@@ -1,0 +1,11 @@
+# Dataset and derived data: private, large, fetched with credentials. Never commit.
+# guides/ holds the organizers' PDFs; the data dictionary includes AWS credentials.
+guides/
+*.pdf
+data/
+data_backup_20260831/
+warehouse/
+.env
+.venv/
+__pycache__/
+.DS_Store

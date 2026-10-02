@@ -9,3 +9,9 @@ warehouse/
 .venv/
 __pycache__/
 .DS_Store
+
+# Local API database and generated artifacts
+backend/*.db
+backend/*.db-*
+frontend/playwright-report/
+frontend/test-results/

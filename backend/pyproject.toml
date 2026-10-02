@@ -1,0 +1,94 @@
+[project]
+name = "cc-platform"
+version = "0.1.0"
+description = "LATAM Bank contact-center platform API (transaction-dispute intake)."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20",
+    "structlog>=24.4",
+    "pyjwt>=2.9",
+    "argon2-cffi>=23.1",
+]
+
+[project.scripts]
+cc-api = "cc_platform.bootstrap.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "httpx2>=2.13",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cc_platform"]
+
+[tool.uv]
+package = true
+
+# --------------------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "N", "SIM", "C4", "RUF", "ASYNC", "S", "PT", "RET", "TID", "TC", "PL",
+]
+ignore = [
+    "PLR0913", # use cases and adapters take explicit collaborators
+    "PLR2004", # magic values are fine in tests and HTTP status maps
+    "RUF001",  # Spanish copy legitimately uses non-ASCII characters
+    "RUF002",
+    "RUF003",
+    "TC001",   # keep runtime imports for FastAPI/Pydantic annotations
+    "TC002",
+    "TC003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "PLR2004", "PLC0415"]
+"src/cc_platform/infrastructure/seed/**" = ["S105", "S106"]
+"src/cc_platform/bootstrap/settings.py" = ["S105"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+# --------------------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+packages = ["cc_platform"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["cc_platform.domain.*", "cc_platform.application.*"]
+strict = true
+
+# --------------------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers"
+filterwarnings = ["error::DeprecationWarning:cc_platform.*"]

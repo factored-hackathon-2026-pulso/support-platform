@@ -1,0 +1,61 @@
+import type { ReactNode } from 'react'
+import { cn } from '@/lib/cn'
+import { DocumentTitle } from './DocumentTitle'
+
+export interface PageHeaderProps {
+  title: ReactNode
+  subtitle?: ReactNode
+  /** Buttons, filters or a summary link at the right. */
+  actions?: ReactNode
+  /** Shows the "Datos de ejemplo" tag before the actions (mocked data). */
+  sampleData?: boolean
+  /** Element before the title (back link, kicker). */
+  eyebrow?: ReactNode
+  /**
+   * Browser tab title. Defaults to `title` when it is a string; pass it when the
+   * title is a node (e.g. "Agente · Disputas" for a composed heading).
+   */
+  documentTitle?: string
+  className?: string
+}
+
+/** Page title bar: display-font h1 (22px), subtitle and actions, bottom border. Sets the tab title. */
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+  sampleData = false,
+  eyebrow,
+  documentTitle,
+  className,
+}: PageHeaderProps) {
+  const tabTitle = documentTitle ?? (typeof title === 'string' ? title : null)
+  return (
+    <header
+      className={cn(
+        'flex shrink-0 items-center justify-between gap-4 border-b border-border px-7 py-4',
+        className,
+      )}
+    >
+      {tabTitle ? <DocumentTitle title={tabTitle} /> : null}
+      <div className="flex min-w-0 flex-col gap-0.5">
+        {eyebrow}
+        <h1 className="m-0 truncate font-display text-22 font-bold">{title}</h1>
+        {subtitle ? <p className="m-0 truncate text-13 text-ink-2">{subtitle}</p> : null}
+      </div>
+      {actions || sampleData ? (
+        <div className="flex shrink-0 items-center gap-3">
+          {sampleData ? <SampleDataTag /> : null}
+          {actions}
+        </div>
+      ) : null}
+    </header>
+  )
+}
+
+/** "Datos de ejemplo": marks screens whose numbers are mocked. */
+export function SampleDataTag({ className }: { className?: string }) {
+  return (
+    <span className={cn('text-13 whitespace-nowrap text-muted', className)}>Datos de ejemplo</span>
+  )
+}

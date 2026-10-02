@@ -1,0 +1,104 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc", "jsx-a11y", "vitest"],
+  "categories": {
+    "correctness": "error"
+  },
+  "env": {
+    "browser": true
+  },
+  "ignorePatterns": ["dist", "node_modules"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ],
+    "react/jsx-key": "error",
+    "react/self-closing-comp": "warn",
+    "typescript/no-explicit-any": "error",
+    "typescript/consistent-type-imports": "error",
+    "jsx-a11y/alt-text": "error",
+    "jsx-a11y/anchor-is-valid": "error",
+    "jsx-a11y/aria-props": "error",
+    "jsx-a11y/aria-role": "error",
+    "jsx-a11y/role-has-required-aria-props": "error",
+    "jsx-a11y/no-autofocus": "warn",
+    "jsx-a11y/label-has-associated-control": "off",
+    "jsx-a11y/no-noninteractive-tabindex": "warn",
+    "no-console": [
+      "warn",
+      {
+        "allow": ["warn", "error"]
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@/features/*/*"],
+            "message": "Import a feature through its index.ts (@/features/<name>). Inside the feature, use relative imports. See ARCHITECTURE.md §3."
+          },
+          {
+            "group": ["@/routes", "@/routes/*"],
+            "message": "Only the route table (src/app/router.tsx) imports route modules."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "src/test/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/features/*/*", "!@/features/*/api"],
+                "message": "Tests import a feature through its index.ts; only its api.ts may be imported (and mocked) directly."
+              },
+              {
+                "group": ["@/routes", "@/routes/*"],
+                "message": "Only the route table (src/app/router.tsx) imports route modules."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/app/router.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/features/*/*"],
+                "message": "Import a feature through its index.ts (@/features/<name>). Inside the feature, use relative imports. See ARCHITECTURE.md §3."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "src/test/**"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    },
+    {
+      "files": ["src/app/session.tsx"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    }
+  ]
+}

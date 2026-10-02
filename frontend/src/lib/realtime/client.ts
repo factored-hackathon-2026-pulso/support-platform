@@ -1,0 +1,220 @@
+/**
+ * Realtime client: one WebSocket per tab to `/api/v1/ws?token=`.
+ *
+ * - Topic subscriptions are reference counted, so two components watching the
+ *   same case share one server subscription, and they are replayed after every
+ *   reconnect.
+ * - Unexpected closes reconnect with exponential backoff + jitter; the attempt
+ *   counter resets once a connection opens.
+ * - Close code 4401 (token rejected, session ended or expired), 4403 and 1008
+ *   stop reconnecting and call `onAuthError` (the session then ends and the user
+ *   goes to /login). 1013 ("try again later") and network drops reconnect.
+ * - Framework-free: React glue lives in `react.tsx`.
+ */
+import { computeBackoff, type BackoffOptions } from './backoff'
+import {
+  parseEnvelope,
+  type ClientMessage,
+  type ConnectionStatus,
+  type RealtimeEnvelope,
+  type RealtimeTopic,
+} from './types'
+
+/** Close codes that mean "do not retry with this token". */
+export const AUTH_CLOSE_CODES: ReadonlySet<number> = new Set([1008, 4401, 4403])
+
+/** Minimal WebSocket surface the client needs (the browser one, or a fake in tests). */
+export interface WebSocketLike {
+  readonly readyState: number
+  send(data: string): void
+  close(code?: number, reason?: string): void
+  onopen: ((event: Event) => void) | null
+  onclose: ((event: CloseEvent) => void) | null
+  onmessage: ((event: MessageEvent) => void) | null
+  onerror: ((event: Event) => void) | null
+}
+
+export type WebSocketFactory = (url: string) => WebSocketLike
+
+const OPEN = 1
+
+export interface RealtimeClientOptions {
+  /** Builds the socket URL for the current token (see `realtimeUrl`). */
+  url: (token: string) => string
+  /** Current session token; `null` means do not connect. */
+  getToken: () => string | null
+  /** Defaults to the browser WebSocket. */
+  createSocket?: WebSocketFactory
+  backoff?: BackoffOptions
+  /** Called when the server rejects the token. */
+  onAuthError?: () => void
+}
+
+type EnvelopeListener = (envelope: RealtimeEnvelope) => void
+type StatusListener = (status: ConnectionStatus) => void
+
+export class RealtimeClient {
+  private readonly options: RealtimeClientOptions
+  private socket: WebSocketLike | null = null
+  private status: ConnectionStatus = 'idle'
+  private attempt = 0
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  /** Set by `disconnect()`: an intentional close must not reconnect. */
+  private stopped = true
+  private readonly topicRefs = new Map<RealtimeTopic, number>()
+  private readonly envelopeListeners = new Set<EnvelopeListener>()
+  private readonly statusListeners = new Set<StatusListener>()
+
+  constructor(options: RealtimeClientOptions) {
+    this.options = options
+  }
+
+  getStatus(): ConnectionStatus {
+    return this.status
+  }
+
+  /** Topics with at least one subscriber. */
+  activeTopics(): RealtimeTopic[] {
+    return [...this.topicRefs.keys()]
+  }
+
+  /** Opens the socket (no-op without a token or when already connected). */
+  connect(): void {
+    this.stopped = false
+    if (this.socket || this.reconnectTimer) return
+    this.open()
+  }
+
+  /** Closes the socket for good (sign out, unmount). Subscriptions are kept for a later connect. */
+  disconnect(): void {
+    this.stopped = true
+    this.clearReconnectTimer()
+    const socket = this.socket
+    this.socket = null
+    if (socket) {
+      this.detach(socket)
+      socket.close(1000, 'client disconnect')
+    }
+    this.attempt = 0
+    this.setStatus('closed')
+  }
+
+  /**
+   * Subscribe to a topic. Returns the unsubscribe function.
+   * The server only hears about the first subscriber and the last unsubscriber.
+   */
+  subscribe(topic: RealtimeTopic): () => void {
+    const count = this.topicRefs.get(topic) ?? 0
+    this.topicRefs.set(topic, count + 1)
+    if (count === 0) this.send({ action: 'subscribe', topic })
+
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      const current = this.topicRefs.get(topic) ?? 0
+      if (current <= 1) {
+        this.topicRefs.delete(topic)
+        this.send({ action: 'unsubscribe', topic })
+      } else {
+        this.topicRefs.set(topic, current - 1)
+      }
+    }
+  }
+
+  onEnvelope(listener: EnvelopeListener): () => void {
+    this.envelopeListeners.add(listener)
+    return () => this.envelopeListeners.delete(listener)
+  }
+
+  onStatusChange(listener: StatusListener): () => void {
+    this.statusListeners.add(listener)
+    return () => this.statusListeners.delete(listener)
+  }
+
+  // ── internals ────────────────────────────────────────────────────────────
+
+  private open(): void {
+    const token = this.options.getToken()
+    if (!token) {
+      this.setStatus('idle')
+      return
+    }
+    const create =
+      this.options.createSocket ?? ((url: string) => new WebSocket(url) as WebSocketLike)
+    this.setStatus(this.attempt === 0 ? 'connecting' : 'reconnecting')
+
+    let socket: WebSocketLike
+    try {
+      socket = create(this.options.url(token))
+    } catch {
+      this.scheduleReconnect()
+      return
+    }
+    this.socket = socket
+
+    socket.onopen = () => {
+      this.attempt = 0
+      this.setStatus('open')
+      for (const topic of this.activeTopics()) this.send({ action: 'subscribe', topic })
+    }
+    socket.onmessage = (event) => {
+      const envelope = parseEnvelope(event.data)
+      if (!envelope) return
+      for (const listener of this.envelopeListeners) listener(envelope)
+    }
+    socket.onerror = () => {
+      // Browsers always follow an error with a close event; reconnect happens there.
+    }
+    socket.onclose = (event) => {
+      if (this.socket !== socket) return
+      this.detach(socket)
+      this.socket = null
+      if (this.stopped) {
+        this.setStatus('closed')
+        return
+      }
+      if (AUTH_CLOSE_CODES.has(event.code)) {
+        this.stopped = true
+        this.setStatus('closed')
+        this.options.onAuthError?.()
+        return
+      }
+      this.scheduleReconnect()
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.stopped) return
+    const delay = computeBackoff(this.attempt, this.options.backoff)
+    this.attempt += 1
+    this.setStatus('reconnecting')
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (!this.stopped) this.open()
+    }, delay)
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+  }
+
+  private detach(socket: WebSocketLike): void {
+    socket.onopen = null
+    socket.onclose = null
+    socket.onmessage = null
+    socket.onerror = null
+  }
+
+  private send(message: ClientMessage): void {
+    // While disconnected the topics stay in `topicRefs` and are replayed on open.
+    if (this.socket?.readyState === OPEN) this.socket.send(JSON.stringify(message))
+  }
+
+  private setStatus(status: ConnectionStatus): void {
+    if (status === this.status) return
+    this.status = status
+    for (const listener of this.statusListeners) listener(status)
+  }
+}

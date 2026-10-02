@@ -1,0 +1,78 @@
+"""Base schema (camelCase on the wire) and the RFC 7807 problem schema."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
+
+from cc_platform.api.problems import ProblemCode
+from cc_platform.domain.people.staff import StaffRole
+
+PROBLEM_MEDIA_TYPE = "application/problem+json"
+
+
+class ApiModel(BaseModel):
+    """All request/response bodies: camelCase aliases, snake_case in Python."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        validate_by_name=True,
+        validate_by_alias=True,
+        serialize_by_alias=True,
+        frozen=True,
+    )
+
+
+class RequestModel(ApiModel):
+    """Request bodies reject unknown fields so typos fail loudly."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ValidationIssue(ApiModel):
+    loc: list[str]
+    msg: str
+    type: str
+
+
+class ProblemDetails(ApiModel):
+    """RFC 7807 problem. ``code`` is the stable machine identifier clients branch on.
+
+    The optional members below are the documented extensions; a domain error may add other
+    structured details (e.g. ``currentStatus``), hence ``additionalProperties``.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    type: str = Field(examples=["urn:cc-platform:problem:account_locked"])
+    title: str
+    status: int
+    code: ProblemCode
+    detail: str | None = None
+    instance: str | None = None
+    request_id: str | None = None
+    remaining_attempts: int | None = Field(
+        default=None,
+        description="invalid_credentials, mfa_invalid: failed attempts left before the lock.",
+    )
+    unlock_at: datetime | None = Field(
+        default=None, description="account_locked: when the lock ends."
+    )
+    required_roles: list[StaffRole] | None = Field(
+        default=None, description="forbidden: roles that may perform the action."
+    )
+    errors: list[ValidationIssue] | None = Field(
+        default=None, description="validation_error: one entry per invalid field."
+    )
+
+
+def problem_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+    """OpenAPI ``responses`` entries for error statuses.
+
+    The content type and schema are filled in by ``cc_platform.api.openapi`` so that every
+    4xx/5xx response of the document is ``application/problem+json`` → ``ProblemDetails``.
+    """
+    return {status: {"description": "Problem details (RFC 7807)"} for status in statuses}

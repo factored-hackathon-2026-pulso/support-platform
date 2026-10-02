@@ -1,0 +1,250 @@
+/*
+ * LATAM Bank · plataforma de soporte — design tokens.
+ * Source of truth: warehouse/design/source/project/*.dc.html (Claude Design canvas).
+ * Every color used by the app must come from this file. See ARCHITECTURE.md › Tokens.
+ */
+@import 'tailwindcss';
+
+/* Self-hosted fonts (no network fonts). Only the weights the canvas uses. */
+@import '@fontsource/bricolage-grotesque/500.css';
+@import '@fontsource/bricolage-grotesque/700.css';
+@import '@fontsource/schibsted-grotesk/400.css';
+@import '@fontsource/schibsted-grotesk/500.css';
+@import '@fontsource/schibsted-grotesk/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+@theme {
+  /* Drop Tailwind's default palette: only semantic tokens are allowed. */
+  --color-*: initial;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Text */
+  --color-ink: #1a1916;
+  --color-ink-2: #4a4843;
+  --color-muted: #6b6860;
+  --color-faint: #8a877f;
+
+  /* Surfaces and lines */
+  --color-canvas: #f2f0ea;
+  --color-surface: #ffffff;
+  --color-panel: #ebe8e0;
+  --color-subtle: #f7f5ef;
+  --color-border: #dedbd2;
+  --color-border-soft: #ebe8e0;
+  --color-divider: #e6e3da;
+
+  /* Dark rail and dark surfaces (toasts) */
+  --color-rail: #1a1916;
+  --color-rail-active: #3a3833;
+  --color-rail-icon: #b9b6ad;
+  --color-on-dark-muted: #c9c5ba;
+
+  /* Accent (blue) */
+  --color-accent: #2f4fc9;
+  --color-accent-strong: #1f3aa3;
+  --color-accent-soft: #e4e9fa;
+  --color-accent-border: #c3cdf2;
+  --color-accent-wash: #f5f7fe;
+  /* Light accent: focus ring on dark surfaces (7.1:1 on the rail) and accents on ink. */
+  --color-accent-muted: #8ea2e8;
+  /* "AGENTE DE IA" kicker on the automation Home (4.7:1 on white). */
+  --color-agent: #5a6fc0;
+
+  /* Warn (orange) */
+  --color-warn: #b8531f;
+  --color-warn-strong: #7a3410;
+  --color-warn-soft: #fbeee6;
+  --color-warn-border: #efc9b2;
+  /* Human-step border in the proposal flow (Proposal.dc.html). */
+  --color-warn-line: #f0cdb6;
+  --color-badge: #e0773f;
+
+  /* Success (green) */
+  --color-success: #2e7d4f;
+  --color-success-strong: #1f5e3a;
+  --color-success-soft: #e3f1e8;
+  --color-success-border: #b9dcc6;
+  /*
+   * Second green family used outside the Workspace (Admin avatar and role chip,
+   * "Activo" pills, approved banner): kept apart from success-soft/strong
+   * because the canvas draws both.
+   */
+  --color-success-tint: #e1f0e6;
+  --color-success-ink: #1e6b45;
+  /* End-node border in the decision tree (AuTree.dc.html). */
+  --color-success-line: #b7dcc4;
+
+  /* Caution (amber): "vence en 11–20 min" pill in Por aprobar (SuApprovals.dc.html). */
+  --color-caution-soft: #fdf3e2;
+  --color-caution-strong: #8a5a12;
+
+  /* Danger (red) */
+  --color-danger: #b3261e;
+  --color-danger-strong: #7a1f17;
+  --color-danger-soft: #f9e3e0;
+  --color-danger-border: #e8b4ab;
+
+  /* Case-status colors (Workspace list) */
+  --color-callout: #c2417a;
+  --color-callout-strong: #8f2a58;
+  --color-callout-soft: #f8e4ee;
+  --color-callout-border: #ebbfd3;
+  --color-waiting: #8a867c;
+  --color-offline: #c9c5ba;
+
+  /* Role avatar tint (Supervisora) */
+  --color-peach: #f7e6da;
+
+  /* Typography */
+  --font-sans: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-body: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Font sizes used by the canvas (px names on purpose: text-13, text-22…) */
+  --text-11: 11px;
+  --text-11--line-height: 1.35;
+  --text-12: 12px;
+  --text-12--line-height: 1.4;
+  --text-13: 13px;
+  --text-13--line-height: 1.45;
+  --text-14: 14px;
+  --text-14--line-height: 1.45;
+  --text-15: 15px;
+  --text-15--line-height: 1.45;
+  --text-16: 16px;
+  --text-16--line-height: 1.4;
+  --text-17: 17px;
+  --text-17--line-height: 1.35;
+  --text-18: 18px;
+  --text-18--line-height: 1.3;
+  --text-20: 20px;
+  --text-20--line-height: 1.25;
+  --text-22: 22px;
+  --text-22--line-height: 1.2;
+  --text-24: 24px;
+  --text-24--line-height: 1.2;
+  --text-26: 26px;
+  --text-26--line-height: 1.2;
+  --text-28: 28px;
+  --text-28--line-height: 1.2;
+  --text-30: 30px;
+  --text-30--line-height: 1.15;
+  --text-32: 32px;
+  --text-32--line-height: 1.15;
+  --text-34: 34px;
+  --text-34--line-height: 1.15;
+  --text-40: 40px;
+  --text-40--line-height: 1.1;
+
+  /* Display headings (auth, agent detail, approve): letter-spacing -0.01em. */
+  --tracking-display: -0.01em;
+  --tracking-kicker: 0.06em;
+  --tracking-label: 0.05em;
+
+  /* Radii used by the canvas: rounded-8 / 10 / 12 / 14 / 16 (and rounded-full) */
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-14: 14px;
+  --radius-16: 16px;
+
+  /* Elevation */
+  --shadow-popover: 0 10px 28px rgb(26 25 22 / 0.18);
+  --shadow-toast: 0 16px 40px rgb(26 25 22 / 0.3);
+  --shadow-dialog: 0 24px 60px rgb(26 25 22 / 0.3);
+  --shadow-drawer: -12px 0 40px rgb(26 25 22 / 0.18);
+
+  --animate-progress: progress 1.2s ease-in-out infinite;
+
+  @keyframes progress {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(250%);
+    }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-15);
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-variant-numeric: lining-nums;
+  }
+
+  /* Links inside running text follow the canvas: accent, no underline. */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /*
+   * Dark surfaces (rail, toasts, auth brand panel): the accent ring is 2.6:1
+   * there, below WCAG 1.4.11. Mark the container with data-surface="dark".
+   */
+  [data-surface='dark'] :focus-visible {
+    outline-color: var(--color-accent-muted);
+  }
+
+  /* Light popovers inside a dark surface (role switcher) go back to the accent ring. */
+  [data-surface='light'] :focus-visible {
+    outline-color: var(--color-accent);
+  }
+
+  /*
+   * Reduced motion (WCAG 2.3.3): no transitions or smooth scrolling. Looping
+   * animations (spinner, skeleton, progress bar) opt out with `motion-reduce:`
+   * variants where they are defined, so they can show a static state instead.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  ::selection {
+    background-color: var(--color-accent-soft);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility text-link {
+  color: var(--color-accent);
+  font-weight: 600;
+  &:hover {
+    color: var(--color-accent-strong);
+  }
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}

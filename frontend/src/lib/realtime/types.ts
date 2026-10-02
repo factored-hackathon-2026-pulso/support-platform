@@ -17,6 +17,9 @@ export type KnownRealtimeEventType =
   | 'tool_call.completed'
   | 'approval.updated'
   | 'copilot.message'
+  | 'inbox.counts'
+  | 'availability.updated'
+  | 'conversation.updated'
 
 export type RealtimeEventType = KnownRealtimeEventType | ControlEnvelopeType | (string & {})
 
@@ -29,8 +32,12 @@ export interface RealtimeEnvelope<TData = unknown, TType extends string = Realti
   data: TData
 }
 
-/** `case:<caseId>`, `inbox:<staffId>`, `approvals`. */
-export type RealtimeTopic = `case:${string}` | `inbox:${string}` | 'approvals'
+/**
+ * `case:<caseId>`, `inbox:<staffId>`, `approvals` (staff tokens) and
+ * `customer:<customerId>` (only the customer token whose subject is that id).
+ */
+export type RealtimeTopic =
+  `case:${string}` | `inbox:${string}` | `customer:${string}` | 'approvals'
 
 /** Messages the client sends (one topic per message, backend `api/routers/realtime.py`). */
 export type ClientMessage =
@@ -61,10 +68,29 @@ export const topics = {
   case: (caseId: string): RealtimeTopic => `case:${caseId}`,
   inbox: (staffId: string): RealtimeTopic => `inbox:${staffId}`,
   approvals: (): RealtimeTopic => 'approvals',
+  customer: (customerId: string): RealtimeTopic => `customer:${customerId}`,
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * `data.payload` of a domain envelope (`data = { entity, entityId, caseId, actor,
+ * payload }`, ARCHITECTURE.md §7), or null when the envelope does not have that
+ * shape. Features narrow the payload of the event types they handle.
+ */
+export function envelopePayload(envelope: RealtimeEnvelope): Record<string, unknown> | null {
+  if (!isRecord(envelope.data)) return null
+  const { payload } = envelope.data
+  return isRecord(payload) ? payload : null
+}
+
+/** `data.caseId` of a domain envelope, or null (not about a case, or malformed). */
+export function envelopeCaseId(envelope: RealtimeEnvelope): string | null {
+  if (!isRecord(envelope.data)) return null
+  const { caseId } = envelope.data
+  return typeof caseId === 'string' ? caseId : null
 }
 
 /** Validates an incoming frame. Anything else (pings, acks, garbage) is ignored. */

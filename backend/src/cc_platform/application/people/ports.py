@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
+from cc_platform.domain.people.availability import AnalystAvailability
 from cc_platform.domain.people.login_account import FailedAttemptCounter, LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.session import StaffSession
@@ -76,3 +77,17 @@ class UnknownLoginAttempts(Protocol):
         ``AccountLockedError``) propagate and leave the counter untouched.
         """
         ...
+
+
+class AnalystAvailabilityRepository(Protocol):
+    async def get(self, staff_id: str) -> AnalystAvailability | None:
+        """``None`` means the analyst never set it: treat as paused."""
+        ...
+
+    async def list(self) -> list[AnalystAvailability]: ...
+
+    async def add(self, availability: AnalystAvailability) -> None:
+        """Insert; a concurrent insert for the same analyst raises ``ConcurrentUpdateError``."""
+        ...
+
+    async def save(self, availability: AnalystAvailability) -> None: ...

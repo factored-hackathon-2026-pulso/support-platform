@@ -12,8 +12,9 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.application.errors import ForbiddenError
+from cc_platform.domain.cases.values import CaseChannel
 from cc_platform.domain.people.staff import ROLE_PRECEDENCE, StaffRole
-from cc_platform.domain.shared.actor import ActorRef
+from cc_platform.domain.shared.actor import ActorRef, ActorRole
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,23 @@ class Actor:
         if role is None:
             raise ForbiddenError(r.value for r in (allowed or ()))
         return ActorRef(role=role.actor_role, actor_id=self.staff_id)
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerActor:
+    """A customer authenticated by a customer session token (simulator app/web session).
+
+    Only ever sees their own conversation and only turns meant for everyone (rule 2).
+    """
+
+    customer_id: str
+    display_name: str
+    session_id: str
+    channel: CaseChannel
+    session_expires_at: datetime
+
+    def actor_ref(self) -> ActorRef:
+        return ActorRef(role=ActorRole.CUSTOMER, actor_id=self.customer_id)
 
 
 def ensure_any_role(actor: Actor, allowed: Iterable[StaffRole]) -> None:

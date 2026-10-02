@@ -1,3 +1,5 @@
+import { registerCasesRealtime } from '@/features/cases'
+import { registerConversationRealtime } from '@/features/conversation'
 import {
   createEnvelopeHandlerRegistry,
   type EnvelopeHandlerRegistry,
@@ -5,7 +7,7 @@ import {
 } from '@/lib/realtime'
 
 /**
- * Every feature that turns realtime envelopes into cache updates, in one list.
+ * Every feature that turns staff realtime envelopes into cache updates, in one list.
  *
  * This is the single composition point for realtime handlers: a feature exports a
  * `RealtimeRegistration` from its `index.ts` (e.g. `registerCasesRealtime`) and is
@@ -13,9 +15,14 @@ import {
  * place before the socket connects, whatever lazy screen the user opens first.
  * Keep the registration modules light (query keys + handlers only): this list is
  * part of the main bundle.
+ *
+ * The customer simulator (/cliente) is not here: it runs its own socket with the
+ * customer token and its own registry (`features/customer-chat`), so customer
+ * envelopes never reach these handlers and vice versa.
  */
 export const FEATURE_REALTIME_REGISTRATIONS: readonly RealtimeRegistration[] = [
-  // registerCasesRealtime, (slice 1: turn.created, case.updated, case.assigned)
+  registerCasesRealtime, // case.updated, case.assigned, inbox.counts, availability.updated → inbox
+  registerConversationRealtime, // turn.created, case.updated, case.assigned → open case
 ]
 
 /** Builds a fresh registry with every feature's handlers (one per AppProviders). */

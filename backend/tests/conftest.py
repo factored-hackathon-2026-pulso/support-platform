@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +12,7 @@ from cc_platform.bootstrap.app import create_app
 from cc_platform.bootstrap.container import Container, build_container
 from cc_platform.infrastructure.clock import FixedClock
 from cc_platform.infrastructure.ids import SequentialIdGenerator
+from cc_platform.infrastructure.seed.customers import seed_customer_id
 from tests.support import DEV_MFA_CODE, PASSWORD, AuthKit, build_auth_kit, make_settings
 
 
@@ -25,8 +27,12 @@ def auth_kit() -> AuthKit:
 
 
 @pytest.fixture
-def container(clock: FixedClock) -> Container:
-    return build_container(make_settings(), clock=clock, ids=SequentialIdGenerator())
+def container(clock: FixedClock, tmp_path: Path) -> Container:
+    # A file database (one connection per Unit of Work), like production: in-memory SQLite
+    # shares a single connection, so background routing interleaved with a request would
+    # share its transaction (and its rollback).
+    settings = make_settings(database_url=f"sqlite+aiosqlite:///{tmp_path / 'api.db'}")
+    return build_container(settings, clock=clock, ids=SequentialIdGenerator())
 
 
 @pytest.fixture
@@ -51,3 +57,29 @@ def sign_in(client: TestClient) -> Callable[[str], str]:
         return token
 
     return _sign_in
+
+
+@pytest.fixture
+def drain(client: TestClient, container: Container) -> Callable[[], None]:
+    """Wait for background work (routing after ``case.opened``, queue drains)."""
+
+    def _drain() -> None:
+        client.portal.call(container.background.drain)  # type: ignore[union-attr]
+
+    return _drain
+
+
+@pytest.fixture
+def customer_session(client: TestClient) -> Callable[..., str]:
+    """Start a simulator session for a seeded customer number; returns the token."""
+
+    def _start(number: int, channel: str | None = None) -> str:
+        body: dict[str, str] = {"customerId": seed_customer_id(number)}
+        if channel is not None:
+            body["channel"] = channel
+        response = client.post("/api/v1/customer/sessions", json=body)
+        assert response.status_code == 201, response.text
+        token: str = response.json()["token"]
+        return token
+
+    return _start

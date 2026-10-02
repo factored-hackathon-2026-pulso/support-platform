@@ -1,111 +1,28 @@
 """SQLAlchemy repositories of the people context (explicit row ↔ aggregate mapping).
 
-Writes use optimistic locking (``_VersionedRepository``): an aggregate is saved with
-``UPDATE … WHERE <key> = :key AND version = :loaded`` and the version is bumped, so two
-requests that loaded the same revision cannot both win; the loser gets
-``ConcurrentUpdateError`` instead of silently overwriting the other's change.
+Writes use optimistic locking (``VersionedRepository`` in ``base.py``).
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from collections.abc import Callable
-from typing import Any, cast
+from typing import Any
 
-from sqlalchemy import Column, CursorResult, RowMapping, Table, insert, select, update
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import Column, select
 
+from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge, MfaChallengeStatus, MfaMethod
 from cc_platform.domain.people.session import SessionEndReason, StaffSession
 from cc_platform.domain.people.staff import Language, Staff, StaffLevel, StaffRole
-from cc_platform.domain.shared.aggregate import AggregateRoot
-from cc_platform.domain.shared.errors import ConcurrentUpdateError, ConflictError, NotFoundError
 from cc_platform.infrastructure.persistence.sqlalchemy import tables
-
-type Tracker = Callable[[AggregateRoot], None]
-type Row = RowMapping
-
-
-class _VersionedRepository[A: AggregateRoot](ABC):
-    """Insert / compare-and-set update / load for one aggregate table (Template Method).
-
-    Subclasses give the table, its key column and the row mapping both ways.
-    """
-
-    table: Table
-
-    def __init__(self, session: AsyncSession, track: Tracker) -> None:
-        self._session = session
-        self._track = track
-
-    # ----------------------------------------------------------------- mapping hooks
-    @property
-    def _key_column(self) -> Column[Any]:
-        return self.table.c.id
-
-    @abstractmethod
-    def _key(self, aggregate: A) -> str: ...
-
-    @abstractmethod
-    def _to_row(self, aggregate: A) -> dict[str, Any]: ...
-
-    @abstractmethod
-    def _from_row(self, row: Row) -> A: ...
-
-    # ----------------------------------------------------------------- operations
-    async def _get_where(self, *criteria: Any) -> A | None:
-        result = await self._session.execute(select(self.table).where(*criteria))
-        return self._load(result.mappings().first())
-
-    async def get(self, key: str) -> A | None:
-        return await self._get_where(self._key_column == key)
-
-    async def add(self, aggregate: A) -> None:
-        statement = insert(self.table).values(
-            **self._to_row(aggregate), **{tables.VERSION_COLUMN: 1}
-        )
-        # On conflict the transaction is unusable; the Unit of Work rolls it back on exit.
-        try:
-            await self._session.execute(statement)
-        except IntegrityError as exc:
-            raise ConflictError("Ya existe un registro con esos datos.") from exc
-        aggregate.mark_persisted(1)
-        self._track(aggregate)
-
-    async def save(self, aggregate: A) -> None:
-        key = self._key(aggregate)
-        expected = aggregate.version
-        if expected < 1:
-            raise NotFoundError(id=key)  # never loaded nor added: nothing to update
-        version = self.table.c[tables.VERSION_COLUMN]
-        statement = (
-            update(self.table)
-            .where(self._key_column == key, version == expected)
-            .values(**self._to_row(aggregate), **{tables.VERSION_COLUMN: expected + 1})
-        )
-        result = cast("CursorResult[Any]", await self._session.execute(statement))
-        if result.rowcount != 1:
-            raise ConcurrentUpdateError(entity=self.table.name, id=key)
-        aggregate.mark_persisted(expected + 1)
-        self._track(aggregate)
-
-    def _materialize(self, row: Row) -> A:
-        aggregate = self._from_row(row)
-        aggregate.mark_persisted(row[tables.VERSION_COLUMN])
-        return aggregate
-
-    def _load(self, row: Row | None) -> A | None:
-        if row is None:
-            return None
-        aggregate = self._materialize(row)
-        self._track(aggregate)
-        return aggregate
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.base import (
+    Row,
+    VersionedRepository,
+)
 
 
 # ----------------------------------------------------------------------------- staff
-class SqlStaffRepository(_VersionedRepository[Staff]):
+class SqlStaffRepository(VersionedRepository[Staff]):
     table = tables.staff
 
     def _key(self, aggregate: Staff) -> str:
@@ -148,7 +65,7 @@ class SqlStaffRepository(_VersionedRepository[Staff]):
 
 
 # ----------------------------------------------------------------------------- login accounts
-class SqlLoginAccountRepository(_VersionedRepository[LoginAccount]):
+class SqlLoginAccountRepository(VersionedRepository[LoginAccount]):
     table = tables.login_accounts
 
     @property
@@ -178,7 +95,7 @@ class SqlLoginAccountRepository(_VersionedRepository[LoginAccount]):
 
 
 # ----------------------------------------------------------------------------- mfa challenges
-class SqlMfaChallengeRepository(_VersionedRepository[MfaChallenge]):
+class SqlMfaChallengeRepository(VersionedRepository[MfaChallenge]):
     table = tables.mfa_challenges
 
     def _key(self, aggregate: MfaChallenge) -> str:
@@ -212,7 +129,7 @@ class SqlMfaChallengeRepository(_VersionedRepository[MfaChallenge]):
 
 
 # ----------------------------------------------------------------------------- sessions
-class SqlStaffSessionRepository(_VersionedRepository[StaffSession]):
+class SqlStaffSessionRepository(VersionedRepository[StaffSession]):
     table = tables.staff_sessions
 
     def _key(self, aggregate: StaffSession) -> str:
@@ -239,3 +156,33 @@ class SqlStaffSessionRepository(_VersionedRepository[StaffSession]):
             ended_at=row["ended_at"],
             end_reason=SessionEndReason(row["end_reason"]) if row["end_reason"] else None,
         )
+
+
+# ----------------------------------------------------------------------------- availability
+class SqlAnalystAvailabilityRepository(VersionedRepository[AnalystAvailability]):
+    table = tables.analyst_availability
+    insert_race_is_retryable = True
+
+    @property
+    def _key_column(self) -> Column[Any]:
+        return tables.analyst_availability.c.staff_id
+
+    def _key(self, aggregate: AnalystAvailability) -> str:
+        return aggregate.staff_id
+
+    def _to_row(self, aggregate: AnalystAvailability) -> dict[str, Any]:
+        return {
+            "staff_id": aggregate.staff_id,
+            "status": aggregate.status.value,
+            "since": aggregate.since,
+        }
+
+    def _from_row(self, row: Row) -> AnalystAvailability:
+        return AnalystAvailability(
+            staff_id=row["staff_id"], status=AvailabilityStatus(row["status"]), since=row["since"]
+        )
+
+    async def list(self) -> list[AnalystAvailability]:
+        table = tables.analyst_availability
+        result = await self._session.execute(select(table).order_by(table.c.staff_id))
+        return [self._materialize(row) for row in result.mappings()]

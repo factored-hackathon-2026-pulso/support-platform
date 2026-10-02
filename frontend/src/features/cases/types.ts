@@ -1,0 +1,24 @@
+/**
+ * API types of the cases feature (docs/platform/api/slice-1-cases.md §1, §3.2):
+ * aliases of the schemas generated from `backend/openapi.json` (`pnpm gen:api`).
+ */
+import type { Schemas } from '@/lib/api'
+
+export type CaseChannel = Schemas['CaseChannel']
+export type CaseOrigin = Schemas['CaseOrigin']
+export type CaseTopic = Schemas['CaseTopic']
+export type CasePriority = Schemas['CasePriority']
+export type CaseStatus = Schemas['CaseStatus']
+/** Canvas bucket, derived by the server (never re-derived here). */
+export type InboxStatus = Schemas['InboxStatus']
+export type CaseLanguage = Schemas['Language']
+export type TurnAuthorRole = Schemas['TurnAuthorRole']
+export type AvailabilityStatus = Schemas['AvailabilityStatus']
+export type CountryCode = Schemas['CountryCode']
+
+export type CustomerRef = Schemas['CustomerRef']
+export type CaseSummary = Schemas['CaseSummary']
+export type InboxCounts = Schemas['InboxCounts']
+export type InboxResponse = Schemas['InboxResponse']
+export type Availability = Schemas['Availability']
+export type UpdateAvailabilityRequest = Schemas['UpdateAvailabilityRequest']

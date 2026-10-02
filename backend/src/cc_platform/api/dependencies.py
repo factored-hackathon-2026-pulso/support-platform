@@ -16,13 +16,19 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.requests import HTTPConnection
 
 from cc_platform.api.context import ApiContext
-from cc_platform.application.security import Actor, ensure_any_role
+from cc_platform.application.security import Actor, CustomerActor, ensure_any_role
 from cc_platform.domain.people.staff import StaffRole
 
 session_bearer = HTTPBearer(
     auto_error=False,
     scheme_name="SessionToken",
     description="Session token returned by POST /api/v1/auth/mfa.",
+)
+
+customer_bearer = HTTPBearer(
+    auto_error=False,
+    scheme_name="CustomerToken",
+    description="Customer token returned by POST /api/v1/customer/sessions (simulator).",
 )
 
 API_CONTEXT_STATE = "api_context"
@@ -57,3 +63,15 @@ def require_roles(*roles: StaffRole) -> Callable[[Actor], Awaitable[Actor]]:
         return actor
 
     return dependency
+
+
+async def current_customer(
+    api: ApiContextDep,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(customer_bearer)],
+) -> CustomerActor:
+    """Customer routes accept only customer tokens (a staff token is ``unauthenticated``)."""
+    token = credentials.credentials if credentials is not None else None
+    return await api.use_cases.customers.authenticate.execute(token)
+
+
+CurrentCustomer = Annotated[CustomerActor, Depends(current_customer)]

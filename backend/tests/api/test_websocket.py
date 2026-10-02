@@ -9,9 +9,10 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
+from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from cc_platform.api.dependencies import API_CONTEXT_STATE
+from cc_platform.api.routers.realtime import RealtimeSocketSession
 from cc_platform.application.security import Actor
 from cc_platform.bootstrap.app import create_app
 from cc_platform.bootstrap.container import Container, build_container
@@ -19,6 +20,7 @@ from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.events import DomainEvent
 from cc_platform.infrastructure.clock import FixedClock
 from cc_platform.infrastructure.ids import SequentialIdGenerator
+from cc_platform.infrastructure.seed.cases import seed_case_id
 from tests.support import (
     ANALYST,
     DEV_MFA_CODE,
@@ -29,8 +31,10 @@ from tests.support import (
     make_settings,
 )
 
-CASE_A = "CASE-" + "0" * 25 + "A"
-CASE_B = "CASE-" + "0" * 25 + "B"
+# Seeded cases: 101 is assigned to Daniela (ANALYST); supervisors may follow any case.
+CASE_A = seed_case_id(101)
+CASE_B = seed_case_id(102)
+FOREIGN_TURN = "TRN-" + "9" * 26  # an event of a test-only class, never suppressed
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -44,7 +48,7 @@ def publish_turn(client: TestClient, container: Container, case_id: str, text: s
     event = TurnCreated(
         occurred_at=container.clock.now(),
         actor=ActorRef(ActorRole.CUSTOMER, "CUS-" + "0" * 25 + "1"),
-        entity_id="TRN-" + "0" * 25 + "1",
+        entity_id=FOREIGN_TURN,
         case_id=case_id,
         text=text,
     )
@@ -111,7 +115,8 @@ def test_fans_out_committed_events_to_case_subscribers_only(
     # The event is also durable in the log (realtime only signals; the log is the record).
     async def read_log() -> list[str]:
         async with container.uow() as uow:
-            return [e.event_type for e in (await uow.event_log.page(case_id=CASE_A)).items]
+            page = await uow.event_log.page(case_id=CASE_A, entity_id=FOREIGN_TURN)
+            return [e.event_type for e in page.items]
 
     assert client.portal.call(read_log) == ["turn.created"]  # type: ignore[union-attr]
 
@@ -255,3 +260,24 @@ def test_socket_is_closed_when_logout_lands_before_it_registers(
             ws.receive_json()
         assert closed.value.code == 4401
     assert checks == 2
+
+
+def test_client_that_leaves_before_the_welcome_is_released(
+    client: TestClient, sign_in: Callable[[str], str]
+) -> None:
+    """A browser that closes right after the handshake (e.g. a React StrictMode remount in
+    dev) makes the ``welcome`` send fail: the session ends quietly (no ASGI error) and the
+    hub forgets the connection instead of leaking it."""
+    token = sign_in(ANALYST.email)
+    api = getattr(client.app.state, API_CONTEXT_STATE)  # type: ignore[union-attr]
+    before = api.realtime_hub.connection_count
+
+    class GoneSocket:
+        client_state = WebSocketState.DISCONNECTED
+
+        async def send_json(self, data: Any) -> None:
+            raise WebSocketDisconnect(code=1006)
+
+    session = RealtimeSocketSession(GoneSocket(), api, token)  # type: ignore[arg-type]
+    client.portal.call(session.run)  # type: ignore[union-attr]
+    assert api.realtime_hub.connection_count == before

@@ -28,33 +28,76 @@ platform already records everything an automated tier will need (event log in th
 
 ## Extension points
 
-### 1. Routing tiers: `Responder` + `ResponderRegistry`
+### 1. Routing tiers: `Responder` + `ResponderRegistry` (implemented in slice 1)
 
-File: `application/routing/ports.py`. Pattern: Chain of Responsibility (judge → tree →
-ai_agent → human), each tier a Strategy.
+Files: `application/routing/ports.py` (port), `application/routing/route_case.py` (the chain),
+`infrastructure/routing/` (registry + null responders), wired in `bootstrap/container.py`.
+Pattern: Chain of Responsibility (judge → tree → ai_agent → human), each automated tier a
+Strategy behind the `Responder` port; the human tier is the terminal handler.
 
 ```python
 class Responder(Protocol):
     @property
-    def tier(self) -> Tier: ...                    # judge | tree | ai_agent | human | supervisor
+    def tier(self) -> Tier: ...                    # judge | tree | ai_agent
     @property
     def component(self) -> ComponentRef: ...       # component_id + component_version
     async def respond(self, context: RoutingContext) -> RoutingDecision: ...
 ```
 
-- `RoutingContext`: case id, pseudonymous customer ref, channel, language, origin, transcript,
-  masked facts.
+How a case is routed today (no AI connected):
+
+1. The customer's first message opens the case (`routing`) and the customer gets a
+   "Recibimos tu mensaje" notice. The POST never waits for routing.
+2. `RoutingProcessManager` (bus subscriber on `case.opened`) runs `RouteCase` in the
+   background. Cases left in `routing` by a crash are re-routed at startup (`RecoverRouting`).
+3. `RouteCase` builds a `RoutingContext` and calls every responder of
+   `ResponderRegistry.chain()` in order, **outside** any database transaction (a responder may
+   call a remote model). The chain stops at the first decision that is not `abstained`.
+4. In one Unit of Work it records **every** decision as a `routing_step` row plus a
+   `routing_step.recorded` event (contract `routing_step`: tier, component id/version,
+   outcome, reason_code, policy_rule_id, confidence, inputs_used, handoff), then runs the
+   human tier.
+5. Human tier (`HumanTier`, Strategy `AssignmentPolicy`, today `LanguageLeastLoadedPolicy`):
+   only analysts who are **available**, rule 3 (a Portuguese case goes only to a
+   Portuguese speaker, `policy_rule_id = H1`), then fewest open cases, then longest since
+   their last assignment. It records an `Assignment` and `case.assigned`, plus a staff-only
+   `routing` turn explaining it. Nobody eligible → `case.queued` ("Cola de disputas" /
+   "Cola de disputas en portugués"); `DrainQueue` assigns queued cases when an analyst
+   becomes available and at startup.
+
+The three registered responders are `NullJudge`, `NullTree`, `NullAiAgent`
+(`null_judge@0.1.0`, `null_tree@0.1.0`, `null_ai_agent@0.1.0`): each returns
+`RoutingDecision(outcome=abstained, reason_code="component_not_connected", inputs_used=())`,
+so every case reaches a person while the full chain is already in the event log and in the
+analyst's "Cómo llegó a ti".
+
+What a responder receives and returns:
+
+- `RoutingContext`: `case_id`, `customer_ref` (pseudonymous customer id), `channel`,
+  `language`, `origin`, `transcript` (customer-visible **message** turns only, as
+  `{sequence, author_role, text}`), `facts` (empty today; masked facts arrive with the
+  customer file).
 - `RoutingDecision`: `outcome` (`resolved` | `mitigated` | `handed_off` | `abstained`),
-  `reason_code`, `policy_rule_id`, `confidence`, `inputs_used`, optional `topic` (judge
-  taxonomy) and a structured `Handoff` (`verified_facts`, `actions_taken` = tool call ids,
-  `open_questions`, `summary`).
-- Each decision becomes a `routing_step` record. `abstained` passes the case to the next tier;
-  the human tier always accepts.
-- Planned for the routing slice: null judge/tree/ai_agent responders that abstain, so every
-  case reaches a person.
-- How to plug in: implement `Responder` in-process, or a `RemoteResponder` that POSTs the
-  context to your HTTP service and parses a `RoutingDecision`; register it in the composition
-  root (`bootstrap/container.py`). No other code changes.
+  `tier`, `component`, `reason_code`, `policy_rule_id`, `confidence` (0–1), `inputs_used`
+  (source names: `customers`, `transactions`, `complaints`, `interactions`, `products`,
+  `digital_events`, `turn`), optional `topic` (judge taxonomy), optional `component_name`
+  (display name for "Cómo llegó a ti", e.g. "Agente de disputas") and a structured `Handoff`
+  (`request`, `verified_facts`, `actions_taken` = verified tool call ids, `evidence`,
+  `open_questions`, `summary`). The `summary` is the Spanish line the analyst reads.
+- A responder that raises is recorded as `abstained` with `reason_code = component_error`
+  and the case continues down the chain (a broken component never blocks a customer).
+
+Not wired yet (later slices): applying the judge's `topic`/priority to the case
+(`case.classified`; live cases show "Sin clasificar"), a `resolved` outcome closing the case
+(today any non-abstained outcome stops the chain and the case still goes to a person),
+automated tiers writing turns (they will go through the turn/tool use cases), and a human
+`routing_step` at close.
+
+How to plug in: implement `Responder` in-process, or a `RemoteResponder` that POSTs the
+context to your HTTP service and parses a `RoutingDecision`; register it for its tier in
+`bootstrap/container.py` (`responders.register(...)` replaces the null one). No other code
+changes. The assignment strategy is also replaceable (`AssignmentPolicy`, e.g. skills or a
+capacity cap).
 
 ### 2. Copilot: `CopilotEngine`
 
@@ -151,6 +194,7 @@ Every Protocol below is declared in its context package and re-exported from
 |---|---|---|---|
 | `Responder` | `routing/ports.py` | `tier`, `component` (properties), `async respond(context) -> RoutingDecision` | `Tier`, `RoutingOutcome`, `ComponentRef`, `RoutingContext`, `RoutingDecision`, `Handoff` |
 | `ResponderRegistry` | `routing/ports.py` | `register(responder)`, `chain() -> Sequence[Responder]` | |
+| `AssignmentPolicy` (human tier) | `routing/assignment.py` | `choose(request, candidates) -> AssignmentChoice \| None` | `AssignmentRequest`, `AnalystCandidate`, `AnalystDirectory` |
 | `CopilotEngine` | `copilot/ports.py` | `run(context) -> AsyncIterator[CopilotEvent]` | `CopilotRunContext`, `CopilotEvent` and subclasses (`copilot/events.py`) |
 | `ToolHandler` | `tools/ports.py` | `definition` (property), `async execute(invocation) -> ToolResult` | `ToolDefinition`, `ToolInvocation`, `ToolResult`, `ToolKind`, `PermissionLevel`, `ToolCallStatus` |
 | `ToolRegistry` | `tools/ports.py` | `register(handler)`, `get(tool_id)`, `definitions()` | |
@@ -158,15 +202,17 @@ Every Protocol below is declared in its context package and re-exported from
 | `EventExporter` | `audit/ports.py` | `export(window) -> AsyncIterator[JsonObject]` | `ExportWindow` |
 | `EventLogRepository` (raw log, implemented) | `ports/event_log.py` | `async page(after=, limit=, case_id=, entity_id=)` | |
 
-## What exists today (slice 0)
+## What exists today (slice 1)
 
 | Piece | State |
 |---|---|
-| Event log table + Unit of Work that appends events atomically | implemented |
+| Event log table + Unit of Work that appends events atomically (in recording order) | implemented |
 | In-process event bus + realtime projection to WebSocket topics | implemented |
 | Actor model (`actor_role`, `actor_id`) shared by people and components | implemented |
-| `Responder`, `CopilotEngine` (+ AG-UI event types), `ToolHandler`/`ToolRegistry`, `ComponentRegistry`, `EventExporter` | Protocols declared, no implementation |
-| Null responders, mock copilot, tool catalog, components registry, masked exporter | next slices |
+| Routing chain: `ResponderRegistry`, null judge/tree/agent, `RouteCase`, human tier (`LanguageLeastLoadedPolicy`), queue + drain, `routing_step` rows and events | implemented |
+| Cases, turns (`turn.created` with `author_role`/`author_id`), assignments, `case_close` events | implemented |
+| `CopilotEngine` (+ AG-UI event types), `ToolHandler`/`ToolRegistry`, `ComponentRegistry`, `EventExporter` | Protocols declared, no implementation |
+| Mock copilot, tool catalog, components registry, masked exporter, judge classification | next slices |
 
 ## Checklist for a new automated component
 

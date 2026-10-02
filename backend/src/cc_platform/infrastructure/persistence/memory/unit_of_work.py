@@ -6,11 +6,18 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.infrastructure.persistence.memory.repositories import (
+    InMemoryAnalystAvailabilityRepository,
+    InMemoryAssignmentRepository,
+    InMemoryCaseRepository,
+    InMemoryCustomerCaseSlotRepository,
+    InMemoryCustomerRepository,
     InMemoryEventLogRepository,
     InMemoryLoginAccountRepository,
     InMemoryMfaChallengeRepository,
+    InMemoryRoutingStepRepository,
     InMemoryStaffRepository,
     InMemoryStaffSessionRepository,
+    InMemoryTurnRepository,
 )
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.unit_of_work_base import BaseUnitOfWork
@@ -21,6 +28,13 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     login_accounts: InMemoryLoginAccountRepository
     mfa_challenges: InMemoryMfaChallengeRepository
     sessions: InMemoryStaffSessionRepository
+    availability: InMemoryAnalystAvailabilityRepository
+    customers: InMemoryCustomerRepository
+    cases: InMemoryCaseRepository
+    turns: InMemoryTurnRepository
+    assignments: InMemoryAssignmentRepository
+    case_slots: InMemoryCustomerCaseSlotRepository
+    routing_steps: InMemoryRoutingStepRepository
     event_log: InMemoryEventLogRepository
 
     def __init__(
@@ -30,22 +44,52 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self._store = store
 
     async def _begin(self) -> None:
-        self.staff = InMemoryStaffRepository(self._store.staff, self.track)
-        self.login_accounts = InMemoryLoginAccountRepository(self._store.login_accounts, self.track)
-        self.mfa_challenges = InMemoryMfaChallengeRepository(self._store.mfa_challenges, self.track)
-        self.sessions = InMemoryStaffSessionRepository(self._store.sessions, self.track)
-        self.event_log = InMemoryEventLogRepository(self._store.events)
+        store, track = self._store, self.track
+        self.staff = InMemoryStaffRepository(store.staff, track)
+        self.login_accounts = InMemoryLoginAccountRepository(store.login_accounts, track)
+        self.mfa_challenges = InMemoryMfaChallengeRepository(store.mfa_challenges, track)
+        self.sessions = InMemoryStaffSessionRepository(store.sessions, track)
+        self.availability = InMemoryAnalystAvailabilityRepository(store.availability, track)
+        self.customers = InMemoryCustomerRepository(store.customers)
+        self.cases = InMemoryCaseRepository(store.cases, track)
+        self.turns = InMemoryTurnRepository(store.turns)
+        self.assignments = InMemoryAssignmentRepository(store.assignments)
+        self.case_slots = InMemoryCustomerCaseSlotRepository(store.case_slots, track)
+        self.routing_steps = InMemoryRoutingStepRepository(store.routing_steps)
+        self.event_log = InMemoryEventLogRepository(store.events)
 
     def _repositories(
         self,
     ) -> tuple[
-        InMemoryStaffRepository,
-        InMemoryLoginAccountRepository,
-        InMemoryMfaChallengeRepository,
-        InMemoryStaffSessionRepository,
-        InMemoryEventLogRepository,
+        InMemoryStaffRepository
+        | InMemoryLoginAccountRepository
+        | InMemoryMfaChallengeRepository
+        | InMemoryStaffSessionRepository
+        | InMemoryAnalystAvailabilityRepository
+        | InMemoryCustomerRepository
+        | InMemoryCaseRepository
+        | InMemoryTurnRepository
+        | InMemoryAssignmentRepository
+        | InMemoryCustomerCaseSlotRepository
+        | InMemoryRoutingStepRepository
+        | InMemoryEventLogRepository,
+        ...,
     ]:
-        return (self.staff, self.login_accounts, self.mfa_challenges, self.sessions, self.event_log)
+        # Aggregates with a version first: a lost race surfaces as ConcurrentUpdateError.
+        return (
+            self.staff,
+            self.login_accounts,
+            self.mfa_challenges,
+            self.sessions,
+            self.availability,
+            self.case_slots,
+            self.cases,
+            self.customers,
+            self.turns,
+            self.assignments,
+            self.routing_steps,
+            self.event_log,
+        )
 
     async def _commit(self) -> None:
         # No await between verify and apply: the check-and-write is atomic on the event loop.

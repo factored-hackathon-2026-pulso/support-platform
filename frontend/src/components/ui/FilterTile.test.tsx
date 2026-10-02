@@ -29,6 +29,15 @@ function CaseFilters({ initial = 'all' }: { initial?: string | null }) {
 }
 
 describe('FilterTile', () => {
+  it('never ellipsises the label ("Por responder" reads whole at 320 px)', () => {
+    render(<CaseFilters />)
+    const label = screen.getByText('Por responder')
+    // jsdom has no layout: the regression guard is the class contract (no
+    // truncate, nowrap, tight tracking; measured at 1280 and 1440 in a browser).
+    expect(label).not.toHaveClass('truncate')
+    expect(label).toHaveClass('whitespace-nowrap', 'tracking-tight')
+  })
+
   it('is a single-choice filter with aria-checked', async () => {
     const user = userEvent.setup()
     render(<CaseFilters />)

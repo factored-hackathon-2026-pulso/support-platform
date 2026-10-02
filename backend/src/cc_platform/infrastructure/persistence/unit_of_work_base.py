@@ -3,8 +3,8 @@
 Subclasses provide the storage-specific ``_begin``/``_commit``/``_rollback``/``_close`` and
 the repositories; this class owns the event pipeline shared by all of them:
 
-collect pending domain events → wrap as ``EventRecord`` (id + ingested_at) → append to the
-event log inside the transaction → commit → publish on the bus.
+collect pending domain events (in recording order) → wrap as ``EventRecord`` (id +
+ingested_at) → append to the event log inside the transaction → commit → publish on the bus.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.event_log import EventLogRepository
 from cc_platform.application.ports.ids import IdGenerator
-from cc_platform.domain.shared.aggregate import AggregateRoot
+from cc_platform.domain.shared.aggregate import AggregateRoot, next_event_stamp
 from cc_platform.domain.shared.events import DomainEvent
 from cc_platform.domain.shared.ids import IdPrefix
 
@@ -31,7 +31,7 @@ class BaseUnitOfWork(ABC):
         self._ids = ids
         self._clock = clock
         self._tracked: dict[int, AggregateRoot] = {}
-        self._loose_events: list[DomainEvent] = []
+        self._loose_events: list[tuple[int, DomainEvent]] = []
 
     # ------------------------------------------------------------------ lifecycle
     async def __aenter__(self) -> Self:
@@ -72,14 +72,16 @@ class BaseUnitOfWork(ABC):
         self._tracked.setdefault(id(aggregate), aggregate)
 
     def record(self, *events: DomainEvent) -> None:
-        self._loose_events.extend(events)
+        self._loose_events.extend((next_event_stamp(), event) for event in events)
 
     def _collect_records(self) -> list[EventRecord]:
-        events: list[DomainEvent] = []
+        stamped: list[tuple[int, DomainEvent]] = []
         for aggregate in self._tracked.values():
-            events.extend(aggregate.pull_events())
-        events.extend(self._loose_events)
+            stamped.extend(aggregate.pull_stamped_events())
+        stamped.extend(self._loose_events)
         self._loose_events.clear()
+        # Recording order across aggregates and loose events (see ``next_event_stamp``).
+        events = [event for _stamp, event in sorted(stamped, key=lambda item: item[0])]
         ingested_at = self._clock.now()
         return [
             EventRecord(

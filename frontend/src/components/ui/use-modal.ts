@@ -83,7 +83,8 @@ interface UseModalOptions {
 
 /**
  * Behavior shared by Dialog and Sheet: focus trap, Escape to close, click on the
- * backdrop to close, restore focus on close and lock page scroll while open.
+ * backdrop to close, restore focus on close (when the trigger is still in the
+ * document) and lock page scroll while open.
  * Modals stack (a Dialog opened from a Sheet): only the top-most one handles
  * keys and backdrop clicks, and the layers below it plus #root are `inert`.
  */
@@ -168,7 +169,9 @@ export function useModal<T extends HTMLElement = HTMLDialogElement>({
       if (index !== -1) stack.splice(index, 1)
       syncInert()
       document.body.style.overflow = overflow
-      previouslyFocused?.focus()
+      // The trigger may be gone (closing the dialog removed it, e.g. "Cerrar
+      // caso" switches case): then the caller decides where focus goes.
+      if (previouslyFocused?.isConnected) previouslyFocused.focus()
     }
   }, [open, initialFocusRef, dismissOnOutsideClick])
 

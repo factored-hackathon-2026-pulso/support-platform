@@ -1,5 +1,6 @@
 """People context: staff, their roles and how they sign in."""
 
+from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
 from cc_platform.domain.people.errors import AccountLockedError, MfaChallengeInvalidError
 from cc_platform.domain.people.events import (
     AccountLocked,
@@ -9,6 +10,7 @@ from cc_platform.domain.people.events import (
     PasswordAccepted,
     SessionEnded,
     SessionStarted,
+    StaffAvailabilityChanged,
 )
 from cc_platform.domain.people.login_account import (
     AuthFactor,
@@ -32,7 +34,9 @@ __all__ = [
     "ROLE_PRECEDENCE",
     "AccountLocked",
     "AccountLockedError",
+    "AnalystAvailability",
     "AuthFactor",
+    "AvailabilityStatus",
     "FailedAttemptCounter",
     "FailedAttemptOutcome",
     "Language",
@@ -51,6 +55,7 @@ __all__ = [
     "SessionEnded",
     "SessionStarted",
     "Staff",
+    "StaffAvailabilityChanged",
     "StaffLevel",
     "StaffRole",
     "StaffSession",

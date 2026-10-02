@@ -22,6 +22,18 @@ describe('session token store', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps each principal under its own storage key', () => {
+    const staff = createSessionTokenStore()
+    const customer = createSessionTokenStore('cc.customer.token')
+    staff.set('staff-token')
+    customer.set('customer-token')
+    expect(sessionStorage.getItem('cc.session.token')).toBe('staff-token')
+    expect(sessionStorage.getItem('cc.customer.token')).toBe('customer-token')
+    customer.clear()
+    expect(staff.get()).toBe('staff-token')
+    expect(createSessionTokenStore('cc.customer.token').get()).toBeNull()
+  })
+
   it('restores the token after a reload of the tab', () => {
     sessionStorage.setItem('cc.session.token', 'persisted')
     expect(createSessionTokenStore().get()).toBe('persisted')

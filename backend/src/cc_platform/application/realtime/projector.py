@@ -3,7 +3,9 @@
 ``RealtimeProjector`` turns committed domain events into envelopes and fans them out to the
 topics each event maps to. Mapping is a registry (``TopicMapper``): by default an event with
 a ``case_id`` goes to ``case:<id>``; contexts register extra rules for their events (e.g.
-an assignment change also goes to ``inbox:<analyst>``).
+an assignment change also goes to ``inbox:<analyst>``). A context that publishes its own,
+richer envelopes (the cases context: ``CaseRealtimeProjector``) ``suppress``es its event
+types here so they are not forwarded raw as well.
 
 ``SessionTerminator`` closes the sockets of a session as soon as it ends (logout).
 """
@@ -24,11 +26,18 @@ type TopicRule = Callable[[DomainEvent], Iterable[Topic]]
 class TopicMapper:
     def __init__(self) -> None:
         self._rules: list[tuple[type[DomainEvent], TopicRule]] = []
+        self._suppressed: tuple[type[DomainEvent], ...] = ()
 
     def register(self, event_type: type[DomainEvent], rule: TopicRule) -> None:
         self._rules.append((event_type, rule))
 
+    def suppress(self, *event_types: type[DomainEvent]) -> None:
+        """Never forward these events raw (another projection owns their envelopes)."""
+        self._suppressed = (*self._suppressed, *event_types)
+
     def topics_for(self, event: DomainEvent) -> list[Topic]:
+        if isinstance(event, self._suppressed):
+            return []
         topics: dict[str, Topic] = {}
         if event.case_id is not None:
             case_topic = Topic.case(event.case_id)
@@ -64,9 +73,7 @@ class RealtimeProjector:
         topics = self._mapper.topics_for(record.event)
         if not topics:
             return
-        envelope = envelope_for(record)
-        for topic in topics:
-            await self._hub.publish(str(topic), envelope)
+        await self._hub.publish_many((str(topic) for topic in topics), envelope_for(record))
 
 
 class SessionTerminator:

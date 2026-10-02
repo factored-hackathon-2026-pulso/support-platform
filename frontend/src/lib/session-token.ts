@@ -7,23 +7,23 @@
  * directly. Nothing else should touch sessionStorage for auth.
  */
 
-const STORAGE_KEY = 'cc.session.token'
+const STAFF_STORAGE_KEY = 'cc.session.token'
 
 type Listener = () => void
 
-function readStorage(): string | null {
+function readStorage(key: string): string | null {
   try {
-    return globalThis.sessionStorage?.getItem(STORAGE_KEY) ?? null
+    return globalThis.sessionStorage?.getItem(key) ?? null
   } catch {
     // Storage can be blocked (privacy mode, sandboxed iframes): memory still works.
     return null
   }
 }
 
-function writeStorage(token: string | null): void {
+function writeStorage(key: string, token: string | null): void {
   try {
-    if (token === null) globalThis.sessionStorage?.removeItem(STORAGE_KEY)
-    else globalThis.sessionStorage?.setItem(STORAGE_KEY, token)
+    if (token === null) globalThis.sessionStorage?.removeItem(key)
+    else globalThis.sessionStorage?.setItem(key, token)
   } catch {
     // See readStorage.
   }
@@ -36,14 +36,15 @@ export interface SessionTokenStore {
   subscribe(listener: Listener): () => void
 }
 
-export function createSessionTokenStore(): SessionTokenStore {
-  let token: string | null = readStorage()
+/** One store per principal: staff (`cc.session.token`) and the simulator customer. */
+export function createSessionTokenStore(storageKey: string = STAFF_STORAGE_KEY): SessionTokenStore {
+  let token: string | null = readStorage(storageKey)
   const listeners = new Set<Listener>()
 
   function set(next: string | null) {
     if (next === token) return
     token = next
-    writeStorage(next)
+    writeStorage(storageKey, next)
     for (const listener of listeners) listener()
   }
 
@@ -58,5 +59,12 @@ export function createSessionTokenStore(): SessionTokenStore {
   }
 }
 
-/** The app-wide store. Tests call `sessionToken.clear()` between cases. */
+/** The app-wide staff store. Tests call `sessionToken.clear()` between cases. */
 export const sessionToken = createSessionTokenStore()
+
+/**
+ * Customer token of the /cliente simulator (audience `cc-customer`). Kept apart
+ * from the staff session on purpose: the staff API client, socket and guards
+ * never see it, and dropping it never signs the staff member out.
+ */
+export const customerSessionToken = createSessionTokenStore('cc.customer.token')

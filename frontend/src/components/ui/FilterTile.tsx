@@ -84,7 +84,7 @@ export function FilterTile({
   return (
     <label
       className={cn(
-        'flex cursor-pointer flex-col rounded-8 border border-l-[3px] bg-surface px-2 py-1.5 text-left text-ink transition-colors',
+        'flex min-w-0 cursor-pointer flex-col rounded-8 border border-l-[3px] bg-surface py-1.5 pr-1 pl-1.5 text-left text-ink transition-colors',
         'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent',
         toneBorderLeft[tone],
         selected
@@ -111,7 +111,9 @@ export function FilterTile({
       >
         {count}
       </span>{' '}
-      <span className="truncate text-12 text-ink-2">{label}</span>
+      {/* Never ellipsised (canvas: nowrap): "Por responder" must read whole in a
+          320 px list, three tiles per row. */}
+      <span className="text-12 tracking-tight whitespace-nowrap text-ink-2">{label}</span>
     </label>
   )
 }

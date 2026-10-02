@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 from cc_platform.api.problems import ProblemCode
+from cc_platform.domain.cases.values import CaseStatus
 from cc_platform.domain.people.staff import StaffRole
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
@@ -42,7 +43,8 @@ class ProblemDetails(ApiModel):
     """RFC 7807 problem. ``code`` is the stable machine identifier clients branch on.
 
     The optional members below are the documented extensions; a domain error may add other
-    structured details (e.g. ``currentStatus``), hence ``additionalProperties``.
+    structured details (e.g. ``channel`` on ``channel_not_supported``), hence
+    ``additionalProperties``.
     """
 
     model_config = ConfigDict(extra="allow")
@@ -66,6 +68,9 @@ class ProblemDetails(ApiModel):
     )
     errors: list[ValidationIssue] | None = Field(
         default=None, description="validation_error: one entry per invalid field."
+    )
+    current_status: CaseStatus | None = Field(
+        default=None, description="invalid_transition, case_closed: the case status now."
     )
 
 

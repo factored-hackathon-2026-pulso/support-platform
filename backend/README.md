@@ -49,6 +49,41 @@ Multi-role personas exercise the role switcher: Renata (Supervisora ↔ Automati
 note `au3`), Felipe (Workspace ↔ "Por aprobar") and Valeria (Automatización ↔ Administración,
 four-eyes on admin changes).
 
+Availability ("Disponible" / "En pausa"): only **Daniela** starts available, so new chats land
+on her. Sign in as Sebastián (es, pt, no cases) and switch to "Disponible"
+(`PUT /api/v1/me/availability`) to see least-loaded balancing.
+
+## Seeded cases and the customer chat simulator (slice 1)
+
+Daniela's "Casos" holds seven canvas stories with invented people ("Datos de ejemplo"):
+Todos 7 · Por responder 3 · En curso 1 · Nuevos 1 · Por llamar 1 · En espera 1 (web dispute,
+impatient app chat, Portuguese web chat, email, inbound call, CONDUSEF outbound call, es-AR
+chat waiting on the customer). Times are relative to the **first** start (delete
+`cc_platform.db`, or use `CC_PERSISTENCE=memory`, to re-anchor them).
+
+The simulator (`/cliente` in the SPA) chats as a seeded customer, no password:
+
+```bash
+curl -s localhost:8000/api/v1/customer/demo-customers          # picker (no auth)
+curl -s localhost:8000/api/v1/customer/sessions -H 'content-type: application/json' \
+  -d '{"customerId":"CUS-00000000000000000000002004"}'           # Rafael (pt-BR) → token
+curl -s localhost:8000/api/v1/customer/conversation/turns -H 'Authorization: Bearer <token>' \
+  -H 'Idempotency-Key: 6b0e…' -H 'content-type: application/json' \
+  -d '{"text":"Olá, não reconheço uma compra","clientMessageId":"6b0e…"}'
+```
+
+The first message opens a case; routing runs in the background through the null judge →
+tree → AI agent (each abstains: `component_not_connected`) and assigns an available analyst
+who speaks the language (rule 3: Portuguese only to a Portuguese speaker, `H1`), or queues
+the case until one becomes available. Customers 1001, 1002, 1003 and 1007 (Daniela's chat
+stories) are also in the picker: writing as them moves their case live.
+
+Analyst endpoints: `GET /cases/inbox?status=&q=`, `GET /cases/{caseId}`,
+`GET|POST /cases/{caseId}/turns`, `POST /cases/{caseId}/read`, `POST /cases/{caseId}/close`,
+`GET|PUT /me/availability`. Customer endpoints: `GET /customer/demo-customers`,
+`POST /customer/sessions`, `GET /customer/conversation`, `POST /customer/conversation/turns`.
+The full contract is `docs/platform/api/slice-1-cases.md`.
+
 ```bash
 # 1) password → MFA challenge
 curl -s localhost:8000/api/v1/auth/login -H 'content-type: application/json' \
@@ -78,10 +113,18 @@ locking), so batching guesses does not bypass the lock, and a challenge is redee
   changed the same record first: reload and retry. Unexpected errors are `500 internal_error`
   problems that still carry CORS headers, so the browser can read them.
 - Every response carries `X-Request-ID` / `X-Correlation-ID` (accepted from the client).
-- Realtime: `ws://localhost:8000/api/v1/ws?token=<session token>`; send
-  `{"action":"subscribe","topic":"case:CASE-…"}` (also `inbox:STF-…`, `approvals`),
-  `unsubscribe`, `ping`; receive `{type,id,occurredAt,data}` envelopes. Close code 4401 means
-  "sign in again" (bad token, logout, expiry).
+- Commands that create things take an `Idempotency-Key` header. Chat turns use it as the
+  `clientMessageId`: a retry with the same text answers `200` + `Idempotent-Replayed: true`
+  and the original turn; the same id with another text is `409 idempotency_conflict`.
+- Realtime: `ws://localhost:8000/api/v1/ws?token=<token>` (a staff session token or a
+  customer token); send `{"action":"subscribe","topic":"case:CASE-…"}` (also `inbox:STF-…`,
+  `approvals`, and for customers only their own `customer:CUS-…`), `unsubscribe`, `ping`;
+  receive `{type,id,occurredAt,data}` envelopes. `case:` topics are limited to the assignee
+  analyst and supervisors. Case envelopes (`turn.created`, `case.updated`, `case.assigned`,
+  `inbox.counts`, `availability.updated`, `conversation.updated`) carry camelCase payloads
+  equal to the REST schemas (`CaseRealtimeProjector`). An envelope bound to several topics
+  (`case.updated` → `case:` + `inbox:`) reaches each connection once (`publish_many`). Close code 4401 means "sign in again"
+  (bad token, logout, expiry).
 
 ## Quality gates
 
@@ -122,13 +165,14 @@ realtime hub, topic policy, health probes, build info), never the container or a
 
 ## Concurrency (optimistic locking)
 
-Every aggregate has a `version`. Repositories save with a compare-and-set
+Every aggregate (staff, sessions, cases, the one-open-case slot per customer, availability)
+has a `version`. Repositories save with a compare-and-set
 (`UPDATE … WHERE id = :id AND version = :loaded`, then `version + 1`; the in-memory adapter
 checks the same at commit) and raise `ConcurrentUpdateError` when another request saved
 first. Commands that are safe to repeat run inside `retry_on_conflict`
 (`application/concurrency.py`) and re-evaluate their rules on fresh state; otherwise the API
 answers `409 concurrent_update`. New aggregates (cases, approvals, assignments) get this by
-extending `_VersionedRepository` / `_StagedRepository`; their state machines then cannot
+extending `VersionedRepository` / `_StagedRepository`; their state machines then cannot
 lose updates.
 
 ## Known gaps
@@ -149,4 +193,18 @@ lose updates.
   and reset on restart; they are not written to the event log.
 - WebSocket auth uses the `?token=` query parameter (redacted in logs). First-message auth
   (brief §4.4) can be added as an alternative without breaking clients.
-- `Idempotency-Key` handling arrives with the first create-command endpoints (cases, turns).
+- Customer sessions are stateless signed tokens (audience `cc-customer`, 8 h): no revocation
+  list yet. The simulator is a dev/demo tool; anyone can pick a seeded customer.
+- No presence: availability persists across sign-ins (an analyst who closes the browser
+  while "Disponible" keeps receiving cases). No capacity cap per analyst yet.
+- Live cases have `topic: null` ("Sin clasificar") and priority `medium`: the judge is a null
+  responder. Phone and email cases exist only as seeds and are read-only (`channel_not_supported`).
+- Routing runs as an in-process background task after `case.opened`. If the process dies
+  before it runs, the case stays in `routing` until the next start (`RecoverRouting` re-routes
+  it and drains the queue).
+- The realtime projection re-reads the case for each committed case event (a few queries per
+  message); fine for one process, revisit with the broker-backed hub.
+- In-memory SQLite (`sqlite+aiosqlite:///:memory:`) shares one connection between all Units
+  of Work, so concurrent work (background routing during a request) would share a
+  transaction. Use a file database (the default) or `CC_PERSISTENCE=memory`; the API tests
+  use a temporary file.

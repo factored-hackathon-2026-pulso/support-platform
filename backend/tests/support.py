@@ -14,8 +14,10 @@ from cc_platform.application.people.auth import (
     VerifyMfa,
 )
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
-from cc_platform.application.security import Actor
+from cc_platform.application.security import Actor, CustomerActor
+from cc_platform.bootstrap.container import Container, build_container
 from cc_platform.bootstrap.settings import Settings
+from cc_platform.domain.cases.values import CaseChannel
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaMethod, MfaPolicy
 from cc_platform.domain.people.staff import StaffRole
@@ -28,7 +30,13 @@ from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryU
 from cc_platform.infrastructure.security.login_attempts import InMemoryUnknownLoginAttempts
 from cc_platform.infrastructure.security.mfa import DevMfaVerifier
 from cc_platform.infrastructure.security.tokens import HmacSessionTokenService
-from cc_platform.infrastructure.seed.people import DEMO_PASSWORD, DEMO_STAFF
+from cc_platform.infrastructure.seed.customers import DEMO_CUSTOMERS
+from cc_platform.infrastructure.seed.people import (
+    DEMO_PASSWORD,
+    DEMO_STAFF,
+    StaffSeed,
+    seed_staff_id,
+)
 
 TEST_SECRET = "test-secret-that-is-long-enough-for-hs256-0123"
 DEV_MFA_CODE = "000000"
@@ -186,3 +194,40 @@ def make_actor(*roles: StaffRole, staff_id: str = "STF-" + "0" * 25 + "7") -> Ac
         session_id="SES-" + "0" * 25 + "1",
         session_expires_at=datetime(2026, 10, 2, 22, tzinfo=UTC),
     )
+
+
+# ----------------------------------------------------------------------------- slice 1 helpers
+async def memory_container(*, seed: bool = True, clock: FixedClock | None = None) -> Container:
+    """The real composition (use cases, projections, routing) over the in-memory UoW."""
+    container = build_container(
+        make_settings(persistence="memory", seed_demo_data=seed),
+        clock=clock or FixedClock(),
+        ids=SequentialIdGenerator(),
+    )
+    await container.startup()
+    return container
+
+
+def actor_for(seed: StaffSeed) -> Actor:
+    return Actor(
+        staff_id=seed_staff_id(seed.number),
+        name=seed.name,
+        roles=seed.roles,
+        session_id="SES-" + str(seed.number).zfill(26),
+        session_expires_at=datetime(2026, 10, 3, tzinfo=UTC),
+    )
+
+
+def customer_actor(number: int, *, channel: CaseChannel = CaseChannel.APP_CHAT) -> CustomerActor:
+    seed = next(s for s in DEMO_CUSTOMERS if s.number == number)
+    return CustomerActor(
+        customer_id=seed.id,
+        display_name=seed.name,
+        session_id="CSN-" + str(number).zfill(26),
+        channel=channel,
+        session_expires_at=datetime(2026, 10, 3, tzinfo=UTC),
+    )
+
+
+SEBASTIAN = next(s for s in DEMO_STAFF if s.name == "Sebastián Cárdenas")
+JULIAN = next(s for s in DEMO_STAFF if s.name == "Julián Ortega")

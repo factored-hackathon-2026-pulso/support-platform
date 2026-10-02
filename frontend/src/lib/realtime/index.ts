@@ -7,7 +7,14 @@ export type { EnvelopeHandler, EnvelopeHandlerRegistry, RealtimeRegistration } f
 export { useRealtimeClient, useRealtimeStatus, useRealtimeSubscription } from './hooks'
 export { RealtimeProvider } from './react'
 export type { RealtimeProviderProps } from './react'
-export { CONTROL_ENVELOPE_TYPES, isControlEnvelope, parseEnvelope, topics } from './types'
+export {
+  CONTROL_ENVELOPE_TYPES,
+  envelopeCaseId,
+  envelopePayload,
+  isControlEnvelope,
+  parseEnvelope,
+  topics,
+} from './types'
 export type {
   ClientMessage,
   ConnectionStatus,

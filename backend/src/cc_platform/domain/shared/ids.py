@@ -50,6 +50,8 @@ class IdPrefix(StrEnum):
     SUGGESTION = "SUG"
     SIGNAL = "SIG"
     COMPONENT = "CMP"
+    ASSIGNMENT = "ASG"
+    CUSTOMER_SESSION = "CSN"
 
 
 def encode_body(timestamp_ms: int, randomness: int) -> str:

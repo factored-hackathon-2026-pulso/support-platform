@@ -1,16 +1,30 @@
+import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router'
-import { ScreenPlaceholder } from '@/components/layout'
+import {
+  WorkspaceScreen,
+  parseWorkspaceSearch,
+  toWorkspaceSearch,
+  type WorkspaceStateChangeOptions,
+  type WorkspaceUrlState,
+} from '@/features/workspace'
 
-/** /analista — Workspace. The selected case lives in the URL (?caso=CASE-…). */
+/**
+ * /analista — Workspace. Shareable state lives in the URL:
+ * `?caso=&estado=&q=&panel=&lista=&apoyo=` (contract §7.1).
+ */
 export default function WorkspaceRoute() {
-  const [searchParams] = useSearchParams()
-  const caseId = searchParams.get('caso')
-  return (
-    <ScreenPlaceholder
-      title="Casos"
-      subtitle="Contactos abiertos, conversación, copiloto y herramientas"
-      description="Aquí atiendes tus casos: la lista por estado, la conversación con el cliente y el panel de apoyo."
-      detail={caseId ? `Caso seleccionado: ${caseId}` : null}
-    />
+  const [searchParams, setSearchParams] = useSearchParams()
+  const state = useMemo(() => parseWorkspaceSearch(searchParams), [searchParams])
+
+  const onStateChange = useCallback(
+    (patch: Partial<WorkspaceUrlState>, options?: WorkspaceStateChangeOptions) => {
+      setSearchParams(
+        (current) => toWorkspaceSearch({ ...parseWorkspaceSearch(current), ...patch }),
+        { replace: options?.replace ?? false },
+      )
+    },
+    [setSearchParams],
   )
+
+  return <WorkspaceScreen state={state} onStateChange={onStateChange} />
 }

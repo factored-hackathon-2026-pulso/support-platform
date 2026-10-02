@@ -1,0 +1,514 @@
+import { act, screen, waitFor, within } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiProblem } from '@/lib/api'
+import { makeCaseSummary } from '@/test/case-fixtures'
+import {
+  CASE_ID,
+  envelope,
+  makeAnalystTurn,
+  makeCaseDetail,
+  makeTurn,
+  seededTurns,
+  stop,
+} from '@/test/conversation-fixtures'
+import { analystStaff } from '@/test/fixtures'
+import { renderWithProviders } from '@/test/render'
+import * as api from '../api'
+import type { CaseDetail, PostTurnResponse, TurnPage } from '../types'
+import { ConversationPane } from './ConversationPane'
+
+vi.mock('../api', async (importOriginal) => {
+  const actual = await importOriginal<typeof api>()
+  return {
+    ...actual,
+    fetchCaseDetail: vi.fn<typeof actual.fetchCaseDetail>(),
+    fetchTurns: vi.fn<typeof actual.fetchTurns>(),
+    postAnalystTurn: vi.fn<typeof actual.postAnalystTurn>(),
+    markCaseRead: vi.fn<typeof actual.markCaseRead>(),
+    closeCase: vi.fn<typeof actual.closeCase>(),
+  }
+})
+
+const page = (overrides: Partial<TurnPage> = {}): TurnPage => ({
+  items: seededTurns(),
+  olderCursor: null,
+  lastSequence: 4,
+  ...overrides,
+})
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function setup(detail: CaseDetail = makeCaseDetail(), turns: TurnPage = page()) {
+  vi.mocked(api.fetchCaseDetail).mockResolvedValue(detail)
+  vi.mocked(api.fetchTurns).mockResolvedValue(turns)
+  vi.mocked(api.markCaseRead).mockResolvedValue(detail.case)
+  const onClosed = vi.fn<(caseId: string) => void>()
+  const view = renderWithProviders(
+    <ConversationPane caseId={detail.case.id} onClosed={onClosed} />,
+    {
+      staff: analystStaff,
+    },
+  )
+  return { ...view, onClosed }
+}
+
+function response(text: string, clientMessageId: string, sequence = 5): PostTurnResponse {
+  return {
+    turn: makeAnalystTurn(sequence, text, clientMessageId),
+    case: makeCaseSummary({
+      version: 4,
+      lastSequence: sequence,
+      assignedAnalystId: analystStaff.id,
+    }),
+  }
+}
+
+beforeEach(() => {
+  vi.mocked(api.postAnalystTurn).mockReset()
+})
+
+describe('ConversationPane · chat', () => {
+  it('renders the header and every kind of turn', async () => {
+    setup()
+    expect(
+      await screen.findByRole('heading', { name: 'Marcela Quintana Pardo' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText(CASE_ID)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Cargo no reconocido · Colombia · Barranquilla · chat web · prioridad media/,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Datos de ejemplo')).toBeInTheDocument()
+
+    const messages = await screen.findByRole('list', { name: 'Mensajes' })
+    expect(within(messages).getByText(/hay un cargo en mi tarjeta/)).toBeInTheDocument()
+    expect(within(messages).getByText(/retiro en cajero por \$1\.585\.208/)).toBeInTheDocument()
+    expect(within(messages).getByText(/Escalado por el agente de disputas/)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Escribe al cliente' })).toBeInTheDocument()
+  })
+
+  it('subscribes to the case topic', async () => {
+    const { sockets } = setup()
+    await screen.findByRole('list', { name: 'Mensajes' })
+    act(() => sockets.last()?.open())
+    expect(sockets.last()?.messages()).toContainEqual({
+      action: 'subscribe',
+      topic: `case:${CASE_ID}`,
+    })
+  })
+
+  it('sends optimistically and settles once, even with the realtime echo', async () => {
+    const pending = deferred<PostTurnResponse>()
+    vi.mocked(api.postAnalystTurn).mockReturnValue(pending.promise)
+    const { user, sockets } = setup()
+    const box = await screen.findByRole('textbox', { name: 'Escribe al cliente' })
+    await screen.findByRole('list', { name: 'Mensajes' })
+    act(() => sockets.last()?.open())
+
+    await user.type(box, 'Hola, Marcela. Ya reviso tu caso.{Enter}')
+    expect(box).toHaveValue('')
+    expect(screen.getByText('Hola, Marcela. Ya reviso tu caso.')).toBeInTheDocument()
+    expect(screen.getByText('Enviando…')).toBeInTheDocument()
+
+    const [caseId, body] = vi.mocked(api.postAnalystTurn).mock.calls[0]!
+    expect(caseId).toBe(CASE_ID)
+    expect(body.text).toBe('Hola, Marcela. Ya reviso tu caso.')
+
+    // The echo can beat the POST response: same clientMessageId, one bubble.
+    const confirmed = response(body.text, body.clientMessageId)
+    act(() => sockets.last()?.receive(envelope('turn.created', confirmed.turn)))
+    await act(async () => pending.resolve(confirmed))
+
+    await waitFor(() => expect(screen.queryByText('Enviando…')).not.toBeInTheDocument())
+    expect(screen.getAllByText('Hola, Marcela. Ya reviso tu caso.')).toHaveLength(1)
+  })
+
+  it('keeps Shift+Enter as a new line', async () => {
+    const { user } = setup()
+    const box = await screen.findByRole('textbox', { name: 'Escribe al cliente' })
+    await user.type(box, 'línea uno{Shift>}{Enter}{/Shift}línea dos')
+    expect(box).toHaveValue('línea uno\nlínea dos')
+    expect(api.postAnalystTurn).not.toHaveBeenCalled()
+  })
+
+  it('marks a failed send and retries it with the same clientMessageId', async () => {
+    vi.mocked(api.postAnalystTurn).mockRejectedValueOnce(ApiProblem.network())
+    const { user } = setup()
+    const box = await screen.findByRole('textbox', { name: 'Escribe al cliente' })
+    await user.type(box, '¿Me confirma la fecha?')
+    await user.click(screen.getByRole('button', { name: 'Enviar' }))
+
+    expect(await screen.findByText('No se envió')).toBeInTheDocument()
+    const firstId = vi.mocked(api.postAnalystTurn).mock.calls[0]![1].clientMessageId
+
+    vi.mocked(api.postAnalystTurn).mockResolvedValueOnce(
+      response('¿Me confirma la fecha?', firstId),
+    )
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+
+    await waitFor(() => expect(screen.queryByText('No se envió')).not.toBeInTheDocument())
+    expect(vi.mocked(api.postAnalystTurn).mock.calls[1]![1].clientMessageId).toBe(firstId)
+    expect(screen.getAllByText('¿Me confirma la fecha?')).toHaveLength(1)
+  })
+
+  it('does not offer a retry when the case was closed meanwhile', async () => {
+    vi.mocked(api.postAnalystTurn).mockRejectedValueOnce(
+      new ApiProblem({ status: 409, code: 'case_closed' }),
+    )
+    const { user } = setup()
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Escribe al cliente' }),
+      'Hola{Enter}',
+    )
+    expect(await screen.findByText('No se envió: el caso ya está cerrado.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+  })
+
+  it('merges live customer turns and fills sequence gaps', async () => {
+    const { sockets } = setup()
+    await screen.findByRole('list', { name: 'Mensajes' })
+    act(() => sockets.last()?.open())
+
+    act(() =>
+      sockets.last()?.receive(envelope('turn.created', makeTurn({ sequence: 5, text: 'hola?' }))),
+    )
+    expect(await screen.findByText('hola?')).toBeInTheDocument()
+
+    vi.mocked(api.fetchTurns).mockResolvedValueOnce({
+      items: [
+        makeTurn({ sequence: 6, text: 'hola?? hay alguien??' }),
+        makeTurn({ sequence: 7, text: 'contesten!!' }),
+      ],
+      olderCursor: null,
+      lastSequence: 7,
+    })
+    act(() =>
+      sockets
+        .last()
+        ?.receive(envelope('turn.created', makeTurn({ sequence: 7, text: 'contesten!!' }))),
+    )
+    expect(await screen.findByText('hola?? hay alguien??')).toBeInTheDocument()
+    expect(api.fetchTurns).toHaveBeenLastCalledWith(
+      CASE_ID,
+      { afterSequence: 5, limit: 200 },
+      expect.anything(),
+    )
+    expect(screen.getAllByText('contesten!!')).toHaveLength(1)
+  })
+
+  it('loads older messages above the current ones', async () => {
+    const { user } = setup(
+      makeCaseDetail(),
+      page({ items: seededTurns().slice(2), olderCursor: 'c-1' }),
+    )
+    const button = await screen.findByRole('button', { name: 'Cargar mensajes anteriores' })
+    const olderPage = deferred<TurnPage>()
+    vi.mocked(api.fetchTurns).mockReturnValueOnce(olderPage.promise)
+    await user.click(button)
+    // History is not news: the log is busy while the older page is merged.
+    const log = screen.getByRole('log', { name: 'Conversación del caso' })
+    expect(log).toHaveAttribute('aria-busy', 'true')
+    await act(async () =>
+      olderPage.resolve({ items: seededTurns().slice(0, 2), olderCursor: null, lastSequence: 4 }),
+    )
+    expect(await screen.findByText(/hay un cargo en mi tarjeta/)).toBeInTheDocument()
+    await waitFor(() => expect(log).not.toHaveAttribute('aria-busy'))
+    expect(api.fetchTurns).toHaveBeenLastCalledWith(CASE_ID, { cursor: 'c-1' })
+    expect(
+      screen.queryByRole('button', { name: 'Cargar mensajes anteriores' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('marks a new case as read with the last sequence', async () => {
+    const detail = makeCaseDetail()
+    detail.case = { ...detail.case, status: 'assigned', inboxStatus: 'new', lastSequence: 4 }
+    setup(detail)
+    await waitFor(() => expect(api.markCaseRead).toHaveBeenCalledWith(CASE_ID, 4), {
+      timeout: 2000,
+    })
+  })
+})
+
+describe('ConversationPane · ordering and gaps', () => {
+  it('posts quick replies one after another, in the order they were typed', async () => {
+    const posts = [deferred<PostTurnResponse>(), deferred<PostTurnResponse>()]
+    vi.mocked(api.postAnalystTurn)
+      .mockReturnValueOnce(posts[0]!.promise)
+      .mockReturnValueOnce(posts[1]!.promise)
+    const { user } = setup()
+    const box = await screen.findByRole('textbox', { name: 'Escribe al cliente' })
+    await user.type(box, 'uno{Enter}')
+    await user.type(box, 'dos{Enter}')
+    // The second POST waits for the first: the server numbers turns in commit order.
+    expect(api.postAnalystTurn).toHaveBeenCalledTimes(1)
+    const first = vi.mocked(api.postAnalystTurn).mock.calls[0]![1]
+    expect(first.text).toBe('uno')
+    await act(async () => posts[0]!.resolve(response('uno', first.clientMessageId, 5)))
+    await waitFor(() => expect(api.postAnalystTurn).toHaveBeenCalledTimes(2))
+    const second = vi.mocked(api.postAnalystTurn).mock.calls[1]![1]
+    expect(second.text).toBe('dos')
+    await act(async () => posts[1]!.resolve(response('dos', second.clientMessageId, 6)))
+    await waitFor(() => expect(screen.queryByText('Enviando…')).not.toBeInTheDocument())
+    const texts = within(screen.getByRole('list', { name: 'Mensajes' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent)
+    expect(texts.findIndex((t) => t?.includes('uno'))).toBeLessThan(
+      texts.findIndex((t) => t?.includes('dos')),
+    )
+  })
+
+  it('catches up on a customer turn missed while the socket was down', async () => {
+    // Socket down: the customer wrote seq 5; our reply comes back over REST as 6.
+    vi.mocked(api.postAnalystTurn).mockImplementation(async (_caseId, body) =>
+      response(body.text, body.clientMessageId, 6),
+    )
+    const { user } = setup()
+    const box = await screen.findByRole('textbox', { name: 'Escribe al cliente' })
+    await screen.findByRole('list', { name: 'Mensajes' })
+    vi.mocked(api.fetchTurns).mockResolvedValueOnce({
+      items: [
+        makeTurn({ sequence: 5, text: 'fue el 9 de enero' }),
+        makeAnalystTurn(6, 'Ya lo reviso', 'ignored'),
+      ],
+      olderCursor: null,
+      lastSequence: 6,
+    })
+    await user.type(box, 'Ya lo reviso{Enter}')
+    expect(await screen.findByText('fue el 9 de enero')).toBeInTheDocument()
+    // Asked from the hole (4), not from the highest turn held (6).
+    expect(api.fetchTurns).toHaveBeenLastCalledWith(
+      CASE_ID,
+      { afterSequence: 4, limit: 200 },
+      expect.anything(),
+    )
+    expect(screen.getAllByText('Ya lo reviso')).toHaveLength(1)
+  })
+})
+
+describe('ConversationPane · accessibility', () => {
+  it('keeps the focus in the composer after sending with the button', async () => {
+    vi.mocked(api.postAnalystTurn).mockImplementation(async (_caseId, body) =>
+      response(body.text, body.clientMessageId),
+    )
+    const { user } = setup()
+    const box = await screen.findByRole('textbox', { name: 'Escribe al cliente' })
+    const send = screen.getByRole('button', { name: 'Enviar' })
+    expect(send).toHaveAttribute('aria-disabled', 'true')
+    await user.click(send)
+    expect(api.postAnalystTurn).not.toHaveBeenCalled()
+    await user.type(box, 'Hola')
+    expect(send).not.toHaveAttribute('aria-disabled')
+    send.focus()
+    await user.keyboard('{Enter}')
+    expect(api.postAnalystTurn).toHaveBeenCalledTimes(1)
+    expect(box).toHaveFocus()
+  })
+
+  it('mounts the live log with the history in it and updates a sent bubble in place', async () => {
+    const turns = deferred<TurnPage>()
+    const post = deferred<PostTurnResponse>()
+    vi.mocked(api.postAnalystTurn).mockReturnValue(post.promise)
+    const detail = makeCaseDetail()
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue(detail)
+    vi.mocked(api.fetchTurns).mockReturnValue(turns.promise)
+    vi.mocked(api.markCaseRead).mockResolvedValue(detail.case)
+    const { user } = renderWithProviders(<ConversationPane caseId={CASE_ID} />, {
+      staff: analystStaff,
+    })
+    await screen.findByRole('heading', { name: 'Marcela Quintana Pardo' })
+    // The skeleton is not inside a live region: nothing to announce yet.
+    expect(screen.queryByRole('log')).not.toBeInTheDocument()
+    await act(async () => turns.resolve(page()))
+    const log = await screen.findByRole('log', { name: 'Conversación del caso' })
+    expect(log).toHaveAttribute('aria-relevant', 'additions')
+    expect(within(log).getByText(/hay un cargo en mi tarjeta/)).toBeInTheDocument()
+
+    await user.type(screen.getByRole('textbox', { name: 'Escribe al cliente' }), 'Hola{Enter}')
+    const bubble = within(log).getByText('Hola').closest('li')
+    const body = vi.mocked(api.postAnalystTurn).mock.calls[0]![1]
+    await act(async () => post.resolve(response('Hola', body.clientMessageId)))
+    await waitFor(() => expect(screen.queryByText('Enviando…')).not.toBeInTheDocument())
+    // Same node from "Enviando…" to sent: the message is announced once.
+    expect(within(log).getByText('Hola').closest('li')).toBe(bubble)
+  })
+
+  it('keeps "Cargar mensajes anteriores" outside the live log', async () => {
+    setup(makeCaseDetail(), page({ items: seededTurns().slice(2), olderCursor: 'c-1' }))
+    const log = await screen.findByRole('log', { name: 'Conversación del caso' })
+    const button = screen.getByRole('button', { name: 'Cargar mensajes anteriores' })
+    expect(log).not.toContainElement(button)
+  })
+
+  it('shows the meta line whole, with "en portugués", and a short case number', async () => {
+    const detail = makeCaseDetail()
+    detail.case = { ...detail.case, language: 'pt' }
+    setup(detail)
+    const header = (await screen.findByRole('heading', { name: 'Marcela Quintana Pardo' }))
+      .parentElement!
+    expect(header).toHaveTextContent(/Colombia · Barranquilla · chat web · en portugués/)
+    expect(within(header).getByText('CASE-…0101')).toBeInTheDocument()
+    expect(within(header).getByTitle(CASE_ID)).toBeInTheDocument()
+    expect(
+      within(header).getByRole('button', { name: 'Copiar número de caso' }),
+    ).toBeInTheDocument()
+  })
+
+  it('moves the focus to the case heading when asked (programmatic switch)', async () => {
+    const detail = makeCaseDetail()
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue(detail)
+    vi.mocked(api.fetchTurns).mockResolvedValue(page())
+    vi.mocked(api.markCaseRead).mockResolvedValue(detail.case)
+    const onFocused = vi.fn<() => void>()
+    renderWithProviders(<ConversationPane caseId={CASE_ID} focusOnLoad onFocused={onFocused} />, {
+      staff: analystStaff,
+    })
+    const heading = await screen.findByRole('heading', { name: 'Marcela Quintana Pardo' })
+    await waitFor(() => expect(heading).toHaveFocus())
+    expect(onFocused).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ConversationPane · states', () => {
+  it('explains why the analyst cannot reply', async () => {
+    setup(
+      makeCaseDetail({
+        capabilities: { canReply: false, replyBlockedReason: 'not_assignee', canClose: false },
+      }),
+    )
+    expect(
+      await screen.findByText('Solo la persona asignada puede escribir en este caso.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cerrar caso' })).toBeDisabled()
+  })
+
+  it('shows a live call as a timed, read-only transcript', async () => {
+    const detail = makeCaseDetail({
+      channelIdentity: { kind: 'caller_number', verified: true },
+      routing: {
+        stops: [
+          stop({ kind: 'entry', label: 'IVR' }),
+          stop({ kind: 'assignee', staffId: analystStaff.id }),
+        ],
+        inputsUsed: [],
+      },
+      capabilities: {
+        canReply: false,
+        replyBlockedReason: 'channel_not_supported',
+        canClose: true,
+      },
+    })
+    detail.case = {
+      ...detail.case,
+      channel: 'phone',
+      status: 'in_call',
+      inboxStatus: 'live',
+      liveSince: new Date(Date.now() - 246_000).toISOString(),
+    }
+    const call = [
+      makeAnalystTurn(1, 'Buenas tardes, gracias por llamar a LATAM Bank.', 'x'),
+      makeTurn({ sequence: 2, text: 'Sí, claro, bloquéela.' }),
+    ]
+    setup(detail, page({ items: call, lastSequence: 2 }))
+    expect(await screen.findByText('En llamada')).toBeInTheDocument()
+    expect(screen.getByText('Entrante · el IVR verificó su identidad')).toBeInTheDocument()
+    const list = await screen.findByRole('list', { name: 'Transcripción de la llamada' })
+    expect(within(list).getByText('Sí, claro, bloquéela.')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Por ahora solo el chat funciona en vivo. Llamadas y correo llegan/),
+    ).toBeInTheDocument()
+  })
+
+  it('shows e-mails with the latest one open', async () => {
+    const detail = makeCaseDetail({
+      capabilities: {
+        canReply: false,
+        replyBlockedReason: 'channel_not_supported',
+        canClose: true,
+      },
+    })
+    detail.case = { ...detail.case, channel: 'email' }
+    const mails = [
+      makeTurn({
+        sequence: 1,
+        text: 'Buenas tardes:\n\nEscribo porque hay un cargo que no reconozco.',
+      }),
+      makeTurn({
+        sequence: 2,
+        text: 'Hola:\n\nBueno, adelante. Veamos si pueden resolverlo.\n\nSaludos',
+      }),
+    ]
+    const { user } = setup(detail, page({ items: mails, lastSequence: 2 }))
+    const list = await screen.findByRole('list', { name: 'Correos' })
+    expect(within(list).getByText(/Veamos si pueden resolverlo/)).toBeInTheDocument()
+    await user.click(within(list).getByRole('button', { name: /Escribo porque hay un cargo/ }))
+    expect(within(list).getByText(/Buenas tardes:/)).toBeInTheDocument()
+  })
+
+  it('shows why a case cannot be opened', async () => {
+    vi.mocked(api.fetchCaseDetail).mockRejectedValue(
+      new ApiProblem({ status: 403, code: 'case_not_assigned' }),
+    )
+    vi.mocked(api.fetchTurns).mockRejectedValue(
+      new ApiProblem({ status: 403, code: 'case_not_assigned' }),
+    )
+    renderWithProviders(<ConversationPane caseId={CASE_ID} />, { staff: analystStaff })
+    expect(await screen.findByText('Este caso no está asignado a ti')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+})
+
+describe('ConversationPane · close', () => {
+  it('requires the result, sends the close form and reports back', async () => {
+    const detail = makeCaseDetail()
+    const closed = makeCaseDetail({
+      capabilities: { canReply: false, replyBlockedReason: 'closed', canClose: false },
+    })
+    closed.case = { ...closed.case, status: 'closed', version: 9 }
+    vi.mocked(api.closeCase).mockResolvedValue(closed)
+    const { user, onClosed } = setup(detail)
+
+    await user.click(await screen.findByRole('button', { name: 'Cerrar caso' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
+    expect(
+      within(dialog).getByText('Se guarda en el histórico de la plataforma'),
+    ).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
+    expect(
+      await within(dialog).findByText('Elige si quedó resuelto o sin resolver.'),
+    ).toBeInTheDocument()
+    expect(api.closeCase).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Sin resolver' }))
+    await user.selectOptions(
+      within(dialog).getByRole('combobox', { name: 'Seguimiento' }),
+      'En 2 días',
+    )
+    await user.selectOptions(
+      within(dialog).getByRole('combobox', { name: 'Qué se hizo' }),
+      'Se brindó explicación detallada al cliente y se resolvió la situación.',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
+
+    await waitFor(() => expect(onClosed).toHaveBeenCalledWith(CASE_ID))
+    expect(api.closeCase).toHaveBeenCalledWith(CASE_ID, {
+      resolved: false,
+      contactReason: 'Transaccional',
+      resolutionCode: 'explained',
+      followUp: 'in_two_days',
+      sendCsatSurvey: true,
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await screen.findByText('Cerrado')).toBeInTheDocument()
+  })
+})

@@ -109,8 +109,8 @@ def test_topic_mapper_uses_case_by_default_and_registered_rules() -> None:
 
 async def test_projector_fans_out_envelopes_to_topic_subscribers() -> None:
     hub = InMemoryRealtimeHub()
-    listener = hub.connect(connection_id="CON-1", staff_id=STAFF_ID, session_id="SES-1")
-    bystander = hub.connect(connection_id="CON-2", staff_id=STAFF_ID, session_id="SES-2")
+    listener = hub.connect(connection_id="CON-1", principal_id=STAFF_ID, session_id="SES-1")
+    bystander = hub.connect(connection_id="CON-2", principal_id=STAFF_ID, session_id="SES-2")
     hub.subscribe(listener.id, f"case:{CASE_ID}")
     hub.subscribe(bystander.id, "approvals")
 
@@ -135,13 +135,32 @@ async def test_projector_fans_out_envelopes_to_topic_subscribers() -> None:
     assert await bystander.next_envelope() is None
 
 
+async def test_projector_sends_a_multi_topic_event_once_per_socket() -> None:
+    hub = InMemoryRealtimeHub()
+    socket = hub.connect(connection_id="CON-1", principal_id=STAFF_ID, session_id="SES-1")
+    hub.subscribe(socket.id, f"case:{CASE_ID}")
+    hub.subscribe(socket.id, f"inbox:{STAFF_ID}")
+    mapper = TopicMapper()
+    mapper.register(CaseAssigned, lambda e: [Topic.inbox(e.analyst_id)])  # type: ignore[attr-defined]
+
+    projector = RealtimeProjector(hub, mapper)
+    await projector(record(assigned()))
+    await projector(record(assigned(), event_id="EVT-" + "0" * 25 + "2"))
+
+    received = [await socket.next_envelope(), await socket.next_envelope()]
+    assert [e.id if e else None for e in received] == [
+        "EVT-" + "0" * 25 + "1",
+        "EVT-" + "0" * 25 + "2",  # not a second copy of the first one
+    ]
+
+
 async def test_events_without_topics_are_not_published() -> None:
     hub = InMemoryRealtimeHub()
     event = SessionEnded(
         occurred_at=NOW, actor=ActorRef(ActorRole.ANALYST, STAFF_ID), entity_id="SES-1",
         staff_id=STAFF_ID, reason="logout",
     )  # fmt: skip
-    connection = hub.connect(connection_id="CON-1", staff_id=STAFF_ID, session_id="SES-1")
+    connection = hub.connect(connection_id="CON-1", principal_id=STAFF_ID, session_id="SES-1")
     hub.subscribe(connection.id, f"inbox:{STAFF_ID}")
     await RealtimeProjector(hub, TopicMapper())(record(event))
     await SessionTerminator(hub)(record(event))

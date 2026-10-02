@@ -10,6 +10,7 @@ from cc_platform.application.people.auth import (
     Logout,
     VerifyMfa,
 )
+from cc_platform.application.people.availability import GetMyAvailability, SetMyAvailability
 from cc_platform.application.people.queries import GetCurrentStaff, ListStaff
 
 
@@ -21,3 +22,5 @@ class PeopleUseCases:
     logout: Logout
     current_staff: GetCurrentStaff
     list_staff: ListStaff
+    get_availability: GetMyAvailability
+    set_availability: SetMyAvailability

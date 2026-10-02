@@ -7,10 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.ids import IdGenerator
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import (
+    SqlAssignmentRepository,
+    SqlCaseRepository,
+    SqlCustomerCaseSlotRepository,
+    SqlCustomerRepository,
+    SqlRoutingStepRepository,
+    SqlTurnRepository,
+)
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.event_log import (
     SqlEventLogRepository,
 )
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.people import (
+    SqlAnalystAvailabilityRepository,
     SqlLoginAccountRepository,
     SqlMfaChallengeRepository,
     SqlStaffRepository,
@@ -24,6 +33,13 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     login_accounts: SqlLoginAccountRepository
     mfa_challenges: SqlMfaChallengeRepository
     sessions: SqlStaffSessionRepository
+    availability: SqlAnalystAvailabilityRepository
+    customers: SqlCustomerRepository
+    cases: SqlCaseRepository
+    turns: SqlTurnRepository
+    assignments: SqlAssignmentRepository
+    case_slots: SqlCustomerCaseSlotRepository
+    routing_steps: SqlRoutingStepRepository
     event_log: SqlEventLogRepository
 
     def __init__(
@@ -45,6 +61,13 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.login_accounts = SqlLoginAccountRepository(session, self.track)
         self.mfa_challenges = SqlMfaChallengeRepository(session, self.track)
         self.sessions = SqlStaffSessionRepository(session, self.track)
+        self.availability = SqlAnalystAvailabilityRepository(session, self.track)
+        self.customers = SqlCustomerRepository(session)
+        self.cases = SqlCaseRepository(session, self.track)
+        self.turns = SqlTurnRepository(session)
+        self.assignments = SqlAssignmentRepository(session)
+        self.case_slots = SqlCustomerCaseSlotRepository(session, self.track)
+        self.routing_steps = SqlRoutingStepRepository(session)
         self.event_log = SqlEventLogRepository(session)
 
     async def _commit(self) -> None:

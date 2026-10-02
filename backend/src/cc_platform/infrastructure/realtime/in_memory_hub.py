@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import Iterable
 
 import structlog
 
@@ -25,9 +26,11 @@ SLOW_CONSUMER = "slow_consumer"
 
 
 class _Connection:
-    def __init__(self, connection_id: str, staff_id: str, session_id: str, queue_size: int) -> None:
+    def __init__(
+        self, connection_id: str, principal_id: str, session_id: str, queue_size: int
+    ) -> None:
         self._id = connection_id
-        self.staff_id = staff_id
+        self.principal_id = principal_id
         self.session_id = session_id
         self._topics: set[str] = set()
         self._queue: asyncio.Queue[RealtimeEnvelope | None] = asyncio.Queue(maxsize=queue_size)
@@ -84,8 +87,8 @@ class InMemoryRealtimeHub:
         self._connections: dict[str, _Connection] = {}
         self._subscribers: defaultdict[str, set[str]] = defaultdict(set)
 
-    def connect(self, *, connection_id: str, staff_id: str, session_id: str) -> _Connection:
-        connection = _Connection(connection_id, staff_id, session_id, self._queue_size)
+    def connect(self, *, connection_id: str, principal_id: str, session_id: str) -> _Connection:
+        connection = _Connection(connection_id, principal_id, session_id, self._queue_size)
         self._connections[connection_id] = connection
         return connection
 
@@ -109,8 +112,16 @@ class InMemoryRealtimeHub:
         self._drop(topic, connection_id)
 
     async def publish(self, topic: str, envelope: RealtimeEnvelope) -> int:
+        return await self.publish_many((topic,), envelope)
+
+    async def publish_many(self, topics: Iterable[str], envelope: RealtimeEnvelope) -> int:
+        # Union of the subscribers, in first-seen order: a connection on several of the
+        # topics gets the envelope once.
+        targets: dict[str, None] = {}
+        for topic in topics:
+            targets.update(dict.fromkeys(self._subscribers.get(topic, ())))
         delivered = 0
-        for connection_id in tuple(self._subscribers.get(topic, ())):
+        for connection_id in targets:
             connection = self._connections.get(connection_id)
             if connection is None:
                 continue

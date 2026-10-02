@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { cn } from '@/lib/cn'
 
 export interface EmptyStateProps {
@@ -13,6 +13,11 @@ export interface EmptyStateProps {
   /** compact: for panels and lists (smaller title). */
   size?: 'default' | 'compact'
   className?: string
+  /**
+   * Makes the title focusable (`tabIndex=-1`) and exposes it, for screens that
+   * move focus here after the content it replaces disappeared.
+   */
+  headingRef?: Ref<HTMLHeadingElement>
 }
 
 /** Centered message for empty lists, finished queues and placeholders. */
@@ -24,6 +29,7 @@ export function EmptyState({
   as: Heading = 'h2',
   size = 'default',
   className,
+  headingRef,
 }: EmptyStateProps) {
   return (
     <div
@@ -38,6 +44,8 @@ export function EmptyState({
         </span>
       ) : null}
       <Heading
+        ref={headingRef}
+        tabIndex={headingRef ? -1 : undefined}
         className={cn(
           'm-0 font-display font-bold text-ink',
           size === 'compact' ? 'text-18' : 'text-24',

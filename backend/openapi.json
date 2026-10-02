@@ -1,6 +1,991 @@
 {
   "components": {
     "schemas": {
+      "AssignmentOut": {
+        "properties": {
+          "analystId": {
+            "title": "Analystid",
+            "type": "string"
+          },
+          "analystName": {
+            "title": "Analystname",
+            "type": "string"
+          },
+          "assignedAt": {
+            "format": "date-time",
+            "title": "Assignedat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "policyRuleId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policyruleid"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/AssignmentReason"
+          }
+        },
+        "required": [
+          "id",
+          "analystId",
+          "analystName",
+          "reason",
+          "policyRuleId",
+          "assignedAt"
+        ],
+        "title": "AssignmentOut",
+        "type": "object"
+      },
+      "AssignmentReason": {
+        "enum": [
+          "language_least_loaded",
+          "queue_drained",
+          "outbound_followup"
+        ],
+        "title": "AssignmentReason",
+        "type": "string"
+      },
+      "Availability": {
+        "properties": {
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AvailabilityStatus"
+          }
+        },
+        "required": [
+          "status",
+          "since"
+        ],
+        "title": "Availability",
+        "type": "object"
+      },
+      "AvailabilityStatus": {
+        "enum": [
+          "available",
+          "paused"
+        ],
+        "title": "AvailabilityStatus",
+        "type": "string"
+      },
+      "CaseCapabilities": {
+        "properties": {
+          "canClose": {
+            "title": "Canclose",
+            "type": "boolean"
+          },
+          "canReply": {
+            "title": "Canreply",
+            "type": "boolean"
+          },
+          "replyBlockedReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplyBlockedReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "canReply",
+          "replyBlockedReason",
+          "canClose"
+        ],
+        "title": "CaseCapabilities",
+        "type": "object"
+      },
+      "CaseChannel": {
+        "description": "Contract ``case.channel`` subset (``whatsapp``/``video`` are out of scope).",
+        "enum": [
+          "app_chat",
+          "web_chat",
+          "phone",
+          "email"
+        ],
+        "title": "CaseChannel",
+        "type": "string"
+      },
+      "CaseClosure": {
+        "properties": {
+          "closedAt": {
+            "format": "date-time",
+            "title": "Closedat",
+            "type": "string"
+          },
+          "closedById": {
+            "title": "Closedbyid",
+            "type": "string"
+          },
+          "contactReason": {
+            "$ref": "#/components/schemas/ContactReason"
+          },
+          "csatRequested": {
+            "title": "Csatrequested",
+            "type": "boolean"
+          },
+          "followupAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followupat"
+          },
+          "resolutionCode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolutionCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "closedAt",
+          "closedById",
+          "resolved",
+          "contactReason",
+          "resolutionCode",
+          "followupAt",
+          "csatRequested"
+        ],
+        "title": "CaseClosure",
+        "type": "object"
+      },
+      "CaseDetail": {
+        "properties": {
+          "assignment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssignmentOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/CaseCapabilities",
+            "description": "Computed for the caller."
+          },
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "channelIdentity": {
+            "$ref": "#/components/schemas/ChannelIdentity"
+          },
+          "closure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseClosure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "customer": {
+            "$ref": "#/components/schemas/CustomerProfile"
+          },
+          "routing": {
+            "$ref": "#/components/schemas/RoutingSummary",
+            "description": "\"Cómo llegó a ti\"."
+          }
+        },
+        "required": [
+          "case",
+          "customer",
+          "channelIdentity",
+          "assignment",
+          "routing",
+          "closure",
+          "capabilities"
+        ],
+        "title": "CaseDetail",
+        "type": "object"
+      },
+      "CaseOrigin": {
+        "description": "Who started the case. ``regulator``/``branch``: the bank must call the customer.",
+        "enum": [
+          "customer",
+          "regulator",
+          "branch"
+        ],
+        "title": "CaseOrigin",
+        "type": "string"
+      },
+      "CasePriority": {
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "title": "CasePriority",
+        "type": "string"
+      },
+      "CaseStatus": {
+        "description": "Stored state machine of a case (see ``Case``).",
+        "enum": [
+          "routing",
+          "queued",
+          "assigned",
+          "in_progress",
+          "in_call",
+          "to_call",
+          "awaiting_approval",
+          "closed"
+        ],
+        "title": "CaseStatus",
+        "type": "string"
+      },
+      "CaseSummary": {
+        "properties": {
+          "assignedAnalystId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignedanalystid"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/CaseChannel"
+          },
+          "closedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closedat"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/CustomerRef"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "inboxStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "lastInteractionAt": {
+            "format": "date-time",
+            "title": "Lastinteractionat",
+            "type": "string"
+          },
+          "lastSequence": {
+            "title": "Lastsequence",
+            "type": "integer"
+          },
+          "liveSince": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Livesince"
+          },
+          "openedAt": {
+            "format": "date-time",
+            "title": "Openedat",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/CaseOrigin"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview"
+          },
+          "previewAuthorRole": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TurnAuthorRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priority": {
+            "$ref": "#/components/schemas/CasePriority"
+          },
+          "slaDueAt": {
+            "format": "date-time",
+            "title": "Sladueat",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseTopic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unreadCount": {
+            "title": "Unreadcount",
+            "type": "integer"
+          },
+          "version": {
+            "description": "Realtime: apply only when newer than the cached one.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "customer",
+          "channel",
+          "language",
+          "origin",
+          "topic",
+          "priority",
+          "status",
+          "inboxStatus",
+          "openedAt",
+          "slaDueAt",
+          "lastInteractionAt",
+          "liveSince",
+          "preview",
+          "previewAuthorRole",
+          "assignedAnalystId",
+          "unreadCount",
+          "lastSequence",
+          "closedAt"
+        ],
+        "title": "CaseSummary",
+        "type": "object"
+      },
+      "CaseTopic": {
+        "description": "Judge taxonomy (contract ``case.topic``). Nullable in slice 1: no judge yet.",
+        "enum": [
+          "consultar_movimientos",
+          "consultar_cargo",
+          "disputar_cargo",
+          "cobro_duplicado",
+          "estado_disputa",
+          "fraude_urgente",
+          "hablar_con_humano",
+          "fuera_de_alcance",
+          "problema_app"
+        ],
+        "title": "CaseTopic",
+        "type": "string"
+      },
+      "ChannelIdentity": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ChannelSessionKind"
+          },
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "verified"
+        ],
+        "title": "ChannelIdentity",
+        "type": "object"
+      },
+      "ChannelSessionKind": {
+        "description": "Identity the contact already carried (contract ``identity_check.channel_session``).",
+        "enum": [
+          "app_session",
+          "web_session",
+          "caller_number",
+          "email_address",
+          "outbound_call"
+        ],
+        "title": "ChannelSessionKind",
+        "type": "string"
+      },
+      "CloseCaseRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "contactReason": {
+            "$ref": "#/components/schemas/ContactReason"
+          },
+          "followUp": {
+            "$ref": "#/components/schemas/FollowUp"
+          },
+          "resolutionCode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolutionCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "boolean"
+          },
+          "sendCsatSurvey": {
+            "title": "Sendcsatsurvey",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "resolved",
+          "contactReason",
+          "resolutionCode",
+          "followUp",
+          "sendCsatSurvey"
+        ],
+        "title": "CloseCaseRequest",
+        "type": "object"
+      },
+      "ContactReason": {
+        "description": "Contract ``case_close.contact_reason`` (the bank's own Spanish values).",
+        "enum": [
+          "Transaccional",
+          "Queja",
+          "Producto",
+          "Retención",
+          "Técnico",
+          "Comercial"
+        ],
+        "title": "ContactReason",
+        "type": "string"
+      },
+      "CountryCode": {
+        "enum": [
+          "CO",
+          "MX",
+          "AR",
+          "BR"
+        ],
+        "title": "CountryCode",
+        "type": "string"
+      },
+      "CreateCustomerSessionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "enum": [
+                  "app_chat",
+                  "web_chat"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default app_chat; ignored while the customer has an open case.",
+            "title": "Channel"
+          },
+          "customerId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Customerid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customerId"
+        ],
+        "title": "CreateCustomerSessionRequest",
+        "type": "object"
+      },
+      "CustomerConversation": {
+        "properties": {
+          "agentName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Assignee first name while with_agent.",
+            "title": "Agentname"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/CaseChannel"
+          },
+          "closedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closedat"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "lastSequence": {
+            "description": "Highest sequence among customer-visible turns.",
+            "title": "Lastsequence",
+            "type": "integer"
+          },
+          "openedAt": {
+            "format": "date-time",
+            "title": "Openedat",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CustomerConversationStatus"
+          }
+        },
+        "required": [
+          "caseId",
+          "status",
+          "channel",
+          "language",
+          "openedAt",
+          "closedAt",
+          "agentName",
+          "lastSequence"
+        ],
+        "title": "CustomerConversation",
+        "type": "object"
+      },
+      "CustomerConversationResponse": {
+        "properties": {
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CustomerConversation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerTurn"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "conversation",
+          "turns"
+        ],
+        "title": "CustomerConversationResponse",
+        "type": "object"
+      },
+      "CustomerConversationStatus": {
+        "description": "Customer-facing projection of ``CaseStatus``.",
+        "enum": [
+          "waiting_agent",
+          "with_agent",
+          "closed"
+        ],
+        "title": "CustomerConversationStatus",
+        "type": "string"
+      },
+      "CustomerLocale": {
+        "enum": [
+          "es-CO",
+          "es-MX",
+          "es-AR",
+          "pt-BR"
+        ],
+        "title": "CustomerLocale",
+        "type": "string"
+      },
+      "CustomerProfile": {
+        "properties": {
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "country": {
+            "$ref": "#/components/schemas/CountryCode"
+          },
+          "customerSince": {
+            "format": "date",
+            "title": "Customersince",
+            "type": "string"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "documentType": {
+            "title": "Documenttype",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/CustomerLocale"
+          },
+          "segment": {
+            "$ref": "#/components/schemas/CustomerSegment"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "segment",
+          "country",
+          "city",
+          "locale",
+          "language",
+          "customerSince",
+          "documentType"
+        ],
+        "title": "CustomerProfile",
+        "type": "object"
+      },
+      "CustomerRef": {
+        "properties": {
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "title": "CustomerRef",
+        "type": "object"
+      },
+      "CustomerSegment": {
+        "enum": [
+          "Basic",
+          "Plus",
+          "Premium"
+        ],
+        "title": "CustomerSegment",
+        "type": "string"
+      },
+      "CustomerSelf": {
+        "properties": {
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/CustomerLocale"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "locale",
+          "language"
+        ],
+        "title": "CustomerSelf",
+        "type": "object"
+      },
+      "CustomerSessionResponse": {
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/CaseChannel"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/CustomerSelf"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expiresAt",
+          "customer",
+          "channel"
+        ],
+        "title": "CustomerSessionResponse",
+        "type": "object"
+      },
+      "CustomerTurn": {
+        "properties": {
+          "authorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorname"
+          },
+          "authorRole": {
+            "$ref": "#/components/schemas/CustomerTurnAuthor"
+          },
+          "clientMessageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only on the customer's own messages.",
+            "title": "Clientmessageid"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "message",
+              "notice"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "sequence": {
+            "description": "Case sequence (customer-visible turns may skip numbers).",
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sequence",
+          "kind",
+          "authorRole",
+          "authorName",
+          "text",
+          "language",
+          "createdAt",
+          "clientMessageId"
+        ],
+        "title": "CustomerTurn",
+        "type": "object"
+      },
+      "CustomerTurnAuthor": {
+        "description": "Customer-facing author: automated tiers are shown as one \"bot\".",
+        "enum": [
+          "customer",
+          "analyst",
+          "bot",
+          "system"
+        ],
+        "title": "CustomerTurnAuthor",
+        "type": "string"
+      },
+      "DemoConversation": {
+        "properties": {
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/CaseChannel"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CustomerConversationStatus"
+          }
+        },
+        "required": [
+          "caseId",
+          "channel",
+          "status"
+        ],
+        "title": "DemoConversation",
+        "type": "object"
+      },
+      "DemoCustomer": {
+        "properties": {
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "country": {
+            "$ref": "#/components/schemas/CountryCode"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "locale": {
+            "$ref": "#/components/schemas/CustomerLocale"
+          },
+          "openConversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DemoConversation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "segment": {
+            "$ref": "#/components/schemas/CustomerSegment"
+          },
+          "suggestions": {
+            "description": "Opener chips in the customer's own voice.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "locale",
+          "language",
+          "country",
+          "city",
+          "segment",
+          "suggestions",
+          "openConversation"
+        ],
+        "title": "DemoCustomer",
+        "type": "object"
+      },
+      "DemoCustomerList": {
+        "properties": {
+          "items": {
+            "description": "Simulator customers first, then customers with an open chat case.",
+            "items": {
+              "$ref": "#/components/schemas/DemoCustomer"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "DemoCustomerList",
+        "type": "object"
+      },
+      "FollowUp": {
+        "description": "Close dialog \"Seguimiento\"; the server turns it into ``followup_at``.",
+        "enum": [
+          "none",
+          "tomorrow",
+          "in_two_days"
+        ],
+        "title": "FollowUp",
+        "type": "string"
+      },
       "HealthResponse": {
         "properties": {
           "checks": {
@@ -29,6 +1014,89 @@
         ],
         "title": "HealthResponse",
         "type": "object"
+      },
+      "InboxCounts": {
+        "properties": {
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "computedAt": {
+            "format": "date-time",
+            "title": "Computedat",
+            "type": "string"
+          },
+          "live": {
+            "title": "Live",
+            "type": "integer"
+          },
+          "new": {
+            "title": "New",
+            "type": "integer"
+          },
+          "toCall": {
+            "title": "Tocall",
+            "type": "integer"
+          },
+          "toReply": {
+            "title": "Toreply",
+            "type": "integer"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "new",
+          "toReply",
+          "live",
+          "toCall",
+          "waiting",
+          "computedAt"
+        ],
+        "title": "InboxCounts",
+        "type": "object"
+      },
+      "InboxResponse": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/InboxCounts",
+            "description": "Always the whole inbox (ignores status and q)."
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CaseSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "counts",
+          "serverTime"
+        ],
+        "title": "InboxResponse",
+        "type": "object"
+      },
+      "InboxStatus": {
+        "description": "Canvas bucket of a case in \"Casos\" (derived from ``CaseStatus``, never stored).",
+        "enum": [
+          "new",
+          "to_reply",
+          "live",
+          "to_call",
+          "waiting"
+        ],
+        "title": "InboxStatus",
+        "type": "string"
       },
       "Language": {
         "enum": [
@@ -97,6 +1165,21 @@
           "methods"
         ],
         "title": "LoginResponse",
+        "type": "object"
+      },
+      "MarkReadRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "upToSequence": {
+            "minimum": 0.0,
+            "title": "Uptosequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "upToSequence"
+        ],
+        "title": "MarkReadRequest",
         "type": "object"
       },
       "MeResponse": {
@@ -187,6 +1270,99 @@
         "title": "MfaRequest",
         "type": "object"
       },
+      "PostAnalystTurnRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "clientMessageId": {
+            "description": "Client-generated id (UUID v4); also the Idempotency-Key header.",
+            "examples": [
+              "0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10"
+            ],
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Clientmessageid",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "clientMessageId"
+        ],
+        "title": "PostAnalystTurnRequest",
+        "type": "object"
+      },
+      "PostCustomerTurnRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "clientMessageId": {
+            "description": "Client-generated id (UUID v4); also the Idempotency-Key header.",
+            "examples": [
+              "0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10"
+            ],
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Clientmessageid",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "clientMessageId"
+        ],
+        "title": "PostCustomerTurnRequest",
+        "type": "object"
+      },
+      "PostCustomerTurnResponse": {
+        "properties": {
+          "caseCreated": {
+            "title": "Casecreated",
+            "type": "boolean"
+          },
+          "conversation": {
+            "$ref": "#/components/schemas/CustomerConversation"
+          },
+          "turn": {
+            "$ref": "#/components/schemas/CustomerTurn"
+          }
+        },
+        "required": [
+          "turn",
+          "conversation",
+          "caseCreated"
+        ],
+        "title": "PostCustomerTurnResponse",
+        "type": "object"
+      },
+      "PostTurnResponse": {
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "turn": {
+            "$ref": "#/components/schemas/Turn"
+          }
+        },
+        "required": [
+          "turn",
+          "case"
+        ],
+        "title": "PostTurnResponse",
+        "type": "object"
+      },
       "ProblemCode": {
         "enum": [
           "invalid_credentials",
@@ -201,6 +1377,10 @@
           "conflict",
           "concurrent_update",
           "invalid_transition",
+          "case_not_assigned",
+          "case_closed",
+          "channel_not_supported",
+          "idempotency_conflict",
           "invalid_value",
           "policy_violation",
           "validation_error",
@@ -216,10 +1396,22 @@
       },
       "ProblemDetails": {
         "additionalProperties": true,
-        "description": "RFC 7807 problem. ``code`` is the stable machine identifier clients branch on.\n\nThe optional members below are the documented extensions; a domain error may add other\nstructured details (e.g. ``currentStatus``), hence ``additionalProperties``.",
+        "description": "RFC 7807 problem. ``code`` is the stable machine identifier clients branch on.\n\nThe optional members below are the documented extensions; a domain error may add other\nstructured details (e.g. ``channel`` on ``channel_not_supported``), hence\n``additionalProperties``.",
         "properties": {
           "code": {
             "$ref": "#/components/schemas/ProblemCode"
+          },
+          "currentStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "invalid_transition, case_closed: the case status now."
           },
           "detail": {
             "anyOf": [
@@ -339,6 +1531,208 @@
           "code"
         ],
         "title": "ProblemDetails",
+        "type": "object"
+      },
+      "ReplyBlockedReason": {
+        "enum": [
+          "not_assignee",
+          "closed",
+          "channel_not_supported"
+        ],
+        "title": "ReplyBlockedReason",
+        "type": "string"
+      },
+      "ResolutionCode": {
+        "description": "Contract ``case_close.resolution_code`` (the five \"Qué se hizo\" phrases).",
+        "enum": [
+          "adjustment",
+          "escalated_to_area",
+          "explained",
+          "compensation",
+          "correction"
+        ],
+        "title": "ResolutionCode",
+        "type": "string"
+      },
+      "RouteStop": {
+        "properties": {
+          "componentId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Componentid"
+          },
+          "componentVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Componentversion"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RouteStopKind"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoutingOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policyRuleId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policyruleid"
+          },
+          "reasonCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoncode"
+          },
+          "staffId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Staffid"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "waitedSeconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waitedseconds"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "tier",
+          "componentId",
+          "componentVersion",
+          "outcome",
+          "reasonCode",
+          "policyRuleId",
+          "summary",
+          "staffId",
+          "waitedSeconds",
+          "occurredAt"
+        ],
+        "title": "RouteStop",
+        "type": "object"
+      },
+      "RouteStopKind": {
+        "description": "Stops of \"Cómo llegó a ti\" (read model): entry point, tiers, queue, the analyst.",
+        "enum": [
+          "entry",
+          "tier",
+          "queue",
+          "assignee"
+        ],
+        "title": "RouteStopKind",
+        "type": "string"
+      },
+      "RoutingOutcome": {
+        "enum": [
+          "resolved",
+          "mitigated",
+          "handed_off",
+          "abstained"
+        ],
+        "title": "RoutingOutcome",
+        "type": "string"
+      },
+      "RoutingSummary": {
+        "properties": {
+          "inputsUsed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Inputsused",
+            "type": "array"
+          },
+          "stops": {
+            "items": {
+              "$ref": "#/components/schemas/RouteStop"
+            },
+            "title": "Stops",
+            "type": "array"
+          }
+        },
+        "required": [
+          "stops",
+          "inputsUsed"
+        ],
+        "title": "RoutingSummary",
         "type": "object"
       },
       "SessionOut": {
@@ -478,6 +1872,204 @@
         "title": "StaffRole",
         "type": "string"
       },
+      "Tier": {
+        "enum": [
+          "judge",
+          "tree",
+          "ai_agent",
+          "human",
+          "supervisor"
+        ],
+        "title": "Tier",
+        "type": "string"
+      },
+      "Turn": {
+        "properties": {
+          "audience": {
+            "$ref": "#/components/schemas/TurnAudience"
+          },
+          "authorId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorid"
+          },
+          "authorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorname"
+          },
+          "authorRole": {
+            "$ref": "#/components/schemas/TurnAuthorRole"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "clientMessageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientmessageid"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "evidenceIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidenceids",
+            "type": "array"
+          },
+          "fromSuggestionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fromsuggestionid"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TurnKind"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "sequence": {
+            "description": "1-based, gap-free per case (staff-only turns included).",
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "caseId",
+          "sequence",
+          "kind",
+          "audience",
+          "authorRole",
+          "authorId",
+          "authorName",
+          "text",
+          "language",
+          "createdAt",
+          "clientMessageId",
+          "evidenceIds",
+          "fromSuggestionId"
+        ],
+        "title": "Turn",
+        "type": "object"
+      },
+      "TurnAudience": {
+        "description": "``staff`` turns never reach the customer (REST or socket).",
+        "enum": [
+          "everyone",
+          "staff"
+        ],
+        "title": "TurnAudience",
+        "type": "string"
+      },
+      "TurnAuthorRole": {
+        "description": "Contract ``turn.author_role``.",
+        "enum": [
+          "customer",
+          "analyst",
+          "system",
+          "tree",
+          "judge",
+          "ai_agent",
+          "copilot"
+        ],
+        "title": "TurnAuthorRole",
+        "type": "string"
+      },
+      "TurnKind": {
+        "description": "``message`` = conversation; ``routing`` = staff banner on how the case arrived;\n``notice`` = platform note. Slice 3 adds ``action`` (verified tool-call cards).",
+        "enum": [
+          "message",
+          "routing",
+          "notice"
+        ],
+        "title": "TurnKind",
+        "type": "string"
+      },
+      "TurnPage": {
+        "properties": {
+          "items": {
+            "description": "Ascending sequence.",
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "lastSequence": {
+            "title": "Lastsequence",
+            "type": "integer"
+          },
+          "olderCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldercursor"
+          }
+        },
+        "required": [
+          "items",
+          "olderCursor",
+          "lastSequence"
+        ],
+        "title": "TurnPage",
+        "type": "object"
+      },
+      "UpdateAvailabilityRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/AvailabilityStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "UpdateAvailabilityRequest",
+        "type": "object"
+      },
       "ValidationIssue": {
         "properties": {
           "loc": {
@@ -506,6 +2098,11 @@
       }
     },
     "securitySchemes": {
+      "CustomerToken": {
+        "description": "Customer token returned by POST /api/v1/customer/sessions (simulator).",
+        "scheme": "bearer",
+        "type": "http"
+      },
       "SessionToken": {
         "description": "Session token returned by POST /api/v1/auth/mfa.",
         "scheme": "bearer",
@@ -709,6 +2306,856 @@
         ]
       }
     },
+    "/api/v1/cases/inbox": {
+      "get": {
+        "description": "`counts` always cover the whole inbox (the counters are the filters), whatever `status` and `q` select. Sorted: live calls first, then the closest SLA, then the oldest case. At most 200 items.",
+        "operationId": "cases_get_inbox",
+        "parameters": [
+          {
+            "description": "Omit for Todos",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/InboxStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Omit for Todos",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Customer name or case id (contains)",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Customer name or case id (contains)",
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The caller's open cases (\"Casos\") and the status counters",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}": {
+      "get": {
+        "operationId": "cases_get_case",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Case detail: customer, channel identity, assignment, \"Cómo llegó a ti\", closure",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/close": {
+      "post": {
+        "operationId": "cases_close_case",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseCaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Close the case (contract case_close); the customer is told the chat ended",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/read": {
+      "post": {
+        "operationId": "cases_mark_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Move the assignee's read cursor (opening a new case starts it)",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/turns": {
+      "get": {
+        "description": "No params → the latest page. `cursor` (from `olderCursor`) → the page before it. `afterSequence` → turns after it (gap fill after a reconnect). `cursor` and `afterSequence` are mutually exclusive.",
+        "operationId": "cases_list_turns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "afterSequence",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aftersequence"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "A page of the transcript (ascending sequence)",
+        "tags": [
+          "cases"
+        ]
+      },
+      "post": {
+        "description": "Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true` and the original turn; the same id with another text is `idempotency_conflict`. Moves a `new` case to `in_progress`.",
+        "operationId": "cases_post_turn",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostAnalystTurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTurnResponse"
+                }
+              }
+            },
+            "description": "Replay of an already-created turn"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTurnResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Reply to the customer (assignee only; chat channels only)",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/customer/conversation": {
+      "get": {
+        "operationId": "customer_get_conversation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "afterSequence",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aftersequence"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "My current conversation (open case, else the last closed one) and its turns",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/conversation/turns": {
+      "post": {
+        "description": "Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`.",
+        "operationId": "customer_post_turn",
+        "parameters": [
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostCustomerTurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostCustomerTurnResponse"
+                }
+              }
+            },
+            "description": "Replay of an already-sent message"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostCustomerTurnResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Write to the bank: opens a case when none is open, else appends to it",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/demo-customers": {
+      "get": {
+        "operationId": "customer_list_demo_customers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoCustomerList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Seeded customers for the simulator picker (no auth; empty without demo data)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/sessions": {
+      "post": {
+        "operationId": "customer_create_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "summary": "Start a customer session (channel identity = app/web session)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "system_health",
@@ -737,6 +3184,116 @@
         "summary": "Liveness and dependency checks",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/v1/me/availability": {
+      "get": {
+        "operationId": "availability_get_availability",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Availability"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "My availability (never set = paused)",
+        "tags": [
+          "availability"
+        ]
+      },
+      "put": {
+        "operationId": "availability_set_availability",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAvailabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Availability"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Set my availability (same status = no change, no event)",
+        "tags": [
+          "availability"
         ]
       }
     },

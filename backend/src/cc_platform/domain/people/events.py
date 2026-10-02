@@ -73,3 +73,14 @@ class SessionEnded(DomainEvent):
 
     staff_id: str
     reason: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StaffAvailabilityChanged(DomainEvent):
+    """An analyst switched between "Disponible" and "En pausa"."""
+
+    event_type = "staff.availability_changed"
+    entity = "staff"
+
+    from_status: str
+    to_status: str

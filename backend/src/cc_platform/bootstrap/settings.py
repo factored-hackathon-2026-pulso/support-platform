@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     argon2_time_cost: int = Field(default=3, ge=1)
     argon2_memory_cost: int = Field(default=65536, ge=8)
     argon2_parallelism: int = Field(default=4, ge=1)
+    # Customer chat simulator sessions (stateless tokens, audience cc-customer)
+    customer_session_ttl_minutes: int = Field(default=480, ge=1)
 
     # HTTP
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
@@ -65,6 +67,10 @@ class Settings(BaseSettings):
     @property
     def session_ttl(self) -> timedelta:
         return timedelta(minutes=self.session_ttl_minutes)
+
+    @property
+    def customer_session_ttl(self) -> timedelta:
+        return timedelta(minutes=self.customer_session_ttl_minutes)
 
     @property
     def lockout_duration(self) -> timedelta:

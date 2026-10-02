@@ -10,6 +10,7 @@ swaps it for a broker-backed hub (Redis pub/sub, Postgres LISTEN/NOTIFY) behind 
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
@@ -54,8 +55,10 @@ class RealtimeConnection(Protocol):
 
 class RealtimeHub(Protocol):
     def connect(
-        self, *, connection_id: str, staff_id: str, session_id: str
-    ) -> RealtimeConnection: ...
+        self, *, connection_id: str, principal_id: str, session_id: str
+    ) -> RealtimeConnection:
+        """Register a socket of a staff member (``STF-…``) or a customer (``CUS-…``)."""
+        ...
 
     def disconnect(self, connection_id: str) -> None: ...
 
@@ -65,6 +68,16 @@ class RealtimeHub(Protocol):
 
     async def publish(self, topic: str, envelope: RealtimeEnvelope) -> int:
         """Queue the envelope for every subscriber of ``topic``; returns how many."""
+        ...
+
+    async def publish_many(self, topics: Iterable[str], envelope: RealtimeEnvelope) -> int:
+        """Queue the envelope **once per connection** subscribed to any of ``topics``.
+
+        One event often concerns several topics (``case:<id>`` and ``inbox:<staff>``); a
+        socket subscribed to more than one of them must still receive it once, or every
+        client handler (and the refetches it triggers) runs twice. Returns how many
+        connections it reached.
+        """
         ...
 
     def close_session(self, session_id: str) -> int:

@@ -7,6 +7,7 @@ Start with the brief; everything else hangs off it.
 | [ENGINEERING_BRIEF.md](./ENGINEERING_BRIEF.md) | Scope, stack, layout, patterns, product rules, quality gates, hygiene. Every slice and review follows it. |
 | [adr/0001-architecture.md](./adr/0001-architecture.md) | Hexagonal + DDD-lite + CQRS-lite with an append-only event log; patterns table, alternatives, consequences. |
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | AG-UI 1.0 as the copilot wire protocol (SSE), own UI components, `@ag-ui/client` on the frontend, interrupt/resume for tool proposals. |
+| [api/slice-1-cases.md](./api/slice-1-cases.md) | Slice 1 API contract: cases, turns, routing/assignment, inbox statuses, customer simulator, realtime topics, seed, FE ownership. |
 | [AI_INTEGRATION.md](./AI_INTEGRATION.md) | How the AI team plugs in judge / tree / agent responders, a copilot engine, tools, components and the event export; every Protocol in code. |
 | [../../backend/README.md](../../backend/README.md) | API: run, seeded sign-in accounts, conventions, gates, known gaps. |
 | [../../frontend/README.md](../../frontend/README.md), [../../frontend/ARCHITECTURE.md](../../frontend/ARCHITECTURE.md) | SPA: run, folder and slice rules, routing, components, data layer, realtime, testing. |

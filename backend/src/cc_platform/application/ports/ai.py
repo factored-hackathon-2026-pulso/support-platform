@@ -14,6 +14,13 @@ from cc_platform.application.automation.ports import (
 )
 from cc_platform.application.copilot.events import CopilotEvent
 from cc_platform.application.copilot.ports import CopilotEngine, CopilotRunContext
+from cc_platform.application.routing.assignment import (
+    AnalystCandidate,
+    AnalystDirectory,
+    AssignmentChoice,
+    AssignmentPolicy,
+    AssignmentRequest,
+)
 from cc_platform.application.routing.ports import (
     ComponentRef,
     Handoff,
@@ -36,6 +43,11 @@ from cc_platform.application.tools.ports import (
 )
 
 __all__ = [
+    "AnalystCandidate",
+    "AnalystDirectory",
+    "AssignmentChoice",
+    "AssignmentPolicy",
+    "AssignmentRequest",
     "ComponentKind",
     "ComponentRef",
     "ComponentRegistry",

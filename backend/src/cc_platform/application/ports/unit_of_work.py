@@ -20,16 +20,29 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from types import TracebackType
-from typing import Protocol, Self
+from typing import TYPE_CHECKING, Protocol, Self
 
-from cc_platform.application.people.ports import (
-    LoginAccountRepository,
-    MfaChallengeRepository,
-    StaffRepository,
-    StaffSessionRepository,
-)
-from cc_platform.application.ports.event_log import EventLogRepository
 from cc_platform.domain.shared.events import DomainEvent
+
+if TYPE_CHECKING:
+    # Annotations only: importing the context packages at runtime would be circular
+    # (their use cases import this module).
+    from cc_platform.application.cases.ports import (
+        AssignmentRepository,
+        CaseRepository,
+        CustomerCaseSlotRepository,
+        TurnRepository,
+    )
+    from cc_platform.application.customers.ports import CustomerRepository
+    from cc_platform.application.people.ports import (
+        AnalystAvailabilityRepository,
+        LoginAccountRepository,
+        MfaChallengeRepository,
+        StaffRepository,
+        StaffSessionRepository,
+    )
+    from cc_platform.application.ports.event_log import EventLogRepository
+    from cc_platform.application.routing.repositories import RoutingStepRepository
 
 
 class UnitOfWork(Protocol):
@@ -45,6 +58,27 @@ class UnitOfWork(Protocol):
 
     @property
     def sessions(self) -> StaffSessionRepository: ...
+
+    @property
+    def availability(self) -> AnalystAvailabilityRepository: ...
+
+    @property
+    def customers(self) -> CustomerRepository: ...
+
+    @property
+    def cases(self) -> CaseRepository: ...
+
+    @property
+    def turns(self) -> TurnRepository: ...
+
+    @property
+    def assignments(self) -> AssignmentRepository: ...
+
+    @property
+    def case_slots(self) -> CustomerCaseSlotRepository: ...
+
+    @property
+    def routing_steps(self) -> RoutingStepRepository: ...
 
     @property
     def event_log(self) -> EventLogRepository: ...

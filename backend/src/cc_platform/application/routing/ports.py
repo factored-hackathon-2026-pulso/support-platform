@@ -1,64 +1,43 @@
 """Routing tiers: the ``Responder`` port (Chain of Responsibility) — AI extension point.
 
-A case is offered to the tiers in order judge → tree → ai_agent → human. Each tier is a
-``Responder`` that returns a ``RoutingDecision``; the routing use case (``routing`` slice)
-records every decision as a ``routing_step`` (contracts/platform_history.json) and stops at
-the first tier that resolves, mitigates and hands off, or hands off. ``abstained`` passes
-the case to the next tier.
+A case is offered to the tiers in order judge → tree → ai_agent → human. Each automated
+tier is a ``Responder`` that returns a ``RoutingDecision``; ``RouteCase``
+(``application/routing/route_case.py``) records every decision as a ``routing_step``
+(contracts/platform_history.json) and stops at the first tier that resolves, mitigates or
+hands off. ``abstained`` passes the case to the next tier. The human tier is the terminal
+handler of the chain (an ``AssignmentPolicy`` strategy picks the analyst), not a
+``Responder``: it records an ``Assignment``, not a routing step.
 
-Today only the human tier exists; judge/tree/ai_agent are registered as null responders that
-abstain. The AI team plugs real implementations in by registering them in the
-``ResponderRegistry`` (in-process, or a ``RemoteResponder`` that calls an HTTP endpoint) from
-the composition root, without touching the core. Automated tiers act only through the tools
-use case (same RBAC, policies and approvals as people) and never decide an abono (rule 6)
-nor resolve charges over 1.000.000 COP or when the customer asks for a person (rule 10).
+Today judge/tree/ai_agent are null responders that abstain with ``component_not_connected``
+(``infrastructure/routing/null_responders.py``), so every case reaches a person. The AI
+team plugs real implementations in by registering them in the ``ResponderRegistry``
+(in-process, or a ``RemoteResponder`` that calls an HTTP endpoint) from the composition
+root, without touching the core. Automated tiers act only through the tools use case (same
+RBAC, policies and approvals as people) and never decide an abono (rule 6) nor resolve
+charges over 1.000.000 COP or when the customer asks for a person (rule 10).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Protocol
 
+# The vocabulary lives in the domain (``RoutingStep`` needs it); re-exported here so the
+# AI team finds everything about the port in one module.
+from cc_platform.domain.routing.values import ComponentRef, Handoff, RoutingOutcome, Tier
 from cc_platform.domain.shared.json import JsonValue
 
-
-class Tier(StrEnum):
-    JUDGE = "judge"
-    TREE = "tree"
-    AI_AGENT = "ai_agent"
-    HUMAN = "human"
-    SUPERVISOR = "supervisor"
-
-
-class RoutingOutcome(StrEnum):
-    RESOLVED = "resolved"
-    MITIGATED = "mitigated"
-    HANDED_OFF = "handed_off"
-    ABSTAINED = "abstained"
-
-
-@dataclass(frozen=True, slots=True)
-class ComponentRef:
-    """An automated component version; serialised as ``component_id@component_version``."""
-
-    component_id: str
-    component_version: str
-
-    def __str__(self) -> str:
-        return f"{self.component_id}@{self.component_version}"
-
-
-@dataclass(frozen=True, slots=True)
-class Handoff:
-    """What the next tier needs to continue without asking the customer again (rule 10)."""
-
-    verified_facts: tuple[str, ...] = ()
-    actions_taken: tuple[str, ...] = ()
-    """Ids of verified tool calls (``CALL-…``): actions are claimed only with evidence (rule 9)."""
-    open_questions: tuple[str, ...] = ()
-    summary: str | None = None
+__all__ = [
+    "ComponentRef",
+    "Handoff",
+    "Responder",
+    "ResponderRegistry",
+    "RoutingContext",
+    "RoutingDecision",
+    "RoutingOutcome",
+    "Tier",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +65,8 @@ class RoutingDecision:
     handoff: Handoff | None = None
     topic: str | None = None
     """Judge only: intent from the contract taxonomy (``disputar_cargo``…)."""
+    component_name: str | None = None
+    """Display name for "Cómo llegó a ti" (e.g. "Agente de disputas"); ``None`` = default."""
 
 
 class Responder(Protocol):
@@ -108,5 +89,5 @@ class ResponderRegistry(Protocol):
         ...
 
     def chain(self) -> Sequence[Responder]:
-        """Responders in routing order (judge, tree, ai_agent, human)."""
+        """Automated responders in routing order (judge, tree, ai_agent)."""
         ...

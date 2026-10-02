@@ -19,8 +19,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.security import PasswordHasher
 from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
+from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.staff import Language, Staff, StaffLevel, StaffRole
 from cc_platform.domain.shared.ids import BODY_LENGTH, IdPrefix, make_id
@@ -117,6 +119,42 @@ async def seed_demo_staff(
             await unit.staff.add(staff)
             await unit.login_accounts.add(
                 LoginAccount(staff_id=staff.id, password_hash=await hasher.hash(password))
+            )
+            created += 1
+        await unit.commit()
+    return created
+
+
+#: Slice 1 contract §2.3: only Daniela takes new cases at first, so the demo lands on her.
+#: Signing in as Sebastián (es, pt, no cases) and switching to "Disponible" shows the
+#: least-loaded balancing.
+DEMO_AVAILABLE_ANALYSTS: frozenset[int] = frozenset({1})
+
+
+async def seed_demo_availability(
+    uow: UnitOfWorkFactory,
+    clock: Clock,
+    *,
+    seeds: tuple[StaffSeed, ...] = DEMO_STAFF,
+    available: frozenset[int] = DEMO_AVAILABLE_ANALYSTS,
+) -> int:
+    """Availability rows for every seeded analyst that has none. Idempotent."""
+    created = 0
+    now = clock.now()
+    async with uow() as unit:
+        for seed in seeds:
+            if StaffRole.ANALYST not in seed.roles:
+                continue
+            staff_id = seed_staff_id(seed.number)
+            if await unit.availability.get(staff_id) is not None:
+                continue
+            status = (
+                AvailabilityStatus.AVAILABLE
+                if seed.number in available
+                else AvailabilityStatus.PAUSED
+            )
+            await unit.availability.add(
+                AnalystAvailability(staff_id=staff_id, status=status, since=now)
             )
             created += 1
         await unit.commit()

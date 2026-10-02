@@ -170,15 +170,25 @@ it with `lazyRoute()` in the right role section. Until it is built, render
   subscriptions (`case:<id>`, `inbox:<staffId>`, `approvals`) replayed after every
   reconnect; exponential backoff with jitter (`computeBackoff`), reset on open;
   close code 4401 (token rejected, logout, expiry; also 4403/1008) stops and ends the
-  session, 1013 and network drops reconnect.
+  session, 1013 and network drops reconnect. `disconnect()` closes a socket that is
+  still connecting once it opens (never mid-handshake), so StrictMode's dev remount of
+  a provider that already holds a token logs nothing. The customer simulator runs a
+  second client with the customer token (`customer:<customerId>` topic, own registry).
+  Domain envelopes are deduplicated by `(type, id)` before any listener runs
+  (`RecentKeys`, a bounded window kept across reconnects); control envelopes pass through.
 - Protocol: client frames `{ action: 'subscribe' | 'unsubscribe', topic }` and
   `{ action: 'ping' }`; server envelopes `{ type, id, occurredAt, data }` validated by
   `parseEnvelope`. Control envelopes (`welcome`, `subscribed`, `unsubscribed`, `pong`,
   `error`) share the shape (`isControlEnvelope`). Domain envelopes carry
-  `data = { entity, entityId, caseId, actor, payload }`.
+  `data = { entity, entityId, caseId, actor, payload }`; read them only through
+  `envelopePayload` / `envelopeCaseId` (`@/lib/realtime`). Each payload type has one
+  reader, owned by its feature and shared through its `index.ts` (e.g.
+  `readCaseSummary` and `isNewerCase` from `@/features/cases`), never copied.
 - Handler registry (`createEnvelopeHandlerRegistry`): one handler per event type
   that updates the TanStack Query cache (`setQueryData` / `invalidateQueries`).
-  Handlers must be idempotent (same `id` may arrive twice). There is **no global
+  Handlers must still be idempotent (a late payload can be older than the cache) and
+  should refetch only when a patch cannot be applied in place (e.g. the inbox refetches
+  only when a case may enter, leave or move in it). There is **no global
   registry and no registration at import time** (routes are lazy, so import side
   effects would depend on which screen loaded first). Instead:
   1. the feature writes `export const registerCasesRealtime: RealtimeRegistration =
@@ -243,10 +253,10 @@ it with `lazyRoute()` in the right role section. Until it is built, render
 | `Select`                                                       | `options`, `placeholder`, `size`                                                                                                      | native select                                                                                                                            |
 | `Checkbox`                                                     | `label`, `description`, `variant` plain·card                                                                                          | works inside `Field` (id, hint/error, aria-invalid)                                                                                      |
 | `CodeInput`                                                    | `value`, `onChange`, `length`, `label`, `describedBy`, `invalid`, `disabled`, `initialFocus`, `ref` (`CodeInputHandle.focus(i?)`)     | one box per digit, paste/autofill, Backspace/arrows; every box is described by `describedBy`                                             |
-| `Dialog`                                                       | `open`, `onOpenChange`, `title`, `description`, `footer`, `footerNote`, `size` sm·md·lg                                               | focus trap, Escape, restores focus; stacks over a Sheet (only the top layer reacts, the rest is `inert`)                                 |
+| `Dialog`                                                       | `open`, `onOpenChange`, `title`, `description`, `footer`, `footerNote`, `size` sm·md·lg                                               | focus trap, Escape, restores focus (if the trigger still exists); stacks over a Sheet (top layer reacts, the rest is `inert`)            |
 | `Sheet`                                                        | `open`, `onOpenChange`, `title`, `header`, `footer`, `width` 480·600·720                                                              | right drawer, same modal behaviour as Dialog                                                                                             |
 | `ToastProvider` / `useToast`                                   | `toast({ title, description, tag, meta, actions, duration, politeness })`                                                             | persistent live regions (`status` / `alert`); 6 s auto-dismiss paused on hover/focus; reachable while a Dialog is open                   |
-| `EmptyState`                                                   | `icon`, `title`, `description`, `action`, `as` h1·h2·h3, `size`                                                                       | placeholders, empty lists                                                                                                                |
+| `EmptyState`                                                   | `icon`, `title`, `description`, `action`, `as` h1·h2·h3, `size`, `headingRef`                                                         | placeholders, empty lists; `headingRef` makes the title a focus target                                                                   |
 | `PageHeader` / `SampleDataTag`                                 | `title`, `subtitle`, `actions`, `sampleData`, `eyebrow`, `documentTitle`                                                              | h1 of every staff page; also sets the tab title (`title` if it is a string, else `documentTitle`)                                        |
 | `DocumentTitle`                                                | `title`                                                                                                                               | tab title "Página · LATAM Bank Soporte" (React 19 hoists `<title>`); for screens without PageHeader / AuthHeading                        |
 | `Kicker`                                                       | `tone`, `size`, `as` (intrinsic tags)                                                                                                 | uppercase section labels                                                                                                                 |
@@ -311,7 +321,15 @@ Extend primitives instead of forking them; add new ones here with a test.
   native radios. Tables stay native tables: no `role="grid"` without a grid keyboard
   model.
 - Live regions are mounted before their content (toasts, NavigationProgress), so
-  insertions are announced.
+  insertions are announced. Transcripts are the opposite case: the `role="log"`
+  mounts once the first page is in (history is not announced), with
+  `aria-relevant="additions"`, `aria-busy` while an older page is merged, and one
+  React key per message from "Enviando…" to sent (`clientMessageId ?? turn.id`).
+  Controls around it (load older, chips, errors) stay outside the log.
+- Focus after a programmatic switch: when the screen replaces the focused control
+  (next case after "Cerrar caso", "Ver caso" in a toast) it moves the focus to the
+  new heading (`tabIndex=-1`) or to the empty state's heading. Buttons that become
+  unavailable while focused (composer "Enviar") use `aria-disabled`, not `disabled`.
 - Desktop-first (1440×900) and must not break at 1280 px.
 
 ## 12. Environment

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Button } from './Button'
 import { Dialog } from './Dialog'
 import { SegmentedControl } from './SegmentedControl'
@@ -31,7 +31,46 @@ function CloseCaseDialog() {
   )
 }
 
+/** "Cerrar caso" that removes its own trigger on confirm (the Workspace switches case). */
+function RemovesTrigger() {
+  const [open, setOpen] = useState(false)
+  const [done, setDone] = useState(false)
+  if (done) return <p>Caso cerrado</p>
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Cerrar caso</Button>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Cerrar el caso"
+        footer={
+          <Button
+            variant="primary"
+            onClick={() => {
+              setOpen(false)
+              setDone(true)
+            }}
+          >
+            Confirmar
+          </Button>
+        }
+      />
+    </>
+  )
+}
+
 describe('Dialog', () => {
+  it('does not try to restore focus to a trigger that is gone', async () => {
+    const user = userEvent.setup()
+    render(<RemovesTrigger />)
+    const trigger = screen.getByRole('button', { name: 'Cerrar caso' })
+    await user.click(trigger)
+    const focus = vi.spyOn(trigger, 'focus')
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }))
+    expect(screen.getByText('Caso cerrado')).toBeInTheDocument()
+    expect(focus).not.toHaveBeenCalled()
+  })
+
   it('opens as a labelled modal and moves focus inside', async () => {
     const user = userEvent.setup()
     render(<CloseCaseDialog />)

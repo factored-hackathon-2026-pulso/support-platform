@@ -8,9 +8,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cc_platform.application.cases.use_cases import CasesUseCases
+from cc_platform.application.customers.use_cases import CustomersUseCases
 from cc_platform.application.people.use_cases import PeopleUseCases
 
 
 @dataclass(frozen=True, slots=True)
 class UseCases:
     people: PeopleUseCases
+    cases: CasesUseCases
+    customers: CustomersUseCases

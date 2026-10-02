@@ -14,8 +14,8 @@ def envelope(n: int) -> RealtimeEnvelope:
 
 async def test_publish_reaches_only_topic_subscribers() -> None:
     hub = InMemoryRealtimeHub()
-    a = hub.connect(connection_id="CON-A", staff_id="STF-1", session_id="SES-1")
-    b = hub.connect(connection_id="CON-B", staff_id="STF-2", session_id="SES-2")
+    a = hub.connect(connection_id="CON-A", principal_id="STF-1", session_id="SES-1")
+    b = hub.connect(connection_id="CON-B", principal_id="STF-2", session_id="SES-2")
     hub.subscribe(a.id, "case:1")
     hub.subscribe(b.id, "case:2")
 
@@ -26,9 +26,25 @@ async def test_publish_reaches_only_topic_subscribers() -> None:
     assert a.topics == frozenset({"case:1"})
 
 
+async def test_publish_many_delivers_once_per_connection() -> None:
+    hub = InMemoryRealtimeHub()
+    both = hub.connect(connection_id="CON-A", principal_id="STF-1", session_id="SES-1")
+    inbox_only = hub.connect(connection_id="CON-B", principal_id="STF-1", session_id="SES-2")
+    hub.subscribe(both.id, "case:1")
+    hub.subscribe(both.id, "inbox:STF-1")
+    hub.subscribe(inbox_only.id, "inbox:STF-1")
+
+    assert await hub.publish_many(["case:1", "inbox:STF-1", "case:nobody"], envelope(1)) == 2
+    assert await hub.publish("case:1", envelope(2)) == 1
+
+    assert [await both.next_envelope(), await both.next_envelope()] == [envelope(1), envelope(2)]
+    assert await inbox_only.next_envelope() == envelope(1)
+    assert await hub.publish_many([], envelope(3)) == 0
+
+
 async def test_unsubscribe_and_disconnect_clean_up() -> None:
     hub = InMemoryRealtimeHub()
-    a = hub.connect(connection_id="CON-A", staff_id="STF-1", session_id="SES-1")
+    a = hub.connect(connection_id="CON-A", principal_id="STF-1", session_id="SES-1")
     hub.subscribe(a.id, "case:1")
     hub.unsubscribe(a.id, "case:1")
     assert hub.subscriber_count("case:1") == 0
@@ -44,7 +60,7 @@ async def test_unsubscribe_and_disconnect_clean_up() -> None:
 
 async def test_slow_consumer_is_disconnected() -> None:
     hub = InMemoryRealtimeHub(queue_size=2)
-    slow = hub.connect(connection_id="CON-S", staff_id="STF-1", session_id="SES-1")
+    slow = hub.connect(connection_id="CON-S", principal_id="STF-1", session_id="SES-1")
     hub.subscribe(slow.id, "case:1")
 
     delivered = [await hub.publish("case:1", envelope(n)) for n in range(3)]
@@ -57,9 +73,9 @@ async def test_slow_consumer_is_disconnected() -> None:
 
 async def test_close_session_closes_every_socket_of_the_session() -> None:
     hub = InMemoryRealtimeHub()
-    tab1 = hub.connect(connection_id="CON-1", staff_id="STF-1", session_id="SES-1")
-    tab2 = hub.connect(connection_id="CON-2", staff_id="STF-1", session_id="SES-1")
-    other = hub.connect(connection_id="CON-3", staff_id="STF-1", session_id="SES-2")
+    tab1 = hub.connect(connection_id="CON-1", principal_id="STF-1", session_id="SES-1")
+    tab2 = hub.connect(connection_id="CON-2", principal_id="STF-1", session_id="SES-1")
+    other = hub.connect(connection_id="CON-3", principal_id="STF-1", session_id="SES-2")
 
     assert hub.close_session("SES-1") == 2
 

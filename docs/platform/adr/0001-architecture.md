@@ -50,6 +50,8 @@ file can be added without touching commands). There is no separate write/read da
 - On `commit` the Unit of Work (Template Method in `BaseUnitOfWork`) wraps each event as an
   `EventRecord` (`EVT-…` id + `ingested_at`), **appends it to `event_log` in the same
   transaction** as the state change, commits, and then publishes the records on the event bus.
+  Events of one transaction keep the order in which they were recorded, across aggregates
+  and loose `record` calls (a process-wide recording stamp on `AggregateRoot`).
   The log can never miss a committed change, and subscribers only see committed facts.
 - `event_log` mirrors the contract envelope: `event_id, event_type, entity, entity_id,
   case_id, actor_role, actor_id, event_time, ingested_at, payload` plus a monotonically
@@ -86,11 +88,12 @@ injectable `Clock`. Every route declares its roles with `require_roles(...)`.
 | Repository + Unit of Work | `application/ports/unit_of_work.py`, `infrastructure/persistence/*` |
 | Template Method | `BaseUnitOfWork` (event pipeline shared by SQL and in-memory UoWs) |
 | Observer (pub/sub) | `InProcessEventBus`, realtime projector |
-| Registry | `TopicMapper` rules; later `ToolRegistry`, `ResponderRegistry`, `ComponentRegistry` |
-| Chain of Responsibility | `Responder` tiers judge → tree → ai_agent → human (routing slice) |
-| Strategy | `CopilotEngine`, `PasswordHasher`, `MfaVerifier`, policy rules (later) |
+| Registry | `TopicMapper` rules, `ResponderRegistry`; later `ToolRegistry`, `ComponentRegistry` |
+| Chain of Responsibility | `Responder` tiers judge → tree → ai_agent → human (`RouteCase`, slice 1) |
+| Strategy | `AssignmentPolicy`, `SlaPolicy`, `CopilotEngine`, `PasswordHasher`, `MfaVerifier`, policy rules (later) |
+| Process manager | `RoutingProcessManager` (`case.opened` → route, analyst available → drain queue) |
 | Command | `ToolHandler` + one execute-tool use case (tools slice) |
-| State machine | `MfaChallenge`, `StaffSession` today; `Case`, `Approval` later |
+| State machine | `MfaChallenge`, `StaffSession`, `Case`; `Approval` later |
 | Composition root | `bootstrap/container.py` |
 
 ## Alternatives considered

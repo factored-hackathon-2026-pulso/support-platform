@@ -6,13 +6,18 @@
  *   reconnect.
  * - Unexpected closes reconnect with exponential backoff + jitter; the attempt
  *   counter resets once a connection opens.
+ * - Domain envelopes are deduplicated by `(type, id)` (a bounded window of
+ *   recent keys, kept across reconnects): handlers and listeners see each event
+ *   once, even if the server delivers it twice. Control envelopes pass through.
  * - Close code 4401 (token rejected, session ended or expired), 4403 and 1008
  *   stop reconnecting and call `onAuthError` (the session then ends and the user
  *   goes to /login). 1013 ("try again later") and network drops reconnect.
  * - Framework-free: React glue lives in `react.tsx`.
  */
 import { computeBackoff, type BackoffOptions } from './backoff'
+import { RecentKeys, envelopeKey } from './dedupe'
 import {
+  isControlEnvelope,
   parseEnvelope,
   type ClientMessage,
   type ConnectionStatus,
@@ -36,6 +41,7 @@ export interface WebSocketLike {
 
 export type WebSocketFactory = (url: string) => WebSocketLike
 
+const CONNECTING = 0
 const OPEN = 1
 
 export interface RealtimeClientOptions {
@@ -48,6 +54,8 @@ export interface RealtimeClientOptions {
   backoff?: BackoffOptions
   /** Called when the server rejects the token. */
   onAuthError?: () => void
+  /** How many recent envelope keys to remember for dedupe (default 512). */
+  dedupeWindow?: number
 }
 
 type EnvelopeListener = (envelope: RealtimeEnvelope) => void
@@ -64,9 +72,11 @@ export class RealtimeClient {
   private readonly topicRefs = new Map<RealtimeTopic, number>()
   private readonly envelopeListeners = new Set<EnvelopeListener>()
   private readonly statusListeners = new Set<StatusListener>()
+  private readonly seen: RecentKeys
 
   constructor(options: RealtimeClientOptions) {
     this.options = options
+    this.seen = new RecentKeys(options.dedupeWindow)
   }
 
   getStatus(): ConnectionStatus {
@@ -93,7 +103,7 @@ export class RealtimeClient {
     this.socket = null
     if (socket) {
       this.detach(socket)
-      socket.close(1000, 'client disconnect')
+      closeWhenSettled(socket)
     }
     this.attempt = 0
     this.setStatus('closed')
@@ -161,6 +171,7 @@ export class RealtimeClient {
     socket.onmessage = (event) => {
       const envelope = parseEnvelope(event.data)
       if (!envelope) return
+      if (!isControlEnvelope(envelope) && !this.seen.add(envelopeKey(envelope))) return
       for (const listener of this.envelopeListeners) listener(envelope)
     }
     socket.onerror = () => {
@@ -217,4 +228,18 @@ export class RealtimeClient {
     this.status = status
     for (const listener of this.statusListeners) listener(status)
   }
+}
+
+/**
+ * Closes a socket we no longer want. One that is still connecting is closed as
+ * soon as it opens: closing it mid-handshake makes browsers log "WebSocket is
+ * closed before the connection is established" (e.g. React StrictMode's dev
+ * remount of a provider that already holds a token, like the /cliente simulator).
+ */
+function closeWhenSettled(socket: WebSocketLike): void {
+  if (socket.readyState === CONNECTING) {
+    socket.onopen = () => socket.close(1000, 'client disconnect')
+    return
+  }
+  socket.close(1000, 'client disconnect')
 }

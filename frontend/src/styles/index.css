@@ -98,6 +98,19 @@
   /* Role avatar tint (Supervisora) */
   --color-peach: #f7e6da;
 
+  /*
+   * Customer mobile app (AppSupportChat.dc.html), used only by the /cliente
+   * simulator so it reads as the customer's app, not the staff platform.
+   * app-brand on white is 5.3:1; app-muted on app-canvas is 5.4:1.
+   */
+  --color-app-canvas: #f4f5f1;
+  --color-app-ink: #1f2a2e;
+  --color-app-muted: #5e6a68;
+  --color-app-line: #e3e6e0;
+  --color-app-chip-line: #c9d3cc;
+  --color-app-brand: #2f7a67;
+  --color-app-brand-strong: #225a4c;
+
   /* Typography */
   --font-sans: 'Schibsted Grotesk', system-ui, sans-serif;
   --font-body: 'Schibsted Grotesk', system-ui, sans-serif;

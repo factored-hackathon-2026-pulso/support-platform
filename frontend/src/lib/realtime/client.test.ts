@@ -102,6 +102,22 @@ describe('RealtimeClient', () => {
     expect(sockets.sockets).toHaveLength(1)
   })
 
+  it('closes a socket that is still connecting once it opens (no mid-handshake close)', () => {
+    const { client, sockets } = setup()
+    client.connect()
+    const first = sockets.last()
+    client.disconnect()
+    expect(first?.closedWith).toBeNull()
+    expect(client.getStatus()).toBe('closed')
+
+    client.connect() // StrictMode remount: a fresh socket, the stale one is left to settle
+    expect(sockets.sockets).toHaveLength(2)
+    first?.open()
+    expect(first?.closedWith?.code).toBe(1000)
+    expect(sockets.last()?.closedWith).toBeNull()
+    expect(client.getStatus()).toBe('connecting')
+  })
+
   it('cancels a pending reconnect on disconnect()', () => {
     const { client, sockets } = setup()
     client.connect()
@@ -197,6 +213,40 @@ describe('RealtimeClient', () => {
         occurredAt: '2026-01-01T00:00:00Z',
         data: { caseId: 'CASE-1' },
       },
+    ])
+  })
+
+  it('delivers each domain envelope once, also across reconnects, but every control envelope', () => {
+    const { client, sockets } = setup()
+    const received: string[] = []
+    client.onEnvelope((envelope) => received.push(`${envelope.type}/${envelope.id}`))
+    client.connect()
+    sockets.last()?.open()
+    const updated = {
+      type: 'case.updated',
+      id: 'EVT-1',
+      occurredAt: '2026-01-01T00:00:00Z',
+      data: {},
+    }
+
+    sockets.last()?.receive({ ...updated, data: { topic: 'case:CASE-1' } })
+    sockets.last()?.receive({ ...updated, data: { topic: 'inbox:STF-1' } })
+    sockets.last()?.receive({ ...updated, type: 'turn.created' })
+    sockets.last()?.receive({ ...updated, type: 'pong', id: 'CTL-1' })
+    sockets.last()?.receive({ ...updated, type: 'pong', id: 'CTL-1' })
+
+    sockets.last()?.serverClose(1006)
+    vi.advanceTimersByTime(1_000)
+    sockets.last()?.open()
+    sockets.last()?.receive(updated)
+    sockets.last()?.receive({ ...updated, id: 'EVT-2' })
+
+    expect(received).toEqual([
+      'case.updated/EVT-1',
+      'turn.created/EVT-1',
+      'pong/CTL-1',
+      'pong/CTL-1',
+      'case.updated/EVT-2',
     ])
   })
 })

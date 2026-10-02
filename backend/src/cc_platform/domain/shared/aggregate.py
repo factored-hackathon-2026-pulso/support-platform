@@ -11,10 +11,23 @@ challenge, case status, approvals) and counters (lockout) free of lost updates.
 
 from __future__ import annotations
 
+import itertools
+
 from cc_platform.domain.shared.events import DomainEvent
 
 _EVENTS_KEY = "_pending_events"
 _VERSION_KEY = "_version"
+
+#: Process-wide recording order of domain events. A Unit of Work that collects events from
+#: several aggregates (and loose events) sorts them by this stamp, so the event log keeps
+#: the order in which things happened inside one transaction (e.g. routing steps before
+#: the assignment they led to), not the order in which aggregates were loaded.
+_RECORDING_ORDER = itertools.count(1)
+
+
+def next_event_stamp() -> int:
+    """Stamp for an event recorded outside an aggregate (``UnitOfWork.record``)."""
+    return next(_RECORDING_ORDER)
 
 
 class AggregateRoot:
@@ -25,21 +38,25 @@ class AggregateRoot:
     the same transaction and publishes them after commit.
     """
 
-    def _pending(self) -> list[DomainEvent]:
-        pending: list[DomainEvent] | None = self.__dict__.get(_EVENTS_KEY)
+    def _pending(self) -> list[tuple[int, DomainEvent]]:
+        pending: list[tuple[int, DomainEvent]] | None = self.__dict__.get(_EVENTS_KEY)
         if pending is None:
             pending = []
             self.__dict__[_EVENTS_KEY] = pending
         return pending
 
     def _record(self, event: DomainEvent) -> None:
-        self._pending().append(event)
+        self._pending().append((next_event_stamp(), event))
 
-    def pull_events(self) -> list[DomainEvent]:
+    def pull_stamped_events(self) -> list[tuple[int, DomainEvent]]:
+        """Pending events with their recording stamp (Unit of Work only)."""
         pending = self._pending()
         events = list(pending)
         pending.clear()
         return events
+
+    def pull_events(self) -> list[DomainEvent]:
+        return [event for _stamp, event in self.pull_stamped_events()]
 
     @property
     def has_pending_events(self) -> bool:

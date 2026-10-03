@@ -1,11 +1,13 @@
 /**
- * Conversation calls (docs/platform/api/slice-1-cases.md §3): case detail, turns,
- * analyst replies, read cursor and close. The only module of the feature that
+ * Conversation calls (docs/platform/api/slice-2-case-lifecycle.md §5.1): case
+ * detail, turns, analyst replies, read cursor, close and the customer's other
+ * cases ("Casos anteriores"). The only module of the feature that
  * talks to the API client; tests mock it with `vi.mock('@/features/conversation/api')`.
  */
 import { api, unwrap } from '@/lib/api'
 import type {
   CaseDetail,
+  CaseHistory,
   CaseSummary,
   CloseCaseRequest,
   PostAnalystTurnRequest,
@@ -13,11 +15,12 @@ import type {
   TurnPage,
 } from './types'
 
-/** Query keys (frozen by the contract §7.2). */
+/** Query keys (frozen by the contract §9.7). */
 export const conversationKeys = {
   all: ['conversation'] as const,
   detail: (caseId: string) => ['conversation', caseId, 'detail'] as const,
   turns: (caseId: string) => ['conversation', caseId, 'turns'] as const,
+  history: (caseId: string) => ['conversation', caseId, 'history'] as const,
 }
 
 export const conversationMutationKeys = {
@@ -26,7 +29,7 @@ export const conversationMutationKeys = {
   close: (caseId: string) => ['conversation', caseId, 'close'] as const,
 }
 
-/** GET /cases/{caseId}: case, customer, assignment, "Cómo llegó a ti", capabilities. */
+/** GET /cases/{caseId}: case, customer, assignment ("Cómo llegó a ti"), closure, capabilities. */
 export async function fetchCaseDetail(caseId: string, signal?: AbortSignal): Promise<CaseDetail> {
   return unwrap(api.GET('/api/v1/cases/{caseId}', { params: { path: { caseId } }, signal }))
 }
@@ -80,7 +83,16 @@ export async function markCaseRead(caseId: string, upToSequence: number): Promis
   )
 }
 
-/** POST /cases/{caseId}/close. */
+/** POST /cases/{caseId}/close: `{ reason, note }` (the customer only gets the closing notice). */
 export async function closeCase(caseId: string, body: CloseCaseRequest): Promise<CaseDetail> {
   return unwrap(api.POST('/api/v1/cases/{caseId}/close', { params: { path: { caseId } }, body }))
+}
+
+/**
+ * GET /cases/{caseId}/history: the customer's **other** cases (any status),
+ * newest first, at most 20 (`total` is the full count). With read access to
+ * `caseId`, every listed case is readable through GET /cases/{id} and /turns.
+ */
+export async function fetchCaseHistory(caseId: string, signal?: AbortSignal): Promise<CaseHistory> {
+  return unwrap(api.GET('/api/v1/cases/{caseId}/history', { params: { path: { caseId } }, signal }))
 }

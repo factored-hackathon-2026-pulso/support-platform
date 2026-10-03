@@ -1,12 +1,9 @@
 import { useId, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
-import { Button, Callout, ComposerFrame, Textarea } from '@/components/ui'
-import { MAX_MESSAGE_LENGTH, normalizeMessage, REPLY_BLOCKED_COPY } from '../model'
-import type { ReplyBlockedReason } from '../types'
+import { Button, ComposerFrame, Textarea } from '@/components/ui'
+import { MAX_MESSAGE_LENGTH, normalizeMessage } from '../model'
 
 export interface ComposerProps {
-  /** Null when the analyst may write; otherwise why not (copy per reason). */
-  blockedReason: ReplyBlockedReason | null
   onSend: (text: string) => void
 }
 
@@ -16,22 +13,15 @@ export interface ComposerProps {
  * pending and turns sent or failed there. Focus goes back to the box after a
  * send, and "Enviar" is `aria-disabled` (never natively disabled) while there is
  * nothing to send, so pressing it never drops the keyboard focus to <body>.
+ * Shown only when the viewer may reply (`ReadOnlyFooter` otherwise).
  */
-export function Composer({ blockedReason, onSend }: ComposerProps) {
+export function Composer({ onSend }: ComposerProps) {
   const id = useId()
   const hintId = `${id}-hint`
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const message = normalizeMessage(text)
   const tooLong = text.trim().length > MAX_MESSAGE_LENGTH
-
-  if (blockedReason) {
-    return (
-      <Callout tone="neutral" role="note">
-        {REPLY_BLOCKED_COPY[blockedReason]}
-      </Callout>
-    )
-  }
 
   function submit() {
     if (!message) return

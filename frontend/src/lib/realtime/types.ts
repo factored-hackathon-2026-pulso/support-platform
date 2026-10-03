@@ -13,10 +13,6 @@ export type KnownRealtimeEventType =
   | 'turn.created'
   | 'case.updated'
   | 'case.assigned'
-  | 'identity_check.updated'
-  | 'tool_call.completed'
-  | 'approval.updated'
-  | 'copilot.message'
   | 'inbox.counts'
   | 'availability.updated'
   | 'conversation.updated'
@@ -33,11 +29,10 @@ export interface RealtimeEnvelope<TData = unknown, TType extends string = Realti
 }
 
 /**
- * `case:<caseId>`, `inbox:<staffId>`, `approvals` (staff tokens) and
- * `customer:<customerId>` (only the customer token whose subject is that id).
+ * `case:<caseId>`, `inbox:<staffId>` (staff tokens) and `customer:<customerId>`
+ * (only the customer token whose subject is that id).
  */
-export type RealtimeTopic =
-  `case:${string}` | `inbox:${string}` | `customer:${string}` | 'approvals'
+export type RealtimeTopic = `case:${string}` | `inbox:${string}` | `customer:${string}`
 
 /** Messages the client sends (one topic per message, backend `api/routers/realtime.py`). */
 export type ClientMessage =
@@ -67,7 +62,6 @@ export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' |
 export const topics = {
   case: (caseId: string): RealtimeTopic => `case:${caseId}`,
   inbox: (staffId: string): RealtimeTopic => `inbox:${staffId}`,
-  approvals: (): RealtimeTopic => 'approvals',
   customer: (customerId: string): RealtimeTopic => `customer:${customerId}`,
 } as const
 

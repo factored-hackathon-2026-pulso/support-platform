@@ -1,11 +1,12 @@
 /**
- * Customer simulator realtime (contract §5.2–§5.3, §7.2): envelopes on
+ * Customer simulator realtime (slice-2-case-lifecycle.md §7, §9.6): envelopes on
  * `customer:<id>` → the chat cache. Registered in the simulator's **own**
  * registry (its socket authenticates with the customer token), never in
  * `app/realtime-handlers.ts`.
  *
- * Idempotent: turns merge by id. A turn or conversation of another case (a new
- * one opened after the last closed) refetches the conversation instead.
+ * Idempotent: turns merge by id. A conversation of another, newer case (a new
+ * one opened after the last closed) keeps the closed one as a past block and
+ * refetches; a turn of another case refetches the conversation.
  */
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -17,7 +18,7 @@ import {
   type RealtimeRegistration,
 } from '@/lib/realtime'
 import { customerChatKeys } from './api'
-import { applyConversation, isSameCase, mergeCustomerTurns } from './model'
+import { applyConversation, isNewerConversation, isSameCase, mergeCustomerTurns } from './model'
 import type { CustomerChatCache, CustomerConversation, CustomerTurn } from './types'
 
 function readData(envelope: RealtimeEnvelope) {
@@ -65,8 +66,19 @@ function applyConversationUpdate(envelope: RealtimeEnvelope, queryClient: QueryC
       queryClient.setQueryData<CustomerChatCache>(key, (current) =>
         current ? applyConversation(current, conversation) : current,
       )
-    } else {
-      void queryClient.invalidateQueries({ queryKey: key, exact: true })
+      return
+    }
+    // A late update of an older case never switches the chat back.
+    if (!isNewerConversation(conversation, cache.conversation)) return
+    queryClient.setQueryData<CustomerChatCache>(key, (current) =>
+      current ? applyConversation(current, conversation) : current,
+    )
+    void queryClient.invalidateQueries({ queryKey: key, exact: true })
+    const customerId = key[1]
+    if (typeof customerId === 'string') {
+      void queryClient.invalidateQueries({
+        queryKey: customerChatKeys.pastConversations(customerId),
+      })
     }
   })
 }

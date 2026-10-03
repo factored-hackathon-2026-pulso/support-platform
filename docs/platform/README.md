@@ -4,17 +4,19 @@ Start with the brief; everything else hangs off it.
 
 | Document | What it is for |
 |---|---|
-| [ENGINEERING_BRIEF.md](./ENGINEERING_BRIEF.md) | Scope, stack, layout, patterns, product rules, quality gates, hygiene. Every slice and review follows it. |
+| [ENGINEERING_BRIEF.md](./ENGINEERING_BRIEF.md) | Scope (chat-only support platform), stack, layout, patterns, product rules, slice plan, quality gates, hygiene. Every slice and review follows it. |
 | [adr/0001-architecture.md](./adr/0001-architecture.md) | Hexagonal + DDD-lite + CQRS-lite with an append-only event log; patterns table, alternatives, consequences. |
-| [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | AG-UI 1.0 as the copilot wire protocol (SSE), own UI components, `@ag-ui/client` on the frontend, interrupt/resume for tool proposals. |
-| [api/slice-1-cases.md](./api/slice-1-cases.md) | Slice 1 API contract: cases, turns, routing/assignment, inbox statuses, customer simulator, realtime topics, seed, FE ownership. |
-| [AI_INTEGRATION.md](./AI_INTEGRATION.md) | How the AI team plugs in judge / tree / agent responders, a copilot engine, tools, components and the event export; every Protocol in code. |
+| [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | **Superseded (2026-10-03):** AI is out of the platform scope. Kept only as a record; do not implement it. |
+| [api/slice-1-cases.md](./api/slice-1-cases.md) | Slice 1 API contract (implemented): cases, turns, assignment, inbox, customer simulator, realtime topics, seed. Partly superseded by slice 2. |
+| [api/slice-2-case-lifecycle.md](./api/slice-2-case-lifecycle.md) | Slice 2 contract: the scope-cut removal list, the case lifecycle (statuses, close with a reason, new case after a close, case history, first-response SLA), REST + realtime changes, seed, frontend changes. |
 | [../../backend/README.md](../../backend/README.md) | API: run, seeded sign-in accounts, conventions, gates, known gaps. |
 | [../../frontend/README.md](../../frontend/README.md), [../../frontend/ARCHITECTURE.md](../../frontend/ARCHITECTURE.md) | SPA: run, folder and slice rules, routing, components, data layer, realtime, testing. |
 
 Other sources of truth: design boards in `warehouse/design/source/project/*.dc.html`
-(read-only), policies in `docs/policies.md` and `docs/security_questions.md`, data
-contracts in `contracts/*.json` (read-only).
+(read-only; only the screens still in scope apply, see brief §2), rule 3 (language) in
+`docs/policies.md`, and the event envelope of `contracts/platform_history.json` (read-only).
+`docs/security_questions.md` and the abono, approval and automation rules of
+`docs/policies.md` no longer apply to the platform.
 
 New architecture decisions go in `adr/NNNN-title.md` (next number: 0003).
 

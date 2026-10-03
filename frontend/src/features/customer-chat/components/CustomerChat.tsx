@@ -1,29 +1,42 @@
 import { useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { ArrowRight, CircleAlert } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Button, Callout, Skeleton } from '@/components/ui'
 import { cn } from '@/lib/cn'
-import { formatTime } from '@/lib/format'
 import {
+  chatLang,
+  closedConversationNote,
   conversationStatusLine,
+  customerChatCopy,
+  inputPlaceholder,
   normalizeCustomerMessage,
   toChatItems,
   visibleSuggestions,
   type ChatItem,
 } from '../model'
 import { useCustomerChatLive, useCustomerConversation, useSendCustomerMessage } from '../hooks'
+import type { Language } from '../types'
+import { ChatBubble } from './ChatBubble'
+import { PastConversations } from './PastConversations'
 
 export interface CustomerChatProps {
   customerId: string
   /** Chips of this customer (from the picker list): openers or open-chat follow-ups. */
   suggestions: readonly string[]
+  /** The customer's language: everything inside the phone frame speaks it. */
+  language: Language
 }
 
 /**
  * The customer's chat, framed like the mobile app support screen
- * (AppSupportChat.dc.html): "Soporte" + who is attending, the conversation,
- * opener chips and the input. Live through `customer:<id>`.
+ * (AppSupportChat.dc.html): "Soporte" + who is attending, the past
+ * conversations on demand, the current conversation, opener chips and the
+ * input. After a close the input stays enabled: writing starts a new
+ * conversation (contract §9.6). Live through `customer:<id>`. The copy follows
+ * the customer's language (Spanish or Portuguese), like the notices the server
+ * sends them.
  */
-export function CustomerChat({ customerId, suggestions }: CustomerChatProps) {
+export function CustomerChat({ customerId, suggestions, language }: CustomerChatProps) {
+  const copy = customerChatCopy(language)
   useCustomerChatLive(customerId)
   const chat = useCustomerConversation(customerId)
   const { send, retry } = useSendCustomerMessage(customerId)
@@ -34,6 +47,7 @@ export function CustomerChat({ customerId, suggestions }: CustomerChatProps) {
   const conversation = chat.data?.conversation ?? null
   const chips = chat.status === 'success' ? visibleSuggestions(suggestions, chat.data) : []
   const message = normalizeCustomerMessage(text)
+  const closedNote = closedConversationNote(conversation, language)
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -46,12 +60,17 @@ export function CustomerChat({ customerId, suggestions }: CustomerChatProps) {
   }
 
   return (
-    <div className="mx-auto flex h-full max-h-[844px] w-full max-w-[390px] flex-col overflow-hidden rounded-16 border border-app-line bg-app-canvas text-app-ink shadow-popover">
+    <div
+      lang={chatLang(language)}
+      className="mx-auto flex h-full max-h-[844px] w-full max-w-[390px] flex-col overflow-hidden rounded-16 border border-app-line bg-app-canvas text-app-ink shadow-popover"
+    >
       <header className="flex items-center gap-3 border-b border-app-line bg-white px-5 pt-[18px] pb-3">
         <span className="flex grow flex-col">
-          <span className="text-16 font-semibold">Soporte</span>
+          <span className="text-16 font-semibold">{copy.support}</span>
           <span className="text-12 text-app-muted" aria-live="polite">
-            {chat.status === 'success' ? conversationStatusLine(conversation) : 'Cargando…'}
+            {chat.status === 'success'
+              ? conversationStatusLine(conversation, language)
+              : copy.loading}
           </span>
         </span>
       </header>
@@ -68,34 +87,38 @@ export function CustomerChat({ customerId, suggestions }: CustomerChatProps) {
         ) : chat.status === 'error' ? (
           <Callout
             tone="danger"
-            title="No pudimos cargar la conversación"
+            title={copy.loadErrorTitle}
             actions={
               <Button size="sm" loading={chat.isFetching} onClick={() => void chat.refetch()}>
-                Reintentar
+                {copy.retry}
               </Button>
             }
           >
-            Revisa tu conexión e inténtalo de nuevo.
+            {copy.loadErrorBody}
           </Callout>
         ) : (
-          // The log mounts with the history already in it, so only messages
-          // added afterwards are announced (ARCHITECTURE.md §11).
-          <div role="log" aria-label="Conversación con soporte" aria-relevant="additions">
-            <ol aria-label="Mensajes" className="m-0 flex list-none flex-col gap-3 p-0">
-              {items.length === 0 ? (
-                <li className="self-start rounded-[16px_16px_16px_4px] bg-white px-3.5 py-2.5 text-15 leading-[1.45]">
-                  Hola, ¿en qué te podemos ayudar?
-                </li>
-              ) : null}
-              {items.map((item) => (
-                <ChatBubble key={item.key} item={item} onRetry={retry} />
-              ))}
-            </ol>
-          </div>
+          <>
+            <PastConversations customerId={customerId} cache={chat.data} language={language} />
+            {/* The log mounts with the history already in it, so only messages
+              added afterwards are announced (ARCHITECTURE.md §11). Past
+              conversations stay outside it. */}
+            <div role="log" aria-label={copy.logLabel} aria-relevant="additions">
+              <ol aria-label={copy.messagesLabel} className="m-0 flex list-none flex-col gap-3 p-0">
+                {items.length === 0 ? (
+                  <li className="self-start rounded-[16px_16px_16px_4px] bg-white px-3.5 py-2.5 text-15 leading-[1.45]">
+                    {copy.greeting}
+                  </li>
+                ) : null}
+                {items.map((item) => (
+                  <ChatBubble key={item.key} item={item} copy={copy} onRetry={retry} />
+                ))}
+              </ol>
+            </div>
+          </>
         )}
         {chips.length > 0 ? (
           <fieldset className="m-0 flex min-w-0 flex-col items-start gap-2 border-0 p-0">
-            <legend className="sr-only">Sugerencias</legend>
+            <legend className="sr-only">{copy.suggestionsLabel}</legend>
             {chips.map((suggestion) => (
               <button
                 key={suggestion}
@@ -113,26 +136,34 @@ export function CustomerChat({ customerId, suggestions }: CustomerChatProps) {
         ) : null}
       </div>
 
+      {closedNote ? (
+        <p className="m-0 border-t border-app-line bg-white px-5 pt-3 text-center text-12 text-app-muted">
+          {closedNote}
+        </p>
+      ) : null}
       <form
         onSubmit={submit}
-        className="flex items-center gap-2 border-t border-app-line bg-white px-4 pt-3 pb-[26px]"
+        className={cn(
+          'flex items-center gap-2 bg-white px-4 pt-3 pb-[26px]',
+          !closedNote && 'border-t border-app-line',
+        )}
       >
         <label htmlFor="customer-message" className="sr-only">
-          Escribe tu mensaje
+          {copy.inputLabel}
         </label>
         <input
           ref={inputRef}
           id="customer-message"
           type="text"
           autoComplete="off"
-          placeholder="Escribe aquí"
+          placeholder={inputPlaceholder(conversation, language)}
           value={text}
           onChange={(event) => setText(event.target.value)}
           className="min-h-11 grow rounded-full border-0 bg-app-canvas px-4 text-15 text-app-ink placeholder:text-app-muted"
         />
         <button
           type="submit"
-          aria-label="Enviar"
+          aria-label={copy.send}
           aria-disabled={!message || undefined}
           className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-app-brand text-white hover:bg-app-brand-strong aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
         >
@@ -140,55 +171,6 @@ export function CustomerChat({ customerId, suggestions }: CustomerChatProps) {
         </button>
       </form>
     </div>
-  )
-}
-
-function ChatBubble({ item, onRetry }: { item: ChatItem; onRetry: (id: string) => void }) {
-  if (item.side === 'notice') {
-    return <li className="self-center px-4 text-center text-12 text-app-muted">{item.text}</li>
-  }
-  const mine = item.side === 'customer'
-  return (
-    <li
-      className={cn('flex max-w-[86%] flex-col gap-1', mine ? 'items-end self-end' : 'self-start')}
-    >
-      {item.author ? <span className="text-12 text-app-muted">{item.author}</span> : null}
-      <div
-        className={cn(
-          'px-3.5 py-2.5 text-15 leading-[1.45] break-words whitespace-pre-line',
-          mine
-            ? 'rounded-[16px_16px_4px_16px] bg-app-brand text-white'
-            : 'rounded-[16px_16px_16px_4px] bg-white',
-        )}
-      >
-        {mine ? <span className="sr-only">Tú: </span> : null}
-        {item.text}
-      </div>
-      {item.delivery === 'sending' ? (
-        <span className="text-12 text-app-muted" aria-hidden="true">
-          Enviando…
-        </span>
-      ) : item.delivery === 'failed' ? (
-        <span
-          className="flex items-center gap-1.5 text-12 font-medium text-danger-strong"
-          role="alert"
-        >
-          <CircleAlert size={13} aria-hidden="true" />
-          No se envió ·
-          <button
-            type="button"
-            className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-app-brand underline-offset-2 hover:underline"
-            onClick={() => item.clientMessageId && onRetry(item.clientMessageId)}
-          >
-            Reintentar
-          </button>
-        </span>
-      ) : (
-        <span className="text-11 text-app-muted" aria-hidden="true">
-          {formatTime(item.createdAt)}
-        </span>
-      )}
-    </li>
   )
 }
 

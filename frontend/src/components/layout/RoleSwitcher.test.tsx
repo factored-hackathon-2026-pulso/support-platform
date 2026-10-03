@@ -1,22 +1,22 @@
 import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { automationAdminStaff, supervisorStaff } from '@/test/fixtures'
+import { supervisorAdminStaff, supervisorStaff } from '@/test/fixtures'
 import { renderRoute } from '@/test/render'
 
 describe('RoleSwitcher', () => {
   it('lists only the roles the user holds, marking the current one', async () => {
-    const { user } = renderRoute('/automatizacion', { staff: automationAdminStaff })
-    await screen.findByRole('heading', { level: 1, name: 'Panorama' })
+    const { user } = renderRoute('/administracion/usuarios', { staff: supervisorAdminStaff })
+    await screen.findByRole('heading', { level: 1, name: 'Usuarios y roles' })
 
-    const trigger = screen.getByRole('button', { name: 'Andrés Salazar Pinto, cambiar de rol' })
+    const trigger = screen.getByRole('button', { name: 'Carolina Peña Ruiz, cambiar de rol' })
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     await user.click(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
 
     const list = screen.getByRole('list', { name: 'Cambiar de rol' })
     const links = within(list).getAllByRole('link')
-    expect(links.map((link) => link.textContent)).toEqual(['Automatización', 'Administración'])
-    expect(within(list).getByRole('link', { name: 'Automatización' })).toHaveAttribute(
+    expect(links.map((link) => link.textContent)).toEqual(['Supervisora', 'Administración'])
+    expect(within(list).getByRole('link', { name: 'Administración' })).toHaveAttribute(
       'aria-current',
       'true',
     )

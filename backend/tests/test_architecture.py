@@ -56,3 +56,21 @@ def test_layer_does_not_import_outer_layers_or_frameworks(layer: str) -> None:
         if any(module == f or module.startswith(f"{f}.") for f in forbidden)
     ]
     assert violations == []
+
+
+@pytest.mark.parametrize(
+    "removed",
+    [
+        "application/ports/ai.py",
+        "application/copilot",
+        "application/tools",
+        "application/automation",
+        "application/routing",
+        "application/audit/ports.py",
+        "domain/routing",
+        "infrastructure/routing",
+    ],
+)
+def test_removed_scope_stays_removed(removed: str) -> None:
+    """Slice 2 scope cut (brief §1): these packages must not come back."""
+    assert not (PACKAGE_ROOT / removed).exists()

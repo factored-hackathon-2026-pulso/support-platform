@@ -1,5 +1,6 @@
-"""Parallel chat requests against a real SQLite file (separate connections): the case's
-compare-and-set and the slot keep one open case per customer and one turn per message id."""
+"""Parallel requests against a real SQLite file (separate connections): the case's
+compare-and-set and the slot keep one open case per customer, one turn per message id, one
+close per case, and never a message written after a close."""
 
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ def send(http: httpx.AsyncClient, token: str, text: str, cmid: str) -> object:
 async def test_parallel_first_messages_open_one_case(
     setup: tuple[httpx.AsyncClient, Container],
 ) -> None:
-    http, container = setup
+    http, _ = setup
     token = await customer_token(http, 2001)
     responses = await asyncio.gather(
         *(send(http, token, f"Mensaje {i}", str(uuid.uuid4())) for i in range(6))  # type: ignore[misc]
@@ -60,7 +61,7 @@ async def test_parallel_first_messages_open_one_case(
     bodies = [r.json() for r in responses]
     assert len({b["conversation"]["caseId"] for b in bodies}) == 1
     assert sum(b["caseCreated"] for b in bodies) == 1
-    await container.background.drain()
+    assert {b["conversation"]["status"] for b in bodies} == {"with_agent"}
     conversation = (await http.get("/api/v1/customer/conversation", headers=bearer(token))).json()
     messages = [t for t in conversation["turns"] if t["kind"] == "message"]
     assert len(messages) == 6
@@ -68,15 +69,19 @@ async def test_parallel_first_messages_open_one_case(
     assert sequences == sorted(set(sequences))
 
 
-async def test_double_send_is_one_turn(setup: tuple[httpx.AsyncClient, Container]) -> None:
-    http, _ = setup
+async def daniela_headers(http: httpx.AsyncClient) -> dict[str, str]:
     login = await http.post(
         "/api/v1/auth/login", json={"email": ANALYST.email, "password": PASSWORD}
     )
     mfa = await http.post(
         "/api/v1/auth/mfa", json={"challengeId": login.json()["challengeId"], "code": DEV_MFA_CODE}
     )
-    daniela = bearer(mfa.json()["token"])
+    return bearer(mfa.json()["token"])
+
+
+async def test_double_send_is_one_turn(setup: tuple[httpx.AsyncClient, Container]) -> None:
+    http, _ = setup
+    daniela = await daniela_headers(http)
     cmid = str(uuid.uuid4())
     responses = await asyncio.gather(
         *(
@@ -92,3 +97,57 @@ async def test_double_send_is_one_turn(setup: tuple[httpx.AsyncClient, Container
     assert len({r.json()["turn"]["id"] for r in responses}) == 1
     page = await http.get(f"/api/v1/cases/{seed_case_id(102)}/turns", headers=daniela)
     assert [t["clientMessageId"] for t in page.json()["items"]].count(cmid) == 1
+
+
+async def test_double_close_is_one_close(setup: tuple[httpx.AsyncClient, Container]) -> None:
+    http, _ = setup
+    daniela = await daniela_headers(http)
+    case_id = seed_case_id(101)
+    responses = await asyncio.gather(
+        *(
+            http.post(
+                f"/api/v1/cases/{case_id}/close",
+                headers=daniela,
+                json={"reason": "resolved", "note": None},
+            )
+            for _ in range(4)
+        )
+    )
+    assert Counter(r.status_code for r in responses) == {200: 1, 409: 3}
+    assert {r.json()["code"] for r in responses if r.status_code == 409} == {"case_closed"}
+    page = (await http.get(f"/api/v1/cases/{case_id}/turns", headers=daniela)).json()
+    notices = [t for t in page["items"] if t["kind"] == "notice" and t["sequence"] > 2]
+    assert len(notices) == 1
+
+
+async def test_close_racing_the_customers_next_message(
+    setup: tuple[httpx.AsyncClient, Container],
+) -> None:
+    http, _ = setup
+    daniela = await daniela_headers(http)
+    token = await customer_token(http, 1001)
+    case_id = seed_case_id(101)
+    closed, posted = await asyncio.gather(
+        http.post(
+            f"/api/v1/cases/{case_id}/close",
+            headers=daniela,
+            json={"reason": "resolved", "note": None},
+        ),
+        send(http, token, "¿Sigue ahí?", str(uuid.uuid4())),  # type: ignore[arg-type]
+    )
+    assert closed.status_code == 200
+    assert posted.status_code == 201
+    body = posted.json()
+    old = (await http.get(f"/api/v1/cases/{case_id}/turns", headers=daniela)).json()["items"]
+    assert old[-1]["kind"] == "notice"  # nothing after the closed notice
+    if body["caseCreated"]:
+        assert body["conversation"]["previousCaseId"] == case_id
+        assert "¿Sigue ahí?" not in [t["text"] for t in old]
+    else:
+        assert body["conversation"]["caseId"] == case_id
+        assert [t["text"] for t in old].count("¿Sigue ahí?") == 1
+    after = (await http.get("/api/v1/customer/conversation", headers=bearer(token))).json()
+    if body["caseCreated"]:
+        assert after["conversation"]["caseId"] == body["conversation"]["caseId"]
+    else:
+        assert after["conversation"]["status"] == "closed"

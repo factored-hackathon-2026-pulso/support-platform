@@ -1,5 +1,5 @@
 /**
- * Conversation realtime (contract §5.2–§5.3, §7.2): staff envelopes on
+ * Conversation realtime (slice-2-case-lifecycle.md §7): staff envelopes on
  * `case:<id>` → the case detail and turns caches. Registered in
  * `app/realtime-handlers.ts`; keep this module light (keys + handlers only).
  *

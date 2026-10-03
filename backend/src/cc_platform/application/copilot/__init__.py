@@ -1,1 +1,0 @@
-"""copilot context (application layer)."""

@@ -14,7 +14,6 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryEventLogRepository,
     InMemoryLoginAccountRepository,
     InMemoryMfaChallengeRepository,
-    InMemoryRoutingStepRepository,
     InMemoryStaffRepository,
     InMemoryStaffSessionRepository,
     InMemoryTurnRepository,
@@ -34,7 +33,6 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     turns: InMemoryTurnRepository
     assignments: InMemoryAssignmentRepository
     case_slots: InMemoryCustomerCaseSlotRepository
-    routing_steps: InMemoryRoutingStepRepository
     event_log: InMemoryEventLogRepository
 
     def __init__(
@@ -55,7 +53,6 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.turns = InMemoryTurnRepository(store.turns)
         self.assignments = InMemoryAssignmentRepository(store.assignments)
         self.case_slots = InMemoryCustomerCaseSlotRepository(store.case_slots, track)
-        self.routing_steps = InMemoryRoutingStepRepository(store.routing_steps)
         self.event_log = InMemoryEventLogRepository(store.events)
 
     def _repositories(
@@ -71,7 +68,6 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryTurnRepository
         | InMemoryAssignmentRepository
         | InMemoryCustomerCaseSlotRepository
-        | InMemoryRoutingStepRepository
         | InMemoryEventLogRepository,
         ...,
     ]:
@@ -87,7 +83,6 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.customers,
             self.turns,
             self.assignments,
-            self.routing_steps,
             self.event_log,
         )
 

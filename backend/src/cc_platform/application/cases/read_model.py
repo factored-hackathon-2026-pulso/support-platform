@@ -1,7 +1,7 @@
 """Read side of the cases context (CQRS-lite): pure projections plus one reader.
 
-``inbox_status`` is the single place that derives the canvas bucket of a case (Nuevos,
-Por responder, En curso, Por llamar, En espera); the frontend never re-derives it.
+``inbox_status`` is the single place that derives the bucket of a case in "Casos" (Nuevos,
+Por responder, Esperando al cliente, Cerrados); the frontend never re-derives it.
 ``CaseReader`` loads what the projections need inside a Unit of Work; the REST queries and
 the realtime projection both use it, so a socket payload always equals the REST shape.
 """
@@ -14,19 +14,19 @@ from datetime import datetime
 from cc_platform.application.cases.dto import (
     AssignmentView,
     CaseCapabilitiesView,
+    CaseClosureView,
+    CaseCustomerView,
+    CaseHistoryItemView,
     CaseSummaryView,
+    CustomerConversationSummaryView,
     CustomerConversationView,
-    CustomerProfileView,
     CustomerRefView,
     CustomerTurnView,
     InboxCountsView,
     ReplyBlockedReason,
-    RouteStopView,
-    RoutingSummaryView,
     TurnView,
 )
 from cc_platform.application.ports.unit_of_work import UnitOfWork
-from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
@@ -40,33 +40,29 @@ from cc_platform.domain.cases.values import (
     TurnAuthorRole,
 )
 from cc_platform.domain.customers.customer import Customer
-from cc_platform.domain.routing.routing_step import RoutingStep
-from cc_platform.domain.routing.values import RouteStopKind
 
 UNKNOWN_CUSTOMER = "Cliente"
 MAX_INBOX_ITEMS = 200
 
 
 # ----------------------------------------------------------------------------- pure projections
-_INBOX_STATUS: dict[CaseStatus, InboxStatus] = {
-    CaseStatus.ASSIGNED: InboxStatus.NEW,
-    CaseStatus.IN_CALL: InboxStatus.LIVE,
-    CaseStatus.TO_CALL: InboxStatus.TO_CALL,
-    CaseStatus.AWAITING_APPROVAL: InboxStatus.WAITING,
-}
-
-
 def inbox_status(case: Case) -> InboxStatus | None:
-    """Canvas bucket of a case; ``None`` while it is in no inbox (routing, queued, closed).
+    """Bucket of a case (contract §4.1); ``None`` while it is queued (in no inbox).
 
     ``in_progress`` splits on who wrote the last message: the customer → Por responder;
-    anyone else (analyst, bot) or nobody → En espera ("Esperando al cliente").
+    the analyst (or nobody yet) → Esperando al cliente.
     """
-    if case.status is CaseStatus.IN_PROGRESS:
-        if case.last_message_author_role is TurnAuthorRole.CUSTOMER:
-            return InboxStatus.TO_REPLY
-        return InboxStatus.WAITING
-    return _INBOX_STATUS.get(case.status)
+    match case.status:
+        case CaseStatus.ASSIGNED:
+            return InboxStatus.NEW
+        case CaseStatus.IN_PROGRESS:
+            if case.last_message_author_role is TurnAuthorRole.CUSTOMER:
+                return InboxStatus.TO_REPLY
+            return InboxStatus.WAITING
+        case CaseStatus.CLOSED:
+            return InboxStatus.CLOSED
+        case CaseStatus.QUEUED:
+            return None
 
 
 def summarize(case: Case, customer_name: str) -> CaseSummaryView:
@@ -77,15 +73,13 @@ def summarize(case: Case, customer_name: str) -> CaseSummaryView:
         customer=CustomerRefView(id=case.customer_id, display_name=customer_name),
         channel=case.channel,
         language=case.language,
-        origin=case.origin,
-        topic=case.topic,
         priority=case.priority,
         status=case.status,
         inbox_status=inbox_status(case),
         opened_at=case.opened_at,
         sla_due_at=case.sla_due_at,
+        first_response_at=case.first_response_at,
         last_interaction_at=case.last_interaction_at,
-        live_since=case.live_since if case.status is CaseStatus.IN_CALL else None,
         preview=case.last_message_preview if has_message else case.last_turn_preview,
         preview_author_role=(
             case.last_message_author_role if has_message else case.last_turn_author_role
@@ -93,28 +87,39 @@ def summarize(case: Case, customer_name: str) -> CaseSummaryView:
         assigned_analyst_id=case.assigned_analyst_id,
         unread_count=case.unread_count,
         last_sequence=case.last_sequence,
+        previous_case_id=case.previous_case_id,
         closed_at=case.closed_at,
+        close_reason=case.closure.reason if case.closure else None,
     )
 
 
 def count_inbox(items: Iterable[CaseSummaryView], computed_at: datetime) -> InboxCountsView:
+    """Counters of the whole inbox: ``all`` = open cases; ``closed`` = closed in the window
+    (the caller passes the open items plus the closed items of the window)."""
     buckets = [item.inbox_status for item in items if item.inbox_status is not None]
+    new = buckets.count(InboxStatus.NEW)
+    to_reply = buckets.count(InboxStatus.TO_REPLY)
+    waiting = buckets.count(InboxStatus.WAITING)
     return InboxCountsView(
-        all=len(buckets),
-        new=buckets.count(InboxStatus.NEW),
-        to_reply=buckets.count(InboxStatus.TO_REPLY),
-        live=buckets.count(InboxStatus.LIVE),
-        to_call=buckets.count(InboxStatus.TO_CALL),
-        waiting=buckets.count(InboxStatus.WAITING),
+        all=new + to_reply + waiting,
+        new=new,
+        to_reply=to_reply,
+        waiting=waiting,
+        closed=buckets.count(InboxStatus.CLOSED),
         computed_at=computed_at,
     )
 
 
 def inbox_order(item: CaseSummaryView) -> tuple[int, datetime, datetime, str]:
-    """Live calls first (longest first), then the closest SLA, then the oldest case."""
-    if item.inbox_status is InboxStatus.LIVE:
-        return (0, item.live_since or item.opened_at, item.opened_at, item.id)
-    return (1, item.sla_due_at, item.opened_at, item.id)
+    """Open lists: Nuevos and Por responder first, then Esperando al cliente; within each
+    group whoever has waited longest (oldest last interaction), then the oldest case."""
+    group = 1 if item.inbox_status is InboxStatus.WAITING else 0
+    return (group, item.last_interaction_at, item.opened_at, item.id)
+
+
+def closed_order(item: CaseSummaryView) -> tuple[datetime, str]:
+    """Cerrados: the most recently closed first (sort with ``reverse=True``)."""
+    return (item.closed_at or item.opened_at, item.id)
 
 
 def capabilities_for(case: Case, staff_id: str) -> CaseCapabilitiesView:
@@ -124,8 +129,6 @@ def capabilities_for(case: Case, staff_id: str) -> CaseCapabilitiesView:
         reason = ReplyBlockedReason.NOT_ASSIGNEE
     elif case.is_closed:
         reason = ReplyBlockedReason.CLOSED
-    elif not case.channel.is_chat:
-        reason = ReplyBlockedReason.CHANNEL_NOT_SUPPORTED
     return CaseCapabilitiesView(
         can_reply=reason is None and case.status in REPLYABLE_STATUSES,
         reply_blocked_reason=reason,
@@ -133,80 +136,14 @@ def capabilities_for(case: Case, staff_id: str) -> CaseCapabilitiesView:
     )
 
 
-def route_summary(
-    case: Case,
-    steps: Sequence[RoutingStep],
-    assignment: Assignment | None,
-    analyst_name: str | None,
-) -> RoutingSummaryView:
-    """ "Cómo llegó a ti": entry → tiers → queue (if it waited) → the analyst, in order."""
-    stops: list[RouteStopView] = []
-    if case.entry_label is not None:
-        stops.append(
-            RouteStopView(
-                kind=RouteStopKind.ENTRY,
-                occurred_at=case.opened_at,
-                label=case.entry_label,
-                summary=case.entry_summary,
-            )
-        )
-    inputs: dict[str, None] = {}
-    for step in steps:
-        inputs.update(dict.fromkeys(step.inputs_used))
-        stops.append(
-            RouteStopView(
-                kind=RouteStopKind.TIER,
-                occurred_at=step.occurred_at,
-                label=step.component_name,
-                tier=step.tier,
-                component_id=step.component.component_id if step.component else None,
-                component_version=step.component.component_version if step.component else None,
-                outcome=step.outcome,
-                reason_code=step.reason_code,
-                policy_rule_id=step.policy_rule_id,
-                summary=step.handoff.summary if step.handoff else None,
-            )
-        )
-    if case.queued_at is not None:
-        waited = (
-            int((case.assigned_at - case.queued_at).total_seconds())
-            if case.assigned_at is not None
-            else None
-        )
-        stops.append(
-            RouteStopView(
-                kind=RouteStopKind.QUEUE,
-                occurred_at=case.queued_at,
-                label=case.queue_label,
-                summary=case.queue_summary,
-                waited_seconds=waited,
-            )
-        )
-    if assignment is not None:
-        stops.append(
-            RouteStopView(
-                kind=RouteStopKind.ASSIGNEE,
-                occurred_at=assignment.assigned_at,
-                label=analyst_name,
-                reason_code=assignment.reason.value,
-                policy_rule_id=assignment.policy_rule_id,
-                staff_id=assignment.staff_id,
-            )
-        )
-    return RoutingSummaryView(stops=tuple(stops), inputs_used=tuple(inputs))
-
-
-def profile_of(customer: Customer) -> CustomerProfileView:
-    return CustomerProfileView(
+def customer_of(customer: Customer) -> CaseCustomerView:
+    return CaseCustomerView(
         id=customer.id,
         display_name=customer.display_name,
-        segment=customer.segment,
-        country=customer.country,
-        city=customer.city,
         locale=customer.locale,
         language=customer.language,
-        customer_since=customer.customer_since,
-        document_type=customer.document_type,
+        country=customer.country,
+        city=customer.city,
     )
 
 
@@ -246,16 +183,30 @@ class CaseReader:
         names = await self.customer_names(case.customer_id for case in cases)
         return [summarize(case, names[case.customer_id]) for case in cases]
 
-    async def inbox(self, staff_id: str) -> list[CaseSummaryView]:
-        """Every case in ``staff_id``'s inbox, sorted (counts are computed over all of it)."""
+    async def open_inbox(self, staff_id: str) -> list[CaseSummaryView]:
+        """``staff_id``'s open cases (Nuevos, Por responder, Esperando), sorted."""
         cases = await self._uow.cases.list_for_assignee(staff_id, OPEN_ASSIGNED_STATUSES)
-        items = [item for item in await self.summaries(cases) if item.inbox_status is not None]
-        return sorted(items, key=inbox_order)
+        return sorted(await self.summaries(cases), key=inbox_order)
+
+    async def closed_inbox(self, staff_id: str, closed_since: datetime) -> list[CaseSummaryView]:
+        """``staff_id``'s cases closed since ``closed_since``, the most recent first."""
+        cases = await self._uow.cases.list_closed_for_assignee(staff_id, closed_since)
+        return sorted(await self.summaries(cases), key=closed_order, reverse=True)
+
+    async def inbox_counts(
+        self, staff_id: str, *, closed_since: datetime, computed_at: datetime
+    ) -> InboxCountsView:
+        items = [
+            *await self.open_inbox(staff_id),
+            *await self.closed_inbox(staff_id, closed_since),
+        ]
+        return count_inbox(items, computed_at)
 
     async def assignment(self, case: Case) -> AssignmentView | None:
         assignment = await self._uow.assignments.latest_for_case(case.id)
         if assignment is None:
             return None
+        waited = assignment.waited_seconds
         return AssignmentView(
             id=assignment.id,
             analyst_id=assignment.staff_id,
@@ -263,17 +214,43 @@ class CaseReader:
             reason=assignment.reason,
             policy_rule_id=assignment.policy_rule_id,
             assigned_at=assignment.assigned_at,
+            queue_label=case.queue_label if waited is not None else None,
+            waited_seconds=waited,
         )
 
-    async def routing(self, case: Case) -> RoutingSummaryView:
-        steps = await self._uow.routing_steps.list_for_case(case.id)
-        assignment = await self._uow.assignments.latest_for_case(case.id)
-        name = await self.staff_name(assignment.staff_id) if assignment else None
-        return route_summary(case, steps, assignment, name)
+    async def closure(self, case: Case) -> CaseClosureView | None:
+        closure = case.closure
+        if closure is None:
+            return None
+        return CaseClosureView(
+            closed_at=closure.closed_at,
+            closed_by_id=closure.closed_by_id,
+            closed_by_name=await self.staff_name(closure.closed_by_id),
+            reason=closure.reason,
+            note=closure.note,
+        )
 
-    async def _author_names(self, case: Case, turns: Sequence[Turn]) -> dict[str, str | None]:
+    async def history_items(self, cases: Sequence[Case]) -> list[CaseHistoryItemView]:
+        items: list[CaseHistoryItemView] = []
+        for case in cases:
+            analyst = case.assigned_analyst_id
+            items.append(
+                CaseHistoryItemView(
+                    id=case.id,
+                    status=case.status,
+                    channel=case.channel,
+                    opened_at=case.opened_at,
+                    closed_at=case.closed_at,
+                    close_reason=case.closure.reason if case.closure else None,
+                    analyst_id=analyst,
+                    analyst_name=await self.staff_name(analyst) if analyst else None,
+                    preview=case.last_message_preview,
+                )
+            )
+        return items
+
+    async def _author_names(self, turns: Sequence[Turn]) -> dict[str, str | None]:
         names: dict[str, str | None] = {}
-        components: dict[str, str | None] | None = None
         for turn in turns:
             author = turn.author_id
             if author is None or author in names:
@@ -282,19 +259,10 @@ class CaseReader:
                 names[author] = (await self.customer_names([author]))[author]
             elif turn.author_role is TurnAuthorRole.ANALYST:
                 names[author] = await self.staff_name(author)
-            elif turn.author_role.is_bot:
-                if components is None:
-                    steps = await self._uow.routing_steps.list_for_case(case.id)
-                    components = {
-                        str(step.component): step.component_name
-                        for step in steps
-                        if step.component is not None
-                    }
-                names[author] = components.get(author)
         return names
 
-    async def turn_views(self, case: Case, turns: Sequence[Turn]) -> list[TurnView]:
-        names = await self._author_names(case, turns)
+    async def turn_views(self, turns: Sequence[Turn]) -> list[TurnView]:
+        names = await self._author_names(turns)
         return [
             TurnView(
                 id=turn.id,
@@ -309,8 +277,6 @@ class CaseReader:
                 language=turn.language,
                 created_at=turn.created_at,
                 client_message_id=turn.client_message_id,
-                evidence_ids=turn.evidence_ids,
-                from_suggestion_id=turn.from_suggestion_id,
             )
             for turn in turns
         ]
@@ -318,8 +284,8 @@ class CaseReader:
     async def customer_turn_views(
         self, turns: Sequence[Turn], customer_id: str
     ) -> list[CustomerTurnView]:
-        """What the customer may see: ``everyone`` turns, bots as one "bot", analysts by
-        first name, client message ids only on the customer's own messages."""
+        """What the customer may see: ``everyone`` turns, analysts by first name, client
+        message ids only on the customer's own messages."""
         views: list[CustomerTurnView] = []
         for turn in turns:
             if not turn.is_public:
@@ -345,12 +311,15 @@ class CaseReader:
             )
         return views
 
+    async def _agent_name(self, case: Case, status: CustomerConversationStatus) -> str | None:
+        """The assignee's first name while with an agent; on a closed case, who attended."""
+        if status is CustomerConversationStatus.WAITING_AGENT or not case.assigned_analyst_id:
+            return None
+        name = await self.staff_name(case.assigned_analyst_id)
+        return first_name(name) if name else None
+
     async def conversation(self, case: Case) -> CustomerConversationView:
         status = CustomerConversationStatus.of(case.status)
-        agent: str | None = None
-        if status is CustomerConversationStatus.WITH_AGENT and case.assigned_analyst_id:
-            name = await self.staff_name(case.assigned_analyst_id)
-            agent = first_name(name) if name else None
         return CustomerConversationView(
             case_id=case.id,
             status=status,
@@ -358,6 +327,19 @@ class CaseReader:
             language=case.language,
             opened_at=case.opened_at,
             closed_at=case.closed_at,
-            agent_name=agent,
+            agent_name=await self._agent_name(case, status),
             last_sequence=case.last_public_sequence,
+            previous_case_id=case.previous_case_id,
+        )
+
+    async def conversation_summary(self, case: Case) -> CustomerConversationSummaryView:
+        status = CustomerConversationStatus.of(case.status)
+        return CustomerConversationSummaryView(
+            case_id=case.id,
+            status=status,
+            channel=case.channel,
+            opened_at=case.opened_at,
+            closed_at=case.closed_at,
+            agent_name=await self._agent_name(case, status),
+            preview=case.last_message_preview,  # messages are always public
         )

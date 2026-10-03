@@ -1,7 +1,7 @@
 """Domain error hierarchy.
 
-Every error carries a stable machine ``code`` (part of the public API: the frontend and
-the AI team branch on it) plus structured ``details``. Messages are Spanish because the
+Every error carries a stable machine ``code`` (part of the public API: the frontend
+branches on it) plus structured ``details``. Messages are Spanish because the
 API surfaces them as ``detail`` in problem+json responses that the UI may show.
 
 HTTP status mapping lives in the API layer (``cc_platform.api.errors``), never here.

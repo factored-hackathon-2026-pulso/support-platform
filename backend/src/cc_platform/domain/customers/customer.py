@@ -1,27 +1,20 @@
-"""``Customer``: masked read model of a bank customer (never written by use cases yet).
+"""``Customer``: the minimal profile of a person who writes to the bank (seeded read model).
 
-Only what the platform may show to the person attending: display name, segment, location,
-locale and document type (no document number, phone or email). Slice 2 adds the customer
-file (products, complaints, contacts, who saw what). ``simulator`` marks the invented
-customers listed in the customer chat simulator, with opener ``suggestions`` written in the
-customer's own voice and locale.
+Only what the platform needs to route and greet: display name, locale (which gives the
+conversation language), country and city. There is no customer file: no documents,
+segments, products or contact data. ``simulator`` marks the invented customers listed first
+in the customer chat simulator; ``suggestions`` are opener chips written in the customer's
+own voice and locale.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 from enum import StrEnum
 
 from cc_platform.domain.people.staff import Language
 from cc_platform.domain.shared.errors import InvalidValueError
 from cc_platform.domain.shared.ids import IdPrefix, require_id
-
-
-class CustomerSegment(StrEnum):
-    BASIC = "Basic"
-    PLUS = "Plus"
-    PREMIUM = "Premium"
 
 
 class CountryCode(StrEnum):
@@ -46,12 +39,9 @@ class CustomerLocale(StrEnum):
 class Customer:
     id: str
     display_name: str
-    segment: CustomerSegment
     country: CountryCode
     city: str
     locale: CustomerLocale
-    customer_since: date
-    document_type: str
     simulator: bool = False
     suggestions: tuple[str, ...] = ()
 
@@ -62,7 +52,7 @@ class Customer:
 
     @property
     def language(self) -> Language:
-        """Conversation language (no detection in slice 1: the profile decides)."""
+        """Conversation language (no detection: the locale decides)."""
         return self.locale.language
 
     @property

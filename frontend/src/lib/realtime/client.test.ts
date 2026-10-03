@@ -154,10 +154,10 @@ describe('RealtimeClient', () => {
 
     const offA = client.subscribe('case:CASE-1')
     const offB = client.subscribe('case:CASE-1')
-    client.subscribe('approvals')
+    client.subscribe('inbox:STF-1')
     expect(sockets.last()?.messages()).toEqual([
       { action: 'subscribe', topic: 'case:CASE-1' },
-      { action: 'subscribe', topic: 'approvals' },
+      { action: 'subscribe', topic: 'inbox:STF-1' },
     ])
 
     offA()
@@ -169,7 +169,7 @@ describe('RealtimeClient', () => {
     sockets.last()?.open()
     expect(sockets.last()?.messages()).toEqual([
       { action: 'subscribe', topic: 'case:CASE-1' },
-      { action: 'subscribe', topic: 'approvals' },
+      { action: 'subscribe', topic: 'inbox:STF-1' },
     ])
 
     offB()
@@ -177,7 +177,7 @@ describe('RealtimeClient', () => {
       action: 'unsubscribe',
       topic: 'case:CASE-1',
     })
-    expect(client.activeTopics()).toEqual(['approvals'])
+    expect(client.activeTopics()).toEqual(['inbox:STF-1'])
   })
 
   it('queues subscriptions made while connecting and sends them on open', () => {

@@ -42,7 +42,6 @@ if TYPE_CHECKING:
         StaffSessionRepository,
     )
     from cc_platform.application.ports.event_log import EventLogRepository
-    from cc_platform.application.routing.repositories import RoutingStepRepository
 
 
 class UnitOfWork(Protocol):
@@ -76,9 +75,6 @@ class UnitOfWork(Protocol):
 
     @property
     def case_slots(self) -> CustomerCaseSlotRepository: ...
-
-    @property
-    def routing_steps(self) -> RoutingStepRepository: ...
 
     @property
     def event_log(self) -> EventLogRepository: ...

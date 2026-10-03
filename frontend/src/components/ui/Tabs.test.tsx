@@ -3,18 +3,18 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Tab, TabList, TabPanel, Tabs } from './Tabs'
 
-function SupportTabs({ onValueChange }: { onValueChange?: (v: string) => void }) {
+function SampleTabs({ onValueChange }: { onValueChange?: (v: string) => void }) {
   return (
-    <Tabs defaultValue="copilot" onValueChange={onValueChange}>
+    <Tabs defaultValue="mensajes" onValueChange={onValueChange}>
       <TabList aria-label="Paneles">
-        <Tab value="copilot">Copiloto</Tab>
-        <Tab value="tools">Herramientas</Tab>
+        <Tab value="mensajes">Mensajes</Tab>
+        <Tab value="history">Historial</Tab>
         <Tab value="client" dot>
           Cliente
         </Tab>
       </TabList>
-      <TabPanel value="copilot">Panel copiloto</TabPanel>
-      <TabPanel value="tools">Panel herramientas</TabPanel>
+      <TabPanel value="mensajes">Panel mensajes</TabPanel>
+      <TabPanel value="history">Panel historial</TabPanel>
       <TabPanel value="client">Panel cliente</TabPanel>
     </Tabs>
   )
@@ -22,56 +22,50 @@ function SupportTabs({ onValueChange }: { onValueChange?: (v: string) => void })
 
 describe('Tabs', () => {
   it('wires tablist, tabs and panels with ARIA', () => {
-    render(<SupportTabs />)
+    render(<SampleTabs />)
     expect(screen.getByRole('tablist', { name: 'Paneles' })).toBeInTheDocument()
-    const copilot = screen.getByRole('tab', { name: 'Copiloto' })
-    expect(copilot).toHaveAttribute('aria-selected', 'true')
-    expect(copilot).toHaveAttribute('tabindex', '0')
-    expect(screen.getByRole('tab', { name: 'Herramientas' })).toHaveAttribute('tabindex', '-1')
+    const messages = screen.getByRole('tab', { name: 'Mensajes' })
+    expect(messages).toHaveAttribute('aria-selected', 'true')
+    expect(messages).toHaveAttribute('tabindex', '0')
+    expect(screen.getByRole('tab', { name: 'Historial' })).toHaveAttribute('tabindex', '-1')
     const panel = screen.getByRole('tabpanel')
-    expect(panel).toHaveTextContent('Panel copiloto')
-    expect(panel).toHaveAccessibleName('Copiloto')
+    expect(panel).toHaveTextContent('Panel mensajes')
+    expect(panel).toHaveAccessibleName('Mensajes')
     expect(screen.getByRole('tab', { name: /Cliente/ })).toHaveTextContent('con alertas')
   })
 
   it('selects a tab on click', async () => {
     const user = userEvent.setup()
     const onValueChange = vi.fn<(value: string) => void>()
-    render(<SupportTabs onValueChange={onValueChange} />)
-    await user.click(screen.getByRole('tab', { name: 'Herramientas' }))
-    expect(screen.getByRole('tab', { name: 'Herramientas' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    expect(screen.getByRole('tabpanel')).toHaveTextContent('Panel herramientas')
-    expect(onValueChange).toHaveBeenCalledWith('tools')
+    render(<SampleTabs onValueChange={onValueChange} />)
+    await user.click(screen.getByRole('tab', { name: 'Historial' }))
+    expect(screen.getByRole('tab', { name: 'Historial' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('Panel historial')
+    expect(onValueChange).toHaveBeenCalledWith('history')
   })
 
   it('moves focus and selection with the arrow keys, Home and End', async () => {
     const user = userEvent.setup()
-    render(<SupportTabs />)
+    render(<SampleTabs />)
     await user.tab()
-    expect(screen.getByRole('tab', { name: 'Copiloto' })).toHaveFocus()
+    expect(screen.getByRole('tab', { name: 'Mensajes' })).toHaveFocus()
 
     await user.keyboard('{ArrowRight}')
-    expect(screen.getByRole('tab', { name: 'Herramientas' })).toHaveFocus()
-    expect(screen.getByRole('tab', { name: 'Herramientas' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
+    expect(screen.getByRole('tab', { name: 'Historial' })).toHaveFocus()
+    expect(screen.getByRole('tab', { name: 'Historial' })).toHaveAttribute('aria-selected', 'true')
 
     await user.keyboard('{End}')
     expect(screen.getByRole('tab', { name: /Cliente/ })).toHaveFocus()
     expect(screen.getByRole('tabpanel')).toHaveTextContent('Panel cliente')
 
     await user.keyboard('{ArrowRight}')
-    expect(screen.getByRole('tab', { name: 'Copiloto' })).toHaveFocus()
+    expect(screen.getByRole('tab', { name: 'Mensajes' })).toHaveFocus()
 
     await user.keyboard('{ArrowLeft}')
     expect(screen.getByRole('tab', { name: /Cliente/ })).toHaveAttribute('aria-selected', 'true')
 
     await user.keyboard('{Home}')
-    expect(screen.getByRole('tab', { name: 'Copiloto' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Mensajes' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('keeps the tablist reachable when no tab is selected', async () => {
@@ -79,14 +73,14 @@ describe('Tabs', () => {
     render(
       <Tabs>
         <TabList aria-label="Paneles">
-          <Tab value="copilot">Copiloto</Tab>
-          <Tab value="tools">Herramientas</Tab>
+          <Tab value="mensajes">Mensajes</Tab>
+          <Tab value="history">Historial</Tab>
         </TabList>
-        <TabPanel value="copilot">Panel copiloto</TabPanel>
+        <TabPanel value="mensajes">Panel mensajes</TabPanel>
       </Tabs>,
     )
     await user.tab()
-    expect(screen.getByRole('tab', { name: 'Copiloto' })).toHaveFocus()
-    expect(screen.getByRole('tab', { name: 'Herramientas' })).not.toHaveAttribute('aria-controls')
+    expect(screen.getByRole('tab', { name: 'Mensajes' })).toHaveFocus()
+    expect(screen.getByRole('tab', { name: 'Historial' })).not.toHaveAttribute('aria-controls')
   })
 })

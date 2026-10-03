@@ -84,7 +84,7 @@ export function LoginScreen({
     <>
       <AuthHeading
         title="Entrar"
-        subtitle="Tu rol (analista, supervisora, automatización o administración) se asigna a tu cuenta."
+        subtitle="Tu rol (analista, supervisora o administración) se asigna a tu cuenta."
       />
 
       <MicrosoftSignIn />

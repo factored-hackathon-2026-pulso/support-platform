@@ -1,7 +1,6 @@
-"""Domain events of the cases context (snake_case payloads, contract-shaped).
+"""Domain events of the cases context (snake_case payloads, slice 2 contract §2.4).
 
-``entity_id`` is the case id except for ``turn.created`` (the turn id) and ``case.closed``
-(entity ``case_close``, keyed by the case id as in the contract).
+``entity_id`` is the case id except for ``turn.created`` (the turn id).
 """
 
 from __future__ import annotations
@@ -19,12 +18,10 @@ class CaseOpened(DomainEvent):
 
     customer_id: str
     channel: str
-    channel_session: str
     language: str
-    origin: str
-    topic: str | None
     priority: str
     sla_due_at: datetime
+    previous_case_id: str | None
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -40,8 +37,6 @@ class TurnCreated(DomainEvent):
     text: str
     language: str
     client_message_id: str | None
-    evidence_ids: tuple[str, ...]
-    from_suggestion_id: str | None
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -67,6 +62,7 @@ class CaseAssigned(DomainEvent):
     policy_rule_id: str | None
     open_cases_at_assignment: int
     strategy: str
+    waited_seconds: int | None
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -89,20 +85,30 @@ class CaseRead(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CaseFirstResponded(DomainEvent):
+    """The first analyst message: the first-response SLA stops here (met or missed)."""
+
+    event_type = "case.first_responded"
+    entity = "case"
+
+    first_response_at: datetime
+    response_seconds: int
+    sla_due_at: datetime
+    sla_met: bool
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CaseClosed(DomainEvent):
-    """Contract ``case_close`` (plus ``csat_requested``; the CSAT answer arrives later)."""
+    """The assignee closed the case with a reason (the note is internal: staff only)."""
 
     event_type = "case.closed"
-    entity = "case_close"
+    entity = "case"
 
     closed_at: datetime
     closed_by_role: str
     closed_by_id: str
-    resolved: bool
-    contact_reason: str
-    resolution_code: str | None
-    followup_at: datetime | None
-    csat_requested: bool
+    reason: str
+    note: str | None
 
 
 #: Every event type of the cases context (the realtime projection owns them).
@@ -113,5 +119,6 @@ CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseAssigned,
     CaseStatusChanged,
     CaseRead,
+    CaseFirstResponded,
     CaseClosed,
 )

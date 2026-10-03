@@ -7,7 +7,7 @@ export interface ListItemButtonProps extends ButtonHTMLAttributes<HTMLButtonElem
   selected?: boolean
   /**
    * Permanent status color on the left border (case list). Without it the border
-   * is transparent and turns ink when selected (approvals, users, tools lists).
+   * is transparent and turns ink when selected (users and teams lists).
    */
   tone?: Tone
   /** Left border width: 3 (default) or 4 (case list). */

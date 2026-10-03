@@ -16,4 +16,3 @@ class CustomerSessionStarted(DomainEvent):
 
     session_id: str
     channel: str
-    channel_session: str

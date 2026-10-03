@@ -36,7 +36,9 @@ def test_domain_errors_map_to_stable_codes_and_unexpected_errors_to_500(
 
     @app.get("/boom/policy")
     async def policy() -> None:
-        raise PolicyViolationError("Supera tu límite de abono.", policyRuleId="R7")
+        raise PolicyViolationError(
+            "Ese caso solo lo atiende quien hable portugués.", policyRuleId="H1"
+        )
 
     @app.get("/boom/crash")
     async def crash() -> None:
@@ -52,8 +54,8 @@ def test_domain_errors_map_to_stable_codes_and_unexpected_errors_to_500(
         policy_problem = test_client.get("/boom/policy").json()
         assert policy_problem["status"] == 422
         assert policy_problem["code"] == "policy_violation"
-        assert policy_problem["detail"] == "Supera tu límite de abono."
-        assert policy_problem["policyRuleId"] == "R7"
+        assert policy_problem["detail"] == "Ese caso solo lo atiende quien hable portugués."
+        assert policy_problem["policyRuleId"] == "H1"
 
         crash_response = test_client.get("/boom/crash")
         assert crash_response.status_code == 500

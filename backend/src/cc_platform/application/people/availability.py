@@ -1,6 +1,6 @@
 """Availability use cases ("Disponible" / "En pausa" in the Workspace list header).
 
-Becoming available triggers ``DrainQueue`` (routing process manager on
+Becoming available triggers ``DrainQueue`` (the ``QueueDrainer`` process manager listens to
 ``staff.availability_changed``), so a queued case lands on the analyst right away.
 """
 

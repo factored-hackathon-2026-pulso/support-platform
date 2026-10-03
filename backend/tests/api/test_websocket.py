@@ -139,7 +139,12 @@ def test_unsubscribe_stops_delivery(
 
 @pytest.mark.parametrize(
     ("topic", "code"),
-    [("approvals", "forbidden"), ("case:CASE-1", "invalid_topic"), ("chat:x", "invalid_topic")],
+    [
+        ("inbox:STF-00000000000000000000000002", "forbidden"),
+        ("approvals", "invalid_topic"),  # removed in slice 2
+        ("case:CASE-1", "invalid_topic"),
+        ("chat:x", "invalid_topic"),
+    ],
 )
 def test_rejects_forbidden_or_invalid_topics(
     client: TestClient, sign_in: Callable[[str], str], topic: str, code: str
@@ -152,14 +157,16 @@ def test_rejects_forbidden_or_invalid_topics(
         assert reply["data"] == {"code": code, "detail": reply["data"]["detail"], "topic": topic}
 
 
-def test_supervisor_can_follow_approvals_and_any_inbox(
+def test_supervisor_can_follow_any_inbox_but_not_approvals(
     client: TestClient, sign_in: Callable[[str], str]
 ) -> None:
     token = sign_in(SUPERVISOR.email)
     with client.websocket_connect(f"/api/v1/ws?token={token}") as ws:
         ws.receive_json()
-        assert subscribe(ws, "approvals")["data"] == {"topic": "approvals"}
-        assert subscribe(ws, "inbox:STF-00000000000000000000000001")["type"] == "subscribed"
+        assert subscribe(ws, "inbox:STF-00000000000000000000000001")["data"] == {
+            "topic": "inbox:STF-00000000000000000000000001"
+        }
+        assert subscribe(ws, "approvals")["data"]["code"] == "invalid_topic"
 
 
 def test_invalid_messages_get_an_error_and_keep_the_socket(

@@ -43,7 +43,7 @@ class Actor:
 class CustomerActor:
     """A customer authenticated by a customer session token (simulator app/web session).
 
-    Only ever sees their own conversation and only turns meant for everyone (rule 2).
+    Only ever sees their own cases and only turns meant for everyone.
     """
 
     customer_id: str

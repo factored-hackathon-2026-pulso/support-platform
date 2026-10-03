@@ -6,7 +6,9 @@ import {
   customerChatKeys,
   customerChatMutationKeys,
   fetchCustomerConversation,
+  fetchPastConversation,
   listDemoCustomers,
+  listPastConversations,
   postCustomerTurn,
 } from '../api'
 import {
@@ -17,7 +19,12 @@ import {
   mergeCustomerTurns,
   setPendingStatus,
 } from '../model'
-import type { CustomerChatCache, DemoCustomerList } from '../types'
+import type {
+  CustomerChatCache,
+  CustomerConversationDetail,
+  CustomerConversationList,
+  DemoCustomerList,
+} from '../types'
 
 export function useDemoCustomers(): UseQueryResult<DemoCustomerList, ApiProblem> {
   return useQuery<DemoCustomerList, ApiProblem>({
@@ -39,6 +46,33 @@ export function useCustomerConversation(
       return chatFromResponse(response, queryClient.getQueryData<CustomerChatCache>(key))
     },
     staleTime: 0,
+  })
+}
+
+/** GET /customer/conversations, loaded when "Ver conversaciones anteriores" is pressed. */
+export function usePastConversations(
+  customerId: string,
+  enabled: boolean,
+): UseQueryResult<CustomerConversationList, ApiProblem> {
+  return useQuery<CustomerConversationList, ApiProblem>({
+    queryKey: customerChatKeys.pastConversations(customerId),
+    queryFn: ({ signal }) => listPastConversations(signal),
+    enabled,
+  })
+}
+
+/** GET /customer/conversations/{caseId}, loaded when a past block is expanded. */
+export function usePastConversation(
+  customerId: string,
+  caseId: string,
+  enabled: boolean,
+): UseQueryResult<CustomerConversationDetail, ApiProblem> {
+  return useQuery<CustomerConversationDetail, ApiProblem>({
+    queryKey: customerChatKeys.pastConversation(customerId, caseId),
+    queryFn: ({ signal }) => fetchPastConversation(caseId, signal),
+    enabled,
+    // A closed conversation does not change.
+    staleTime: Infinity,
   })
 }
 
@@ -74,10 +108,16 @@ export function useSendCustomerMessage(customerId: string) {
     scope: { id: `customer-send:${customerId}` },
     mutationFn: async (input: { text: string; clientMessageId: string }) => {
       try {
-        const { turn, conversation } = await postCustomerTurn(input)
+        const { turn, conversation, caseCreated } = await postCustomerTurn(input)
         queryClient.setQueryData<CustomerChatCache>(key, (current) =>
           mergeCustomerTurns(applyConversation(current ?? emptyChat(), conversation), [turn]),
         )
+        // Writing after a close opened a new case: the closed one joins the past list.
+        if (caseCreated) {
+          void queryClient.invalidateQueries({
+            queryKey: customerChatKeys.pastConversations(customerId),
+          })
+        }
       } catch (error) {
         queryClient.setQueryData<CustomerChatCache>(key, (current) =>
           current ? setPendingStatus(current, input.clientMessageId, 'failed') : current,

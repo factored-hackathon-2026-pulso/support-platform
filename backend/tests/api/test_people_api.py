@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 from tests.support import ADMIN, ANALYST, SUPERVISOR, bearer
 
+STAFF_KEYS = {"id", "name", "email", "roles", "languages", "team"}
+
 
 def test_analyst_cannot_list_staff(client: TestClient, sign_in: Callable[[str], str]) -> None:
     response = client.get("/api/v1/staff", headers=bearer(sign_in(ANALYST.email)))
@@ -29,11 +31,11 @@ def test_supervisor_lists_staff_and_filters_by_role(
         "Felipe Echeverri",  # analyst + supervisor (team lead)
         "Lucía Herrera",
         "Martín Salazar",
-        "Renata Villalba",  # supervisor + automation
+        "Renata Villalba",
     }
-
-    four_eyes = [p for p in everyone.json()["items"] if p["requiresFourEyes"]]
-    assert [p["roles"] for p in four_eyes] == [["automation", "admin"]]
+    roles = {role for person in everyone.json()["items"] for role in person["roles"]}
+    assert roles == {"analyst", "supervisor", "admin"}
+    assert all(set(person) == STAFF_KEYS for person in everyone.json()["items"])
 
 
 def test_admin_can_list_staff(client: TestClient, sign_in: Callable[[str], str]) -> None:

@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useCurrentUser } from '@/app/session'
-import { Button, Callout, Skeleton } from '@/components/ui'
-import {
-  conversationLayout,
-  describeCaseLoadFailure,
-  toTranscriptItems,
-  type TranscriptItem,
-} from '../model'
+import { Button, Callout, Skeleton, useToastClearance } from '@/components/ui'
+import { describeCaseLoadFailure, toTranscriptItems, type TranscriptItem } from '../model'
 import {
   useCaseDetail,
   useCaseTurns,
@@ -16,18 +11,19 @@ import {
   useSendMessage,
 } from '../hooks'
 import type { CaseDetail, TranscriptCache } from '../types'
-import { CallBar } from './CallBar'
-import { CallTranscript } from './CallTranscript'
+import { ArrivalNote } from './ArrivalNote'
 import { CaseHeader } from './CaseHeader'
 import { ChatTranscript } from './ChatTranscript'
 import { CloseCaseDialog } from './CloseCaseDialog'
 import { Composer } from './Composer'
-import { EmailThread } from './EmailThread'
+import { ReadOnlyFooter } from './ReadOnlyFooter'
 
 export interface ConversationPaneProps {
   caseId: string
   /** Called after "Cerrar caso" succeeds (the Workspace selects the next case). */
   onClosed?(caseId: string): void
+  /** "Casos anteriores (n)" in the header (the Workspace opens the history sheet). */
+  onOpenHistory?(): void
   /**
    * Move the keyboard focus to the case heading once it renders (the Workspace
    * asks for it after a programmatic switch: next case after closing, "Ver caso").
@@ -38,15 +34,23 @@ export interface ConversationPaneProps {
 }
 
 /**
- * Centre column of the Workspace for one case: header, transcript (chat, call or
- * e-mail layout), composer and the close dialog. Live through `case:<id>`.
+ * The conversation column of the Workspace for one case (it takes the whole
+ * width next to the list): header, "Cómo llegó a ti", the chat transcript, the
+ * composer (or the read-only footer) and the close dialog. Live through
+ * `case:<id>`.
  */
 export function ConversationPane(props: ConversationPaneProps) {
   // A fresh body per case: drafts, scroll and dialogs never leak between cases.
   return <ConversationBody key={props.caseId} {...props} />
 }
 
-function ConversationBody({ caseId, onClosed, focusOnLoad, onFocused }: ConversationPaneProps) {
+function ConversationBody({
+  caseId,
+  onClosed,
+  onOpenHistory,
+  focusOnLoad,
+  onFocused,
+}: ConversationPaneProps) {
   const me = useCurrentUser()
   useConversationLive(caseId)
   const detail = useCaseDetail(caseId)
@@ -94,6 +98,7 @@ function ConversationBody({ caseId, onClosed, focusOnLoad, onFocused }: Conversa
       turns={turns}
       meId={me.id}
       onClosed={onClosed}
+      onOpenHistory={onOpenHistory}
       headingRef={setFocusTarget}
     />
   )
@@ -104,6 +109,7 @@ interface LoadedConversationProps {
   turns: ReturnType<typeof useCaseTurns>
   meId: string
   onClosed?(caseId: string): void
+  onOpenHistory?(): void
   headingRef: (element: HTMLElement | null) => void
 }
 
@@ -112,11 +118,12 @@ function LoadedConversation({
   turns,
   meId,
   onClosed,
+  onOpenHistory,
   headingRef,
 }: LoadedConversationProps) {
   const { case: summary, capabilities } = detail
-  const layout = conversationLayout(summary.channel)
   const [closing, setClosing] = useState(false)
+  const toastClearance = useToastClearance<HTMLDivElement>()
   const { send, retry } = useSendMessage(summary.id)
   const items = useMemo(
     () => (turns.data ? toTranscriptItems(turns.data, meId) : []),
@@ -128,23 +135,23 @@ function LoadedConversation({
       aria-label={`Conversación con ${summary.customer.displayName}`}
       className="flex h-full min-h-0 grow flex-col bg-canvas"
     >
-      <CaseHeader detail={detail} headingRef={headingRef} onRequestClose={() => setClosing(true)} />
-      {layout === 'call' ? <CallBar detail={detail} /> : null}
-      <TranscriptArea
-        caseId={summary.id}
-        layout={layout}
-        turns={turns}
-        items={items}
-        startedAt={summary.liveSince}
-        onRetry={retry}
+      <CaseHeader
+        detail={detail}
+        headingRef={headingRef}
+        onRequestClose={() => setClosing(true)}
+        onOpenHistory={onOpenHistory}
       />
-      <div className="shrink-0 border-t border-border px-6 pt-3 pb-[18px]">
-        <Composer
-          blockedReason={
-            capabilities.canReply ? null : (capabilities.replyBlockedReason ?? 'closed')
-          }
-          onSend={send}
-        />
+      <ArrivalNote detail={detail} meId={meId} />
+      <TranscriptArea caseId={summary.id} turns={turns} items={items} onRetry={retry} />
+      {/* Toasts rise above the composer so they never cover "Enviar". */}
+      <div ref={toastClearance} className="shrink-0 border-t border-border px-6 pt-3 pb-[18px]">
+        <div className="mx-auto w-full max-w-[880px]">
+          {capabilities.canReply ? (
+            <Composer onSend={send} />
+          ) : (
+            <ReadOnlyFooter detail={detail} meId={meId} />
+          )}
+        </div>
       </div>
       <CloseCaseDialog
         summary={summary}
@@ -158,18 +165,15 @@ function LoadedConversation({
 
 interface TranscriptAreaProps {
   caseId: string
-  layout: ReturnType<typeof conversationLayout>
   turns: ReturnType<typeof useCaseTurns>
   items: TranscriptItem[]
-  startedAt: string | null
   onRetry: (clientMessageId: string) => void
 }
 
-function TranscriptArea({ caseId, layout, turns, items, startedAt, onRetry }: TranscriptAreaProps) {
+function TranscriptArea({ caseId, turns, items, onRetry }: TranscriptAreaProps) {
   const scrollRef = useStickToBottom(items, turns.data)
   const older = useLoadOlderTurns(caseId)
   const olderBusy = useOlderPageBusy(older.isPending, items[0]?.key ?? '')
-  const banners = layout === 'chat' ? [] : items.filter((item) => item.variant === 'routing')
 
   let body
   if (turns.status === 'pending') {
@@ -201,13 +205,7 @@ function TranscriptArea({ caseId, layout, turns, items, startedAt, onRetry }: Tr
         aria-busy={olderBusy || undefined}
         className="flex flex-col gap-2.5"
       >
-        {layout === 'call' ? (
-          <CallTranscript items={items} startedAt={startedAt} />
-        ) : layout === 'email' ? (
-          <EmailThread items={items} />
-        ) : (
-          <ChatTranscript items={items} onRetry={onRetry} />
-        )}
+        <ChatTranscript items={items} onRetry={onRetry} />
       </div>
     )
   }
@@ -215,34 +213,29 @@ function TranscriptArea({ caseId, layout, turns, items, startedAt, onRetry }: Tr
   return (
     <div
       ref={scrollRef}
-      className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-2.5 overflow-y-auto px-6 py-[18px]"
+      className="flex min-h-0 flex-1 scrollbar-thin overflow-y-auto px-6 py-[18px]"
     >
-      {turns.data?.olderCursor ? (
-        <div className="flex flex-col items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            loading={older.isPending}
-            onClick={() => older.mutate()}
-          >
-            Cargar mensajes anteriores
-          </Button>
-          {older.isError ? (
-            <span className="text-12 text-danger-strong" role="alert">
-              No pudimos cargar los mensajes anteriores. Inténtalo de nuevo.
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-      {banners.map((banner) => (
-        <p
-          key={banner.key}
-          className="m-0 max-w-[90%] self-center rounded-10 bg-accent-soft px-3 py-2 text-center text-13 text-ink"
-        >
-          {banner.text}
-        </p>
-      ))}
-      {body}
+      {/* Readable width on a wide screen: the column fills the space, the text does not. */}
+      <div className="mx-auto flex w-full max-w-[880px] flex-col gap-2.5">
+        {turns.data?.olderCursor ? (
+          <div className="flex flex-col items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={older.isPending}
+              onClick={() => older.mutate()}
+            >
+              Cargar mensajes anteriores
+            </Button>
+            {older.isError ? (
+              <span className="text-12 text-danger-strong" role="alert">
+                No pudimos cargar los mensajes anteriores. Inténtalo de nuevo.
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {body}
+      </div>
     </div>
   )
 }

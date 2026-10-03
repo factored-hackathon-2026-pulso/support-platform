@@ -24,6 +24,12 @@ function setup() {
   return { registry, queryClient, todos, toReply }
 }
 
+const MARCELA = makeCaseSummary().id
+
+function cardOf(queryClient: QueryClient, key: readonly unknown[], id = MARCELA) {
+  return queryClient.getQueryData<InboxResponse>(key)?.items.find((item) => item.id === id)
+}
+
 function envelope(type: string, payload: unknown, id = 'EVT-1'): RealtimeEnvelope {
   return {
     type,
@@ -45,8 +51,7 @@ describe('registerCasesRealtime', () => {
     const { registry, queryClient, todos, toReply } = setup()
     const updated = makeCaseSummary({ version: 4, inboxStatus: 'waiting', preview: 'Hola' })
     registry.dispatch(envelope('case.updated', updated), queryClient)
-    const inbox = queryClient.getQueryData<InboxResponse>(todos)
-    expect(inbox?.items[0]).toEqual(updated)
+    expect(cardOf(queryClient, todos)).toEqual(updated)
     expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(toReply)?.isInvalidated).toBe(true)
   })
@@ -55,7 +60,7 @@ describe('registerCasesRealtime', () => {
     const { registry, queryClient, todos, toReply } = setup()
     const updated = makeCaseSummary({ version: 4, preview: '¿Hola?', unreadCount: 2 })
     registry.dispatch(envelope('case.updated', updated), queryClient)
-    expect(queryClient.getQueryData<InboxResponse>(toReply)?.items[0]).toEqual(updated)
+    expect(cardOf(queryClient, toReply)).toEqual(updated)
     expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(false)
     expect(queryClient.getQueryState(toReply)?.isInvalidated).toBe(false)
   })
@@ -65,7 +70,7 @@ describe('registerCasesRealtime', () => {
     const read = makeCaseSummary({ version: 4, unreadCount: 0, lastSequence: 7 })
     applyCaseSummaryToInboxes(queryClient, read)
     const after = queryClient.getQueryData<InboxResponse>(todos)
-    expect(after?.items[0]).toEqual(read)
+    expect(cardOf(queryClient, todos)).toEqual(read)
     registry.dispatch(envelope('case.updated', read), queryClient)
     expect(queryClient.getQueryData(todos)).toBe(after)
     expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(false)
@@ -75,9 +80,7 @@ describe('registerCasesRealtime', () => {
     const { registry, queryClient, todos } = setup()
     const stale = makeCaseSummary({ version: 3, preview: 'viejo' })
     registry.dispatch(envelope('case.updated', stale), queryClient)
-    expect(queryClient.getQueryData<InboxResponse>(todos)?.items[0]?.preview).toBe(
-      'si, bloqueela porfa',
-    )
+    expect(cardOf(queryClient, todos)?.preview).toBe(makeCaseSummary().preview)
   })
 
   it('case.assigned refetches only the inboxes the new case belongs to', () => {
@@ -91,15 +94,46 @@ describe('registerCasesRealtime', () => {
     expect(queryClient.getQueryState(toReply)?.isInvalidated).toBe(false)
   })
 
+  it('a close moves the card out of the open inboxes and into Cerrados', () => {
+    const { registry, queryClient, todos, toReply } = setup()
+    const cerrados = caseKeys.inbox({ status: 'closed', q: '' })
+    const nuevos = caseKeys.inbox({ status: 'new', q: '' })
+    queryClient.setQueryData(cerrados, makeInbox([]))
+    queryClient.setQueryData(nuevos, makeInbox([]))
+    const closed = makeCaseSummary({
+      version: 9,
+      status: 'closed',
+      inboxStatus: 'closed',
+      closedAt: NOW.toISOString(),
+      closeReason: 'resolved',
+    })
+    registry.dispatch(envelope('case.updated', closed), queryClient)
+    expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(toReply)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(cerrados)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(nuevos)?.isInvalidated).toBe(false)
+  })
+
+  it('refetches when the last interaction moves (the order changes), not on a new SLA stop', () => {
+    const { registry, queryClient, todos } = setup()
+    const responded = makeCaseSummary({ version: 4, firstResponseAt: NOW.toISOString() })
+    registry.dispatch(envelope('case.updated', responded, 'EVT-2'), queryClient)
+    expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(false)
+    const wrote = makeCaseSummary({ version: 5, lastInteractionAt: NOW.toISOString() })
+    registry.dispatch(envelope('case.updated', wrote, 'EVT-3'), queryClient)
+    expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
+  })
+
   it('inbox.counts updates every cached inbox when newer, never with older counts', () => {
     const { registry, queryClient, todos, toReply } = setup()
     const later = new Date(NOW.getTime() + 1000).toISOString()
     registry.dispatch(
-      envelope('inbox.counts', makeCounts({ all: 7, toReply: 3, computedAt: later })),
+      envelope('inbox.counts', makeCounts({ all: 7, toReply: 3, closed: 4, computedAt: later })),
       queryClient,
     )
     expect(queryClient.getQueryData<InboxResponse>(todos)?.counts.all).toBe(7)
     expect(queryClient.getQueryData<InboxResponse>(toReply)?.counts.toReply).toBe(3)
+    expect(queryClient.getQueryData<InboxResponse>(todos)?.counts.closed).toBe(4)
 
     const earlier = new Date(NOW.getTime() - 1000).toISOString()
     registry.dispatch(

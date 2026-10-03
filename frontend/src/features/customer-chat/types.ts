@@ -1,5 +1,5 @@
 /**
- * API types of the customer simulator (docs/platform/api/slice-1-cases.md §4):
+ * API types of the customer simulator (docs/platform/api/slice-2-case-lifecycle.md §6):
  * aliases of the schemas generated from `backend/openapi.json` (`pnpm gen:api`),
  * plus the UI-only chat cache.
  */
@@ -9,7 +9,6 @@ export type Language = Schemas['Language']
 export type CaseChannel = Schemas['CaseChannel']
 export type CustomerLocale = Schemas['CustomerLocale']
 export type CountryCode = Schemas['CountryCode']
-export type CustomerSegment = Schemas['CustomerSegment']
 export type CustomerConversationStatus = Schemas['CustomerConversationStatus']
 export type CustomerTurnAuthor = Schemas['CustomerTurnAuthor']
 
@@ -20,11 +19,21 @@ export type DemoCustomerList = Schemas['DemoCustomerList']
 export type CreateCustomerSessionRequest = Schemas['CreateCustomerSessionRequest']
 export type CustomerSelf = Schemas['CustomerSelf']
 export type CustomerSessionResponse = Schemas['CustomerSessionResponse']
-/** `agentName` is the assignee's first name while `with_agent`. */
+/**
+ * `agentName` is the assignee's first name while `with_agent`; on a closed
+ * conversation, who attended it. `previousCaseId` links a conversation opened
+ * after a close.
+ */
 export type CustomerConversation = Schemas['CustomerConversation']
 /** `sequence` is the case sequence: customer-visible turns may skip numbers. */
 export type CustomerTurn = Schemas['CustomerTurn']
+/** The current conversation, its visible turns and how many closed ones came before. */
 export type CustomerConversationResponse = Schemas['CustomerConversationResponse']
+/** The customer's closed conversations other than the current one, newest first (≤ 20). */
+export type CustomerConversationList = Schemas['CustomerConversationList']
+export type CustomerConversationSummary = Schemas['CustomerConversationSummary']
+/** One own conversation with its latest `everyone` turns, ascending. */
+export type CustomerConversationDetail = Schemas['CustomerConversationDetail']
 export type PostCustomerTurnRequest = Schemas['PostCustomerTurnRequest']
 export type PostCustomerTurnResponse = Schemas['PostCustomerTurnResponse']
 
@@ -36,13 +45,23 @@ export interface PendingCustomerMessage {
   status: 'sending' | 'failed'
 }
 
+/** A conversation that ended while the simulator was open, kept in view with its turns. */
+export interface EndedConversation {
+  conversation: CustomerConversation
+  turns: CustomerTurn[]
+}
+
 /**
  * Chat cache of the signed-in simulator customer
  * (`customerChatKeys.conversation(customerId)`): the current conversation, its
- * customer-visible turns in sequence order, and messages still being sent.
+ * customer-visible turns in sequence order, messages still being sent, how many
+ * closed conversations came before (server count) and the ones that ended here
+ * (shown as past blocks right above the current one, oldest first).
  */
 export interface CustomerChatCache {
   conversation: CustomerConversation | null
   turns: CustomerTurn[]
   pending: PendingCustomerMessage[]
+  pastConversationCount: number
+  ended: EndedConversation[]
 }

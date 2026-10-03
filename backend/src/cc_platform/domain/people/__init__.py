@@ -25,7 +25,6 @@ from cc_platform.domain.people.staff import (
     ROLE_PRECEDENCE,
     Language,
     Staff,
-    StaffLevel,
     StaffRole,
     normalize_email,
 )
@@ -56,7 +55,6 @@ __all__ = [
     "SessionStarted",
     "Staff",
     "StaffAvailabilityChanged",
-    "StaffLevel",
     "StaffRole",
     "StaffSession",
     "normalize_email",

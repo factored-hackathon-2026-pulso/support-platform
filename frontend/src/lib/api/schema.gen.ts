@@ -85,8 +85,8 @@ export interface paths {
       cookie?: never
     }
     /**
-     * The caller's open cases ("Casos") and the status counters
-     * @description `counts` always cover the whole inbox (the counters are the filters), whatever `status` and `q` select. Sorted: live calls first, then the closest SLA, then the oldest case. At most 200 items.
+     * The caller's cases ("Casos") and the status counters
+     * @description No `status` = Todos (the open cases); `status=closed` = the caller's cases closed in the last 7 days. `counts` always cover the whole inbox (the counters are the filters), whatever `status` and `q` select. Open lists: `new` and `to_reply` first, then `waiting`, each by the oldest last interaction; `closed`: the most recently closed first. At most 200 items.
      */
     get: operations['cases_get_inbox']
     put?: never
@@ -104,7 +104,7 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** Case detail: customer, channel identity, assignment, "Cómo llegó a ti", closure */
+    /** Case detail: customer, "Cómo llegó a ti", closure, capabilities */
     get: operations['cases_get_case']
     put?: never
     post?: never
@@ -123,8 +123,31 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** Close the case (contract case_close); the customer is told the chat ended */
+    /**
+     * Close the case with a reason; the customer is told the conversation ended
+     * @description Assignee only, from `assigned` or `in_progress`. The note is internal (trimmed, blank becomes null, at most 500 characters); the customer never sees the reason or the note. Their next message opens a new case linked to this one.
+     */
     post: operations['cases_close_case']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/history': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * "Casos anteriores de este cliente": the customer's other cases
+     * @description Any status, excluding `caseId`, newest `openedAt` first, at most 20 (`total` is the full count). Whoever may read `caseId` may read every listed case (read-only).
+     */
+    get: operations['cases_get_case_history']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -162,8 +185,8 @@ export interface paths {
     get: operations['cases_list_turns']
     put?: never
     /**
-     * Reply to the customer (assignee only; chat channels only)
-     * @description Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true` and the original turn; the same id with another text is `idempotency_conflict`. Moves a `new` case to `in_progress`.
+     * Reply to the customer (assignee only)
+     * @description Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true` and the original turn; the same id with another text is `idempotency_conflict`. Moves a `new` case to `in_progress`; the first reply stops the first-response SLA.
      */
     post: operations['cases_post_turn']
     delete?: never
@@ -200,9 +223,49 @@ export interface paths {
     put?: never
     /**
      * Write to the bank: opens a case when none is open, else appends to it
-     * @description Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`.
+     * @description Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`. With no open case (never wrote, or the last one closed) a new case opens, linked to the previous closed one, and is assigned in the same request (`with_agent`) or waits in the queue (`waiting_agent`).
      */
     post: operations['customer_post_turn']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/conversations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * My past conversations (closed, other than the current one)
+     * @description Newest `openedAt` first, at most 20.
+     */
+    get: operations['customer_list_past_conversations']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/conversations/{caseId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * One of my conversations with its turns (read-only)
+     * @description Up to the latest 200 turns meant for the customer, ascending.
+     */
+    get: operations['customer_get_past_conversation']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -216,7 +279,10 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** Seeded customers for the simulator picker (no auth; empty without demo data) */
+    /**
+     * Seeded customers for the simulator picker (no auth; empty without demo data)
+     * @description Simulator customers first, then every other seeded customer by name.
+     */
     get: operations['customer_list_demo_customers']
     put?: never
     post?: never
@@ -331,13 +397,24 @@ export interface components {
       id: string
       /** Policyruleid */
       policyRuleId: string | null
+      /**
+       * Queuelabel
+       * @description Set when the case waited in a queue.
+       */
+      queueLabel: string | null
       reason: components['schemas']['AssignmentReason']
+      /**
+       * Waitedseconds
+       * @description Queue wait (queue_drained), else null.
+       */
+      waitedSeconds: number | null
     }
     /**
      * AssignmentReason
+     * @description Why a case reached its analyst. Slice 3 adds ``manual`` (a supervisor).
      * @enum {string}
      */
-    AssignmentReason: 'language_least_loaded' | 'queue_drained' | 'outbound_followup'
+    AssignmentReason: 'language_least_loaded' | 'queue_drained'
     /** Availability */
     Availability: {
       /**
@@ -362,10 +439,10 @@ export interface components {
     }
     /**
      * CaseChannel
-     * @description Contract ``case.channel`` subset (``whatsapp``/``video`` are out of scope).
+     * @description Where the customer writes from (the simulator stands in for both).
      * @enum {string}
      */
-    CaseChannel: 'app_chat' | 'web_chat' | 'phone' | 'email'
+    CaseChannel: 'app_chat' | 'web_chat'
     /** CaseClosure */
     CaseClosure: {
       /**
@@ -375,35 +452,85 @@ export interface components {
       closedAt: string
       /** Closedbyid */
       closedById: string
-      contactReason: components['schemas']['ContactReason']
-      /** Csatrequested */
-      csatRequested: boolean
-      /** Followupat */
-      followupAt: string | null
-      resolutionCode: components['schemas']['ResolutionCode'] | null
-      /** Resolved */
-      resolved: boolean
+      /** Closedbyname */
+      closedByName: string | null
+      /**
+       * Note
+       * @description Internal note: staff only, never sent to the customer.
+       */
+      note: string | null
+      reason: components['schemas']['CloseReason']
+    }
+    /** CaseCustomer */
+    CaseCustomer: {
+      /** City */
+      city: string
+      country: components['schemas']['CountryCode']
+      /** Displayname */
+      displayName: string
+      /** Id */
+      id: string
+      language: components['schemas']['Language']
+      locale: components['schemas']['CustomerLocale']
     }
     /** CaseDetail */
     CaseDetail: {
+      /** @description "Cómo llegó a ti". */
       assignment: components['schemas']['AssignmentOut'] | null
       /** @description Computed for the caller. */
       capabilities: components['schemas']['CaseCapabilities']
       case: components['schemas']['CaseSummary']
-      channelIdentity: components['schemas']['ChannelIdentity']
       closure: components['schemas']['CaseClosure'] | null
-      customer: components['schemas']['CustomerProfile']
-      /** @description "Cómo llegó a ti". */
-      routing: components['schemas']['RoutingSummary']
+      customer: components['schemas']['CaseCustomer']
+      /**
+       * Previouscasecount
+       * @description Other cases of this customer (any status).
+       */
+      previousCaseCount: number
+    }
+    /** CaseHistory */
+    CaseHistory: {
+      /**
+       * Items
+       * @description Newest openedAt first, at most 20.
+       */
+      items: components['schemas']['CaseHistoryItem'][]
+      /**
+       * Total
+       * @description All other cases of the customer.
+       */
+      total: number
+    }
+    /** CaseHistoryItem */
+    CaseHistoryItem: {
+      /**
+       * Analystid
+       * @description Who held it (the assignee).
+       */
+      analystId: string | null
+      /** Analystname */
+      analystName: string | null
+      channel: components['schemas']['CaseChannel']
+      closeReason: components['schemas']['CloseReason'] | null
+      /** Closedat */
+      closedAt: string | null
+      /** Id */
+      id: string
+      /**
+       * Openedat
+       * Format: date-time
+       */
+      openedAt: string
+      /**
+       * Preview
+       * @description Last message text (at most 140 characters).
+       */
+      preview: string | null
+      status: components['schemas']['CaseStatus']
     }
     /**
-     * CaseOrigin
-     * @description Who started the case. ``regulator``/``branch``: the bank must call the customer.
-     * @enum {string}
-     */
-    CaseOrigin: 'customer' | 'regulator' | 'branch'
-    /**
      * CasePriority
+     * @description Drives the first-response SLA target. Live cases open as ``medium``.
      * @enum {string}
      */
     CasePriority: 'low' | 'medium' | 'high'
@@ -412,25 +539,24 @@ export interface components {
      * @description Stored state machine of a case (see ``Case``).
      * @enum {string}
      */
-    CaseStatus:
-      | 'routing'
-      | 'queued'
-      | 'assigned'
-      | 'in_progress'
-      | 'in_call'
-      | 'to_call'
-      | 'awaiting_approval'
-      | 'closed'
+    CaseStatus: 'queued' | 'assigned' | 'in_progress' | 'closed'
     /** CaseSummary */
     CaseSummary: {
       /** Assignedanalystid */
       assignedAnalystId: string | null
       channel: components['schemas']['CaseChannel']
+      closeReason: components['schemas']['CloseReason'] | null
       /** Closedat */
       closedAt: string | null
       customer: components['schemas']['CustomerRef']
+      /**
+       * Firstresponseat
+       * @description The first analyst message (the SLA stops); null while pending.
+       */
+      firstResponseAt: string | null
       /** Id */
       id: string
+      /** @description null while the case is queued. */
       inboxStatus: components['schemas']['InboxStatus'] | null
       language: components['schemas']['Language']
       /**
@@ -440,25 +566,27 @@ export interface components {
       lastInteractionAt: string
       /** Lastsequence */
       lastSequence: number
-      /** Livesince */
-      liveSince: string | null
       /**
        * Openedat
        * Format: date-time
        */
       openedAt: string
-      origin: components['schemas']['CaseOrigin']
       /** Preview */
       preview: string | null
       previewAuthorRole: components['schemas']['TurnAuthorRole'] | null
+      /**
+       * Previouscaseid
+       * @description The closed case this one continues ("Volvió a escribir").
+       */
+      previousCaseId: string | null
       priority: components['schemas']['CasePriority']
       /**
        * Sladueat
        * Format: date-time
+       * @description First-response due time.
        */
       slaDueAt: string
       status: components['schemas']['CaseStatus']
-      topic: components['schemas']['CaseTopic'] | null
       /** Unreadcount */
       unreadCount: number
       /**
@@ -467,50 +595,18 @@ export interface components {
        */
       version: number
     }
-    /**
-     * CaseTopic
-     * @description Judge taxonomy (contract ``case.topic``). Nullable in slice 1: no judge yet.
-     * @enum {string}
-     */
-    CaseTopic:
-      | 'consultar_movimientos'
-      | 'consultar_cargo'
-      | 'disputar_cargo'
-      | 'cobro_duplicado'
-      | 'estado_disputa'
-      | 'fraude_urgente'
-      | 'hablar_con_humano'
-      | 'fuera_de_alcance'
-      | 'problema_app'
-    /** ChannelIdentity */
-    ChannelIdentity: {
-      kind: components['schemas']['ChannelSessionKind']
-      /** Verified */
-      verified: boolean
-    }
-    /**
-     * ChannelSessionKind
-     * @description Identity the contact already carried (contract ``identity_check.channel_session``).
-     * @enum {string}
-     */
-    ChannelSessionKind:
-      'app_session' | 'web_session' | 'caller_number' | 'email_address' | 'outbound_call'
     /** CloseCaseRequest */
     CloseCaseRequest: {
-      contactReason: components['schemas']['ContactReason']
-      followUp: components['schemas']['FollowUp']
-      resolutionCode: components['schemas']['ResolutionCode'] | null
-      /** Resolved */
-      resolved: boolean
-      /** Sendcsatsurvey */
-      sendCsatSurvey: boolean
+      /** Note */
+      note: string | null
+      reason: components['schemas']['CloseReason']
     }
     /**
-     * ContactReason
-     * @description Contract ``case_close.contact_reason`` (the bank's own Spanish values).
+     * CloseReason
+     * @description Why the assignee closed a case. Team-generated list (not from the dataset).
      * @enum {string}
      */
-    ContactReason: 'Transaccional' | 'Queja' | 'Producto' | 'Retención' | 'Técnico' | 'Comercial'
+    CloseReason: 'resolved' | 'customer_unresponsive' | 'duplicate' | 'out_of_scope' | 'other'
     /**
      * CountryCode
      * @enum {string}
@@ -530,7 +626,7 @@ export interface components {
     CustomerConversation: {
       /**
        * Agentname
-       * @description Assignee first name while with_agent.
+       * @description Assignee first name while with_agent; on a closed case, who attended it.
        */
       agentName: string | null
       /** Caseid */
@@ -549,11 +645,38 @@ export interface components {
        * Format: date-time
        */
       openedAt: string
+      /**
+       * Previouscaseid
+       * @description The closed case this one continues.
+       */
+      previousCaseId: string | null
       status: components['schemas']['CustomerConversationStatus']
+    }
+    /** CustomerConversationDetail */
+    CustomerConversationDetail: {
+      conversation: components['schemas']['CustomerConversation']
+      /**
+       * Turns
+       * @description Up to the latest 200, ascending.
+       */
+      turns: components['schemas']['CustomerTurn'][]
+    }
+    /** CustomerConversationList */
+    CustomerConversationList: {
+      /**
+       * Items
+       * @description Closed conversations other than the current one, newest first (≤ 20).
+       */
+      items: components['schemas']['CustomerConversationSummary'][]
     }
     /** CustomerConversationResponse */
     CustomerConversationResponse: {
       conversation: components['schemas']['CustomerConversation'] | null
+      /**
+       * Pastconversationcount
+       * @description Closed conversations other than the current one.
+       */
+      pastConversationCount: number
       /** Turns */
       turns: components['schemas']['CustomerTurn'][]
     }
@@ -563,31 +686,35 @@ export interface components {
      * @enum {string}
      */
     CustomerConversationStatus: 'waiting_agent' | 'with_agent' | 'closed'
+    /** CustomerConversationSummary */
+    CustomerConversationSummary: {
+      /**
+       * Agentname
+       * @description First name of who attended it.
+       */
+      agentName: string | null
+      /** Caseid */
+      caseId: string
+      channel: components['schemas']['CaseChannel']
+      /** Closedat */
+      closedAt: string | null
+      /**
+       * Openedat
+       * Format: date-time
+       */
+      openedAt: string
+      /**
+       * Preview
+       * @description Last message text (at most 140 characters).
+       */
+      preview: string | null
+      status: components['schemas']['CustomerConversationStatus']
+    }
     /**
      * CustomerLocale
      * @enum {string}
      */
     CustomerLocale: 'es-CO' | 'es-MX' | 'es-AR' | 'pt-BR'
-    /** CustomerProfile */
-    CustomerProfile: {
-      /** City */
-      city: string
-      country: components['schemas']['CountryCode']
-      /**
-       * Customersince
-       * Format: date
-       */
-      customerSince: string
-      /** Displayname */
-      displayName: string
-      /** Documenttype */
-      documentType: string
-      /** Id */
-      id: string
-      language: components['schemas']['Language']
-      locale: components['schemas']['CustomerLocale']
-      segment: components['schemas']['CustomerSegment']
-    }
     /** CustomerRef */
     CustomerRef: {
       /** Displayname */
@@ -595,11 +722,6 @@ export interface components {
       /** Id */
       id: string
     }
-    /**
-     * CustomerSegment
-     * @enum {string}
-     */
-    CustomerSegment: 'Basic' | 'Plus' | 'Premium'
     /** CustomerSelf */
     CustomerSelf: {
       /** Displayname */
@@ -654,10 +776,10 @@ export interface components {
     }
     /**
      * CustomerTurnAuthor
-     * @description Customer-facing author: automated tiers are shown as one "bot".
+     * @description Customer-facing author of a turn.
      * @enum {string}
      */
-    CustomerTurnAuthor: 'customer' | 'analyst' | 'bot' | 'system'
+    CustomerTurnAuthor: 'customer' | 'analyst' | 'system'
     /** DemoConversation */
     DemoConversation: {
       /** Caseid */
@@ -669,6 +791,8 @@ export interface components {
     DemoCustomer: {
       /** City */
       city: string
+      /** Closedconversationcount */
+      closedConversationCount: number
       country: components['schemas']['CountryCode']
       /** Displayname */
       displayName: string
@@ -676,8 +800,8 @@ export interface components {
       id: string
       language: components['schemas']['Language']
       locale: components['schemas']['CustomerLocale']
+      /** @description Only an open case. */
       openConversation: components['schemas']['DemoConversation'] | null
-      segment: components['schemas']['CustomerSegment']
       /**
        * Suggestions
        * @description Opener chips in the customer's own voice.
@@ -688,16 +812,10 @@ export interface components {
     DemoCustomerList: {
       /**
        * Items
-       * @description Simulator customers first, then customers with an open chat case.
+       * @description Simulator customers first, then every other seeded customer by name.
        */
       items: components['schemas']['DemoCustomer'][]
     }
-    /**
-     * FollowUp
-     * @description Close dialog "Seguimiento"; the server turns it into ``followup_at``.
-     * @enum {string}
-     */
-    FollowUp: 'none' | 'tomorrow' | 'in_two_days'
     /** HealthResponse */
     HealthResponse: {
       /** Checks */
@@ -712,19 +830,23 @@ export interface components {
     }
     /** InboxCounts */
     InboxCounts: {
-      /** All */
+      /**
+       * All
+       * @description Open cases: new + toReply + waiting.
+       */
       all: number
+      /**
+       * Closed
+       * @description Cases closed in the last 7 days.
+       */
+      closed: number
       /**
        * Computedat
        * Format: date-time
        */
       computedAt: string
-      /** Live */
-      live: number
       /** New */
       new: number
-      /** Tocall */
-      toCall: number
       /** Toreply */
       toReply: number
       /** Waiting */
@@ -744,10 +866,10 @@ export interface components {
     }
     /**
      * InboxStatus
-     * @description Canvas bucket of a case in "Casos" (derived from ``CaseStatus``, never stored).
+     * @description Bucket of a case in "Casos" (derived from ``CaseStatus``, never stored).
      * @enum {string}
      */
-    InboxStatus: 'new' | 'to_reply' | 'live' | 'to_call' | 'waiting'
+    InboxStatus: 'new' | 'to_reply' | 'waiting' | 'closed'
     /**
      * Language
      * @enum {string}
@@ -873,7 +995,6 @@ export interface components {
       | 'invalid_transition'
       | 'case_not_assigned'
       | 'case_closed'
-      | 'channel_not_supported'
       | 'idempotency_conflict'
       | 'invalid_value'
       | 'policy_violation'
@@ -889,7 +1010,7 @@ export interface components {
      * @description RFC 7807 problem. ``code`` is the stable machine identifier clients branch on.
      *
      *     The optional members below are the documented extensions; a domain error may add other
-     *     structured details (e.g. ``channel`` on ``channel_not_supported``), hence
+     *     structured details (e.g. ``openCaseId`` on ``conflict``), hence
      *     ``additionalProperties``.
      */
     ProblemDetails: {
@@ -954,58 +1075,7 @@ export interface components {
      * ReplyBlockedReason
      * @enum {string}
      */
-    ReplyBlockedReason: 'not_assignee' | 'closed' | 'channel_not_supported'
-    /**
-     * ResolutionCode
-     * @description Contract ``case_close.resolution_code`` (the five "Qué se hizo" phrases).
-     * @enum {string}
-     */
-    ResolutionCode: 'adjustment' | 'escalated_to_area' | 'explained' | 'compensation' | 'correction'
-    /** RouteStop */
-    RouteStop: {
-      /** Componentid */
-      componentId: string | null
-      /** Componentversion */
-      componentVersion: string | null
-      kind: components['schemas']['RouteStopKind']
-      /** Label */
-      label: string | null
-      /**
-       * Occurredat
-       * Format: date-time
-       */
-      occurredAt: string
-      outcome: components['schemas']['RoutingOutcome'] | null
-      /** Policyruleid */
-      policyRuleId: string | null
-      /** Reasoncode */
-      reasonCode: string | null
-      /** Staffid */
-      staffId: string | null
-      /** Summary */
-      summary: string | null
-      tier: components['schemas']['Tier'] | null
-      /** Waitedseconds */
-      waitedSeconds: number | null
-    }
-    /**
-     * RouteStopKind
-     * @description Stops of "Cómo llegó a ti" (read model): entry point, tiers, queue, the analyst.
-     * @enum {string}
-     */
-    RouteStopKind: 'entry' | 'tier' | 'queue' | 'assignee'
-    /**
-     * RoutingOutcome
-     * @enum {string}
-     */
-    RoutingOutcome: 'resolved' | 'mitigated' | 'handed_off' | 'abstained'
-    /** RoutingSummary */
-    RoutingSummary: {
-      /** Inputsused */
-      inputsUsed: string[]
-      /** Stops */
-      stops: components['schemas']['RouteStop'][]
-    }
+    ReplyBlockedReason: 'not_assignee' | 'closed'
     /** SessionOut */
     SessionOut: {
       /**
@@ -1029,12 +1099,6 @@ export interface components {
        */
       tokenType: 'Bearer'
     }
-    /**
-     * StaffLevel
-     * @description Analyst seniority; drives abono limits (policies R7/R8).
-     * @enum {string}
-     */
-    StaffLevel: 'Junior' | 'Mid-Senior' | 'Senior' | 'Specialist'
     /** StaffListResponse */
     StaffListResponse: {
       /** Items */
@@ -1048,11 +1112,8 @@ export interface components {
       id: string
       /** Languages */
       languages: components['schemas']['Language'][]
-      level: components['schemas']['StaffLevel']
       /** Name */
       name: string
-      /** Requiresfoureyes */
-      requiresFourEyes: boolean
       /** Roles */
       roles: components['schemas']['StaffRole'][]
       /** Team */
@@ -1063,12 +1124,7 @@ export interface components {
      * @description Platform roles. They combine: one person may hold several (brief §1).
      * @enum {string}
      */
-    StaffRole: 'analyst' | 'supervisor' | 'automation' | 'admin'
-    /**
-     * Tier
-     * @enum {string}
-     */
-    Tier: 'judge' | 'tree' | 'ai_agent' | 'human' | 'supervisor'
+    StaffRole: 'analyst' | 'supervisor' | 'admin'
     /** Turn */
     Turn: {
       audience: components['schemas']['TurnAudience']
@@ -1086,10 +1142,6 @@ export interface components {
        * Format: date-time
        */
       createdAt: string
-      /** Evidenceids */
-      evidenceIds: string[]
-      /** Fromsuggestionid */
-      fromSuggestionId: string | null
       /** Id */
       id: string
       kind: components['schemas']['TurnKind']
@@ -1110,14 +1162,14 @@ export interface components {
     TurnAudience: 'everyone' | 'staff'
     /**
      * TurnAuthorRole
-     * @description Contract ``turn.author_role``.
+     * @description Who wrote a turn: the customer, an analyst or the platform (notices, banners).
      * @enum {string}
      */
-    TurnAuthorRole: 'customer' | 'analyst' | 'system' | 'tree' | 'judge' | 'ai_agent' | 'copilot'
+    TurnAuthorRole: 'customer' | 'analyst' | 'system'
     /**
      * TurnKind
-     * @description ``message`` = conversation; ``routing`` = staff banner on how the case arrived;
-     *     ``notice`` = platform note. Slice 3 adds ``action`` (verified tool-call cards).
+     * @description ``message`` = conversation; ``routing`` = staff-only assignment banner (how the case
+     *     arrived); ``notice`` = platform note.
      * @enum {string}
      */
     TurnKind: 'message' | 'routing' | 'notice'
@@ -1316,7 +1368,7 @@ export interface operations {
   cases_get_inbox: {
     parameters: {
       query?: {
-        /** @description Omit for Todos */
+        /** @description Omit for Todos (open cases) */
         status?: components['schemas']['InboxStatus'] | null
         /** @description Customer name or case id (contains) */
         q?: string | null
@@ -1484,6 +1536,64 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_get_case_history: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CaseHistory']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
       422: {
         headers: {
           [name: string]: unknown
@@ -1794,6 +1904,84 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_list_past_conversations: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerConversationList']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_get_past_conversation: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerConversationDetail']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
       422: {
         headers: {
           [name: string]: unknown

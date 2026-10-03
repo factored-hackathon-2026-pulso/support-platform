@@ -1,7 +1,18 @@
 # ADR 0002 · AI UI frameworks and the copilot wire protocol
 
-- Status: Accepted
-- Date: 2026-10-02
+- Status: **Superseded — AI is out of the platform scope (2026-10-03)**
+- Date: 2026-10-02 (superseded 2026-10-03)
+
+> **Superseded.** On 2026-10-03 the product scope was cut to a chat-only support platform:
+> support staff and customers talk by chat, and there is no copilot, no AI agent, no tool
+> catalog and no automated routing tier. Nothing in this ADR is built or planned. No
+> `POST /cases/{caseId}/copilot/runs`, no AG-UI events, no `@ag-ui/client` and no
+> `ag-ui-protocol` dependency. The analyst's Workspace has no right-hand panel. The
+> `CopilotEngine` port and `application/copilot/` are deleted in slice 2
+> (`../api/slice-2-case-lifecycle.md` §1). The text below is kept only as the record of what
+> was decided before the cut. Do not implement it. If AI comes back into scope, a new ADR
+> must start from the current architecture (`0001-architecture.md`) and must not revive
+> this one.
 - Scope: analyst copilot panel (Workspace right panel, "Copiloto" tab) and its backend stream. Does **not** cover the analyst ↔ customer chat.
 - Related: `ENGINEERING_BRIEF.md` §4.2 (CopilotEngine strategy), §4.4 (realtime, "AG-UI compatible"), §4.6 (extension points).
 

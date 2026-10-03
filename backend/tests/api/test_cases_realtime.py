@@ -1,4 +1,5 @@
-"""Realtime of slice 1: customer ↔ analyst fan-out, topic access, payload shapes."""
+"""Realtime of the case lifecycle (contract §7): customer ↔ analyst fan-out, the first
+response, close and reopen, topic access, payload shapes."""
 
 from __future__ import annotations
 
@@ -19,8 +20,8 @@ from cc_platform.infrastructure.seed.people import seed_staff_id
 from tests.support import ANALYST, JULIAN, SUPERVISOR, bearer
 
 DANIELA_ID = seed_staff_id(1)
-IMPATIENT = seed_case_id(102)
-BEATRIZ, NATALIA = 1002, 2001
+MARCELA_CASE, BEATRIZ_CASE, PATRICIA_OLD = seed_case_id(101), seed_case_id(102), seed_case_id(110)
+MARCELA, BEATRIZ, NATALIA = 1001, 1002, 2001
 
 PAYLOAD_SCHEMAS: dict[str, type[ApiModel]] = {
     "case.updated": CaseSummary,
@@ -74,6 +75,25 @@ def post_as_customer(client: TestClient, token: str, text: str) -> dict[str, Any
     return body
 
 
+def reply_as(client: TestClient, headers: dict[str, str], case_id: str, text: str) -> None:
+    cmid = str(uuid.uuid4())
+    response = client.post(
+        f"/api/v1/cases/{case_id}/turns",
+        headers={**headers, "Idempotency-Key": cmid},
+        json={"text": text, "clientMessageId": cmid},
+    )
+    assert response.status_code == 201, response.text
+
+
+def close_case(client: TestClient, headers: dict[str, str], case_id: str) -> None:
+    response = client.post(
+        f"/api/v1/cases/{case_id}/close",
+        headers=headers,
+        json={"reason": "out_of_scope", "note": "Nota interna del equipo"},
+    )
+    assert response.status_code == 200, response.text
+
+
 def test_customer_message_reaches_the_analyst_inbox_and_case(
     client: TestClient, sign_in: Callable[[str], str], customer_session: Callable[..., str]
 ) -> None:
@@ -81,29 +101,29 @@ def test_customer_message_reaches_the_analyst_inbox_and_case(
     with connect(client, sign_in(ANALYST.email)) as analyst:
         analyst.receive_json()
         assert subscribe(analyst, f"inbox:{DANIELA_ID}")["type"] == "subscribed"
-        assert subscribe(analyst, f"case:{IMPATIENT}")["type"] == "subscribed"
+        assert subscribe(analyst, f"case:{BEATRIZ_CASE}")["type"] == "subscribed"
 
         post_as_customer(client, customer, "¿¿Me van a contestar??")
         envelopes = until_pong(analyst)
 
-    types = [e["type"] for e in envelopes]
     # Subscribed to both case: and inbox:, the socket still gets case.updated once.
-    assert types == ["turn.created", "case.updated", "inbox.counts"]
+    assert [e["type"] for e in envelopes] == ["turn.created", "case.updated", "inbox.counts"]
     turn = envelopes[0]["data"]
-    assert turn["caseId"] == IMPATIENT
+    assert turn["caseId"] == BEATRIZ_CASE
     assert turn["actor"] == {"role": "customer", "id": seed_customer_id(BEATRIZ)}
     assert turn["payload"]["sequence"] == 7
     assert turn["payload"]["authorName"] == "Beatriz Salcedo Prieto"
     assert envelopes[1]["data"]["payload"]["unreadCount"] == 4
     assert envelopes[1]["id"] == envelopes[0]["id"]  # same source event, different type
-    assert envelopes[2]["data"]["payload"]["toReply"] == 3
+    assert envelopes[2]["data"]["payload"]["toReply"] == 2
+    assert envelopes[2]["data"]["payload"]["closed"] == 3
     assert_contract_payloads(envelopes)
 
 
 @pytest.mark.parametrize(
     ("topic", "expected"),
     [
-        (f"case:{IMPATIENT}", ["turn.created", "case.updated"]),
+        (f"case:{BEATRIZ_CASE}", ["turn.created", "case.updated"]),
         (f"inbox:{DANIELA_ID}", ["case.updated", "inbox.counts"]),
     ],
 )
@@ -123,78 +143,132 @@ def test_case_updated_reaches_each_topic_on_its_own(
     assert [e["type"] for e in envelopes] == expected
 
 
-def test_analyst_reply_reaches_the_customer(
+def test_first_reply_reaches_the_customer_and_updates_the_card(
     client: TestClient, sign_in: Callable[[str], str], customer_session: Callable[..., str]
 ) -> None:
     daniela = bearer(sign_in(ANALYST.email))
-    with connect(client, customer_session(BEATRIZ)) as customer:
+    with (
+        connect(client, customer_session(BEATRIZ)) as customer,
+        connect(client, daniela["Authorization"].removeprefix("Bearer ")) as analyst,
+    ):
         welcome = customer.receive_json()
+        analyst.receive_json()
         assert set(welcome["data"]) == {"connectionId", "customerId"}
-        assert welcome["data"]["customerId"] == seed_customer_id(BEATRIZ)
         topic = f"customer:{seed_customer_id(BEATRIZ)}"
         assert subscribe(customer, topic)["data"] == {"topic": topic}
-
-        cmid = str(uuid.uuid4())
-        response = client.post(
-            f"/api/v1/cases/{IMPATIENT}/turns",
-            headers={**daniela, "Idempotency-Key": cmid},
-            json={"text": "Hola, Beatriz. Ya reviso su caso.", "clientMessageId": cmid},
-        )
-        assert response.status_code == 201
-        envelopes = until_pong(customer)
-
-    types = [e["type"] for e in envelopes]
-    assert types == ["turn.created"]  # already in progress: no conversation change
-    reply = envelopes[0]["data"]
-    assert reply["actor"] == {"role": "analyst", "id": None}  # no staff ids for customers
-    assert reply["payload"]["authorRole"] == "analyst"
-    assert reply["payload"]["authorName"] == "Daniela"
-    assert reply["payload"]["clientMessageId"] is None
-    assert reply["payload"]["text"] == "Hola, Beatriz. Ya reviso su caso."
-    assert_contract_payloads(envelopes, customer=True)
-
-
-def test_new_case_staff_only_turns_never_reach_the_customer(
-    client: TestClient,
-    sign_in: Callable[[str], str],
-    customer_session: Callable[..., str],
-    drain: Callable[[], None],
-) -> None:
-    token = customer_session(NATALIA)
-    with (
-        connect(client, token) as customer,
-        connect(client, sign_in(ANALYST.email)) as analyst,
-    ):
-        customer.receive_json()
-        analyst.receive_json()
-        subscribe(customer, f"customer:{seed_customer_id(NATALIA)}")
         subscribe(analyst, f"inbox:{DANIELA_ID}")
 
-        created = post_as_customer(client, token, "Hay un cargo que no reconozco")
-        drain()
+        reply_as(client, daniela, BEATRIZ_CASE, "Hola, Beatriz. Ya reviso su caso.")
         to_customer = until_pong(customer)
         to_analyst = until_pong(analyst)
 
-    case_id = created["conversation"]["caseId"]
-    turns = [e["data"]["payload"] for e in to_customer if e["type"] == "turn.created"]
-    assert [(t["sequence"], t["kind"]) for t in turns] == [(1, "message"), (2, "notice")]
-    first = next(e for e in to_customer if e["type"] == "turn.created")
-    assert first["data"]["actor"] == {"role": "customer", "id": seed_customer_id(NATALIA)}
+    assert [e["type"] for e in to_customer] == ["turn.created"]  # no conversation change
+    reply = to_customer[0]["data"]
+    assert reply["actor"] == {"role": "analyst", "id": None}  # no staff ids for customers
+    assert (reply["payload"]["authorRole"], reply["payload"]["authorName"]) == (
+        "analyst",
+        "Daniela",
+    )
+    assert reply["payload"]["clientMessageId"] is None
+    assert_contract_payloads(to_customer, customer=True)
+
+    # The first answer stops the SLA: a case.updated follows case.first_responded.
+    updates = [e for e in to_analyst if e["type"] == "case.updated"]
+    assert updates[-1]["data"]["payload"]["firstResponseAt"] == "2026-10-02T14:00:00Z"
+    assert updates[-1]["data"]["payload"]["inboxStatus"] == "waiting"
+    sources = {e["data"]["entity"] for e in to_analyst}
+    assert sources == {"turn", "case"}
+    assert any(
+        e["type"] == "case.updated"
+        and e["data"]["entity"] == "case"
+        and e["data"]["payload"]["firstResponseAt"] is not None
+        and e["id"] not in {u["id"] for u in to_analyst if u["data"]["entity"] == "turn"}
+        for e in to_analyst
+    )
+    assert_contract_payloads(to_analyst)
+
+
+def test_close_notice_reaches_the_customer_never_the_reason(
+    client: TestClient, sign_in: Callable[[str], str], customer_session: Callable[..., str]
+) -> None:
+    token = sign_in(ANALYST.email)
+    with (
+        connect(client, customer_session(MARCELA)) as customer,
+        connect(client, token) as analyst,
+    ):
+        customer.receive_json()
+        analyst.receive_json()
+        subscribe(customer, f"customer:{seed_customer_id(MARCELA)}")
+        subscribe(analyst, f"inbox:{DANIELA_ID}")
+
+        close_case(client, bearer(token), MARCELA_CASE)
+        to_customer = until_pong(customer)
+        to_analyst = until_pong(analyst)
+
+    assert [e["type"] for e in to_customer] == [
+        "turn.created",
+        "conversation.updated",
+        "conversation.updated",
+    ]
+    notice = to_customer[0]["data"]["payload"]
+    assert (notice["kind"], notice["authorRole"]) == ("notice", "system")
+    assert notice["text"].startswith("La conversación terminó.")
+    assert to_customer[-1]["data"]["payload"]["status"] == "closed"
+    assert to_customer[-1]["data"]["payload"]["agentName"] == "Daniela"
+    wire = str(to_customer)
+    assert "out_of_scope" not in wire
+    assert "Nota interna" not in wire
+    assert_contract_payloads(to_customer, customer=True)
+
+    # One close, two envelopes for the inbox: the card moves to Cerrados, fresh counts.
+    summary = [e for e in to_analyst if e["type"] == "case.updated"][-1]["data"]["payload"]
+    assert (summary["inboxStatus"], summary["closeReason"]) == ("closed", "out_of_scope")
+    counts = [e for e in to_analyst if e["type"] == "inbox.counts"][-1]["data"]["payload"]
+    assert (counts["all"], counts["toReply"], counts["closed"]) == (4, 1, 4)
+    assert_contract_payloads(to_analyst)
+
+
+def test_writing_after_a_close_switches_the_conversation_and_reaches_the_analyst(
+    client: TestClient, sign_in: Callable[[str], str], customer_session: Callable[..., str]
+) -> None:
+    token = sign_in(ANALYST.email)
+    close_case(client, bearer(token), MARCELA_CASE)
+    customer_token = customer_session(MARCELA)
+    with (
+        connect(client, customer_token) as customer,
+        connect(client, token) as analyst,
+    ):
+        customer.receive_json()
+        analyst.receive_json()
+        subscribe(customer, f"customer:{seed_customer_id(MARCELA)}")
+        subscribe(analyst, f"inbox:{DANIELA_ID}")
+
+        created = post_as_customer(client, customer_token, "Hola de nuevo")
+        to_customer = until_pong(customer)
+        to_analyst = until_pong(analyst)
+
+    new_id = created["conversation"]["caseId"]
     conversations = [
         e["data"]["payload"] for e in to_customer if e["type"] == "conversation.updated"
     ]
+    assert {c["caseId"] for c in conversations} == {new_id}  # a different caseId: a switch
+    assert new_id != MARCELA_CASE
+    assert conversations[-1]["previousCaseId"] == MARCELA_CASE
     assert conversations[-1]["status"] == "with_agent"
-    assert conversations[-1]["agentName"] == "Daniela"
-    assert all("Ningún nivel" not in str(e) for e in to_customer)  # the routing banner
+    turns = [e["data"]["payload"] for e in to_customer if e["type"] == "turn.created"]
+    assert [(t["sequence"], t["kind"]) for t in turns] == [(1, "message"), (2, "notice")]
+    assert "volvió a escribir" not in str(to_customer)  # staff-only banner
+    assert "Asignado" not in str(to_customer)
     assert_contract_payloads(to_customer, customer=True)
 
-    assigned = [e for e in to_analyst if e["type"] == "case.assigned"]
-    assert [e["data"]["payload"]["id"] for e in assigned] == [case_id]
-    assert assigned[0]["data"]["payload"]["inboxStatus"] == "new"
-    counts = [e["data"]["payload"] for e in to_analyst if e["type"] == "inbox.counts"]
-    assert counts[-1]["all"] == 8
+    assigned = [e["data"]["payload"] for e in to_analyst if e["type"] == "case.assigned"]
+    assert [(a["id"], a["previousCaseId"], a["inboxStatus"]) for a in assigned] == [
+        (new_id, MARCELA_CASE, "new")
+    ]
+    counts = [e for e in to_analyst if e["type"] == "inbox.counts"][-1]["data"]["payload"]
+    assert (counts["all"], counts["new"], counts["closed"]) == (5, 3, 4)
+    assert not {e["type"] for e in to_analyst} & {"case.opened", "case.queued"}
     assert_contract_payloads(to_analyst)
-    assert not {e["type"] for e in to_analyst} & {"case.opened", "routing_step.recorded"}
 
 
 def test_availability_updates_reach_the_own_inbox(
@@ -212,22 +286,22 @@ def test_availability_updates_reach_the_own_inbox(
 
 
 @pytest.mark.parametrize(
-    "topic",
+    ("topic", "code"),
     [
-        f"customer:{seed_customer_id(1001)}",  # someone else's conversation
-        f"inbox:{DANIELA_ID}",
-        f"case:{IMPATIENT}",
-        "approvals",
+        (f"customer:{seed_customer_id(1001)}", "forbidden"),  # someone else's conversation
+        (f"inbox:{DANIELA_ID}", "forbidden"),
+        (f"case:{BEATRIZ_CASE}", "forbidden"),
+        ("approvals", "invalid_topic"),  # removed in slice 2
     ],
 )
 def test_a_customer_may_only_follow_its_own_topic(
-    client: TestClient, customer_session: Callable[..., str], topic: str
+    client: TestClient, customer_session: Callable[..., str], topic: str, code: str
 ) -> None:
     with connect(client, customer_session(BEATRIZ)) as customer:
         customer.receive_json()
         reply = subscribe(customer, topic)
     assert reply["type"] == "error"
-    assert reply["data"]["code"] == "forbidden"
+    assert reply["data"]["code"] == code
 
 
 def test_staff_topic_access_for_cases_and_customers(
@@ -236,13 +310,17 @@ def test_staff_topic_access_for_cases_and_customers(
     with (
         connect(client, sign_in(JULIAN.email)) as julian,
         connect(client, sign_in(SUPERVISOR.email)) as supervisor,
+        connect(client, sign_in(ANALYST.email)) as daniela,
     ):
-        julian.receive_json()
-        supervisor.receive_json()
-        assert subscribe(julian, f"case:{IMPATIENT}")["data"]["code"] == "forbidden"
+        for ws in (julian, supervisor, daniela):
+            ws.receive_json()
+        assert subscribe(julian, f"case:{BEATRIZ_CASE}")["data"]["code"] == "forbidden"
         assert subscribe(julian, f"customer:{seed_customer_id(BEATRIZ)}")["data"]["code"] == (
             "forbidden"
         )
         assert subscribe(julian, f"case:{seed_case_id(999)}")["data"]["code"] == "forbidden"
-        assert subscribe(supervisor, f"case:{IMPATIENT}")["type"] == "subscribed"
+        assert subscribe(julian, "approvals")["data"]["code"] == "invalid_topic"
+        assert subscribe(supervisor, f"case:{BEATRIZ_CASE}")["type"] == "subscribed"
         assert subscribe(supervisor, f"customer:{seed_customer_id(BEATRIZ)}")["type"] == "error"
+        # History access is REST only: a closed history case has no live topic.
+        assert subscribe(daniela, f"case:{PATRICIA_OLD}")["data"]["code"] == "forbidden"

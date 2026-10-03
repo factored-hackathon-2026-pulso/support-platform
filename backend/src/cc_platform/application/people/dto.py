@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.domain.people.mfa import MfaMethod
-from cc_platform.domain.people.staff import Language, Staff, StaffLevel, StaffRole
+from cc_platform.domain.people.staff import Language, Staff, StaffRole
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,10 +15,8 @@ class StaffView:
     name: str
     email: str
     roles: tuple[StaffRole, ...]
-    level: StaffLevel
     languages: tuple[Language, ...]
     team: str
-    requires_four_eyes: bool
 
     @classmethod
     def from_staff(cls, staff: Staff) -> StaffView:
@@ -27,10 +25,8 @@ class StaffView:
             name=staff.name,
             email=staff.email,
             roles=tuple(sorted(staff.roles, key=_role_order)),
-            level=staff.level,
             languages=tuple(sorted(staff.languages)),
             team=staff.team,
-            requires_four_eyes=staff.requires_four_eyes,
         )
 
 

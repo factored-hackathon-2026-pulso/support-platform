@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.domain.people.login_account import LockoutPolicy, LoginAccount
-from cc_platform.domain.people.staff import Language, Staff, StaffLevel, StaffRole
+from cc_platform.domain.people.staff import Language, Staff, StaffRole
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.errors import (
     ConcurrentUpdateError,
@@ -83,7 +83,6 @@ def make_staff(staff_id: str = STAFF_ID, email: str = "daniela.rios@latambank.ex
         name="Daniela Ríos",
         email=email,
         roles=frozenset({StaffRole.ANALYST, StaffRole.SUPERVISOR}),
-        level=StaffLevel.SPECIALIST,
         languages=frozenset({Language.SPANISH, Language.PORTUGUESE}),
         team="Disputas · Equipo Andes",
     )

@@ -1,4 +1,4 @@
-"""Read model: the derived canvas status, counters, inbox order, capabilities and route."""
+"""Read model: the derived inbox status (contract §4.1), counters, order and capabilities."""
 
 from __future__ import annotations
 
@@ -7,27 +7,28 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from cc_platform.application.cases.dto import ReplyBlockedReason
+from cc_platform.application.cases.dto import CaseSummaryView, ReplyBlockedReason
+from cc_platform.application.cases.queries import CLOSED_INBOX_WINDOW
 from cc_platform.application.cases.read_model import (
     CaseReader,
     capabilities_for,
     count_inbox,
+    inbox_order,
     inbox_status,
     summarize,
 )
 from cc_platform.domain.cases import (
     Case,
     CaseChannel,
-    CaseOrigin,
+    CaseClosure,
     CasePriority,
     CaseStatus,
-    ChannelSessionKind,
+    CloseReason,
     InboxStatus,
     TurnAuthorRole,
 )
 from cc_platform.domain.people.staff import Language
-from cc_platform.domain.routing.values import RouteStopKind, RoutingOutcome, Tier
-from cc_platform.infrastructure.seed.cases import seed_case_id
+from cc_platform.domain.shared.actor import ActorRole
 from cc_platform.infrastructure.seed.people import seed_staff_id
 from tests.support import memory_container
 
@@ -38,22 +39,30 @@ DANIELA = seed_staff_id(1)
 def case_in(
     status: CaseStatus,
     last_author: TurnAuthorRole | None = None,
-    channel: CaseChannel = CaseChannel.APP_CHAT,
+    *,
+    number: int = 1,
+    last_message_at: datetime | None = None,
+    opened_at: datetime = NOW,
 ) -> Case:
+    closure = (
+        CaseClosure(NOW, DANIELA, ActorRole.ANALYST, CloseReason.RESOLVED)
+        if status is CaseStatus.CLOSED
+        else None
+    )
     return Case(
-        id="CASE-" + "0" * 25 + "1",
+        id="CASE-" + str(number).zfill(26),
         customer_id="CUS-" + "0" * 25 + "1",
-        channel=channel,
-        channel_session=ChannelSessionKind.APP_SESSION,
+        channel=CaseChannel.APP_CHAT,
         language=Language.SPANISH,
-        origin=CaseOrigin.CUSTOMER,
         priority=CasePriority.MEDIUM,
         status=status,
-        opened_at=NOW,
-        sla_due_at=NOW + timedelta(hours=1),
+        opened_at=opened_at,
+        sla_due_at=opened_at + timedelta(minutes=15),
         search_text="x",
-        assigned_analyst_id=DANIELA if status is not CaseStatus.ROUTING else None,
+        assigned_analyst_id=DANIELA if status is not CaseStatus.QUEUED else None,
         last_message_author_role=last_author,
+        last_message_at=last_message_at,
+        closure=closure,
     )
 
 
@@ -63,14 +72,9 @@ def case_in(
         (CaseStatus.ASSIGNED, TurnAuthorRole.CUSTOMER, InboxStatus.NEW),
         (CaseStatus.IN_PROGRESS, TurnAuthorRole.CUSTOMER, InboxStatus.TO_REPLY),
         (CaseStatus.IN_PROGRESS, TurnAuthorRole.ANALYST, InboxStatus.WAITING),
-        (CaseStatus.IN_PROGRESS, TurnAuthorRole.TREE, InboxStatus.WAITING),
         (CaseStatus.IN_PROGRESS, None, InboxStatus.WAITING),
-        (CaseStatus.IN_CALL, TurnAuthorRole.CUSTOMER, InboxStatus.LIVE),
-        (CaseStatus.TO_CALL, None, InboxStatus.TO_CALL),
-        (CaseStatus.AWAITING_APPROVAL, TurnAuthorRole.CUSTOMER, InboxStatus.WAITING),
-        (CaseStatus.ROUTING, TurnAuthorRole.CUSTOMER, None),
+        (CaseStatus.CLOSED, TurnAuthorRole.CUSTOMER, InboxStatus.CLOSED),
         (CaseStatus.QUEUED, TurnAuthorRole.CUSTOMER, None),
-        (CaseStatus.CLOSED, TurnAuthorRole.CUSTOMER, None),
     ],
 )
 def test_inbox_status_table(
@@ -79,18 +83,53 @@ def test_inbox_status_table(
     assert inbox_status(case_in(status, last_author)) is expected
 
 
-def test_counts_cover_every_bucket() -> None:
+def test_counts_cover_every_bucket_and_all_means_open() -> None:
     items = [
         summarize(case_in(CaseStatus.ASSIGNED), "A"),
         summarize(case_in(CaseStatus.IN_PROGRESS, TurnAuthorRole.CUSTOMER), "B"),
         summarize(case_in(CaseStatus.IN_PROGRESS, TurnAuthorRole.ANALYST), "C"),
         summarize(case_in(CaseStatus.CLOSED), "D"),
+        summarize(case_in(CaseStatus.CLOSED), "E"),
+        summarize(case_in(CaseStatus.QUEUED), "F"),
     ]
     counts = count_inbox(items, NOW)
-    assert (counts.all, counts.new, counts.to_reply, counts.waiting, counts.live) == (3, 1, 1, 1, 0)
+    assert (counts.all, counts.new, counts.to_reply, counts.waiting, counts.closed) == (
+        3,
+        1,
+        1,
+        1,
+        2,
+    )
 
 
-def test_capabilities_for_assignee_supervisor_closed_and_phone() -> None:
+def test_open_order_new_and_to_reply_first_then_waiting_oldest_interaction_first() -> None:
+    def item(
+        number: int, status: CaseStatus, author: TurnAuthorRole, minutes_ago: int
+    ) -> CaseSummaryView:
+        at = NOW - timedelta(minutes=minutes_ago)
+        return summarize(case_in(status, author, number=number, last_message_at=at), "x")
+
+    waiting_oldest = item(1, CaseStatus.IN_PROGRESS, TurnAuthorRole.ANALYST, 60)
+    to_reply_recent = item(2, CaseStatus.IN_PROGRESS, TurnAuthorRole.CUSTOMER, 1)
+    new_older = item(3, CaseStatus.ASSIGNED, TurnAuthorRole.CUSTOMER, 5)
+    items = [waiting_oldest, to_reply_recent, new_older]
+    assert sorted(items, key=inbox_order) == [new_older, to_reply_recent, waiting_oldest]
+
+
+def test_summary_carries_the_lifecycle_fields() -> None:
+    linked = replace(
+        case_in(CaseStatus.CLOSED),
+        previous_case_id="CASE-" + "0" * 25 + "9",
+        first_response_at=NOW + timedelta(minutes=3),
+    )
+    summary = summarize(linked, "A")
+    assert summary.previous_case_id == "CASE-" + "0" * 25 + "9"
+    assert summary.first_response_at == NOW + timedelta(minutes=3)
+    assert (summary.closed_at, summary.close_reason) == (NOW, CloseReason.RESOLVED)
+    assert summary.inbox_status is InboxStatus.CLOSED
+
+
+def test_capabilities_for_assignee_others_and_closed() -> None:
     open_chat = case_in(CaseStatus.IN_PROGRESS, TurnAuthorRole.CUSTOMER)
     mine = capabilities_for(open_chat, DANIELA)
     assert (mine.can_reply, mine.reply_blocked_reason, mine.can_close) == (True, None, True)
@@ -101,81 +140,37 @@ def test_capabilities_for_assignee_supervisor_closed_and_phone() -> None:
         False,
     )
     closed = capabilities_for(case_in(CaseStatus.CLOSED), DANIELA)
-    assert closed.reply_blocked_reason is ReplyBlockedReason.CLOSED
-    assert not closed.can_close
-    phone = capabilities_for(case_in(CaseStatus.IN_CALL, channel=CaseChannel.PHONE), DANIELA)
-    assert phone.reply_blocked_reason is ReplyBlockedReason.CHANNEL_NOT_SUPPORTED
-    assert phone.can_close
+    assert (closed.can_reply, closed.reply_blocked_reason, closed.can_close) == (
+        False,
+        ReplyBlockedReason.CLOSED,
+        False,
+    )
+    assert [r.value for r in ReplyBlockedReason] == ["not_assignee", "closed"]
 
 
 async def test_seeded_inbox_order_and_counts() -> None:
     container = await memory_container()
-    async with container.uow() as uow:
-        items = await CaseReader(uow).inbox(DANIELA)
-    names = [item.customer.display_name.split()[0] for item in items]
-    # Live call first, then by closest SLA.
-    assert names == ["Claudia", "Beatriz", "Larissa", "Joaquín", "Marcela", "Patricia", "Héctor"]
-    counts = count_inbox(items, NOW)
-    assert (
-        counts.all,
-        counts.to_reply,
-        counts.live,
-        counts.new,
-        counts.to_call,
-        counts.waiting,
-    ) == (
-        7,
-        3,
-        1,
-        1,
-        1,
-        1,
-    )
-    beatriz = items[1]
-    assert beatriz.unread_count == 3
-    assert beatriz.preview == "contesten!! qué mal servicio"
-    hector = items[-1]
-    assert hector.preview is not None  # no messages: the routing banner is the preview
-    assert hector.preview_author_role is TurnAuthorRole.SYSTEM
-    assert hector.last_interaction_at == hector.opened_at
-
-
-async def test_route_summary_of_seeded_stories() -> None:
-    container = await memory_container()
+    now = container.clock.now()
     async with container.uow() as uow:
         reader = CaseReader(uow)
-        web = await uow.cases.get(seed_case_id(101))
-        call = await uow.cases.get(seed_case_id(105))
-        assert web is not None
-        assert call is not None
-        web_route = await reader.routing(web)
-        call_route = await reader.routing(call)
-    assert [(s.kind, s.tier) for s in web_route.stops] == [
-        (RouteStopKind.TIER, Tier.JUDGE),
-        (RouteStopKind.TIER, Tier.TREE),
-        (RouteStopKind.TIER, Tier.AI_AGENT),
-        (RouteStopKind.ASSIGNEE, None),
-    ]
-    agent = web_route.stops[2]
-    assert (agent.label, agent.outcome, agent.reason_code, agent.policy_rule_id) == (
-        "Agente de disputas",
-        RoutingOutcome.HANDED_OFF,
-        "R4_amount_over_limit",
-        "R4",
+        items = await reader.open_inbox(DANIELA)
+        closed = await reader.closed_inbox(DANIELA, now - CLOSED_INBOX_WINDOW)
+        counts = await reader.inbox_counts(
+            DANIELA, closed_since=now - CLOSED_INBOX_WINDOW, computed_at=now
+        )
+    names = [item.customer.display_name.split()[0] for item in items]
+    # new/to_reply by the oldest last interaction (Patricia 4 min, Marcela and Larissa 2 min,
+    # the older case first, Beatriz 1 min), then the case waiting on the customer.
+    assert names == ["Patricia", "Marcela", "Larissa", "Beatriz", "Joaquín"]
+    assert [c.customer.display_name.split()[0] for c in closed] == ["Héctor", "Claudia", "Patricia"]
+    assert (counts.all, counts.to_reply, counts.new, counts.waiting, counts.closed) == (
+        5,
+        2,
+        2,
+        1,
+        3,
     )
-    assert web_route.inputs_used == ("customers", "transactions", "interactions")
-    assert [s.kind for s in call_route.stops] == [
-        RouteStopKind.ENTRY,
-        RouteStopKind.QUEUE,
-        RouteStopKind.ASSIGNEE,
-    ]
-    assert call_route.stops[0].label == "IVR"
-    assert call_route.stops[1].waited_seconds == 133
-    assert call_route.stops[2].label == "Daniela Ríos"
-    assert call_route.inputs_used == ()
-
-
-def test_live_since_only_while_in_call() -> None:
-    live = replace(case_in(CaseStatus.IN_CALL), live_since=NOW)
-    assert summarize(live, "A").live_since == NOW
-    assert summarize(replace(live, status=CaseStatus.TO_CALL), "A").live_since is None
+    beatriz = items[3]
+    assert beatriz.unread_count == 3
+    assert beatriz.preview == "contesten!! qué mal servicio"
+    assert beatriz.first_response_at is None

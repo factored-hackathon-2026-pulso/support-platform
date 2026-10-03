@@ -19,7 +19,7 @@ export interface SegmentedControlProps<V extends string = string> {
   /** Accessible name of the group (rendered as a visually hidden legend). */
   label: string
   /**
-   * segmented: grey track with a white selected segment (tools selector).
+   * segmented: grey track with a white selected segment (compact selectors).
    * pills: transparent chips, the selected one is ink (status filters "Conectadas 12").
    */
   variant?: 'segmented' | 'pills'

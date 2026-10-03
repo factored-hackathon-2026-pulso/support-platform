@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CasesApi from '@/features/cases/api'
 import { fetchAvailability, fetchInbox, updateAvailability } from '@/features/cases/api'
 import { ApiProblem } from '@/lib/api'
-import { NOW, available, emptyInbox, makeInbox, paused, seededInbox } from '@/test/case-fixtures'
+import {
+  NOW,
+  available,
+  closedInbox,
+  emptyInbox,
+  makeInbox,
+  paused,
+  seededInbox,
+} from '@/test/case-fixtures'
 import { analystStaff } from '@/test/fixtures'
 import { renderRoute } from '@/test/render'
 
@@ -27,11 +35,13 @@ vi.mock('@/features/conversation', async () => {
   function ConversationPane({
     caseId,
     onClosed,
+    onOpenHistory,
     focusOnLoad,
     onFocused,
   }: {
     caseId: string
     onClosed?: (id: string) => void
+    onOpenHistory?: () => void
     focusOnLoad?: boolean
     onFocused?: () => void
   }) {
@@ -49,7 +59,38 @@ vi.mock('@/features/conversation', async () => {
         <button type="button" onClick={() => onClosed?.(caseId)}>
           Simular cierre
         </button>
+        <button type="button" onClick={() => onOpenHistory?.()}>
+          Casos anteriores (2)
+        </button>
       </section>
+    )
+  }
+  /** Stub sheet: shows what the Workspace passes and lets the test drive it. */
+  function CaseHistorySheet({
+    caseId,
+    customerName,
+    selected,
+    onSelect,
+    onClose,
+  }: {
+    caseId: string
+    customerName: string
+    selected: string
+    onSelect: (selected: string) => void
+    onClose: () => void
+  }) {
+    return (
+      <dialog open aria-label={`Casos anteriores de ${customerName}`}>
+        <p>
+          Historial de {caseId} · {selected}
+        </p>
+        <button type="button" onClick={() => onSelect('CASE-00000000000000000000000110')}>
+          Abrir caso 110
+        </button>
+        <button type="button" onClick={onClose}>
+          Cerrar historial
+        </button>
+      </dialog>
     )
   }
   return {
@@ -57,35 +98,34 @@ vi.mock('@/features/conversation', async () => {
       all: ['conversation'],
       detail: (caseId: string) => ['conversation', caseId, 'detail'],
       turns: (caseId: string) => ['conversation', caseId, 'turns'],
+      history: (caseId: string) => ['conversation', caseId, 'history'],
     },
     registerConversationRealtime: () => {},
     ConversationPane,
-    RoutingSummary: ({ caseId }: { caseId: string }) => <p>Cómo llegó a ti · {caseId}</p>,
+    CaseHistorySheet,
     useCaseDetail: (caseId: string | null) => ({
       status: 'success',
       isFetching: false,
       refetch: () => {},
-      data: {
-        customer: {
-          id: 'CUS-00000000000000000000001001',
-          displayName: caseId?.endsWith('102')
-            ? 'Beatriz Salcedo Prieto'
-            : 'Marcela Quintana Pardo',
-          segment: 'Plus',
-          country: 'CO',
-          city: 'Barranquilla',
-          locale: 'es-CO',
-          language: 'es',
-          customerSince: '2019-02-01',
-          documentType: 'CE',
-        },
-      },
+      data: caseId
+        ? {
+            customer: {
+              id: 'CUS-00000000000000000000001004',
+              displayName: 'Patricia Lozano Vega',
+              country: 'MX',
+              city: 'Guadalajara',
+              locale: 'es-MX',
+              language: 'es',
+            },
+          }
+        : undefined,
     }),
   }
 })
 
-const FIRST = 'CASE-00000000000000000000000101'
-const SECOND = 'CASE-00000000000000000000000102'
+// Order of Daniela's open inbox in the fixtures: Beatriz (102), Marcela (101), …
+const FIRST = 'CASE-00000000000000000000000102'
+const SECOND = 'CASE-00000000000000000000000101'
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -118,7 +158,7 @@ describe('/analista (Workspace)', () => {
     const { router, user } = renderWorkspace(`/analista?caso=${SECOND}`)
     expect(await screen.findByText(`Conversación ${SECOND}`)).toBeInTheDocument()
     const list = await screen.findByRole('list', { name: 'Casos' })
-    expect(within(list).getByRole('button', { name: /Beatriz Salcedo Prieto/ })).toHaveAttribute(
+    expect(within(list).getByRole('button', { name: /Marcela Quintana Pardo/ })).toHaveAttribute(
       'aria-current',
       'true',
     )
@@ -128,20 +168,48 @@ describe('/analista (Workspace)', () => {
     expect(screen.getByText('Conversación CASE-00000000000000000000000107')).toBeInTheDocument()
   })
 
-  it('restores the filter from ?estado= and keeps the filter in the URL', async () => {
-    const toCall = seededInbox.filter((item) => item.inboxStatus === 'to_call')
-    vi.mocked(fetchInbox).mockImplementation(async ({ status }) =>
-      status === 'to_call' ? makeInbox(toCall) : makeInbox(),
-    )
-    const { router, user } = renderWorkspace('/analista?estado=por-llamar')
-    expect(await screen.findByRole('radio', { name: '1 Por llamar' })).toBeChecked()
-    await screen.findByText('Conversación CASE-00000000000000000000000106')
-    expect(fetchInbox).toHaveBeenCalledWith({ status: 'to_call', q: '' }, expect.anything())
+  it('renders two columns: the list and the conversation, with no support panel', async () => {
+    renderWorkspace()
+    await screen.findByText(`Conversación ${FIRST}`)
+    expect(screen.getByRole('region', { name: 'Casos abiertos' })).toBeInTheDocument()
+    expect(screen.getByRole('main')).toBeInTheDocument()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    const filters = screen.getByRole('radiogroup', { name: 'Filtrar casos' })
+    for (const name of [
+      '5 Todos',
+      '2 Por responder',
+      '2 Nuevos',
+      '1 Esperando al cliente',
+      '3 Cerrados',
+    ]) {
+      expect(within(filters).getByRole('radio', { name })).toBeInTheDocument()
+    }
+  })
 
-    await user.click(screen.getByRole('radio', { name: '6 Todos' }))
+  it('opens Cerrados from ?estado=cerrados, read-only cards, and keeps the filter in the URL', async () => {
+    vi.mocked(fetchInbox).mockImplementation(async ({ status }) =>
+      status === 'closed' ? makeInbox(closedInbox) : makeInbox(),
+    )
+    const { router, user } = renderWorkspace('/analista?estado=cerrados')
+    expect(await screen.findByRole('radio', { name: '3 Cerrados' })).toBeChecked()
+    await screen.findByText('Conversación CASE-00000000000000000000000106')
+    expect(fetchInbox).toHaveBeenCalledWith({ status: 'closed', q: '' }, expect.anything())
+    const list = screen.getByRole('list', { name: 'Casos' })
+    expect(
+      within(list).getByRole('button', { name: /Héctor Villarreal Garza, Cerrado/ }),
+    ).toHaveTextContent('Cerrado hace 3 h')
+
+    await user.click(screen.getByRole('radio', { name: '5 Todos' }))
     expect(searchOf(router).get('estado')).toBeNull()
-    await user.click(screen.getByRole('radio', { name: '1 En espera' }))
-    expect(searchOf(router).get('estado')).toBe('en-espera')
+    await user.click(screen.getByRole('radio', { name: '1 Esperando al cliente' }))
+    expect(searchOf(router).get('estado')).toBe('esperando')
+  })
+
+  it('falls back to Todos for a removed filter slug', async () => {
+    renderWorkspace('/analista?estado=por-llamar')
+    expect(await screen.findByRole('radio', { name: '5 Todos' })).toBeChecked()
+    expect(fetchInbox).toHaveBeenCalledWith({ status: null, q: '' }, expect.anything())
   })
 
   it('keeps the search in the URL', async () => {
@@ -157,15 +225,14 @@ describe('/analista (Workspace)', () => {
     vi.mocked(fetchInbox).mockResolvedValue(emptyInbox)
     const { router } = renderWorkspace()
     expect(
-      await screen.findByRole('heading', { level: 2, name: 'No tienes contactos abiertos' }),
+      await screen.findByRole('heading', { level: 2, name: 'No tienes casos abiertos' }),
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Estás disponible. Cuando un agente escale un contacto que te corresponde, aparece aquí.',
+        'Estás disponible. Cuando un cliente escriba y te corresponda, aparece aquí.',
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('Nada pendiente.')).toBeInTheDocument()
-    expect(screen.queryByRole('complementary', { name: /Panel de apoyo/ })).not.toBeInTheDocument()
     expect(searchOf(router).get('caso')).toBeNull()
   })
 
@@ -248,89 +315,49 @@ describe('/analista (Workspace)', () => {
   })
 })
 
-describe('/analista support panel', () => {
-  it('opens on Copiloto with the slice 2 placeholder', async () => {
-    renderWorkspace()
-    const panel = await screen.findByRole('complementary', { name: 'Panel de apoyo' })
-    const tabs = within(panel).getByRole('tablist', { name: 'Paneles' })
-    expect(within(tabs).getByRole('tab', { name: 'Copiloto' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    expect(within(panel).getByText(/^Pregúntale lo que necesites sobre este cliente/)).toBeVisible()
-    expect(within(panel).getByText(/^Llega en la próxima entrega/)).toBeInTheDocument()
-    expect(within(panel).getByRole('textbox', { name: 'Pregúntale al copiloto' })).toBeDisabled()
-    expect(within(panel).getByRole('button', { name: 'Preguntar' })).toBeDisabled()
-  })
-
-  it('switches tabs through the URL (?panel=)', async () => {
+describe('/analista "Casos anteriores"', () => {
+  it('opens the history sheet through the URL and closes it again', async () => {
     const { router, user } = renderWorkspace()
-    const panel = await screen.findByRole('complementary', { name: 'Panel de apoyo' })
+    await screen.findByText(`Conversación ${FIRST}`)
+    await user.click(screen.getByRole('button', { name: 'Casos anteriores (2)' }))
+    expect(searchOf(router).get('historial')).toBe('lista')
+    const sheet = await screen.findByRole('dialog', {
+      name: 'Casos anteriores de Patricia Lozano Vega',
+    })
+    expect(sheet).toHaveTextContent(`Historial de ${FIRST} · lista`)
 
-    await user.click(within(panel).getByRole('tab', { name: 'Herramientas' }))
-    expect(searchOf(router).get('panel')).toBe('herramientas')
-    const toolTabs = within(panel).getByRole('tablist', { name: 'Tipo de herramienta' })
-    expect(
-      within(toolTabs)
-        .getAllByRole('tab')
-        .map((tab) => tab.textContent),
-    ).toEqual(['Acciones 0', 'Consultas 0', 'Hechas 0'])
-    expect(within(panel).getByText('No hay acciones para este caso.')).toBeInTheDocument()
-    await user.click(within(toolTabs).getByRole('tab', { name: /Hechas/ }))
-    expect(within(panel).getByText('Todavía no se hizo nada en este caso.')).toBeInTheDocument()
+    await user.click(within(sheet).getByRole('button', { name: 'Abrir caso 110' }))
+    expect(searchOf(router).get('historial')).toBe('CASE-00000000000000000000000110')
+    expect(router.state.historyAction).toBe('REPLACE')
 
-    await user.click(within(panel).getByRole('tab', { name: 'Cliente' }))
-    expect(searchOf(router).get('panel')).toBe('cliente')
-    expect(
-      within(panel).getByRole('heading', { level: 2, name: 'Marcela Quintana Pardo' }),
-    ).toBeInTheDocument()
-    expect(
-      within(panel).getByText('Plus · cliente desde feb 2019 · Barranquilla, Colombia'),
-    ).toBeInTheDocument()
-    expect(within(panel).getByText('CUS-00000000000000000000001001 · CE')).toBeInTheDocument()
-    expect(within(panel).getByText(`Cómo llegó a ti · ${FIRST}`)).toBeInTheDocument()
-    for (const section of [
-      'Productos',
-      'Reclamos',
-      'Contactos recientes',
-      'Contacto',
-      'Quién vio qué',
-    ]) {
-      expect(within(panel).getByRole('button', { name: section })).toHaveAttribute(
-        'aria-expanded',
-        'false',
-      )
-    }
+    await user.click(within(sheet).getByRole('button', { name: 'Cerrar historial' }))
+    expect(searchOf(router).get('historial')).toBeNull()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('collapses to an icon rail and reopens on a tab (panelContraido)', async () => {
-    const { router, user } = renderWorkspace()
-    const panel = await screen.findByRole('complementary', { name: 'Panel de apoyo' })
-    await user.click(within(panel).getByRole('button', { name: 'Contraer el panel' }))
-    expect(searchOf(router).get('apoyo')).toBe('contraido')
-
-    const rail = screen.getByRole('complementary', { name: 'Panel de apoyo, contraído' })
-    for (const name of ['Mostrar el panel', 'Copiloto', 'Herramientas', 'Cliente']) {
-      expect(within(rail).getByRole('button', { name })).toBeInTheDocument()
-    }
-    await user.click(within(rail).getByRole('button', { name: 'Cliente' }))
-    expect(searchOf(router).get('apoyo')).toBeNull()
-    expect(searchOf(router).get('panel')).toBe('cliente')
-    const reopened = screen.getByRole('complementary', { name: 'Panel de apoyo' })
-    expect(within(reopened).getByRole('tab', { name: 'Cliente' })).toHaveAttribute(
-      'aria-selected',
-      'true',
+  it('restores the sheet on a past case from the URL and drops it when another case is picked', async () => {
+    const { router, user } = renderWorkspace(
+      `/analista?caso=${FIRST}&historial=CASE-00000000000000000000000110`,
     )
+    expect(
+      await screen.findByText(`Historial de ${FIRST} · CASE-00000000000000000000000110`),
+    ).toBeInTheDocument()
+    const list = await screen.findByRole('list', { name: 'Casos' })
+    await user.click(within(list).getByRole('button', { name: /Joaquín Ferreyra Paz/ }))
+    expect(searchOf(router).get('caso')).toBe('CASE-00000000000000000000000107')
+    expect(searchOf(router).get('historial')).toBeNull()
   })
 
-  it('restores collapsed list and panel from the URL (contraida)', async () => {
-    renderWorkspace(`/analista?caso=${FIRST}&lista=contraida&apoyo=contraido`)
+  it('ignores the removed panel params and restores a collapsed list (contraida)', async () => {
+    const { router } = renderWorkspace(
+      `/analista?caso=${SECOND}&lista=contraida&panel=cliente&apoyo=contraido`,
+    )
     const rail = await screen.findByRole('region', { name: 'Casos, lista contraída' })
     expect(
       await within(rail).findByRole('button', { name: 'Marcela Quintana Pardo, Por responder' }),
     ).toHaveAttribute('aria-current', 'true')
-    expect(
-      screen.getByRole('complementary', { name: 'Panel de apoyo, contraído' }),
-    ).toBeInTheDocument()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    // The next URL write drops them.
+    expect(router.state.location.search).toContain('lista=contraida')
   })
 })

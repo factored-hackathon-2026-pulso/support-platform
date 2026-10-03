@@ -57,7 +57,7 @@ export function RequireSession() {
           as="h1"
           icon={<UserX size={40} strokeWidth={1.6} />}
           title="Tu cuenta no tiene un rol asignado"
-          description="Pide a Administración que te asigne un rol (analista, supervisora, automatización o administración)."
+          description="Pide a Administración que te asigne un rol (analista, supervisora o administración)."
           action={
             <Button variant="primary" onClick={signOut}>
               Cerrar sesión

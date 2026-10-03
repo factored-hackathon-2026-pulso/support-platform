@@ -3,13 +3,16 @@ import type { TranscriptItem } from '../model'
 
 export interface ChatTranscriptProps {
   items: readonly TranscriptItem[]
-  onRetry: (clientMessageId: string) => void
+  /** Re-send a failed message (absent in read-only transcripts). */
+  onRetry?: (clientMessageId: string) => void
+  /** Accessible name of the list (default "Mensajes"). */
+  label?: string
 }
 
-/** Chat layout: every turn in sequence order, then the messages still being sent. */
-export function ChatTranscript({ items, onRetry }: ChatTranscriptProps) {
+/** Every turn in sequence order, then the messages still being sent. */
+export function ChatTranscript({ items, onRetry, label = 'Mensajes' }: ChatTranscriptProps) {
   return (
-    <ol aria-label="Mensajes" className="m-0 flex list-none flex-col gap-2.5 p-0">
+    <ol aria-label={label} className="m-0 flex list-none flex-col gap-2.5 p-0">
       {items.map((item) => (
         <TranscriptMessage key={item.key} item={item} onRetry={onRetry} />
       ))}

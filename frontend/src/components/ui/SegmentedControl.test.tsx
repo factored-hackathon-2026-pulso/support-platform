@@ -14,13 +14,9 @@ describe('SegmentedControl', () => {
     const user = userEvent.setup()
     const onValueChange = vi.fn<(value: string) => void>()
     render(
-      <SegmentedControl
-        label="Tipo de herramienta"
-        options={OPTIONS}
-        onValueChange={onValueChange}
-      />,
+      <SegmentedControl label="Tipo de mensaje" options={OPTIONS} onValueChange={onValueChange} />,
     )
-    expect(screen.getByRole('group', { name: 'Tipo de herramienta' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Tipo de mensaje' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Acciones 3' })).toBeChecked()
 
     await user.click(screen.getByRole('radio', { name: 'Consultas 4' }))

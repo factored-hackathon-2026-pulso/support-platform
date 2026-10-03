@@ -1,12 +1,12 @@
 /**
- * Cases calls (docs/platform/api/slice-1-cases.md §3): the analyst inbox and the
+ * Cases calls (docs/platform/api/slice-2-case-lifecycle.md §5.1): the analyst inbox and the
  * analyst's own availability. The only module of the feature that talks to the
  * API client; tests mock it with `vi.mock('@/features/cases/api')`.
  */
 import { api, unwrap } from '@/lib/api'
 import type { Availability, AvailabilityStatus, InboxResponse, InboxStatus } from './types'
 
-/** Query keys (frozen by the contract §7.1). */
+/** Query keys (frozen by the contract, unchanged since slice 1). */
 export const caseKeys = {
   all: ['cases'] as const,
   inboxes: () => ['cases', 'inbox'] as const,
@@ -20,13 +20,13 @@ export const caseMutationKeys = {
 }
 
 export interface InboxParams {
-  /** `null` = Todos. */
+  /** `null` = Todos (the open cases); `closed` = Cerrados (the last 7 days). */
   status: InboxStatus | null
   /** Already trimmed; empty = no search. */
   q: string
 }
 
-/** GET /cases/inbox: the signed-in analyst's cases + counts over the whole inbox. */
+/** GET /cases/inbox: the signed-in analyst's cases + counts over the whole inbox (incl. Cerrados). */
 export async function fetchInbox(
   { status, q }: InboxParams,
   signal?: AbortSignal,

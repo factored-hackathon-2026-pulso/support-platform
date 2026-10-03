@@ -2,7 +2,7 @@
 
 Each job runs as its own task on the running loop; failures are logged, never raised to the
 publisher. ``drain()`` waits until no job is pending (tests, shutdown), including jobs
-spawned by jobs (e.g. routing a case whose commit triggers more work).
+spawned by jobs (e.g. a queue drain whose commits trigger more work).
 """
 
 from __future__ import annotations

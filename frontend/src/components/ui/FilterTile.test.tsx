@@ -29,13 +29,15 @@ function CaseFilters({ initial = 'all' }: { initial?: string | null }) {
 }
 
 describe('FilterTile', () => {
-  it('never ellipsises the label ("Por responder" reads whole at 320 px)', () => {
+  it('never ellipsises the label: a long one wraps to two lines', () => {
     render(<CaseFilters />)
     const label = screen.getByText('Por responder')
     // jsdom has no layout: the regression guard is the class contract (no
-    // truncate, nowrap, tight tracking; measured at 1280 and 1440 in a browser).
+    // truncate or nowrap, tight tracking and leading, so "Esperando al
+    // cliente" takes two lines in a 320 px list, three tiles per row).
     expect(label).not.toHaveClass('truncate')
-    expect(label).toHaveClass('whitespace-nowrap', 'tracking-tight')
+    expect(label).not.toHaveClass('whitespace-nowrap')
+    expect(label).toHaveClass('tracking-tight', 'leading-tight')
   })
 
   it('is a single-choice filter with aria-checked', async () => {

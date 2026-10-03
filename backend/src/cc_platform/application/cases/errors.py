@@ -6,7 +6,7 @@ from cc_platform.application.errors import ApplicationError
 
 
 class CaseNotAssignedError(ApplicationError):
-    """The case exists but the caller is not its assignee (nor a supervisor reading it)."""
+    """The case exists but the caller may not see it (read) or is not its assignee (write)."""
 
     code = "case_not_assigned"
-    default_message = "Este caso no está asignado a ti."
+    default_message = "No tienes acceso a este caso."

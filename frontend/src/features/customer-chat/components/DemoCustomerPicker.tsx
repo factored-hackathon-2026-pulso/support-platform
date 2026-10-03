@@ -9,7 +9,7 @@ import {
   Skeleton,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
-import { localeLabel, placeLabel } from '../model'
+import { closedConversationsLine, localeLabel, pickerBadge, placeLabel } from '../model'
 import { useDemoCustomers } from '../hooks'
 import type { DemoCustomer } from '../types'
 
@@ -89,6 +89,8 @@ function CustomerCard({
   disabled: boolean
   onPick: (customerId: string) => void
 }) {
+  const badge = pickerBadge(customer)
+  const past = closedConversationsLine(customer.closedConversationCount)
   return (
     <button
       type="button"
@@ -103,16 +105,15 @@ function CustomerCard({
     >
       <span className="flex w-full items-start justify-between gap-2">
         <span className="text-16 font-semibold">{customer.displayName}</span>
-        {customer.openConversation ? (
-          <Badge tone="success" size="sm">
-            Conversación abierta
+        {badge ? (
+          <Badge tone={badge.tone} size="sm">
+            {badge.text}
           </Badge>
         ) : null}
       </span>
       <span className="text-13 text-ink-2">{localeLabel(customer.locale)}</span>
-      <span className="text-13 text-ink-2">
-        {placeLabel(customer.city, customer.country)} · {customer.segment}
-      </span>
+      <span className="text-13 text-ink-2">{placeLabel(customer.city, customer.country)}</span>
+      {past ? <span className="text-12 text-muted">{past}</span> : null}
       {busy ? <span className="text-12 text-muted">Abriendo sesión…</span> : null}
     </button>
   )

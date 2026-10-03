@@ -39,14 +39,46 @@ def test_customer_routes_use_the_customer_scheme() -> None:
     customer = "/api/v1/customer"
     assert paths[f"{customer}/conversation"]["get"]["security"] == [{"CustomerToken": []}]
     assert paths[f"{customer}/conversation/turns"]["post"]["security"] == [{"CustomerToken": []}]
+    assert paths[f"{customer}/conversations"]["get"]["security"] == [{"CustomerToken": []}]
+    assert paths[f"{customer}/conversations/{{caseId}}"]["get"]["security"] == [
+        {"CustomerToken": []}
+    ]
     assert "security" not in paths[f"{customer}/demo-customers"]["get"]
     assert "security" not in paths[f"{customer}/sessions"]["post"]
     assert paths["/api/v1/cases/inbox"]["get"]["security"] == [{"SessionToken": []}]
 
 
-def test_slice_1_response_members_are_always_present() -> None:
+RESPONSE_SCHEMAS = (
+    "CaseSummary", "InboxCounts", "CaseDetail", "CaseCustomer", "AssignmentOut", "CaseClosure",
+    "CaseHistory", "CaseHistoryItem", "Turn", "CustomerTurn", "CustomerConversation",
+    "CustomerConversationResponse", "CustomerConversationSummary", "CustomerConversationDetail",
+    "DemoCustomer", "StaffOut",
+)  # fmt: skip
+
+
+def test_response_members_are_always_present() -> None:
     """``T | null`` members are required in the schema, so generated types have no ``?``."""
     schemas = build_openapi()["components"]["schemas"]
-    for name in ("CaseSummary", "CaseDetail", "Turn", "RouteStop", "CustomerTurn", "DemoCustomer"):
+    for name in RESPONSE_SCHEMAS:
         schema = schemas[name]
         assert set(schema["required"]) == set(schema["properties"]), name
+
+
+def test_removed_scope_is_gone_from_the_contract() -> None:
+    document = build_openapi()
+    schemas = document["components"]["schemas"]
+    for removed in ("RouteStop", "RoutingSummary", "ChannelIdentity", "CustomerProfile"):
+        assert removed not in schemas
+    assert schemas["CaseChannel"]["enum"] == ["app_chat", "web_chat"]
+    assert schemas["CaseStatus"]["enum"] == ["queued", "assigned", "in_progress", "closed"]
+    assert schemas["InboxStatus"]["enum"] == ["new", "to_reply", "waiting", "closed"]
+    assert schemas["StaffRole"]["enum"] == ["analyst", "supervisor", "admin"]
+    assert set(schemas["ProblemCode"]["enum"]) == {
+        "invalid_credentials", "mfa_invalid", "mfa_challenge_invalid", "account_locked",
+        "unauthenticated", "session_expired", "forbidden", "not_found", "method_not_allowed",
+        "conflict", "concurrent_update", "invalid_transition", "case_not_assigned", "case_closed",
+        "idempotency_conflict", "invalid_value", "policy_violation", "validation_error",
+        "domain_error", "application_error", "invalid_topic", "invalid_message", "http_error",
+        "internal_error",
+    }  # fmt: skip
+    assert set(schemas["CloseCaseRequest"]["required"]) == {"reason", "note"}

@@ -8,6 +8,7 @@ import {
   fakeCustomerToken,
   makeCustomerConversation,
   makeCustomerTurn,
+  makePastSummary,
   SIM_CASE_ID,
   SIM_CUSTOMER_ID,
 } from '@/test/conversation-fixtures'
@@ -25,6 +26,8 @@ vi.mock('../api', async (importOriginal) => {
     createCustomerSession: vi.fn<typeof actual.createCustomerSession>(),
     fetchCustomerConversation: vi.fn<typeof actual.fetchCustomerConversation>(),
     postCustomerTurn: vi.fn<typeof actual.postCustomerTurn>(),
+    listPastConversations: vi.fn<typeof actual.listPastConversations>(),
+    fetchPastConversation: vi.fn<typeof actual.fetchPastConversation>(),
   }
 })
 
@@ -43,7 +46,11 @@ function renderSimulator() {
 
 beforeEach(() => {
   vi.mocked(api.listDemoCustomers).mockResolvedValue({ items: demoCustomers })
-  vi.mocked(api.fetchCustomerConversation).mockResolvedValue({ conversation: null, turns: [] })
+  vi.mocked(api.fetchCustomerConversation).mockResolvedValue({
+    conversation: null,
+    turns: [],
+    pastConversationCount: 0,
+  })
 })
 
 describe('CustomerSimulatorScreen · picker', () => {
@@ -70,11 +77,16 @@ describe('CustomerSimulatorScreen · picker', () => {
     expect(within(joaquin).getByText('Conversación abierta')).toBeInTheDocument()
     const rafael = screen.getByRole('button', { name: /Rafael Nogueira Costa/ })
     expect(within(rafael).getByText('Portugués de Brasil')).toBeInTheDocument()
-    expect(within(rafael).getByText('Buenos Aires, Argentina · Plus')).toBeInTheDocument()
+    expect(within(rafael).getByText('Buenos Aires, Argentina')).toBeInTheDocument()
+    expect(rafael).not.toHaveTextContent(/conversaci(ó|o)n(es)? anterior/)
+    const claudia = screen.getByRole('button', { name: /Claudia Restrepo Varela/ })
+    expect(within(claudia).getByText('1 conversación anterior')).toBeInTheDocument()
+    const gabriela = screen.getByRole('button', { name: /Gabriela Duarte Melo/ })
+    expect(within(gabriela).getByText('Esperando a una persona')).toBeInTheDocument()
 
     await user.click(rafael)
     expect(api.createCustomerSession).toHaveBeenCalledWith({ customerId: SIM_CUSTOMER_ID })
-    expect(await screen.findByText('Soporte')).toBeInTheDocument()
+    expect(await screen.findByText('Suporte')).toBeInTheDocument()
     expect(customerSessionToken.get()).toBe(issued)
     // The staff session is untouched.
     expect(sessionToken.get()).toBeNull()
@@ -109,9 +121,12 @@ describe('CustomerSimulatorScreen · chat', () => {
     const { user, customerSockets } = renderSimulator()
 
     expect(await screen.findByText('Hablando como')).toBeInTheDocument()
-    expect(
-      await screen.findByText(/Escribe tu mensaje y te responde una persona/),
-    ).toBeInTheDocument()
+    // Rafael (pt-BR): the chat speaks Portuguese; the simulator chrome stays in Spanish.
+    const status = await screen.findByText(/Escreva sua mensagem e uma pessoa da equipe/)
+    expect(status.closest('[lang]')).toHaveAttribute('lang', 'pt-BR')
+    expect(screen.getByText('Suporte')).toBeInTheDocument()
+    expect(screen.getByText('Olá, como podemos ajudar?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cambiar de cliente' })).toBeInTheDocument()
 
     const socket = customerSockets.last()
     expect(socket?.url).toContain(encodeURIComponent(stored))
@@ -125,7 +140,7 @@ describe('CustomerSimulatorScreen · chat', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Olá, não reconheço uma compra no meu cartão' }),
     )
-    const input = screen.getByRole('textbox', { name: 'Escribe tu mensaje' })
+    const input = screen.getByRole('textbox', { name: 'Escreva sua mensagem' })
     expect(input).toHaveValue('Olá, não reconheço uma compra no meu cartão')
     await user.click(screen.getByRole('button', { name: 'Enviar' }))
     expect(input).toHaveValue('')
@@ -133,7 +148,7 @@ describe('CustomerSimulatorScreen · chat', () => {
     expect(input).toHaveFocus()
     expect(screen.getByText('Enviando…')).toBeInTheDocument()
     // No chips while a message is on its way.
-    expect(screen.queryByRole('group', { name: 'Sugerencias' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Sugestões' })).not.toBeInTheDocument()
 
     const body = vi.mocked(api.postCustomerTurn).mock.calls[0]![0]
     const turn = makeCustomerTurn({
@@ -144,7 +159,7 @@ describe('CustomerSimulatorScreen · chat', () => {
     await act(async () =>
       resolvePost({ turn, conversation: makeCustomerConversation(), caseCreated: true }),
     )
-    expect(await screen.findByText('Buscando a una persona del equipo…')).toBeInTheDocument()
+    expect(await screen.findByText('Procurando uma pessoa da equipe…')).toBeInTheDocument()
     expect(screen.queryByText('Enviando…')).not.toBeInTheDocument()
 
     // Echo + server notice + the analyst's reply, live.
@@ -184,11 +199,11 @@ describe('CustomerSimulatorScreen · chat', () => {
     })
     expect(await screen.findByText('Olá, Rafael! Vou verificar.')).toBeInTheDocument()
     expect(screen.getByText('Daniela · LATAM Bank')).toBeInTheDocument()
-    expect(screen.getByText('Te atiende Daniela · LATAM Bank')).toBeInTheDocument()
+    expect(screen.getByText('Você está falando com Daniela · LATAM Bank')).toBeInTheDocument()
     expect(screen.getByText('Recebemos sua mensagem.')).toBeInTheDocument()
     // POST response + echo = one bubble; the chip already sent is not offered again.
     expect(screen.getAllByText('Olá, não reconheço uma compra no meu cartão')).toHaveLength(1)
-    const chips = screen.getByRole('group', { name: 'Sugerencias' })
+    const chips = screen.getByRole('group', { name: 'Sugestões' })
     expect(
       within(chips)
         .getAllByRole('button')
@@ -218,6 +233,7 @@ describe('CustomerSimulatorScreen · chat', () => {
           text: '¿Me contás cuándo fue y de cuánto?',
         }),
       ],
+      pastConversationCount: 0,
     })
     const { user } = renderSimulator()
     expect(await screen.findByText('Te atiende Daniela · LATAM Bank')).toBeInTheDocument()
@@ -241,15 +257,16 @@ describe('CustomerSimulatorScreen · chat', () => {
     vi.mocked(api.fetchCustomerConversation).mockResolvedValue({
       conversation: makeCustomerConversation(),
       turns: [makeCustomerTurn({ sequence: 1 })],
+      pastConversationCount: 0,
     })
     const { user } = renderSimulator()
     // No log while loading (the skeleton is not announced), then one with the history.
     expect(screen.queryByRole('log')).not.toBeInTheDocument()
-    const log = await screen.findByRole('log', { name: 'Conversación con soporte' })
+    const log = await screen.findByRole('log', { name: 'Conversa com o suporte' })
     expect(log).toHaveAttribute('aria-relevant', 'additions')
     expect(within(log).getByText('Olá, não reconheço uma compra no meu cartão')).toBeInTheDocument()
 
-    await user.type(screen.getByRole('textbox', { name: 'Escribe tu mensaje' }), 'oi{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Escreva sua mensagem' }), 'oi{Enter}')
     const sending = within(log).getByText('oi').closest('li')
     const body = vi.mocked(api.postCustomerTurn).mock.calls[0]![0]
     await act(async () =>
@@ -271,7 +288,7 @@ describe('CustomerSimulatorScreen · chat', () => {
       () => new Promise((resolve) => resolvers.push(resolve)),
     )
     const { user } = renderSimulator()
-    const input = await screen.findByRole('textbox', { name: 'Escribe tu mensaje' })
+    const input = await screen.findByRole('textbox', { name: 'Escreva sua mensagem' })
     await user.type(input, 'hola?{Enter}')
     await user.type(input, 'hola??{Enter}')
     await user.type(input, 'contesten!!{Enter}')
@@ -300,9 +317,9 @@ describe('CustomerSimulatorScreen · chat', () => {
     customerSessionToken.set(token())
     vi.mocked(api.postCustomerTurn).mockRejectedValueOnce(ApiProblem.network())
     const { user } = renderSimulator()
-    const input = await screen.findByRole('textbox', { name: 'Escribe tu mensaje' })
+    const input = await screen.findByRole('textbox', { name: 'Escreva sua mensagem' })
     await user.type(input, 'Quero falar com uma pessoa{Enter}')
-    expect(await screen.findByText(/No se envió/)).toBeInTheDocument()
+    expect(await screen.findByText(/Não enviada/)).toBeInTheDocument()
 
     const firstId = vi.mocked(api.postCustomerTurn).mock.calls[0]![0].clientMessageId
     vi.mocked(api.postCustomerTurn).mockResolvedValueOnce({
@@ -314,8 +331,8 @@ describe('CustomerSimulatorScreen · chat', () => {
       conversation: makeCustomerConversation(),
       caseCreated: true,
     })
-    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
-    await waitFor(() => expect(screen.queryByText(/No se envió/)).not.toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Tentar de novo' }))
+    await waitFor(() => expect(screen.queryByText(/Não enviada/)).not.toBeInTheDocument())
     expect(vi.mocked(api.postCustomerTurn).mock.calls[1]![0].clientMessageId).toBe(firstId)
     expect(screen.getAllByText('Quero falar com uma pessoa')).toHaveLength(1)
   })
@@ -336,9 +353,10 @@ describe('CustomerSimulatorScreen · chat', () => {
           text: 'A conversa foi encerrada. Obrigado por falar com o LATAM Bank.',
         }),
       ],
+      pastConversationCount: 0,
     })
     const { user } = renderSimulator()
-    expect(await screen.findByText('Conversación terminada')).toBeInTheDocument()
+    expect(await screen.findByText('Conversa encerrada')).toBeInTheDocument()
     expect(screen.getByText(/A conversa foi encerrada/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Cambiar de cliente' }))
@@ -346,6 +364,151 @@ describe('CustomerSimulatorScreen · chat', () => {
       await screen.findByRole('heading', { name: 'Elige un cliente de ejemplo' }),
     ).toBeInTheDocument()
     expect(customerSessionToken.get()).toBeNull()
+  })
+
+  it('shows past conversations on demand, oldest at the top, and opens one read-only', async () => {
+    const claudia = 'CUS-00000000000000000000001005'
+    customerSessionToken.set(fakeCustomerToken(claudia))
+    vi.mocked(api.fetchCustomerConversation).mockResolvedValue({
+      conversation: makeCustomerConversation({
+        caseId: 'CASE-00000000000000000000009100',
+        status: 'with_agent',
+        agentName: 'Daniela',
+        language: 'es',
+      }),
+      turns: [makeCustomerTurn({ sequence: 1, language: 'es', text: 'Hola de nuevo' })],
+      pastConversationCount: 2,
+    })
+    vi.mocked(api.listPastConversations).mockResolvedValue({
+      items: [
+        makePastSummary(),
+        makePastSummary({
+          caseId: 'CASE-00000000000000000000000099',
+          openedAt: '2026-02-10T13:00:00Z',
+          agentName: 'Julián',
+          preview: 'Gracias, ya quedó.',
+        }),
+      ],
+    })
+    vi.mocked(api.fetchPastConversation).mockResolvedValue({
+      conversation: makeCustomerConversation({
+        caseId: 'CASE-00000000000000000000000105',
+        status: 'closed',
+        agentName: 'Daniela',
+        language: 'es',
+      }),
+      turns: [
+        makeCustomerTurn({
+          sequence: 1,
+          language: 'es',
+          text: 'Hola, necesito ayuda con un cargo',
+        }),
+        makeCustomerTurn({
+          sequence: 4,
+          language: 'es',
+          authorRole: 'analyst',
+          authorName: 'Daniela',
+          text: '¿Me cuenta qué cargo es y de qué fecha?',
+        }),
+      ],
+    })
+    const { user } = renderSimulator()
+    const button = await screen.findByRole('button', {
+      name: 'Ver conversaciones anteriores (2)',
+    })
+    expect(api.listPastConversations).not.toHaveBeenCalled()
+    await user.click(button)
+
+    const past = await screen.findByRole('region', { name: 'Conversaciones anteriores' })
+    const blocks = within(past).getAllByRole('button', { expanded: false })
+    // The button is gone: the focus moves to the first loaded block, not to <body>.
+    expect(blocks[0]).toHaveFocus()
+    expect(blocks.map((block) => block.textContent)).toEqual([
+      'Conversación del 10 feb 2026 · Terminada · Te atendió JuliánGracias, ya quedó.',
+      'Conversación del 4 mar 2026 · Terminada · Te atendió DanielaHola, Claudia. Soy Daniela, de LATAM Bank. ¿Me cuenta qué cargo es y de qué fecha?',
+    ])
+    // Past conversations sit outside the live log.
+    expect(screen.getByRole('log')).not.toContainElement(past)
+
+    await user.click(blocks[1]!)
+    expect(blocks[1]).toHaveAttribute('aria-expanded', 'true')
+    expect(await within(past).findByText('Hola, necesito ayuda con un cargo')).toBeInTheDocument()
+    expect(api.fetchPastConversation).toHaveBeenCalledWith(
+      'CASE-00000000000000000000000105',
+      expect.anything(),
+    )
+    expect(
+      screen.queryByRole('button', { name: /Ver conversaciones anteriores/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('writing after a close starts a new conversation and keeps the closed one above', async () => {
+    customerSessionToken.set(token())
+    vi.mocked(api.fetchCustomerConversation).mockResolvedValue({
+      conversation: makeCustomerConversation({
+        status: 'closed',
+        agentName: 'Daniela',
+        closedAt: '2026-03-05T17:00:00Z',
+      }),
+      turns: [
+        makeCustomerTurn({ sequence: 1 }),
+        makeCustomerTurn({
+          sequence: 6,
+          kind: 'notice',
+          authorRole: 'system',
+          text: 'A conversa foi encerrada. Se precisar de algo mais, escreva para nós e abrimos uma nova conversa.',
+        }),
+      ],
+      pastConversationCount: 0,
+    })
+    const next = makeCustomerConversation({
+      caseId: 'CASE-00000000000000000000009002',
+      openedAt: '2026-03-05T17:30:00Z',
+      previousCaseId: SIM_CASE_ID,
+      lastSequence: 1,
+    })
+    vi.mocked(api.postCustomerTurn).mockImplementation(async (body) => ({
+      turn: makeCustomerTurn({
+        id: 'TRN-NEW-1',
+        sequence: 1,
+        text: body.text,
+        clientMessageId: body.clientMessageId,
+      }),
+      conversation: next,
+      caseCreated: true,
+    }))
+    const { user } = renderSimulator()
+    expect(await screen.findByText('Conversa encerrada')).toBeInTheDocument()
+    expect(
+      screen.getByText('Esta conversa terminou. Se você escrever, começamos uma nova.'),
+    ).toBeInTheDocument()
+    const input = screen.getByRole('textbox', { name: 'Escreva sua mensagem' })
+    expect(input).toBeEnabled()
+    expect(input).toHaveAttribute('placeholder', 'Escreva para começar uma nova conversa')
+
+    // The next refetch answers with the new conversation.
+    vi.mocked(api.fetchCustomerConversation).mockResolvedValue({
+      conversation: next,
+      turns: [makeCustomerTurn({ id: 'TRN-NEW-1', sequence: 1, text: 'Oi de novo' })],
+      pastConversationCount: 1,
+    })
+    await user.type(input, 'Oi de novo{Enter}')
+
+    expect(await screen.findByText('Procurando uma pessoa da equipe…')).toBeInTheDocument()
+    const past = screen.getByRole('region', { name: 'Conversas anteriores' })
+    const block = within(past).getByRole('button', { expanded: true })
+    expect(block).toHaveTextContent('Encerrada · Atendida por Daniela')
+    expect(within(past).getByText(/A conversa foi encerrada/)).toBeInTheDocument()
+    const log = screen.getByRole('log', { name: 'Conversa com o suporte' })
+    expect(within(log).getByText('Oi de novo')).toBeInTheDocument()
+    expect(within(log).queryByText(/A conversa foi encerrada/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Esta conversa terminou. Se você escrever, começamos uma nova.'),
+    ).not.toBeInTheDocument()
+    // Already on screen: no "Ver conversaciones anteriores" for it.
+    expect(
+      screen.queryByRole('button', { name: /Ver conversas anteriores/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('drops an expired stored token', async () => {

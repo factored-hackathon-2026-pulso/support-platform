@@ -6,7 +6,7 @@ from datetime import timedelta
 from fastapi.testclient import TestClient
 
 from cc_platform.infrastructure.clock import FixedClock
-from tests.support import ANALYST, AUTOMATION_ADMIN, DEV_MFA_CODE, PASSWORD, bearer
+from tests.support import ADMIN_ONLY, ANALYST, DEV_MFA_CODE, PASSWORD, TEAM_LEAD, bearer
 
 PROBLEM = "application/problem+json"
 
@@ -37,10 +37,8 @@ def test_full_login_flow_returns_session_and_staff(client: TestClient, clock: Fi
         "name": "Daniela Ríos",
         "email": "daniela.rios@latambank.example",
         "roles": ["analyst"],
-        "level": "Specialist",
         "languages": ["es", "pt"],
         "team": "Disputas · Equipo Andes",
-        "requiresFourEyes": False,
     }
 
     me = client.get("/api/v1/auth/me", headers=bearer(session["token"]))
@@ -145,8 +143,12 @@ def test_session_expires_with_the_clock(
 
 
 def test_logout_revokes_the_token(client: TestClient, sign_in: Callable[[str], str]) -> None:
-    token = sign_in(AUTOMATION_ADMIN.email)
-    assert client.get("/api/v1/auth/me", headers=bearer(token)).json()["staff"]["requiresFourEyes"]
+    token = sign_in(ADMIN_ONLY.email)
+    assert client.get("/api/v1/auth/me", headers=bearer(token)).json()["staff"]["roles"] == [
+        "admin"
+    ]
+    lead = client.get("/api/v1/auth/me", headers=bearer(sign_in(TEAM_LEAD.email))).json()
+    assert lead["staff"]["roles"] == ["analyst", "supervisor"]  # combinable roles
 
     assert client.post("/api/v1/auth/logout", headers=bearer(token)).status_code == 204
     after = client.get("/api/v1/auth/me", headers=bearer(token))

@@ -22,7 +22,7 @@ export interface AccordionProps {
 }
 
 /**
- * Single-open accordion (the client file: PRODUCTOS · RECLAMOS · CONTACTO…).
+ * Single-open accordion (one section open at a time).
  * Opening one section closes the others.
  */
 export function Accordion({

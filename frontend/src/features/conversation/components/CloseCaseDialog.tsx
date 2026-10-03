@@ -1,18 +1,20 @@
-import { useState } from 'react'
-import { Button, Callout, Checkbox, Dialog, Field, SegmentedControl, Select } from '@/components/ui'
+import { useRef, useState } from 'react'
+import { Button, Callout, Dialog, Field, RadioGroup, Textarea } from '@/components/ui'
+import { CLOSE_REASONS, type CloseReason } from '@/features/cases'
 import {
-  CONTACT_REASON_OPTIONS,
-  describeCloseFailure,
-  FOLLOW_UP_OPTIONS,
+  CLOSED_NOTICE,
+  CLOSE_NOTE_MAX_LENGTH,
   INITIAL_CLOSE_FORM,
-  RESOLUTION_OPTIONS,
+  describeCloseFailure,
+  noteCounter,
+  shortCaseId,
   toCloseRequest,
   validateCloseForm,
   type CloseCaseForm,
   type CloseFormErrors,
 } from '../model'
 import { useCloseCase } from '../hooks/use-close-case'
-import type { CaseSummary, ContactReason, FollowUp, ResolutionCode } from '../types'
+import type { CaseSummary } from '../types'
 
 export interface CloseCaseDialogProps {
   summary: CaseSummary
@@ -21,25 +23,27 @@ export interface CloseCaseDialogProps {
   onClosed?: (caseId: string) => void
 }
 
-type ResultValue = 'resolved' | 'unresolved'
-
-const RESULT_OPTIONS = [
-  { value: 'resolved', label: 'Resuelto' },
-  { value: 'unresolved', label: 'Sin resolver' },
-] as const satisfies ReadonlyArray<{ value: ResultValue; label: string }>
-
 /**
- * "Cerrar caso" (canvas `cerrar`): result, contact reason, follow-up, what was
- * done and the satisfaction survey. Saved in the platform history (`case_close`).
+ * "Cerrar caso" (contract §9.5): a required reason from the fixed list, an
+ * optional internal note (≤ 500 characters, only staff see it) and a preview
+ * of the notice the customer will get, in the case language. The customer never
+ * sees the reason or the note.
  */
 export function CloseCaseDialog({ summary, open, onOpenChange, onClosed }: CloseCaseDialogProps) {
   const close = useCloseCase(summary.id)
   const [form, setForm] = useState<CloseCaseForm>(INITIAL_CLOSE_FORM)
   const [errors, setErrors] = useState<CloseFormErrors>({})
+  const reasonsRef = useRef<HTMLDivElement>(null)
+  const noteRef = useRef<HTMLTextAreaElement>(null)
+  const noteTooLong = form.note.trim().length > CLOSE_NOTE_MAX_LENGTH
 
   function update(patch: Partial<CloseCaseForm>) {
     setForm((current) => ({ ...current, ...patch }))
-    if ('resolved' in patch) setErrors((current) => ({ ...current, resolved: undefined }))
+    setErrors((current) => {
+      const next = { ...current }
+      for (const key of Object.keys(patch) as (keyof CloseCaseForm)[]) delete next[key]
+      return next
+    })
   }
 
   function changeOpen(next: boolean) {
@@ -54,17 +58,22 @@ export function CloseCaseDialog({ summary, open, onOpenChange, onClosed }: Close
   function submit() {
     const found = validateCloseForm(form)
     setErrors(found)
-    if (Object.keys(found).length > 0) return
-    close.mutate(toCloseRequest(form), {
+    // A failed validation focuses the first invalid control (its error is its description).
+    if (found.reason) {
+      reasonsRef.current?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus()
+      return
+    }
+    if (found.note || form.reason === null) {
+      noteRef.current?.focus()
+      return
+    }
+    close.mutate(toCloseRequest({ ...form, reason: form.reason }), {
       onSuccess: () => {
         changeOpen(false)
         onClosed?.(summary.id)
       },
     })
   }
-
-  const result: ResultValue | '' =
-    form.resolved === null ? '' : form.resolved ? 'resolved' : 'unresolved'
 
   return (
     <Dialog
@@ -73,10 +82,12 @@ export function CloseCaseDialog({ summary, open, onOpenChange, onClosed }: Close
       title="Cerrar caso"
       description={
         <>
-          {summary.customer.displayName} · <span className="font-mono text-12">{summary.id}</span>
+          {summary.customer.displayName} ·{' '}
+          <span className="font-mono text-12" title={summary.id}>
+            {shortCaseId(summary.id)}
+          </span>
         </>
       }
-      footerNote="Se guarda en el histórico de la plataforma"
       footer={
         <>
           <Button variant="secondary" onClick={() => changeOpen(false)}>
@@ -88,54 +99,39 @@ export function CloseCaseDialog({ summary, open, onOpenChange, onClosed }: Close
         </>
       }
     >
-      <div className="flex flex-col gap-3.5">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-13 font-semibold" aria-hidden="true">
-            Resultado
-          </span>
-          <SegmentedControl<ResultValue>
-            label="Resultado"
-            options={RESULT_OPTIONS}
-            value={result as ResultValue}
-            onValueChange={(value) => update({ resolved: value === 'resolved' })}
+      <div className="flex flex-col gap-4">
+        <div ref={reasonsRef}>
+          <RadioGroup<CloseReason>
+            label="Motivo"
+            required
+            options={CLOSE_REASONS}
+            value={form.reason}
+            error={errors.reason}
+            onValueChange={(reason) => update({ reason })}
           />
-          {errors.resolved ? (
-            <span className="text-13 font-medium text-danger-strong" role="alert">
-              {errors.resolved}
+        </div>
+        <Field
+          label="Nota interna (opcional)"
+          hint="Solo la ve el equipo."
+          error={
+            errors.note ?? (noteTooLong ? 'La nota puede tener hasta 500 caracteres.' : undefined)
+          }
+          labelAside={
+            <span className={noteTooLong ? 'text-12 text-danger-strong' : 'text-12 text-muted'}>
+              {noteCounter(form.note)}
             </span>
-          ) : null}
-        </div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <Field label="Motivo del contacto">
-            <Select
-              options={CONTACT_REASON_OPTIONS}
-              value={form.contactReason}
-              onChange={(event) => update({ contactReason: event.target.value as ContactReason })}
-            />
-          </Field>
-          <Field label="Seguimiento">
-            <Select
-              options={FOLLOW_UP_OPTIONS}
-              value={form.followUp}
-              onChange={(event) => update({ followUp: event.target.value as FollowUp })}
-            />
-          </Field>
-        </div>
-        <Field label="Qué se hizo">
-          <Select
-            options={RESOLUTION_OPTIONS}
-            placeholder="Elige una opción"
-            value={form.resolutionCode}
-            onChange={(event) =>
-              update({ resolutionCode: event.target.value as ResolutionCode | '' })
-            }
+          }
+        >
+          <Textarea
+            ref={noteRef}
+            rows={3}
+            value={form.note}
+            onChange={(event) => update({ note: event.target.value })}
           />
         </Field>
-        <Checkbox
-          label="Enviarle la encuesta de satisfacción al cerrar"
-          checked={form.sendCsatSurvey}
-          onChange={(event) => update({ sendCsatSurvey: event.target.checked })}
-        />
+        <Callout tone="neutral" title="El cliente verá">
+          <span lang={summary.language}>{CLOSED_NOTICE[summary.language]}</span>
+        </Callout>
         {close.isError ? (
           <Callout tone="danger" title="No se cerró el caso">
             {describeCloseFailure(close.error)}

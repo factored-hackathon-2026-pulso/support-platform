@@ -8,10 +8,12 @@ import { ApiProblem } from '@/lib/api'
 import {
   NOW,
   available,
+  closedInbox,
   emptyInbox,
   makeCaseSummary,
   makeInbox,
   paused,
+  seededInbox,
 } from '@/test/case-fixtures'
 import { analystStaff } from '@/test/fixtures'
 import { renderWithProviders } from '@/test/render'
@@ -32,9 +34,15 @@ const onQueryChange = vi.fn<(query: string) => void>()
 const onCollapsedChange = vi.fn<(collapsed: boolean) => void>()
 
 /** Controlled like the Workspace does it, with the callbacks spied. */
-function Harness({ collapsed: initialCollapsed = false }: { collapsed?: boolean }) {
+function Harness({
+  collapsed: initialCollapsed = false,
+  filter: initialFilter = null,
+}: {
+  collapsed?: boolean
+  filter?: InboxStatus | null
+}) {
   const [selected, setSelected] = useState<string | null>('CASE-00000000000000000000000101')
-  const [filter, setFilter] = useState<InboxStatus | null>(null)
+  const [filter, setFilter] = useState<InboxStatus | null>(initialFilter)
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   return (
@@ -63,7 +71,7 @@ function Harness({ collapsed: initialCollapsed = false }: { collapsed?: boolean 
   )
 }
 
-function renderPanel(options: { collapsed?: boolean } = {}) {
+function renderPanel(options: { collapsed?: boolean; filter?: InboxStatus | null } = {}) {
   return renderWithProviders(<Harness {...options} />, { staff: analystStaff, route: '/analista' })
 }
 
@@ -87,49 +95,78 @@ afterEach(() => {
 })
 
 describe('CaseListPanel', () => {
-  it('renders the title, the counters as filters and one card per status', async () => {
+  it('renders the title, the five counters as filters and one card per open case', async () => {
     renderPanel()
     expect(screen.getByRole('heading', { level: 1, name: 'Casos' })).toBeInTheDocument()
     const filters = screen.getByRole('radiogroup', { name: 'Filtrar casos' })
-    await within(filters).findByRole('radio', { name: '6 Todos' })
-    for (const name of [
-      '2 Por responder',
-      '1 En curso',
-      '1 Nuevos',
-      '1 Por llamar',
-      '1 En espera',
-    ]) {
-      expect(within(filters).getByRole('radio', { name })).toBeInTheDocument()
-    }
-    expect(within(filters).getByRole('radio', { name: '6 Todos' })).toBeChecked()
+    await within(filters).findByRole('radio', { name: '5 Todos' })
+    expect(
+      within(filters)
+        .getAllByRole('radio')
+        .map((radio) => radio.parentElement?.textContent),
+    ).toEqual(['5 Todos', '2 Por responder', '2 Nuevos', '1 Esperando al cliente', '3 Cerrados'])
+    expect(within(filters).getByRole('radio', { name: '5 Todos' })).toBeChecked()
 
-    expect(within(caseList()).getAllByRole('button')).toHaveLength(6)
+    expect(within(caseList()).getAllByRole('button')).toHaveLength(5)
     expect(card(/Marcela Quintana Pardo, Por responder/)).toHaveAttribute('title', 'Por responder')
-    expect(card(/Claudia Restrepo Varela, En llamada/)).toHaveTextContent('En llamada · 04:06')
-    expect(card(/Claudia Restrepo Varela/)).toHaveTextContent('ahora')
-    expect(card(/Larissa Monteiro Alves, Nuevo/)).toHaveTextContent('SLA 58 min')
-    expect(card(/Héctor Villarreal Garza, Por llamar/)).toHaveTextContent(
-      'Prioridad baja · Teléfono · Cargo no reconocido',
-    )
-    expect(card(/Héctor Villarreal Garza/)).toHaveTextContent('SLA 2 días')
+    expect(card(/Larissa Monteiro Alves, Nuevo/)).toHaveTextContent('SLA 13 min')
     expect(card(/Joaquín Ferreyra Paz, Esperando al cliente/)).toHaveTextContent(
-      'Prioridad media · App · Estado de la disputa',
+      'Prioridad media · App',
     )
   })
 
-  it('draws the status stripe and the SLA risk with tokens', async () => {
+  it('shows the first-response SLA only while the first reply is pending', async () => {
+    renderPanel()
+    const beatriz = await screen.findByRole('button', { name: /Beatriz Salcedo Prieto/ })
+    expect(within(beatriz).getByText('SLA 3 min')).toHaveClass('text-warn')
+    expect(within(card(/Larissa Monteiro Alves/)).getByText('SLA 13 min')).toHaveClass('text-ink-2')
+    // Marcela and Joaquín already got a first answer: no SLA tag.
+    expect(card(/Marcela Quintana Pardo/)).not.toHaveTextContent(/SLA/)
+    expect(card(/Joaquín Ferreyra Paz/)).not.toHaveTextContent(/SLA/)
+  })
+
+  it('draws the status stripe with tokens and tags a customer who wrote again', async () => {
     renderPanel()
     const marcela = await screen.findByRole('button', { name: /Marcela Quintana Pardo/ })
     expect(marcela).toHaveClass('border-l-warn')
-    expect(card(/Claudia Restrepo Varela/)).toHaveClass('border-l-success')
     expect(card(/Larissa Monteiro Alves/)).toHaveClass('border-l-accent')
-    expect(card(/Héctor Villarreal Garza/)).toHaveClass('border-l-callout')
     expect(card(/Joaquín Ferreyra Paz/)).toHaveClass('border-l-waiting')
-
-    expect(within(card(/Beatriz Salcedo Prieto/)).getByText('SLA 9 min')).toHaveClass('text-warn')
-    expect(within(marcela).getByText('SLA 5 h')).toHaveClass('text-ink-2')
-    expect(marcela).toHaveTextContent('Prioridad media · Web · Cargo no reconocido')
+    expect(marcela).toHaveTextContent('Prioridad media · Web')
     expect(marcela).toHaveTextContent('hace 2 min')
+
+    const patricia = card(/Patricia Lozano Vega/)
+    const tag = within(patricia).getByText('Volvió a escribir')
+    expect(tag).toHaveAttribute(
+      'title',
+      'Escribió de nuevo después de que se cerró su caso anterior',
+    )
+    expect(marcela).not.toHaveTextContent('Volvió a escribir')
+  })
+
+  it('lists the closed cases of the last 7 days in Cerrados', async () => {
+    vi.mocked(fetchInbox).mockImplementation(async ({ status }) =>
+      status === 'closed' ? makeInbox(closedInbox) : makeInbox(),
+    )
+    const { user } = renderPanel()
+    await user.click(await screen.findByRole('radio', { name: '3 Cerrados' }))
+    expect(onFilterChange).toHaveBeenCalledWith('closed')
+    const hector = await within(caseList()).findByRole('button', {
+      name: /Héctor Villarreal Garza, Cerrado/,
+    })
+    expect(within(caseList()).getAllByRole('button')).toHaveLength(3)
+    expect(hector).toHaveClass('border-l-offline')
+    expect(hector).toHaveTextContent('Cerrado hace 3 h')
+    expect(hector).toHaveTextContent('Fuera de alcance')
+    expect(hector).not.toHaveTextContent(/SLA/)
+    expect(card(/Claudia Restrepo Varela/)).toHaveTextContent('El cliente no respondió')
+    expect(card(/Patricia Lozano Vega/)).toHaveTextContent('Resuelto')
+    expect(card(/Patricia Lozano Vega/)).toHaveTextContent('Cerrado hace 2 días')
+  })
+
+  it('says when no case was closed in the last 7 days', async () => {
+    vi.mocked(fetchInbox).mockResolvedValue(emptyInbox)
+    renderPanel({ filter: 'closed' })
+    expect(await screen.findByText('No cerraste casos en los últimos 7 días.')).toBeInTheDocument()
   })
 
   it('marks the selected case and selects another one', async () => {
@@ -144,12 +181,12 @@ describe('CaseListPanel', () => {
 
   it('filters with the counters', async () => {
     const { user } = renderPanel()
-    await user.click(await screen.findByRole('radio', { name: '1 Por llamar' }))
-    expect(onFilterChange).toHaveBeenCalledWith('to_call')
+    await user.click(await screen.findByRole('radio', { name: '1 Esperando al cliente' }))
+    expect(onFilterChange).toHaveBeenCalledWith('waiting')
     await waitFor(() =>
-      expect(fetchInbox).toHaveBeenCalledWith({ status: 'to_call', q: '' }, expect.anything()),
+      expect(fetchInbox).toHaveBeenCalledWith({ status: 'waiting', q: '' }, expect.anything()),
     )
-    expect(screen.getByRole('radio', { name: '1 Por llamar' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '1 Esperando al cliente' })).toBeChecked()
   })
 
   it('searches by customer or case number after a pause in typing', async () => {
@@ -171,6 +208,7 @@ describe('CaseListPanel', () => {
     renderPanel()
     expect(await screen.findByText('Nada pendiente.')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: '0 Todos' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '0 Cerrados' })).toBeInTheDocument()
   })
 
   it('says when a search matches nothing', async () => {
@@ -230,7 +268,7 @@ describe('CaseListPanel', () => {
     expect(screen.getByRole('button', { name: /^Disponible/ })).toBeInTheDocument()
   })
 
-  it('collapses to a rail of initials and expands again', async () => {
+  it('collapses to a rail of initials of the open cases and expands again', async () => {
     const { user } = renderPanel()
     await user.click(await screen.findByRole('button', { name: 'Contraer la lista' }))
     expect(onCollapsedChange).toHaveBeenCalledWith(true)
@@ -256,6 +294,44 @@ describe('CaseListPanel', () => {
     await user.click(within(rail).getByRole('button', { name: 'Mostrar la lista de casos' }))
     expect(onCollapsedChange).toHaveBeenLastCalledWith(false)
     expect(screen.getByRole('region', { name: 'Casos abiertos' })).toBeInTheDocument()
+  })
+
+  it('leaves the closed cases out of the collapsed rail', async () => {
+    vi.mocked(fetchInbox).mockResolvedValue(makeInbox(closedInbox))
+    renderPanel({ collapsed: true, filter: 'closed' })
+    const rail = screen.getByRole('region', { name: 'Casos, lista contraída' })
+    await waitFor(() => expect(fetchInbox).toHaveBeenCalled())
+    expect(within(rail).queryByRole('button', { name: /Héctor/ })).not.toBeInTheDocument()
+  })
+
+  it('toasts a customer who wrote again after a close', async () => {
+    const { sockets } = renderPanel()
+    await screen.findByRole('list', { name: 'Casos' })
+    const returned = makeCaseSummary({
+      id: 'CASE-00000000000000000000009002',
+      customer: { id: 'CUS-00000000000000000000001005', displayName: 'Claudia Restrepo Varela' },
+      status: 'assigned',
+      inboxStatus: 'new',
+      previousCaseId: 'CASE-00000000000000000000000105',
+      version: 1,
+    })
+    act(() => {
+      sockets.last()?.open()
+      sockets.last()?.receive({
+        type: 'case.assigned',
+        id: 'EVT-ASSIGNED-2',
+        occurredAt: NOW.toISOString(),
+        data: {
+          entity: 'case',
+          entityId: returned.id,
+          caseId: returned.id,
+          actor: null,
+          payload: returned,
+        },
+      })
+    })
+    expect(await screen.findByText('Claudia volvió a escribir')).toBeInTheDocument()
+    expect(screen.queryByText('Te llegó un caso nuevo')).not.toBeInTheDocument()
   })
 
   it('toasts a newly assigned case and opens it from the toast', async () => {
@@ -286,6 +362,96 @@ describe('CaseListPanel', () => {
     expect(screen.getByText('Rafael Nogueira Costa')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Ver caso' }))
     expect(onSelectCase).toHaveBeenCalledWith('CASE-00000000000000000000009001')
+  })
+
+  it('drops the new-case toast once its case is opened from the list, or closes', async () => {
+    const { user, sockets } = renderPanel()
+    await screen.findByRole('list', { name: 'Casos' })
+    const socket = sockets.last()
+    const fresh = makeCaseSummary({
+      id: 'CASE-00000000000000000000009001',
+      customer: { id: 'CUS-00000000000000000000002004', displayName: 'Rafael Nogueira Costa' },
+      status: 'assigned',
+      inboxStatus: 'new',
+      version: 1,
+    })
+    const other = makeCaseSummary({
+      id: 'CASE-00000000000000000000009003',
+      customer: { id: 'CUS-00000000000000000000002005', displayName: 'Lucía Benítez Ortiz' },
+      status: 'assigned',
+      inboxStatus: 'new',
+      version: 1,
+    })
+    const assigned = (summary: typeof fresh, id: string) => ({
+      type: 'case.assigned',
+      id,
+      occurredAt: NOW.toISOString(),
+      data: {
+        entity: 'case',
+        entityId: summary.id,
+        caseId: summary.id,
+        actor: null,
+        payload: summary,
+      },
+    })
+    // The refetch the new cases trigger brings them in.
+    vi.mocked(fetchInbox).mockResolvedValue(makeInbox([fresh, other, ...seededInbox]))
+    act(() => {
+      socket?.open()
+      socket?.receive(assigned(fresh, 'EVT-ASSIGNED-10'))
+      socket?.receive(assigned(other, 'EVT-ASSIGNED-11'))
+    })
+    const toasts = screen.getByRole('region', { name: 'Notificaciones' })
+    await waitFor(() =>
+      expect(within(toasts).getAllByText('Te llegó un caso nuevo')).toHaveLength(2),
+    )
+
+    // Opening Rafael's case from its card: its toast goes, Lucía's stays.
+    await user.click(
+      await within(caseList()).findByRole('button', { name: /Rafael Nogueira Costa/ }),
+    )
+    await waitFor(() => expect(within(toasts).queryByText('Rafael Nogueira Costa')).toBeNull())
+    expect(within(toasts).getByText('Lucía Benítez Ortiz')).toBeInTheDocument()
+
+    // Lucía's case closes (closed elsewhere): no "Ver caso" left pointing at it.
+    act(() => {
+      socket?.receive({
+        type: 'case.updated',
+        id: 'EVT-UPDATED-11',
+        occurredAt: NOW.toISOString(),
+        data: {
+          entity: 'case',
+          entityId: other.id,
+          caseId: other.id,
+          actor: null,
+          payload: { ...other, status: 'closed', inboxStatus: 'closed', version: 2 },
+        },
+      })
+    })
+    await waitFor(() => expect(within(toasts).queryByText('Te llegó un caso nuevo')).toBeNull())
+  })
+
+  it('does not toast a case that is already the selected one', async () => {
+    const { sockets } = renderPanel()
+    await screen.findByRole('list', { name: 'Casos' })
+    const selected = makeCaseSummary({ id: 'CASE-00000000000000000000000101', version: 9 })
+    act(() => {
+      sockets.last()?.open()
+      sockets.last()?.receive({
+        type: 'case.assigned',
+        id: 'EVT-ASSIGNED-12',
+        occurredAt: NOW.toISOString(),
+        data: {
+          entity: 'case',
+          entityId: selected.id,
+          caseId: selected.id,
+          actor: null,
+          payload: selected,
+        },
+      })
+    })
+    await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement())
+    expect(screen.queryByRole('button', { name: 'Ver caso' })).not.toBeInTheDocument()
   })
 
   it('refetches the inbox when the socket comes back', async () => {

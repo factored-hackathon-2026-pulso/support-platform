@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.domain.cases.values import CaseChannel, CustomerConversationStatus
-from cc_platform.domain.customers.customer import CountryCode, CustomerLocale, CustomerSegment
+from cc_platform.domain.customers.customer import CountryCode, CustomerLocale
 from cc_platform.domain.people.staff import Language
 
 
@@ -25,9 +25,9 @@ class DemoCustomerView:
     language: Language
     country: CountryCode
     city: str
-    segment: CustomerSegment
     suggestions: tuple[str, ...]
     open_conversation: OpenConversationView | None
+    closed_conversation_count: int
 
 
 @dataclass(frozen=True, slots=True)

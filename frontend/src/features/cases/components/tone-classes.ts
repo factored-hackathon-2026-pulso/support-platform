@@ -10,6 +10,6 @@ export const toneRing: Record<Tone, string> = {
   warn: 'border-warn',
   success: 'border-success',
   danger: 'border-danger',
-  callout: 'border-callout',
   waiting: 'border-waiting',
+  closed: 'border-offline',
 }

@@ -3,17 +3,16 @@ import { MessageSquare, MousePointerClick } from 'lucide-react'
 import { useCurrentUser } from '@/app/session'
 import { DocumentTitle, EmptyState, Spinner } from '@/components/ui'
 import { CaseListPanel, useAvailability, useInbox, type InboxStatus } from '@/features/cases'
-import { ConversationPane } from '@/features/conversation'
+import { CaseHistorySheet, ConversationPane, useCaseDetail } from '@/features/conversation'
 import { topics, useRealtimeSubscription } from '@/lib/realtime'
 import {
+  HISTORY_LIST,
   emptyWorkspaceCopy,
   firstSelectableCase,
   nextCaseAfterClose,
-  type SupportPanelTab,
   type WorkspaceStateChangeOptions,
   type WorkspaceUrlState,
 } from '../model'
-import { SupportPanel } from './SupportPanel'
 
 type FocusRequest = { kind: 'case'; caseId: string } | { kind: 'empty' }
 
@@ -23,9 +22,11 @@ export interface WorkspaceScreenProps {
 }
 
 /**
- * Analyst Workspace (Workspace.dc.html): "Casos" list · conversation · support
- * panel. All shareable state lives in the URL (`state`); the screen reports
- * changes through `onStateChange` and the route writes them back.
+ * Analyst Workspace (Workspace.dc.html, contract §9.2): two columns, the "Casos"
+ * list (collapsible to a rail) and the conversation, which takes the rest of the
+ * width. "Casos anteriores" opens as a side sheet over it. All shareable state
+ * lives in the URL (`state`); the screen reports changes through
+ * `onStateChange` and the route writes them back.
  *
  * Owns the `<main>` landmark; the conversation renders inside it.
  *
@@ -49,6 +50,8 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
 
   const items = inbox.data?.items
   const ready = inbox.status === 'success' && !inbox.isPlaceholderData
+  // Same cache entry as the conversation: the customer's name for the history sheet.
+  const detail = useCaseDetail(state.caseId)
 
   useEffect(() => {
     if (state.caseId || !ready || !items) return
@@ -61,22 +64,33 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
     onStateChange({ caseId: first }, { replace: true })
   }, [state.caseId, ready, items, onStateChange])
 
-  const selectCase = useCallback((caseId: string) => onStateChange({ caseId }), [onStateChange])
+  // Another case closes the history sheet: it belongs to the previous customer.
+  const selectCase = useCallback(
+    (caseId: string) => onStateChange({ caseId, history: null }),
+    [onStateChange],
+  )
 
   const openNotifiedCase = useCallback(
     (caseId: string) => {
       setFocusRequest({ kind: 'case', caseId })
-      onStateChange({ caseId })
+      onStateChange({ caseId, history: null })
     },
     [onStateChange],
   )
+
+  const openHistory = useCallback(() => onStateChange({ history: HISTORY_LIST }), [onStateChange])
+  const selectHistory = useCallback(
+    (history: string) => onStateChange({ history }, { replace: true }),
+    [onStateChange],
+  )
+  const closeHistory = useCallback(() => onStateChange({ history: null }), [onStateChange])
 
   const handleClosed = useCallback(
     (caseId: string) => {
       closedHere.current.add(caseId)
       const next = nextCaseAfterClose(items ?? [], caseId, closedHere.current)
       setFocusRequest(next ? { kind: 'case', caseId: next } : { kind: 'empty' })
-      onStateChange({ caseId: next }, { replace: true })
+      onStateChange({ caseId: next, history: null }, { replace: true })
     },
     [items, onStateChange],
   )
@@ -113,6 +127,7 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
           <ConversationPane
             caseId={state.caseId}
             onClosed={handleClosed}
+            onOpenHistory={openHistory}
             focusOnLoad={focusRequest?.kind === 'case' && focusRequest.caseId === state.caseId}
             onFocused={clearFocusRequest}
           />
@@ -133,25 +148,18 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
             headingRef={emptyHeading}
             icon={<MousePointerClick size={40} strokeWidth={1.6} />}
             title="Elige un caso de la lista"
-            description="La conversación, el copiloto y las herramientas del caso aparecen aquí."
+            description="La conversación con el cliente aparece aquí."
           />
         )}
       </main>
 
-      {state.caseId ? (
-        <SupportPanel
+      {state.caseId && state.history ? (
+        <CaseHistorySheet
           caseId={state.caseId}
-          tab={state.panelTab}
-          collapsed={state.panelCollapsed}
-          onTabChange={(panelTab: SupportPanelTab) =>
-            onStateChange({ panelTab }, { replace: true })
-          }
-          onCollapsedChange={(panelCollapsed) =>
-            onStateChange({ panelCollapsed }, { replace: true })
-          }
-          onOpenTab={(panelTab) =>
-            onStateChange({ panelTab, panelCollapsed: false }, { replace: true })
-          }
+          customerName={detail.data?.customer.displayName ?? ''}
+          selected={state.history}
+          onSelect={selectHistory}
+          onClose={closeHistory}
         />
       ) : null}
     </div>

@@ -2,14 +2,14 @@
 
 Customer tokens (scheme ``CustomerToken``, audience ``cc-customer``) are separate from staff
 tokens: each kind is ``unauthenticated`` on the other's routes. A customer only ever sees
-their own conversation and only the turns meant for them (rule 2).
+their own conversations and only the turns meant for them.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Path, Query, Response, status
 
 from cc_platform.api.dependencies import ApiContextDep, CurrentCustomer
 from cc_platform.api.routers.cases import (
@@ -20,10 +20,11 @@ from cc_platform.api.routers.cases import (
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.api.schemas.customer import (
     CreateCustomerSessionRequest,
-    CustomerConversation,
+    CustomerConversationDetail,
+    CustomerConversationList,
     CustomerConversationResponse,
+    CustomerConversationSummary,
     CustomerSessionResponse,
-    CustomerTurn,
     DemoCustomer,
     DemoCustomerList,
     PostCustomerTurnRequest,
@@ -39,6 +40,7 @@ router = APIRouter(prefix="/customer", tags=["customer"])
     "/demo-customers",
     response_model=DemoCustomerList,
     summary="Seeded customers for the simulator picker (no auth; empty without demo data)",
+    description="Simulator customers first, then every other seeded customer by name.",
 )
 async def list_demo_customers(api: ApiContextDep) -> DemoCustomerList:
     views = await api.use_cases.customers.list_demo_customers.execute()
@@ -75,12 +77,39 @@ async def get_conversation(
     result = await api.use_cases.cases.customer_conversation.execute(
         customer, after_sequence=after_sequence
     )
-    return CustomerConversationResponse(
-        conversation=(
-            CustomerConversation.from_view(result.conversation) if result.conversation else None
-        ),
-        turns=[CustomerTurn.from_view(turn) for turn in result.turns],
+    return CustomerConversationResponse.from_result(result)
+
+
+@router.get(
+    "/conversations",
+    response_model=CustomerConversationList,
+    summary="My past conversations (closed, other than the current one)",
+    description="Newest `openedAt` first, at most 20.",
+    responses=problem_responses(401),
+)
+async def list_past_conversations(
+    customer: CurrentCustomer, api: ApiContextDep
+) -> CustomerConversationList:
+    views = await api.use_cases.cases.past_conversations.execute(customer)
+    return CustomerConversationList(
+        items=[CustomerConversationSummary.from_view(view) for view in views]
     )
+
+
+@router.get(
+    "/conversations/{caseId}",
+    response_model=CustomerConversationDetail,
+    summary="One of my conversations with its turns (read-only)",
+    description="Up to the latest 200 turns meant for the customer, ascending.",
+    responses=problem_responses(401, 404),
+)
+async def get_past_conversation(
+    case_id: Annotated[str, Path(alias="caseId", max_length=64)],
+    customer: CurrentCustomer,
+    api: ApiContextDep,
+) -> CustomerConversationDetail:
+    view = await api.use_cases.cases.past_conversation.execute(customer, case_id)
+    return CustomerConversationDetail.from_view(view)
 
 
 @router.post(
@@ -90,7 +119,9 @@ async def get_conversation(
     summary="Write to the bank: opens a case when none is open, else appends to it",
     description=(
         "Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text "
-        "answers 200 with `Idempotent-Replayed: true`."
+        "answers 200 with `Idempotent-Replayed: true`. With no open case (never wrote, or the "
+        "last one closed) a new case opens, linked to the previous closed one, and is "
+        "assigned in the same request (`with_agent`) or waits in the queue (`waiting_agent`)."
     ),
     responses={
         200: {

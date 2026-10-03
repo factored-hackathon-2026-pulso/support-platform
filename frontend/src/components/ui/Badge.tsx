@@ -10,7 +10,7 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   icon?: ReactNode
 }
 
-/** Pill-shaped label: "Agente IA", "Activo", "Lectura", "Verificada"… */
+/** Pill-shaped label: "Cerrado", "Volvió a escribir", "Activo"… */
 export function Badge({
   tone = 'neutral',
   variant = 'soft',

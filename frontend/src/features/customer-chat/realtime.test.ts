@@ -66,20 +66,53 @@ describe('conversation.updated', () => {
     expect(chat()?.turns).toHaveLength(1)
   })
 
-  it('refetches for another case and ignores malformed payloads', () => {
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+  it('ignores malformed payloads', () => {
     const before = chat()
     registry.dispatch(envelope('conversation.updated', { status: 'closed' }), queryClient)
     expect(chat()).toBe(before)
+  })
+
+  it('switches to a newer case: the closed one becomes a past block, then refetches', () => {
+    // The current conversation closes…
+    registry.dispatch(
+      envelope('conversation.updated', makeCustomerConversation({ status: 'closed' }), SIM_CASE_ID),
+      queryClient,
+    )
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    // …and the customer writes again: a new case opens with a different caseId.
+    const next = makeCustomerConversation({
+      caseId: 'CASE-NEW',
+      openedAt: '2026-03-05T16:10:00Z',
+      previousCaseId: SIM_CASE_ID,
+    })
+    registry.dispatch(envelope('conversation.updated', next, 'CASE-NEW'), queryClient)
+    expect(chat()?.conversation?.caseId).toBe('CASE-NEW')
+    expect(chat()?.turns).toEqual([])
+    expect(chat()?.ended.map((past) => past.conversation.caseId)).toEqual([SIM_CASE_ID])
+    expect(chat()?.ended[0]?.turns).toHaveLength(1)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: key, exact: true })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: customerChatKeys.pastConversations(SIM_CUSTOMER_ID),
+    })
+  })
+
+  it('ignores a late update of an older case', () => {
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const before = chat()
     registry.dispatch(
       envelope(
         'conversation.updated',
-        makeCustomerConversation({ caseId: 'CASE-NEW' }),
-        'CASE-NEW',
+        makeCustomerConversation({
+          caseId: 'CASE-OLD',
+          status: 'closed',
+          openedAt: '2026-03-01T10:00:00Z',
+        }),
+        'CASE-OLD',
       ),
       queryClient,
     )
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: key, exact: true })
+    expect(chat()).toBe(before)
+    expect(invalidate).not.toHaveBeenCalled()
   })
 
   it('never handles staff-only event types', () => {

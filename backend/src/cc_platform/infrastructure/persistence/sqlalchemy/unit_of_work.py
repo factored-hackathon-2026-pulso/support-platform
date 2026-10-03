@@ -12,7 +12,6 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import
     SqlCaseRepository,
     SqlCustomerCaseSlotRepository,
     SqlCustomerRepository,
-    SqlRoutingStepRepository,
     SqlTurnRepository,
 )
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.event_log import (
@@ -39,7 +38,6 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     turns: SqlTurnRepository
     assignments: SqlAssignmentRepository
     case_slots: SqlCustomerCaseSlotRepository
-    routing_steps: SqlRoutingStepRepository
     event_log: SqlEventLogRepository
 
     def __init__(
@@ -67,7 +65,6 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.turns = SqlTurnRepository(session)
         self.assignments = SqlAssignmentRepository(session)
         self.case_slots = SqlCustomerCaseSlotRepository(session, self.track)
-        self.routing_steps = SqlRoutingStepRepository(session)
         self.event_log = SqlEventLogRepository(session)
 
     async def _commit(self) -> None:

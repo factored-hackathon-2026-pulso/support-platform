@@ -29,8 +29,8 @@ def auth_kit() -> AuthKit:
 @pytest.fixture
 def container(clock: FixedClock, tmp_path: Path) -> Container:
     # A file database (one connection per Unit of Work), like production: in-memory SQLite
-    # shares a single connection, so background routing interleaved with a request would
-    # share its transaction (and its rollback).
+    # shares a single connection, so a background queue drain interleaved with a request
+    # would share its transaction (and its rollback).
     settings = make_settings(database_url=f"sqlite+aiosqlite:///{tmp_path / 'api.db'}")
     return build_container(settings, clock=clock, ids=SequentialIdGenerator())
 
@@ -61,7 +61,7 @@ def sign_in(client: TestClient) -> Callable[[str], str]:
 
 @pytest.fixture
 def drain(client: TestClient, container: Container) -> Callable[[], None]:
-    """Wait for background work (routing after ``case.opened``, queue drains)."""
+    """Wait for background work (queue drains after an analyst becomes available)."""
 
     def _drain() -> None:
         client.portal.call(container.background.drain)  # type: ignore[union-attr]

@@ -88,7 +88,15 @@ function SimulatorChat({
           </Button>
         </div>
         <div className="min-h-0 grow">
-          <CustomerChat customerId={session.customerId} suggestions={me?.suggestions ?? []} />
+          {/* The customer's language comes with the list: wait for it so the
+            chat does not switch language once it arrives. */}
+          {customers.isPending ? null : (
+            <CustomerChat
+              customerId={session.customerId}
+              suggestions={me?.suggestions ?? []}
+              language={me?.language ?? 'es'}
+            />
+          )}
         </div>
       </div>
     </RealtimeProvider>

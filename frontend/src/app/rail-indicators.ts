@@ -8,7 +8,7 @@ const NO_INDICATORS: RailIndicators = Object.freeze({})
  *
  * Composition point between the rail (components/layout) and the features that
  * own the numbers. Each feature exposes a count hook from its `index.ts` (e.g.
- * `usePendingApprovalsCount({ enabled })` in approvals, kept fresh by its realtime
+ * `useQueuedCasesCount({ enabled })` in supervision (slice 3), kept fresh by its realtime
  * handlers) and this hook maps it to a `RailIndicatorKey`. Call every feature hook
  * unconditionally and pass `enabled: role === '…'` so only the visible role fetches.
  *

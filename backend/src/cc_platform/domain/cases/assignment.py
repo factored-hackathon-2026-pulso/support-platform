@@ -1,4 +1,9 @@
-"""``Assignment``: why and how a case reached an analyst (one row per assignment)."""
+"""``Assignment``: why and how a case reached an analyst (one row per assignment).
+
+``waited_seconds`` is the time the case spent in the language queue before a drain
+assigned it (``queue_drained``); ``None`` when it was assigned on arrival. "Cómo llegó a
+ti" is built from this row only.
+"""
 
 from __future__ import annotations
 
@@ -22,6 +27,7 @@ class Assignment:
     strategy: str
     assigned_at: datetime
     assigned_by: ActorRef
+    waited_seconds: int | None = None
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.ASSIGNMENT)
@@ -29,3 +35,5 @@ class Assignment:
         require_id(self.staff_id, IdPrefix.STAFF)
         if self.open_cases_at_assignment < 0:
             raise InvalidValueError("open case count cannot be negative", field="open_cases")
+        if self.waited_seconds is not None and self.waited_seconds < 0:
+            raise InvalidValueError("queue wait cannot be negative", field="waited_seconds")

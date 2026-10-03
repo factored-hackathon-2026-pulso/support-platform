@@ -1,4 +1,4 @@
-"""Ports of the customers context: the masked directory and customer session tokens."""
+"""Ports of the customers context: the customer profiles and customer session tokens."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from cc_platform.domain.customers.customer import Customer
 
 
 class CustomerRepository(Protocol):
-    """Masked customer read model (seeded; no use case writes it in slice 1)."""
+    """Minimal customer profile (seeded; no use case writes it yet)."""
 
     async def get(self, customer_id: str) -> Customer | None: ...
 

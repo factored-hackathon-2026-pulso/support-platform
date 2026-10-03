@@ -1,8 +1,8 @@
 """Who performed an action.
 
-``ActorRole`` is the vocabulary of ``actor_role`` / ``author_role`` in
-``contracts/platform_history.json``: staff roles, the customer, automated tiers
-(judge, tree, ai_agent, copilot) and the platform itself (system).
+``ActorRole`` is the vocabulary of ``actor_role`` in the event-log envelope
+(``contracts/platform_history.json``): the staff roles, the customer and the platform
+itself (``system``).
 """
 
 from __future__ import annotations
@@ -16,13 +16,8 @@ from cc_platform.domain.shared.errors import InvalidValueError
 class ActorRole(StrEnum):
     ANALYST = "analyst"
     SUPERVISOR = "supervisor"
-    AUTOMATION = "automation"
     ADMIN = "admin"
     CUSTOMER = "customer"
-    JUDGE = "judge"
-    TREE = "tree"
-    AI_AGENT = "ai_agent"
-    COPILOT = "copilot"
     SYSTEM = "system"
 
 
@@ -30,8 +25,8 @@ class ActorRole(StrEnum):
 class ActorRef:
     """Reference to the actor of a domain event (role under which they acted + id).
 
-    For people ``actor_id`` is the staff or customer id; for automated components it is
-    ``component_id@component_version`` as the contract requires.
+    For people ``actor_id`` is the staff or customer id; for the platform it is
+    ``cc-platform``.
     """
 
     role: ActorRole

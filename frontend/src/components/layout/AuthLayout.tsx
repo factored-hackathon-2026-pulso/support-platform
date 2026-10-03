@@ -21,7 +21,7 @@ export function AuthLayout() {
         </div>
         <div className="flex flex-col gap-4">
           <p className="m-0 font-display text-40 font-bold tracking-display text-balance">
-            Atención al cliente que aprende de cómo la resuelves.
+            Atención al cliente por chat, de principio a fin.
           </p>
           <p className="m-0 text-16 text-rail-icon">
             Contact center de LATAM Bank · México, Colombia y Argentina

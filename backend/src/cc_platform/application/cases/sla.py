@@ -1,8 +1,9 @@
-"""SLA policy (Strategy; synthetic policy values, labelled as such in the UI).
+"""First-response SLA (Strategy ``SlaPolicy``; slice 2 contract §4.5).
 
-Chat (app/web, and inbound phone): ``high`` 30 min · ``medium`` 60 min · ``low`` 4 h from
-``opened_at``; email 24 h; outbound follow-ups (origin regulator/branch) 48 h. "SLA x" is
-formatted by the frontend from ``slaDueAt``.
+``sla_due_at = opened_at + target(priority)``. Team-generated targets (not from the
+dataset; the UI labels them "Política de ejemplo"): ``high`` 5 min · ``medium`` 15 min ·
+``low`` 60 min. The SLA stops at the first analyst message (``case.first_responded``); the
+frontend formats "SLA x" from ``slaDueAt`` while ``firstResponseAt`` is null.
 """
 
 from __future__ import annotations
@@ -11,44 +12,26 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Protocol
 
-from cc_platform.domain.cases.values import CaseChannel, CaseOrigin, CasePriority
+from cc_platform.domain.cases.values import CasePriority
 
 
 class SlaPolicy(Protocol):
-    def due_at(
-        self,
-        *,
-        channel: CaseChannel,
-        origin: CaseOrigin,
-        priority: CasePriority,
-        opened_at: datetime,
-    ) -> datetime: ...
+    def due_at(self, *, priority: CasePriority, opened_at: datetime) -> datetime:
+        """When the first response is due for a case opened at ``opened_at``."""
+        ...
 
 
-def _default_chat_targets() -> dict[CasePriority, timedelta]:
+def _team_generated_targets() -> dict[CasePriority, timedelta]:
     return {
-        CasePriority.HIGH: timedelta(minutes=30),
-        CasePriority.MEDIUM: timedelta(minutes=60),
-        CasePriority.LOW: timedelta(hours=4),
+        CasePriority.HIGH: timedelta(minutes=5),
+        CasePriority.MEDIUM: timedelta(minutes=15),
+        CasePriority.LOW: timedelta(minutes=60),
     }
 
 
 @dataclass(frozen=True, slots=True)
-class SyntheticSlaPolicy:
-    chat: dict[CasePriority, timedelta] = field(default_factory=_default_chat_targets)
-    email: timedelta = timedelta(hours=24)
-    outbound: timedelta = timedelta(hours=48)
+class FirstResponseSlaPolicy:
+    targets: dict[CasePriority, timedelta] = field(default_factory=_team_generated_targets)
 
-    def due_at(
-        self,
-        *,
-        channel: CaseChannel,
-        origin: CaseOrigin,
-        priority: CasePriority,
-        opened_at: datetime,
-    ) -> datetime:
-        if origin.is_outbound:
-            return opened_at + self.outbound
-        if channel is CaseChannel.EMAIL:
-            return opened_at + self.email
-        return opened_at + self.chat[priority]
+    def due_at(self, *, priority: CasePriority, opened_at: datetime) -> datetime:
+        return opened_at + self.targets[priority]

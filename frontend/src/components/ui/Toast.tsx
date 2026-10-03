@@ -22,11 +22,19 @@ export interface ToastProviderProps {
   limit?: number
 }
 
+/** Gap between the stack and the viewport edge, or the element it keeps clear of (px). */
+const EDGE_GAP = 24
+const CLEARANCE_GAP = 12
+
 /**
  * Toast stack (bottom right, dark surface). The two live regions are always
  * mounted so screen readers announce toasts reliably: `status` (polite) and
- * `alert` (assertive). The region is reachable while a Dialog is open
- * (`data-toast-region`, see use-modal).
+ * `alert` (assertive). The stack rises above a bottom-docked element that
+ * reserves the space (`useToastClearance`, e.g. the chat composer, so a toast
+ * never covers "Enviar"), and sits below open modals (z-40 < z-50): an open
+ * Dialog or Sheet is never covered, and its focus trap keeps the keyboard in
+ * it. The live regions are outside the inert app root, so a toast that arrives
+ * while a modal is open is still announced.
  */
 export function ToastProvider({ children, limit = 3 }: ToastProviderProps) {
   const [toasts, setToasts] = useState<ToastRecord[]>([])
@@ -45,7 +53,15 @@ export function ToastProvider({ children, limit = 3 }: ToastProviderProps) {
     [limit],
   )
 
-  const value = useMemo(() => ({ toast, dismiss }), [toast, dismiss])
+  const reservations = useRef(new Map<symbol, number>())
+  const [clearance, setClearance] = useState(0)
+  const reserveBottom = useCallback((key: symbol, px: number | null) => {
+    if (px === null) reservations.current.delete(key)
+    else reservations.current.set(key, px)
+    setClearance(Math.max(0, ...reservations.current.values()))
+  }, [])
+
+  const value = useMemo(() => ({ toast, dismiss, reserveBottom }), [toast, dismiss, reserveBottom])
   const polite = toasts.filter((t) => (t.politeness ?? 'status') === 'status')
   const assertive = toasts.filter((t) => t.politeness === 'alert')
 
@@ -56,7 +72,8 @@ export function ToastProvider({ children, limit = 3 }: ToastProviderProps) {
         <section
           aria-label="Notificaciones"
           data-toast-region
-          className="pointer-events-none fixed right-6 bottom-6 z-[60] flex w-[380px] max-w-[calc(100vw-48px)] flex-col"
+          style={{ bottom: clearance > 0 ? clearance + CLEARANCE_GAP : EDGE_GAP }}
+          className="pointer-events-none fixed right-6 z-40 flex w-[380px] max-w-[calc(100vw-48px)] flex-col"
         >
           {/* <output> is a polite status live region. */}
           <output aria-live="polite" className="flex flex-col gap-2.5">

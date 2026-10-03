@@ -2,14 +2,14 @@
 
 Topics (brief §4.4):
 
-- ``case:<CASE-id>``: everything that happens in one case (turns, tool calls, approvals...).
+- ``case:<CASE-id>``: everything that happens in one case (turns, status, reads, close).
 - ``inbox:<STF-id>``: the case list of one staff member (assignment changes, new cases).
-- ``approvals``: the supervisors' approval queue ("Por aprobar").
 - ``customer:<CUS-id>``: one customer's own conversation (customer chat simulator); only
   that customer's token may subscribe, never staff.
 
 ``case:`` topics also need a case-level check (assignee or supervisor), which needs the
 case: the WebSocket endpoint runs ``AuthorizeCaseSubscription`` after this role check.
+Supervision topics arrive in slice 3.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ from cc_platform.domain.shared.ids import IdPrefix, is_valid_id
 class TopicKind(StrEnum):
     CASE = "case"
     INBOX = "inbox"
-    APPROVALS = "approvals"
     CUSTOMER = "customer"
 
 
@@ -40,10 +39,10 @@ _KEY_PREFIX: dict[TopicKind, IdPrefix] = {
 @dataclass(frozen=True, slots=True)
 class Topic:
     kind: TopicKind
-    key: str | None = None
+    key: str
 
     def __str__(self) -> str:
-        return self.kind.value if self.key is None else f"{self.kind.value}:{self.key}"
+        return f"{self.kind.value}:{self.key}"
 
     @classmethod
     def case(cls, case_id: str) -> Topic:
@@ -52,10 +51,6 @@ class Topic:
     @classmethod
     def inbox(cls, staff_id: str) -> Topic:
         return cls(TopicKind.INBOX, staff_id)
-
-    @classmethod
-    def approvals(cls) -> Topic:
-        return cls(TopicKind.APPROVALS)
 
     @classmethod
     def customer(cls, customer_id: str) -> Topic:
@@ -68,12 +63,7 @@ class Topic:
             kind = TopicKind(name)
         except ValueError:
             raise InvalidTopicError(topic=raw) from None
-        expected = _KEY_PREFIX.get(kind)
-        if expected is None:
-            if sep:
-                raise InvalidTopicError(topic=raw)
-            return cls(kind)
-        if not is_valid_id(key, expected):
+        if not sep or not is_valid_id(key, _KEY_PREFIX[kind]):
             raise InvalidTopicError(topic=raw)
         return cls(kind, key)
 
@@ -88,8 +78,6 @@ class TopicAccessPolicy:
                 return actor.has_any_role({StaffRole.ANALYST, StaffRole.SUPERVISOR})
             case TopicKind.INBOX:
                 return topic.key == actor.staff_id or actor.has_any_role({StaffRole.SUPERVISOR})
-            case TopicKind.APPROVALS:
-                return actor.has_any_role({StaffRole.SUPERVISOR})
             case TopicKind.CUSTOMER:
                 return False  # a customer's own channel; staff follow ``case:`` instead
 

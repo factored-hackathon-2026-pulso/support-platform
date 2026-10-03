@@ -1,7 +1,7 @@
 """Domain events of the people context.
 
-Payloads never include passwords, MFA codes or token material: the event log is exported
-to the AI team (contract principle: personal data masked, secrets never stored).
+Payloads never include passwords, MFA codes or token material: the event log is the audit
+trail (contract principle: personal data masked, secrets never stored).
 """
 
 from __future__ import annotations

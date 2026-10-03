@@ -5,11 +5,13 @@ import { makeCaseSummary } from '@/test/case-fixtures'
 import {
   CASE_ID,
   envelope,
+  julianTurns,
   makeAnalystTurn,
   makeCaseDetail,
+  makeClosedDetail,
+  makeJulianDetail,
   makeTurn,
   seededTurns,
-  stop,
 } from '@/test/conversation-fixtures'
 import { analystStaff } from '@/test/fixtures'
 import { renderWithProviders } from '@/test/render'
@@ -51,13 +53,12 @@ function setup(detail: CaseDetail = makeCaseDetail(), turns: TurnPage = page()) 
   vi.mocked(api.fetchTurns).mockResolvedValue(turns)
   vi.mocked(api.markCaseRead).mockResolvedValue(detail.case)
   const onClosed = vi.fn<(caseId: string) => void>()
+  const onOpenHistory = vi.fn<() => void>()
   const view = renderWithProviders(
-    <ConversationPane caseId={detail.case.id} onClosed={onClosed} />,
-    {
-      staff: analystStaff,
-    },
+    <ConversationPane caseId={detail.case.id} onClosed={onClosed} onOpenHistory={onOpenHistory} />,
+    { staff: analystStaff },
   )
-  return { ...view, onClosed }
+  return { ...view, onClosed, onOpenHistory }
 }
 
 function response(text: string, clientMessageId: string, sequence = 5): PostTurnResponse {
@@ -76,24 +77,38 @@ beforeEach(() => {
 })
 
 describe('ConversationPane · chat', () => {
-  it('renders the header and every kind of turn', async () => {
+  it('renders the header, "Cómo llegó a ti" and every kind of turn', async () => {
     setup()
     expect(
       await screen.findByRole('heading', { name: 'Marcela Quintana Pardo' }),
     ).toBeInTheDocument()
     expect(screen.getByText(CASE_ID)).toBeInTheDocument()
     expect(
-      screen.getByText(
-        /Cargo no reconocido · Colombia · Barranquilla · chat web · prioridad media/,
-      ),
+      screen.getByText(/· Colombia · Barranquilla · chat web · prioridad media/),
     ).toBeInTheDocument()
     expect(screen.getByText('Datos de ejemplo')).toBeInTheDocument()
+    expect(screen.getByText('Cómo llegó a ti').parentElement).toHaveTextContent(
+      'Cómo llegó a ti · : Te llegó porque estás disponible y hablas español · 5 mar, 10:46',
+    )
 
     const messages = await screen.findByRole('list', { name: 'Mensajes' })
     expect(within(messages).getByText(/hay un cargo en mi tarjeta/)).toBeInTheDocument()
-    expect(within(messages).getByText(/retiro en cajero por \$1\.585\.208/)).toBeInTheDocument()
-    expect(within(messages).getByText(/Escalado por el agente de disputas/)).toBeInTheDocument()
+    expect(within(messages).getByText(/Recibimos tu mensaje/)).toBeInTheDocument()
+    expect(
+      within(messages).getByText(/Asignado a Daniela Ríos porque está disponible/),
+    ).toBeInTheDocument()
+    expect(within(messages).getByText(/Soy Daniela, de LATAM Bank/)).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Escribe al cliente' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cerrar caso' })).toBeEnabled()
+    // No previous cases: no history button. No support panel, call bar or e-mail layout.
+    expect(screen.queryByRole('button', { name: /Casos anteriores/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+  })
+
+  it('offers "Casos anteriores (n)" when the customer has other cases', async () => {
+    const { user, onOpenHistory } = setup(makeCaseDetail({ previousCaseCount: 2 }))
+    await user.click(await screen.findByRole('button', { name: 'Casos anteriores (2)' }))
+    expect(onOpenHistory).toHaveBeenCalledTimes(1)
   })
 
   it('subscribes to the case topic', async () => {
@@ -378,80 +393,43 @@ describe('ConversationPane · accessibility', () => {
 })
 
 describe('ConversationPane · states', () => {
-  it('explains why the analyst cannot reply', async () => {
+  it('shows a closed case read-only, with the closure, the note and no composer', async () => {
+    setup(makeClosedDetail())
+    const footer = await screen.findByRole('note', { name: 'Solo lectura' })
+    expect(footer).toHaveTextContent('Caso cerrado el 5 mar, 10:58 · Resuelto')
+    expect(footer).toHaveTextContent('Nota: Se explicó el plazo del reverso (5 días hábiles).')
+    expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cerrar caso' })).not.toBeInTheDocument()
+    expect(screen.getByText('Cerrado')).toBeInTheDocument()
+    // A closed case is never marked read.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(api.markCaseRead).not.toHaveBeenCalled()
+  })
+
+  it("shows another analyst's case read-only (history access)", async () => {
+    setup(makeJulianDetail(), page({ items: julianTurns(), lastSequence: 3 }))
+    expect(await screen.findByText('Cómo llegó a ti')).toBeInTheDocument()
+    expect(screen.getByText(/Lo atendió Julián Ortega/)).toBeInTheDocument()
+    const footer = await screen.findByRole('note', { name: 'Solo lectura' })
+    expect(footer).toHaveTextContent('Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto')
+    const messages = await screen.findByRole('list', { name: 'Mensajes' })
+    expect(within(messages).getByText(/Soy Julián, de LATAM Bank/)).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
+  })
+
+  it('says whose case it is when the viewer is not the assignee of an open case', async () => {
+    const base = makeCaseDetail()
     setup(
       makeCaseDetail({
         capabilities: { canReply: false, replyBlockedReason: 'not_assignee', canClose: false },
+        assignment: { ...base.assignment!, analystId: 'STF-2', analystName: 'Julián Ortega' },
       }),
     )
     expect(
-      await screen.findByText('Solo la persona asignada puede escribir en este caso.'),
+      await screen.findByText('Solo lectura: este caso es de Julián Ortega.'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Cerrar caso' })).toBeDisabled()
-  })
-
-  it('shows a live call as a timed, read-only transcript', async () => {
-    const detail = makeCaseDetail({
-      channelIdentity: { kind: 'caller_number', verified: true },
-      routing: {
-        stops: [
-          stop({ kind: 'entry', label: 'IVR' }),
-          stop({ kind: 'assignee', staffId: analystStaff.id }),
-        ],
-        inputsUsed: [],
-      },
-      capabilities: {
-        canReply: false,
-        replyBlockedReason: 'channel_not_supported',
-        canClose: true,
-      },
-    })
-    detail.case = {
-      ...detail.case,
-      channel: 'phone',
-      status: 'in_call',
-      inboxStatus: 'live',
-      liveSince: new Date(Date.now() - 246_000).toISOString(),
-    }
-    const call = [
-      makeAnalystTurn(1, 'Buenas tardes, gracias por llamar a LATAM Bank.', 'x'),
-      makeTurn({ sequence: 2, text: 'Sí, claro, bloquéela.' }),
-    ]
-    setup(detail, page({ items: call, lastSequence: 2 }))
-    expect(await screen.findByText('En llamada')).toBeInTheDocument()
-    expect(screen.getByText('Entrante · el IVR verificó su identidad')).toBeInTheDocument()
-    const list = await screen.findByRole('list', { name: 'Transcripción de la llamada' })
-    expect(within(list).getByText('Sí, claro, bloquéela.')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Por ahora solo el chat funciona en vivo. Llamadas y correo llegan/),
-    ).toBeInTheDocument()
-  })
-
-  it('shows e-mails with the latest one open', async () => {
-    const detail = makeCaseDetail({
-      capabilities: {
-        canReply: false,
-        replyBlockedReason: 'channel_not_supported',
-        canClose: true,
-      },
-    })
-    detail.case = { ...detail.case, channel: 'email' }
-    const mails = [
-      makeTurn({
-        sequence: 1,
-        text: 'Buenas tardes:\n\nEscribo porque hay un cargo que no reconozco.',
-      }),
-      makeTurn({
-        sequence: 2,
-        text: 'Hola:\n\nBueno, adelante. Veamos si pueden resolverlo.\n\nSaludos',
-      }),
-    ]
-    const { user } = setup(detail, page({ items: mails, lastSequence: 2 }))
-    const list = await screen.findByRole('list', { name: 'Correos' })
-    expect(within(list).getByText(/Veamos si pueden resolverlo/)).toBeInTheDocument()
-    await user.click(within(list).getByRole('button', { name: /Escribo porque hay un cargo/ }))
-    expect(within(list).getByText(/Buenas tardes:/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cerrar caso' })).not.toBeInTheDocument()
   })
 
   it('shows why a case cannot be opened', async () => {
@@ -462,53 +440,90 @@ describe('ConversationPane · states', () => {
       new ApiProblem({ status: 403, code: 'case_not_assigned' }),
     )
     renderWithProviders(<ConversationPane caseId={CASE_ID} />, { staff: analystStaff })
-    expect(await screen.findByText('Este caso no está asignado a ti')).toBeInTheDocument()
+    expect(await screen.findByText('No tienes acceso a este caso')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
 })
 
 describe('ConversationPane · close', () => {
-  it('requires the result, sends the close form and reports back', async () => {
-    const detail = makeCaseDetail()
-    const closed = makeCaseDetail({
-      capabilities: { canReply: false, replyBlockedReason: 'closed', canClose: false },
-    })
-    closed.case = { ...closed.case, status: 'closed', version: 9 }
+  it('requires a reason, sends it with the trimmed note and reports back', async () => {
+    const closed = makeClosedDetail()
     vi.mocked(api.closeCase).mockResolvedValue(closed)
-    const { user, onClosed } = setup(detail)
+    const { user, onClosed } = setup()
 
     await user.click(await screen.findByRole('button', { name: 'Cerrar caso' }))
     const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
     expect(
-      within(dialog).getByText('Se guarda en el histórico de la plataforma'),
-    ).toBeInTheDocument()
+      within(dialog).getByText('Marcela Quintana Pardo ·', { exact: false }),
+    ).toHaveTextContent('Marcela Quintana Pardo · CASE-…0101')
+    const reasons = within(dialog).getByRole('radiogroup', { name: /Motivo/ })
+    expect(
+      within(reasons)
+        .getAllByRole('radio')
+        .map((radio) => radio.parentElement?.textContent),
+    ).toEqual(['Resuelto', 'El cliente no respondió', 'Duplicado', 'Fuera de alcance', 'Otro'])
 
     await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
-    expect(
-      await within(dialog).findByText('Elige si quedó resuelto o sin resolver.'),
-    ).toBeInTheDocument()
+    expect(await within(dialog).findByText('Elige un motivo.')).toBeInTheDocument()
+    expect(reasons).toHaveAttribute('aria-invalid', 'true')
+    expect(within(reasons).getByRole('radio', { name: 'Resuelto' })).toHaveFocus()
     expect(api.closeCase).not.toHaveBeenCalled()
 
-    await user.click(within(dialog).getByRole('radio', { name: 'Sin resolver' }))
-    await user.selectOptions(
-      within(dialog).getByRole('combobox', { name: 'Seguimiento' }),
-      'En 2 días',
-    )
-    await user.selectOptions(
-      within(dialog).getByRole('combobox', { name: 'Qué se hizo' }),
-      'Se brindó explicación detallada al cliente y se resolvió la situación.',
-    )
+    await user.click(within(dialog).getByRole('radio', { name: 'Duplicado' }))
+    expect(within(dialog).queryByText('Elige un motivo.')).not.toBeInTheDocument()
+    const note = within(dialog).getByRole('textbox', { name: 'Nota interna (opcional)' })
+    expect(note).toHaveAccessibleDescription('Solo la ve el equipo.')
+    await user.type(note, '  Mismo caso que el 104.  ')
+    expect(within(dialog).getByText('22/500')).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
 
     await waitFor(() => expect(onClosed).toHaveBeenCalledWith(CASE_ID))
     expect(api.closeCase).toHaveBeenCalledWith(CASE_ID, {
-      resolved: false,
-      contactReason: 'Transaccional',
-      resolutionCode: 'explained',
-      followUp: 'in_two_days',
-      sendCsatSurvey: true,
+      reason: 'duplicate',
+      note: 'Mismo caso que el 104.',
     })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(await screen.findByText('Cerrado')).toBeInTheDocument()
+    expect(await screen.findByRole('note', { name: 'Solo lectura' })).toBeInTheDocument()
+    expect(screen.getByText('Cerrado')).toBeInTheDocument()
+  })
+
+  it('previews the notice the customer will see, in the case language', async () => {
+    const pt = makeCaseDetail()
+    pt.case = { ...pt.case, language: 'pt' }
+    const { user } = setup(pt)
+    await user.click(await screen.findByRole('button', { name: 'Cerrar caso' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
+    const preview = within(dialog).getByText('El cliente verá').parentElement!
+    expect(preview).toHaveTextContent(
+      'A conversa foi encerrada. Se precisar de algo mais, escreva para nós e abrimos uma nova conversa.',
+    )
+    expect(within(dialog).getByText(/^A conversa foi encerrada/)).toHaveAttribute('lang', 'pt')
+  })
+
+  it('rejects a note over 500 characters before sending', async () => {
+    const { user } = setup()
+    await user.click(await screen.findByRole('button', { name: 'Cerrar caso' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
+    await user.click(within(dialog).getByRole('radio', { name: 'Otro' }))
+    const note = within(dialog).getByRole('textbox', { name: 'Nota interna (opcional)' })
+    await user.click(note)
+    await user.paste('a'.repeat(501))
+    expect(within(dialog).getByText('501/500')).toBeInTheDocument()
+    expect(
+      within(dialog).getAllByText('La nota puede tener hasta 500 caracteres.').length,
+    ).toBeGreaterThan(0)
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
+    expect(note).toHaveFocus()
+    expect(api.closeCase).not.toHaveBeenCalled()
+  })
+
+  it('explains a server rejection', async () => {
+    vi.mocked(api.closeCase).mockRejectedValue(new ApiProblem({ status: 409, code: 'case_closed' }))
+    const { user } = setup()
+    await user.click(await screen.findByRole('button', { name: 'Cerrar caso' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
+    await user.click(within(dialog).getByRole('radio', { name: 'Resuelto' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
+    expect(await within(dialog).findByText('Este caso ya estaba cerrado.')).toBeInTheDocument()
   })
 })

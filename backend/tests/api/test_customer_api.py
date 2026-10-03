@@ -1,4 +1,5 @@
-"""Customer chat simulator API: picker, sessions, conversation, and the live round trip."""
+"""Customer chat simulator API: picker, sessions, conversations, past conversations and the
+live round trip (assignment in the same request, queue and drain, close and reopen)."""
 
 from __future__ import annotations
 
@@ -12,7 +13,8 @@ from cc_platform.infrastructure.seed.cases import seed_case_id
 from cc_platform.infrastructure.seed.customers import seed_customer_id
 from tests.support import ANALYST, SEBASTIAN, bearer
 
-NATALIA, RAFAEL, MARCELA, PATRICIA = 2001, 2004, 1001, 1004
+NATALIA, RAFAEL, MARCELA, PATRICIA, CLAUDIA = 2001, 2004, 1001, 1004, 1005
+PATRICIA_REFUND, PATRICIA_AGAIN, PATRICIA_OLD = (seed_case_id(n) for n in (104, 108, 110))
 
 
 def write(client: TestClient, token: str, text: str, cmid: str | None = None) -> Any:
@@ -24,21 +26,34 @@ def write(client: TestClient, token: str, text: str, cmid: str | None = None) ->
     )
 
 
-def test_demo_customers_simulator_first_then_open_chats(client: TestClient) -> None:
+def availability(client: TestClient, token: str, status: str) -> None:
+    response = client.put("/api/v1/me/availability", headers=bearer(token), json={"status": status})
+    assert response.status_code == 200, response.text
+
+
+def test_demo_customers_simulator_first_then_everyone_by_name(client: TestClient) -> None:
     items = client.get("/api/v1/customer/demo-customers").json()["items"]
     names = [item["displayName"].split()[0] for item in items]
     assert names == [
-        "Natalia", "Ximena", "Lucas", "Rafael", "Andrés",  # simulator customers
-        "Marcela", "Beatriz", "Larissa", "Joaquín",  # open chat cases (not email/phone)
+        "Natalia", "Ximena", "Lucas", "Rafael", "Andrés",  # simulator customers (by id)
+        "Beatriz", "Claudia", "Gabriela", "Héctor", "Joaquín", "Larissa", "Marcela", "Patricia",
     ]  # fmt: skip
-    assert items[0]["openConversation"] is None
-    assert len(items[0]["suggestions"]) == 3
-    assert items[3]["locale"] == "pt-BR"
-    assert items[5]["openConversation"] == {
-        "caseId": seed_case_id(101),
-        "channel": "web_chat",
+    first = items[0]
+    assert set(first) == {
+        "id", "displayName", "locale", "language", "country", "city", "suggestions",
+        "openConversation", "closedConversationCount",
+    }  # fmt: skip
+    assert (first["openConversation"], first["closedConversationCount"]) == (None, 0)
+    by_name = {item["displayName"].split()[0]: item for item in items}
+    assert by_name["Patricia"]["openConversation"] == {
+        "caseId": PATRICIA_AGAIN,
+        "channel": "app_chat",
         "status": "with_agent",
     }
+    assert by_name["Patricia"]["closedConversationCount"] == 2
+    assert by_name["Claudia"]["openConversation"] is None  # closed cases never fill it
+    assert by_name["Claudia"]["closedConversationCount"] == 1
+    assert by_name["Gabriela"]["openConversation"]["status"] == "waiting_agent"
 
 
 def test_sessions(client: TestClient) -> None:
@@ -55,18 +70,18 @@ def test_sessions(client: TestClient) -> None:
         "locale": "es-CO",
         "language": "es",
     }
-    # An open case decides the channel.
+    # An open case decides the channel; every seeded customer may chat.
     marcela = client.post(
         "/api/v1/customer/sessions", json={"customerId": seed_customer_id(MARCELA)}
     )
     assert marcela.json()["channel"] == "web_chat"
+    patricia = client.post(
+        "/api/v1/customer/sessions", json={"customerId": seed_customer_id(PATRICIA)}
+    )
+    assert (patricia.status_code, patricia.json()["channel"]) == (201, "app_chat")
     for unknown in (seed_customer_id(9999), "nope"):
         missing = client.post("/api/v1/customer/sessions", json={"customerId": unknown})
         assert (missing.status_code, missing.json()["code"]) == (404, "not_found")
-    email = client.post(
-        "/api/v1/customer/sessions", json={"customerId": seed_customer_id(PATRICIA)}
-    )
-    assert email.status_code == 404  # her open case is an email: not a chat
     phone = client.post(
         "/api/v1/customer/sessions",
         json={"customerId": seed_customer_id(NATALIA), "channel": "phone"},
@@ -81,36 +96,80 @@ def test_tokens_do_not_cross_audiences(
     staff = sign_in(ANALYST.email)
     on_staff_route = client.get("/api/v1/cases/inbox", headers=bearer(customer))
     assert (on_staff_route.status_code, on_staff_route.json()["code"]) == (401, "unauthenticated")
-    on_customer_route = client.get("/api/v1/customer/conversation", headers=bearer(staff))
-    assert (on_customer_route.status_code, on_customer_route.json()["code"]) == (
-        401,
-        "unauthenticated",
-    )
-    assert client.get("/api/v1/customer/conversation").status_code == 401
+    for path in ("/api/v1/customer/conversation", "/api/v1/customer/conversations"):
+        on_customer_route = client.get(path, headers=bearer(staff))
+        assert (on_customer_route.status_code, on_customer_route.json()["code"]) == (
+            401,
+            "unauthenticated",
+        )
+        assert client.get(path).status_code == 401
+    assert client.get(f"/api/v1/customer/conversations/{PATRICIA_OLD}").status_code == 401
 
 
-def test_a_customer_only_ever_sees_their_own_conversation(
+def test_a_customer_only_ever_sees_their_own_conversations(
     client: TestClient, customer_session: Callable[..., str]
 ) -> None:
     marcela = customer_session(MARCELA)
     natalia = customer_session(NATALIA)
     mine = client.get("/api/v1/customer/conversation", headers=bearer(marcela)).json()
     assert mine["conversation"]["caseId"] == seed_case_id(101)
-    assert all(turn["kind"] in {"message", "notice"} for turn in mine["turns"])
-    assert "Escalado" not in " ".join(turn["text"] for turn in mine["turns"])  # staff banner
+    assert mine["pastConversationCount"] == 0
+    assert {turn["kind"] for turn in mine["turns"]} == {"message", "notice"}
+    assert "Asignado" not in " ".join(turn["text"] for turn in mine["turns"])  # staff banner
     theirs = client.get("/api/v1/customer/conversation", headers=bearer(natalia)).json()
-    assert theirs == {"conversation": None, "turns": []}
-    # Writing as Natalia never lands in Marcela's case.
+    assert theirs == {"conversation": None, "turns": [], "pastConversationCount": 0}
+    foreign = client.get(
+        f"/api/v1/customer/conversations/{seed_case_id(101)}", headers=bearer(natalia)
+    )
+    assert (foreign.status_code, foreign.json()["code"]) == (404, "not_found")
     created = write(client, natalia, "Hola").json()
     assert created["caseCreated"]
     assert created["conversation"]["caseId"] != seed_case_id(101)
 
 
+def test_past_conversations(client: TestClient, customer_session: Callable[..., str]) -> None:
+    token = customer_session(PATRICIA)
+    current = client.get("/api/v1/customer/conversation", headers=bearer(token)).json()
+    assert current["conversation"]["caseId"] == PATRICIA_AGAIN
+    assert current["conversation"]["previousCaseId"] == PATRICIA_REFUND
+    assert current["pastConversationCount"] == 2
+    past = client.get("/api/v1/customer/conversations", headers=bearer(token)).json()
+    assert [item["caseId"] for item in past["items"]] == [PATRICIA_REFUND, PATRICIA_OLD]
+    assert past["items"][1] == {
+        "caseId": PATRICIA_OLD,
+        "status": "closed",
+        "channel": "web_chat",
+        "openedAt": "2026-09-12T14:00:00Z",
+        "closedAt": "2026-09-12T14:15:00Z",
+        "agentName": "Julián",
+        "preview": "Ah, es cierto. Gracias.",
+    }
+    detail = client.get(f"/api/v1/customer/conversations/{PATRICIA_OLD}", headers=bearer(token))
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["conversation"]["status"] == "closed"
+    assert body["conversation"]["agentName"] == "Julián"
+    assert [t["authorRole"] for t in body["turns"]] == [
+        "customer",
+        "system",
+        "analyst",
+        "customer",
+        "system",
+    ]
+    assert body["turns"][-1]["text"].startswith("La conversación terminó")
+    assert all("resuelto" not in t["text"].lower() for t in body["turns"])  # never the reason
+    current_too = client.get(
+        f"/api/v1/customer/conversations/{PATRICIA_AGAIN}", headers=bearer(token)
+    )
+    assert current_too.status_code == 200  # any own case
+    missing = client.get(
+        f"/api/v1/customer/conversations/{seed_case_id(999)}", headers=bearer(token)
+    )
+    assert missing.status_code == 404
+
+
 def test_live_round_trip_customer_to_analyst_and_back(
-    client: TestClient,
-    customer_session: Callable[..., str],
-    sign_in: Callable[[str], str],
-    drain: Callable[[], None],
+    client: TestClient, customer_session: Callable[..., str], sign_in: Callable[[str], str]
 ) -> None:
     customer = customer_session(RAFAEL)
     cmid = str(uuid.uuid4())
@@ -118,24 +177,23 @@ def test_live_round_trip_customer_to_analyst_and_back(
     assert first.status_code == 201
     body = first.json()
     assert body["caseCreated"]
-    assert body["conversation"]["status"] == "waiting_agent"
+    # Assigned in the same request: no background routing.
+    assert body["conversation"]["status"] == "with_agent"
+    assert body["conversation"]["agentName"] == "Daniela"
     assert body["turn"]["clientMessageId"] == cmid
     replay = write(client, customer, "Olá, não reconheço uma compra no meu cartão", cmid)
     assert (replay.status_code, replay.headers["Idempotent-Replayed"]) == (200, "true")
     conflict = write(client, customer, "Outro texto", cmid)
     assert conflict.json()["code"] == "idempotency_conflict"
-    drain()  # routing runs in the background
 
     case_id = body["conversation"]["caseId"]
     daniela = bearer(sign_in(ANALYST.email))
     inbox = client.get("/api/v1/cases/inbox?status=new", headers=daniela).json()
     assert case_id in [item["id"] for item in inbox["items"]]
     detail = client.get(f"/api/v1/cases/{case_id}", headers=daniela).json()
-    assert detail["case"]["topic"] is None  # "Sin clasificar": no judge yet
     assert detail["assignment"]["policyRuleId"] == "H1"  # rule 3
-    assert [s["reasonCode"] for s in detail["routing"]["stops"][:3]] == [
-        "component_not_connected"
-    ] * 3
+    assert detail["case"]["priority"] == "medium"
+    assert detail["case"]["slaDueAt"] == "2026-10-02T14:15:00Z"
 
     answer_id = str(uuid.uuid4())
     answered = client.post(
@@ -146,7 +204,6 @@ def test_live_round_trip_customer_to_analyst_and_back(
     assert answered.status_code == 201
     conversation = client.get("/api/v1/customer/conversation", headers=bearer(customer)).json()
     assert conversation["conversation"]["status"] == "with_agent"
-    assert conversation["conversation"]["agentName"] == "Daniela"
     last = conversation["turns"][-1]
     assert (last["authorRole"], last["authorName"], last["clientMessageId"]) == (
         "analyst",
@@ -161,20 +218,77 @@ def test_live_round_trip_customer_to_analyst_and_back(
     assert [t["text"] for t in since["turns"]] == ["Olá, Rafael! Sou a Daniela, vou te ajudar."]
 
 
+def test_close_then_write_again_opens_a_linked_case(
+    client: TestClient, customer_session: Callable[..., str], sign_in: Callable[[str], str]
+) -> None:
+    token = customer_session(MARCELA)
+    daniela = bearer(sign_in(ANALYST.email))
+    closed = client.post(
+        f"/api/v1/cases/{seed_case_id(101)}/close",
+        headers=daniela,
+        json={"reason": "resolved", "note": "Nota interna"},
+    )
+    assert closed.status_code == 200
+    ended = client.get("/api/v1/customer/conversation", headers=bearer(token)).json()
+    assert ended["conversation"]["status"] == "closed"
+    assert ended["conversation"]["agentName"] == "Daniela"  # "Te atendió Daniela"
+    assert ended["pastConversationCount"] == 0  # the closed one is still the current one
+    assert "Nota interna" not in str(ended)
+
+    again = write(client, token, "Hola, otra vez").json()
+    assert again["caseCreated"]
+    new_id = again["conversation"]["caseId"]
+    assert new_id != seed_case_id(101)
+    assert again["conversation"]["previousCaseId"] == seed_case_id(101)
+    assert again["conversation"]["status"] == "with_agent"
+    now = client.get("/api/v1/customer/conversation", headers=bearer(token)).json()
+    assert now["conversation"]["caseId"] == new_id
+    assert now["pastConversationCount"] == 1
+    past = client.get("/api/v1/customer/conversations", headers=bearer(token)).json()
+    assert [item["caseId"] for item in past["items"]] == [seed_case_id(101)]
+
+    card = client.get(f"/api/v1/cases/{new_id}", headers=daniela).json()
+    assert (card["case"]["previousCaseId"], card["previousCaseCount"]) == (seed_case_id(101), 1)
+    history = client.get(f"/api/v1/cases/{new_id}/history", headers=daniela).json()
+    assert [(i["id"], i["closeReason"]) for i in history["items"]] == [
+        (seed_case_id(101), "resolved")
+    ]
+
+
+def test_queue_and_drain_through_the_api(
+    client: TestClient,
+    customer_session: Callable[..., str],
+    sign_in: Callable[[str], str],
+    drain: Callable[[], None],
+) -> None:
+    daniela = sign_in(ANALYST.email)
+    availability(client, daniela, "paused")
+    token = customer_session(RAFAEL)
+    queued = write(client, token, "Olá").json()
+    assert queued["conversation"]["status"] == "waiting_agent"
+    assert queued["conversation"]["agentName"] is None
+    availability(client, daniela, "available")
+    drain()  # the queue drains in the background
+    after = client.get("/api/v1/customer/conversation", headers=bearer(token)).json()
+    assert after["conversation"]["status"] == "with_agent"
+    detail = client.get(
+        f"/api/v1/cases/{queued['conversation']['caseId']}", headers=bearer(daniela)
+    ).json()
+    assert detail["assignment"]["reason"] == "queue_drained"
+    assert detail["assignment"]["queueLabel"] == "Cola en portugués"
+    assert detail["assignment"]["waitedSeconds"] == 0
+
+
 def test_least_loaded_analyst_gets_the_next_case(
     client: TestClient,
     customer_session: Callable[..., str],
     sign_in: Callable[[str], str],
     drain: Callable[[], None],
 ) -> None:
-    sebastian = bearer(sign_in(SEBASTIAN.email))
-    assert (
-        client.put(
-            "/api/v1/me/availability", headers=sebastian, json={"status": "available"}
-        ).json()["status"]
-        == "available"
-    )
+    sebastian = sign_in(SEBASTIAN.email)
+    availability(client, sebastian, "available")
+    drain()  # he speaks Portuguese and holds nothing: the queued case 109 goes to him
     case_id = write(client, customer_session(NATALIA), "Hola").json()["conversation"]["caseId"]
-    drain()
-    inbox = client.get("/api/v1/cases/inbox", headers=sebastian).json()
-    assert [item["id"] for item in inbox["items"]] == [case_id]
+    inbox = client.get("/api/v1/cases/inbox", headers=bearer(sebastian)).json()
+    # 1 open case against Daniela's 5: he also gets the next Spanish case.
+    assert {item["id"] for item in inbox["items"]} == {seed_case_id(109), case_id}

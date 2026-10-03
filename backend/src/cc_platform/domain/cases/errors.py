@@ -16,16 +16,6 @@ class CaseClosedError(ConflictError):
         super().__init__(None, currentStatus=CaseStatus.CLOSED.value)
 
 
-class ChannelNotSupportedError(ConflictError):
-    """Only chat channels work live in slice 1; phone and email are read-only (409)."""
-
-    code = "channel_not_supported"
-    default_message = "Por ahora solo puedes escribir en casos de chat."
-
-    def __init__(self, channel: str) -> None:
-        super().__init__(None, channel=channel)
-
-
 class IdempotencyConflictError(ConflictError):
     """The same ``clientMessageId`` was already used with another text (409)."""
 

@@ -1,7 +1,7 @@
 """Background work port: run a job after the current request without making it wait.
 
 Used by process managers (bus subscribers) for work a command triggers but must not block
-on, e.g. routing a case after ``case.opened`` (the customer's POST never waits for it).
+on, e.g. draining the queue when an analyst becomes available (her PUT never waits for it).
 The in-process adapter keeps a reference to every task (so none is garbage-collected
 mid-flight), logs failures, and can ``drain()`` pending jobs (tests, shutdown). A
 multi-process deployment swaps it for a queue behind the same port.

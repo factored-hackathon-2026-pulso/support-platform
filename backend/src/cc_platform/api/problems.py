@@ -36,7 +36,6 @@ class ProblemCode(StrEnum):
     # cases
     CASE_NOT_ASSIGNED = "case_not_assigned"
     CASE_CLOSED = "case_closed"
-    CHANNEL_NOT_SUPPORTED = "channel_not_supported"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     # input and business rules
     INVALID_VALUE = "invalid_value"
@@ -76,11 +75,8 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
     P.CONFLICT: ProblemSpec(409, "Conflict"),
     P.CONCURRENT_UPDATE: ProblemSpec(409, "Concurrent update"),
     P.INVALID_TRANSITION: ProblemSpec(409, "Invalid state transition"),
-    P.CASE_NOT_ASSIGNED: ProblemSpec(403, "Case not assigned", "Este caso no está asignado a ti."),
+    P.CASE_NOT_ASSIGNED: ProblemSpec(403, "Case not assigned", "No tienes acceso a este caso."),
     P.CASE_CLOSED: ProblemSpec(409, "Case closed", "Este caso ya está cerrado."),
-    P.CHANNEL_NOT_SUPPORTED: ProblemSpec(
-        409, "Channel not supported", "Por ahora solo puedes escribir en casos de chat."
-    ),
     P.IDEMPOTENCY_CONFLICT: ProblemSpec(
         409, "Idempotency conflict", "Ese mensaje ya se envió con otro texto."
     ),

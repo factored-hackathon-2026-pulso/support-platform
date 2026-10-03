@@ -25,6 +25,7 @@ from tests.support import make_actor
 NOW = datetime(2026, 10, 2, 14, tzinfo=UTC)
 CASE_ID = "CASE-" + "0" * 25 + "1"
 STAFF_ID = "STF-" + "0" * 25 + "7"
+CUSTOMER_ID = "CUS-" + "0" * 25 + "1"
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -53,7 +54,7 @@ def assigned() -> CaseAssigned:
     [
         (f"case:{CASE_ID}", TopicKind.CASE),
         (f"inbox:{STAFF_ID}", TopicKind.INBOX),
-        ("approvals", TopicKind.APPROVALS),
+        (f"customer:{CUSTOMER_ID}", TopicKind.CUSTOMER),
     ],
 )
 def test_topic_parse_round_trips(raw: str, kind: TopicKind) -> None:
@@ -70,7 +71,9 @@ def test_topic_parse_round_trips(raw: str, kind: TopicKind) -> None:
         "case:",
         "case:CASE-1",
         f"case:{STAFF_ID}",
+        "approvals",  # removed in slice 2
         "approvals:x",
+        "inbox",
         "chat:1",
         f"inbox:{CASE_ID}",
     ],
@@ -92,8 +95,8 @@ def test_access_policy() -> None:
     assert policy.can_subscribe(analyst, Topic.inbox(analyst.staff_id))
     assert not policy.can_subscribe(analyst, other_inbox)
     assert policy.can_subscribe(supervisor, other_inbox)
-    assert policy.can_subscribe(supervisor, Topic.approvals())
-    assert not policy.can_subscribe(analyst, Topic.approvals())
+    assert not policy.can_subscribe(supervisor, Topic.customer(CUSTOMER_ID))
+    assert [kind.value for kind in TopicKind] == ["case", "inbox", "customer"]
 
 
 def test_topic_mapper_uses_case_by_default_and_registered_rules() -> None:
@@ -112,7 +115,7 @@ async def test_projector_fans_out_envelopes_to_topic_subscribers() -> None:
     listener = hub.connect(connection_id="CON-1", principal_id=STAFF_ID, session_id="SES-1")
     bystander = hub.connect(connection_id="CON-2", principal_id=STAFF_ID, session_id="SES-2")
     hub.subscribe(listener.id, f"case:{CASE_ID}")
-    hub.subscribe(bystander.id, "approvals")
+    hub.subscribe(bystander.id, f"inbox:{STAFF_ID}")
 
     await RealtimeProjector(hub, TopicMapper())(record(assigned()))
 
@@ -130,7 +133,7 @@ async def test_projector_fans_out_envelopes_to_topic_subscribers() -> None:
             "payload": {"analyst_id": STAFF_ID},
         },
     }
-    assert hub.subscriber_count("approvals") == 1
+    assert hub.subscriber_count(f"inbox:{STAFF_ID}") == 1
     hub.disconnect(bystander.id)
     assert await bystander.next_envelope() is None
 

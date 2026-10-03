@@ -1,5 +1,5 @@
 /**
- * Customer simulator calls (docs/platform/api/slice-1-cases.md §4). The simulator
+ * Customer simulator calls (docs/platform/api/slice-2-case-lifecycle.md §6). The simulator
  * has its own API client bound to the **customer** token store, so the staff
  * session is never sent nor cleared from here. Tests mock this module with
  * `vi.mock('@/features/customer-chat/api')`.
@@ -8,6 +8,8 @@ import { createApiClient, unwrap } from '@/lib/api'
 import { customerSessionToken } from '@/lib/session-token'
 import type {
   CreateCustomerSessionRequest,
+  CustomerConversationDetail,
+  CustomerConversationList,
   CustomerConversationResponse,
   CustomerSessionResponse,
   DemoCustomerList,
@@ -15,11 +17,14 @@ import type {
   PostCustomerTurnResponse,
 } from './types'
 
-/** Query keys (frozen by the contract §7.2). */
+/** Query keys (frozen by the contract §9.6). */
 export const customerChatKeys = {
   all: ['customer-chat'] as const,
   demoCustomers: () => ['customer-chat', 'demo-customers'] as const,
   conversation: (customerId: string) => ['customer-chat', customerId, 'conversation'] as const,
+  pastConversations: (customerId: string) => ['customer-chat', customerId, 'past'] as const,
+  pastConversation: (customerId: string, caseId: string) =>
+    ['customer-chat', customerId, 'past', caseId] as const,
 }
 
 export const customerChatMutationKeys = {
@@ -30,7 +35,7 @@ export const customerChatMutationKeys = {
 /** Bearer = customer token; a 401 for it clears it (back to the picker). */
 export const customerApi = createApiClient({ tokenStore: customerSessionToken })
 
-/** GET /customer/demo-customers (no auth): simulator customers, then those with an open chat. */
+/** GET /customer/demo-customers (no auth): simulator customers first, then the other seeded ones. */
 export async function listDemoCustomers(signal?: AbortSignal): Promise<DemoCustomerList> {
   return unwrap(customerApi.GET('/api/v1/customer/demo-customers', { signal }))
 }
@@ -42,14 +47,17 @@ export async function createCustomerSession(
   return unwrap(customerApi.POST('/api/v1/customer/sessions', { body }))
 }
 
-/** GET /customer/conversation: the open case (or the last closed one) and its visible turns. */
+/**
+ * GET /customer/conversation: the open case (or the last closed one), its
+ * visible turns and `pastConversationCount`.
+ */
 export async function fetchCustomerConversation(
   signal?: AbortSignal,
 ): Promise<CustomerConversationResponse> {
   return unwrap(customerApi.GET('/api/v1/customer/conversation', { signal }))
 }
 
-/** POST /customer/conversation/turns: opens a case when none is open, else appends. */
+/** POST /customer/conversation/turns: opens a case when none is open (also after a close), else appends. */
 export async function postCustomerTurn(
   body: PostCustomerTurnRequest,
 ): Promise<PostCustomerTurnResponse> {
@@ -57,6 +65,26 @@ export async function postCustomerTurn(
     customerApi.POST('/api/v1/customer/conversation/turns', {
       params: { header: { 'Idempotency-Key': body.clientMessageId } },
       body,
+    }),
+  )
+}
+
+/** GET /customer/conversations: closed conversations other than the current one, newest first. */
+export async function listPastConversations(
+  signal?: AbortSignal,
+): Promise<CustomerConversationList> {
+  return unwrap(customerApi.GET('/api/v1/customer/conversations', { signal }))
+}
+
+/** GET /customer/conversations/{caseId}: one own conversation, read-only (404 if not theirs). */
+export async function fetchPastConversation(
+  caseId: string,
+  signal?: AbortSignal,
+): Promise<CustomerConversationDetail> {
+  return unwrap(
+    customerApi.GET('/api/v1/customer/conversations/{caseId}', {
+      params: { path: { caseId } },
+      signal,
     }),
   )
 }

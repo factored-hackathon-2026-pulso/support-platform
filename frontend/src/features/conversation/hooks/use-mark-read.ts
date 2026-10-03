@@ -20,7 +20,7 @@ function isDocumentVisible(): boolean {
 /**
  * Moves the assignee's read cursor to the last turn when the case is new or has
  * unread customer messages, while the tab is visible. The server moves an
- * `assigned` case to `in_progress` (Nuevos → Por responder / En espera).
+ * `assigned` case to `in_progress` (Nuevos → Por responder).
  */
 export function useMarkRead(summary: CaseSummary | undefined, meId: string): void {
   const queryClient = useQueryClient()

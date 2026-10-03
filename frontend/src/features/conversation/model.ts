@@ -1,25 +1,30 @@
 /**
  * Conversation rules (pure, unit-tested): how turns are merged, ordered and
  * deduplicated (REST pages, realtime echoes and optimistic sends), how each turn
- * is shown, the copy of the header, the composer, "Cómo llegó a ti" and the
- * close dialog. Contract: docs/platform/api/slice-1-cases.md §3–§5.
+ * is shown, the copy of the header, "Cómo llegó a ti", the read-only footer,
+ * "Casos anteriores" and the close dialog. Contract:
+ * docs/platform/api/slice-2-case-lifecycle.md §4, §9.3–§9.5 (transcript rules
+ * unchanged from slice-1-cases.md §5).
  */
-import { channelPhrase, countryName, isNewerCase, priorityLabel } from '@/features/cases'
+import {
+  channelPhrase,
+  closeReasonLabel,
+  countryName,
+  isNewerCase,
+  priorityLabel,
+  type CloseReason,
+} from '@/features/cases'
 import { isApiProblem } from '@/lib/api'
-import { formatDateTime, formatDuration, formatTimer } from '@/lib/format'
+import { formatDate, formatDateTime, formatDuration } from '@/lib/format'
 import type {
-  AssignmentReason,
-  CaseChannel,
+  CaseClosure,
   CaseDetail,
+  CaseHistoryItem,
   CaseSummary,
   CloseCaseRequest,
-  ContactReason,
-  FollowUp,
   Language,
   PendingMessage,
   ReplyBlockedReason,
-  ResolutionCode,
-  RouteStop,
   TranscriptCache,
   Turn,
   TurnPage,
@@ -177,7 +182,12 @@ export function readTarget(summary: CaseSummary, meId: string): number | null {
 
 // ── How each turn is shown ───────────────────────────────────────────────────
 
-export type TranscriptVariant = 'customer' | 'own' | 'analyst' | 'bot' | 'routing' | 'notice'
+/**
+ * `customer` left; `own` (the viewer) right in ink; `analyst` another analyst
+ * (e.g. Julián in a history case) right in ink-2; `routing` the centred staff-only
+ * assignment banner; `notice` a centred muted note.
+ */
+export type TranscriptVariant = 'customer' | 'own' | 'analyst' | 'routing' | 'notice'
 
 export interface TranscriptItem {
   /**
@@ -188,7 +198,7 @@ export interface TranscriptItem {
   key: string
   variant: TranscriptVariant
   text: string
-  /** Who wrote it ("Tú", the customer, "Árbol de decisión"); null for banners and notes. */
+  /** Who wrote it ("Tú", the customer, another analyst); null for banners and notes. */
   author: string | null
   createdAt: string
   sequence: number | null
@@ -200,13 +210,6 @@ export interface TranscriptItem {
   clientMessageId: string | null
 }
 
-const BOT_LABELS: Partial<Record<Turn['authorRole'], string>> = {
-  judge: 'Juez de entrada',
-  tree: 'Árbol de decisión',
-  ai_agent: 'Agente de IA',
-  copilot: 'Copiloto',
-}
-
 export function turnVariant(turn: Turn, meId: string): TranscriptVariant {
   if (turn.kind === 'routing') return 'routing'
   if (turn.kind === 'notice') return 'notice'
@@ -215,10 +218,8 @@ export function turnVariant(turn: Turn, meId: string): TranscriptVariant {
       return 'customer'
     case 'analyst':
       return turn.authorId === meId ? 'own' : 'analyst'
-    case 'system':
-      return 'notice'
     default:
-      return 'bot'
+      return 'notice'
   }
 }
 
@@ -230,8 +231,6 @@ export function turnAuthor(turn: Turn, variant: TranscriptVariant): string | nul
       return turn.authorName ?? 'Cliente'
     case 'analyst':
       return turn.authorName ?? 'Analista'
-    case 'bot':
-      return turn.authorName ?? BOT_LABELS[turn.authorRole] ?? 'Asistente automático'
     default:
       return null
   }
@@ -276,33 +275,17 @@ export function noticeLabel(item: TranscriptItem): string {
   return item.staffOnly ? 'Nota interna' : 'Aviso al cliente'
 }
 
-// ── Header, layouts, call bar ────────────────────────────────────────────────
-
-export type ConversationLayout = 'chat' | 'call' | 'email'
-
-export function conversationLayout(channel: CaseChannel): ConversationLayout {
-  if (channel === 'phone') return 'call'
-  if (channel === 'email') return 'email'
-  return 'chat'
-}
-
-function entryLabel(detail: CaseDetail): string | null {
-  return detail.routing.stops.find((stop) => stop.kind === 'entry')?.label ?? null
-}
+// ── Header ──────────────────────────────────────────────────────────────────
 
 /**
- * Header meta line after the topic: "Colombia · Barranquilla · chat web · prioridad media",
- * "Colombia · Medellín · chat web · en portugués", "México · reclamo por la CONDUSEF · prioridad baja".
+ * Header meta line (contract §9.3): "Colombia · Barranquilla · chat web ·
+ * prioridad media"; a Portuguese case ends "· en portugués" instead (rule 3: the
+ * only cue outside the transcript that the reply must be in Portuguese).
  */
-export function caseHeaderMeta(detail: CaseDetail): string {
+export function caseHeaderMeta(detail: Pick<CaseDetail, 'case' | 'customer'>): string {
   const { case: summary, customer } = detail
   const last =
     summary.language === 'pt' ? 'en portugués' : priorityLabel(summary.priority).toLowerCase()
-  const entry = entryLabel(detail)
-  if (summary.origin === 'regulator') {
-    const via = entry ? `reclamo por la ${entry}` : 'reclamo de un regulador'
-    return [countryName(customer.country), via, last].join(' · ')
-  }
   return [countryName(customer.country), customer.city, channelPhrase(summary.channel), last].join(
     ' · ',
   )
@@ -319,61 +302,117 @@ export function shortCaseId(id: string): string {
   return `${id.slice(0, dash + 1)}…${id.slice(-4)}`
 }
 
-export interface CallBarState {
-  state: string
-  tone: 'success' | 'callout' | 'neutral'
-  /** "04:06" while in a call; null otherwise. */
-  timer: string | null
-  /** "Entrante · el IVR verificó su identidad" / "Saliente · reclamo por la CONDUSEF". */
-  kind: string
+/** "Casos anteriores (2)": the header button, shown only when there are any. */
+export function previousCasesLabel(count: number): string | null {
+  return count > 0 ? `Casos anteriores (${count})` : null
 }
 
-export function callBarState(detail: CaseDetail, now: number): CallBarState {
-  const { case: summary, channelIdentity } = detail
-  const entry = entryLabel(detail)
-  const outbound = channelIdentity.kind === 'outbound_call'
-  const kind = outbound
-    ? summary.origin === 'regulator' && entry
-      ? `Saliente · reclamo por la ${entry}`
-      : 'Saliente'
-    : channelIdentity.verified
-      ? `Entrante · ${entry ? `el ${entry}` : 'el canal'} verificó su identidad`
-      : 'Entrante'
-  if (summary.status === 'in_call' && summary.liveSince) {
-    const seconds = (now - new Date(summary.liveSince).getTime()) / 1000
-    return { state: 'En llamada', tone: 'success', timer: formatTimer(seconds), kind }
+function firstName(name: string | null | undefined): string {
+  return name?.trim().split(/\s+/)[0] ?? ''
+}
+
+// ── "Cómo llegó a ti" (people-based assignment only, contract §9.3) ──────────
+
+const LANGUAGE_NAMES: Record<Language, string> = { es: 'español', pt: 'portugués' }
+
+/** "45 s", "2 min 13 s", "6 min", "1 h 5 min". */
+export function formatWait(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 60) return `${s} s`
+  if (s >= 3600) return formatDuration(s / 60)
+  const rest = s % 60
+  return rest ? `${Math.floor(s / 60)} min ${rest} s` : `${s / 60} min`
+}
+
+/** "la cola en portugués" from the server's "Cola en portugués". */
+function queueInSentence(queueLabel: string | null): string {
+  if (!queueLabel) return 'la cola'
+  return `la ${queueLabel.charAt(0).toLowerCase()}${queueLabel.slice(1)}`
+}
+
+/**
+ * The one-line "Cómo llegó a ti" note, from the recorded `assignment` only:
+ * - mine, `language_least_loaded`: "Te llegó porque estás disponible y hablas
+ *   portugués (regla 3) · 5 mar, 10:58";
+ * - mine, `queue_drained`: "Esperó 6 min en la cola en portugués y te llegó
+ *   cuando quedaste disponible · 5 mar, 10:58";
+ * - someone else's (history or supervisor view): "Lo atendió Julián Ortega";
+ * - no assignment (queued): null.
+ */
+export function arrivalLine(
+  detail: Pick<CaseDetail, 'assignment' | 'case'>,
+  meId: string,
+): string | null {
+  const { assignment } = detail
+  if (!assignment) return null
+  if (assignment.analystId !== meId) return `Lo atendió ${assignment.analystName}`
+  const when = formatDateTime(assignment.assignedAt, { withYear: false })
+  if (assignment.reason === 'queue_drained') {
+    const waited =
+      assignment.waitedSeconds !== null
+        ? `Esperó ${formatWait(assignment.waitedSeconds)}`
+        : 'Esperó'
+    return `${waited} en ${queueInSentence(assignment.queueLabel)} y te llegó cuando quedaste disponible · ${when}`
   }
-  if (summary.status === 'to_call')
-    return { state: 'Por llamar', tone: 'callout', timer: null, kind }
-  if (summary.status === 'closed')
-    return { state: 'Caso cerrado', tone: 'neutral', timer: null, kind }
-  return { state: 'Llamada terminada', tone: 'neutral', timer: null, kind }
+  const language = LANGUAGE_NAMES[detail.case.language]
+  const rule = detail.case.language === 'pt' ? ' (regla 3)' : ''
+  return `Te llegó porque estás disponible y hablas ${language}${rule} · ${when}`
 }
 
-/** Offset of a call line from the start of the call ("02:07"). */
-export function callOffset(createdAt: string, startedAt: string): string {
-  return formatTimer((new Date(createdAt).getTime() - new Date(startedAt).getTime()) / 1000)
+// ── Read-only footer and closure (contract §9.3) ────────────────────────────
+
+/**
+ * "Caso cerrado el 3 mar, 10:15 · Resuelto"; when someone else closed it:
+ * "Caso cerrado el 3 mar, 10:15 por Julián Ortega · Resuelto".
+ */
+export function closureLine(
+  closure: Pick<CaseClosure, 'closedAt' | 'closedById' | 'closedByName' | 'reason'>,
+  meId?: string,
+): string {
+  const when = formatDateTime(closure.closedAt, { withYear: false })
+  const by =
+    meId !== undefined && closure.closedById !== meId && closure.closedByName
+      ? ` por ${closure.closedByName}`
+      : ''
+  return `Caso cerrado el ${when}${by} · ${closeReasonLabel(closure.reason)}`
 }
 
-/** First meaningful line of an e-mail (skips greetings), for collapsed older mails. */
-export function emailSnippet(body: string): string {
-  const lines = body
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  return lines.find((line) => !/^(hola|buenas|buenos)\b/i.test(line)) ?? lines[0] ?? ''
+/** "Nota: …" under the closure line, or null without a note. */
+export function closureNote(closure: Pick<CaseClosure, 'note'>): string | null {
+  const note = closure.note?.trim()
+  return note ? `Nota: ${note}` : null
+}
+
+export const REPLY_BLOCKED_COPY: Record<ReplyBlockedReason, string> = {
+  not_assignee: 'Solo lectura: este caso es de otra persona del equipo.',
+  closed: 'Este caso está cerrado. Si el cliente vuelve a escribir, se abre un caso nuevo.',
+}
+
+/**
+ * Lines of the read-only footer that replaces the composer, or null when the
+ * viewer can reply. Closed: the closure line (+ "Nota: …"). Not the assignee:
+ * "Solo lectura: este caso es de {analystName}."
+ */
+export function readOnlyFooter(
+  detail: Pick<CaseDetail, 'capabilities' | 'closure' | 'assignment'>,
+  meId: string,
+): string[] | null {
+  const { capabilities, closure, assignment } = detail
+  if (capabilities.canReply) return null
+  if (closure) {
+    const note = closureNote(closure)
+    return note ? [closureLine(closure, meId), note] : [closureLine(closure, meId)]
+  }
+  const reason = capabilities.replyBlockedReason ?? 'closed'
+  if (reason === 'not_assignee' && assignment?.analystName) {
+    return [`Solo lectura: este caso es de ${assignment.analystName}.`]
+  }
+  return [REPLY_BLOCKED_COPY[reason]]
 }
 
 // ── Composer ────────────────────────────────────────────────────────────────
 
 export const MAX_MESSAGE_LENGTH = 4000
-
-export const REPLY_BLOCKED_COPY: Record<ReplyBlockedReason, string> = {
-  not_assignee: 'Solo la persona asignada puede escribir en este caso.',
-  closed: 'Este caso está cerrado. Si el cliente vuelve a escribir, se abre un caso nuevo.',
-  channel_not_supported:
-    'Por ahora solo el chat funciona en vivo. Llamadas y correo llegan en una próxima entrega.',
-}
 
 /** Text to send, or null when there is nothing to send (blank) or it is too long. */
 export function normalizeMessage(text: string): string | null {
@@ -393,11 +432,6 @@ export function describeSendFailure(error: unknown): SendFailure {
     switch (error.code) {
       case 'case_closed':
         return { message: 'No se envió: el caso ya está cerrado.', retryable: false }
-      case 'channel_not_supported':
-        return {
-          message: 'No se envió: por ahora solo puedes escribir en chats.',
-          retryable: false,
-        }
       case 'case_not_assigned':
       case 'forbidden':
         return { message: 'No se envió: este caso ya no está asignado a ti.', retryable: false }
@@ -418,8 +452,9 @@ export function describeSendFailure(error: unknown): SendFailure {
 export function describeCaseLoadFailure(error: unknown): { title: string; description: string } {
   if (isApiProblem(error, 'case_not_assigned') || isApiProblem(error, 'forbidden')) {
     return {
-      title: 'Este caso no está asignado a ti',
-      description: 'Solo la persona asignada y las supervisoras pueden verlo.',
+      title: 'No tienes acceso a este caso',
+      description:
+        'Lo ven la persona asignada, las supervisoras y quien atendió antes a este cliente.',
     }
   }
   if (isApiProblem(error, 'not_found')) {
@@ -431,259 +466,69 @@ export function describeCaseLoadFailure(error: unknown): { title: string; descri
   }
 }
 
-// ── "Cómo llegó a ti" ───────────────────────────────────────────────────────
+// ── "Casos anteriores de este cliente" (contract §4.7, §9.4) ────────────────
 
-const LANGUAGE_NAMES: Record<Language, string> = { es: 'español', pt: 'portugués' }
-
-const INPUT_LABELS: Record<string, string> = {
-  customers: 'su ficha',
-  transactions: 'sus movimientos',
-  complaints: 'sus reclamos',
-  interactions: 'sus contactos anteriores',
-  products: 'sus productos',
-  digital_events: 'su actividad digital',
-  turn: 'la conversación',
+/** "Casos anteriores de Patricia". */
+export function historySheetTitle(customerName: string): string {
+  const first = firstName(customerName)
+  return first ? `Casos anteriores de ${first}` : 'Casos anteriores'
 }
 
-const TIER_NAMES: Record<string, { title: string; short: string }> = {
-  judge: { title: 'Juez de entrada', short: 'juez' },
-  tree: { title: 'Árbol de decisión', short: 'árbol' },
-  ai_agent: { title: 'Agente de IA', short: 'agente de IA' },
-  human: { title: 'Persona', short: 'persona' },
-  supervisor: { title: 'Supervisora', short: 'supervisora' },
+/** "3 mar 2026 · Resuelto · Julián Ortega"; an open case says "Abierto"; nobody → "Sin asignar". */
+export function historyItemLine(
+  item: Pick<CaseHistoryItem, 'openedAt' | 'status' | 'closeReason' | 'analystName'>,
+): string {
+  const state = item.status === 'closed' ? closeReasonLabel(item.closeReason) : 'Abierto'
+  return [formatDate(item.openedAt), state, item.analystName ?? 'Sin asignar'].join(' · ')
 }
 
-/** Lower-cases the first letter of a label unless it is an acronym ("IVR", "CONDUSEF"). */
-function lowerFirst(text: string): string {
-  const [first = '', second = ''] = text
-  return second && second === second.toUpperCase() && second !== second.toLowerCase()
-    ? text
-    : first.toLowerCase() + text.slice(1)
+/** Shown under the list when the server capped it (it returns at most 20). */
+export function historyTruncatedNote(shown: number, total: number): string | null {
+  return total > shown ? 'Se muestran los 20 más recientes.' : null
 }
 
-function upperFirst(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1)
-}
+// ── Close dialog (contract §4.4, §9.5) ──────────────────────────────────────
 
-/** Spanish list: "a", "a y b", "a, b y c". */
-export function joinSpanish(items: readonly string[]): string {
-  if (items.length <= 1) return items[0] ?? ''
-  return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`
-}
-
-/** "Esperó 2 min 13 s." style wait. */
-export function formatWait(seconds: number): string {
-  const s = Math.max(0, Math.round(seconds))
-  if (s < 60) return `${s} s`
-  if (s >= 3600) return formatDuration(s / 60)
-  const rest = s % 60
-  return rest ? `${Math.floor(s / 60)} min ${rest} s` : `${s / 60} min`
-}
-
-function firstName(name: string | null): string {
-  return name?.trim().split(/\s+/)[0] ?? 'otra persona'
-}
-
-/** Short name of a stop in the one-line route ("juez", "agente de disputas", "tú"). */
-function stopShortName(stop: RouteStop, meId: string): string {
-  switch (stop.kind) {
-    case 'tier':
-      return stop.label ? lowerFirst(stop.label) : (TIER_NAMES[stop.tier ?? '']?.short ?? 'nivel')
-    case 'assignee':
-      return stop.staffId === meId ? 'tú' : firstName(stop.label)
-    default:
-      return stop.label ? lowerFirst(stop.label) : stop.kind === 'queue' ? 'cola' : 'entrada'
-  }
-}
-
-/** "Juez → árbol → agente de IA → tú", "IVR → cola de disputas → tú". */
-export function routeLine(stops: readonly RouteStop[], meId: string): string {
-  if (stops.length === 0) return 'Sin recorrido registrado'
-  return upperFirst(stops.map((stop) => stopShortName(stop, meId)).join(' → '))
-}
-
-export interface RouteStepView {
-  key: string
-  title: string
-  lines: string[]
-  /** The last stop (whoever has the case now) is drawn in ink. */
-  current: boolean
-}
-
-const OUTCOME_COPY: Record<string, string> = {
-  abstained: 'Pasó el caso sin atenderlo.',
-  handed_off: 'Atendió una parte y pasó el caso.',
-  mitigated: 'Atendió una parte y pasó el caso.',
-  resolved: 'Lo resolvió.',
-}
-
-function stopTitle(stop: RouteStop, meId: string): string {
-  switch (stop.kind) {
-    case 'tier':
-      return stop.label ?? TIER_NAMES[stop.tier ?? '']?.title ?? 'Nivel automático'
-    case 'assignee':
-      return stop.staffId === meId ? 'Tú' : (stop.label ?? 'Persona asignada')
-    case 'queue':
-      return stop.label ?? 'Cola'
-    default:
-      return stop.label ?? 'Entrada'
-  }
-}
+/** Maximum length of the internal note, after trimming. */
+export const CLOSE_NOTE_MAX_LENGTH = 500
 
 /**
- * Policy rule ids (docs/policies.md, "de dónde sale cada regla") → the rule
- * number analysts know. Only rules that can route or assign a case are listed.
+ * The notice the customer gets when the case closes, in the case language. It
+ * must stay identical to the backend text (contract §3.3); a model test pins it.
  */
-const POLICY_RULE_NUMBERS: Record<string, number> = {
-  R1: 1,
-  R3: 2,
-  H1: 3,
-  R2: 4,
-  B1: 5,
-  AP1: 6,
-  L1: 7,
-  A1: 8,
-  R4: 10,
-  H2: 10,
-  A2: 11,
+export const CLOSED_NOTICE: Record<Language, string> = {
+  es: 'La conversación terminó. Si necesitas algo más, escríbenos y te atendemos en una nueva conversación.',
+  pt: 'A conversa foi encerrada. Se precisar de algo mais, escreva para nós e abrimos uma nova conversa.',
 }
-
-/** " (regla 3)" when the server recorded the rule behind the step, else "". */
-function ruleSuffix(policyRuleId: string | null): string {
-  const number = policyRuleId ? POLICY_RULE_NUMBERS[policyRuleId] : undefined
-  return number ? ` (regla ${number})` : ''
-}
-
-/**
- * Why the case reached the viewer, from what the server recorded on the
- * assignment (`reasonCode` = `AssignmentReason`, `policyRuleId`), never guessed:
- * an outbound follow-up is not "you are available and speak Spanish".
- */
-function assignedToMeLine(stop: RouteStop, detail: CaseDetail): string {
-  const rule = ruleSuffix(stop.policyRuleId)
-  switch (stop.reasonCode as AssignmentReason | null) {
-    case 'language_least_loaded':
-    case 'queue_drained':
-      return `Te llegó porque estás disponible y hablas ${LANGUAGE_NAMES[detail.case.language]}${rule}.`
-    case 'outbound_followup':
-      return `Te lo asignaron para llamar al cliente: seguimiento saliente${rule}.`
-    default:
-      return `Te lo asignaron${rule}.`
-  }
-}
-
-function stopLines(stop: RouteStop, detail: CaseDetail, meId: string): string[] {
-  if (stop.kind === 'tier') {
-    if (stop.summary) return [stop.summary]
-    if (stop.outcome === 'abstained' && stop.reasonCode === 'component_not_connected') {
-      return ['Todavía no hay uno conectado: pasó el caso sin atenderlo.']
-    }
-    return [OUTCOME_COPY[stop.outcome ?? ''] ?? 'Pasó el caso.']
-  }
-  if (stop.kind === 'queue') {
-    const lines = stop.summary ? [stop.summary] : []
-    if (stop.waitedSeconds !== null) lines.push(`Esperó ${formatWait(stop.waitedSeconds)}.`)
-    return lines.length ? lines : ['Esperó en la cola.']
-  }
-  if (stop.kind === 'assignee') {
-    const since = `Desde el ${formatDateTime(stop.occurredAt, { withYear: false })}.`
-    if (stop.summary) return [stop.summary, since]
-    if (stop.staffId !== meId) return [`Asignado a ${stop.label ?? 'otra persona'}.`, since]
-    return [assignedToMeLine(stop, detail), since]
-  }
-  return stop.summary ? [stop.summary] : []
-}
-
-export function routeSteps(detail: CaseDetail, meId: string): RouteStepView[] {
-  const { stops } = detail.routing
-  return stops.map((stop, index) => ({
-    key: `${index}-${stop.kind}-${stop.occurredAt}`,
-    title: stopTitle(stop, meId),
-    lines: stopLines(stop, detail, meId),
-    current: index === stops.length - 1,
-  }))
-}
-
-/** "Usaron su ficha y sus movimientos." / "Ningún nivel automático leyó datos del cliente." */
-export function inputsSentence(inputsUsed: readonly string[]): string {
-  if (inputsUsed.length === 0) return 'Ningún nivel automático leyó datos del cliente.'
-  return `Usaron ${joinSpanish(inputsUsed.map((name) => INPUT_LABELS[name] ?? name))}.`
-}
-
-// ── Close dialog ────────────────────────────────────────────────────────────
-
-/** "Motivo del contacto", in canvas order. */
-export const CONTACT_REASON_OPTIONS: ReadonlyArray<{ value: ContactReason; label: string }> = [
-  { value: 'Transaccional', label: 'Transaccional' },
-  { value: 'Queja', label: 'Queja' },
-  { value: 'Producto', label: 'Producto' },
-  { value: 'Técnico', label: 'Técnico' },
-  { value: 'Comercial', label: 'Comercial' },
-  { value: 'Retención', label: 'Retención' },
-]
-
-export const FOLLOW_UP_OPTIONS: ReadonlyArray<{ value: FollowUp; label: string }> = [
-  { value: 'tomorrow', label: 'Mañana' },
-  { value: 'in_two_days', label: 'En 2 días' },
-  { value: 'none', label: 'Sin seguimiento' },
-]
-
-/** "Qué se hizo": the five canvas phrases → `ResolutionCode`. */
-export const RESOLUTION_OPTIONS: ReadonlyArray<{ value: ResolutionCode; label: string }> = [
-  {
-    value: 'escalated_to_area',
-    label: 'Se escaló a área correspondiente y se aplicó la solución definitiva.',
-  },
-  {
-    value: 'correction',
-    label: 'Se verificó la información y se procedió con la corrección solicitada.',
-  },
-  {
-    value: 'adjustment',
-    label: 'Se revisó el caso y se realizó el ajuste correspondiente en la cuenta del cliente.',
-  },
-  {
-    value: 'compensation',
-    label: 'Se otorgó compensación al cliente por las molestias ocasionadas.',
-  },
-  {
-    value: 'explained',
-    label: 'Se brindó explicación detallada al cliente y se resolvió la situación.',
-  },
-]
 
 export interface CloseCaseForm {
-  /** null until the analyst picks Resuelto / Sin resolver. */
-  resolved: boolean | null
-  contactReason: ContactReason
-  /** '' = not chosen (optional). */
-  resolutionCode: ResolutionCode | ''
-  followUp: FollowUp
-  sendCsatSurvey: boolean
+  /** null until the analyst picks a reason (required). */
+  reason: CloseReason | null
+  /** Internal note, optional ('' = none). Only staff see it. */
+  note: string
 }
 
-export const INITIAL_CLOSE_FORM: CloseCaseForm = {
-  resolved: null,
-  contactReason: 'Transaccional',
-  resolutionCode: '',
-  followUp: 'tomorrow',
-  sendCsatSurvey: true,
-}
+export const INITIAL_CLOSE_FORM: CloseCaseForm = { reason: null, note: '' }
 
 export type CloseFormErrors = Partial<Record<keyof CloseCaseForm, string>>
 
 export function validateCloseForm(form: CloseCaseForm): CloseFormErrors {
-  return form.resolved === null ? { resolved: 'Elige si quedó resuelto o sin resolver.' } : {}
+  const errors: CloseFormErrors = {}
+  if (form.reason === null) errors.reason = 'Elige un motivo.'
+  if (form.note.trim().length > CLOSE_NOTE_MAX_LENGTH) {
+    errors.note = 'La nota puede tener hasta 500 caracteres.'
+  }
+  return errors
 }
 
-export function toCloseRequest(form: CloseCaseForm): CloseCaseRequest {
-  return {
-    resolved: form.resolved ?? false,
-    contactReason: form.contactReason,
-    resolutionCode: form.resolutionCode || null,
-    followUp: form.followUp,
-    sendCsatSurvey: form.sendCsatSurvey,
-  }
+/** `{ reason, note: trimmed || null }`. Call it only after `validateCloseForm` passed. */
+export function toCloseRequest(form: CloseCaseForm & { reason: CloseReason }): CloseCaseRequest {
+  return { reason: form.reason, note: form.note.trim() || null }
+}
+
+/** "{n}/500" under the note (trimmed length, as the server counts it). */
+export function noteCounter(note: string): string {
+  return `${note.trim().length}/${CLOSE_NOTE_MAX_LENGTH}`
 }
 
 export function describeCloseFailure(error: unknown): string {
@@ -692,5 +537,6 @@ export function describeCloseFailure(error: unknown): string {
     return 'Este caso no se puede cerrar en su estado actual.'
   }
   if (isApiProblem(error, 'case_not_assigned')) return 'Este caso ya no está asignado a ti.'
+  if (isApiProblem(error, 'validation_error')) return 'Revisa el motivo y la nota.'
   return 'No pudimos cerrar el caso. Inténtalo de nuevo.'
 }

@@ -1,23 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
 import {
+  demoCustomers,
   fakeCustomerToken,
   makeCustomerConversation,
   makeCustomerTurn,
+  makePastSummary,
   SIM_CUSTOMER_ID,
 } from '@/test/conversation-fixtures'
 import {
   addPendingCustomer,
   applyConversation,
   chatFromResponse,
+  closedConversationNote,
+  closedConversationsLine,
+  chatLang,
   conversationStatusLine,
+  customerChatCopy,
   decodeCustomerToken,
   describeStartFailure,
   emptyChat,
+  endedSummary,
+  hiddenPastCount,
+  inputPlaceholder,
+  isNewerConversation,
   isSameCase,
   localeLabel,
   mergeCustomerTurns,
   normalizeCustomerMessage,
+  pastBlocks,
+  pastBlockTitle,
+  pastConversationsButton,
+  pickerBadge,
   placeLabel,
   setPendingStatus,
   toChatItems,
@@ -74,7 +88,49 @@ describe('chat cache', () => {
     expect(mergeCustomerTurns(merged, [makeCustomerTurn({ sequence: 4 })])).toBe(merged)
   })
 
-  it('starts an empty transcript when a new case replaces the closed one', () => {
+  it('switches to a new case after a close, keeping the closed one as a past block', () => {
+    const closed = mergeCustomerTurns(
+      {
+        ...emptyChat(),
+        pastConversationCount: 1,
+        conversation: makeCustomerConversation({
+          caseId: 'CASE-OLD',
+          status: 'closed',
+          openedAt: '2026-03-05T15:00:00Z',
+        }),
+      },
+      [makeCustomerTurn({ sequence: 1 })],
+    )
+    const next = applyConversation(
+      addPendingCustomer(closed, pending('cm-2')),
+      makeCustomerConversation({ previousCaseId: 'CASE-OLD' }),
+    )
+    expect(next.conversation?.caseId).toBe(makeCustomerConversation().caseId)
+    expect(next.turns).toEqual([])
+    expect(next.pending).toHaveLength(1)
+    expect(next.ended).toEqual([{ conversation: closed.conversation, turns: closed.turns }])
+    expect(next.pastConversationCount).toBe(2)
+    // The same switch again (POST response, then the realtime echo) adds nothing.
+    expect(applyConversation(next, next.conversation!)).toEqual(next)
+
+    // A late update of the old case never switches the chat back.
+    expect(applyConversation(next, closed.conversation!)).toBe(next)
+    expect(isNewerConversation(closed.conversation!, next.conversation)).toBe(false)
+    expect(isNewerConversation(makeCustomerConversation(), null)).toBe(true)
+  })
+
+  it('does not keep an open conversation as a past block', () => {
+    const open = {
+      ...emptyChat(),
+      conversation: makeCustomerConversation({
+        caseId: 'CASE-A',
+        openedAt: '2026-03-05T15:00:00Z',
+      }),
+    }
+    expect(applyConversation(open, makeCustomerConversation()).ended).toEqual([])
+  })
+
+  it('patches the same case in place', () => {
     const closed = mergeCustomerTurns(
       {
         ...emptyChat(),
@@ -82,12 +138,6 @@ describe('chat cache', () => {
       },
       [makeCustomerTurn({ sequence: 1 })],
     )
-    const next = applyConversation(
-      addPendingCustomer(closed, pending('cm-2')),
-      makeCustomerConversation(),
-    )
-    expect(next.turns).toEqual([])
-    expect(next.pending).toHaveLength(1)
     const same = applyConversation(
       closed,
       makeCustomerConversation({ caseId: 'CASE-OLD', status: 'with_agent' }),
@@ -100,12 +150,19 @@ describe('chat cache', () => {
   it('merges a fetched conversation and keeps messages still being sent', () => {
     const previous = addPendingCustomer(emptyChat(), pending('cm-3'))
     const fresh = chatFromResponse(
-      { conversation: makeCustomerConversation(), turns: [makeCustomerTurn({ sequence: 1 })] },
+      {
+        conversation: makeCustomerConversation(),
+        turns: [makeCustomerTurn({ sequence: 1 })],
+        pastConversationCount: 2,
+      },
       previous,
     )
     expect(fresh.turns).toHaveLength(1)
     expect(fresh.pending).toHaveLength(1)
-    expect(chatFromResponse({ conversation: null, turns: [] }, previous)).toEqual({
+    expect(fresh.pastConversationCount).toBe(2)
+    expect(
+      chatFromResponse({ conversation: null, turns: [], pastConversationCount: 0 }, previous),
+    ).toEqual({
       ...emptyChat(),
       pending: previous.pending,
     })
@@ -135,7 +192,12 @@ describe('what the chat shows', () => {
           authorName: 'Daniela',
           text: 'Olá, Rafael!',
         }),
-        makeCustomerTurn({ sequence: 5, authorRole: 'bot', text: 'Posso ajudar?' }),
+        makeCustomerTurn({
+          sequence: 6,
+          kind: 'notice',
+          authorRole: 'system',
+          text: 'A conversa foi encerrada.',
+        }),
       ]),
       pending('cm-5', 'obrigado'),
     )
@@ -143,24 +205,64 @@ describe('what the chat shows', () => {
       ['customer', null, 'sent'],
       ['notice', null, 'sent'],
       ['bank', 'Daniela · LATAM Bank', 'sent'],
-      ['bank', 'Asistente automático', 'sent'],
+      ['notice', null, 'sent'],
       ['customer', null, 'sending'],
     ])
   })
 
-  it('describes who is attending', () => {
-    expect(conversationStatusLine(null)).toMatch(/Escribe tu mensaje/)
-    expect(conversationStatusLine(makeCustomerConversation())).toBe(
+  it('describes who is attending, in Spanish', () => {
+    expect(conversationStatusLine(null, 'es')).toMatch(/Escribe tu mensaje/)
+    expect(conversationStatusLine(makeCustomerConversation(), 'es')).toBe(
       'Buscando a una persona del equipo…',
     )
     expect(
       conversationStatusLine(
         makeCustomerConversation({ status: 'with_agent', agentName: 'Daniela' }),
+        'es',
       ),
     ).toBe('Te atiende Daniela · LATAM Bank')
-    expect(conversationStatusLine(makeCustomerConversation({ status: 'closed' }))).toBe(
+    expect(conversationStatusLine(makeCustomerConversation({ status: 'with_agent' }), 'es')).toBe(
+      'Te atiende una persona del equipo · LATAM Bank',
+    )
+    expect(conversationStatusLine(makeCustomerConversation({ status: 'closed' }), 'es')).toBe(
       'Conversación terminada',
     )
+  })
+
+  it('describes who is attending, in Portuguese', () => {
+    expect(conversationStatusLine(null, 'pt')).toBe(
+      'Escreva sua mensagem e uma pessoa da equipe vai te atender',
+    )
+    expect(conversationStatusLine(makeCustomerConversation(), 'pt')).toBe(
+      'Procurando uma pessoa da equipe…',
+    )
+    expect(
+      conversationStatusLine(
+        makeCustomerConversation({ status: 'with_agent', agentName: 'Daniela' }),
+        'pt',
+      ),
+    ).toBe('Você está falando com Daniela · LATAM Bank')
+    expect(conversationStatusLine(makeCustomerConversation({ status: 'with_agent' }), 'pt')).toBe(
+      'Você está falando com uma pessoa da equipe · LATAM Bank',
+    )
+    expect(conversationStatusLine(makeCustomerConversation({ status: 'closed' }), 'pt')).toBe(
+      'Conversa encerrada',
+    )
+  })
+
+  it('has the whole chat copy in both languages', () => {
+    const es = customerChatCopy('es')
+    const pt = customerChatCopy('pt')
+    expect(Object.keys(pt).sort()).toEqual(Object.keys(es).sort())
+    expect(es).toMatchObject({ support: 'Soporte', greeting: 'Hola, ¿en qué te podemos ayudar?' })
+    expect(pt).toMatchObject({
+      support: 'Suporte',
+      greeting: 'Olá, como podemos ajudar?',
+      currentConversation: 'Conversa atual',
+      retry: 'Tentar de novo',
+    })
+    expect(chatLang('pt')).toBe('pt-BR')
+    expect(chatLang('es')).toBe('es')
   })
 
   it('offers the chips whether the conversation is absent, open or closed', () => {
@@ -203,14 +305,115 @@ describe('what the chat shows', () => {
     )
   })
 
+  it('invites a new conversation once the current one is closed', () => {
+    const closed = makeCustomerConversation({ status: 'closed' })
+    expect(inputPlaceholder(closed, 'es')).toBe('Escribe para empezar una nueva conversación')
+    expect(inputPlaceholder(makeCustomerConversation(), 'es')).toBe('Escribe aquí')
+    expect(inputPlaceholder(null, 'es')).toBe('Escribe aquí')
+    expect(closedConversationNote(closed, 'es')).toBe(
+      'Esta conversación terminó. Si escribes, empezamos una nueva.',
+    )
+    expect(closedConversationNote(makeCustomerConversation(), 'es')).toBeNull()
+    // Portuguese (rule 3 demo: the customer comes back after a close).
+    expect(inputPlaceholder(closed, 'pt')).toBe('Escreva para começar uma nova conversa')
+    expect(inputPlaceholder(null, 'pt')).toBe('Escreva aqui')
+    expect(closedConversationNote(closed, 'pt')).toBe(
+      'Esta conversa terminou. Se você escrever, começamos uma nova.',
+    )
+    expect(closedConversationNote(makeCustomerConversation(), 'pt')).toBeNull()
+  })
+
   it('formats the picker labels and failures', () => {
     expect(localeLabel('es-AR')).toBe('Español de Argentina')
     expect(placeLabel('Buenos Aires', 'AR')).toBe('Buenos Aires, Argentina')
+    expect(placeLabel('São Paulo', 'BR')).toBe('São Paulo, Brasil')
     expect(normalizeCustomerMessage('  oi ')).toBe('oi')
     expect(normalizeCustomerMessage(' ')).toBeNull()
     expect(describeStartFailure(new ApiProblem({ status: 404, code: 'not_found' }))).toMatch(
       /Elige otro/,
     )
     expect(describeStartFailure(ApiProblem.network())).toMatch(/backend/)
+  })
+})
+
+describe('picker', () => {
+  it('badges an open conversation, or one still waiting for a person', () => {
+    const [rafael, joaquin, claudia, gabriela] = demoCustomers
+    expect(pickerBadge(rafael!)).toBeNull()
+    expect(pickerBadge(joaquin!)).toEqual({ text: 'Conversación abierta', tone: 'success' })
+    expect(pickerBadge(gabriela!)).toEqual({ text: 'Esperando a una persona', tone: 'warn' })
+    expect(closedConversationsLine(claudia!.closedConversationCount)).toBe(
+      '1 conversación anterior',
+    )
+    expect(closedConversationsLine(3)).toBe('3 conversaciones anteriores')
+    expect(closedConversationsLine(0)).toBeNull()
+  })
+})
+
+describe('past conversations', () => {
+  it('counts the ones not on screen yet and labels the button', () => {
+    const chat = { ...emptyChat(), pastConversationCount: 3 }
+    expect(hiddenPastCount(chat)).toBe(3)
+    const ended = {
+      conversation: makeCustomerConversation({ status: 'closed' }),
+      turns: [makeCustomerTurn()],
+    }
+    expect(hiddenPastCount({ ...chat, ended: [ended] })).toBe(2)
+    expect(hiddenPastCount({ pastConversationCount: 0, ended: [ended] })).toBe(0)
+    expect(pastConversationsButton(2, 'es')).toBe('Ver conversaciones anteriores (2)')
+    expect(pastConversationsButton(2, 'pt')).toBe('Ver conversas anteriores (2)')
+    expect(pastConversationsButton(0, 'es')).toBeNull()
+    expect(pastConversationsButton(0, 'pt')).toBeNull()
+  })
+
+  it('renders the server list oldest at the top, without the ones that ended here', () => {
+    const newest = makePastSummary({ caseId: 'CASE-3', openedAt: '2026-03-04T10:00:00Z' })
+    const middle = makePastSummary({ caseId: 'CASE-2', openedAt: '2026-03-02T10:00:00Z' })
+    const oldest = makePastSummary({ caseId: 'CASE-1', openedAt: '2026-02-20T10:00:00Z' })
+    const endedHere = {
+      conversation: makeCustomerConversation({ caseId: 'CASE-3', status: 'closed' }),
+      turns: [],
+    }
+    expect(pastBlocks([newest, middle, oldest], [endedHere]).map((b) => b.caseId)).toEqual([
+      'CASE-1',
+      'CASE-2',
+    ])
+  })
+
+  it('titles a block with its date, its state and who attended it', () => {
+    expect(pastBlockTitle(makePastSummary(), 'es')).toBe(
+      'Conversación del 4 mar 2026 · Terminada · Te atendió Daniela',
+    )
+    expect(pastBlockTitle(makePastSummary({ agentName: null }), 'es')).toBe(
+      'Conversación del 4 mar 2026 · Terminada',
+    )
+    expect(pastBlockTitle(makePastSummary(), 'pt')).toBe(
+      'Conversa de 4 mar 2026 · Encerrada · Atendida por Daniela',
+    )
+    expect(
+      pastBlockTitle(makePastSummary({ openedAt: '2026-02-10T15:00:00Z', agentName: null }), 'pt'),
+    ).toBe('Conversa de 10 fev 2026 · Encerrada')
+  })
+
+  it('turns a conversation that ended here into a block with its last message', () => {
+    const conversation = makeCustomerConversation({
+      caseId: 'CASE-9',
+      status: 'closed',
+      agentName: 'Daniela',
+      closedAt: '2026-03-05T16:30:00Z',
+    })
+    const turns = [
+      makeCustomerTurn({ sequence: 1, text: 'Olá' }),
+      makeCustomerTurn({ sequence: 2, kind: 'notice', authorRole: 'system', text: 'Encerrada.' }),
+    ]
+    expect(endedSummary({ conversation, turns })).toEqual({
+      caseId: 'CASE-9',
+      status: 'closed',
+      channel: 'app_chat',
+      openedAt: conversation.openedAt,
+      closedAt: '2026-03-05T16:30:00Z',
+      agentName: 'Daniela',
+      preview: 'Olá',
+    })
   })
 })

@@ -1,4 +1,4 @@
-"""Customer chat simulator schemas (slice 1 contract §4)."""
+"""Customer chat simulator schemas (slice 2 contract §6)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,9 @@ from pydantic import Field
 from cc_platform.api.schemas.cases import ClientMessageId, TurnText
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.application.cases.dto import (
+    CustomerConversationDetailView,
+    CustomerConversationResult,
+    CustomerConversationSummaryView,
     CustomerConversationView,
     CustomerTurnView,
     PostCustomerTurnResult,
@@ -23,7 +26,7 @@ from cc_platform.domain.cases.values import (
     CustomerConversationStatus,
     CustomerTurnAuthor,
 )
-from cc_platform.domain.customers.customer import CountryCode, CustomerLocale, CustomerSegment
+from cc_platform.domain.customers.customer import CountryCode, CustomerLocale
 from cc_platform.domain.people.staff import Language
 
 
@@ -40,9 +43,9 @@ class DemoCustomer(ApiModel):
     language: Language
     country: CountryCode
     city: str
-    segment: CustomerSegment
     suggestions: list[str] = Field(description="Opener chips in the customer's own voice.")
-    open_conversation: DemoConversation | None
+    open_conversation: DemoConversation | None = Field(description="Only an open case.")
+    closed_conversation_count: int
 
     @classmethod
     def from_view(cls, view: DemoCustomerView) -> DemoCustomer:
@@ -54,7 +57,6 @@ class DemoCustomer(ApiModel):
             language=view.language,
             country=view.country,
             city=view.city,
-            segment=view.segment,
             suggestions=list(view.suggestions),
             open_conversation=(
                 DemoConversation(
@@ -65,12 +67,13 @@ class DemoCustomer(ApiModel):
                 if conversation
                 else None
             ),
+            closed_conversation_count=view.closed_conversation_count,
         )
 
 
 class DemoCustomerList(ApiModel):
     items: list[DemoCustomer] = Field(
-        description="Simulator customers first, then customers with an open chat case."
+        description="Simulator customers first, then every other seeded customer by name."
     )
 
 
@@ -116,8 +119,11 @@ class CustomerConversation(ApiModel):
     language: Language
     opened_at: datetime
     closed_at: datetime | None
-    agent_name: str | None = Field(description="Assignee first name while with_agent.")
+    agent_name: str | None = Field(
+        description="Assignee first name while with_agent; on a closed case, who attended it."
+    )
     last_sequence: int = Field(description="Highest sequence among customer-visible turns.")
+    previous_case_id: str | None = Field(description="The closed case this one continues.")
 
     @classmethod
     def from_view(cls, view: CustomerConversationView) -> CustomerConversation:
@@ -130,6 +136,7 @@ class CustomerConversation(ApiModel):
             closed_at=view.closed_at,
             agent_name=view.agent_name,
             last_sequence=view.last_sequence,
+            previous_case_id=view.previous_case_id,
         )
 
 
@@ -163,6 +170,59 @@ class CustomerTurn(ApiModel):
 class CustomerConversationResponse(ApiModel):
     conversation: CustomerConversation | None
     turns: list[CustomerTurn]
+    past_conversation_count: int = Field(
+        description="Closed conversations other than the current one."
+    )
+
+    @classmethod
+    def from_result(cls, result: CustomerConversationResult) -> CustomerConversationResponse:
+        return cls(
+            conversation=(
+                CustomerConversation.from_view(result.conversation) if result.conversation else None
+            ),
+            turns=[CustomerTurn.from_view(turn) for turn in result.turns],
+            past_conversation_count=result.past_conversation_count,
+        )
+
+
+class CustomerConversationSummary(ApiModel):
+    case_id: str
+    status: CustomerConversationStatus
+    channel: CaseChannel
+    opened_at: datetime
+    closed_at: datetime | None
+    agent_name: str | None = Field(description="First name of who attended it.")
+    preview: str | None = Field(description="Last message text (at most 140 characters).")
+
+    @classmethod
+    def from_view(cls, view: CustomerConversationSummaryView) -> CustomerConversationSummary:
+        return cls(
+            case_id=view.case_id,
+            status=view.status,
+            channel=view.channel,
+            opened_at=view.opened_at,
+            closed_at=view.closed_at,
+            agent_name=view.agent_name,
+            preview=view.preview,
+        )
+
+
+class CustomerConversationList(ApiModel):
+    items: list[CustomerConversationSummary] = Field(
+        description="Closed conversations other than the current one, newest first (≤ 20)."
+    )
+
+
+class CustomerConversationDetail(ApiModel):
+    conversation: CustomerConversation
+    turns: list[CustomerTurn] = Field(description="Up to the latest 200, ascending.")
+
+    @classmethod
+    def from_view(cls, view: CustomerConversationDetailView) -> CustomerConversationDetail:
+        return cls(
+            conversation=CustomerConversation.from_view(view.conversation),
+            turns=[CustomerTurn.from_view(turn) for turn in view.turns],
+        )
 
 
 class PostCustomerTurnRequest(RequestModel):

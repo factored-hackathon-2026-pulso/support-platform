@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable, Collection, Iterable, Sequence
+from datetime import datetime
 
 from cc_platform.application.cases.ports import AssigneeLoad
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
@@ -22,7 +23,6 @@ from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff, StaffRole
-from cc_platform.domain.routing.routing_step import RoutingStep
 from cc_platform.domain.shared.aggregate import AggregateRoot
 from cc_platform.domain.shared.errors import ConcurrentUpdateError, ConflictError, NotFoundError
 from cc_platform.infrastructure.persistence.cursors import clamp_limit, decode_cursor, encode_cursor
@@ -263,9 +263,29 @@ class InMemoryCaseRepository(_StagedRepository[Case]):
             if case.assigned_analyst_id == staff_id and case.status in statuses
         )
 
+    async def list_closed_for_assignee(self, staff_id: str, closed_since: datetime) -> list[Case]:
+        return self._tracked(
+            case
+            for case in self._all()
+            if case.assigned_analyst_id == staff_id
+            and case.status is CaseStatus.CLOSED
+            and case.closed_at is not None
+            and case.closed_at >= closed_since
+        )
+
     async def list_by_status(self, status: CaseStatus) -> list[Case]:
         matching = [case for case in self._all() if case.status is status]
         return self._tracked(sorted(matching, key=lambda case: (case.opened_at, case.id)))
+
+    async def list_for_customer(self, customer_id: str) -> list[Case]:
+        mine = [case for case in self._all() if case.customer_id == customer_id]
+        return self._tracked(sorted(mine, key=lambda case: (case.opened_at, case.id), reverse=True))
+
+    async def exists_for_customer_and_assignee(self, customer_id: str, staff_id: str) -> bool:
+        return any(
+            case.customer_id == customer_id and case.assigned_analyst_id == staff_id
+            for case in self._all()
+        )
 
     async def latest_for_customer(self, customer_id: str) -> Case | None:
         mine = [case for case in self._all() if case.customer_id == customer_id]
@@ -305,7 +325,7 @@ class InMemoryCustomerCaseSlotRepository(_StagedRepository[CustomerCaseSlot]):
 
 
 class _AppendOnlyRepository[E]:
-    """Immutable rows (turns, assignments, routing steps): add only, checked at commit."""
+    """Immutable rows (turns, assignments): add only, checked at commit."""
 
     def __init__(self, committed: dict[str, E], key: Callable[[E], str]) -> None:
         self._committed = committed
@@ -393,15 +413,6 @@ class InMemoryAssignmentRepository(_AppendOnlyRepository[Assignment]):
     async def latest_for_case(self, case_id: str) -> Assignment | None:
         mine = [a for a in self._all() if a.case_id == case_id]
         return max(mine, key=lambda a: (a.assigned_at, a.id)) if mine else None
-
-
-class InMemoryRoutingStepRepository(_AppendOnlyRepository[RoutingStep]):
-    def __init__(self, committed: dict[str, RoutingStep]) -> None:
-        super().__init__(committed, lambda step: step.id)
-
-    async def list_for_case(self, case_id: str) -> list[RoutingStep]:
-        steps = [step for step in self._all() if step.case_id == case_id]
-        return sorted(steps, key=lambda step: (step.occurred_at, step.id))
 
 
 # ----------------------------------------------------------------------------- customers

@@ -1,4 +1,5 @@
-"""Staff aggregate: the people who work in the contact center (analysts, supervisors...)."""
+"""Staff aggregate: the people who work on the support platform (analysts, supervisors,
+administrators)."""
 
 from __future__ import annotations
 
@@ -16,7 +17,6 @@ class StaffRole(StrEnum):
 
     ANALYST = "analyst"
     SUPERVISOR = "supervisor"
-    AUTOMATION = "automation"
     ADMIN = "admin"
 
     @property
@@ -28,18 +28,8 @@ class StaffRole(StrEnum):
 ROLE_PRECEDENCE: tuple[StaffRole, ...] = (
     StaffRole.ANALYST,
     StaffRole.SUPERVISOR,
-    StaffRole.AUTOMATION,
     StaffRole.ADMIN,
 )
-
-
-class StaffLevel(StrEnum):
-    """Analyst seniority; drives abono limits (policies R7/R8)."""
-
-    JUNIOR = "Junior"
-    MID_SENIOR = "Mid-Senior"
-    SENIOR = "Senior"
-    SPECIALIST = "Specialist"
 
 
 class Language(StrEnum):
@@ -63,7 +53,6 @@ class Staff(AggregateRoot):
     name: str
     email: str
     roles: frozenset[StaffRole]
-    level: StaffLevel
     languages: frozenset[Language]
     team: str
     active: bool = True
@@ -92,11 +81,6 @@ class Staff(AggregateRoot):
     @property
     def primary_role(self) -> StaffRole:
         return next(role for role in ROLE_PRECEDENCE if role in self.roles)
-
-    @property
-    def requires_four_eyes(self) -> bool:
-        """Automation + admin in one person: admin changes need a second approver (brief §1)."""
-        return StaffRole.AUTOMATION in self.roles and StaffRole.ADMIN in self.roles
 
     def actor_ref(self, acting_role: StaffRole | None = None) -> ActorRef:
         role = (

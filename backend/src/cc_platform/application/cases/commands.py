@@ -1,14 +1,14 @@
 """Commands of the analyst side: reply, mark read, close.
 
 Each runs inside ``retry_on_conflict`` and re-checks its rules on fresh state: two tabs
-sending at once, or a reply racing a close, are serialised by the case's optimistic
-``version`` (the loser re-runs and sees the winner's change).
+sending at once, a reply racing a close, or a close racing the customer's next message are
+serialised by the case's optimistic ``version`` (the loser re-runs and sees the winner's
+change: a customer message that loses to a close opens a new linked case instead).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 
 from cc_platform.application.cases import copy
 from cc_platform.application.cases.dto import (
@@ -28,7 +28,6 @@ from cc_platform.application.security import Actor
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.errors import (
     CaseClosedError,
-    ChannelNotSupportedError,
     IdempotencyConflictError,
     invalid_case_transition,
 )
@@ -36,19 +35,12 @@ from cc_platform.domain.cases.turn import Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
     CLOSABLE_STATUSES,
     CaseStatus,
-    FollowUp,
     TurnAudience,
     TurnAuthorRole,
     TurnKind,
 )
 from cc_platform.domain.people.staff import StaffRole
 from cc_platform.domain.shared.ids import IdPrefix
-
-FOLLOW_UP_DELAY: dict[FollowUp, timedelta | None] = {
-    FollowUp.NONE: None,
-    FollowUp.TOMORROW: timedelta(hours=24),
-    FollowUp.IN_TWO_DAYS: timedelta(hours=48),
-}
 
 
 async def find_replay(
@@ -87,10 +79,6 @@ class PostAnalystTurn:
                 if replay.case_id != case.id:
                     raise IdempotencyConflictError()
                 return await _turn_result(reader, case, replay, replayed=True)
-            if case.is_closed:
-                raise CaseClosedError()
-            if not case.channel.is_chat:
-                raise ChannelNotSupportedError(case.channel.value)
             case.ensure_assignee_can_reply()
 
             now = self.clock.now()
@@ -116,7 +104,7 @@ class PostAnalystTurn:
 async def _turn_result(
     reader: CaseReader, case: Case, turn: Turn, *, replayed: bool
 ) -> PostTurnResult:
-    views = await reader.turn_views(case, [turn])
+    views = await reader.turn_views([turn])
     return PostTurnResult(turn=views[0], case=await reader.summary(case), replayed=replayed)
 
 
@@ -143,8 +131,10 @@ class MarkCaseRead:
 
 @dataclass(frozen=True, slots=True)
 class CloseCase:
-    """Close (contract ``case_close``): notice to the customer, the customer's slot is
-    freed (their next message opens a new case), ``case.closed`` is recorded."""
+    """Close with a required reason (contract §4.4), in one Unit of Work: the closed notice
+    in the case language (the customer never sees the reason or the note), ``case.closed``
+    + ``case.status_changed``, and the customer's slot is freed (their next message opens a
+    new case linked to this one)."""
 
     uow: UnitOfWorkFactory
     clock: Clock
@@ -178,11 +168,8 @@ class CloseCase:
             case.close(
                 actor=actor.acting_as({StaffRole.ANALYST}),
                 at=now,
-                resolved=command.resolved,
-                contact_reason=command.contact_reason,
-                resolution_code=command.resolution_code,
-                followup_at=_followup_at(now, command.follow_up),
-                csat_requested=command.send_csat_survey,
+                reason=command.reason,
+                note=command.note,
             )
             await uow.cases.save(case)
             await uow.turns.add(notice)
@@ -193,8 +180,3 @@ class CloseCase:
             detail = await case_detail(uow, case, actor.staff_id)
             await uow.commit()
         return detail
-
-
-def _followup_at(now: datetime, follow_up: FollowUp) -> datetime | None:
-    delay = FOLLOW_UP_DELAY[follow_up]
-    return now + delay if delay is not None else None

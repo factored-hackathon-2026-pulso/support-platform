@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 /**
  * The real clock, re-read every `intervalMs` while `enabled` (SLA countdowns,
- * "hace 2 min", the call timer).
+ * "hace 2 min").
  */
 export function useNow(intervalMs: number, enabled = true): number {
   const [now, setNow] = useState(() => Date.now())

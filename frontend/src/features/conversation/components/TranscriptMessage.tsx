@@ -8,24 +8,24 @@ export interface TranscriptMessageProps {
   onRetry?: (clientMessageId: string) => void
 }
 
-const BUBBLE: Record<'customer' | 'own' | 'analyst' | 'bot', string> = {
+const BUBBLE: Record<'customer' | 'own' | 'analyst', string> = {
   customer: 'self-start border-border bg-surface text-ink',
   own: 'self-end border-ink bg-ink text-white',
   analyst: 'self-end border-ink-2 bg-ink-2 text-white',
-  bot: 'self-end border-accent-border bg-accent-soft text-ink',
 }
 
 /**
  * One turn of the chat transcript (Workspace.dc.html): customer bubbles on the
- * left, the analyst's own on the right in ink, bots on the right tinted; routing
- * turns as the centred accent banner, notices as centred muted notes.
+ * left, the analyst's own on the right in ink, another analyst's in ink-2;
+ * the staff-only assignment banner centred in accent, notices as centred muted
+ * notes. Bubbles take at most 70% of the column.
  */
 export function TranscriptMessage({ item, onRetry }: TranscriptMessageProps) {
   if (item.variant === 'routing') {
     return (
       <li className="flex justify-center">
         <p className="m-0 max-w-[90%] rounded-10 bg-accent-soft px-3 py-2 text-center text-13 whitespace-pre-line text-ink">
-          <span className="sr-only">Cómo llegó el caso: </span>
+          <span className="sr-only">Nota interna: </span>
           {item.text}
         </p>
       </li>
@@ -49,7 +49,7 @@ export function TranscriptMessage({ item, onRetry }: TranscriptMessageProps) {
     >
       <div
         className={cn(
-          'max-w-[72%] rounded-14 border px-3.5 py-2.5 text-15 leading-[1.45] break-words whitespace-pre-line',
+          'max-w-[70%] rounded-14 border px-3.5 py-2.5 text-15 leading-[1.45] break-words whitespace-pre-line',
           BUBBLE[item.variant],
           item.delivery === 'failed' && 'border-danger-border',
         )}

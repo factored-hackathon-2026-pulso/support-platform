@@ -22,7 +22,6 @@ from cc_platform.domain.people import (
     SessionEnded,
     SessionEndReason,
     Staff,
-    StaffLevel,
     StaffRole,
     StaffSession,
 )
@@ -40,7 +39,6 @@ def make_staff(**overrides: object) -> Staff:
         "name": "Daniela Ríos",
         "email": "  Daniela.Rios@LatamBank.example ",
         "roles": frozenset({StaffRole.ANALYST}),
-        "level": StaffLevel.SPECIALIST,
         "languages": frozenset({Language.SPANISH, Language.PORTUGUESE}),
         "team": "Disputas · Equipo Andes",
     }
@@ -54,7 +52,6 @@ def test_staff_normalises_email_and_exposes_roles() -> None:
     assert staff.email == "daniela.rios@latambank.example"
     assert staff.speaks(Language.PORTUGUESE)
     assert staff.primary_role is StaffRole.ANALYST
-    assert not staff.requires_four_eyes
 
 
 @pytest.mark.parametrize(
@@ -73,13 +70,13 @@ def test_staff_invariants(overrides: dict[str, object]) -> None:
         make_staff(**overrides)
 
 
-def test_automation_plus_admin_requires_four_eyes() -> None:
-    staff = make_staff(roles=frozenset({StaffRole.AUTOMATION, StaffRole.ADMIN}))
-    assert staff.requires_four_eyes
-    assert staff.primary_role is StaffRole.AUTOMATION
+def test_roles_combine_and_follow_the_precedence() -> None:
+    assert [role.value for role in StaffRole] == ["analyst", "supervisor", "admin"]
+    staff = make_staff(roles=frozenset({StaffRole.SUPERVISOR, StaffRole.ADMIN}))
+    assert staff.primary_role is StaffRole.SUPERVISOR
     assert staff.actor_ref(StaffRole.ADMIN).role is ActorRole.ADMIN
     # A role the person does not hold falls back to the primary role.
-    assert staff.actor_ref(StaffRole.SUPERVISOR).role is ActorRole.AUTOMATION
+    assert staff.actor_ref(StaffRole.ANALYST).role is ActorRole.SUPERVISOR
 
 
 # ----------------------------------------------------------------------------- lockout

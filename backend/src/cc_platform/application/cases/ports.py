@@ -41,8 +41,20 @@ class CaseRepository(Protocol):
         """Cases in ``status``, oldest ``opened_at`` first."""
         ...
 
+    async def list_closed_for_assignee(self, staff_id: str, closed_since: datetime) -> list[Case]:
+        """``staff_id``'s closed cases with ``closed_at >= closed_since`` (any order)."""
+        ...
+
     async def latest_for_customer(self, customer_id: str) -> Case | None:
         """The customer's most recently opened case, if any."""
+        ...
+
+    async def list_for_customer(self, customer_id: str) -> list[Case]:
+        """Every case of the customer, newest ``opened_at`` first (then id, descending)."""
+        ...
+
+    async def exists_for_customer_and_assignee(self, customer_id: str, staff_id: str) -> bool:
+        """Whether ``staff_id`` holds (or held) any case of the customer (history access)."""
         ...
 
     async def assignee_loads(

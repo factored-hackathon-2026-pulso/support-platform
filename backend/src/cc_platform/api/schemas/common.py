@@ -43,7 +43,7 @@ class ProblemDetails(ApiModel):
     """RFC 7807 problem. ``code`` is the stable machine identifier clients branch on.
 
     The optional members below are the documented extensions; a domain error may add other
-    structured details (e.g. ``channel`` on ``channel_not_supported``), hence
+    structured details (e.g. ``openCaseId`` on ``conflict``), hence
     ``additionalProperties``.
     """
 

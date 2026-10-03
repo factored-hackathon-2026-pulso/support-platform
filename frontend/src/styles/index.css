@@ -50,16 +50,12 @@
   --color-accent-wash: #f5f7fe;
   /* Light accent: focus ring on dark surfaces (7.1:1 on the rail) and accents on ink. */
   --color-accent-muted: #8ea2e8;
-  /* "AGENTE DE IA" kicker on the automation Home (4.7:1 on white). */
-  --color-agent: #5a6fc0;
 
   /* Warn (orange) */
   --color-warn: #b8531f;
   --color-warn-strong: #7a3410;
   --color-warn-soft: #fbeee6;
   --color-warn-border: #efc9b2;
-  /* Human-step border in the proposal flow (Proposal.dc.html). */
-  --color-warn-line: #f0cdb6;
   --color-badge: #e0773f;
 
   /* Success (green) */
@@ -69,17 +65,11 @@
   --color-success-border: #b9dcc6;
   /*
    * Second green family used outside the Workspace (Admin avatar and role chip,
-   * "Activo" pills, approved banner): kept apart from success-soft/strong
+   * "Activo" pills): kept apart from success-soft/strong
    * because the canvas draws both.
    */
   --color-success-tint: #e1f0e6;
   --color-success-ink: #1e6b45;
-  /* End-node border in the decision tree (AuTree.dc.html). */
-  --color-success-line: #b7dcc4;
-
-  /* Caution (amber): "vence en 11–20 min" pill in Por aprobar (SuApprovals.dc.html). */
-  --color-caution-soft: #fdf3e2;
-  --color-caution-strong: #8a5a12;
 
   /* Danger (red) */
   --color-danger: #b3261e;
@@ -87,11 +77,8 @@
   --color-danger-soft: #f9e3e0;
   --color-danger-border: #e8b4ab;
 
-  /* Case-status colors (Workspace list) */
-  --color-callout: #c2417a;
-  --color-callout-strong: #8f2a58;
-  --color-callout-soft: #f8e4ee;
-  --color-callout-border: #ebbfd3;
+  /* Case-status colors (Workspace list): waiting = Esperando al cliente,
+     offline = the `closed` tone (Cerrados) and offline dots. */
   --color-waiting: #8a867c;
   --color-offline: #c9c5ba;
 
@@ -153,7 +140,7 @@
   --text-40: 40px;
   --text-40--line-height: 1.1;
 
-  /* Display headings (auth, agent detail, approve): letter-spacing -0.01em. */
+  /* Display headings (auth brand panel): letter-spacing -0.01em. */
   --tracking-display: -0.01em;
   --tracking-kicker: 0.06em;
   --tracking-label: 0.05em;

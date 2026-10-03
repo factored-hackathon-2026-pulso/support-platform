@@ -1,20 +1,14 @@
 /**
- * Public API of the conversation feature: the Workspace centre column for one
- * case, "Cómo llegó a ti", the shared case-detail query and its realtime
- * handlers (docs/platform/api/slice-1-cases.md §7.2). Depends only on
- * `@/features/cases`.
+ * Public API of the conversation feature: the Workspace conversation for one
+ * case, "Casos anteriores de este cliente", the shared case-detail query and its
+ * realtime handlers (docs/platform/api/slice-2-case-lifecycle.md §9.7). Depends
+ * only on `@/features/cases`.
  */
 export { ConversationPane } from './components/ConversationPane'
 export type { ConversationPaneProps } from './components/ConversationPane'
-export { RoutingSummary } from './components/RoutingSummary'
-export type { RoutingSummaryProps } from './components/RoutingSummary'
+export { CaseHistorySheet } from './components/CaseHistorySheet'
+export type { CaseHistorySheetProps } from './components/CaseHistorySheet'
 export { useCaseDetail } from './hooks/use-case-detail'
 export { conversationKeys } from './api'
 export { registerConversationRealtime } from './realtime'
-export type {
-  CaseDetail,
-  CustomerProfile,
-  RouteStop,
-  RoutingSummary as RoutingSummaryData,
-  Turn,
-} from './types'
+export type { CaseCustomer, CaseDetail, CaseHistory, CaseHistoryItem, Turn } from './types'

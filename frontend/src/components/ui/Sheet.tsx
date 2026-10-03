@@ -10,11 +10,13 @@ export interface SheetProps {
   onOpenChange: (open: boolean) => void
   /** Accessible title. Rendered as the sheet heading unless `header` is provided. */
   title: ReactNode
+  /** Line under the title ("Solo lectura"); becomes the sheet's accessible description. */
+  description?: ReactNode
   /** Custom content for the top bar (e.g. a Kicker). The title is then visually hidden. */
   header?: ReactNode
   children?: ReactNode
   footer?: ReactNode
-  /** Panel width in px (Home insight drawer: 600). */
+  /** Panel width in px (default 600). */
   width?: 480 | 600 | 720
   initialFocusRef?: RefObject<HTMLElement | null>
   className?: string
@@ -22,11 +24,12 @@ export interface SheetProps {
 
 const widths = { 480: 'w-[480px]', 600: 'w-[600px]', 720: 'w-[720px]' } as const
 
-/** Right-side drawer (the Panorama "detalle del tema"). Same a11y behavior as Dialog. */
+/** Right-side drawer ("Casos anteriores de este cliente"). Same a11y behavior as Dialog. */
 export function Sheet({
   open,
   onOpenChange,
   title,
+  description,
   header,
   children,
   footer,
@@ -35,6 +38,7 @@ export function Sheet({
   className,
 }: SheetProps) {
   const titleId = useId()
+  const descriptionId = useId()
   const close = () => onOpenChange(false)
   const { containerRef } = useModal({ open, onClose: close, initialFocusRef })
 
@@ -47,6 +51,7 @@ export function Sheet({
         open
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={description && !header ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
           'relative m-0 ml-auto flex h-full max-h-none max-w-full flex-col border-0 bg-canvas p-0 text-ink shadow-drawer outline-none',
@@ -63,9 +68,16 @@ export function Sheet({
               </h2>
             </>
           ) : (
-            <h2 id={titleId} className="m-0 font-display text-22 font-bold">
-              {title}
-            </h2>
+            <div className="flex min-w-0 flex-col gap-1">
+              <h2 id={titleId} className="m-0 font-display text-22 font-bold">
+                {title}
+              </h2>
+              {description ? (
+                <p id={descriptionId} className="m-0 text-14 text-ink-2">
+                  {description}
+                </p>
+              ) : null}
+            </div>
           )}
           <IconButton aria-label="Cerrar" icon={<X size={16} />} onClick={close} />
         </div>

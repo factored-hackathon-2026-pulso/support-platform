@@ -43,13 +43,13 @@ export interface TabsProps {
 }
 
 /**
- * Underline tabs (support panel: Copiloto · Herramientas · Cliente).
+ * Underline tabs.
  * WAI-ARIA tabs pattern: arrow keys / Home / End move and select (automatic activation).
  *
  * @example
- * <Tabs defaultValue="copilot">
- *   <TabList aria-label="Paneles"><Tab value="copilot">Copiloto</Tab>…</TabList>
- *   <TabPanel value="copilot">…</TabPanel>
+ * <Tabs defaultValue="mensajes">
+ *   <TabList aria-label="Vistas"><Tab value="mensajes">Mensajes</Tab>…</TabList>
+ *   <TabPanel value="mensajes">…</TabPanel>
  * </Tabs>
  */
 export function Tabs({

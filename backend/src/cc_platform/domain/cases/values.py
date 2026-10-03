@@ -1,6 +1,7 @@
-"""Vocabulary of the cases context, aligned with ``contracts/platform_history.json``.
+"""Vocabulary of the cases context (slice 2 contract §2.1).
 
 Enum values are part of the public API (OpenAPI enums the frontend generates types from).
+Every case is a chat: there are no calls, emails, routing tiers or bots.
 """
 
 from __future__ import annotations
@@ -11,70 +12,15 @@ from cc_platform.domain.shared.actor import ActorRole
 
 
 class CaseChannel(StrEnum):
-    """Contract ``case.channel`` subset (``whatsapp``/``video`` are out of scope)."""
+    """Where the customer writes from (the simulator stands in for both)."""
 
     APP_CHAT = "app_chat"
     WEB_CHAT = "web_chat"
-    PHONE = "phone"
-    EMAIL = "email"
-
-    @property
-    def is_chat(self) -> bool:
-        """Only chat works live in slice 1; phone and email are read-only layouts."""
-        return self in (CaseChannel.APP_CHAT, CaseChannel.WEB_CHAT)
-
-
-class ChannelSessionKind(StrEnum):
-    """Identity the contact already carried (contract ``identity_check.channel_session``)."""
-
-    APP_SESSION = "app_session"
-    WEB_SESSION = "web_session"
-    CALLER_NUMBER = "caller_number"
-    EMAIL_ADDRESS = "email_address"
-    OUTBOUND_CALL = "outbound_call"
-
-    @property
-    def verified(self) -> bool:
-        """Rule 1: app/web session and a registered caller number identify the customer;
-        email and a call the bank makes do not (security questions needed, slice 3)."""
-        return self in (
-            ChannelSessionKind.APP_SESSION,
-            ChannelSessionKind.WEB_SESSION,
-            ChannelSessionKind.CALLER_NUMBER,
-        )
-
-    @classmethod
-    def for_chat(cls, channel: CaseChannel) -> ChannelSessionKind:
-        return cls.WEB_SESSION if channel is CaseChannel.WEB_CHAT else cls.APP_SESSION
-
-
-class CaseOrigin(StrEnum):
-    """Who started the case. ``regulator``/``branch``: the bank must call the customer."""
-
-    CUSTOMER = "customer"
-    REGULATOR = "regulator"
-    BRANCH = "branch"
-
-    @property
-    def is_outbound(self) -> bool:
-        return self is not CaseOrigin.CUSTOMER
-
-
-class CaseTopic(StrEnum):
-    """Judge taxonomy (contract ``case.topic``). Nullable in slice 1: no judge yet."""
-
-    CONSULTAR_MOVIMIENTOS = "consultar_movimientos"
-    CONSULTAR_CARGO = "consultar_cargo"
-    DISPUTAR_CARGO = "disputar_cargo"
-    COBRO_DUPLICADO = "cobro_duplicado"
-    ESTADO_DISPUTA = "estado_disputa"
-    FRAUDE_URGENTE = "fraude_urgente"
-    HABLAR_CON_HUMANO = "hablar_con_humano"
-    FUERA_DE_ALCANCE = "fuera_de_alcance"
-    PROBLEMA_APP = "problema_app"
 
 
 class CasePriority(StrEnum):
+    """Drives the first-response SLA target. Live cases open as ``medium``."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -83,69 +29,48 @@ class CasePriority(StrEnum):
 class CaseStatus(StrEnum):
     """Stored state machine of a case (see ``Case``)."""
 
-    ROUTING = "routing"
     QUEUED = "queued"
     ASSIGNED = "assigned"
     IN_PROGRESS = "in_progress"
-    IN_CALL = "in_call"
-    TO_CALL = "to_call"
-    AWAITING_APPROVAL = "awaiting_approval"
     CLOSED = "closed"
 
 
-#: Statuses in which a case sits in its analyst's inbox (counted as her open load).
+#: Statuses in which a case sits in its analyst's open inbox (counted as her open load).
 OPEN_ASSIGNED_STATUSES: frozenset[CaseStatus] = frozenset(
-    {
-        CaseStatus.ASSIGNED,
-        CaseStatus.IN_PROGRESS,
-        CaseStatus.IN_CALL,
-        CaseStatus.TO_CALL,
-        CaseStatus.AWAITING_APPROVAL,
-    }
+    {CaseStatus.ASSIGNED, CaseStatus.IN_PROGRESS}
 )
 
-#: Statuses an analyst may close a case from.
-CLOSABLE_STATUSES: frozenset[CaseStatus] = frozenset(
-    {CaseStatus.ASSIGNED, CaseStatus.IN_PROGRESS, CaseStatus.IN_CALL, CaseStatus.TO_CALL}
-)
+#: Statuses the assignee may close a case from.
+CLOSABLE_STATUSES: frozenset[CaseStatus] = OPEN_ASSIGNED_STATUSES
 
 #: Statuses in which the assignee may write in the chat.
-REPLYABLE_STATUSES: frozenset[CaseStatus] = frozenset({CaseStatus.ASSIGNED, CaseStatus.IN_PROGRESS})
+REPLYABLE_STATUSES: frozenset[CaseStatus] = OPEN_ASSIGNED_STATUSES
 
 
 class InboxStatus(StrEnum):
-    """Canvas bucket of a case in "Casos" (derived from ``CaseStatus``, never stored)."""
+    """Bucket of a case in "Casos" (derived from ``CaseStatus``, never stored)."""
 
     NEW = "new"
     TO_REPLY = "to_reply"
-    LIVE = "live"
-    TO_CALL = "to_call"
     WAITING = "waiting"
+    CLOSED = "closed"
 
 
 class TurnAuthorRole(StrEnum):
-    """Contract ``turn.author_role``."""
+    """Who wrote a turn: the customer, an analyst or the platform (notices, banners)."""
 
     CUSTOMER = "customer"
     ANALYST = "analyst"
     SYSTEM = "system"
-    TREE = "tree"
-    JUDGE = "judge"
-    AI_AGENT = "ai_agent"
-    COPILOT = "copilot"
 
     @property
     def actor_role(self) -> ActorRole:
         return ActorRole(self.value)
 
-    @property
-    def is_bot(self) -> bool:
-        return self in (TurnAuthorRole.TREE, TurnAuthorRole.JUDGE, TurnAuthorRole.AI_AGENT)
-
 
 class TurnKind(StrEnum):
-    """``message`` = conversation; ``routing`` = staff banner on how the case arrived;
-    ``notice`` = platform note. Slice 3 adds ``action`` (verified tool-call cards)."""
+    """``message`` = conversation; ``routing`` = staff-only assignment banner (how the case
+    arrived); ``notice`` = platform note."""
 
     MESSAGE = "message"
     ROUTING = "routing"
@@ -160,38 +85,20 @@ class TurnAudience(StrEnum):
 
 
 class AssignmentReason(StrEnum):
+    """Why a case reached its analyst. Slice 3 adds ``manual`` (a supervisor)."""
+
     LANGUAGE_LEAST_LOADED = "language_least_loaded"
     QUEUE_DRAINED = "queue_drained"
-    OUTBOUND_FOLLOWUP = "outbound_followup"
 
 
-class ContactReason(StrEnum):
-    """Contract ``case_close.contact_reason`` (the bank's own Spanish values)."""
+class CloseReason(StrEnum):
+    """Why the assignee closed a case. Team-generated list (not from the dataset)."""
 
-    TRANSACCIONAL = "Transaccional"
-    QUEJA = "Queja"
-    PRODUCTO = "Producto"
-    RETENCION = "Retención"
-    TECNICO = "Técnico"
-    COMERCIAL = "Comercial"
-
-
-class ResolutionCode(StrEnum):
-    """Contract ``case_close.resolution_code`` (the five "Qué se hizo" phrases)."""
-
-    ADJUSTMENT = "adjustment"
-    ESCALATED_TO_AREA = "escalated_to_area"
-    EXPLAINED = "explained"
-    COMPENSATION = "compensation"
-    CORRECTION = "correction"
-
-
-class FollowUp(StrEnum):
-    """Close dialog "Seguimiento"; the server turns it into ``followup_at``."""
-
-    NONE = "none"
-    TOMORROW = "tomorrow"
-    IN_TWO_DAYS = "in_two_days"
+    RESOLVED = "resolved"
+    CUSTOMER_UNRESPONSIVE = "customer_unresponsive"
+    DUPLICATE = "duplicate"
+    OUT_OF_SCOPE = "out_of_scope"
+    OTHER = "other"
 
 
 class CustomerConversationStatus(StrEnum):
@@ -205,25 +112,18 @@ class CustomerConversationStatus(StrEnum):
     def of(cls, status: CaseStatus) -> CustomerConversationStatus:
         if status is CaseStatus.CLOSED:
             return cls.CLOSED
-        if status in (CaseStatus.ROUTING, CaseStatus.QUEUED):
+        if status is CaseStatus.QUEUED:
             return cls.WAITING_AGENT
         return cls.WITH_AGENT
 
 
 class CustomerTurnAuthor(StrEnum):
-    """Customer-facing author: automated tiers are shown as one "bot"."""
+    """Customer-facing author of a turn."""
 
     CUSTOMER = "customer"
     ANALYST = "analyst"
-    BOT = "bot"
     SYSTEM = "system"
 
     @classmethod
     def of(cls, role: TurnAuthorRole) -> CustomerTurnAuthor:
-        if role is TurnAuthorRole.CUSTOMER:
-            return cls.CUSTOMER
-        if role is TurnAuthorRole.ANALYST:
-            return cls.ANALYST
-        if role.is_bot:
-            return cls.BOT
-        return cls.SYSTEM
+        return cls(role.value)

@@ -1,5 +1,8 @@
 """Customers context use cases: the simulator picker and customer sessions.
 
+Every seeded customer is a chat customer and is listed in the picker: the simulator ones
+first (fresh customers with opener chips), then everyone else by name.
+
 Customer sessions are stateless signed tokens (audience ``cc-customer``, separate from
 staff tokens): ``sub`` = customer id, ``sid`` = ``CSN-…``, ``channel``. There is no
 revocation list yet (documented gap); expiry is checked against the ``Clock``.
@@ -24,11 +27,7 @@ from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
 from cc_platform.application.security import CustomerActor
 from cc_platform.domain.cases.case import Case
-from cc_platform.domain.cases.values import (
-    CaseChannel,
-    ChannelSessionKind,
-    CustomerConversationStatus,
-)
+from cc_platform.domain.cases.values import CaseChannel, CustomerConversationStatus
 from cc_platform.domain.customers.customer import Customer
 from cc_platform.domain.customers.events import CustomerSessionStarted
 from cc_platform.domain.shared.errors import NotFoundError
@@ -54,19 +53,15 @@ def _self_view(customer: Customer) -> CustomerSelfView:
 
 @dataclass(frozen=True, slots=True)
 class ListDemoCustomers:
-    """Simulator customers first, then customers with an open chat case (dev tool)."""
+    """Simulator customers first (by id), then every other seeded customer by name."""
 
     uow: UnitOfWorkFactory
 
     async def execute(self) -> list[DemoCustomerView]:
-        simulator: list[DemoCustomerView] = []
-        with_chat: list[DemoCustomerView] = []
+        views: list[tuple[bool, str, DemoCustomerView]] = []
         async with self.uow() as uow:
             for customer in await uow.customers.list():
-                conversation = _open_conversation(await current_case(uow, customer.id))
-                is_chat = conversation is not None and conversation.channel.is_chat
-                if not customer.simulator and not is_chat:
-                    continue
+                cases = await uow.cases.list_for_customer(customer.id)
                 view = DemoCustomerView(
                     id=customer.id,
                     display_name=customer.display_name,
@@ -74,12 +69,13 @@ class ListDemoCustomers:
                     language=customer.language,
                     country=customer.country,
                     city=customer.city,
-                    segment=customer.segment,
                     suggestions=customer.suggestions,
-                    open_conversation=conversation,
+                    open_conversation=_open_conversation(await current_case(uow, customer.id)),
+                    closed_conversation_count=sum(1 for case in cases if case.is_closed),
                 )
-                (simulator if customer.simulator else with_chat).append(view)
-        return simulator + with_chat
+                order = customer.id if customer.simulator else customer.display_name
+                views.append((not customer.simulator, order, view))
+        return [view for *_key, view in sorted(views, key=lambda item: (item[0], item[1]))]
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +90,7 @@ class StartCustomerSession:
         self, customer_id: str, channel: CaseChannel | None = None
     ) -> CustomerSessionGrant:
         """Sign in as a seeded customer. While a case is open its channel wins (one open
-        case per customer); a customer whose open case is not a chat cannot use the chat."""
+        case per customer)."""
         now = self.clock.now()
         session_id = self.ids.new_id(IdPrefix.CUSTOMER_SESSION)
         async with self.uow() as uow:
@@ -106,8 +102,6 @@ class StartCustomerSession:
             if customer is None:
                 raise NotFoundError("No encontramos ese cliente.", customerId=customer_id)
             open_case = _open_conversation(await current_case(uow, customer.id))
-            if open_case is not None and not open_case.channel.is_chat:
-                raise NotFoundError("Ese cliente no tiene un chat abierto.", customerId=customer_id)
             session_channel = (
                 open_case.channel if open_case is not None else channel or CaseChannel.APP_CHAT
             )
@@ -120,7 +114,6 @@ class StartCustomerSession:
                     entity_id=customer.id,
                     session_id=session_id,
                     channel=session_channel.value,
-                    channel_session=ChannelSessionKind.for_chat(session_channel).value,
                 )
             )
             await uow.commit()

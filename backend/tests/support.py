@@ -43,9 +43,9 @@ DEV_MFA_CODE = "000000"
 
 ANALYST = next(s for s in DEMO_STAFF if s.name == "Daniela Ríos")
 SUPERVISOR = next(s for s in DEMO_STAFF if s.name == "Lucía Herrera")
-AUTOMATION_ADMIN = next(s for s in DEMO_STAFF if s.name == "Valeria Quintero")
+ADMIN_ONLY = next(s for s in DEMO_STAFF if s.name == "Valeria Quintero")
 ADMIN = next(s for s in DEMO_STAFF if s.name == "Carolina Peña")
-SUPERVISOR_AUTOMATION = next(s for s in DEMO_STAFF if s.name == "Renata Villalba")
+SECOND_SUPERVISOR = next(s for s in DEMO_STAFF if s.name == "Renata Villalba")
 TEAM_LEAD = next(s for s in DEMO_STAFF if s.name == "Felipe Echeverri")
 PASSWORD = DEMO_PASSWORD
 
@@ -198,7 +198,7 @@ def make_actor(*roles: StaffRole, staff_id: str = "STF-" + "0" * 25 + "7") -> Ac
 
 # ----------------------------------------------------------------------------- slice 1 helpers
 async def memory_container(*, seed: bool = True, clock: FixedClock | None = None) -> Container:
-    """The real composition (use cases, projections, routing) over the in-memory UoW."""
+    """The real composition (use cases, projections, queue drainer) over the in-memory UoW."""
     container = build_container(
         make_settings(persistence="memory", seed_demo_data=seed),
         clock=clock or FixedClock(),
@@ -231,3 +231,5 @@ def customer_actor(number: int, *, channel: CaseChannel = CaseChannel.APP_CHAT) 
 
 SEBASTIAN = next(s for s in DEMO_STAFF if s.name == "Sebastián Cárdenas")
 JULIAN = next(s for s in DEMO_STAFF if s.name == "Julián Ortega")
+TOMAS = next(s for s in DEMO_STAFF if s.name == "Tomás Arango")
+PAULA = next(s for s in DEMO_STAFF if s.name == "Paula Medina")

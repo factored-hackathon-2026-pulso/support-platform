@@ -1,18 +1,19 @@
-"""``Case`` aggregate: one contact from the customer's first message to the close.
+"""``Case`` aggregate: one chat from the customer's first message to the close.
 
-State machine (explicit transitions; anything else raises ``InvalidTransitionError``, and
-writing to a closed case raises ``CaseClosedError``)::
+State machine (slice 2 contract §2.3; explicit transitions, anything else raises
+``InvalidTransitionError``, and writing to a closed case raises ``CaseClosedError``)::
 
-    open ──▶ routing ──▶ queued ──▶ assigned        (queue drain)
-                    └──────────────▶ assigned        (eligible analyst)
-    assigned ──▶ in_progress                         (assignee opens or replies)
-    assigned ──▶ to_call                             (outbound origin: the bank calls)
-    assigned | in_progress | to_call ──▶ in_call     (call starts; seeds only in slice 1)
-    assigned | in_progress | in_call | to_call ──▶ closed   (terminal)
+    open ──▶ queued ──▶ assigned        (AssignCase in the open's Unit of Work, or a drain)
+    assigned ──▶ in_progress            (the assignee opens or replies)
+    assigned | in_progress ──▶ closed   (the assignee closes with a reason; terminal)
 
-``awaiting_approval`` is declared for slice 3. Every transition records a domain event; the
-optimistic ``version`` makes concurrent transitions lose instead of overwrite, and also
-serialises turn sequence numbers (a turn is appended in the same Unit of Work as the save).
+A closed case never reopens: the customer's next message opens a new case linked through
+``previous_case_id``. Every transition records a domain event; the optimistic ``version``
+makes concurrent transitions lose instead of overwrite, and also serialises turn sequence
+numbers (a turn is appended in the same Unit of Work as the save).
+
+First-response SLA: ``sla_due_at`` is the first-response due time; the first analyst
+message sets ``first_response_at`` once and records ``case.first_responded``.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from cc_platform.domain.cases.errors import CaseClosedError, invalid_case_transi
 from cc_platform.domain.cases.events import (
     CaseAssigned,
     CaseClosed,
+    CaseFirstResponded,
     CaseOpened,
     CaseQueued,
     CaseRead,
@@ -37,13 +39,9 @@ from cc_platform.domain.cases.values import (
     CLOSABLE_STATUSES,
     REPLYABLE_STATUSES,
     CaseChannel,
-    CaseOrigin,
     CasePriority,
     CaseStatus,
-    CaseTopic,
-    ChannelSessionKind,
-    ContactReason,
-    ResolutionCode,
+    CloseReason,
     TurnAudience,
     TurnAuthorRole,
     TurnKind,
@@ -55,6 +53,7 @@ from cc_platform.domain.shared.errors import InvalidTransitionError, InvalidValu
 from cc_platform.domain.shared.ids import IdPrefix, require_id
 
 PREVIEW_LENGTH = 140
+MAX_CLOSE_NOTE = 500
 
 
 def search_key(*parts: str) -> str:
@@ -68,18 +67,29 @@ def preview_of(text: str) -> str:
     return flat if len(flat) <= PREVIEW_LENGTH else flat[: PREVIEW_LENGTH - 1] + "…"
 
 
+def normalize_close_note(note: str | None) -> str | None:
+    """Trimmed internal note; blank → ``None``; at most 500 characters."""
+    if note is None:
+        return None
+    trimmed = note.strip()
+    if not trimmed:
+        return None
+    if len(trimmed) > MAX_CLOSE_NOTE:
+        raise InvalidValueError(
+            f"La nota puede tener hasta {MAX_CLOSE_NOTE} caracteres.", field="note"
+        )
+    return trimmed
+
+
 @dataclass(frozen=True, slots=True)
 class CaseClosure:
-    """Contract ``case_close`` as stored on the case."""
+    """How the case ended. ``reason`` and ``note`` are for staff only."""
 
     closed_at: datetime
     closed_by_id: str
     closed_by_role: ActorRole
-    resolved: bool
-    contact_reason: ContactReason
-    resolution_code: ResolutionCode | None
-    followup_at: datetime | None
-    csat_requested: bool
+    reason: CloseReason
+    note: str | None = None
 
 
 @dataclass(eq=False)
@@ -87,22 +97,21 @@ class Case(AggregateRoot):
     id: str
     customer_id: str
     channel: CaseChannel
-    channel_session: ChannelSessionKind
     language: Language
-    origin: CaseOrigin
     priority: CasePriority
     status: CaseStatus
     opened_at: datetime
     sla_due_at: datetime
+    """First-response due time (``opened_at`` + the ``SlaPolicy`` target)."""
     search_text: str
-    topic: CaseTopic | None = None
+    previous_case_id: str | None = None
+    """The customer's most recent closed case when this one opened ("Volvió a escribir")."""
+    first_response_at: datetime | None = None
     assigned_analyst_id: str | None = None
     assigned_at: datetime | None = None
     queued_at: datetime | None = None
     queue_label: str | None = None
-    queue_summary: str | None = None
-    entry_label: str | None = None
-    entry_summary: str | None = None
+    """Set when nobody could take the case on arrival (``case.queued`` was recorded)."""
     last_sequence: int = 0
     last_public_sequence: int = 0
     last_message_at: datetime | None = None
@@ -113,7 +122,6 @@ class Case(AggregateRoot):
     assignee_read_sequence: int = 0
     unread_sequences: tuple[int, ...] = ()
     """Sequences of customer messages after the assignee's read cursor (``unreadCount``)."""
-    live_since: datetime | None = None
     closure: CaseClosure | None = None
 
     def __post_init__(self) -> None:
@@ -121,6 +129,10 @@ class Case(AggregateRoot):
         require_id(self.customer_id, IdPrefix.CUSTOMER)
         if self.assigned_analyst_id is not None:
             require_id(self.assigned_analyst_id, IdPrefix.STAFF)
+        if self.previous_case_id is not None:
+            require_id(self.previous_case_id, IdPrefix.CASE)
+            if self.previous_case_id == self.id:
+                raise InvalidValueError("a case cannot follow itself", field="previous_case_id")
         if self.sla_due_at < self.opened_at:
             raise InvalidValueError("SLA cannot be due before the case opens", field="sla_due_at")
         if not 0 <= self.assignee_read_sequence <= self.last_sequence:
@@ -135,32 +147,26 @@ class Case(AggregateRoot):
         customer_id: str,
         customer_name: str,
         channel: CaseChannel,
-        channel_session: ChannelSessionKind,
         language: Language,
-        origin: CaseOrigin,
         priority: CasePriority,
         opened_at: datetime,
         sla_due_at: datetime,
         actor: ActorRef,
-        topic: CaseTopic | None = None,
-        entry_label: str | None = None,
-        entry_summary: str | None = None,
+        previous_case_id: str | None = None,
     ) -> Case:
+        """A new case, ``queued`` until ``AssignCase`` places it (same Unit of Work)."""
         case = cls(
             id=case_id,
             customer_id=customer_id,
             channel=channel,
-            channel_session=channel_session,
             language=language,
-            origin=origin,
             priority=priority,
-            status=CaseStatus.ROUTING,
+            status=CaseStatus.QUEUED,
             opened_at=opened_at,
             sla_due_at=sla_due_at,
             search_text=search_key(customer_name, case_id),
-            topic=topic,
-            entry_label=entry_label,
-            entry_summary=entry_summary,
+            previous_case_id=previous_case_id,
+            queued_at=opened_at,
         )
         case._record(
             CaseOpened(
@@ -170,12 +176,10 @@ class Case(AggregateRoot):
                 case_id=case_id,
                 customer_id=customer_id,
                 channel=channel.value,
-                channel_session=channel_session.value,
                 language=language.value,
-                origin=origin.value,
-                topic=topic.value if topic else None,
                 priority=priority.value,
                 sla_due_at=sla_due_at,
+                previous_case_id=previous_case_id,
             )
         )
         return case
@@ -197,6 +201,11 @@ class Case(AggregateRoot):
     def last_interaction_at(self) -> datetime:
         return self.last_message_at or self.opened_at
 
+    @property
+    def is_waiting_in_queue(self) -> bool:
+        """Queued and already announced (``case.queued`` + banner): nobody could take it."""
+        return self.status is CaseStatus.QUEUED and self.queue_label is not None
+
     def is_assignee(self, staff_id: str) -> bool:
         return self.assigned_analyst_id is not None and self.assigned_analyst_id == staff_id
 
@@ -215,7 +224,8 @@ class Case(AggregateRoot):
     ) -> Turn:
         """Add the next turn (``sequence = last_sequence + 1``) and record ``turn.created``.
 
-        The caller stores the returned turn in the same Unit of Work as this case.
+        The first analyst message also stops the first-response SLA. The caller stores the
+        returned turn in the same Unit of Work as this case.
         """
         if self.is_closed:
             raise CaseClosedError()
@@ -258,34 +268,45 @@ class Case(AggregateRoot):
                 text=turn.text,
                 language=turn.language.value,
                 client_message_id=client_message_id,
-                evidence_ids=turn.evidence_ids,
-                from_suggestion_id=turn.from_suggestion_id,
             )
         )
+        if turn.is_analyst_message and self.first_response_at is None:
+            self._first_response(turn)
         return turn
+
+    def _first_response(self, turn: Turn) -> None:
+        at = turn.created_at
+        self.first_response_at = at
+        self._record(
+            CaseFirstResponded(
+                occurred_at=at,
+                actor=turn.author,
+                entity_id=self.id,
+                case_id=self.id,
+                first_response_at=at,
+                response_seconds=max(0, int((at - self.opened_at).total_seconds())),
+                sla_due_at=self.sla_due_at,
+                sla_met=at <= self.sla_due_at,
+            )
+        )
 
     def ensure_assignee_can_reply(self) -> None:
         """Rule of ``PostAnalystTurn``: only ``assigned``/``in_progress`` cases take replies."""
         if self.is_closed:
             raise CaseClosedError()
         if self.status not in REPLYABLE_STATUSES:
-            raise invalid_case_transition(self.status, "in_progress")
+            raise invalid_case_transition(self.status, CaseStatus.IN_PROGRESS.value)
 
-    # ------------------------------------------------------------------ routing
-    def queue(
-        self,
-        *,
-        label: str,
-        reason_code: str,
-        policy_rule_id: str | None,
-        at: datetime,
-        summary: str | None = None,
-    ) -> None:
-        self._require(CaseStatus.ROUTING, target=CaseStatus.QUEUED)
-        self.status = CaseStatus.QUEUED
-        self.queued_at = at
+    # ------------------------------------------------------------------ assignment
+    def mark_waiting_in_queue(
+        self, *, label: str, reason_code: str, policy_rule_id: str | None, at: datetime
+    ) -> bool:
+        """Nobody eligible: record ``case.queued`` once (no transition, the case is already
+        ``queued``). Returns False when it was already announced."""
+        self._require(CaseStatus.QUEUED, target=CaseStatus.QUEUED)
+        if self.queue_label is not None:
+            return False
         self.queue_label = label
-        self.queue_summary = summary
         self._record(
             CaseQueued(
                 occurred_at=at,
@@ -298,9 +319,11 @@ class Case(AggregateRoot):
                 policy_rule_id=policy_rule_id,
             )
         )
+        return True
 
     def assign(self, assignment: Assignment) -> None:
-        self._require(CaseStatus.ROUTING, CaseStatus.QUEUED, target=CaseStatus.ASSIGNED)
+        """``queued → assigned`` (slice 3 adds reassignment of an open case)."""
+        self._require(CaseStatus.QUEUED, target=CaseStatus.ASSIGNED)
         if assignment.case_id != self.id:
             raise InvalidValueError("assignment belongs to another case", field="case_id")
         previous = self.assigned_analyst_id
@@ -322,6 +345,7 @@ class Case(AggregateRoot):
                 policy_rule_id=assignment.policy_rule_id,
                 open_cases_at_assignment=assignment.open_cases_at_assignment,
                 strategy=assignment.strategy,
+                waited_seconds=assignment.waited_seconds,
             )
         )
 
@@ -362,50 +386,22 @@ class Case(AggregateRoot):
         self._change_status(CaseStatus.IN_PROGRESS, at=at, actor=actor, reason="opened_by_assignee")
         return True
 
-    def require_callback(self, *, at: datetime, actor: ActorRef) -> None:
-        """``assigned → to_call``: a regulator/branch complaint the bank must call about."""
-        self._require(CaseStatus.ASSIGNED, target=CaseStatus.TO_CALL)
-        if not self.origin.is_outbound:
-            raise invalid_case_transition(self.status, CaseStatus.TO_CALL.value)
-        self._change_status(CaseStatus.TO_CALL, at=at, actor=actor, reason="outbound_followup")
-
-    def start_call(self, *, at: datetime, actor: ActorRef) -> None:
-        """A call with the customer starts (layout seam: only seeds use it in slice 1)."""
-        self._require(
-            CaseStatus.ASSIGNED,
-            CaseStatus.IN_PROGRESS,
-            CaseStatus.TO_CALL,
-            target=CaseStatus.IN_CALL,
-        )
-        self.live_since = at
-        self._change_status(CaseStatus.IN_CALL, at=at, actor=actor, reason="call_started")
-
     def close(
-        self,
-        *,
-        actor: ActorRef,
-        at: datetime,
-        resolved: bool,
-        contact_reason: ContactReason,
-        resolution_code: ResolutionCode | None,
-        followup_at: datetime | None,
-        csat_requested: bool,
+        self, *, actor: ActorRef, at: datetime, reason: CloseReason, note: str | None = None
     ) -> None:
+        """``assigned | in_progress → closed`` (terminal). The note is trimmed (≤ 500)."""
         if self.is_closed:
             raise CaseClosedError()
         if self.status not in CLOSABLE_STATUSES:
             raise invalid_case_transition(self.status, CaseStatus.CLOSED.value)
+        clean_note = normalize_close_note(note)
         self.closure = CaseClosure(
             closed_at=at,
             closed_by_id=actor.actor_id,
             closed_by_role=actor.role,
-            resolved=resolved,
-            contact_reason=contact_reason,
-            resolution_code=resolution_code,
-            followup_at=followup_at,
-            csat_requested=csat_requested,
+            reason=reason,
+            note=clean_note,
         )
-        self.live_since = None
         self._record(
             CaseClosed(
                 occurred_at=at,
@@ -415,11 +411,8 @@ class Case(AggregateRoot):
                 closed_at=at,
                 closed_by_role=actor.role.value,
                 closed_by_id=actor.actor_id,
-                resolved=resolved,
-                contact_reason=contact_reason.value,
-                resolution_code=resolution_code.value if resolution_code else None,
-                followup_at=followup_at,
-                csat_requested=csat_requested,
+                reason=reason.value,
+                note=clean_note,
             )
         )
         self._change_status(CaseStatus.CLOSED, at=at, actor=actor, reason="closed")

@@ -10,9 +10,9 @@ export interface ToastAction {
 export interface ToastOptions {
   title: ReactNode
   description?: ReactNode
-  /** Small blue pill before the meta line ("Agente IA"). */
+  /** Small blue pill before the meta line ("Nuevo"). */
   tag?: string
-  /** Muted line on top ("Nueva solicitud de aprobación · vence en 30 min"). */
+  /** Muted line on top ("Cola de soporte · hace 1 min"). */
   meta?: ReactNode
   actions?: ToastAction[]
   /** ms before auto-dismiss. `null` keeps it until dismissed. Default 6000 (null with actions). */
@@ -28,6 +28,11 @@ export interface ToastRecord extends ToastOptions {
 export interface ToastContextValue {
   toast: (options: ToastOptions) => number
   dismiss: (id: number) => void
+  /**
+   * Keeps the stack above a bottom-docked element (`useToastClearance`): `px`
+   * from the bottom of the viewport to its top, `null` to release it.
+   */
+  reserveBottom: (key: symbol, px: number | null) => void
 }
 
 export const ToastContext = createContext<ToastContextValue | null>(null)

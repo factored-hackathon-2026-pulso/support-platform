@@ -25,10 +25,8 @@ const me = {
     name: 'Daniela Ríos Medina',
     email: 'daniela.rios@latambank.example',
     roles: ['analyst'],
-    level: 'Specialist',
     languages: ['es'],
     team: 'Disputas',
-    requiresFourEyes: false,
   },
   session: { id: 'SES-1', expiresAt: '2026-10-02T20:00:00Z' },
 }

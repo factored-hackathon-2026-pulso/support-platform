@@ -1,14 +1,14 @@
 /**
- * API types of the cases feature (docs/platform/api/slice-1-cases.md §1, §3.2):
+ * API types of the cases feature (docs/platform/api/slice-2-case-lifecycle.md §2.1, §5.2):
  * aliases of the schemas generated from `backend/openapi.json` (`pnpm gen:api`).
  */
 import type { Schemas } from '@/lib/api'
 
 export type CaseChannel = Schemas['CaseChannel']
-export type CaseOrigin = Schemas['CaseOrigin']
-export type CaseTopic = Schemas['CaseTopic']
 export type CasePriority = Schemas['CasePriority']
 export type CaseStatus = Schemas['CaseStatus']
+/** Team-generated close reasons (contract §4.4). */
+export type CloseReason = Schemas['CloseReason']
 /** Canvas bucket, derived by the server (never re-derived here). */
 export type InboxStatus = Schemas['InboxStatus']
 export type CaseLanguage = Schemas['Language']

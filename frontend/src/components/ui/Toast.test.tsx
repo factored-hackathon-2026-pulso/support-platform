@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Button } from './Button'
 import { TOAST_DURATION, ToastProvider } from './Toast'
 import { useToast, type ToastOptions } from './toast-context'
+import { useToastClearance } from './use-toast-clearance'
 
 function Trigger({ label = 'Avisar', options }: { label?: string; options: ToastOptions }) {
   const { toast } = useToast()
@@ -22,11 +23,11 @@ describe('Toast', () => {
       <ToastProvider>
         <Trigger
           options={{
-            tag: 'Agente IA',
-            meta: 'Nueva solicitud de aprobación · vence en 30 min',
-            title: 'Agente de disputas v2 pide abrir una disputa fuera de plazo',
+            tag: 'Nuevo',
+            meta: 'Cola de soporte · hace 1 min',
+            title: 'Te llegó un caso nuevo',
             actions: [
-              { label: 'Revisar', onClick: onReview },
+              { label: 'Ver caso', onClick: onReview },
               { label: 'Más tarde', onClick: () => {} },
             ],
           }}
@@ -39,9 +40,9 @@ describe('Toast', () => {
     expect(screen.getByRole('region', { name: 'Notificaciones' })).toContainElement(status)
 
     await user.click(screen.getByRole('button', { name: 'Avisar' }))
-    expect(status).toHaveTextContent('Agente de disputas v2 pide abrir una disputa fuera de plazo')
+    expect(status).toHaveTextContent('Te llegó un caso nuevo')
 
-    await user.click(screen.getByRole('button', { name: 'Revisar' }))
+    await user.click(screen.getByRole('button', { name: 'Ver caso' }))
     expect(onReview).toHaveBeenCalledOnce()
     expect(status).toBeEmptyDOMElement()
   })
@@ -104,5 +105,33 @@ describe('Toast', () => {
     fireEvent.mouseLeave(item)
     act(() => vi.advanceTimersByTime(2000))
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
+  })
+
+  it('sits below open modals and rises above a bottom-docked composer while it is mounted', () => {
+    function Composer() {
+      return <div ref={useToastClearance<HTMLDivElement>()}>Composer</div>
+    }
+    function Page({ composer }: { composer: boolean }) {
+      return composer ? <Composer /> : null
+    }
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ top: window.innerHeight - 140, height: 140 } as DOMRect)
+    const { rerender } = render(
+      <ToastProvider>
+        <Page composer />
+      </ToastProvider>,
+    )
+    const region = screen.getByRole('region', { name: 'Notificaciones' })
+    // Dialog and Sheet backdrops are z-50.
+    expect(region).toHaveClass('z-40')
+    expect(region).toHaveStyle({ bottom: '152px' })
+    rerender(
+      <ToastProvider>
+        <Page composer={false} />
+      </ToastProvider>,
+    )
+    expect(region).toHaveStyle({ bottom: '24px' })
+    rect.mockRestore()
   })
 })

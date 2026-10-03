@@ -1,11 +1,12 @@
-"""SQLAlchemy repositories of the cases, routing and customers contexts."""
+"""SQLAlchemy repositories of the cases and customers contexts."""
 
 from __future__ import annotations
 
 from collections.abc import Collection
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Column, func, insert, select
+from sqlalchemy import Column, exists, func, insert, select
 from sqlalchemy import case as sql_case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,26 +19,15 @@ from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
     AssignmentReason,
     CaseChannel,
-    CaseOrigin,
     CasePriority,
     CaseStatus,
-    CaseTopic,
-    ChannelSessionKind,
-    ContactReason,
-    ResolutionCode,
+    CloseReason,
     TurnAudience,
     TurnAuthorRole,
     TurnKind,
 )
-from cc_platform.domain.customers.customer import (
-    CountryCode,
-    Customer,
-    CustomerLocale,
-    CustomerSegment,
-)
+from cc_platform.domain.customers.customer import CountryCode, Customer, CustomerLocale
 from cc_platform.domain.people.staff import Language
-from cc_platform.domain.routing.routing_step import RoutingStep
-from cc_platform.domain.routing.values import ComponentRef, Handoff, RoutingOutcome, Tier
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.errors import ConcurrentUpdateError, ConflictError
 from cc_platform.infrastructure.persistence.sqlalchemy import tables
@@ -64,22 +54,18 @@ class SqlCaseRepository(VersionedRepository[Case]):
             "id": aggregate.id,
             "customer_id": aggregate.customer_id,
             "channel": aggregate.channel.value,
-            "channel_session": aggregate.channel_session.value,
             "language": aggregate.language.value,
-            "origin": aggregate.origin.value,
-            "topic": aggregate.topic.value if aggregate.topic else None,
             "priority": aggregate.priority.value,
             "status": aggregate.status.value,
             "opened_at": aggregate.opened_at,
             "sla_due_at": aggregate.sla_due_at,
+            "first_response_at": aggregate.first_response_at,
             "search_text": aggregate.search_text,
+            "previous_case_id": aggregate.previous_case_id,
             "assigned_analyst_id": aggregate.assigned_analyst_id,
             "assigned_at": aggregate.assigned_at,
             "queued_at": aggregate.queued_at,
             "queue_label": aggregate.queue_label,
-            "queue_summary": aggregate.queue_summary,
-            "entry_label": aggregate.entry_label,
-            "entry_summary": aggregate.entry_summary,
             "last_sequence": aggregate.last_sequence,
             "last_public_sequence": aggregate.last_public_sequence,
             "last_message_at": aggregate.last_message_at,
@@ -95,17 +81,11 @@ class SqlCaseRepository(VersionedRepository[Case]):
             "last_turn_preview": aggregate.last_turn_preview,
             "assignee_read_sequence": aggregate.assignee_read_sequence,
             "unread_sequences": list(aggregate.unread_sequences),
-            "live_since": aggregate.live_since,
             "closed_at": closure.closed_at if closure else None,
             "closed_by_id": closure.closed_by_id if closure else None,
             "closed_by_role": closure.closed_by_role.value if closure else None,
-            "resolved": closure.resolved if closure else None,
-            "contact_reason": closure.contact_reason.value if closure else None,
-            "resolution_code": (
-                closure.resolution_code.value if closure and closure.resolution_code else None
-            ),
-            "followup_at": closure.followup_at if closure else None,
-            "csat_requested": closure.csat_requested if closure else None,
+            "close_reason": closure.reason.value if closure else None,
+            "close_note": closure.note if closure else None,
         }
 
     def _from_row(self, row: Row) -> Case:
@@ -115,34 +95,25 @@ class SqlCaseRepository(VersionedRepository[Case]):
                 closed_at=row["closed_at"],
                 closed_by_id=row["closed_by_id"],
                 closed_by_role=ActorRole(row["closed_by_role"]),
-                resolved=bool(row["resolved"]),
-                contact_reason=ContactReason(row["contact_reason"]),
-                resolution_code=(
-                    ResolutionCode(row["resolution_code"]) if row["resolution_code"] else None
-                ),
-                followup_at=row["followup_at"],
-                csat_requested=bool(row["csat_requested"]),
+                reason=CloseReason(row["close_reason"]),
+                note=row["close_note"],
             )
         return Case(
             id=row["id"],
             customer_id=row["customer_id"],
             channel=CaseChannel(row["channel"]),
-            channel_session=ChannelSessionKind(row["channel_session"]),
             language=Language(row["language"]),
-            origin=CaseOrigin(row["origin"]),
             priority=CasePriority(row["priority"]),
             status=CaseStatus(row["status"]),
             opened_at=row["opened_at"],
             sla_due_at=row["sla_due_at"],
+            first_response_at=row["first_response_at"],
             search_text=row["search_text"],
-            topic=CaseTopic(row["topic"]) if row["topic"] else None,
+            previous_case_id=row["previous_case_id"],
             assigned_analyst_id=row["assigned_analyst_id"],
             assigned_at=row["assigned_at"],
             queued_at=row["queued_at"],
             queue_label=row["queue_label"],
-            queue_summary=row["queue_summary"],
-            entry_label=row["entry_label"],
-            entry_summary=row["entry_summary"],
             last_sequence=row["last_sequence"],
             last_public_sequence=row["last_public_sequence"],
             last_message_at=row["last_message_at"],
@@ -152,11 +123,10 @@ class SqlCaseRepository(VersionedRepository[Case]):
             last_turn_preview=row["last_turn_preview"],
             assignee_read_sequence=row["assignee_read_sequence"],
             unread_sequences=tuple(int(s) for s in row["unread_sequences"]),
-            live_since=row["live_since"],
             closure=closure,
         )
 
-    async def _list(self, *criteria: Any, order: tuple[Column[Any], ...] = ()) -> list[Case]:
+    async def _list(self, *criteria: Any, order: tuple[Any, ...] = ()) -> list[Case]:
         statement = select(self.table).where(*criteria).order_by(*order)
         result = await self._session.execute(statement)
         found: list[Case] = []
@@ -174,9 +144,30 @@ class SqlCaseRepository(VersionedRepository[Case]):
             c.assigned_analyst_id == staff_id, c.status.in_([s.value for s in statuses])
         )
 
+    async def list_closed_for_assignee(self, staff_id: str, closed_since: datetime) -> list[Case]:
+        c = self.table.c
+        return await self._list(
+            c.assigned_analyst_id == staff_id,
+            c.status == CaseStatus.CLOSED.value,
+            c.closed_at >= closed_since,
+        )
+
     async def list_by_status(self, status: CaseStatus) -> list[Case]:
         c = self.table.c
         return await self._list(c.status == status.value, order=(c.opened_at, c.id))
+
+    async def list_for_customer(self, customer_id: str) -> list[Case]:
+        c = self.table.c
+        return await self._list(
+            c.customer_id == customer_id, order=(c.opened_at.desc(), c.id.desc())
+        )
+
+    async def exists_for_customer_and_assignee(self, customer_id: str, staff_id: str) -> bool:
+        c = self.table.c
+        statement = select(
+            exists().where(c.customer_id == customer_id, c.assigned_analyst_id == staff_id)
+        )
+        return bool((await self._session.execute(statement)).scalar())
 
     async def latest_for_customer(self, customer_id: str) -> Case | None:
         c = self.table.c
@@ -262,8 +253,6 @@ class SqlTurnRepository(_AppendOnly):
                 "language": turn.language.value,
                 "created_at": turn.created_at,
                 "client_message_id": turn.client_message_id,
-                "evidence_ids": list(turn.evidence_ids),
-                "from_suggestion_id": turn.from_suggestion_id,
             },
             race=True,
         )
@@ -282,8 +271,6 @@ class SqlTurnRepository(_AppendOnly):
             language=Language(row["language"]),
             created_at=row["created_at"],
             client_message_id=row["client_message_id"],
-            evidence_ids=tuple(row["evidence_ids"]),
-            from_suggestion_id=row["from_suggestion_id"],
         )
 
     async def page(
@@ -337,6 +324,7 @@ class SqlAssignmentRepository(_AppendOnly):
                 "assigned_at": assignment.assigned_at,
                 "assigned_by_role": assignment.assigned_by.role.value,
                 "assigned_by_id": assignment.assigned_by.actor_id,
+                "waited_seconds": assignment.waited_seconds,
             },
         )
 
@@ -361,56 +349,8 @@ class SqlAssignmentRepository(_AppendOnly):
             strategy=row["strategy"],
             assigned_at=row["assigned_at"],
             assigned_by=ActorRef(ActorRole(row["assigned_by_role"]), row["assigned_by_id"]),
+            waited_seconds=row["waited_seconds"],
         )
-
-
-class SqlRoutingStepRepository(_AppendOnly):
-    async def add(self, step: RoutingStep) -> None:
-        await self._insert(
-            tables.routing_steps,
-            {
-                "id": step.id,
-                "case_id": step.case_id,
-                "tier": step.tier.value,
-                "component_id": step.component.component_id if step.component else None,
-                "component_version": step.component.component_version if step.component else None,
-                "component_name": step.component_name,
-                "outcome": step.outcome.value,
-                "reason_code": step.reason_code,
-                "policy_rule_id": step.policy_rule_id,
-                "confidence": step.confidence,
-                "inputs_used": list(step.inputs_used),
-                "handoff": step.handoff.to_json() if step.handoff else None,
-                "occurred_at": step.occurred_at,
-            },
-        )
-
-    async def list_for_case(self, case_id: str) -> list[RoutingStep]:
-        c = tables.routing_steps.c
-        result = await self._session.execute(
-            select(tables.routing_steps).where(c.case_id == case_id).order_by(c.occurred_at, c.id)
-        )
-        return [
-            RoutingStep(
-                id=row["id"],
-                case_id=row["case_id"],
-                tier=Tier(row["tier"]),
-                component=(
-                    ComponentRef(row["component_id"], row["component_version"])
-                    if row["component_id"]
-                    else None
-                ),
-                outcome=RoutingOutcome(row["outcome"]),
-                occurred_at=row["occurred_at"],
-                component_name=row["component_name"],
-                reason_code=row["reason_code"],
-                policy_rule_id=row["policy_rule_id"],
-                confidence=row["confidence"],
-                inputs_used=tuple(row["inputs_used"]),
-                handoff=Handoff.from_json(row["handoff"]) if row["handoff"] else None,
-            )
-            for row in result.mappings()
-        ]
 
 
 # ----------------------------------------------------------------------------- customers
@@ -420,12 +360,9 @@ class SqlCustomerRepository(_AppendOnly):
         return Customer(
             id=row["id"],
             display_name=row["display_name"],
-            segment=CustomerSegment(row["segment"]),
             country=CountryCode(row["country"]),
             city=row["city"],
             locale=CustomerLocale(row["locale"]),
-            customer_since=row["customer_since"],
-            document_type=row["document_type"],
             simulator=bool(row["simulator"]),
             suggestions=tuple(row["suggestions"]),
         )
@@ -436,12 +373,9 @@ class SqlCustomerRepository(_AppendOnly):
             {
                 "id": customer.id,
                 "display_name": customer.display_name,
-                "segment": customer.segment.value,
                 "country": customer.country.value,
                 "city": customer.city,
                 "locale": customer.locale.value,
-                "customer_since": customer.customer_since,
-                "document_type": customer.document_type,
                 "simulator": customer.simulator,
                 "suggestions": list(customer.suggestions),
             },

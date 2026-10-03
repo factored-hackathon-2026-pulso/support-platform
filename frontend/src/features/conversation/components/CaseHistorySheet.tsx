@@ -1,0 +1,292 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeft, ChevronRight, FolderOpen } from 'lucide-react'
+import { useCurrentUser } from '@/app/session'
+import {
+  Button,
+  Callout,
+  cardClasses,
+  EmptyState,
+  QueryState,
+  Sheet,
+  Skeleton,
+} from '@/components/ui'
+import { cn } from '@/lib/cn'
+import {
+  closureLine,
+  describeCaseLoadFailure,
+  historyItemLine,
+  historySheetTitle,
+  historyTruncatedNote,
+  shortCaseId,
+  toTranscriptItems,
+} from '../model'
+import { useCaseDetail, useCaseHistory, useCaseTurns, useLoadOlderTurns } from '../hooks'
+import type { CaseHistory } from '../types'
+import { ChatTranscript } from './ChatTranscript'
+
+export interface CaseHistorySheetProps {
+  /** The case open in the Workspace (its customer's other cases are listed). */
+  caseId: string
+  customerName: string
+  /** `'lista'` = the list; a case id = that past case's read-only transcript. */
+  selected: 'lista' | string
+  onSelect(selected: 'lista' | string): void
+  onClose(): void
+}
+
+/**
+ * "Casos anteriores de {nombre}" (contract §9.4): the customer's other cases
+ * with the team, and the read-only transcript of the one picked. Conversation
+ * history, not bank data. No composer, no read cursor, no `case:` subscription
+ * (a past case is closed and does not change). The URL holds what is shown
+ * (`?historial=lista | <CASE-id>`).
+ *
+ * Focus (ARCHITECTURE.md §11): switching view replaces the focused control, so
+ * opening a past case moves the focus to its heading, and going back to the
+ * list moves it to the row of the case it came from. Opening the sheet straight
+ * on a view leaves the initial focus to the Sheet (and its return on close).
+ */
+export function CaseHistorySheet({
+  caseId,
+  customerName,
+  selected,
+  onSelect,
+  onClose,
+}: CaseHistorySheetProps) {
+  const previous = usePreviousView(selected)
+  return (
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+      title={historySheetTitle(customerName)}
+      description="Conversaciones que tuvo con el equipo. Solo lectura."
+      width={600}
+    >
+      {selected === 'lista' ? (
+        <HistoryList caseId={caseId} onSelect={onSelect} returnTo={previous} />
+      ) : (
+        <PastCase
+          key={selected}
+          caseId={selected}
+          focusHeading={previous !== null}
+          onBack={() => onSelect('lista')}
+        />
+      )}
+    </Sheet>
+  )
+}
+
+/**
+ * The view shown before `selected` last changed while the sheet stayed open
+ * (`null` until it changes): what the focus returns to.
+ */
+function usePreviousView(selected: string): string | null {
+  const [views, setViews] = useState<{ current: string; previous: string | null }>({
+    current: selected,
+    previous: null,
+  })
+  if (views.current !== selected) {
+    setViews({ current: selected, previous: views.current })
+    return views.current
+  }
+  return views.previous
+}
+
+interface HistoryListProps {
+  caseId: string
+  onSelect(id: string): void
+  /** The view the sheet showed before the list (a past case id): its row takes the focus. */
+  returnTo: string | null
+}
+
+function HistoryList({ caseId, onSelect, returnTo }: HistoryListProps) {
+  const history = useCaseHistory(caseId)
+  const rows = useRef(new Map<string, HTMLButtonElement>())
+  const pendingFocus = useRef(returnTo)
+
+  // Back from a past case: its row (or the first one) takes the focus, once.
+  useEffect(() => {
+    if (!pendingFocus.current || !history.data) return
+    const target = rows.current.get(pendingFocus.current) ?? rows.current.values().next().value
+    pendingFocus.current = null
+    target?.focus()
+  }, [history.data])
+
+  return (
+    <QueryState<CaseHistory>
+      query={history}
+      skeleton={<ListSkeleton />}
+      isEmpty={(data) => data.items.length === 0}
+      empty={
+        <EmptyState
+          icon={<FolderOpen size={36} strokeWidth={1.6} aria-hidden="true" />}
+          title="No tiene otros casos."
+          as="h3"
+        />
+      }
+      errorTitle="No pudimos cargar los casos anteriores"
+    >
+      {(data) => {
+        const note = historyTruncatedNote(data.items.length, data.total)
+        return (
+          <div className="flex flex-col gap-3">
+            <ul aria-label="Casos anteriores" className="m-0 flex list-none flex-col gap-2 p-0">
+              {data.items.map((item) => (
+                <li key={item.id}>
+                  <button
+                    ref={(node) => {
+                      if (!node) return
+                      rows.current.set(item.id, node)
+                      return () => {
+                        rows.current.delete(item.id)
+                      }
+                    }}
+                    type="button"
+                    onClick={() => onSelect(item.id)}
+                    className={cn(
+                      cardClasses({ padding: 'sm', interactive: true }),
+                      'flex w-full cursor-pointer items-center gap-3 text-left',
+                    )}
+                  >
+                    <span className="flex min-w-0 grow flex-col gap-1">
+                      <span className="text-14 font-semibold text-ink">
+                        {historyItemLine(item)}
+                      </span>
+                      <span className="truncate text-13 text-ink-2">
+                        {item.preview ?? 'Sin mensajes'}
+                      </span>
+                    </span>
+                    <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-muted" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {note ? <p className="m-0 text-13 text-muted">{note}</p> : null}
+          </div>
+        )
+      }}
+    </QueryState>
+  )
+}
+
+interface PastCaseProps {
+  caseId: string
+  /** The sheet switched to this case from the list: its heading takes the focus. */
+  focusHeading: boolean
+  onBack(): void
+}
+
+function PastCase({ caseId, focusHeading, onBack }: PastCaseProps) {
+  const me = useCurrentUser()
+  const detail = useCaseDetail(caseId)
+  const turns = useCaseTurns(caseId, detail.data?.case.lastSequence)
+  const older = useLoadOlderTurns(caseId)
+  const items = useMemo(
+    () => (turns.data ? toTranscriptItems(turns.data, me.id) : []),
+    [turns.data, me.id],
+  )
+  const headingRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => {
+    if (focusHeading) headingRef.current?.focus()
+  }, [focusHeading])
+
+  const failed = detail.status === 'error' || turns.status === 'error'
+  const closure = detail.data?.closure
+  const heading = (
+    <h3
+      ref={headingRef}
+      tabIndex={-1}
+      className="m-0 text-15 font-semibold text-ink focus-visible:outline-offset-4"
+    >
+      Caso <span className="font-mono text-14">{shortCaseId(caseId)}</span>
+      {detail.data && !failed ? ` · ${closure ? closureLine(closure, me.id) : 'Abierto'}` : null}
+    </h3>
+  )
+
+  const back = (
+    <Button
+      variant="ghost"
+      size="sm"
+      icon={<ArrowLeft size={14} aria-hidden="true" />}
+      onClick={onBack}
+      className="self-start"
+    >
+      Todos los casos anteriores
+    </Button>
+  )
+
+  if (failed) {
+    const failure = describeCaseLoadFailure(detail.error ?? turns.error)
+    return (
+      <div className="flex flex-col gap-3">
+        {back}
+        {heading}
+        <Callout
+          tone="danger"
+          title={failure.title}
+          actions={
+            <Button
+              size="sm"
+              onClick={() => {
+                void detail.refetch()
+                void turns.refetch()
+              }}
+            >
+              Reintentar
+            </Button>
+          }
+        >
+          {failure.description}
+        </Callout>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {back}
+      {heading}
+      {closure?.note ? <p className="m-0 text-13 text-ink-2">Nota: {closure.note}</p> : null}
+      {turns.status === 'pending' || detail.status === 'pending' ? (
+        <div aria-busy="true" className="flex flex-col gap-3">
+          <Skeleton className="h-10 w-2/3" />
+          <Skeleton className="h-10 w-1/2 self-end" />
+        </div>
+      ) : (
+        <>
+          {turns.data.olderCursor ? (
+            <div className="flex flex-col items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={older.isPending}
+                onClick={() => older.mutate()}
+              >
+                Cargar mensajes anteriores
+              </Button>
+              {older.isError ? (
+                <span className="text-12 text-danger-strong" role="alert">
+                  No pudimos cargar los mensajes anteriores. Inténtalo de nuevo.
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          <ChatTranscript items={items} label="Mensajes del caso anterior" />
+        </>
+      )}
+    </div>
+  )
+}
+
+function ListSkeleton() {
+  return (
+    <div aria-busy="true" className="flex flex-col gap-2">
+      {[0, 1].map((row) => (
+        <Skeleton key={row} className="h-16 w-full" />
+      ))}
+    </div>
+  )
+}

@@ -1,15 +1,15 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { sessionToken } from '@/lib/session-token'
-import { analystStaff, automationAdminStaff, supervisorStaff } from '@/test/fixtures'
+import { adminStaff, analystStaff, supervisorAdminStaff, supervisorStaff } from '@/test/fixtures'
 import { renderRoute } from '@/test/render'
 
 describe('route guards', () => {
   it('sends anonymous users to /login and remembers where they were going', async () => {
-    const { router } = renderRoute('/supervision/auditoria?filtro=abonos')
+    const { router } = renderRoute('/supervision/auditoria?filtro=cierres')
     expect(await screen.findByRole('heading', { level: 1, name: 'Entrar' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
-    expect(router.state.location.state).toEqual({ from: '/supervision/auditoria?filtro=abonos' })
+    expect(router.state.location.state).toEqual({ from: '/supervision/auditoria?filtro=cierres' })
   })
 
   it('redirects a role section the user does not hold to their first role home', async () => {
@@ -19,11 +19,11 @@ describe('route guards', () => {
   })
 
   it('opens the sections of every role the user holds', async () => {
-    const { router } = renderRoute('/administracion/reglas', { staff: automationAdminStaff })
+    const { router } = renderRoute('/administracion/usuarios', { staff: supervisorAdminStaff })
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Políticas y reglas' }),
+      await screen.findByRole('heading', { level: 1, name: 'Usuarios y roles' }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/administracion/reglas')
+    expect(router.state.location.pathname).toBe('/administracion/usuarios')
   })
 
   it('sends "/" to the home of the first role', async () => {
@@ -42,9 +42,11 @@ describe('route guards', () => {
   })
 
   it('keeps signed-in users out of the login screens', async () => {
-    const { router } = renderRoute('/login', { staff: automationAdminStaff })
-    expect(await screen.findByRole('heading', { level: 1, name: 'Panorama' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/automatizacion')
+    const { router } = renderRoute('/login', { staff: adminStaff })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Usuarios y roles' }),
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/administracion/usuarios')
   })
 
   it('offers a retry instead of the login when the session cannot be restored (API down)', async () => {
@@ -86,7 +88,7 @@ describe('route guards', () => {
   })
 
   it('shows the not found page inside the shell', async () => {
-    renderRoute('/automatizacion/no-existe', { staff: automationAdminStaff })
+    renderRoute('/administracion/reglas', { staff: adminStaff })
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).toBeInTheDocument()

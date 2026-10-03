@@ -1,4 +1,5 @@
 export { useCaseDetail } from './use-case-detail'
+export { useCaseHistory } from './use-case-history'
 export { useCaseTurns, useLoadOlderTurns } from './use-case-turns'
 export { useCloseCase } from './use-close-case'
 export { useConversationLive } from './use-conversation-live'

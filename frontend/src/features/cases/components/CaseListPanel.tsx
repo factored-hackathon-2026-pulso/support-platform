@@ -8,7 +8,13 @@ import {
   Skeleton,
 } from '@/components/ui'
 import { useDebouncedValue, useInbox, useInboxLive, useNow } from '../hooks'
-import { INBOX_FILTERS, SEARCH_MAX_LENGTH, countForFilter, normalizeSearch } from '../model'
+import {
+  INBOX_FILTERS,
+  SEARCH_MAX_LENGTH,
+  countForFilter,
+  emptyListCopy,
+  normalizeSearch,
+} from '../model'
 import type { InboxResponse, InboxStatus } from '../types'
 import { AvailabilityToggle } from './AvailabilityToggle'
 import { CaseCard } from './CaseCard'
@@ -17,7 +23,7 @@ import { PausedNotice } from './PausedNotice'
 
 export interface CaseListPanelProps {
   selectedCaseId: string | null
-  /** `null` = Todos. */
+  /** `null` = Todos (open cases); `closed` = Cerrados (read-only, last 7 days). */
   filter: InboxStatus | null
   query: string
   collapsed: boolean
@@ -34,14 +40,14 @@ export interface CaseListPanelProps {
 
 /** Search waits for a short pause in typing before it hits the API. */
 const SEARCH_DEBOUNCE_MS = 250
-/** SLA countdowns tick every 30 s; a live call timer every second. */
-const SLOW_TICK_MS = 30_000
-const FAST_TICK_MS = 1_000
+/** SLA countdowns and "hace x" tick every 30 s (contract §4.5). */
+const TICK_MS = 30_000
 
 /**
- * The "Casos" column of the Workspace: availability, the status counters (which
- * ARE the filters), search and the case cards; or, collapsed, a rail of
- * initials. Owns the inbox query and its live updates.
+ * The "Casos" column of the Workspace: availability, the five status counters
+ * (which ARE the filters: Todos · Por responder · Nuevos · Esperando al cliente ·
+ * Cerrados), search and the case cards; or, collapsed, a rail of initials of the
+ * open cases. Owns the inbox query and its live updates.
  */
 export function CaseListPanel({
   selectedCaseId,
@@ -56,16 +62,15 @@ export function CaseListPanel({
 }: CaseListPanelProps) {
   const q = normalizeSearch(useDebouncedValue(query, SEARCH_DEBOUNCE_MS))
   const inbox = useInbox({ status: filter, q })
-  useInboxLive(onOpenNotifiedCase ?? onSelectCase)
+  useInboxLive(onOpenNotifiedCase ?? onSelectCase, selectedCaseId)
 
   const items = inbox.data?.items
-  const hasLiveCall = items?.some((item) => item.status === 'in_call') ?? false
-  const now = useNow(hasLiveCall ? FAST_TICK_MS : SLOW_TICK_MS)
+  const now = useNow(TICK_MS)
 
   if (collapsed) {
     return (
       <CollapsedCaseRail
-        items={items}
+        items={items?.filter((item) => item.status !== 'closed')}
         toReplyCount={inbox.data?.counts.toReply}
         selectedCaseId={selectedCaseId}
         onSelectCase={onSelectCase}
@@ -128,7 +133,7 @@ export function CaseListPanel({
           isEmpty={(data) => data.items.length === 0}
           empty={
             <p className="m-0 border-t border-border p-4 text-14 text-ink-2">
-              {searching ? 'Ningún caso coincide con tu búsqueda.' : 'Nada pendiente.'}
+              {emptyListCopy(filter, searching)}
             </p>
           }
           errorTitle="No pudimos cargar tus casos"

@@ -1,7 +1,9 @@
-"""``Case`` state machine, transcript sequencing and the one-open-case slot."""
+"""``Case`` state machine (contract §2.3), first-response SLA, close, transcript sequencing and
+the one-open-case slot."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -12,15 +14,14 @@ from cc_platform.domain.cases import (
     Case,
     CaseChannel,
     CaseClosedError,
-    CaseOrigin,
     CasePriority,
     CaseStatus,
-    ChannelSessionKind,
-    ContactReason,
+    CloseReason,
     CustomerCaseSlot,
     TurnAudience,
     TurnAuthorRole,
     TurnKind,
+    normalize_close_note,
     preview_of,
     search_key,
 )
@@ -34,6 +35,7 @@ from cc_platform.domain.shared.errors import (
 
 NOW = datetime(2026, 10, 2, 14, tzinfo=UTC)
 CASE_ID = "CASE-" + "0" * 25 + "1"
+OTHER_CASE = "CASE-" + "0" * 25 + "2"
 CUSTOMER_ID = "CUS-" + "0" * 25 + "1"
 ANALYST_ID = "STF-" + "0" * 25 + "1"
 ANALYST = ActorRef(ActorRole.ANALYST, ANALYST_ID)
@@ -44,78 +46,264 @@ def turn_id() -> str:
     return f"TRN-{next(_turns):026d}"
 
 
-def open_case(
-    *, origin: CaseOrigin = CaseOrigin.CUSTOMER, channel: CaseChannel = CaseChannel.APP_CHAT
-) -> Case:
+def open_case(*, previous: str | None = None) -> Case:
     return Case.open(
         case_id=CASE_ID,
         customer_id=CUSTOMER_ID,
         customer_name="Natalia Guzmán Rincón",
-        channel=channel,
-        channel_session=ChannelSessionKind.for_chat(channel),
+        channel=CaseChannel.APP_CHAT,
         language=Language.SPANISH,
-        origin=origin,
         priority=CasePriority.MEDIUM,
         opened_at=NOW,
-        sla_due_at=NOW + timedelta(hours=1),
+        sla_due_at=NOW + timedelta(minutes=15),
         actor=ActorRef(ActorRole.CUSTOMER, CUSTOMER_ID),
+        previous_case_id=previous,
     )
 
 
-def customer_says(case: Case, text: str = "No reconozco un cargo") -> None:
+def say(
+    case: Case, text: str = "No reconozco un cargo", *, role: TurnAuthorRole, at: datetime = NOW
+) -> None:
     case.append_turn(
         turn_id=turn_id(),
         kind=TurnKind.MESSAGE,
         audience=TurnAudience.EVERYONE,
-        author_role=TurnAuthorRole.CUSTOMER,
-        author_id=CUSTOMER_ID,
+        author_role=role,
+        author_id=CUSTOMER_ID if role is TurnAuthorRole.CUSTOMER else ANALYST_ID,
         text=text,
-        created_at=NOW,
+        created_at=at,
     )
 
 
-def assignment(case: Case) -> Assignment:
+def customer_says(case: Case, text: str = "No reconozco un cargo") -> None:
+    say(case, text, role=TurnAuthorRole.CUSTOMER)
+
+
+def assignment(case: Case, *, waited: int | None = None) -> Assignment:
     return Assignment(
         id="ASG-" + "0" * 25 + "1",
         case_id=case.id,
         staff_id=ANALYST_ID,
-        reason=AssignmentReason.LANGUAGE_LEAST_LOADED,
+        reason=AssignmentReason.QUEUE_DRAINED if waited else AssignmentReason.LANGUAGE_LEAST_LOADED,
         policy_rule_id=None,
         open_cases_at_assignment=0,
         strategy="language_least_loaded@1",
         assigned_at=NOW,
         assigned_by=ActorRef.system(),
+        waited_seconds=waited,
     )
 
 
-def assigned_case(**kwargs: object) -> Case:
-    case = open_case(**kwargs)  # type: ignore[arg-type]
+def assigned_case() -> Case:
+    case = open_case()
     customer_says(case)
     case.assign(assignment(case))
     return case
 
 
-def close(case: Case) -> None:
-    case.close(
-        actor=ANALYST,
-        at=NOW,
-        resolved=False,
-        contact_reason=ContactReason.TRANSACCIONAL,
-        resolution_code=None,
-        followup_at=None,
-        csat_requested=False,
-    )
+def in_progress_case() -> Case:
+    case = assigned_case()
+    case.mark_read(up_to=1, at=NOW)
+    return case
 
 
-def test_open_starts_routing_and_records_case_opened() -> None:
-    case = open_case()
-    assert case.status is CaseStatus.ROUTING
+def close(case: Case, reason: CloseReason = CloseReason.RESOLVED, note: str | None = None) -> None:
+    case.close(actor=ANALYST, at=NOW, reason=reason, note=note)
+
+
+# ----------------------------------------------------------------------------- open
+def test_open_starts_queued_and_records_case_opened() -> None:
+    case = open_case(previous=OTHER_CASE)
+    assert case.status is CaseStatus.QUEUED
+    assert case.queued_at == NOW
+    assert not case.is_waiting_in_queue  # nobody announced the wait yet
     (event,) = case.pull_events()
     assert event.event_type == "case.opened"
-    assert event.payload()["channel_session"] == "app_session"
-    assert event.payload()["topic"] is None  # no judge yet
+    assert event.payload() == {
+        "customer_id": CUSTOMER_ID,
+        "channel": "app_chat",
+        "language": "es",
+        "priority": "medium",
+        "sla_due_at": "2026-10-02T14:15:00Z",
+        "previous_case_id": OTHER_CASE,
+    }
 
 
+def test_a_case_cannot_follow_itself() -> None:
+    with pytest.raises(InvalidValueError):
+        open_case(previous=CASE_ID)
+
+
+# ----------------------------------------------------------------------------- the table
+def test_queued_to_assigned_to_in_progress_to_closed() -> None:
+    case = open_case()
+    customer_says(case)
+    assert case.mark_waiting_in_queue(
+        label="Cola en español", reason_code="no_available_analyst", policy_rule_id=None, at=NOW
+    )
+    assert case.is_waiting_in_queue
+    assert not case.mark_waiting_in_queue(  # announced once only
+        label="Cola en español", reason_code="no_available_analyst", policy_rule_id=None, at=NOW
+    )
+    case.assign(assignment(case, waited=120))
+    assert (case.status, case.assigned_analyst_id) == (CaseStatus.ASSIGNED, ANALYST_ID)
+    case.mark_read(up_to=1, at=NOW)
+    assert case.status is CaseStatus.IN_PROGRESS
+    close(case)
+    assert case.status is CaseStatus.CLOSED
+    events = case.pull_events()
+    assert [e.event_type for e in events] == [
+        "case.opened",
+        "turn.created",
+        "case.queued",
+        "case.assigned",
+        "case.status_changed",
+        "case.read",
+        "case.closed",
+        "case.status_changed",
+    ]
+    assert events[3].payload()["waited_seconds"] == 120
+    assert events[-1].payload() == {
+        "from_status": "in_progress",
+        "to_status": "closed",
+        "reason": "closed",
+    }
+
+
+def test_opening_an_assigned_case_starts_it_and_moves_the_read_cursor() -> None:
+    case = assigned_case()
+    case.pull_events()
+    assert case.mark_read(up_to=99, at=NOW)  # clamped to last_sequence
+    assert case.status is CaseStatus.IN_PROGRESS
+    assert case.assignee_read_sequence == 1
+    assert case.unread_count == 0
+    events = case.pull_events()
+    assert [e.event_type for e in events] == ["case.status_changed", "case.read"]
+    assert events[0].payload() == {
+        "from_status": "assigned",
+        "to_status": "in_progress",
+        "reason": "opened_by_assignee",
+    }
+    # Monotonic: reading an older position changes nothing.
+    assert not case.mark_read(up_to=0, at=NOW)
+    assert case.pull_events() == []
+
+
+@pytest.mark.parametrize("prepare", [assigned_case, in_progress_case], ids=["assigned", "progress"])
+def test_close_from_assigned_or_in_progress(prepare: Callable[[], Case]) -> None:
+    case = prepare()
+    close(case, CloseReason.DUPLICATE, "  Ya lo atiende otro caso.  ")
+    assert case.status is CaseStatus.CLOSED
+    assert case.closure is not None
+    assert (case.closure.reason, case.closure.note) == (
+        CloseReason.DUPLICATE,
+        "Ya lo atiende otro caso.",
+    )
+    closed = next(e for e in case.pull_events() if e.event_type == "case.closed")
+    assert closed.payload() == {
+        "closed_at": "2026-10-02T14:00:00Z",
+        "closed_by_role": "analyst",
+        "closed_by_id": ANALYST_ID,
+        "reason": "duplicate",
+        "note": "Ya lo atiende otro caso.",
+    }
+
+
+def test_a_closed_case_is_terminal() -> None:
+    case = in_progress_case()
+    close(case)
+    with pytest.raises(CaseClosedError) as closed:
+        close(case)
+    assert closed.value.details == {"currentStatus": "closed"}
+    with pytest.raises(CaseClosedError):
+        customer_says(case)
+    with pytest.raises(CaseClosedError):
+        case.ensure_assignee_can_reply()
+    with pytest.raises(CaseClosedError):
+        case.assign(assignment(case))
+
+
+def test_a_queued_case_cannot_be_closed_nor_answered() -> None:
+    case = open_case()
+    with pytest.raises(InvalidTransitionError) as refused:
+        close(case)
+    assert refused.value.details["currentStatus"] == "queued"
+    with pytest.raises(InvalidTransitionError):
+        case.ensure_assignee_can_reply()
+    with pytest.raises(InvalidTransitionError):
+        case.mark_read(up_to=1, at=NOW)  # nobody assigned yet
+
+
+def test_invalid_transitions_raise_with_the_current_status() -> None:
+    case = assigned_case()
+    with pytest.raises(InvalidTransitionError) as again:
+        case.assign(assignment(case))  # reassignment is slice 3
+    assert again.value.details["currentStatus"] == "assigned"
+    with pytest.raises(InvalidTransitionError):
+        case.mark_waiting_in_queue(label="Cola", reason_code="x", policy_rule_id=None, at=NOW)
+
+
+@pytest.mark.parametrize("reason", list(CloseReason))
+def test_every_close_reason_is_accepted(reason: CloseReason) -> None:
+    case = assigned_case()
+    close(case, reason)
+    assert case.closure is not None
+    assert case.closure.reason is reason
+    assert case.closure.note is None
+
+
+def test_close_note_is_trimmed_blank_is_null_and_at_most_500() -> None:
+    assert normalize_close_note(None) is None
+    assert normalize_close_note("   ") is None
+    assert normalize_close_note("  nota  ") == "nota"
+    assert normalize_close_note("x" * 500) == "x" * 500
+    with pytest.raises(InvalidValueError):
+        normalize_close_note("x" * 501)
+    case = assigned_case()
+    with pytest.raises(InvalidValueError):
+        close(case, note="x" * 501)
+    assert case.status is CaseStatus.ASSIGNED  # nothing changed
+
+
+# ----------------------------------------------------------------------------- first response
+@pytest.mark.parametrize(("minutes", "met"), [(10, True), (15, True), (16, False)])
+def test_first_analyst_message_stops_the_sla_once(minutes: int, met: bool) -> None:
+    case = assigned_case()
+    case.pull_events()
+    at = NOW + timedelta(minutes=minutes)
+    say(case, "Hola, soy Daniela.", role=TurnAuthorRole.ANALYST, at=at)
+    assert case.first_response_at == at
+    events = case.pull_events()
+    assert [e.event_type for e in events] == ["turn.created", "case.first_responded"]
+    assert events[1].actor == ANALYST
+    assert events[1].payload() == {
+        "first_response_at": at.isoformat().replace("+00:00", "Z"),
+        "response_seconds": minutes * 60,
+        "sla_due_at": "2026-10-02T14:15:00Z",
+        "sla_met": met,
+    }
+    # Later analyst messages and customer messages never move it.
+    say(case, "¿Sigue ahí?", role=TurnAuthorRole.ANALYST, at=at + timedelta(minutes=5))
+    customer_says(case, "sí")
+    assert case.first_response_at == at
+    assert "case.first_responded" not in [e.event_type for e in case.pull_events()]
+
+
+def test_notices_and_banners_do_not_count_as_a_first_response() -> None:
+    case = assigned_case()
+    case.append_turn(
+        turn_id=turn_id(),
+        kind=TurnKind.NOTICE,
+        audience=TurnAudience.EVERYONE,
+        author_role=TurnAuthorRole.SYSTEM,
+        author_id=None,
+        text="Recibimos tu mensaje.",
+        created_at=NOW,
+    )
+    assert case.first_response_at is None
+
+
+# ----------------------------------------------------------------------------- transcript
 def test_turn_sequences_are_gap_free_and_include_staff_turns() -> None:
     case = open_case()
     customer_says(case)
@@ -161,107 +349,13 @@ def test_preview_flattens_and_truncates() -> None:
     assert search_key("Joaquín Ferreyra") == "joaquin ferreyra"
 
 
-def test_routing_to_queue_to_assigned() -> None:
-    case = open_case()
-    case.queue(
-        label="Cola de disputas", reason_code="no_available_analyst", policy_rule_id=None, at=NOW
-    )
-    assert case.status is CaseStatus.QUEUED
-    case.assign(assignment(case))
-    assert case.status is CaseStatus.ASSIGNED
-    assert case.assigned_analyst_id == ANALYST_ID
-    types = [e.event_type for e in case.pull_events()]
-    assert types == ["case.opened", "case.queued", "case.assigned"]
-
-
-def test_opening_an_assigned_case_starts_it_and_moves_the_read_cursor() -> None:
-    case = assigned_case()
-    case.pull_events()
-    assert case.mark_read(up_to=99, at=NOW)  # clamped to last_sequence
-    assert case.status is CaseStatus.IN_PROGRESS
-    assert case.assignee_read_sequence == 1
-    assert case.unread_count == 0
-    events = case.pull_events()
-    assert [e.event_type for e in events] == ["case.status_changed", "case.read"]
-    assert events[0].payload() == {
-        "from_status": "assigned",
-        "to_status": "in_progress",
-        "reason": "opened_by_assignee",
-    }
-    # Monotonic: reading an older position changes nothing.
-    assert not case.mark_read(up_to=0, at=NOW)
-    assert case.pull_events() == []
-
-
-def test_close_from_every_open_status_and_never_twice() -> None:
-    case = assigned_case()
-    close(case)
-    assert case.status is CaseStatus.CLOSED
-    assert case.closure is not None
-    types = [e.event_type for e in case.pull_events()]
-    assert types[-2:] == ["case.closed", "case.status_changed"]
-    with pytest.raises(CaseClosedError) as closed:
-        close(case)
-    assert closed.value.details == {"currentStatus": "closed"}
-    with pytest.raises(CaseClosedError):
-        customer_says(case)
-
-    for prepare in (
-        lambda c: c.mark_read(up_to=1, at=NOW),  # in_progress
-        lambda c: c.start_call(at=NOW, actor=ANALYST),  # in_call
-    ):
-        other = assigned_case()
-        prepare(other)
-        close(other)
-        assert other.status is CaseStatus.CLOSED
-
-
-@pytest.mark.parametrize("status", [CaseStatus.ROUTING, CaseStatus.QUEUED])
-def test_cases_nobody_holds_cannot_be_closed(status: CaseStatus) -> None:
-    case = open_case()
-    if status is CaseStatus.QUEUED:
-        case.queue(label="Cola", reason_code="no_available_analyst", policy_rule_id=None, at=NOW)
-    with pytest.raises(InvalidTransitionError) as refused:
-        close(case)
-    assert refused.value.details["currentStatus"] == status.value
-
-
-def test_invalid_transitions_raise_with_the_current_status() -> None:
-    case = assigned_case()
-    with pytest.raises(InvalidTransitionError):
-        case.queue(label="Cola", reason_code="x", policy_rule_id=None, at=NOW)
-    with pytest.raises(InvalidTransitionError):
-        case.assign(assignment(case))
-    with pytest.raises(InvalidTransitionError):
-        case.require_callback(at=NOW, actor=ANALYST)  # only outbound origins
-    with pytest.raises(InvalidTransitionError):
-        open_case().mark_read(up_to=1, at=NOW)  # nobody assigned yet
-
-
-def test_replies_only_in_assigned_or_in_progress() -> None:
-    case = assigned_case()
-    case.ensure_assignee_can_reply()
-    case.start_call(at=NOW, actor=ANALYST)
-    with pytest.raises(InvalidTransitionError):
-        case.ensure_assignee_can_reply()
-
-
-def test_outbound_follow_up_goes_to_call_then_live() -> None:
-    case = assigned_case(origin=CaseOrigin.REGULATOR, channel=CaseChannel.PHONE)
-    case.require_callback(at=NOW, actor=ActorRef.system())
-    assert case.status is CaseStatus.TO_CALL
-    case.start_call(at=NOW + timedelta(minutes=1), actor=ANALYST)
-    assert case.status is CaseStatus.IN_CALL
-    assert case.live_since == NOW + timedelta(minutes=1)
-
-
 def test_slot_holds_one_open_case() -> None:
     slot = CustomerCaseSlot(customer_id=CUSTOMER_ID)
     slot.occupy(CASE_ID)
     slot.occupy(CASE_ID)  # idempotent for the same case
     with pytest.raises(ConflictError):
-        slot.occupy("CASE-" + "0" * 25 + "2")
-    slot.release("CASE-" + "0" * 25 + "2")  # not the holder: no-op
+        slot.occupy(OTHER_CASE)
+    slot.release(OTHER_CASE)  # not the holder: no-op
     assert slot.open_case_id == CASE_ID
     slot.release(CASE_ID)
     assert slot.open_case_id is None

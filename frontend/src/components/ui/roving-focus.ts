@@ -9,20 +9,22 @@ const KEYS: Record<Orientation, { prev: string; next: string }> = {
 
 /**
  * Keyboard navigation for composite widgets (tablist, listbox-like groups).
- * Moves focus between `selector` items inside the event's currentTarget and
- * returns the newly focused element so callers can select it.
+ * Moves focus between `selector` items inside `container` (default: the
+ * event's currentTarget) and returns the newly focused element so callers can
+ * select it.
  */
 export function handleRovingKeyDown(
   event: KeyboardEvent<HTMLElement>,
   selector: string,
   orientation: Orientation = 'horizontal',
+  container: HTMLElement = event.currentTarget,
 ): HTMLElement | null {
   const { prev, next } = KEYS[orientation]
   const isPrev = event.key === prev
   const isNext = event.key === next
   if (!isPrev && !isNext && event.key !== 'Home' && event.key !== 'End') return null
 
-  const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(selector)).filter(
+  const items = Array.from(container.querySelectorAll<HTMLElement>(selector)).filter(
     (el) => !el.hasAttribute('disabled') && el.getAttribute('aria-disabled') !== 'true',
   )
   if (items.length === 0) return null

@@ -1,38 +1,32 @@
 /**
- * API types of the conversation feature (docs/platform/api/slice-1-cases.md §3.2):
+ * API types of the conversation feature (docs/platform/api/slice-2-case-lifecycle.md §5.2):
  * aliases of the schemas generated from `backend/openapi.json` (`pnpm gen:api`),
  * plus the UI-only transcript cache.
  */
-import type { CaseChannel, CaseSummary } from '@/features/cases'
+import type { CaseChannel, CaseSummary, CloseReason } from '@/features/cases'
 import type { Schemas } from '@/lib/api'
 
-export type { CaseChannel, CaseSummary }
+export type { CaseChannel, CaseSummary, CloseReason }
 
 export type Language = Schemas['Language']
 export type TurnKind = Schemas['TurnKind']
 export type TurnAudience = Schemas['TurnAudience']
 export type TurnAuthorRole = Schemas['TurnAuthorRole']
-export type Tier = Schemas['Tier']
-export type RoutingOutcome = Schemas['RoutingOutcome']
-export type RouteStopKind = Schemas['RouteStopKind']
 export type AssignmentReason = Schemas['AssignmentReason']
-export type ChannelSessionKind = Schemas['ChannelSessionKind']
-export type ContactReason = Schemas['ContactReason']
-export type ResolutionCode = Schemas['ResolutionCode']
-export type FollowUp = Schemas['FollowUp']
-export type CustomerSegment = Schemas['CustomerSegment']
 export type CountryCode = Schemas['CountryCode']
 export type CustomerLocale = Schemas['CustomerLocale']
 
-export type CustomerProfile = Schemas['CustomerProfile']
-export type ChannelIdentity = Schemas['ChannelIdentity']
+/** Who the customer is (no customer-file data): name, locale, language, place. */
+export type CaseCustomer = Schemas['CaseCustomer']
+/** "Cómo llegó a ti": who got the case, why, and the queue wait if any. */
 export type AssignmentOut = Schemas['AssignmentOut']
-export type RouteStop = Schemas['RouteStop']
-export type RoutingSummary = Schemas['RoutingSummary']
 export type CaseClosure = Schemas['CaseClosure']
 export type CaseCapabilities = Schemas['CaseCapabilities']
 export type ReplyBlockedReason = Schemas['ReplyBlockedReason']
 export type CaseDetail = Schemas['CaseDetail']
+/** The customer's other cases ("Casos anteriores"), newest first, at most 20. */
+export type CaseHistory = Schemas['CaseHistory']
+export type CaseHistoryItem = Schemas['CaseHistoryItem']
 /** `sequence` is 1-based and gap-free per case (includes staff-only turns). */
 export type Turn = Schemas['Turn']
 export type TurnPage = Schemas['TurnPage']
@@ -50,7 +44,7 @@ export interface PendingMessage {
   status: 'sending' | 'failed'
   /** Spanish copy for the failure (from `describeSendFailure`). */
   error: string | null
-  /** False when re-sending cannot help (closed case, channel not supported). */
+  /** False when re-sending cannot help (closed case, not the assignee). */
   retryable: boolean
 }
 

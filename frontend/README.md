@@ -1,7 +1,8 @@
 # Plataforma de soporte · frontend
 
-React SPA for the LATAM Bank contact-center staff (analista, supervisora,
-automatización, administración) plus a customer chat simulator for demos.
+React SPA for the LATAM Bank support staff (analista, supervisora,
+administración), who talk with customers by chat, plus a customer chat simulator
+for demos.
 
 ```bash
 pnpm install
@@ -10,7 +11,7 @@ pnpm dev                     # http://localhost:5173
 ```
 
 Quality gates (all must pass): `pnpm typecheck`, `pnpm lint`, `pnpm test`,
-`pnpm build`, `pnpm format:check`.
+`pnpm build`, `pnpm format:check`, `pnpm check:api`.
 
 API types are generated from `../backend/openapi.json` into
 `src/lib/api/schema.gen.ts`: `pnpm gen:api` regenerates them, `pnpm check:api`

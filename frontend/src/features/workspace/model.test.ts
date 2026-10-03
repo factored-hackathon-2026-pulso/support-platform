@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  customerHeaderId,
-  customerHeaderLine,
   emptyWorkspaceCopy,
   firstSelectableCase,
-  formatMonthYear,
   nextCaseAfterClose,
   parseWorkspaceSearch,
   toWorkspaceSearch,
@@ -15,30 +12,37 @@ const defaults: WorkspaceUrlState = {
   caseId: null,
   filter: null,
   query: '',
-  panelTab: 'copiloto',
-  panelCollapsed: false,
   listCollapsed: false,
+  history: null,
 }
 
 describe('parseWorkspaceSearch', () => {
   it('reads every param', () => {
     const params = new URLSearchParams(
-      'caso=CASE-1&estado=por-llamar&q=Marcela&panel=cliente&lista=contraida&apoyo=contraido',
+      'caso=CASE-1&estado=cerrados&q=Marcela&lista=contraida&historial=lista',
     )
     expect(parseWorkspaceSearch(params)).toEqual({
       caseId: 'CASE-1',
-      filter: 'to_call',
+      filter: 'closed',
       query: 'Marcela',
-      panelTab: 'cliente',
-      panelCollapsed: true,
       listCollapsed: true,
+      history: 'lista',
     })
   })
 
-  it('falls back to the defaults for absent or unknown values', () => {
+  it('opens the history sheet on a past case', () => {
+    const params = new URLSearchParams('caso=CASE-108&historial=CASE-110')
+    expect(parseWorkspaceSearch(params).history).toBe('CASE-110')
+  })
+
+  it('falls back to the defaults for absent, unknown and removed values', () => {
     expect(parseWorkspaceSearch(new URLSearchParams())).toEqual(defaults)
     expect(
-      parseWorkspaceSearch(new URLSearchParams('caso=&estado=x&panel=x&lista=1&apoyo=si')),
+      parseWorkspaceSearch(
+        new URLSearchParams(
+          'caso=&estado=por-llamar&lista=1&historial=%20&panel=cliente&apoyo=contraido',
+        ),
+      ),
     ).toEqual(defaults)
   })
 })
@@ -48,18 +52,19 @@ describe('toWorkspaceSearch', () => {
     expect(toWorkspaceSearch(defaults).toString()).toBe('')
   })
 
-  it('round-trips through the parser', () => {
+  it('round-trips through the parser, without panel or apoyo', () => {
     const state: WorkspaceUrlState = {
-      caseId: 'CASE-00000000000000000000000101',
+      caseId: 'CASE-00000000000000000000000108',
       filter: 'waiting',
       query: 'Joaquín',
-      panelTab: 'herramientas',
-      panelCollapsed: true,
       listCollapsed: true,
+      history: 'CASE-00000000000000000000000110',
     }
     const params = toWorkspaceSearch(state)
-    expect(params.get('estado')).toBe('en-espera')
-    expect(params.get('panel')).toBe('herramientas')
+    expect(params.get('estado')).toBe('esperando')
+    expect(params.get('historial')).toBe('CASE-00000000000000000000000110')
+    expect(params.has('panel')).toBe(false)
+    expect(params.has('apoyo')).toBe(false)
     expect(parseWorkspaceSearch(new URLSearchParams(params.toString()))).toEqual(state)
   })
 })
@@ -82,36 +87,16 @@ describe('case selection', () => {
   })
 })
 
-describe('client header', () => {
-  const customer = {
-    id: 'CUS-00000000000000000000001001',
-    segment: 'Plus',
-    customerSince: '2019-02-01',
-    city: 'Barranquilla',
-    country: 'CO' as const,
-    documentType: 'CE',
-  }
-
-  it('formats the calendar month without a time-zone shift', () => {
-    expect(formatMonthYear('2019-02-01')).toBe('feb 2019')
-    expect(formatMonthYear('2020-01-31')).toBe('ene 2020')
-  })
-
-  it('builds the header lines', () => {
-    expect(customerHeaderLine(customer)).toBe(
-      'Plus · cliente desde feb 2019 · Barranquilla, Colombia',
-    )
-    expect(customerHeaderId(customer)).toBe('CUS-00000000000000000000001001 · CE')
-  })
-})
-
 describe('emptyWorkspaceCopy', () => {
-  it('uses the canvas copy, and explains the pause', () => {
+  it('says there is nothing open, and explains the pause', () => {
     expect(emptyWorkspaceCopy(false)).toEqual({
-      title: 'No tienes contactos abiertos',
-      description:
-        'Estás disponible. Cuando un agente escale un contacto que te corresponde, aparece aquí.',
+      title: 'No tienes casos abiertos',
+      description: 'Estás disponible. Cuando un cliente escriba y te corresponda, aparece aquí.',
     })
-    expect(emptyWorkspaceCopy(true).description).toMatch(/^Estás en pausa/)
+    expect(emptyWorkspaceCopy(true)).toEqual({
+      title: 'No tienes casos abiertos',
+      description:
+        'Estás en pausa: no te llegan casos nuevos. Vuelve a disponible para recibir el siguiente.',
+    })
   })
 })

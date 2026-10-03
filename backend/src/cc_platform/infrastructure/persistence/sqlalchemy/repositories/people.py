@@ -13,7 +13,7 @@ from cc_platform.domain.people.availability import AnalystAvailability, Availabi
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge, MfaChallengeStatus, MfaMethod
 from cc_platform.domain.people.session import SessionEndReason, StaffSession
-from cc_platform.domain.people.staff import Language, Staff, StaffLevel, StaffRole
+from cc_platform.domain.people.staff import Language, Staff, StaffRole
 from cc_platform.infrastructure.persistence.sqlalchemy import tables
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.base import (
     Row,
@@ -34,7 +34,6 @@ class SqlStaffRepository(VersionedRepository[Staff]):
             "name": aggregate.name,
             "email": aggregate.email,
             "roles": sorted(role.value for role in aggregate.roles),
-            "level": aggregate.level.value,
             "languages": sorted(language.value for language in aggregate.languages),
             "team": aggregate.team,
             "active": aggregate.active,
@@ -46,7 +45,6 @@ class SqlStaffRepository(VersionedRepository[Staff]):
             name=row["name"],
             email=row["email"],
             roles=frozenset(StaffRole(value) for value in row["roles"]),
-            level=StaffLevel(row["level"]),
             languages=frozenset(Language(value) for value in row["languages"]),
             team=row["team"],
             active=row["active"],

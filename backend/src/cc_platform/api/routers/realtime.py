@@ -257,7 +257,7 @@ class RealtimeSocketSession:
             return policy.can_customer_subscribe(actor.customer, topic)
         if actor.staff is None or not policy.can_subscribe(actor.staff, topic):
             return False
-        if topic.kind is TopicKind.CASE and topic.key is not None:
+        if topic.kind is TopicKind.CASE:
             return await self._api.use_cases.cases.authorize_subscription.execute(
                 actor.staff, topic.key
             )

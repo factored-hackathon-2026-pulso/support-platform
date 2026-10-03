@@ -1,33 +1,16 @@
-import {
-  Archive,
-  Bot,
-  GitBranch,
-  LayoutDashboard,
-  MessageSquare,
-  Scale,
-  Shield,
-  SquareCheckBig,
-  UserPlus,
-  Users,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react'
+import { MessageSquare, Shield, UserPlus, Users, type LucideIcon } from 'lucide-react'
 import type { AvatarTone } from '@/components/ui'
 
 /** Same values as the API `StaffRole` enum. */
-export type RoleId = 'analyst' | 'supervisor' | 'automation' | 'admin'
+export type RoleId = 'analyst' | 'supervisor' | 'admin'
 
 /**
  * Live signals a rail destination can show. Each key is fed by the feature that
  * owns the data (app/rail-indicators.ts); a key nobody feeds shows nothing.
  */
 export type RailIndicatorKey =
-  /** Approval requests waiting for the supervisor ("Por aprobar"). */
-  | 'pendingApprovals'
-  /** Admin change requests waiting for a second admin (four-eyes). */
-  | 'pendingAdminChanges'
-  /** New signals or proposals in the automation panorama. */
-  | 'automationNews'
+  /** Cases waiting in a language queue (slice 3 feeds it; nobody does yet). */
+  'queuedCases'
 
 /** Value of one indicator: a count (orange badge) and/or a dot (something new). */
 export interface RailIndicator {
@@ -63,7 +46,7 @@ export interface RoleDefinition {
 }
 
 /**
- * Role navigation, straight from the canvas rails (Workspace, SuTeam, Home, Admin).
+ * Role navigation, straight from the canvas rails (Workspace, SuTeam, Admin).
  * Badges and dots are not part of this static config: items name an `indicator`
  * and the rail reads its live value (app/rail-indicators.ts).
  */
@@ -84,41 +67,7 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
     avatarTone: 'peach',
     nav: [
       { to: '/supervision/equipo', label: 'Equipo y colas', icon: Users },
-      {
-        to: '/supervision/aprobaciones',
-        label: 'Por aprobar',
-        icon: SquareCheckBig,
-        indicator: 'pendingApprovals',
-      },
       { to: '/supervision/auditoria', label: 'Auditoría', icon: Shield },
-    ],
-  },
-  automation: {
-    id: 'automation',
-    label: 'Automatización',
-    basePath: '/automatizacion',
-    home: '/automatizacion',
-    avatarTone: 'accent',
-    nav: [
-      {
-        to: '/automatizacion',
-        label: 'Panorama',
-        icon: LayoutDashboard,
-        indicator: 'automationNews',
-        end: true,
-      },
-      { to: '/automatizacion/arbol', label: 'Árbol de decisión', icon: GitBranch },
-      {
-        to: '/automatizacion/agentes',
-        label: 'Agentes',
-        icon: Bot,
-        // Proposal, sandbox and activation belong to the agents flow (canvas marks "Agentes").
-        alsoActiveOn: [
-          '/automatizacion/propuestas',
-          '/automatizacion/sandbox',
-          '/automatizacion/activar',
-        ],
-      },
     ],
   },
   admin: {
@@ -127,22 +76,12 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
     basePath: '/administracion',
     home: '/administracion/usuarios',
     avatarTone: 'success',
-    nav: [
-      { to: '/administracion/usuarios', label: 'Usuarios y roles', icon: UserPlus },
-      {
-        to: '/administracion/herramientas',
-        label: 'Herramientas y permisos',
-        icon: Wrench,
-        indicator: 'pendingAdminChanges',
-      },
-      { to: '/administracion/reglas', label: 'Políticas y reglas', icon: Scale },
-      { to: '/administracion/retencion', label: 'Retención de datos', icon: Archive },
-    ],
+    nav: [{ to: '/administracion/usuarios', label: 'Usuarios y roles', icon: UserPlus }],
   },
 }
 
 /** Display order in the role switcher and priority for "first role home". */
-export const ROLE_ORDER: readonly RoleId[] = ['analyst', 'supervisor', 'automation', 'admin']
+export const ROLE_ORDER: readonly RoleId[] = ['analyst', 'supervisor', 'admin']
 
 function matchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`)

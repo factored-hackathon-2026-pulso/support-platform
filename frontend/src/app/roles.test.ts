@@ -4,18 +4,27 @@ import {
   isNavItemActive,
   resolvePostLoginPath,
   roleFromPath,
+  ROLE_ORDER,
   ROLES,
   sortRoles,
+  type NavItem,
 } from './roles'
 
-const agents = ROLES.automation.nav.find((item) => item.label === 'Agentes')!
-const panorama = ROLES.automation.nav.find((item) => item.label === 'Panorama')!
-
 describe('roles', () => {
+  it('has exactly three roles, in canonical order', () => {
+    expect(ROLE_ORDER).toEqual(['analyst', 'supervisor', 'admin'])
+    expect(Object.keys(ROLES).sort()).toEqual(['admin', 'analyst', 'supervisor'])
+  })
+
+  it('lists the destinations of each role', () => {
+    expect(ROLES.analyst.nav.map((item) => item.label)).toEqual(['Casos'])
+    expect(ROLES.supervisor.nav.map((item) => item.label)).toEqual(['Equipo y colas', 'Auditoría'])
+    expect(ROLES.admin.nav.map((item) => item.label)).toEqual(['Usuarios y roles'])
+  })
+
   it('maps paths to the owning role', () => {
     expect(roleFromPath('/analista')).toBe('analyst')
-    expect(roleFromPath('/supervision/aprobaciones')).toBe('supervisor')
-    expect(roleFromPath('/automatizacion/sandbox/CMP-1')).toBe('automation')
+    expect(roleFromPath('/supervision/auditoria')).toBe('supervisor')
     expect(roleFromPath('/administracion')).toBe('admin')
     expect(roleFromPath('/analistas')).toBeNull()
     expect(roleFromPath('/cliente')).toBeNull()
@@ -23,17 +32,19 @@ describe('roles', () => {
 
   it('orders roles canonically and finds the first home', () => {
     expect(sortRoles(['admin', 'ghost', 'analyst'])).toEqual(['analyst', 'admin'])
-    expect(firstRoleHome(['admin', 'automation'])).toBe('/automatizacion')
+    expect(sortRoles(['ghost', 'admin'])).toEqual(['admin'])
+    expect(firstRoleHome(['admin', 'supervisor'])).toBe('/supervision/equipo')
     expect(firstRoleHome([])).toBeNull()
   })
 
-  it('marks the agents item active on the whole agents flow, panorama only on its exact path', () => {
-    expect(isNavItemActive(agents, '/automatizacion/agentes/AGT-1')).toBe(true)
-    expect(isNavItemActive(agents, '/automatizacion/propuestas/PRP-1')).toBe(true)
-    expect(isNavItemActive(agents, '/automatizacion/activar/CMP-1')).toBe(true)
-    expect(isNavItemActive(agents, '/automatizacion/arbol')).toBe(false)
-    expect(isNavItemActive(panorama, '/automatizacion')).toBe(true)
-    expect(isNavItemActive(panorama, '/automatizacion/arbol')).toBe(false)
+  it('marks an item active on its path, an `end` item only on the exact path', () => {
+    const team: NavItem = ROLES.supervisor.nav[0]!
+    expect(isNavItemActive(team, '/supervision/equipo')).toBe(true)
+    expect(isNavItemActive(team, '/supervision/auditoria')).toBe(false)
+    const exact: NavItem = { ...team, end: true }
+    expect(isNavItemActive(exact, '/supervision/equipo/detalle')).toBe(false)
+    const flow: NavItem = { ...team, alsoActiveOn: ['/supervision/casos'] }
+    expect(isNavItemActive(flow, '/supervision/casos/CASE-1')).toBe(true)
   })
 
   it('returns to the requested page only when the user may open it', () => {

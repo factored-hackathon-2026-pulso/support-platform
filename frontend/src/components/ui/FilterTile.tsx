@@ -64,8 +64,7 @@ export interface FilterTileProps extends Omit<
 }
 
 /**
- * Count tile with a colored left border, used as a list filter ("5 Por
- * responder"). A visually hidden radio inside a label; place it in a
+ * Count tile with a colored left border, used as a list filter ("5 Nuevos"). A visually hidden radio inside a label; place it in a
  * FilterTileGroup. Tiles sit on a white surface so the tone-colored counts keep
  * 4.5:1 contrast on the grey list pane.
  */
@@ -111,9 +110,9 @@ export function FilterTile({
       >
         {count}
       </span>{' '}
-      {/* Never ellipsised (canvas: nowrap): "Por responder" must read whole in a
-          320 px list, three tiles per row. */}
-      <span className="text-12 tracking-tight whitespace-nowrap text-ink-2">{label}</span>
+      {/* Never ellipsised: a long label ("Esperando al cliente") wraps to two
+          lines in a 320 px list, three tiles per row. */}
+      <span className="text-12 leading-tight tracking-tight text-balance text-ink-2">{label}</span>
     </label>
   )
 }

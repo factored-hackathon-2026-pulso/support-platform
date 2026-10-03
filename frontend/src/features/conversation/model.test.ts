@@ -4,38 +4,42 @@ import { makeCaseSummary } from '@/test/case-fixtures'
 import {
   makeAnalystTurn,
   makeCaseDetail,
+  makeClosedDetail,
+  makeHistoryItem,
+  makeJulianDetail,
   makeTurn,
   seededTurns,
-  stop,
 } from '@/test/conversation-fixtures'
 import { analystStaff } from '@/test/fixtures'
 import {
   addPending,
   applySummary,
-  callBarState,
-  callOffset,
+  arrivalLine,
   caseHeaderMeta,
-  conversationLayout,
+  CLOSED_NOTICE,
+  closureLine,
+  closureNote,
   describeCaseLoadFailure,
   describeCloseFailure,
   describeSendFailure,
-  emailSnippet,
   emptyTranscript,
   formatWait,
   hasMissingTurns,
   hasSequenceGap,
+  historyItemLine,
+  historySheetTitle,
+  historyTruncatedNote,
   INITIAL_CLOSE_FORM,
-  inputsSentence,
-  joinSpanish,
   mergeOlderPage,
   mergeTurns,
   needsDetailRefetch,
   normalizeMessage,
+  noteCounter,
+  previousCasesLabel,
+  readOnlyFooter,
   readTarget,
   removePending,
-  RESOLUTION_OPTIONS,
-  routeLine,
-  routeSteps,
+  shortCaseId,
   toCloseRequest,
   toTranscriptItems,
   transcriptFromPage,
@@ -171,20 +175,12 @@ describe('transcript merge', () => {
 })
 
 describe('transcript items', () => {
-  it('maps every turn to its bubble and labels the analyst as "Tú"', () => {
+  it('maps every turn to its bubble and labels the viewer as "Tú"', () => {
     const turns = [
       ...seededTurns(),
+      makeTurn({ sequence: 5, text: 'es un retiro en cajero del 9 de enero' }),
       makeTurn({
-        sequence: 5,
-        kind: 'notice',
-        authorRole: 'system',
-        authorId: null,
-        authorName: null,
-        text: 'Recibimos tu mensaje.',
-      }),
-      makeAnalystTurn(6, 'Hola, Marcela', 'cm-1'),
-      makeTurn({
-        sequence: 7,
+        sequence: 6,
         authorRole: 'analyst',
         authorId: 'STF-OTHER',
         authorName: 'Julián Ortega',
@@ -193,14 +189,27 @@ describe('transcript items', () => {
     const items = toTranscriptItems(mergeTurns(emptyTranscript(), turns), ME)
     expect(items.map((i) => [i.variant, i.author])).toEqual([
       ['customer', 'Marcela Quintana Pardo'],
-      ['bot', 'Árbol de decisión'],
-      ['customer', 'Marcela Quintana Pardo'],
-      ['routing', null],
       ['notice', null],
+      ['routing', null],
       ['own', 'Tú'],
+      ['customer', 'Marcela Quintana Pardo'],
       ['analyst', 'Julián Ortega'],
     ])
-    expect(items[3]?.staffOnly).toBe(true)
+    expect(items[1]?.staffOnly).toBe(false)
+    expect(items[2]?.staffOnly).toBe(true)
+  })
+
+  it('has no bot variant: a system message is a centred note', () => {
+    expect(turnVariant(makeTurn({ authorRole: 'system' }), ME)).toBe('notice')
+    expect(turnVariant(makeTurn({ authorRole: 'analyst', authorId: ME }), ME)).toBe('own')
+    expect(turnVariant(makeTurn({ authorRole: 'analyst', authorId: 'STF-2' }), ME)).toBe('analyst')
+    const item = toTranscriptItems(
+      mergeTurns(emptyTranscript(), [
+        makeTurn({ sequence: 1, authorRole: 'analyst', authorId: 'STF-2', authorName: null }),
+      ]),
+      ME,
+    )[0]
+    expect(item?.author).toBe('Analista')
   })
 
   it('shows pending messages last, sending or failed', () => {
@@ -228,17 +237,6 @@ describe('transcript items', () => {
     expect(sent.at(-1)).toMatchObject({ key: 'cm-k', delivery: 'sent' })
     // Turns without a clientMessageId keep their id.
     expect(sent[0]?.key).toBe(seededTurns()[0]?.id)
-  })
-
-  it('falls back to role names for bots without a display name', () => {
-    expect(turnVariant(makeTurn({ authorRole: 'ai_agent' }), ME)).toBe('bot')
-    const item = toTranscriptItems(
-      mergeTurns(emptyTranscript(), [
-        makeTurn({ sequence: 1, authorRole: 'judge', authorName: null }),
-      ]),
-      ME,
-    )[0]
-    expect(item?.author).toBe('Juez de entrada')
   })
 })
 
@@ -270,95 +268,155 @@ describe('case summary updates', () => {
   })
 })
 
-describe('header and layouts', () => {
-  it('builds the header meta line of the canvas', () => {
+describe('header', () => {
+  it('builds the meta line: country, city, channel and priority', () => {
     expect(caseHeaderMeta(makeCaseDetail())).toBe(
       'Colombia · Barranquilla · chat web · prioridad media',
     )
+    const app = makeCaseDetail()
+    app.case = { ...app.case, channel: 'app_chat', priority: 'high' }
+    expect(caseHeaderMeta(app)).toBe('Colombia · Barranquilla · chat en la app · prioridad alta')
+  })
+
+  it('says "en portugués" instead of the priority for a Portuguese case (rule 3)', () => {
     const pt = makeCaseDetail()
     pt.case = { ...pt.case, language: 'pt' }
-    pt.customer = { ...pt.customer, city: 'Medellín' }
-    expect(caseHeaderMeta(pt)).toBe('Colombia · Medellín · chat web · en portugués')
-    const regulator = makeCaseDetail({
-      routing: { stops: [stop({ kind: 'entry', label: 'CONDUSEF' })], inputsUsed: [] },
-    })
-    regulator.case = { ...regulator.case, origin: 'regulator', priority: 'low', channel: 'phone' }
-    regulator.customer = { ...regulator.customer, country: 'MX' }
-    expect(caseHeaderMeta(regulator)).toBe('México · reclamo por la CONDUSEF · prioridad baja')
+    expect(caseHeaderMeta(pt)).toBe('Colombia · Barranquilla · chat web · en portugués')
   })
 
-  it('picks the layout per channel', () => {
-    expect(conversationLayout('app_chat')).toBe('chat')
-    expect(conversationLayout('web_chat')).toBe('chat')
-    expect(conversationLayout('phone')).toBe('call')
-    expect(conversationLayout('email')).toBe('email')
+  it('shortens the case number and labels the history button', () => {
+    expect(shortCaseId('CASE-00000000000000000000000103')).toBe('CASE-…0103')
+    expect(shortCaseId('CASE-1')).toBe('CASE-1')
+    expect(previousCasesLabel(2)).toBe('Casos anteriores (2)')
+    expect(previousCasesLabel(0)).toBeNull()
   })
+})
 
-  it('shows the call state, timer and how the call came in', () => {
-    const live = makeCaseDetail({
-      channelIdentity: { kind: 'caller_number', verified: true },
-      routing: { stops: [stop({ kind: 'entry', label: 'IVR' })], inputsUsed: [] },
-    })
-    live.case = { ...live.case, status: 'in_call', liveSince: '2026-03-05T15:55:54Z' }
-    expect(callBarState(live, Date.parse('2026-03-05T16:00:00Z'))).toEqual({
-      state: 'En llamada',
-      tone: 'success',
-      timer: '04:06',
-      kind: 'Entrante · el IVR verificó su identidad',
-    })
-    const outbound = makeCaseDetail({
-      channelIdentity: { kind: 'outbound_call', verified: false },
-      routing: { stops: [stop({ kind: 'entry', label: 'CONDUSEF' })], inputsUsed: [] },
-    })
-    outbound.case = { ...outbound.case, status: 'to_call', origin: 'regulator' }
-    expect(callBarState(outbound, 0)).toMatchObject({
-      state: 'Por llamar',
-      timer: null,
-      kind: 'Saliente · reclamo por la CONDUSEF',
-    })
-    expect(callOffset('2026-03-05T15:58:01Z', '2026-03-05T15:55:54Z')).toBe('02:07')
-  })
-
-  it('takes the first meaningful line of an e-mail', () => {
-    expect(emailSnippet('Hola:\n\nBueno, adelante. Veamos si pueden resolverlo.\n\nSaludos')).toBe(
-      'Bueno, adelante. Veamos si pueden resolverlo.',
+describe('Cómo llegó a ti', () => {
+  it('explains a language assignment, with rule 3 for Portuguese', () => {
+    const detail = makeCaseDetail()
+    expect(arrivalLine(detail, ME)).toBe(
+      'Te llegó porque estás disponible y hablas español · 5 mar, 10:46',
     )
-    expect(emailSnippet('Buenas tardes:')).toBe('Buenas tardes:')
+    const pt = makeCaseDetail()
+    pt.case = { ...pt.case, language: 'pt' }
+    expect(arrivalLine(pt, ME)).toBe(
+      'Te llegó porque estás disponible y hablas portugués (regla 3) · 5 mar, 10:46',
+    )
+  })
+
+  it('explains a case that waited in the queue', () => {
+    const drained = makeCaseDetail({
+      assignment: {
+        id: 'ASG-2',
+        analystId: ME,
+        analystName: 'Daniela Ríos',
+        reason: 'queue_drained',
+        policyRuleId: 'H1',
+        assignedAt: '2026-03-05T15:46:10Z',
+        queueLabel: 'Cola en portugués',
+        waitedSeconds: 360,
+      },
+    })
+    expect(arrivalLine(drained, ME)).toBe(
+      'Esperó 6 min en la cola en portugués y te llegó cuando quedaste disponible · 5 mar, 10:46',
+    )
+  })
+
+  it("names who attended someone else's case, and says nothing without an assignment", () => {
+    expect(arrivalLine(makeJulianDetail(), ME)).toBe('Lo atendió Julián Ortega')
+    expect(arrivalLine(makeCaseDetail({ assignment: null }), ME)).toBeNull()
+  })
+
+  it('formats waits', () => {
+    expect(formatWait(45)).toBe('45 s')
+    expect(formatWait(133)).toBe('2 min 13 s')
+    expect(formatWait(360)).toBe('6 min')
+  })
+})
+
+describe('closure and the read-only footer', () => {
+  it('says when and why the case closed, and who closed it if it was not me', () => {
+    const { closure } = makeClosedDetail()
+    expect(closureLine(closure!, ME)).toBe('Caso cerrado el 5 mar, 10:58 · Resuelto')
+    expect(
+      closureLine({ ...closure!, closedById: 'STF-2', closedByName: 'Julián Ortega' }, ME),
+    ).toBe('Caso cerrado el 5 mar, 10:58 por Julián Ortega · Resuelto')
+    expect(closureNote(closure!)).toBe('Nota: Se explicó el plazo del reverso (5 días hábiles).')
+    expect(closureNote({ note: null })).toBeNull()
+    expect(closureNote({ note: '  ' })).toBeNull()
+  })
+
+  it('replaces the composer only when the viewer cannot reply', () => {
+    expect(readOnlyFooter(makeCaseDetail(), ME)).toBeNull()
+    expect(readOnlyFooter(makeClosedDetail(), ME)).toEqual([
+      'Caso cerrado el 5 mar, 10:58 · Resuelto',
+      'Nota: Se explicó el plazo del reverso (5 días hábiles).',
+    ])
+    expect(readOnlyFooter(makeJulianDetail(), ME)).toEqual([
+      'Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto',
+    ])
+  })
+
+  it('says whose case it is on an open case of someone else', () => {
+    const notMine = makeCaseDetail({
+      capabilities: { canReply: false, replyBlockedReason: 'not_assignee', canClose: false },
+      assignment: {
+        ...makeCaseDetail().assignment!,
+        analystId: 'STF-2',
+        analystName: 'Julián Ortega',
+      },
+    })
+    expect(readOnlyFooter(notMine, ME)).toEqual(['Solo lectura: este caso es de Julián Ortega.'])
+  })
+})
+
+describe('case history', () => {
+  it('titles the sheet with the first name', () => {
+    expect(historySheetTitle('Patricia Lozano Vega')).toBe('Casos anteriores de Patricia')
+    expect(historySheetTitle('')).toBe('Casos anteriores')
+  })
+
+  it('describes each past case: date, reason or "Abierto", and who held it', () => {
+    expect(historyItemLine(makeHistoryItem())).toBe('3 mar 2026 · Resuelto · Daniela Ríos')
+    expect(
+      historyItemLine(
+        makeHistoryItem({ status: 'in_progress', closeReason: null, analystName: null }),
+      ),
+    ).toBe('3 mar 2026 · Abierto · Sin asignar')
+  })
+
+  it('notes when the list was capped at 20', () => {
+    expect(historyTruncatedNote(20, 23)).toBe('Se muestran los 20 más recientes.')
+    expect(historyTruncatedNote(2, 2)).toBeNull()
   })
 })
 
 describe('composer', () => {
   it('trims and rejects blank or too long messages', () => {
-    expect(normalizeMessage('  hola  \n')).toBe('hola')
+    expect(normalizeMessage('  hola  ')).toBe('hola')
     expect(normalizeMessage('   ')).toBeNull()
     expect(normalizeMessage('a'.repeat(4001))).toBeNull()
-    expect(normalizeMessage('línea 1\nlínea 2')).toBe('línea 1\nlínea 2')
   })
 
   it('maps send failures to copy and says when a retry can help', () => {
+    expect(describeSendFailure(new ApiProblem({ status: 409, code: 'case_closed' }))).toEqual({
+      message: 'No se envió: el caso ya está cerrado.',
+      retryable: false,
+    })
+    expect(
+      describeSendFailure(new ApiProblem({ status: 403, code: 'case_not_assigned' })).retryable,
+    ).toBe(false)
     expect(describeSendFailure(ApiProblem.network())).toEqual({
       message: 'No se envió',
       retryable: true,
     })
-    expect(
-      describeSendFailure(new ApiProblem({ status: 503, code: 'unexpected_error' })).retryable,
-    ).toBe(true)
-    for (const code of [
-      'case_closed',
-      'channel_not_supported',
-      'case_not_assigned',
-      'idempotency_conflict',
-    ]) {
-      const failure = describeSendFailure(new ApiProblem({ status: 409, code }))
-      expect(failure.retryable).toBe(false)
-      expect(failure.message).toMatch(/^No se envió: /)
-    }
   })
 
   it('explains why a case cannot be opened', () => {
     expect(
       describeCaseLoadFailure(new ApiProblem({ status: 403, code: 'case_not_assigned' })).title,
-    ).toBe('Este caso no está asignado a ti')
+    ).toBe('No tienes acceso a este caso')
     expect(describeCaseLoadFailure(new ApiProblem({ status: 404, code: 'not_found' })).title).toBe(
       'No encontramos este caso',
     )
@@ -368,150 +426,45 @@ describe('composer', () => {
   })
 })
 
-describe('Cómo llegó a ti', () => {
-  it('draws the null chain as "Juez → árbol → agente de IA → tú"', () => {
-    const detail = makeCaseDetail()
-    expect(routeLine(detail.routing.stops, ME)).toBe('Juez → árbol → agente de IA → tú')
-    const steps = routeSteps(detail, ME)
-    expect(steps.map((s) => s.title)).toEqual([
-      'Juez de entrada',
-      'Árbol de decisión',
-      'Agente de IA',
-      'Tú',
-    ])
-    expect(steps[0]?.lines).toEqual(['Todavía no hay uno conectado: pasó el caso sin atenderlo.'])
-    expect(steps[3]?.lines[0]).toBe('Te llegó porque estás disponible y hablas español.')
-    expect(steps[3]?.lines[1]).toBe('Desde el 5 mar, 10:58.')
-    expect(steps.map((s) => s.current)).toEqual([false, false, false, true])
-    expect(inputsSentence(detail.routing.inputsUsed)).toBe(
-      'Ningún nivel automático leyó datos del cliente.',
-    )
-  })
-
-  it('adds rule 3 for Portuguese and the queue wait', () => {
-    const detail = makeCaseDetail()
-    detail.case = { ...detail.case, language: 'pt' }
-    detail.routing = {
-      stops: [
-        stop({
-          kind: 'tier',
-          tier: 'judge',
-          outcome: 'abstained',
-          reasonCode: 'component_not_connected',
-        }),
-        stop({ kind: 'queue', label: 'Cola de disputas en portugués', waitedSeconds: 133 }),
-        stop({
-          kind: 'assignee',
-          label: 'Daniela Ríos',
-          staffId: ME,
-          reasonCode: 'language_least_loaded',
-          policyRuleId: 'H1',
-        }),
-      ],
-      inputsUsed: [],
-    }
-    const steps = routeSteps(detail, ME)
-    expect(routeLine(detail.routing.stops, ME)).toBe('Juez → cola de disputas en portugués → tú')
-    expect(steps[1]?.lines).toEqual(['Esperó 2 min 13 s.'])
-    expect(steps[2]?.lines[0]).toBe(
-      'Te llegó porque estás disponible y hablas portugués (regla 3).',
-    )
-  })
-
-  it('explains the assignment with the reason and rule the server recorded', () => {
-    const lineFor = (overrides: Parameters<typeof stop>[0]) => {
-      const detail = makeCaseDetail()
-      detail.routing = {
-        stops: [stop({ kind: 'assignee', label: 'Daniela Ríos', staffId: ME, ...overrides })],
-        inputsUsed: [],
-      }
-      return routeSteps(detail, ME)[0]?.lines[0]
-    }
-    expect(lineFor({ reasonCode: 'queue_drained' })).toBe(
-      'Te llegó porque estás disponible y hablas español.',
-    )
-    // CONDUSEF (seed 106): an outbound follow-up from the regulatory queue, rule 11.
-    expect(lineFor({ reasonCode: 'outbound_followup', policyRuleId: 'A2' })).toBe(
-      'Te lo asignaron para llamar al cliente: seguimiento saliente (regla 11).',
-    )
-    expect(lineFor({ reasonCode: 'outbound_followup' })).toBe(
-      'Te lo asignaron para llamar al cliente: seguimiento saliente.',
-    )
-    // No rule recorded: no rule claimed, even for a Portuguese case.
-    expect(lineFor({ reasonCode: 'something_new' })).toBe('Te lo asignaron.')
-    expect(lineFor({ reasonCode: null, policyRuleId: 'H1' })).toBe('Te lo asignaron (regla 3).')
-    expect(lineFor({ reasonCode: 'outbound_followup', summary: 'Lo asignó para llamar.' })).toBe(
-      'Lo asignó para llamar.',
-    )
-  })
-
-  it('keeps acronyms and seeded summaries, and names who read what', () => {
-    const detail = makeCaseDetail({
-      routing: {
-        stops: [
-          stop({
-            kind: 'entry',
-            label: 'IVR',
-            summary: 'Verificó su identidad con documento y clave.',
-          }),
-          stop({ kind: 'queue', label: 'Cola de disputas', waitedSeconds: 133 }),
-          stop({
-            kind: 'tier',
-            tier: 'ai_agent',
-            label: 'Agente de disputas',
-            outcome: 'handed_off',
-          }),
-          stop({ kind: 'assignee', label: 'Julián Ortega', staffId: 'STF-OTHER' }),
-        ],
-        inputsUsed: ['customers', 'transactions', 'interactions'],
-      },
-    })
-    expect(routeLine(detail.routing.stops, ME)).toBe(
-      'IVR → cola de disputas → agente de disputas → Julián',
-    )
-    const steps = routeSteps(detail, ME)
-    expect(steps[0]?.lines).toEqual(['Verificó su identidad con documento y clave.'])
-    expect(steps[2]?.lines).toEqual(['Atendió una parte y pasó el caso.'])
-    expect(steps[3]?.lines[0]).toBe('Asignado a Julián Ortega.')
-    expect(inputsSentence(detail.routing.inputsUsed)).toBe(
-      'Usaron su ficha, sus movimientos y sus contactos anteriores.',
-    )
-    expect(routeLine([], ME)).toBe('Sin recorrido registrado')
-  })
-
-  it('formats waits and Spanish lists', () => {
-    expect(formatWait(45)).toBe('45 s')
-    expect(formatWait(120)).toBe('2 min')
-    expect(formatWait(3900)).toBe('1 h 05 min')
-    expect(joinSpanish(['a'])).toBe('a')
-    expect(joinSpanish(['a', 'b'])).toBe('a y b')
-  })
-})
-
 describe('close dialog', () => {
-  it('requires the result and builds the request', () => {
-    expect(validateCloseForm(INITIAL_CLOSE_FORM)).toHaveProperty('resolved')
-    const form = { ...INITIAL_CLOSE_FORM, resolved: false }
-    expect(validateCloseForm(form)).toEqual({})
-    expect(toCloseRequest(form)).toEqual({
-      resolved: false,
-      contactReason: 'Transaccional',
-      resolutionCode: null,
-      followUp: 'tomorrow',
-      sendCsatSurvey: true,
+  it('requires a reason and caps the note at 500 characters', () => {
+    expect(validateCloseForm(INITIAL_CLOSE_FORM)).toEqual({ reason: 'Elige un motivo.' })
+    expect(validateCloseForm({ reason: 'other', note: '' })).toEqual({})
+    expect(validateCloseForm({ reason: 'resolved', note: `  ${'a'.repeat(500)}  ` })).toEqual({})
+    expect(validateCloseForm({ reason: 'resolved', note: 'a'.repeat(501) })).toEqual({
+      note: 'La nota puede tener hasta 500 caracteres.',
     })
-    expect(toCloseRequest({ ...form, resolutionCode: 'explained' }).resolutionCode).toBe(
-      'explained',
-    )
   })
 
-  it('offers the five canvas phrases, one per resolution code', () => {
-    expect(new Set(RESOLUTION_OPTIONS.map((o) => o.value)).size).toBe(5)
+  it('builds the request with a trimmed note, null when blank', () => {
+    expect(toCloseRequest({ reason: 'duplicate', note: '  Mismo caso que el 104.  ' })).toEqual({
+      reason: 'duplicate',
+      note: 'Mismo caso que el 104.',
+    })
+    expect(toCloseRequest({ reason: 'resolved', note: '   ' })).toEqual({
+      reason: 'resolved',
+      note: null,
+    })
+  })
+
+  it('counts the trimmed note', () => {
+    expect(noteCounter('')).toBe('0/500')
+    expect(noteCounter('  hola ')).toBe('4/500')
+  })
+
+  it('pins the closed notice to the backend text, per language', () => {
+    expect(CLOSED_NOTICE).toEqual({
+      es: 'La conversación terminó. Si necesitas algo más, escríbenos y te atendemos en una nueva conversación.',
+      pt: 'A conversa foi encerrada. Se precisar de algo mais, escreva para nós e abrimos uma nova conversa.',
+    })
   })
 
   it('maps close failures', () => {
     expect(describeCloseFailure(new ApiProblem({ status: 409, code: 'case_closed' }))).toBe(
       'Este caso ya estaba cerrado.',
+    )
+    expect(describeCloseFailure(new ApiProblem({ status: 409, code: 'invalid_transition' }))).toBe(
+      'Este caso no se puede cerrar en su estado actual.',
     )
     expect(describeCloseFailure(ApiProblem.network())).toBe(
       'No pudimos cerrar el caso. Inténtalo de nuevo.',

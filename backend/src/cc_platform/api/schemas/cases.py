@@ -1,50 +1,45 @@
-"""Analyst-side case schemas (slice 1 contract §3.2). Response members are always present
+"""Analyst-side case schemas (slice 2 contract §5.2). Response members are always present
 (``T | null`` where nullable), so the generated frontend types have no optional members."""
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Annotated
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, field_validator
 
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.application.cases.dto import (
     AssignmentView,
     CaseCapabilitiesView,
+    CaseClosureView,
+    CaseCustomerView,
     CaseDetailView,
+    CaseHistoryItemView,
+    CaseHistoryView,
     CaseSummaryView,
-    CustomerProfileView,
     InboxCountsView,
     InboxView,
     PostTurnResult,
     ReplyBlockedReason,
-    RouteStopView,
-    RoutingSummaryView,
     TurnPageView,
     TurnView,
 )
-from cc_platform.domain.cases.case import CaseClosure as DomainCaseClosure
+from cc_platform.domain.cases.case import MAX_CLOSE_NOTE
 from cc_platform.domain.cases.turn import MAX_TURN_TEXT
 from cc_platform.domain.cases.values import (
     AssignmentReason,
     CaseChannel,
-    CaseOrigin,
     CasePriority,
     CaseStatus,
-    CaseTopic,
-    ChannelSessionKind,
-    ContactReason,
-    FollowUp,
+    CloseReason,
     InboxStatus,
-    ResolutionCode,
     TurnAudience,
     TurnAuthorRole,
     TurnKind,
 )
-from cc_platform.domain.customers.customer import CountryCode, CustomerLocale, CustomerSegment
+from cc_platform.domain.customers.customer import CountryCode, CustomerLocale
 from cc_platform.domain.people.staff import Language
-from cc_platform.domain.routing.values import RouteStopKind, RoutingOutcome, Tier
 
 TurnText = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_TURN_TEXT)
@@ -71,21 +66,25 @@ class CaseSummary(ApiModel):
     customer: CustomerRef
     channel: CaseChannel
     language: Language
-    origin: CaseOrigin
-    topic: CaseTopic | None
     priority: CasePriority
     status: CaseStatus
-    inbox_status: InboxStatus | None
+    inbox_status: InboxStatus | None = Field(description="null while the case is queued.")
     opened_at: datetime
-    sla_due_at: datetime
+    sla_due_at: datetime = Field(description="First-response due time.")
+    first_response_at: datetime | None = Field(
+        description="The first analyst message (the SLA stops); null while pending."
+    )
     last_interaction_at: datetime
-    live_since: datetime | None
     preview: str | None
     preview_author_role: TurnAuthorRole | None
     assigned_analyst_id: str | None
     unread_count: int
     last_sequence: int
+    previous_case_id: str | None = Field(
+        description='The closed case this one continues ("Volvió a escribir").'
+    )
     closed_at: datetime | None
+    close_reason: CloseReason | None
 
     @classmethod
     def from_view(cls, view: CaseSummaryView) -> CaseSummary:
@@ -95,31 +94,30 @@ class CaseSummary(ApiModel):
             customer=CustomerRef(id=view.customer.id, display_name=view.customer.display_name),
             channel=view.channel,
             language=view.language,
-            origin=view.origin,
-            topic=view.topic,
             priority=view.priority,
             status=view.status,
             inbox_status=view.inbox_status,
             opened_at=view.opened_at,
             sla_due_at=view.sla_due_at,
+            first_response_at=view.first_response_at,
             last_interaction_at=view.last_interaction_at,
-            live_since=view.live_since,
             preview=view.preview,
             preview_author_role=view.preview_author_role,
             assigned_analyst_id=view.assigned_analyst_id,
             unread_count=view.unread_count,
             last_sequence=view.last_sequence,
+            previous_case_id=view.previous_case_id,
             closed_at=view.closed_at,
+            close_reason=view.close_reason,
         )
 
 
 class InboxCounts(ApiModel):
-    all: int
+    all: int = Field(description="Open cases: new + toReply + waiting.")
     new: int
     to_reply: int
-    live: int
-    to_call: int
     waiting: int
+    closed: int = Field(description="Cases closed in the last 7 days.")
     computed_at: datetime
 
     @classmethod
@@ -128,9 +126,8 @@ class InboxCounts(ApiModel):
             all=view.all,
             new=view.new,
             to_reply=view.to_reply,
-            live=view.live,
-            to_call=view.to_call,
             waiting=view.waiting,
+            closed=view.closed,
             computed_at=view.computed_at,
         )
 
@@ -150,35 +147,24 @@ class InboxResponse(ApiModel):
 
 
 # ----------------------------------------------------------------------------- detail
-class CustomerProfile(ApiModel):
+class CaseCustomer(ApiModel):
     id: str
     display_name: str
-    segment: CustomerSegment
-    country: CountryCode
-    city: str
     locale: CustomerLocale
     language: Language
-    customer_since: date
-    document_type: str
+    country: CountryCode
+    city: str
 
     @classmethod
-    def from_view(cls, view: CustomerProfileView) -> CustomerProfile:
+    def from_view(cls, view: CaseCustomerView) -> CaseCustomer:
         return cls(
             id=view.id,
             display_name=view.display_name,
-            segment=view.segment,
-            country=view.country,
-            city=view.city,
             locale=view.locale,
             language=view.language,
-            customer_since=view.customer_since,
-            document_type=view.document_type,
+            country=view.country,
+            city=view.city,
         )
-
-
-class ChannelIdentity(ApiModel):
-    kind: ChannelSessionKind
-    verified: bool
 
 
 class AssignmentOut(ApiModel):
@@ -188,6 +174,8 @@ class AssignmentOut(ApiModel):
     reason: AssignmentReason
     policy_rule_id: str | None
     assigned_at: datetime
+    queue_label: str | None = Field(description="Set when the case waited in a queue.")
+    waited_seconds: int | None = Field(description="Queue wait (queue_drained), else null.")
 
     @classmethod
     def from_view(cls, view: AssignmentView) -> AssignmentOut:
@@ -198,72 +186,26 @@ class AssignmentOut(ApiModel):
             reason=view.reason,
             policy_rule_id=view.policy_rule_id,
             assigned_at=view.assigned_at,
-        )
-
-
-class RouteStop(ApiModel):
-    kind: RouteStopKind
-    label: str | None
-    tier: Tier | None
-    component_id: str | None
-    component_version: str | None
-    outcome: RoutingOutcome | None
-    reason_code: str | None
-    policy_rule_id: str | None
-    summary: str | None
-    staff_id: str | None
-    waited_seconds: int | None
-    occurred_at: datetime
-
-    @classmethod
-    def from_view(cls, view: RouteStopView) -> RouteStop:
-        return cls(
-            kind=view.kind,
-            label=view.label,
-            tier=view.tier,
-            component_id=view.component_id,
-            component_version=view.component_version,
-            outcome=view.outcome,
-            reason_code=view.reason_code,
-            policy_rule_id=view.policy_rule_id,
-            summary=view.summary,
-            staff_id=view.staff_id,
+            queue_label=view.queue_label,
             waited_seconds=view.waited_seconds,
-            occurred_at=view.occurred_at,
-        )
-
-
-class RoutingSummary(ApiModel):
-    stops: list[RouteStop]
-    inputs_used: list[str]
-
-    @classmethod
-    def from_view(cls, view: RoutingSummaryView) -> RoutingSummary:
-        return cls(
-            stops=[RouteStop.from_view(stop) for stop in view.stops],
-            inputs_used=list(view.inputs_used),
         )
 
 
 class CaseClosure(ApiModel):
     closed_at: datetime
     closed_by_id: str
-    resolved: bool
-    contact_reason: ContactReason
-    resolution_code: ResolutionCode | None
-    followup_at: datetime | None
-    csat_requested: bool
+    closed_by_name: str | None
+    reason: CloseReason
+    note: str | None = Field(description="Internal note: staff only, never sent to the customer.")
 
     @classmethod
-    def from_domain(cls, closure: DomainCaseClosure) -> CaseClosure:
+    def from_view(cls, view: CaseClosureView) -> CaseClosure:
         return cls(
-            closed_at=closure.closed_at,
-            closed_by_id=closure.closed_by_id,
-            resolved=closure.resolved,
-            contact_reason=closure.contact_reason,
-            resolution_code=closure.resolution_code,
-            followup_at=closure.followup_at,
-            csat_requested=closure.csat_requested,
+            closed_at=view.closed_at,
+            closed_by_id=view.closed_by_id,
+            closed_by_name=view.closed_by_name,
+            reason=view.reason,
+            note=view.note,
         )
 
 
@@ -283,26 +225,57 @@ class CaseCapabilities(ApiModel):
 
 class CaseDetail(ApiModel):
     case: CaseSummary
-    customer: CustomerProfile
-    channel_identity: ChannelIdentity
-    assignment: AssignmentOut | None
-    routing: RoutingSummary = Field(description='"Cómo llegó a ti".')
+    customer: CaseCustomer
+    assignment: AssignmentOut | None = Field(description='"Cómo llegó a ti".')
     closure: CaseClosure | None
     capabilities: CaseCapabilities = Field(description="Computed for the caller.")
+    previous_case_count: int = Field(description="Other cases of this customer (any status).")
 
     @classmethod
     def from_view(cls, view: CaseDetailView) -> CaseDetail:
         return cls(
             case=CaseSummary.from_view(view.case),
-            customer=CustomerProfile.from_view(view.customer),
-            channel_identity=ChannelIdentity(
-                kind=view.channel_identity.kind, verified=view.channel_identity.verified
-            ),
+            customer=CaseCustomer.from_view(view.customer),
             assignment=AssignmentOut.from_view(view.assignment) if view.assignment else None,
-            routing=RoutingSummary.from_view(view.routing),
-            closure=CaseClosure.from_domain(view.closure) if view.closure else None,
+            closure=CaseClosure.from_view(view.closure) if view.closure else None,
             capabilities=CaseCapabilities.from_view(view.capabilities),
+            previous_case_count=view.previous_case_count,
         )
+
+
+class CaseHistoryItem(ApiModel):
+    id: str
+    status: CaseStatus
+    channel: CaseChannel
+    opened_at: datetime
+    closed_at: datetime | None
+    close_reason: CloseReason | None
+    analyst_id: str | None = Field(description="Who held it (the assignee).")
+    analyst_name: str | None
+    preview: str | None = Field(description="Last message text (at most 140 characters).")
+
+    @classmethod
+    def from_view(cls, view: CaseHistoryItemView) -> CaseHistoryItem:
+        return cls(
+            id=view.id,
+            status=view.status,
+            channel=view.channel,
+            opened_at=view.opened_at,
+            closed_at=view.closed_at,
+            close_reason=view.close_reason,
+            analyst_id=view.analyst_id,
+            analyst_name=view.analyst_name,
+            preview=view.preview,
+        )
+
+
+class CaseHistory(ApiModel):
+    items: list[CaseHistoryItem] = Field(description="Newest openedAt first, at most 20.")
+    total: int = Field(description="All other cases of the customer.")
+
+    @classmethod
+    def from_view(cls, view: CaseHistoryView) -> CaseHistory:
+        return cls(items=[CaseHistoryItem.from_view(item) for item in view.items], total=view.total)
 
 
 # ----------------------------------------------------------------------------- turns
@@ -319,8 +292,6 @@ class Turn(ApiModel):
     language: Language
     created_at: datetime
     client_message_id: str | None
-    evidence_ids: list[str]
-    from_suggestion_id: str | None
 
     @classmethod
     def from_view(cls, view: TurnView) -> Turn:
@@ -337,8 +308,6 @@ class Turn(ApiModel):
             language=view.language,
             created_at=view.created_at,
             client_message_id=view.client_message_id,
-            evidence_ids=list(view.evidence_ids),
-            from_suggestion_id=view.from_suggestion_id,
         )
 
 
@@ -374,9 +343,18 @@ class MarkReadRequest(RequestModel):
     up_to_sequence: int = Field(ge=0)
 
 
+CloseNote = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, max_length=MAX_CLOSE_NOTE),
+    Field(description="Internal note (staff only): trimmed, blank becomes null, at most 500."),
+]
+
+
 class CloseCaseRequest(RequestModel):
-    resolved: bool
-    contact_reason: ContactReason
-    resolution_code: ResolutionCode | None
-    follow_up: FollowUp
-    send_csat_survey: bool
+    reason: CloseReason
+    note: CloseNote | None
+
+    @field_validator("note")
+    @classmethod
+    def _blank_note_is_null(cls, note: str | None) -> str | None:
+        return note or None

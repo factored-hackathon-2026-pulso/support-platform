@@ -10,7 +10,7 @@ import {
 
 /**
  * /analista — Workspace. Shareable state lives in the URL:
- * `?caso=&estado=&q=&panel=&lista=&apoyo=` (contract §7.1).
+ * `?caso=&estado=&q=&lista=&historial=` (slice-2-case-lifecycle.md §9.2).
  */
 export default function WorkspaceRoute() {
   const [searchParams, setSearchParams] = useSearchParams()

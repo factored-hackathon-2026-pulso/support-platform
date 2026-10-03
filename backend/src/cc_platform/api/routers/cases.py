@@ -1,8 +1,10 @@
-"""Analyst Workspace: inbox ("Casos"), case detail, transcript, replies, read cursor, close.
+"""Analyst Workspace: inbox ("Casos"), case detail, the customer's other cases, transcript,
+replies, read cursor, close.
 
-Visibility (enforced in the use cases): the assignee analyst reads and writes; any
-supervisor reads. Unknown or malformed ids → 404 ``not_found``; someone else's case →
-403 ``case_not_assigned``. ``/cases/inbox`` is declared before ``/cases/{caseId}``.
+Visibility (enforced in the use cases, contract §4.3): the assignee analyst reads and
+writes; any supervisor reads; an analyst who holds (or held) another case of the same
+customer reads (history access). Unknown or malformed ids → 404 ``not_found``; anything
+else → 403 ``case_not_assigned``. ``/cases/inbox`` is declared before ``/cases/{caseId}``.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from cc_platform.api.dependencies import ApiContextDep, require_roles
 from cc_platform.api.schemas.cases import (
     CaseDetail,
+    CaseHistory,
     CaseSummary,
     CloseCaseRequest,
     InboxResponse,
@@ -67,11 +70,13 @@ def ensure_idempotency_key(header: str, body_id: str) -> None:
 @router.get(
     "/inbox",
     response_model=InboxResponse,
-    summary='The caller\'s open cases ("Casos") and the status counters',
+    summary='The caller\'s cases ("Casos") and the status counters',
     description=(
-        "`counts` always cover the whole inbox (the counters are the filters), whatever "
-        "`status` and `q` select. Sorted: live calls first, then the closest SLA, then the "
-        "oldest case. At most 200 items."
+        "No `status` = Todos (the open cases); `status=closed` = the caller's cases closed in "
+        "the last 7 days. `counts` always cover the whole inbox (the counters are the "
+        "filters), whatever `status` and `q` select. Open lists: `new` and `to_reply` first, "
+        "then `waiting`, each by the oldest last interaction; `closed`: the most recently "
+        "closed first. At most 200 items."
     ),
     responses=problem_responses(401, 403, 422),
 )
@@ -79,7 +84,7 @@ async def get_inbox(
     actor: Analyst,
     api: ApiContextDep,
     status_filter: Annotated[
-        InboxStatus | None, Query(alias="status", description="Omit for Todos")
+        InboxStatus | None, Query(alias="status", description="Omit for Todos (open cases)")
     ] = None,
     q: Annotated[
         str | None,
@@ -93,11 +98,27 @@ async def get_inbox(
 @router.get(
     "/{caseId}",
     response_model=CaseDetail,
-    summary='Case detail: customer, channel identity, assignment, "Cómo llegó a ti", closure',
+    summary='Case detail: customer, "Cómo llegó a ti", closure, capabilities',
     responses=problem_responses(401, 403, 404),
 )
 async def get_case(case_id: CaseId, actor: AnalystOrSupervisor, api: ApiContextDep) -> CaseDetail:
     return CaseDetail.from_view(await api.use_cases.cases.detail.execute(actor, case_id))
+
+
+@router.get(
+    "/{caseId}/history",
+    response_model=CaseHistory,
+    summary='"Casos anteriores de este cliente": the customer\'s other cases',
+    description=(
+        "Any status, excluding `caseId`, newest `openedAt` first, at most 20 (`total` is the "
+        "full count). Whoever may read `caseId` may read every listed case (read-only)."
+    ),
+    responses=problem_responses(401, 403, 404),
+)
+async def get_case_history(
+    case_id: CaseId, actor: AnalystOrSupervisor, api: ApiContextDep
+) -> CaseHistory:
+    return CaseHistory.from_view(await api.use_cases.cases.history.execute(actor, case_id))
 
 
 @router.get(
@@ -140,11 +161,12 @@ async def list_turns(
     "/{caseId}/turns",
     response_model=PostTurnResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Reply to the customer (assignee only; chat channels only)",
+    summary="Reply to the customer (assignee only)",
     description=(
         "Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text "
         "answers 200 with `Idempotent-Replayed: true` and the original turn; the same id with "
-        "another text is `idempotency_conflict`. Moves a `new` case to `in_progress`."
+        "another text is `idempotency_conflict`. Moves a `new` case to `in_progress`; the "
+        "first reply stops the first-response SLA."
     ),
     responses={
         200: {"description": "Replay of an already-created turn", "model": PostTurnResponse},
@@ -186,7 +208,12 @@ async def mark_read(
 @router.post(
     "/{caseId}/close",
     response_model=CaseDetail,
-    summary="Close the case (contract case_close); the customer is told the chat ended",
+    summary="Close the case with a reason; the customer is told the conversation ended",
+    description=(
+        "Assignee only, from `assigned` or `in_progress`. The note is internal (trimmed, "
+        "blank becomes null, at most 500 characters); the customer never sees the reason "
+        "or the note. Their next message opens a new case linked to this one."
+    ),
     responses=problem_responses(401, 403, 404, 409, 422),
 )
 async def close_case(
@@ -195,12 +222,6 @@ async def close_case(
     detail = await api.use_cases.cases.close.execute(
         actor,
         case_id,
-        CloseCaseCommand(
-            resolved=body.resolved,
-            contact_reason=body.contact_reason,
-            resolution_code=body.resolution_code,
-            follow_up=body.follow_up,
-            send_csat_survey=body.send_csat_survey,
-        ),
+        CloseCaseCommand(reason=body.reason, note=body.note),
     )
     return CaseDetail.from_view(detail)

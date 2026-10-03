@@ -1,27 +1,31 @@
 import type { Ref } from 'react'
-import { Copy } from 'lucide-react'
-import { topicLabel } from '@/features/cases'
+import { Copy, History } from 'lucide-react'
 import { Badge, Button, IconButton, SampleDataTag, useToast } from '@/components/ui'
-import { caseHeaderMeta, shortCaseId } from '../model'
+import { caseHeaderMeta, previousCasesLabel, shortCaseId } from '../model'
 import type { CaseDetail } from '../types'
 
 export interface CaseHeaderProps {
   detail: CaseDetail
   onRequestClose: () => void
+  /** "Casos anteriores (n)": opens the customer's case history (absent = no button). */
+  onOpenHistory?: () => void
   /** The customer-name heading (focusable with `tabIndex=-1`): the Workspace moves focus here on a programmatic case switch. */
   headingRef?: Ref<HTMLHeadingElement>
 }
 
 /**
- * Case header (Workspace.dc.html): name; short id · topic · meta; "Datos de
- * ejemplo"; "Cerrar caso". The meta line wraps like the canvas instead of being
- * truncated: "{país} · {ciudad} · {canal} · en portugués" is the only cue
- * outside the transcript that the analyst must reply in Portuguese (rule 3).
+ * Case header (contract §9.3): name; short id (copyable) · "{país} · {ciudad} ·
+ * {canal} · {prioridad | en portugués}"; "Datos de ejemplo"; "Casos anteriores
+ * (n)" when the customer has other cases; "Cerrar caso" for the assignee, or the
+ * "Cerrado" badge on a closed case. The meta line wraps instead of being
+ * truncated: "en portugués" is the only cue outside the transcript that the
+ * analyst must reply in Portuguese (rule 3).
  */
-export function CaseHeader({ detail, onRequestClose, headingRef }: CaseHeaderProps) {
+export function CaseHeader({ detail, onRequestClose, onOpenHistory, headingRef }: CaseHeaderProps) {
   const { case: summary, capabilities } = detail
   const { toast } = useToast()
   const closed = summary.status === 'closed'
+  const historyLabel = previousCasesLabel(detail.previousCaseCount)
 
   function copyId() {
     void navigator.clipboard?.writeText(summary.id).then(
@@ -53,19 +57,26 @@ export function CaseHeader({ detail, onRequestClose, headingRef }: CaseHeaderPro
             icon={<Copy size={13} aria-hidden="true" />}
             onClick={copyId}
           />
-          <span>
-            · {topicLabel(summary.topic)} · {caseHeaderMeta(detail)}
-          </span>
+          <span>· {caseHeaderMeta(detail)}</span>
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {closed ? <Badge tone="neutral">Cerrado</Badge> : null}
+        {closed ? <Badge tone="closed">Cerrado</Badge> : null}
         <SampleDataTag />
-        {closed ? null : (
-          <Button variant="secondary" onClick={onRequestClose} disabled={!capabilities.canClose}>
+        {historyLabel && onOpenHistory ? (
+          <Button
+            variant="secondary"
+            icon={<History size={15} aria-hidden="true" />}
+            onClick={onOpenHistory}
+          >
+            {historyLabel}
+          </Button>
+        ) : null}
+        {!closed && capabilities.canClose ? (
+          <Button variant="secondary" onClick={onRequestClose}>
             Cerrar caso
           </Button>
-        )}
+        ) : null}
       </div>
     </header>
   )

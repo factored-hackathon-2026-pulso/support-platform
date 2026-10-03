@@ -23,8 +23,8 @@ def test_ensure_any_role_reports_required_roles() -> None:
 
 
 def test_acting_as_picks_the_allowed_role_by_precedence() -> None:
-    actor = make_actor(StaffRole.AUTOMATION, StaffRole.ADMIN)
-    assert actor.acting_as().role is ActorRole.AUTOMATION
+    actor = make_actor(StaffRole.SUPERVISOR, StaffRole.ADMIN)
+    assert actor.acting_as().role is ActorRole.SUPERVISOR
     assert actor.acting_as({StaffRole.ADMIN}).role is ActorRole.ADMIN
     with pytest.raises(ForbiddenError):
-        actor.acting_as({StaffRole.SUPERVISOR})
+        actor.acting_as({StaffRole.ANALYST})

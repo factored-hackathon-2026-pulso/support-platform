@@ -1,9 +1,9 @@
 """Event bus port (publish/subscribe of committed domain events).
 
 The Unit of Work publishes records **after** the transaction commits, so subscribers only
-ever see facts that are durable in the event log. Subscribers (realtime hub, future audit
-projections, signal detectors of the automation context) must be idempotent and must not
-raise: an implementation isolates and logs handler failures.
+ever see facts that are durable in the event log. Subscribers (realtime projections, the
+queue drainer, future audit projections) must be idempotent and must not raise: an
+implementation isolates and logs handler failures.
 """
 
 from __future__ import annotations

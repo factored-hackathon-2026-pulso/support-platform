@@ -13,16 +13,30 @@ import structlog
 
 from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
+from cc_platform.application.cases.assignment import (
+    QUEUE_DRAINER_EVENTS,
+    AssignCase,
+    DrainQueue,
+    LanguageLeastLoadedStrategy,
+    QueueDrainer,
+    RepositoryAnalystDirectory,
+)
 from cc_platform.application.cases.commands import CloseCase, MarkCaseRead, PostAnalystTurn
-from cc_platform.application.cases.customer_chat import GetCustomerConversation, PostCustomerTurn
+from cc_platform.application.cases.customer_chat import (
+    GetCustomerConversation,
+    GetPastConversation,
+    ListPastConversations,
+    PostCustomerTurn,
+)
 from cc_platform.application.cases.queries import (
     AuthorizeCaseSubscription,
     GetCaseDetail,
+    GetCaseHistory,
     GetInbox,
     ListCaseTurns,
 )
 from cc_platform.application.cases.realtime import OWNED_EVENTS, CaseRealtimeProjector
-from cc_platform.application.cases.sla import SyntheticSlaPolicy
+from cc_platform.application.cases.sla import FirstResponseSlaPolicy
 from cc_platform.application.cases.use_cases import CasesUseCases
 from cc_platform.application.customers.use_cases import (
     AuthenticateCustomer,
@@ -56,18 +70,6 @@ from cc_platform.application.realtime.projector import (
     TopicMapper,
 )
 from cc_platform.application.realtime.topics import TopicAccessPolicy
-from cc_platform.application.routing.assignment import (
-    LanguageLeastLoadedPolicy,
-    RepositoryAnalystDirectory,
-)
-from cc_platform.application.routing.ports import ResponderRegistry
-from cc_platform.application.routing.process_manager import SUBSCRIBED_EVENTS, RoutingProcessManager
-from cc_platform.application.routing.route_case import (
-    DrainQueue,
-    HumanTier,
-    RecoverRouting,
-    RouteCase,
-)
 from cc_platform.application.use_cases import UseCases
 from cc_platform.bootstrap.settings import Settings
 from cc_platform.domain.people.events import SessionEnded
@@ -82,12 +84,6 @@ from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryU
 from cc_platform.infrastructure.persistence.sqlalchemy.database import Database, DatabaseProbe
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from cc_platform.infrastructure.realtime.in_memory_hub import InMemoryRealtimeHub
-from cc_platform.infrastructure.routing.null_responders import (
-    null_ai_agent,
-    null_judge,
-    null_tree,
-)
-from cc_platform.infrastructure.routing.registry import InMemoryResponderRegistry
 from cc_platform.infrastructure.security.customer_tokens import HmacCustomerTokenService
 from cc_platform.infrastructure.security.login_attempts import InMemoryUnknownLoginAttempts
 from cc_platform.infrastructure.security.mfa import DevMfaVerifier
@@ -115,8 +111,7 @@ class Container:
     mfa_verifier: MfaVerifier
     use_cases: UseCases
     background: AsyncioBackgroundTasks
-    responders: ResponderRegistry
-    recover_routing: RecoverRouting
+    drain_queue: DrainQueue
     database: Database | None = None
     health_probes: Sequence[HealthProbe] = field(default_factory=tuple)
 
@@ -140,12 +135,11 @@ class Container:
             await self.database.create_schema()
         if self.settings.seed_demo_data:
             await self.seed_demo_data()
-        recovered = await self.recover_routing.execute()
-        if recovered:
-            _log.info("routing_recovered", cases=recovered)
+        # No startup drain (contract §3.2): the queue drains when an analyst becomes
+        # available (``QueueDrainer``) and, in slice 3, by hand.
 
     async def seed_demo_data(self) -> None:
-        """ "Datos de ejemplo": invented staff, customers, availability and Daniela's inbox."""
+        """ "Datos de ejemplo": invented staff, customers, availability and the seeded cases."""
         created = {
             "staff": await seed_demo_staff(self.uow, self.password_hasher),
             "customers": await seed_demo_customers(self.uow),
@@ -205,20 +199,16 @@ def build_container(
     customer_tokens = HmacCustomerTokenService(settings.session_secret.get_secret_value())
     background = AsyncioBackgroundTasks()
 
-    # Routing: Chain of Responsibility over the Responder port. No AI is connected yet, so
-    # judge, tree and agent are null responders that abstain; the AI team registers real
-    # ones here (AI_INTEGRATION.md). The human tier is the terminal handler (Strategy).
-    responders = InMemoryResponderRegistry()
-    for responder in (null_judge(), null_tree(), null_ai_agent()):
-        responders.register(responder)
-    human = HumanTier(
+    # Assignment (brief §4.6): one use case, two callers. ``AssignCase`` runs inside the
+    # Unit of Work that opens a case (``PostCustomerTurn``) and inside ``DrainQueue``, which
+    # the ``QueueDrainer`` process manager spawns when an analyst becomes available.
+    assign_case = AssignCase(
         clock=clock,
         ids=ids,
-        policy=LanguageLeastLoadedPolicy(),
+        strategy=LanguageLeastLoadedStrategy(),
         directory=RepositoryAnalystDirectory(),
     )
-    route_case = RouteCase(uow=uow, clock=clock, ids=ids, responders=responders, human=human)
-    drain_queue = DrainQueue(uow=uow, human=human)
+    drain_queue = DrainQueue(uow=uow, assign_case=assign_case)
 
     hub = InMemoryRealtimeHub(queue_size=settings.realtime_queue_size)
     mapper = TopicMapper()
@@ -229,10 +219,7 @@ def build_container(
         CaseRealtimeProjector(hub, uow, SchemaRealtimePresenter(), clock),
         event_types=OWNED_EVENTS,
     )
-    bus.subscribe(
-        RoutingProcessManager(background, route_case, drain_queue),
-        event_types=SUBSCRIBED_EVENTS,
-    )
+    bus.subscribe(QueueDrainer(background, drain_queue), event_types=QUEUE_DRAINER_EVENTS)
 
     lockout = LockoutPolicy(
         max_failed_attempts=settings.lockout_max_attempts,
@@ -268,14 +255,21 @@ def build_container(
         cases=CasesUseCases(
             inbox=GetInbox(uow=uow, clock=clock),
             detail=GetCaseDetail(uow=uow),
+            history=GetCaseHistory(uow=uow),
             turns=ListCaseTurns(uow=uow),
             post_analyst_turn=PostAnalystTurn(uow=uow, clock=clock, ids=ids),
             mark_read=MarkCaseRead(uow=uow, clock=clock),
             close=CloseCase(uow=uow, clock=clock, ids=ids),
             customer_conversation=GetCustomerConversation(uow=uow),
             post_customer_turn=PostCustomerTurn(
-                uow=uow, clock=clock, ids=ids, sla=SyntheticSlaPolicy()
+                uow=uow,
+                clock=clock,
+                ids=ids,
+                sla=FirstResponseSlaPolicy(),
+                assign_case=assign_case,
             ),
+            past_conversations=ListPastConversations(uow=uow),
+            past_conversation=GetPastConversation(uow=uow),
             authorize_subscription=AuthorizeCaseSubscription(uow=uow),
         ),
         customers=CustomersUseCases(
@@ -305,8 +299,7 @@ def build_container(
         mfa_verifier=mfa_verifier,
         use_cases=use_cases,
         background=background,
-        responders=responders,
-        recover_routing=RecoverRouting(uow=uow, route_case=route_case, drain_queue=drain_queue),
+        drain_queue=drain_queue,
         database=database,
         health_probes=tuple(probes),
     )

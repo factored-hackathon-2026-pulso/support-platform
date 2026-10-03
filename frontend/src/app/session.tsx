@@ -16,7 +16,6 @@ import { sessionToken } from '@/lib/session-token'
 import { ROLES, roleFromPath, sortRoles, type RoleDefinition, type RoleId } from './roles'
 
 export type Staff = Schemas['StaffOut']
-export type StaffLevel = Schemas['StaffLevel']
 
 const LANGUAGE_LABELS: Record<string, string> = { es: 'español', pt: 'portugués' }
 
@@ -25,13 +24,13 @@ export interface SessionUser extends Staff {
   initials: string
   /** Roles in canonical order, unknown values dropped. */
   roleIds: RoleId[]
-  /** "Disputas · Specialist · español, portugués" (empty parts skipped). */
+  /** "Disputas · Equipo Andes · español, portugués" (empty parts skipped). */
   summary: string
 }
 
 export function toSessionUser(staff: Staff): SessionUser {
   const languages = staff.languages.map((code) => LANGUAGE_LABELS[code] ?? code).join(', ')
-  const summary = [staff.team, staff.level, languages].filter(Boolean).join(' · ')
+  const summary = [staff.team, languages].filter(Boolean).join(' · ')
   return {
     ...staff,
     initials: getInitials(staff.name),
@@ -202,8 +201,8 @@ export function useCurrentUser(): SessionUser {
 }
 
 /**
- * Current role, derived from the URL (/analista, /supervision, /automatizacion,
- * /administracion). On shared pages (404) it falls back to the user's first role.
+ * Current role, derived from the URL (/analista, /supervision, /administracion).
+ * On shared pages (404) it falls back to the user's first role.
  * Must be used inside the router.
  */
 export function useCurrentRole(): RoleDefinition {

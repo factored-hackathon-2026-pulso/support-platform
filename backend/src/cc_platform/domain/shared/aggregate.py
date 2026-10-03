@@ -6,7 +6,8 @@ with a compare-and-set (``UPDATE … WHERE id = :id AND version = :loaded``) and
 concurrent request saved the same aggregate first, nothing matches and the repository raises
 ``ConcurrentUpdateError``; the use case then re-runs on fresh state (``retry_on_conflict``)
 or the API answers 409 ``concurrent_update``. This is what keeps state machines (MFA
-challenge, case status, approvals) and counters (lockout) free of lost updates.
+challenge, case status, the customer's open-case slot) and counters (lockout) free of
+lost updates.
 """
 
 from __future__ import annotations
@@ -20,8 +21,8 @@ _VERSION_KEY = "_version"
 
 #: Process-wide recording order of domain events. A Unit of Work that collects events from
 #: several aggregates (and loose events) sorts them by this stamp, so the event log keeps
-#: the order in which things happened inside one transaction (e.g. routing steps before
-#: the assignment they led to), not the order in which aggregates were loaded.
+#: the order in which things happened inside one transaction (e.g. the customer's message
+#: before the assignment it led to), not the order in which aggregates were loaded.
 _RECORDING_ORDER = itertools.count(1)
 
 

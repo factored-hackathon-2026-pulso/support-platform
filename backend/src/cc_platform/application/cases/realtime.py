@@ -1,7 +1,7 @@
-"""``CaseRealtimeProjector``: realtime envelopes of the cases, routing and customers contexts.
+"""``CaseRealtimeProjector``: realtime envelopes of the cases and customers contexts.
 
 Replaces the raw forwarding of ``RealtimeProjector`` for these events (``TopicMapper``
-suppresses them) and publishes only the envelopes of the slice 1 contract (§5.2), with
+suppresses them) and publishes only the envelopes of the slice 2 contract (§7), with
 camelCase payloads equal to the REST schemas. The payload shapes come from a
 ``CaseRealtimePresenter`` (implemented by the API layer with the very same Pydantic
 schemas the REST endpoints return), so socket and REST cannot drift.
@@ -9,13 +9,16 @@ schemas the REST endpoints return), so socket and REST cannot drift.
 - ``turn.created`` → ``case:<id>`` (``Turn``), and ``customer:<cus>`` (``CustomerTurn``)
   for ``everyone`` turns only.
 - ``case.updated`` → ``case:<id>`` and ``inbox:<assignee>`` (``CaseSummary``), after
-  turn.created, case.assigned, case.status_changed, case.read, case.closed. One envelope
+  turn.created, case.assigned, case.status_changed, case.read, case.first_responded,
+  case.closed (a close moves the card to Cerrados: ``inboxStatus = closed``). One envelope
   published to both topics at once, so a socket subscribed to both receives it once.
 - ``case.assigned`` → ``inbox:<assignee>`` (``CaseSummary``).
-- ``inbox.counts`` → ``inbox:<assignee>`` (``InboxCounts``), with each inbox ``case.updated``.
+- ``inbox.counts`` → ``inbox:<assignee>`` (``InboxCounts``, incl. ``closed`` in the 7-day
+  window), with each inbox ``case.updated``.
 - ``availability.updated`` → ``inbox:<staff>`` (``Availability``).
 - ``conversation.updated`` → ``customer:<cus>`` (``CustomerConversation``), after
-  case.opened, case.queued, case.assigned, case.status_changed, case.closed.
+  case.opened, case.queued, case.assigned, case.status_changed, case.closed. A new case
+  after a close carries a different ``caseId``: the simulator switches conversations.
 
 Envelope ``id`` = the source event id (unique per ``type``); clients dedupe on
 ``(type, id)``: within one kind of principal (staff or customer) a ``(type, id)`` pair
@@ -34,7 +37,8 @@ from cc_platform.application.cases.dto import (
     InboxCountsView,
     TurnView,
 )
-from cc_platform.application.cases.read_model import CaseReader, count_inbox
+from cc_platform.application.cases.queries import CLOSED_INBOX_WINDOW
+from cc_platform.application.cases.read_model import CaseReader
 from cc_platform.application.events import EventRecord
 from cc_platform.application.people.availability import AvailabilityView
 from cc_platform.application.ports.clock import Clock
@@ -46,6 +50,7 @@ from cc_platform.domain.cases.events import (
     CASE_EVENTS,
     CaseAssigned,
     CaseClosed,
+    CaseFirstResponded,
     CaseOpened,
     CaseQueued,
     CaseRead,
@@ -58,7 +63,6 @@ from cc_platform.domain.customers.events import CustomerSessionStarted
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.events import StaffAvailabilityChanged
 from cc_platform.domain.people.staff import Language
-from cc_platform.domain.routing.events import RoutingStepRecorded
 from cc_platform.domain.shared.actor import ActorRole
 from cc_platform.domain.shared.events import DomainEvent
 from cc_platform.domain.shared.json import JsonObject
@@ -66,12 +70,18 @@ from cc_platform.domain.shared.json import JsonObject
 #: Events this projection owns (the generic projector must not forward them raw).
 OWNED_EVENTS: tuple[type[DomainEvent], ...] = (
     *CASE_EVENTS,
-    RoutingStepRecorded,
     CustomerSessionStarted,
     StaffAvailabilityChanged,
 )
 
-_CASE_UPDATING = (TurnCreated, CaseAssigned, CaseStatusChanged, CaseRead, CaseClosed)
+_CASE_UPDATING = (
+    TurnCreated,
+    CaseAssigned,
+    CaseStatusChanged,
+    CaseRead,
+    CaseFirstResponded,
+    CaseClosed,
+)
 _CONVERSATION_UPDATING = (CaseOpened, CaseQueued, CaseAssigned, CaseStatusChanged, CaseClosed)
 
 
@@ -105,8 +115,6 @@ def turn_from_event(event: TurnCreated) -> Turn:
         language=Language(event.language),
         created_at=event.occurred_at,
         client_message_id=event.client_message_id,
-        evidence_ids=event.evidence_ids,
-        from_suggestion_id=event.from_suggestion_id,
     )
 
 
@@ -137,7 +145,7 @@ class CaseRealtimeProjector:
             )
             return
         if event.case_id is None or not isinstance(event, CASE_EVENTS):
-            return  # routing steps, sessions: read through REST
+            return  # customer sessions: read through REST
         async with self._uow() as uow:
             case = await uow.cases.get(event.case_id)
             if case is None:
@@ -152,7 +160,7 @@ class CaseRealtimeProjector:
         customer_topic = Topic.customer(case.customer_id)
         if isinstance(event, TurnCreated):
             turn = turn_from_event(event)
-            (staff_view,) = await reader.turn_views(case, [turn])
+            (staff_view,) = await reader.turn_views([turn])
             await self._send(record, case_topic, "turn.created", self._present.turn(staff_view))
             if turn.is_public:
                 (public,) = await reader.customer_turn_views([turn], case.customer_id)
@@ -175,7 +183,10 @@ class CaseRealtimeProjector:
                 await self._send(record, (case_topic, inbox), "case.updated", summary)
                 if isinstance(event, CaseAssigned):
                     await self._send(record, inbox, "case.assigned", summary)
-                counts = count_inbox(await reader.inbox(assignee), self._clock.now())
+                now = self._clock.now()
+                counts = await reader.inbox_counts(
+                    assignee, closed_since=now - CLOSED_INBOX_WINDOW, computed_at=now
+                )
                 await self._send(record, inbox, "inbox.counts", self._present.inbox_counts(counts))
         if isinstance(event, _CONVERSATION_UPDATING):
             conversation = await reader.conversation(case)
@@ -200,7 +211,7 @@ class CaseRealtimeProjector:
         if customer_id is not None and not (
             record.actor_role == ActorRole.CUSTOMER.value and record.actor_id == customer_id
         ):
-            actor_id = None  # customers never learn staff or component ids
+            actor_id = None  # customers never learn staff ids
         envelope = RealtimeEnvelope(
             type=kind,
             id=record.event_id,

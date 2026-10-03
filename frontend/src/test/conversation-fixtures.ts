@@ -1,17 +1,24 @@
-import type { CaseDetail, Turn } from '@/features/conversation'
-import type { CustomerConversation, CustomerTurn, DemoCustomer } from '@/features/customer-chat'
+import type { CaseDetail, CaseHistory, CaseHistoryItem, Turn } from '@/features/conversation'
+import type {
+  CustomerConversation,
+  CustomerConversationSummary,
+  CustomerTurn,
+  DemoCustomer,
+} from '@/features/customer-chat'
 import type { RealtimeEnvelope } from '@/lib/realtime'
 import { makeCaseSummary } from './case-fixtures'
 import { analystStaff } from './fixtures'
 
 /**
  * Invented conversations for tests ("Datos de ejemplo"): people, ids and texts
- * follow the slice 1 seed stories (contract §6), never dataset records.
+ * follow the slice 2 seed stories (contract §8), never dataset records.
  */
 
 export const CASE_ID = 'CASE-00000000000000000000000101'
 export const CUSTOMER_ID = 'CUS-00000000000000000000001001'
 const ME = analystStaff.id
+/** Another analyst (Julián), who held case 110 of Patricia. */
+export const OTHER_ANALYST_ID = 'STF-ANA0000002'
 
 let turnCounter = 0
 
@@ -19,7 +26,7 @@ export function makeTurn(overrides: Partial<Turn> = {}): Turn {
   turnCounter += 1
   const sequence = overrides.sequence ?? turnCounter
   return {
-    id: `TRN-${String(sequence).padStart(4, '0')}-${CASE_ID.slice(-3)}`,
+    id: `TRN-${String(sequence).padStart(4, '0')}-${(overrides.caseId ?? CASE_ID).slice(-3)}`,
     caseId: CASE_ID,
     sequence,
     kind: 'message',
@@ -31,32 +38,37 @@ export function makeTurn(overrides: Partial<Turn> = {}): Turn {
     language: 'es',
     createdAt: new Date(Date.UTC(2026, 2, 5, 15, 46, sequence)).toISOString(),
     clientMessageId: null,
-    evidenceIds: [],
-    fromSuggestionId: null,
     ...overrides,
   }
 }
 
-/** Ana's web-chat dispute (seed 101), shortened: customer, bot, customer, routing banner. */
+/** Marcela's web chat (seed 101): message, opened notice, assignment banner, reply, message. */
 export function seededTurns(): Turn[] {
   return [
     makeTurn({ sequence: 1 }),
     makeTurn({
       sequence: 2,
-      authorRole: 'tree',
-      authorId: 'tree.disputas@ejemplo',
-      authorName: 'Árbol de decisión',
-      text: '¿El cargo que no reconoce es el de un retiro en cajero por $1.585.208 COP, del 9 ene?',
+      kind: 'notice',
+      authorRole: 'system',
+      authorId: null,
+      authorName: null,
+      text: 'Recibimos tu mensaje. En unos minutos te responde una persona del equipo.',
     }),
-    makeTurn({ sequence: 3, text: 'si, ese es' }),
     makeTurn({
-      sequence: 4,
+      sequence: 3,
       kind: 'routing',
       audience: 'staff',
       authorRole: 'system',
       authorId: null,
       authorName: null,
-      text: 'Escalado por el agente de disputas: el retiro supera $1.000.000 (regla 10) y el abono lo decide una persona (regla 6).',
+      text: 'Asignado a Daniela Ríos porque está disponible y habla español.',
+    }),
+    makeTurn({
+      sequence: 4,
+      authorRole: 'analyst',
+      authorId: ME,
+      authorName: 'Daniela Ríos',
+      text: 'Hola, Marcela. Soy Daniela, de LATAM Bank. ¿Me cuenta de qué fecha es el cargo?',
     }),
   ]
 }
@@ -73,82 +85,165 @@ export function makeAnalystTurn(sequence: number, text: string, clientMessageId:
 }
 
 export function makeCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
-  const summary = makeCaseSummary({ lastSequence: 4, assignedAnalystId: ME })
+  const summary = makeCaseSummary({ lastSequence: 4, assignedAnalystId: ME, unreadCount: 0 })
   return {
     case: summary,
     customer: {
       id: CUSTOMER_ID,
       displayName: 'Marcela Quintana Pardo',
-      segment: 'Plus',
       country: 'CO',
       city: 'Barranquilla',
       locale: 'es-CO',
       language: 'es',
-      customerSince: '2019-04-01',
-      documentType: 'CC',
     },
-    channelIdentity: { kind: 'web_session', verified: true },
     assignment: {
       id: 'ASG-0001',
       analystId: ME,
       analystName: 'Daniela Ríos',
       reason: 'language_least_loaded',
       policyRuleId: null,
-      assignedAt: '2026-03-05T15:58:10Z',
-    },
-    routing: {
-      stops: [
-        stop({
-          kind: 'tier',
-          tier: 'judge',
-          outcome: 'abstained',
-          reasonCode: 'component_not_connected',
-        }),
-        stop({
-          kind: 'tier',
-          tier: 'tree',
-          outcome: 'abstained',
-          reasonCode: 'component_not_connected',
-        }),
-        stop({
-          kind: 'tier',
-          tier: 'ai_agent',
-          outcome: 'abstained',
-          reasonCode: 'component_not_connected',
-        }),
-        stop({
-          kind: 'assignee',
-          label: 'Daniela Ríos',
-          staffId: ME,
-          reasonCode: 'language_least_loaded',
-        }),
-      ],
-      inputsUsed: [],
+      assignedAt: '2026-03-05T15:46:10Z',
+      queueLabel: null,
+      waitedSeconds: null,
     },
     closure: null,
     capabilities: { canReply: true, replyBlockedReason: null, canClose: true },
+    previousCaseCount: 0,
     ...overrides,
   }
 }
 
-export function stop(
-  overrides: Partial<CaseDetail['routing']['stops'][number]> = {},
-): CaseDetail['routing']['stops'][number] {
+/** Case 108 of Patricia closed by me (Cerrados): read-only with its closure. */
+export function makeClosedDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
+  const detail = makeCaseDetail()
   return {
-    kind: 'tier',
-    label: null,
-    tier: null,
-    componentId: null,
-    componentVersion: null,
-    outcome: null,
-    reasonCode: null,
-    policyRuleId: null,
-    summary: null,
-    staffId: null,
-    waitedSeconds: null,
-    occurredAt: '2026-03-05T15:58:10Z',
+    ...detail,
+    case: {
+      ...detail.case,
+      status: 'closed',
+      inboxStatus: 'closed',
+      closedAt: '2026-03-05T15:58:00Z',
+      closeReason: 'resolved',
+      version: 9,
+    },
+    closure: {
+      closedAt: '2026-03-05T15:58:00Z',
+      closedById: ME,
+      closedByName: 'Daniela Ríos',
+      reason: 'resolved',
+      note: 'Se explicó el plazo del reverso (5 días hábiles).',
+    },
+    capabilities: { canReply: false, replyBlockedReason: 'closed', canClose: false },
     ...overrides,
   }
+}
+
+export const PATRICIA_CASE_ID = 'CASE-00000000000000000000000108'
+export const JULIAN_CASE_ID = 'CASE-00000000000000000000000110'
+
+export function makeHistoryItem(overrides: Partial<CaseHistoryItem> = {}): CaseHistoryItem {
+  return {
+    id: 'CASE-00000000000000000000000104',
+    status: 'closed',
+    channel: 'app_chat',
+    openedAt: '2026-03-03T15:30:00Z',
+    closedAt: '2026-03-03T16:00:00Z',
+    closeReason: 'resolved',
+    analystId: ME,
+    analystName: 'Daniela Ríos',
+    preview: 'Perfecto, muchas gracias.',
+    ...overrides,
+  }
+}
+
+/** Patricia's other cases (contract §8.3): 104 (Daniela) and 110 (Julián), newest first. */
+export const patriciaHistory: CaseHistory = {
+  items: [
+    makeHistoryItem(),
+    makeHistoryItem({
+      id: JULIAN_CASE_ID,
+      channel: 'web_chat',
+      openedAt: '2026-02-13T15:00:00Z',
+      closedAt: '2026-02-13T15:15:00Z',
+      analystId: OTHER_ANALYST_ID,
+      analystName: 'Julián Ortega',
+      preview: 'Ah, es cierto. Gracias.',
+    }),
+  ],
+  total: 2,
+}
+
+/** Julián's closed case 110, as Daniela reads it through history access. */
+export function makeJulianDetail(): CaseDetail {
+  const base = makeCaseDetail()
+  return {
+    case: makeCaseSummary({
+      id: JULIAN_CASE_ID,
+      customer: { id: 'CUS-00000000000000000000001004', displayName: 'Patricia Lozano Vega' },
+      status: 'closed',
+      inboxStatus: 'closed',
+      assignedAnalystId: OTHER_ANALYST_ID,
+      closedAt: '2026-02-13T15:15:00Z',
+      closeReason: 'resolved',
+      lastSequence: 4,
+      unreadCount: 0,
+    }),
+    customer: {
+      ...base.customer,
+      id: 'CUS-00000000000000000000001004',
+      displayName: 'Patricia Lozano Vega',
+      country: 'MX',
+      city: 'Guadalajara',
+      locale: 'es-MX',
+    },
+    assignment: {
+      id: 'ASG-0110',
+      analystId: OTHER_ANALYST_ID,
+      analystName: 'Julián Ortega',
+      reason: 'language_least_loaded',
+      policyRuleId: null,
+      assignedAt: '2026-02-13T15:00:10Z',
+      queueLabel: null,
+      waitedSeconds: null,
+    },
+    closure: {
+      closedAt: '2026-02-13T15:15:00Z',
+      closedById: OTHER_ANALYST_ID,
+      closedByName: 'Julián Ortega',
+      reason: 'resolved',
+      note: null,
+    },
+    capabilities: { canReply: false, replyBlockedReason: 'closed', canClose: false },
+    previousCaseCount: 2,
+  }
+}
+
+export function julianTurns(): Turn[] {
+  const caseId = JULIAN_CASE_ID
+  return [
+    makeTurn({
+      caseId,
+      sequence: 1,
+      authorId: 'CUS-00000000000000000000001004',
+      authorName: 'Patricia Lozano Vega',
+      text: 'Hola, no reconozco un cargo de una suscripción.',
+    }),
+    makeTurn({
+      caseId,
+      sequence: 2,
+      authorRole: 'analyst',
+      authorId: OTHER_ANALYST_ID,
+      authorName: 'Julián Ortega',
+      text: 'Hola, Patricia. Soy Julián, de LATAM Bank. Ese cargo es de su suscripción de música.',
+    }),
+    makeTurn({
+      caseId,
+      sequence: 3,
+      authorId: 'CUS-00000000000000000000001004',
+      authorName: 'Patricia Lozano Vega',
+      text: 'Ah, es cierto. Gracias.',
+    }),
+  ]
 }
 
 let envelopeCounter = 0
@@ -197,9 +292,9 @@ export const demoCustomers: DemoCustomer[] = [
     language: 'pt',
     country: 'AR',
     city: 'Buenos Aires',
-    segment: 'Plus',
     suggestions: ['Olá, não reconheço uma compra no meu cartão', 'Quero falar com uma pessoa'],
     openConversation: null,
+    closedConversationCount: 0,
   },
   {
     id: 'CUS-00000000000000000000001007',
@@ -208,13 +303,39 @@ export const demoCustomers: DemoCustomer[] = [
     language: 'es',
     country: 'AR',
     city: 'Rosario',
-    segment: 'Plus',
     suggestions: ['Fue a mediados de mes, unos $48.300', '¿Lo pudiste encontrar?'],
     openConversation: {
       caseId: 'CASE-00000000000000000000000107',
       channel: 'app_chat',
       status: 'with_agent',
     },
+    closedConversationCount: 0,
+  },
+  {
+    id: 'CUS-00000000000000000000001005',
+    displayName: 'Claudia Restrepo Varela',
+    locale: 'es-CO',
+    language: 'es',
+    country: 'CO',
+    city: 'Barranquilla',
+    suggestions: ['Hola, sigo con el problema del cargo'],
+    openConversation: null,
+    closedConversationCount: 1,
+  },
+  {
+    id: 'CUS-00000000000000000000001008',
+    displayName: 'Gabriela Duarte Melo',
+    locale: 'pt-BR',
+    language: 'pt',
+    country: 'BR',
+    city: 'São Paulo',
+    suggestions: ['Alguém aí?'],
+    openConversation: {
+      caseId: 'CASE-00000000000000000000000109',
+      channel: 'web_chat',
+      status: 'waiting_agent',
+    },
+    closedConversationCount: 0,
   },
 ]
 
@@ -230,6 +351,22 @@ export function makeCustomerConversation(
     closedAt: null,
     agentName: null,
     lastSequence: 2,
+    previousCaseId: null,
+    ...overrides,
+  }
+}
+
+export function makePastSummary(
+  overrides: Partial<CustomerConversationSummary> = {},
+): CustomerConversationSummary {
+  return {
+    caseId: 'CASE-00000000000000000000000105',
+    status: 'closed',
+    channel: 'web_chat',
+    openedAt: '2026-03-04T13:00:00Z',
+    closedAt: '2026-03-04T16:00:00Z',
+    agentName: 'Daniela',
+    preview: 'Hola, Claudia. Soy Daniela, de LATAM Bank. ¿Me cuenta qué cargo es y de qué fecha?',
     ...overrides,
   }
 }

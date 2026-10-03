@@ -52,9 +52,7 @@ class HmacCustomerTokenService:
                 issuer=self._issuer,
                 options={"require": _REQUIRED_CLAIMS, "verify_exp": False, "verify_iat": False},
             )
-            channel = CaseChannel(str(payload["channel"]))
-            if not channel.is_chat:
-                raise ValueError("customer sessions are chat sessions")
+            channel = CaseChannel(str(payload["channel"]))  # every channel is a chat
             return CustomerSessionClaims(
                 session_id=str(payload["sid"]),
                 customer_id=str(payload["sub"]),

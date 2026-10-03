@@ -15,7 +15,6 @@ from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff
-from cc_platform.domain.routing.routing_step import RoutingStep
 
 
 @dataclass
@@ -30,5 +29,4 @@ class InMemoryStore:
     turns: dict[str, Turn] = field(default_factory=dict)
     assignments: dict[str, Assignment] = field(default_factory=dict)
     case_slots: dict[str, CustomerCaseSlot] = field(default_factory=dict)
-    routing_steps: dict[str, RoutingStep] = field(default_factory=dict)
     events: list[StoredEvent] = field(default_factory=list)

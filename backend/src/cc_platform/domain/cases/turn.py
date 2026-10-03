@@ -44,8 +44,6 @@ class Turn:
     language: Language
     created_at: datetime
     client_message_id: str | None = None
-    evidence_ids: tuple[str, ...] = ()
-    from_suggestion_id: str | None = None
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.TURN)
@@ -72,3 +70,7 @@ class Turn:
     @property
     def is_customer_message(self) -> bool:
         return self.kind is TurnKind.MESSAGE and self.author_role is TurnAuthorRole.CUSTOMER
+
+    @property
+    def is_analyst_message(self) -> bool:
+        return self.kind is TurnKind.MESSAGE and self.author_role is TurnAuthorRole.ANALYST

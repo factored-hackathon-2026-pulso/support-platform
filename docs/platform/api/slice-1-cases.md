@@ -1,5 +1,12 @@
 # Slice 1 contract · cases, live chat and the customer simulator
 
+> **Partly superseded (2026-10-03).** The product scope was cut to a chat-only support platform
+> (no AI, no routing tiers, no copilot, no tools, no customer file, no calls or email, no
+> automation role). `slice-2-case-lifecycle.md` §1 lists every part of this contract that is
+> removed and what replaces it, and its §2–§7 replace the enums, the state machine, the inbox
+> statuses, the close request and the seed. Where the two files disagree, slice 2 wins. This
+> file is kept as the record of slice 1.
+
 Status: **implemented and integrated** (backend agent + FE agent `inbox` + FE agent `conversation`, in parallel;
 integration notes in §11).
 Scope: the analyst ↔ customer chat works for real with **no AI**: a customer opens `/cliente`, picks a seeded
@@ -8,8 +15,8 @@ human, assigned to an available analyst who speaks the language (rule 3, policy 
 analyst's **Casos** list; the analyst opens it and replies; the customer sees the reply live. Reloads restore
 everything. The Workspace also shows a seeded inbox with every status of the canvas.
 
-Read first: `../ENGINEERING_BRIEF.md` (wins over this file), `../adr/0001-architecture.md`, `../AI_INTEGRATION.md`,
-`backend/README.md`, `frontend/ARCHITECTURE.md`. Extend slice 0 foundations (UoW + event log, `retry_on_conflict`,
+Read first: `../ENGINEERING_BRIEF.md` (wins over this file), `../adr/0001-architecture.md`,
+`backend/README.md`, `frontend/ARCHITECTURE.md`. (`AI_INTEGRATION.md` was deleted on 2026-10-03.) Extend slice 0 foundations (UoW + event log, `retry_on_conflict`,
 `ProblemCode` registry, `RealtimeProjector`/`TopicMapper`, `RealtimeClient`, handler registry, `Schemas[...]`);
 never fork them.
 

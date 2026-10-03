@@ -76,6 +76,7 @@ export const routes: RouteObject[] = [
           roleSection('supervisor', '/supervision', [
             indexRedirect('equipo'),
             lazyRoute('equipo', () => import('@/routes/supervision/team')),
+            lazyRoute('casos/:caseId', () => import('@/routes/supervision/case')),
             lazyRoute('auditoria', () => import('@/routes/supervision/audit')),
             lazyRoute('*', () => import('@/routes/not-found')),
           ]),

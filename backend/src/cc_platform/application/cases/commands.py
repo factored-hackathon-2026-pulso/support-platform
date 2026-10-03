@@ -177,6 +177,6 @@ class CloseCase:
             if slot is not None and slot.open_case_id == case.id:
                 slot.release(case.id)
                 await uow.case_slots.save(slot)
-            detail = await case_detail(uow, case, actor.staff_id)
+            detail = await case_detail(uow, case, actor)
             await uow.commit()
         return detail

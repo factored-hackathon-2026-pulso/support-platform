@@ -7,6 +7,7 @@ import {
   ROLE_ORDER,
   ROLES,
   sortRoles,
+  supervisionCasePath,
   type NavItem,
 } from './roles'
 
@@ -43,8 +44,13 @@ describe('roles', () => {
     expect(isNavItemActive(team, '/supervision/auditoria')).toBe(false)
     const exact: NavItem = { ...team, end: true }
     expect(isNavItemActive(exact, '/supervision/equipo/detalle')).toBe(false)
-    const flow: NavItem = { ...team, alsoActiveOn: ['/supervision/casos'] }
-    expect(isNavItemActive(flow, '/supervision/casos/CASE-1')).toBe(true)
+    expect(isNavItemActive(team, '/supervision/casos/CASE-1')).toBe(true)
+    expect(team.indicator).toBe('queuedCases')
+  })
+
+  it('builds the supervisor case path', () => {
+    expect(supervisionCasePath('CASE-1')).toBe('/supervision/casos/CASE-1')
+    expect(roleFromPath(supervisionCasePath('CASE-1'))).toBe('supervisor')
   })
 
   it('returns to the requested page only when the user may open it', () => {

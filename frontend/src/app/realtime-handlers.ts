@@ -1,5 +1,6 @@
 import { registerCasesRealtime } from '@/features/cases'
 import { registerConversationRealtime } from '@/features/conversation'
+import { registerSupervisionRealtime } from '@/features/supervision'
 import {
   createEnvelopeHandlerRegistry,
   type EnvelopeHandlerRegistry,
@@ -21,8 +22,9 @@ import {
  * envelopes never reach these handlers and vice versa.
  */
 export const FEATURE_REALTIME_REGISTRATIONS: readonly RealtimeRegistration[] = [
-  registerCasesRealtime, // case.updated, case.assigned, inbox.counts, availability.updated → inbox
+  registerCasesRealtime, // case.updated, case.assigned, case.unassigned, inbox.counts, availability.updated → inbox
   registerConversationRealtime, // turn.created, case.updated, case.assigned → open case
+  registerSupervisionRealtime, // queue.updated, queue.case_queued, team.updated → team and queues
 ]
 
 /** Builds a fresh registry with every feature's handlers (one per AppProviders). */

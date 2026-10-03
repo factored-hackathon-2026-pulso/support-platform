@@ -27,6 +27,8 @@ from cc_platform.application.cases.dto import (
     TurnView,
 )
 from cc_platform.application.ports.unit_of_work import UnitOfWork
+from cc_platform.application.security import Actor
+from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
@@ -40,6 +42,8 @@ from cc_platform.domain.cases.values import (
     TurnAuthorRole,
 )
 from cc_platform.domain.customers.customer import Customer
+from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.shared.actor import ActorRole
 
 UNKNOWN_CUSTOMER = "Cliente"
 MAX_INBOX_ITEMS = 200
@@ -122,8 +126,10 @@ def closed_order(item: CaseSummaryView) -> tuple[datetime, str]:
     return (item.closed_at or item.opened_at, item.id)
 
 
-def capabilities_for(case: Case, staff_id: str) -> CaseCapabilitiesView:
-    is_assignee = case.is_assignee(staff_id)
+def capabilities_for(case: Case, actor: Actor) -> CaseCapabilitiesView:
+    """What the caller may do: reply and close as the assignee (never a supervisor as such),
+    assign or reassign as a supervisor while the case is open."""
+    is_assignee = case.is_assignee(actor.staff_id)
     reason: ReplyBlockedReason | None = None
     if not is_assignee:
         reason = ReplyBlockedReason.NOT_ASSIGNEE
@@ -133,6 +139,7 @@ def capabilities_for(case: Case, staff_id: str) -> CaseCapabilitiesView:
         can_reply=reason is None and case.status in REPLYABLE_STATUSES,
         reply_blocked_reason=reason,
         can_close=is_assignee and case.status in CLOSABLE_STATUSES,
+        can_assign=actor.has_any_role({StaffRole.SUPERVISOR}) and not case.is_closed,
     )
 
 
@@ -203,10 +210,14 @@ class CaseReader:
         return count_inbox(items, computed_at)
 
     async def assignment(self, case: Case) -> AssignmentView | None:
+        """The case's latest assignment ("Cómo llegó a ti"), if any."""
         assignment = await self._uow.assignments.latest_for_case(case.id)
-        if assignment is None:
-            return None
+        return None if assignment is None else await self.assignment_view(case, assignment)
+
+    async def assignment_view(self, case: Case, assignment: Assignment) -> AssignmentView:
         waited = assignment.waited_seconds
+        by = assignment.assigned_by
+        previous = assignment.previous_staff_id
         return AssignmentView(
             id=assignment.id,
             analyst_id=assignment.staff_id,
@@ -216,6 +227,12 @@ class CaseReader:
             assigned_at=assignment.assigned_at,
             queue_label=case.queue_label if waited is not None else None,
             waited_seconds=waited,
+            assigned_by_role=by.role,
+            assigned_by_name=(
+                None if by.role is ActorRole.SYSTEM else await self.staff_name(by.actor_id)
+            ),
+            previous_analyst_id=previous,
+            previous_analyst_name=await self.staff_name(previous) if previous else None,
         )
 
     async def closure(self, case: Case) -> CaseClosureView | None:

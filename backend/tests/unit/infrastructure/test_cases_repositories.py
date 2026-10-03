@@ -113,10 +113,29 @@ async def test_queries_by_assignee_status_customer_and_load(harness: Harness) ->
         daniela_held = await uow.cases.exists_for_customer_and_assignee(patricia, DANIELA)
         julian_held = await uow.cases.exists_for_customer_and_assignee(patricia, seed_staff_id(2))
         paula_held = await uow.cases.exists_for_customer_and_assignee(patricia, seed_staff_id(3))
+        # Paula held 114 before Lucía reassigned it to Julián: past assignments count.
+        paula_held_esteban = await uow.cases.exists_for_customer_and_assignee(
+            seed_customer_id(1012), seed_staff_id(3)
+        )
+        tomas_held_esteban = await uow.cases.exists_for_customer_and_assignee(
+            seed_customer_id(1012), seed_staff_id(8)
+        )
+        open_cases = await uow.cases.list_by_statuses(OPEN_ASSIGNED_STATUSES)
+        refs = await uow.cases.refs([seed_case_id(103), seed_case_id(101), seed_case_id(999)])
+        no_refs = await uow.cases.refs([])
+    assert (paula_held_esteban, tomas_held_esteban) == (True, False)
+    assert {c.id for c in open_cases} == {
+        seed_case_id(n) for n in (101, 102, 103, 107, 108, 113, 114)
+    }
+    assert {k: (v.customer_id, v.language.value) for k, v in refs.items()} == {
+        seed_case_id(103): (seed_customer_id(1003), "pt"),
+        seed_case_id(101): (seed_customer_id(1001), "es"),
+    }
+    assert no_refs == {}
     assert len(mine) == 5
     assert {c.id for c in closed} == {seed_case_id(n) for n in (104, 105, 106)}
     assert {c.id for c in recent} == {seed_case_id(n) for n in (105, 106)}
-    assert [c.id for c in queued] == [seed_case_id(109)]
+    assert [c.id for c in queued] == [seed_case_id(n) for n in (111, 112, 109)]  # oldest first
     assert latest is not None
     assert latest.id == seed_case_id(108)
     assert [c.id for c in history] == [seed_case_id(n) for n in (108, 104, 110)]  # newest first
@@ -180,7 +199,7 @@ async def test_customers_read_model(harness: Harness) -> None:
         customers = await uow.customers.list()
         many = await uow.customers.get_many([seed_customer_id(2004), seed_customer_id(9999)])
     assert [c.id for c in customers] == sorted(c.id for c in customers)
-    assert len(customers) == 13
+    assert len(customers) == 17
     rafael = many[seed_customer_id(2004)]
     assert (rafael.locale.value, rafael.language.value, rafael.simulator) == ("pt-BR", "pt", True)
     assert len(rafael.suggestions) == 3

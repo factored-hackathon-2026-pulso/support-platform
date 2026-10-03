@@ -10,7 +10,7 @@ from pydantic.alias_generators import to_camel
 
 from cc_platform.api.problems import ProblemCode
 from cc_platform.domain.cases.values import CaseStatus
-from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.people.staff import Language, StaffRole
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 
@@ -71,6 +71,20 @@ class ProblemDetails(ApiModel):
     )
     current_status: CaseStatus | None = Field(
         default=None, description="invalid_transition, case_closed: the case status now."
+    )
+    analyst_id: str | None = Field(
+        default=None,
+        description="analyst_not_eligible, language_mismatch, analyst_paused: the target.",
+    )
+    policy_rule_id: str | None = Field(
+        default=None, description='language_mismatch: the rule behind it ("H1", rule 3).'
+    )
+    case_language: Language | None = Field(
+        default=None, description="language_mismatch: the language of the case."
+    )
+    current_analyst_id: str | None = Field(
+        default=None,
+        description="assignment_changed: who holds the case now (null = it is queued).",
     )
 
 

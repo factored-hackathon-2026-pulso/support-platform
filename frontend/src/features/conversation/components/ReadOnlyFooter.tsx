@@ -1,19 +1,23 @@
 import { Lock } from 'lucide-react'
-import { readOnlyFooter } from '../model'
+import { readOnlyFooter, supervisionFooter, type ConversationMode } from '../model'
 import type { CaseDetail } from '../types'
 
 export interface ReadOnlyFooterProps {
-  detail: Pick<CaseDetail, 'capabilities' | 'closure' | 'assignment'>
+  detail: Pick<CaseDetail, 'capabilities' | 'closure' | 'assignment' | 'case'>
   meId: string
+  /** `supervision`: "Vista de supervisión · …" (slice 3 §8.3), whatever the capabilities say. */
+  mode?: ConversationMode
 }
 
 /**
  * Replaces the composer when the viewer cannot write (contract §9.3): a closed
  * case shows "Caso cerrado el … · {motivo}" (+ "Nota: …"); someone else's case
- * (history access, supervisor) shows "Solo lectura: este caso es de {nombre}."
+ * (history access) shows "Solo lectura: este caso es de {nombre}."; the
+ * supervisor view says what the case waits for or who holds it.
  */
-export function ReadOnlyFooter({ detail, meId }: ReadOnlyFooterProps) {
-  const lines = readOnlyFooter(detail, meId)
+export function ReadOnlyFooter({ detail, meId, mode = 'workspace' }: ReadOnlyFooterProps) {
+  const lines =
+    mode === 'supervision' ? supervisionFooter(detail, meId) : readOnlyFooter(detail, meId)
   if (!lines) return null
   const [first, ...rest] = lines
   return (

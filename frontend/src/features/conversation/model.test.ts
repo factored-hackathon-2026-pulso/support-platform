@@ -14,7 +14,7 @@ import { analystStaff } from '@/test/fixtures'
 import {
   addPending,
   applySummary,
-  arrivalLine,
+  arrivalNote,
   caseHeaderMeta,
   CLOSED_NOTICE,
   closureLine,
@@ -46,6 +46,9 @@ import {
   turnVariant,
   updatePending,
   validateCloseForm,
+  QUEUE_LABEL,
+  supervisionArrivalLine,
+  supervisionFooter,
 } from './model'
 import type { PendingMessage, TranscriptCache } from './types'
 
@@ -292,15 +295,16 @@ describe('header', () => {
   })
 })
 
-describe('Cómo llegó a ti', () => {
+describe('arrival note (Cómo llegó a ti / Quién lo atiende)', () => {
   it('explains a language assignment, with rule 3 for Portuguese', () => {
     const detail = makeCaseDetail()
-    expect(arrivalLine(detail, ME)).toBe(
-      'Te llegó porque estás disponible y hablas español · 5 mar, 10:46',
-    )
+    expect(arrivalNote(detail, ME)).toEqual({
+      heading: 'Cómo llegó a ti',
+      line: 'Te llegó porque estás disponible y hablas español · 5 mar, 10:46',
+    })
     const pt = makeCaseDetail()
     pt.case = { ...pt.case, language: 'pt' }
-    expect(arrivalLine(pt, ME)).toBe(
+    expect(arrivalNote(pt, ME)?.line).toBe(
       'Te llegó porque estás disponible y hablas portugués (regla 3) · 5 mar, 10:46',
     )
   })
@@ -316,22 +320,168 @@ describe('Cómo llegó a ti', () => {
         assignedAt: '2026-03-05T15:46:10Z',
         queueLabel: 'Cola en portugués',
         waitedSeconds: 360,
+        assignedByRole: 'system',
+        assignedByName: null,
+        previousAnalystId: null,
+        previousAnalystName: null,
       },
     })
-    expect(arrivalLine(drained, ME)).toBe(
+    expect(arrivalNote(drained, ME)?.line).toBe(
       'Esperó 6 min en la cola en portugués y te llegó cuando quedaste disponible · 5 mar, 10:46',
     )
   })
 
-  it("names who attended someone else's case, and says nothing without an assignment", () => {
-    expect(arrivalLine(makeJulianDetail(), ME)).toBe('Lo atendió Julián Ortega')
-    expect(arrivalLine(makeCaseDetail({ assignment: null }), ME)).toBeNull()
+  it("names who attended someone else's closed case, and says nothing without an assignment", () => {
+    expect(arrivalNote(makeJulianDetail(), ME)).toEqual({
+      heading: 'Quién lo atendió',
+      line: 'Lo atendió Julián Ortega',
+    })
+    expect(arrivalNote(makeCaseDetail({ assignment: null }), ME)).toBeNull()
+  })
+
+  it('says who holds an open case that supervision took from the viewer, in the present', () => {
+    const base = makeCaseDetail().assignment!
+    const takenFromMe = makeCaseDetail({
+      assignment: {
+        ...base,
+        analystId: 'STF-2',
+        analystName: 'Julián Ortega',
+        reason: 'manual',
+        assignedByRole: 'supervisor',
+        assignedByName: 'Lucía Herrera',
+        previousAnalystId: ME,
+        previousAnalystName: 'Daniela Ríos',
+      },
+    })
+    expect(arrivalNote(takenFromMe, ME)).toEqual({
+      heading: 'Quién lo atiende',
+      line: 'Lucía Herrera pasó este caso a Julián Ortega · 5 mar, 10:46',
+    })
+  })
+
+  it("says who holds someone else's open case, and how a supervisor gave it", () => {
+    const base = makeCaseDetail().assignment!
+    const other = { ...base, analystId: 'STF-2', analystName: 'Julián Ortega' }
+    expect(arrivalNote(makeCaseDetail({ assignment: other }), ME)).toEqual({
+      heading: 'Quién lo atiende',
+      line: 'Lo atiende Julián Ortega',
+    })
+    const manual = {
+      ...other,
+      reason: 'manual' as const,
+      assignedByRole: 'supervisor' as const,
+      assignedByName: 'Lucía Herrera',
+    }
+    expect(arrivalNote(makeCaseDetail({ assignment: manual }), ME)?.line).toBe(
+      'Lo atiende Julián Ortega · Lucía Herrera se lo asignó el 5 mar, 10:46',
+    )
+    const passed = { ...manual, previousAnalystId: 'STF-9', previousAnalystName: 'Paula Medina' }
+    expect(arrivalNote(makeCaseDetail({ assignment: passed }), ME)?.line).toBe(
+      'Lo atiende Julián Ortega · Lucía Herrera se lo pasó el 5 mar, 10:46',
+    )
+  })
+
+  it('explains a manual assignment from the queue and a reassignment (slice 3)', () => {
+    const base = makeCaseDetail().assignment!
+    const fromQueue = makeCaseDetail({
+      assignment: {
+        ...base,
+        reason: 'manual',
+        assignedByRole: 'supervisor',
+        assignedByName: 'Lucía Herrera',
+        queueLabel: 'Cola en portugués',
+        waitedSeconds: 420,
+      },
+    })
+    expect(arrivalNote(fromQueue, ME)?.line).toBe(
+      'Lucía Herrera te asignó este caso después de 7 min en la cola en portugués · 5 mar, 10:46',
+    )
+    const reassigned = makeCaseDetail({
+      assignment: {
+        ...base,
+        reason: 'manual',
+        assignedByRole: 'supervisor',
+        assignedByName: 'Lucía Herrera',
+        previousAnalystId: 'STF-2',
+        previousAnalystName: 'Julián Ortega',
+      },
+    })
+    expect(arrivalNote(reassigned, ME)?.line).toBe(
+      'Lucía Herrera te pasó este caso; antes lo atendía Julián Ortega · 5 mar, 10:46',
+    )
   })
 
   it('formats waits', () => {
     expect(formatWait(45)).toBe('45 s')
     expect(formatWait(133)).toBe('2 min 13 s')
     expect(formatWait(360)).toBe('6 min')
+  })
+})
+
+describe('supervision view (slice 3 §8.3)', () => {
+  const queued = () => {
+    const detail = makeCaseDetail({ assignment: null })
+    detail.case = {
+      ...detail.case,
+      status: 'queued',
+      inboxStatus: null,
+      assignedAnalystId: null,
+      openedAt: '2026-03-05T15:47:00Z',
+    }
+    return detail
+  }
+
+  it('says which queue a queued case waits in, and since when', () => {
+    expect(supervisionArrivalLine(queued())).toBe(
+      'Espera en la cola en español desde las 10:47: nadie disponible habla español',
+    )
+    expect(supervisionFooter(queued(), ME)).toEqual([
+      'Vista de supervisión · El caso espera en la cola en español. Asígnalo para que alguien le responda.',
+    ])
+  })
+
+  it('says who holds an open case and how it reached her', () => {
+    const pt = makeCaseDetail()
+    pt.case = { ...pt.case, language: 'pt' }
+    expect(supervisionArrivalLine(pt)).toBe(
+      'Lo atiende Daniela Ríos: le llegó al estar disponible y hablar portugués (regla 3) · 5 mar, 10:46',
+    )
+    const base = makeCaseDetail().assignment!
+    expect(
+      supervisionArrivalLine(
+        makeCaseDetail({
+          assignment: {
+            ...base,
+            reason: 'queue_drained',
+            queueLabel: 'Cola en portugués',
+            waitedSeconds: 360,
+          },
+        }),
+      ),
+    ).toBe('Lo atiende Daniela Ríos: le llegó desde la cola en portugués tras 6 min · 5 mar, 10:46')
+    const manual = { ...base, reason: 'manual' as const, assignedByName: 'Lucía Herrera' }
+    expect(supervisionArrivalLine(makeCaseDetail({ assignment: manual }))).toBe(
+      'Lo atiende Daniela Ríos: se lo asignó Lucía Herrera · 5 mar, 10:46',
+    )
+    expect(
+      supervisionArrivalLine(
+        makeCaseDetail({ assignment: { ...manual, previousAnalystId: 'STF-2' } }),
+      ),
+    ).toBe('Lo atiende Daniela Ríos: se lo pasó Lucía Herrera · 5 mar, 10:46')
+    expect(supervisionFooter(makeCaseDetail(), ME)).toEqual([
+      'Vista de supervisión · Solo lectura. Lo atiende Daniela Ríos.',
+    ])
+  })
+
+  it('shows who attended a closed case and its closure', () => {
+    expect(supervisionArrivalLine(makeJulianDetail())).toBe('Lo atendió Julián Ortega')
+    expect(supervisionFooter(makeJulianDetail(), 'STF-SUP')).toEqual([
+      'Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto',
+    ])
+  })
+
+  it('keeps the queue labels the backend sends', () => {
+    expect(QUEUE_LABEL).toEqual({ es: 'Cola en español', pt: 'Cola en portugués' })
   })
 })
 
@@ -360,7 +510,12 @@ describe('closure and the read-only footer', () => {
 
   it('says whose case it is on an open case of someone else', () => {
     const notMine = makeCaseDetail({
-      capabilities: { canReply: false, replyBlockedReason: 'not_assignee', canClose: false },
+      capabilities: {
+        canReply: false,
+        replyBlockedReason: 'not_assignee',
+        canClose: false,
+        canAssign: false,
+      },
       assignment: {
         ...makeCaseDetail().assignment!,
         analystId: 'STF-2',
@@ -465,6 +620,9 @@ describe('close dialog', () => {
     )
     expect(describeCloseFailure(new ApiProblem({ status: 409, code: 'invalid_transition' }))).toBe(
       'Este caso no se puede cerrar en su estado actual.',
+    )
+    expect(describeCloseFailure(new ApiProblem({ status: 403, code: 'case_not_assigned' }))).toBe(
+      'Ya no puedes cerrarlo: supervisión pasó este caso a otra persona.',
     )
     expect(describeCloseFailure(ApiProblem.network())).toBe(
       'No pudimos cerrar el caso. Inténtalo de nuevo.',

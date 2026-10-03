@@ -10,8 +10,9 @@ import copy
 from collections.abc import Callable, Collection, Iterable, Sequence
 from datetime import datetime
 
-from cc_platform.application.cases.ports import AssigneeLoad
+from cc_platform.application.cases.ports import AssigneeLoad, CaseRef
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
+from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
@@ -161,6 +162,9 @@ class InMemoryStaffSessionRepository(_StagedRepository[StaffSession]):
     async def get(self, session_id: str) -> StaffSession | None:
         return await self._get(session_id)
 
+    async def active_staff_ids(self, now: datetime) -> set[str]:
+        return {session.staff_id for session in self._all() if session.is_active(now)}
+
 
 class InMemoryEventLogRepository:
     def __init__(self, committed: list[StoredEvent]) -> None:
@@ -215,6 +219,29 @@ class InMemoryEventLogRepository:
             next_cursor=encode_cursor(items[-1].sequence) if has_more and items else None,
         )
 
+    async def search(
+        self, filters: AuditFilters, *, before: int | None, limit: int
+    ) -> list[StoredEvent]:
+        matching = [
+            event
+            for event in reversed(self._committed)
+            if (before is None or event.sequence < before) and _matches(event, filters)
+        ]
+        return matching[:limit]
+
+    async def get(self, event_id: str) -> StoredEvent | None:
+        return next((e for e in self._committed if e.event_id == event_id), None)
+
+    async def latest(self, event_type: str, actor_id: str, case_id: str) -> StoredEvent | None:
+        return next(
+            (
+                e
+                for e in reversed(self._committed)
+                if e.event_type == event_type and e.actor_id == actor_id and e.case_id == case_id
+            ),
+            None,
+        )
+
     def verify(self) -> None:
         """Appends never conflict on version (event ids are checked in ``append``)."""
 
@@ -224,6 +251,21 @@ class InMemoryEventLogRepository:
 
     def discard(self) -> None:
         self._staged.clear()
+
+
+def _matches(event: StoredEvent, filters: AuditFilters) -> bool:
+    """Same semantics as the SQL adapter (``AuditFilters``)."""
+    ids = (event.event_id, event.entity_id, event.case_id or "", event.actor_id)
+    return (
+        (filters.actor_roles is None or event.actor_role in filters.actor_roles)
+        and (filters.actor_id is None or event.actor_id == filters.actor_id)
+        and (filters.case_id is None or event.case_id == filters.case_id)
+        and (filters.event_types is None or event.event_type in filters.event_types)
+        and event.event_type not in filters.exclude_event_types
+        and (filters.occurred_from is None or event.event_time >= filters.occurred_from)
+        and (filters.occurred_to is None or event.event_time < filters.occurred_to)
+        and (not filters.text or any(filters.text.lower() in i.lower() for i in ids))
+    )
 
 
 # ----------------------------------------------------------------------------- people: availability
@@ -242,8 +284,14 @@ class InMemoryAnalystAvailabilityRepository(_StagedRepository[AnalystAvailabilit
 
 # ----------------------------------------------------------------------------- cases
 class InMemoryCaseRepository(_StagedRepository[Case]):
-    def __init__(self, committed: dict[str, Case], track: Tracker) -> None:
+    def __init__(
+        self,
+        committed: dict[str, Case],
+        track: Tracker,
+        assignments: dict[str, Assignment] | None = None,
+    ) -> None:
         super().__init__(committed, lambda case: case.id, track)
+        self._assignments = assignments if assignments is not None else {}
 
     async def get(self, case_id: str) -> Case | None:
         return await self._get(case_id)
@@ -277,14 +325,28 @@ class InMemoryCaseRepository(_StagedRepository[Case]):
         matching = [case for case in self._all() if case.status is status]
         return self._tracked(sorted(matching, key=lambda case: (case.opened_at, case.id)))
 
+    async def list_by_statuses(self, statuses: Collection[CaseStatus]) -> list[Case]:
+        return self._tracked(case for case in self._all() if case.status in statuses)
+
+    async def refs(self, case_ids: Collection[str]) -> dict[str, CaseRef]:
+        wanted = set(case_ids)
+        return {
+            case.id: CaseRef(customer_id=case.customer_id, language=case.language)
+            for case in self._all()
+            if case.id in wanted
+        }
+
     async def list_for_customer(self, customer_id: str) -> list[Case]:
         mine = [case for case in self._all() if case.customer_id == customer_id]
         return self._tracked(sorted(mine, key=lambda case: (case.opened_at, case.id), reverse=True))
 
     async def exists_for_customer_and_assignee(self, customer_id: str, staff_id: str) -> bool:
+        cases = self._all()
+        if any(c.customer_id == customer_id and c.assigned_analyst_id == staff_id for c in cases):
+            return True
+        theirs = {c.id for c in cases if c.customer_id == customer_id}
         return any(
-            case.customer_id == customer_id and case.assigned_analyst_id == staff_id
-            for case in self._all()
+            a.staff_id == staff_id and a.case_id in theirs for a in self._assignments.values()
         )
 
     async def latest_for_customer(self, customer_id: str) -> Case | None:

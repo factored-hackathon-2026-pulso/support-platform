@@ -3,7 +3,8 @@
 FastAPI service for the LATAM Bank support platform: support staff and customers talk by chat.
 Architecture: hexagonal (ports and adapters) + DDD-lite + CQRS-lite with an append-only event
 log. See `docs/platform/ENGINEERING_BRIEF.md`, `docs/platform/adr/0001-architecture.md` and the
-current slice contract, `docs/platform/api/slice-2-case-lifecycle.md`.
+current slice contract, `docs/platform/api/slice-3-supervision.md` (slice 2,
+`slice-2-case-lifecycle.md`, still holds where slice 3 does not change it).
 
 ## Requirements
 
@@ -23,10 +24,11 @@ uv run uvicorn cc_platform.bootstrap.app:create_app --factory --port 8000
 - Health: `GET /api/v1/health` · Build info: `GET /api/v1/meta`
 - Data lives in `backend/cc_platform.db` (SQLite, git-ignored). Delete the file to reset.
   `CC_PERSISTENCE=memory` runs without any database.
-- **After pulling slice 2, delete `backend/cc_platform.db`** (or run with
-  `CC_PERSISTENCE=memory`): the schema changed and there are no migrations. An old database
-  fails fast at startup (`OutdatedSchemaError`), and the seed never rewrites existing rows
-  (old roles would stay).
+- **After pulling slice 3, delete `backend/cc_platform.db`** (or run with
+  `CC_PERSISTENCE=memory`): the schema changed (`assignments.previous_staff_id`,
+  `assignments.paused_override`, new indexes) and there are no migrations. An old database
+  fails fast at startup (`OutdatedSchemaError` lists the missing columns), and the seed never
+  rewrites existing rows.
 - Configuration: environment variables with the `CC_` prefix (or `backend/.env`); see
   `.env.example` and `src/cc_platform/bootstrap/settings.py`.
 
@@ -37,9 +39,9 @@ Seeded staff are fictitious ("Datos de ejemplo"). Every account uses the passwor
 
 | Persona | Email | Roles | Languages | Starts |
 |---|---|---|---|---|
-| Daniela Ríos (main analyst) | `daniela.rios@latambank.example` | analyst | es, pt | available |
-| Julián Ortega | `julian.ortega@latambank.example` | analyst | es | paused |
-| Paula Medina | `paula.medina@latambank.example` | analyst | es | paused |
+| Daniela Ríos (main analyst) | `daniela.rios@latambank.example` | analyst | es, pt | paused (switch to "Disponible") |
+| Julián Ortega | `julian.ortega@latambank.example` | analyst | es | paused, **signed in** (seeded session) |
+| Paula Medina | `paula.medina@latambank.example` | analyst | es | paused (before Lucía moved 114) |
 | Sebastián Cárdenas | `sebastian.cardenas@latambank.example` | analyst | es, pt | paused |
 | Tomás Arango | `tomas.arango@latambank.example` | analyst | es, pt | paused |
 | Lucía Herrera | `lucia.herrera@latambank.example` | supervisor | es, pt | — |
@@ -50,12 +52,22 @@ Seeded staff are fictitious ("Datos de ejemplo"). Every account uses the passwor
 | Carolina Peña | `carolina.pena@latambank.example` | admin | es | — |
 
 Roles combine (Analista, Supervisora, Administración). Felipe exercises the role switcher
-(Casos ↔ Equipo y colas). Supervision and administration screens arrive in slices 3 and 4.
+(Casos ↔ Equipo y colas). Administration screens arrive in slice 4.
 
-Availability ("Disponible" / "En pausa"): only **Daniela** starts available, so new chats land
-on her. Sign in as Sebastián or Tomás (es, pt, no cases) and switch to "Disponible"
-(`PUT /api/v1/me/availability`) to see least-loaded balancing; he also receives the queued
-Portuguese case.
+Julián has a seeded staff session (started 45 minutes before the first start, normal TTL) and
+paused 20 minutes before it, so "Equipo y colas" shows him **En pausa** (paused and signed
+in) rather than Desconectada. When that session expires he becomes Desconectada (delete the
+database to re-anchor).
+
+Availability ("Disponible" / "En pausa"): **nobody starts available**. The seeded queues hold
+cases nobody available could take (rule 3), so an available Spanish or Portuguese speaker would
+contradict them: Daniela paused 12 minutes before the first start, right after her last new
+case and before the queued cases arrived (Paula paused at T−33m, Julián at T−20m; each pause is
+in the audit). To start the demo, sign in as Daniela and switch to "Disponible"
+(`PUT /api/v1/me/availability`): the queues drain to her, oldest first, and new chats then land
+on her. Until someone is available, a new chat waits in its language queue (supervisors can
+assign it). Sign in as Sebastián or Tomás (es, pt, no cases) and switch to "Disponible" too to
+see least-loaded balancing.
 
 ## Seeded cases and the customer chat simulator
 
@@ -63,8 +75,15 @@ Every case is a chat (`app_chat` / `web_chat`), with invented people ("Datos de 
 Daniela's "Casos": **Todos 5 · Por responder 2 · Nuevos 2 · Esperando al cliente 1 ·
 Cerrados 3**. Besides her inbox:
 
-- **Queue:** Gabriela's Portuguese case waits in "Cola en portugués". Startup runs no drain:
-  switch Daniela "En pausa" → "Disponible", or Sebastián/Tomás to "Disponible", to drain it.
+- **Queues:** three cases wait, all opened after Daniela paused. "Cola en español": Rosa (111,
+  SLA due in 4 min, at risk) and Mauricio (112, high priority, SLA overdue); "Cola en
+  portugués": Gabriela (109). The rail badge shows 3. Startup runs no drain: a supervisor
+  assigns them by hand, or switching Daniela (or Sebastián/Tomás) to "Disponible" drains them.
+  Each language queue is first in, first out: a new chat never jumps an older case of its
+  language (`AssignCase` serves the queue first).
+- **Julián** (En pausa) holds two open cases: Camila (113, Por responder, SLA overdue) and
+  Esteban (114, Esperando al cliente), which Lucía reassigned to him from Paula. Lucía has a
+  seeded supervision view of 113, so the audit shows the access family.
 - **History:** Patricia (Nuevos, "Volvió a escribir") has two earlier cases: one closed by
   Daniela two days ago and one closed by Julián twenty days ago (outside the 7-day Cerrados
   window). "Casos anteriores (2)" lists both; Daniela reads Julián's case read-only.
@@ -72,7 +91,9 @@ Cerrados 3**. Besides her inbox:
   linked to the closed one (`previousCaseId`), and is assigned normally.
 
 Times are relative to the **first** start (delete `cc_platform.db`, or use
-`CC_PERSISTENCE=memory`, to re-anchor them). Team-generated values: the first-response SLA
+`CC_PERSISTENCE=memory`, to re-anchor them). Every seeded arrival agrees with rule 3 and the
+least-loaded choice at its time, and the seed writes the whole event log in story-time order
+(`infrastructure/seed/timeline.py`), so the audit lists it as it happened. Team-generated values: the first-response SLA
 (high 5 min · medium 15 min · low 60 min), the 7-day Cerrados window, the queue names and
 the close reasons.
 
@@ -94,13 +115,32 @@ the language queue (`waiting_agent`) and `QueueDrainer` assigns it as soon as an
 analyst becomes available. When the analyst closes the case (with a reason; the customer
 only sees a closing notice), the customer's next message opens a new linked case.
 
+Supervision (Supervisora; slice 3): `GET /supervision/team` (analysts by team, what each
+one is doing now, load, longest wait, open cases), `GET /supervision/queues` (both language
+queues, oldest first), `PUT /supervision/cases/{caseId}/assignee`
+(`{analystId, expectedAnalystId, confirmPaused}`: assign a queued case or reassign an open
+one; rule 3 applies, a paused target needs `confirmPaused`, a stale `expectedAnalystId` is
+`409 assignment_changed`, the current assignee is a `200` no-op). A supervisor reads any case
+through `GET /cases/{caseId}` read-only; that read is audited as `case.viewed` (at most once
+per 15 minutes per supervisor and case). Audit (Supervisora, Administración):
+`GET /audit/events?actorKind=&actorId=&caseId=&family=&changesOnly=&from=&to=&q=&cursor=&limit=`
+(newest first, cursor pagination, a Spanish description per event, message text redacted)
+and `GET /audit/events/{eventId}`.
+
+```bash
+curl -s -X PUT localhost:8000/api/v1/supervision/cases/CASE-00000000000000000000000109/assignee \
+  -H 'Authorization: Bearer <Lucía token>' -H 'content-type: application/json' \
+  -d '{"analystId":"STF-00000000000000000000000004","expectedAnalystId":null,"confirmPaused":true}'
+```
+
 Analyst endpoints: `GET /cases/inbox?status=&q=` (`status=closed` = the last 7 days),
 `GET /cases/{caseId}`, `GET /cases/{caseId}/history`, `GET|POST /cases/{caseId}/turns`,
 `POST /cases/{caseId}/read`, `POST /cases/{caseId}/close` (`{reason, note}`),
 `GET|PUT /me/availability`. Customer endpoints: `GET /customer/demo-customers`,
 `POST /customer/sessions`, `GET /customer/conversation`, `POST /customer/conversation/turns`,
 `GET /customer/conversations`, `GET /customer/conversations/{caseId}`. The full contract is
-`docs/platform/api/slice-2-case-lifecycle.md` (slice 1 rules it does not change still hold).
+`docs/platform/api/slice-2-case-lifecycle.md` (slice 1 rules it does not change still hold) and
+`slice-3-supervision.md`.
 
 ```bash
 # 1) password → MFA challenge
@@ -131,6 +171,9 @@ locking), so batching guesses does not bypass the lock, and a challenge is redee
   changed the same record first: reload and retry. Unexpected errors are `500 internal_error`
   problems that still carry CORS headers, so the browser can read them.
 - Every response carries `X-Request-ID` / `X-Correlation-ID` (accepted from the client).
+- Cursors (`cursor`, `afterSequence`) are sequences: anything but ASCII digits that fit a
+  signed 64-bit integer (`²`, `٣`, 2**63, a 30-digit string) is `422`, never a `500`
+  (`application/pagination.py`, the one decoder).
 - Commands that create things take an `Idempotency-Key` header. Chat turns use it as the
   `clientMessageId`: a retry with the same text answers `200` + `Idempotent-Replayed: true`
   and the original turn; the same id with another text is `409 idempotency_conflict`.
@@ -138,7 +181,11 @@ locking), so batching guesses does not bypass the lock, and a challenge is redee
   customer token); send `{"action":"subscribe","topic":"case:CASE-…"}` (also `inbox:STF-…`,
   and for customers only their own `customer:CUS-…`), `unsubscribe`, `ping`; receive
   `{type,id,occurredAt,data}` envelopes. `case:` topics are limited to the assignee analyst
-  and supervisors (history readers use REST only). Case envelopes (`turn.created`, `case.updated`, `case.assigned`,
+  and supervisors (history readers use REST only). Supervisors also subscribe to
+  `supervision:queues` (`queue.updated` with `QueueCounts`, `queue.case_queued` with a
+  `CaseSummary`) and `supervision:team` (`team.updated` with `{staffIds}`: refetch the team).
+  A reassignment sends `case.unassigned` (+ `case.updated`, `inbox.counts`) to the previous
+  assignee's `inbox:`. `case.viewed` never reaches a socket. Case envelopes (`turn.created`, `case.updated`, `case.assigned`,
   `inbox.counts`, `availability.updated`, `conversation.updated`) carry camelCase payloads
   equal to the REST schemas (`CaseRealtimeProjector`). An envelope bound to several topics
   (`case.updated` → `case:` + `inbox:`) reaches each connection once (`publish_many`). Close code 4401 means "sign in again"
@@ -214,14 +261,23 @@ lands first (and the closing notice follows it) or it retries and opens a new li
   (brief §4.4) can be added as an alternative without breaking clients.
 - Customer sessions are stateless signed tokens (audience `cc-customer`, 8 h): no revocation
   list yet. The simulator is a dev/demo tool; anyone can pick a seeded customer.
+- "Signed in" (supervision "Ahora") means an active staff session, nothing more: an expiring
+  session emits no event (the team screen refetches every 60 s), and an available analyst
+  without a session is still Atendiendo/Disponible ("sin sesión abierta") because cases keep
+  landing on her.
+- `queue.updated` is sent for every committed event of a queued case (a case entering the
+  queue sends several in a row) and when a case leaves a queue (drained or assigned by hand);
+  clients apply the newest `computedAt` and refetch. A case assigned on arrival sends none.
+- Two parallel first reads of a case by the same supervisor may both record `case.viewed`
+  (accepted; the 15-minute dedupe is a read before the write, no lock).
+- Teams are the `Staff.team` names (slug keys) until slice 4 turns them into records.
 - No presence: availability persists across sign-ins (an analyst who closes the browser
   while "Disponible" keeps receiving cases). No capacity cap per analyst yet.
 - Live cases open with priority `medium` (nothing sets another priority yet); seeds vary it.
-- Assignment limits (accepted, contract §3.1): two cases opened at the same instant may both
-  pick the same least-loaded analyst; an analyst who pauses at that instant may still get
-  one; a new case may be assigned while an older case of another language waits. The queue
-  drains only when someone becomes available (no startup drain; supervisors assign by hand
-  in slice 3).
+- Assignment limits (accepted, slice 2 §3.1, slice 3 §3.9): two cases opened at the same
+  instant may both pick the same least-loaded analyst; an analyst who pauses at that instant
+  may still get one (also by hand: availability is another aggregate); a new case may be assigned while an older case of **another** language waits (never of its own: the arrival serves its language queue first). The queue
+  drains only when someone becomes available (no startup drain; supervisors assign by hand).
 - The queue drain runs as an in-process background task after `staff.availability_changed`.
   If the process dies before it runs, the cases stay queued until the next availability
   change.

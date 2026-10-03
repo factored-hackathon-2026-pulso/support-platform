@@ -12,7 +12,9 @@ schemas the REST endpoints return), so socket and REST cannot drift.
   turn.created, case.assigned, case.status_changed, case.read, case.first_responded,
   case.closed (a close moves the card to Cerrados: ``inboxStatus = closed``). One envelope
   published to both topics at once, so a socket subscribed to both receives it once.
-- ``case.assigned`` → ``inbox:<assignee>`` (``CaseSummary``).
+- ``case.assigned`` → ``inbox:<assignee>`` (``CaseSummary``). A reassignment (slice 3) also
+  sends ``case.unassigned`` (``CaseSummary``), ``case.updated`` and her fresh
+  ``inbox.counts`` to ``inbox:<previous assignee>``: the case leaves her lists.
 - ``inbox.counts`` → ``inbox:<assignee>`` (``InboxCounts``, incl. ``closed`` in the 7-day
   window), with each inbox ``case.updated``.
 - ``availability.updated`` → ``inbox:<staff>`` (``Availability``).
@@ -23,7 +25,8 @@ schemas the REST endpoints return), so socket and REST cannot drift.
 Envelope ``id`` = the source event id (unique per ``type``); clients dedupe on
 ``(type, id)``: within one kind of principal (staff or customer) a ``(type, id)`` pair
 always carries the same payload. On
-``customer:`` topics the actor id is hidden unless the actor is that customer.
+``customer:`` topics the actor id is hidden unless the actor is that customer, and a
+supervisor or admin shows as ``system`` (the customer never learns who reassigned).
 """
 
 from __future__ import annotations
@@ -42,8 +45,9 @@ from cc_platform.application.cases.read_model import CaseReader
 from cc_platform.application.events import EventRecord
 from cc_platform.application.people.availability import AvailabilityView
 from cc_platform.application.ports.clock import Clock
-from cc_platform.application.ports.realtime import RealtimeEnvelope, RealtimeHub
+from cc_platform.application.ports.realtime import RealtimeHub
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from cc_platform.application.realtime.projector import derived_envelope
 from cc_platform.application.realtime.topics import Topic
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.events import (
@@ -55,6 +59,7 @@ from cc_platform.domain.cases.events import (
     CaseQueued,
     CaseRead,
     CaseStatusChanged,
+    CaseViewed,
     TurnCreated,
 )
 from cc_platform.domain.cases.turn import Turn
@@ -73,6 +78,14 @@ OWNED_EVENTS: tuple[type[DomainEvent], ...] = (
     CustomerSessionStarted,
     StaffAvailabilityChanged,
 )
+
+#: Actor roles a customer topic may show as they are (anyone else shows as ``system``).
+_CUSTOMER_VISIBLE_ROLES = frozenset(
+    {ActorRole.CUSTOMER.value, ActorRole.ANALYST.value, ActorRole.SYSTEM.value}
+)
+
+#: Audited reads: recorded in the event log, never sent on any socket.
+SILENT_EVENTS: tuple[type[DomainEvent], ...] = (CaseViewed,)
 
 _CASE_UPDATING = (
     TurnCreated,
@@ -174,20 +187,22 @@ class CaseRealtimeProjector:
         if isinstance(event, _CASE_UPDATING):
             summary = self._present.case_summary(await reader.summary(case))
             assignee = case.assigned_analyst_id
-            if assignee is None:
-                await self._send(record, case_topic, "case.updated", summary)
-            else:
-                inbox = Topic.inbox(assignee)
-                # One envelope for both topics: a socket on both (the assignee with the
-                # case open) receives it once (``RealtimeHub.publish_many``).
-                await self._send(record, (case_topic, inbox), "case.updated", summary)
+            previous = (
+                event.previous_analyst_id
+                if isinstance(event, CaseAssigned) and event.previous_analyst_id != assignee
+                else None
+            )
+            # One envelope for every topic: a socket on several (the assignee with the case
+            # open) receives it once (``RealtimeHub.publish_many``).
+            topics = [case_topic, *(Topic.inbox(s) for s in (assignee, previous) if s)]
+            await self._send(record, tuple(topics), "case.updated", summary)
+            if assignee is not None:
                 if isinstance(event, CaseAssigned):
-                    await self._send(record, inbox, "case.assigned", summary)
-                now = self._clock.now()
-                counts = await reader.inbox_counts(
-                    assignee, closed_since=now - CLOSED_INBOX_WINDOW, computed_at=now
-                )
-                await self._send(record, inbox, "inbox.counts", self._present.inbox_counts(counts))
+                    await self._send(record, Topic.inbox(assignee), "case.assigned", summary)
+                await self._send_counts(record, reader, assignee)
+            if previous is not None:
+                await self._send(record, Topic.inbox(previous), "case.unassigned", summary)
+                await self._send_counts(record, reader, previous)
         if isinstance(event, _CONVERSATION_UPDATING):
             conversation = await reader.conversation(case)
             await self._send(
@@ -197,6 +212,15 @@ class CaseRealtimeProjector:
                 self._present.conversation(conversation),
                 customer_id=case.customer_id,
             )
+
+    async def _send_counts(self, record: EventRecord, reader: CaseReader, staff_id: str) -> None:
+        now = self._clock.now()
+        counts = await reader.inbox_counts(
+            staff_id, closed_since=now - CLOSED_INBOX_WINDOW, computed_at=now
+        )
+        await self._send(
+            record, Topic.inbox(staff_id), "inbox.counts", self._present.inbox_counts(counts)
+        )
 
     async def _send(
         self,
@@ -208,21 +232,12 @@ class CaseRealtimeProjector:
         customer_id: str | None = None,
     ) -> None:
         actor_id: str | None = record.actor_id
-        if customer_id is not None and not (
-            record.actor_role == ActorRole.CUSTOMER.value and record.actor_id == customer_id
-        ):
-            actor_id = None  # customers never learn staff ids
-        envelope = RealtimeEnvelope(
-            type=kind,
-            id=record.event_id,
-            occurred_at=record.event_time,
-            data={
-                "entity": record.entity,
-                "entityId": record.entity_id,
-                "caseId": record.case_id,
-                "actor": {"role": record.actor_role, "id": actor_id},
-                "payload": payload,
-            },
-        )
+        actor_role = record.actor_role
+        if customer_id is not None:
+            if not (actor_role == ActorRole.CUSTOMER.value and record.actor_id == customer_id):
+                actor_id = None  # customers never learn staff ids
+            if actor_role not in _CUSTOMER_VISIBLE_ROLES:
+                actor_role = ActorRole.SYSTEM.value  # nor that a supervisor acted
+        envelope = derived_envelope(record, kind, payload, actor_role=actor_role, actor_id=actor_id)
         topics = topic if isinstance(topic, tuple) else (topic,)
         await self._hub.publish_many((str(t) for t in topics), envelope)

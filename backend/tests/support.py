@@ -18,6 +18,7 @@ from cc_platform.application.security import Actor, CustomerActor
 from cc_platform.bootstrap.container import Container, build_container
 from cc_platform.bootstrap.settings import Settings
 from cc_platform.domain.cases.values import CaseChannel
+from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaMethod, MfaPolicy
 from cc_platform.domain.people.staff import StaffRole
@@ -177,6 +178,25 @@ def build_auth_kit(
         authenticate=AuthenticateSession(uow=uow, tokens=tokens, clock=clock),
         logout=Logout(uow=uow, clock=clock),
     )
+
+
+async def make_available_quietly(uow: UnitOfWorkFactory, *staff_ids: str) -> None:
+    """Arrange: these analysts are ``available`` and the seeded queues stay as they are.
+
+    The seed starts with nobody available (an available Spanish or Portuguese speaker
+    would already have drained the queued cases, rule 3), and an availability change
+    through the API drains the queue in the background. Tests about manual assignment,
+    reassignment or the team view need an available target *and* the seeded queues, so
+    they store the state directly, without the ``staff.availability_changed`` event that
+    starts the drain.
+    """
+    async with uow() as unit:
+        for staff_id in staff_ids:
+            row = await unit.availability.get(staff_id)
+            assert row is not None, staff_id
+            row.status = AvailabilityStatus.AVAILABLE
+            await unit.availability.save(row)
+        await unit.commit()
 
 
 async def emit(uow: UnitOfWorkFactory, *events: DomainEvent) -> None:

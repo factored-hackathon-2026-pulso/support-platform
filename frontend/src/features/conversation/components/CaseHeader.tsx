@@ -1,4 +1,4 @@
-import type { Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { Copy, History } from 'lucide-react'
 import { Badge, Button, IconButton, SampleDataTag, useToast } from '@/components/ui'
 import { caseHeaderMeta, previousCasesLabel, shortCaseId } from '../model'
@@ -11,17 +11,29 @@ export interface CaseHeaderProps {
   onOpenHistory?: () => void
   /** The customer-name heading (focusable with `tabIndex=-1`): the Workspace moves focus here on a programmatic case switch. */
   headingRef?: Ref<HTMLHeadingElement>
+  /** Extra actions before "Datos de ejemplo" (the supervisor's "Asignar" / "Reasignar"). */
+  actions?: ReactNode
+  /** Hide "Cerrar caso" even for the assignee (supervision mode never closes). */
+  hideClose?: boolean
 }
 
 /**
  * Case header (contract §9.3): name; short id (copyable) · "{país} · {ciudad} ·
  * {canal} · {prioridad | en portugués}"; "Datos de ejemplo"; "Casos anteriores
  * (n)" when the customer has other cases; "Cerrar caso" for the assignee, or the
- * "Cerrado" badge on a closed case. The meta line wraps instead of being
+ * "Cerrado" badge on a closed case. The supervisor view adds its "Asignar" /
+ * "Reasignar" (`actions`) and never offers "Cerrar caso". The meta line wraps instead of being
  * truncated: "en portugués" is the only cue outside the transcript that the
  * analyst must reply in Portuguese (rule 3).
  */
-export function CaseHeader({ detail, onRequestClose, onOpenHistory, headingRef }: CaseHeaderProps) {
+export function CaseHeader({
+  detail,
+  onRequestClose,
+  onOpenHistory,
+  headingRef,
+  actions,
+  hideClose = false,
+}: CaseHeaderProps) {
   const { case: summary, capabilities } = detail
   const { toast } = useToast()
   const closed = summary.status === 'closed'
@@ -62,6 +74,7 @@ export function CaseHeader({ detail, onRequestClose, onOpenHistory, headingRef }
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {closed ? <Badge tone="closed">Cerrado</Badge> : null}
+        {actions}
         <SampleDataTag />
         {historyLabel && onOpenHistory ? (
           <Button
@@ -72,7 +85,7 @@ export function CaseHeader({ detail, onRequestClose, onOpenHistory, headingRef }
             {historyLabel}
           </Button>
         ) : null}
-        {!closed && capabilities.canClose ? (
+        {!closed && !hideClose && capabilities.canClose ? (
           <Button variant="secondary" onClick={onRequestClose}>
             Cerrar caso
           </Button>

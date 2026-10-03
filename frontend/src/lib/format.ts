@@ -61,6 +61,7 @@ function partsFormatter(timeZone: string | undefined): Intl.DateTimeFormat {
       day: 'numeric',
       hour: 'numeric',
       minute: 'numeric',
+      second: 'numeric',
       hourCycle: 'h23',
     })
     partsFormatters.set(key, formatter)
@@ -75,6 +76,7 @@ interface DateParts {
   day: number
   hour: number
   minute: number
+  second: number
 }
 
 /** Calendar parts of `d` in `timeZone` (default: the viewer's zone). */
@@ -89,6 +91,7 @@ function zonedParts(d: Date, timeZone?: string): DateParts {
     day: parts.day ?? 1,
     hour: parts.hour ?? 0,
     minute: parts.minute ?? 0,
+    second: parts.second ?? 0,
   }
 }
 
@@ -155,10 +158,28 @@ export function formatDate(
   return withYear ? `${base} ${year}` : base
 }
 
-/** "11:02" (24 h, in the viewer's zone). */
-export function formatTime(value: DateInput, { timeZone }: TimeZoneOptions = {}): string {
-  const { hour, minute } = zonedParts(toDate(value), timeZone)
-  return `${pad2(hour)}:${pad2(minute)}`
+export interface FormatTimeOptions extends TimeZoneOptions {
+  /** "11:02:05" (audit log). Default false. */
+  withSeconds?: boolean
+}
+
+/** "11:02" (24 h, in the viewer's zone); `withSeconds` → "11:02:05". */
+export function formatTime(
+  value: DateInput,
+  { timeZone, withSeconds = false }: FormatTimeOptions = {},
+): string {
+  const { hour, minute, second } = zonedParts(toDate(value), timeZone)
+  const base = `${pad2(hour)}:${pad2(minute)}`
+  return withSeconds ? `${base}:${pad2(second)}` : base
+}
+
+/**
+ * Calendar day of an instant in the viewer's zone, as "YYYY-MM-DD" (day
+ * separators, date filters). Two instants share a day when their keys match.
+ */
+export function localDayKey(value: DateInput, { timeZone }: TimeZoneOptions = {}): string {
+  const { year, month, day } = zonedParts(toDate(value), timeZone)
+  return `${year}-${pad2(month)}-${pad2(day)}`
 }
 
 /** "5 mar 2025, 11:02". */

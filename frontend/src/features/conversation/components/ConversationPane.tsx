@@ -1,7 +1,20 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useCurrentUser } from '@/app/session'
 import { Button, Callout, Skeleton, useToastClearance } from '@/components/ui'
-import { describeCaseLoadFailure, toTranscriptItems, type TranscriptItem } from '../model'
+import {
+  describeCaseLoadFailure,
+  toTranscriptItems,
+  type ConversationMode,
+  type TranscriptItem,
+} from '../model'
 import {
   useCaseDetail,
   useCaseTurns,
@@ -17,6 +30,7 @@ import { ChatTranscript } from './ChatTranscript'
 import { CloseCaseDialog } from './CloseCaseDialog'
 import { Composer } from './Composer'
 import { ReadOnlyFooter } from './ReadOnlyFooter'
+import { UnsentDraft } from './UnsentDraft'
 
 export interface ConversationPaneProps {
   caseId: string
@@ -31,13 +45,22 @@ export interface ConversationPaneProps {
    */
   focusOnLoad?: boolean
   onFocused?(): void
+  /**
+   * `workspace` (default): the analyst's pane (composer for the assignee, read
+   * cursor, "Cerrar caso"). `supervision` (slice 3 §8.3): read-only for
+   * everyone, even an assignee who also holds the supervisor role: no composer,
+   * no read cursor, no "Cerrar caso"; the supervision arrival line and footer.
+   */
+  mode?: ConversationMode
+  /** Rendered in the header before "Datos de ejemplo" (the supervisor's "Asignar" / "Reasignar"). */
+  headerActions?: ReactNode
 }
 
 /**
- * The conversation column of the Workspace for one case (it takes the whole
- * width next to the list): header, "Cómo llegó a ti", the chat transcript, the
- * composer (or the read-only footer) and the close dialog. Live through
- * `case:<id>`.
+ * The conversation column for one case (it takes the whole width next to the
+ * Workspace list, or the whole supervisor case view): header, "Cómo llegó a ti",
+ * the chat transcript, the composer (or the read-only footer) and the close
+ * dialog. Live through `case:<id>`.
  */
 export function ConversationPane(props: ConversationPaneProps) {
   // A fresh body per case: drafts, scroll and dialogs never leak between cases.
@@ -50,12 +73,14 @@ function ConversationBody({
   onOpenHistory,
   focusOnLoad,
   onFocused,
+  mode = 'workspace',
+  headerActions,
 }: ConversationPaneProps) {
   const me = useCurrentUser()
   useConversationLive(caseId)
   const detail = useCaseDetail(caseId)
   const turns = useCaseTurns(caseId, detail.data?.case.lastSequence)
-  useMarkRead(detail.data?.case, me.id)
+  useMarkRead(detail.data?.case, me.id, mode === 'workspace')
 
   // The heading (or the error section) once it is on screen.
   const focusTarget = useRef<HTMLElement | null>(null)
@@ -100,6 +125,8 @@ function ConversationBody({
       onClosed={onClosed}
       onOpenHistory={onOpenHistory}
       headingRef={setFocusTarget}
+      mode={mode}
+      headerActions={headerActions}
     />
   )
 }
@@ -111,6 +138,8 @@ interface LoadedConversationProps {
   onClosed?(caseId: string): void
   onOpenHistory?(): void
   headingRef: (element: HTMLElement | null) => void
+  mode: ConversationMode
+  headerActions?: ReactNode
 }
 
 function LoadedConversation({
@@ -120,9 +149,16 @@ function LoadedConversation({
   onClosed,
   onOpenHistory,
   headingRef,
+  mode,
+  headerActions,
 }: LoadedConversationProps) {
   const { case: summary, capabilities } = detail
+  const supervision = mode === 'supervision'
+  const canReply = capabilities.canReply && !supervision
   const [closing, setClosing] = useState(false)
+  // Owned here, not by the composer: when the viewer loses the case (supervision
+  // reassigned it, or it closed) the composer goes away but the text stays.
+  const [draft, setDraft] = useState('')
   const toastClearance = useToastClearance<HTMLDivElement>()
   const { send, retry } = useSendMessage(summary.id)
   const items = useMemo(
@@ -140,25 +176,34 @@ function LoadedConversation({
         headingRef={headingRef}
         onRequestClose={() => setClosing(true)}
         onOpenHistory={onOpenHistory}
+        actions={headerActions}
+        hideClose={supervision}
       />
-      <ArrivalNote detail={detail} meId={meId} />
+      <ArrivalNote detail={detail} meId={meId} mode={mode} />
       <TranscriptArea caseId={summary.id} turns={turns} items={items} onRetry={retry} />
       {/* Toasts rise above the composer so they never cover "Enviar". */}
       <div ref={toastClearance} className="shrink-0 border-t border-border px-6 pt-3 pb-[18px]">
         <div className="mx-auto w-full max-w-[880px]">
-          {capabilities.canReply ? (
-            <Composer onSend={send} />
+          {canReply ? (
+            <Composer value={draft} onChange={setDraft} onSend={send} />
           ) : (
-            <ReadOnlyFooter detail={detail} meId={meId} />
+            <div className="flex flex-col gap-2.5">
+              {!supervision && draft.trim() ? (
+                <UnsentDraft text={draft} onDiscard={() => setDraft('')} />
+              ) : null}
+              <ReadOnlyFooter detail={detail} meId={meId} mode={mode} />
+            </div>
           )}
         </div>
       </div>
-      <CloseCaseDialog
-        summary={summary}
-        open={closing}
-        onOpenChange={setClosing}
-        onClosed={onClosed}
-      />
+      {supervision ? null : (
+        <CloseCaseDialog
+          summary={summary}
+          open={closing}
+          onOpenChange={setClosing}
+          onClosed={onClosed}
+        />
+      )}
     </section>
   )
 }

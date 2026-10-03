@@ -16,6 +16,11 @@ export type KnownRealtimeEventType =
   | 'inbox.counts'
   | 'availability.updated'
   | 'conversation.updated'
+  // Slice 3 (supervision, slice-3-supervision.md §7.2)
+  | 'case.unassigned'
+  | 'queue.updated'
+  | 'queue.case_queued'
+  | 'team.updated'
 
 export type RealtimeEventType = KnownRealtimeEventType | ControlEnvelopeType | (string & {})
 
@@ -28,11 +33,16 @@ export interface RealtimeEnvelope<TData = unknown, TType extends string = Realti
   data: TData
 }
 
+/** Keys of the supervision topics (slice 3 §7.1). */
+export type SupervisionTopicKey = 'queues' | 'team'
+
 /**
- * `case:<caseId>`, `inbox:<staffId>` (staff tokens) and `customer:<customerId>`
- * (only the customer token whose subject is that id).
+ * `case:<caseId>`, `inbox:<staffId>` (staff tokens), `customer:<customerId>`
+ * (only the customer token whose subject is that id) and `supervision:queues` /
+ * `supervision:team` (staff holding the supervisor role).
  */
-export type RealtimeTopic = `case:${string}` | `inbox:${string}` | `customer:${string}`
+export type RealtimeTopic =
+  `case:${string}` | `inbox:${string}` | `customer:${string}` | `supervision:${SupervisionTopicKey}`
 
 /** Messages the client sends (one topic per message, backend `api/routers/realtime.py`). */
 export type ClientMessage =
@@ -63,6 +73,8 @@ export const topics = {
   case: (caseId: string): RealtimeTopic => `case:${caseId}`,
   inbox: (staffId: string): RealtimeTopic => `inbox:${staffId}`,
   customer: (customerId: string): RealtimeTopic => `customer:${customerId}`,
+  supervisionQueues: (): RealtimeTopic => 'supervision:queues',
+  supervisionTeam: (): RealtimeTopic => 'supervision:team',
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -85,6 +97,20 @@ export function envelopeCaseId(envelope: RealtimeEnvelope): string | null {
   if (!isRecord(envelope.data)) return null
   const { caseId } = envelope.data
   return typeof caseId === 'string' ? caseId : null
+}
+
+/**
+ * `data.actor` of a domain envelope (`{ role, id }`, e.g. `{ role: 'supervisor',
+ * id: 'STF-…' }`; `id` is null for the platform), or null when it is missing or
+ * malformed.
+ */
+export function envelopeActor(
+  envelope: RealtimeEnvelope,
+): { role: string; id: string | null } | null {
+  if (!isRecord(envelope.data)) return null
+  const { actor } = envelope.data
+  if (!isRecord(actor) || typeof actor.role !== 'string') return null
+  return { role: actor.role, id: typeof actor.id === 'string' ? actor.id : null }
 }
 
 /** Validates an incoming frame. Anything else (pings, acks, garbage) is ignored. */

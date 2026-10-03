@@ -7,7 +7,8 @@ import {
   SearchInput,
   Skeleton,
 } from '@/components/ui'
-import { useDebouncedValue, useInbox, useInboxLive, useNow } from '../hooks'
+import { useDebouncedValue, useNow } from '@/lib/hooks'
+import { useInbox, useInboxLive } from '../hooks'
 import {
   INBOX_FILTERS,
   SEARCH_MAX_LENGTH,

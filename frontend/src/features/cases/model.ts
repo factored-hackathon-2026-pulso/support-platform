@@ -221,17 +221,40 @@ export function emptyListCopy(filter: InboxStatus | null, searching: boolean): s
   return filter === 'closed' ? 'No cerraste casos en los últimos 7 días.' : 'Nada pendiente.'
 }
 
-/** Toast on `case.assigned` (contract §9.1). */
-export function assignedToastCopy(summary: Pick<CaseSummary, 'previousCaseId' | 'customer'>): {
+export interface ToastCopy {
   title: string
   description: string
-} {
+}
+
+/**
+ * Toast on `case.assigned` (slice 2 §9.1). A case a supervisor gave her
+ * (`fromSupervisor`: the envelope actor is a supervisor, slice 3 §8.3) says so:
+ * "Te asignaron un caso" / "{cliente} · desde supervisión".
+ */
+export function assignedToastCopy(
+  summary: Pick<CaseSummary, 'previousCaseId' | 'customer'>,
+  { fromSupervisor = false }: { fromSupervisor?: boolean } = {},
+): ToastCopy {
   const name = summary.customer.displayName
+  if (fromSupervisor) {
+    return { title: 'Te asignaron un caso', description: `${name} · desde supervisión` }
+  }
   if (summary.previousCaseId) {
     const first = name.trim().split(/\s+/)[0] ?? name
     return { title: `${first} volvió a escribir`, description: name }
   }
   return { title: 'Te llegó un caso nuevo', description: name }
+}
+
+/**
+ * Toast on `case.unassigned`: supervision gave one of her cases to someone else
+ * (slice 3 §8.3). "leerlo" refers to "el caso", named in the same sentence.
+ */
+export function unassignedToastCopy(summary: Pick<CaseSummary, 'customer'>): ToastCopy {
+  return {
+    title: 'Supervisión reasignó un caso',
+    description: `El caso de ${summary.customer.displayName} pasó a otra persona del equipo. Puedes leerlo, pero ya no responder.`,
+  }
 }
 
 // ─── Search ──────────────────────────────────────────────────────────────────

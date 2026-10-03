@@ -41,6 +41,7 @@ src/
     session-token.ts    token store (memory + sessionStorage)
     config.ts           VITE_API_URL, realtime URL
     format.ts, cn.ts    formatters, class names
+    hooks.ts            generic React hooks shared by features: useDebouncedValue, useNow
   styles/index.css      tokens (@theme) and base styles
   test/                 render helpers, fixtures (invented people), fake socket,
                         architecture.test.ts (import boundaries)
@@ -116,18 +117,62 @@ Contract: `docs/platform/api/slice-2-case-lifecycle.md` §9. Dependency directio
   loads `GET /customer/conversations` as collapsed blocks (oldest at the top);
   expanding one loads `GET /customer/conversations/{caseId}`.
 
+### Supervision and audit (slice 3)
+
+Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
+`routes/supervision/*` → `features/supervision` → `features/conversation` →
+`features/cases`; `features/audit` imports only `@/features/conversation` (short
+case ids) and `@/app/roles`. The audit route mounts `useQueueNotices()` itself, so
+the audit feature never imports supervision.
+
+- **`supervision`**: "Equipo y colas" (`TeamScreen`: the two language queues with
+  their cases, the analysts table with the "Ahora" state, filters Conectadas / En
+  pausa / Desconectadas, the team pills, the analyst sheet, the "Listo ·" strip),
+  the supervisor's read-only case view (`SupervisorCaseScreen`: `ConversationPane
+mode="supervision"` + "Asignar"/"Reasignar" + "Casos anteriores"), the assign
+  dialog (rule 3: non-speakers listed but disabled "(regla 3)"; a paused or offline
+  target needs "Asignar aunque esté en pausa"; "El cliente verá" with
+  `REASSIGNED_NOTICE` pinned to the backend text), `useQueuedCasesCount` (rail
+  badge, Supervisora role only), `useQueueNotices` (the "Un caso espera…" toast)
+  and `registerSupervisionRealtime` (`queue.updated` patches counts when newer then
+  refetches; `queue.case_queued` refetches; `team.updated` refetches at most once
+  per 2 s, leading + trailing, throttle state per registry). Time-dependent figures
+  (SLA risk, waits) are recomputed from the rows with a 15 s clock, minute
+  resolution (`waitSince`). Both overviews also refetch every 60 s and after a
+  reconnect.
+- **`audit`**: "Auditoría" (`AuditScreen`): Quién pills, Tipo / Persona selects,
+  Desde / Hasta (viewer's zone → UTC; Hasta inclusive; Hasta < Desde blocks the
+  request), "Solo acciones que cambian algo", the case chip, the debounced id
+  search, the log with day separators and "Cargar más" (`useInfiniteQuery` over
+  `nextCursor`), and the detail aside (payload accordion, redaction note, "Ver la
+  conversación" with `state.from`, "Filtrar por este caso"; a `?evento=` outside the
+  loaded pages is fetched by id). No realtime: "Actualizar" refetches.
+- **Changes to slice 2 features**: `ConversationPane` takes `mode` (`workspace` |
+  `supervision`: never a composer, read cursor or "Cerrar caso") and
+  `headerActions`; `arrivalLine` covers `manual`; `supervisionArrivalLine` /
+  `supervisionFooter`; `useMarkRead(summary, meId, enabled)` is silent on errors
+  (a 403 after a reassignment is expected). `cases` handles `case.unassigned`
+  (refetch + toast "Supervisión reasignó un caso") and says "Te asignaron un caso ·
+  desde supervisión" when the envelope actor is a supervisor (`envelopeActor`).
+- **Back navigation**: screens open the case view with router `state.from` (the
+  full return URL); the case route keeps that state across its own `?historial=` /
+  `?asignar=` changes and names the link "Volver a Auditoría" or "Volver a Equipo y
+  colas".
+
 ## 4. Routing
 
 `src/app/router.tsx` holds the table. Paths are Spanish:
 
-| Path                                                | Screen                                             | Guard      |
-| --------------------------------------------------- | -------------------------------------------------- | ---------- |
-| `/`                                                 | redirect to the first role home (or `/login`)      | —          |
-| `/login`, `/login/verificacion`, `/login/bloqueada` | login, MFA, lockout                                | GuestOnly  |
-| `/analista?caso=&estado=&q=&lista=&historial=`      | Workspace ("Casos")                                | analyst    |
-| `/supervision/{equipo,auditoria}`                   | team and queues, audit (placeholders, slice 3)     | supervisor |
-| `/administracion/usuarios`                          | users and roles (placeholder, slice 4)             | admin      |
-| `/cliente`                                          | customer chat simulator (dev tool, no staff shell) | —          |
+| Path                                                                                   | Screen                                             | Guard      |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------- |
+| `/`                                                                                    | redirect to the first role home (or `/login`)      | —          |
+| `/login`, `/login/verificacion`, `/login/bloqueada`                                    | login, MFA, lockout                                | GuestOnly  |
+| `/analista?caso=&estado=&q=&lista=&historial=`                                         | Workspace ("Casos")                                | analyst    |
+| `/supervision/equipo?equipo=&estado=&analista=&asignar=`                               | Equipo y colas                                     | supervisor |
+| `/supervision/casos/:caseId?historial=&asignar=`                                       | supervisor read-only case view (`state.from`)      | supervisor |
+| `/supervision/auditoria?quien=&persona=&caso=&tipo=&desde=&hasta=&q=&cambios=&evento=` | Auditoría                                          | supervisor |
+| `/administracion/usuarios`                                                             | users and roles (placeholder, slice 4)             | admin      |
+| `/cliente`                                                                             | customer chat simulator (dev tool, no staff shell) | —          |
 
 Any other path inside a role section shows that role's not-found page; any other
 path at all (including the removed automation, approvals, tools, rules and
@@ -202,7 +247,7 @@ it with `lazyRoute()` in the right role section. Until it is built, render
 `src/lib/realtime` is framework-free except `react.tsx` / `hooks.ts`:
 
 - `RealtimeClient`: one WebSocket to `/api/v1/ws?token=`; ref-counted topic
-  subscriptions (`case:<id>`, `inbox:<staffId>`) replayed after every
+  subscriptions (`case:<id>`, `inbox:<staffId>`, `supervision:queues|team`) replayed after every
   reconnect; exponential backoff with jitter (`computeBackoff`), reset on open;
   close code 4401 (token rejected, logout, expiry; also 4403/1008) stops and ends the
   session, 1013 and network drops reconnect. `disconnect()` closes a socket that is
@@ -236,10 +281,16 @@ it with `lazyRoute()` in the right role section. Until it is built, render
      from `renderRoute` / `renderWithProviders`, or inject `envelopeHandlers`).
 - `<RealtimeProvider>` (mounted in `app/providers.tsx`) connects only while the
   session is authenticated. Components use `useRealtimeSubscription(topic)` and
-  `useRealtimeStatus()`.
+  `useRealtimeStatus()`. Refetching what envelopes missed while the socket was down
+  goes through `useOnReconnect(callback, enabled)` (runs on `reconnecting` → `open`),
+  never a hand-written status edge detection.
 - Event types: `turn.created`, `case.updated`, `case.assigned`, `inbox.counts`,
-  `availability.updated`, `conversation.updated` (slice 2 contract §7). Slice 3
-  adds the supervision topics.
+  `availability.updated`, `conversation.updated` (slice 2 contract §7), plus slice
+  3: `case.unassigned` (on `inbox:<previous assignee>`), `queue.updated`,
+  `queue.case_queued` (topic `supervision:queues`) and `team.updated` (topic
+  `supervision:team`, ids only). Supervision topics are for the supervisor role
+  (`topics.supervisionQueues()`, `topics.supervisionTeam()`); read the envelope
+  actor with `envelopeActor`.
 
 ## 8. Tokens and styling
 
@@ -256,6 +307,8 @@ it with `lazyRoute()` in the right role section. Until it is built, render
   waiting (Esperando al cliente), closed (Cerrados). `waiting` (#8a867c) is for dots
   and borders only: its text and solid pills use `muted` to keep 4.5:1. `closed` has
   no color of its own: it is built on `offline` (stripe, dot) and `muted` (text).
+  A status stripe outside a primitive uses `toneBorderLeft[tone]` from
+  `@/components/ui` (the map `ListItemButton` and `FilterTile` use); never copy it.
 - Canvas values outside the Workspace have their own tokens instead of being
   normalized: `success-tint`/`success-ink` (Admin avatar, "Activo").
 - Dark surfaces (rail, toasts, auth brand panel) carry `data-surface="dark"`: the
@@ -270,40 +323,40 @@ it with `lazyRoute()` in the right role section. Until it is built, render
 
 ## 9. Component catalog (`@/components/ui`)
 
-| Component                                                      | Key props                                                                                                                             | Notes                                                                                                                                                                         |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Button` / `LinkButton`                                        | `variant` primary·accent·secondary·ghost·danger, `size` sm·md·lg, `block`, `loading`, `icon`, `iconEnd`                               | `LinkButton` is a router `Link` with the same look; `buttonClasses()` for anything else                                                                                       |
-| `IconButton`                                                   | `aria-label` (required), `icon`, `variant` secondary·ghost·primary·soft, `size` sm·md, `dot`                                          | title defaults to the label; `dot` appends ", con alertas" to the name                                                                                                        |
-| `Badge` / `CountBadge`                                         | `tone`, `variant` soft·solid, `size` sm·md, `icon` / `count`                                                                          | CountBadge is decorative: put the count in the parent's label                                                                                                                 |
-| `Callout`                                                      | `tone` info·warn·success·danger·neutral, `title`, `kickerTitle`, `actions`, `icon`, `role`                                            | danger defaults to `role="alert"`                                                                                                                                             |
-| `Card` / `LinkCard` / `CardHeader`                             | `as` div·section·article·li, `padding` none·sm·md·lg, `tone`, `radius` 10·12·14 / `LinkCard` = router `Link` props / `title`, `aside` | clickable card → `LinkCard` (or `cardClasses()` on a button)                                                                                                                  |
-| `Accordion` / `AccordionItem`                                  | `value`/`defaultValue`/`onValueChange`, `collapsible` / `value`, `title`, `count`, `summary`                                          | one open at a time                                                                                                                                                            |
-| `Tabs`, `TabList`, `Tab`, `TabPanel`                           | `value`/`defaultValue`, `fitted` / `aria-label`, `trailing` / `value`, `count`, `dot` / `keepMounted`                                 | WAI-ARIA tabs, arrow keys; with no tab selected the first one keeps the Tab stop                                                                                              |
-| `SegmentedControl`                                             | `options`, `value`, `onValueChange`, `label`, `variant` segmented·pills, `fitted`                                                     | native radios in a fieldset                                                                                                                                                   |
-| `FilterTile` / `FilterTileGroup`                               | `count`, `label`, `tone`, `selected`, `onSelect` / `aria-label`, `columns`, `name`                                                    | the status counters ARE the filters; native radios (one Tab stop, arrows select), white tiles for contrast; long labels wrap, never cut                                       |
-| `RadioGroup`                                                   | `label`, `options`, `value` (null = none), `onValueChange`, `required`, `error`, `name`                                               | vertical list of native radios in `role="radiogroup"`; arrows move and select (roving focus); error describes the group                                                       |
-| `ListItemButton`                                               | `selected`, `tone`, `markWidth` 3·4                                                                                                   | master/detail rows                                                                                                                                                            |
-| `Field`                                                        | `label`, `hint`, `error`, `required`, `labelAside`, `hideLabel`                                                                       | wires id / aria-describedby / aria-invalid into the control                                                                                                                   |
-| `Input` / `SearchInput`                                        | `size` sm·md·lg, `leadingIcon`                                                                                                        |                                                                                                                                                                               |
-| `Textarea` / `ComposerFrame`                                   | `variant` bordered·bare                                                                                                               | put a bare Textarea inside `ComposerFrame` (draws the frame and the focus ring)                                                                                               |
-| `Select`                                                       | `options`, `placeholder`, `size`                                                                                                      | native select                                                                                                                                                                 |
-| `Checkbox`                                                     | `label`, `description`, `variant` plain·card                                                                                          | works inside `Field` (id, hint/error, aria-invalid)                                                                                                                           |
-| `CodeInput`                                                    | `value`, `onChange`, `length`, `label`, `describedBy`, `invalid`, `disabled`, `initialFocus`, `ref` (`CodeInputHandle.focus(i?)`)     | one box per digit, paste/autofill, Backspace/arrows; every box is described by `describedBy`                                                                                  |
-| `Dialog`                                                       | `open`, `onOpenChange`, `title`, `description`, `footer`, `footerNote`, `size` sm·md·lg                                               | focus trap, Escape, restores focus (if the trigger still exists); stacks over a Sheet (top layer reacts, the rest is `inert`)                                                 |
-| `Sheet`                                                        | `open`, `onOpenChange`, `title`, `description`, `header`, `footer`, `width` 480·600·720                                               | right drawer, same modal behaviour as Dialog; `description` is the subtitle and the accessible description                                                                    |
-| `ToastProvider` / `useToast` / `useToastClearance`             | `toast({ title, description, tag, meta, actions, duration, politeness })`; `dismiss(id)`; `ref={useToastClearance()}`                 | persistent live regions (`status` / `alert`); 6 s auto-dismiss paused on hover/focus; below open modals (z-40); rises above an element that reserves clearance (the composer) |
-| `EmptyState`                                                   | `icon`, `title`, `description`, `action`, `as` h1·h2·h3, `size`, `headingRef`                                                         | placeholders, empty lists; `headingRef` makes the title a focus target                                                                                                        |
-| `PageHeader` / `SampleDataTag`                                 | `title`, `subtitle`, `actions`, `sampleData`, `eyebrow`, `documentTitle`                                                              | h1 of every staff page; also sets the tab title (`title` if it is a string, else `documentTitle`)                                                                             |
-| `DocumentTitle`                                                | `title`                                                                                                                               | tab title "Página · LATAM Bank Soporte" (React 19 hoists `<title>`); for screens without PageHeader / AuthHeading                                                             |
-| `Kicker`                                                       | `tone`, `size`, `as` (intrinsic tags)                                                                                                 | uppercase section labels                                                                                                                                                      |
-| `KeyValueList`                                                 | `items[{ key, label, value, mono, strong }]`, `labelWidth`                                                                            |                                                                                                                                                                               |
-| `Table`, `THead`, `TBody`, `TRow`, `TRowSelect`, `TH`, `TCell` | `stickyHeader`, `density` / `selected`, `onSelect` / `align`, `muted`, `numeric`, `truncate`                                          | native table; selectable rows put a `TRowSelect` button in the primary cell (keyboard + `aria-current`), a click on the row also selects                                      |
-| `Stat`                                                         | `label`, `value`, `hint`, `hintTone`, `valueTone`, `size`, `order`                                                                    |                                                                                                                                                                               |
-| `StatusDot`                                                    | `tone`, `size` 8·10, `label`, `srLabel`                                                                                               |                                                                                                                                                                               |
-| `Avatar`                                                       | `name`, `initials`, `tone` accent·peach·success·neutral, `size`, `decorative`                                                         | success uses `success-tint` (Admin)                                                                                                                                           |
-| `Spinner` / `Skeleton`                                         | `label`, `size` / `className`                                                                                                         |                                                                                                                                                                               |
-| `QueryState`                                                   | `query`, `skeleton`, `empty`, `isEmpty`, `errorTitle`, `errorDescription`, `children(data)`                                           | loading / error-with-retry / empty / content for any TanStack query                                                                                                           |
-| `SourceNote`                                                   | `variant` footer·inline                                                                                                               | where the data comes from                                                                                                                                                     |
+| Component                                                      | Key props                                                                                                                               | Notes                                                                                                                                                                                                                   |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button` / `LinkButton`                                        | `variant` primary·accent·secondary·ghost·danger, `size` sm·md·lg, `block`, `loading`, `icon`, `iconEnd`                                 | `LinkButton` is a router `Link` with the same look; `buttonClasses()` for anything else                                                                                                                                 |
+| `IconButton`                                                   | `aria-label` (required), `icon`, `variant` secondary·ghost·primary·soft, `size` sm·md, `dot`                                            | title defaults to the label; `dot` appends ", con alertas" to the name                                                                                                                                                  |
+| `Badge` / `CountBadge`                                         | `tone`, `variant` soft·solid, `size` sm·md, `icon` / `count`                                                                            | CountBadge is decorative: put the count in the parent's label                                                                                                                                                           |
+| `Callout`                                                      | `tone` info·warn·success·danger·neutral, `title`, `kickerTitle`, `actions`, `icon`, `role`                                              | danger defaults to `role="alert"`                                                                                                                                                                                       |
+| `Card` / `LinkCard` / `CardHeader`                             | `as` div·section·article·li, `padding` none·sm·md·lg, `tone`, `radius` 10·12·14 / `LinkCard` = router `Link` props / `title`, `aside`   | clickable card → `LinkCard` (or `cardClasses()` on a button)                                                                                                                                                            |
+| `Accordion` / `AccordionItem`                                  | `value`/`defaultValue`/`onValueChange`, `collapsible` / `value`, `title`, `count`, `summary`                                            | one open at a time                                                                                                                                                                                                      |
+| `Tabs`, `TabList`, `Tab`, `TabPanel`                           | `value`/`defaultValue`, `fitted` / `aria-label`, `trailing` / `value`, `count`, `dot` / `keepMounted`                                   | WAI-ARIA tabs, arrow keys; with no tab selected the first one keeps the Tab stop                                                                                                                                        |
+| `SegmentedControl`                                             | `options`, `value`, `onValueChange`, `label`, `variant` segmented·pills, `fitted`                                                       | native radios in a fieldset                                                                                                                                                                                             |
+| `FilterTile` / `FilterTileGroup`                               | `count`, `label`, `tone`, `selected`, `onSelect` / `aria-label`, `columns`, `name`                                                      | the status counters ARE the filters; native radios (one Tab stop, arrows select), white tiles for contrast; long labels wrap, never cut                                                                                 |
+| `RadioGroup`                                                   | `label`, `options` (`value`, `label`, `description?`, `disabled?`), `value` (null = none), `onValueChange`, `required`, `error`, `name` | vertical list of native radios in `role="radiogroup"`; arrows move and select (roving focus); error describes the group; an option's `description` is a second line that describes its radio (the name stays the label) |
+| `ListItemButton`                                               | `selected`, `tone`, `markWidth` 3·4                                                                                                     | master/detail rows                                                                                                                                                                                                      |
+| `Field`                                                        | `label`, `hint`, `error`, `required`, `labelAside`, `hideLabel`                                                                         | wires id / aria-describedby / aria-invalid into the control                                                                                                                                                             |
+| `Input` / `SearchInput`                                        | `size` sm·md·lg, `leadingIcon`                                                                                                          |                                                                                                                                                                                                                         |
+| `Textarea` / `ComposerFrame`                                   | `variant` bordered·bare                                                                                                                 | put a bare Textarea inside `ComposerFrame` (draws the frame and the focus ring)                                                                                                                                         |
+| `Select`                                                       | `options`, `placeholder`, `size`                                                                                                        | native select                                                                                                                                                                                                           |
+| `Checkbox`                                                     | `label`, `description`, `variant` plain·card                                                                                            | works inside `Field` (id, hint/error, aria-invalid)                                                                                                                                                                     |
+| `CodeInput`                                                    | `value`, `onChange`, `length`, `label`, `describedBy`, `invalid`, `disabled`, `initialFocus`, `ref` (`CodeInputHandle.focus(i?)`)       | one box per digit, paste/autofill, Backspace/arrows; every box is described by `describedBy`                                                                                                                            |
+| `Dialog`                                                       | `open`, `onOpenChange`, `title`, `description`, `footer`, `footerNote`, `size` sm·md·lg                                                 | focus trap, Escape, restores focus (if the trigger still exists); stacks over a Sheet (top layer reacts, the rest is `inert`)                                                                                           |
+| `Sheet`                                                        | `open`, `onOpenChange`, `title`, `description`, `header`, `footer`, `width` 480·600·720                                                 | right drawer, same modal behaviour as Dialog; `description` is the subtitle and the accessible description                                                                                                              |
+| `ToastProvider` / `useToast` / `useToastClearance`             | `toast({ title, description, tag, meta, actions, duration, politeness })`; `dismiss(id)`; `ref={useToastClearance()}`                   | persistent live regions (`status` / `alert`); 6 s auto-dismiss paused on hover/focus; below open modals (z-40); rises above an element that reserves clearance (the composer)                                           |
+| `EmptyState`                                                   | `icon`, `title`, `description`, `action`, `as` h1·h2·h3, `size`, `headingRef`                                                           | placeholders, empty lists; `headingRef` makes the title a focus target                                                                                                                                                  |
+| `PageHeader` / `SampleDataTag`                                 | `title`, `subtitle`, `actions`, `sampleData`, `eyebrow`, `documentTitle`                                                                | h1 of every staff page; also sets the tab title (`title` if it is a string, else `documentTitle`)                                                                                                                       |
+| `DocumentTitle`                                                | `title`                                                                                                                                 | tab title "Página · LATAM Bank Soporte" (React 19 hoists `<title>`); for screens without PageHeader / AuthHeading                                                                                                       |
+| `Kicker`                                                       | `tone`, `size`, `as` (intrinsic tags)                                                                                                   | uppercase section labels                                                                                                                                                                                                |
+| `KeyValueList`                                                 | `items[{ key, label, value, mono, strong }]`, `labelWidth`                                                                              |                                                                                                                                                                                                                         |
+| `Table`, `THead`, `TBody`, `TRow`, `TRowSelect`, `TH`, `TCell` | `stickyHeader`, `density` / `selected`, `onSelect` / `align`, `muted`, `numeric`, `truncate`                                            | native table; selectable rows put a `TRowSelect` button in the primary cell (keyboard + `aria-current`), a click on the row also selects                                                                                |
+| `Stat`                                                         | `label`, `value`, `hint`, `hintTone`, `valueTone`, `size`, `order`                                                                      |                                                                                                                                                                                                                         |
+| `StatusDot`                                                    | `tone`, `size` 8·10, `label`, `srLabel`                                                                                                 |                                                                                                                                                                                                                         |
+| `Avatar`                                                       | `name`, `initials`, `tone` accent·peach·success·neutral, `size`, `decorative`                                                           | success uses `success-tint` (Admin)                                                                                                                                                                                     |
+| `Spinner` / `Skeleton`                                         | `label`, `size` / `className`                                                                                                           |                                                                                                                                                                                                                         |
+| `QueryState`                                                   | `query`, `skeleton`, `empty`, `isEmpty`, `errorTitle`, `errorDescription`, `children(data)`                                             | loading / error-with-retry / empty / content for any TanStack query                                                                                                                                                     |
+| `SourceNote`                                                   | `variant` footer·inline                                                                                                                 | where the data comes from                                                                                                                                                                                               |
 
 Layout (`@/components/layout`): `AppShell` (rail + outlet), `Rail` (role
 destinations from `ROLES`, `aria-current`, live badges/dots from the `indicators`

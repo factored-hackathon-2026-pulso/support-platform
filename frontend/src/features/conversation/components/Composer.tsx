@@ -1,9 +1,12 @@
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useRef, type KeyboardEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Button, ComposerFrame, Textarea } from '@/components/ui'
 import { MAX_MESSAGE_LENGTH, normalizeMessage } from '../model'
 
 export interface ComposerProps {
+  /** The draft, owned by the pane so it survives the composer (see `UnsentDraft`). */
+  value: string
+  onChange: (text: string) => void
   onSend: (text: string) => void
 }
 
@@ -15,10 +18,9 @@ export interface ComposerProps {
  * nothing to send, so pressing it never drops the keyboard focus to <body>.
  * Shown only when the viewer may reply (`ReadOnlyFooter` otherwise).
  */
-export function Composer({ onSend }: ComposerProps) {
+export function Composer({ value: text, onChange: setText, onSend }: ComposerProps) {
   const id = useId()
   const hintId = `${id}-hint`
-  const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const message = normalizeMessage(text)
   const tooLong = text.trim().length > MAX_MESSAGE_LENGTH

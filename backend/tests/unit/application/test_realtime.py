@@ -96,7 +96,19 @@ def test_access_policy() -> None:
     assert not policy.can_subscribe(analyst, other_inbox)
     assert policy.can_subscribe(supervisor, other_inbox)
     assert not policy.can_subscribe(supervisor, Topic.customer(CUSTOMER_ID))
-    assert [kind.value for kind in TopicKind] == ["case", "inbox", "customer"]
+    assert [kind.value for kind in TopicKind] == ["case", "inbox", "customer", "supervision"]
+    for topic in (Topic.supervision_queues(), Topic.supervision_team()):
+        assert policy.can_subscribe(supervisor, topic)
+        assert not policy.can_subscribe(analyst, topic)
+        assert not policy.can_subscribe(admin, topic)
+        assert Topic.parse(str(topic)) == topic
+    assert [str(Topic.supervision_queues()), str(Topic.supervision_team())] == [
+        "supervision:queues",
+        "supervision:team",
+    ]
+    for raw in ("supervision:inbox", "supervision:", "supervision:STF-" + "0" * 26):
+        with pytest.raises(InvalidTopicError):
+            Topic.parse(raw)
 
 
 def test_topic_mapper_uses_case_by_default_and_registered_rules() -> None:

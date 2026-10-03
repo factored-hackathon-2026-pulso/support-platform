@@ -69,4 +69,28 @@ describe('RadioGroup', () => {
     expect(group).toHaveAttribute('aria-invalid', 'true')
     expect(group).toHaveAccessibleDescription('Elige un motivo.')
   })
+
+  it('names an option by its label and describes it with its description', () => {
+    render(
+      <RadioGroup
+        label="¿A quién?"
+        value={null}
+        onValueChange={() => {}}
+        options={[
+          { value: 'a', label: 'Daniela Ríos', description: 'Disponible · 2 abiertos' },
+          {
+            value: 'b',
+            label: 'Julián Ortega',
+            description: 'No habla portugués (regla 3)',
+            disabled: true,
+          },
+        ]}
+      />,
+    )
+    const daniela = screen.getByRole('radio', { name: 'Daniela Ríos' })
+    expect(daniela).toHaveAccessibleDescription('Disponible · 2 abiertos')
+    const julian = screen.getByRole('radio', { name: 'Julián Ortega' })
+    expect(julian).toBeDisabled()
+    expect(julian).toHaveAccessibleDescription('No habla portugués (regla 3)')
+  })
 })

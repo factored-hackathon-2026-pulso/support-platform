@@ -15,7 +15,7 @@ import {
   type CloseReason,
 } from '@/features/cases'
 import { isApiProblem } from '@/lib/api'
-import { formatDate, formatDateTime, formatDuration } from '@/lib/format'
+import { formatDate, formatDateTime, formatDuration, formatTime } from '@/lib/format'
 import type {
   CaseClosure,
   CaseDetail,
@@ -311,9 +311,23 @@ function firstName(name: string | null | undefined): string {
   return name?.trim().split(/\s+/)[0] ?? ''
 }
 
-// ── "Cómo llegó a ti" (people-based assignment only, contract §9.3) ──────────
+// ── Arrival note (people-based assignment only, contract §9.3, slice 3 §8.3) ─
 
-const LANGUAGE_NAMES: Record<Language, string> = { es: 'español', pt: 'portugués' }
+/** "español" / "portugués", as the copy says the case language. */
+export const LANGUAGE_NAMES: Record<Language, string> = { es: 'español', pt: 'portugués' }
+
+/**
+ * Names of the language queues (team-generated, slice 2 §3.3; the backend sends
+ * the same text as `LanguageQueue.label` / `AssignmentOut.queueLabel`). Needed here
+ * for a queued case, which has no assignment to carry the label yet.
+ */
+export const QUEUE_LABEL: Record<Language, string> = {
+  es: 'Cola en español',
+  pt: 'Cola en portugués',
+}
+
+/** What the transcript and the panes allow (slice 3 §8.3). */
+export type ConversationMode = 'workspace' | 'supervision'
 
 /** "45 s", "2 min 13 s", "6 min", "1 h 5 min". */
 export function formatWait(seconds: number): string {
@@ -325,28 +339,67 @@ export function formatWait(seconds: number): string {
 }
 
 /** "la cola en portugués" from the server's "Cola en portugués". */
-function queueInSentence(queueLabel: string | null): string {
+export function queueInSentence(queueLabel: string | null): string {
   if (!queueLabel) return 'la cola'
   return `la ${queueLabel.charAt(0).toLowerCase()}${queueLabel.slice(1)}`
 }
 
+/** The arrival note under the case header: a short heading and one line. */
+export interface ArrivalNoteCopy {
+  heading: string
+  line: string
+}
+
 /**
- * The one-line "Cómo llegó a ti" note, from the recorded `assignment` only:
- * - mine, `language_least_loaded`: "Te llegó porque estás disponible y hablas
+ * The one-line arrival note of the Workspace, from the recorded `assignment` only.
+ *
+ * The viewer holds the case: heading "Cómo llegó a ti",
+ * - `language_least_loaded`: "Te llegó porque estás disponible y hablas
  *   portugués (regla 3) · 5 mar, 10:58";
- * - mine, `queue_drained`: "Esperó 6 min en la cola en portugués y te llegó
- *   cuando quedaste disponible · 5 mar, 10:58";
- * - someone else's (history or supervisor view): "Lo atendió Julián Ortega";
- * - no assignment (queued): null.
+ * - `queue_drained`: "Esperó 6 min en la cola en portugués y te llegó cuando
+ *   quedaste disponible · 5 mar, 10:58";
+ * - `manual` (slice 3) from the queue: "Lucía Herrera te asignó este caso
+ *   después de 7 min en la cola en portugués · 5 mar, 10:58"; by reassignment:
+ *   "Lucía Herrera te pasó este caso; antes lo atendía Paula Medina · 5 mar, 10:58".
+ *
+ * Someone else holds it (history access, or supervision moved it away from the
+ * viewer), so nothing "reached" the viewer:
+ * - open, heading "Quién lo atiende": "Lucía Herrera pasó este caso a Daniela
+ *   Ríos · 3 oct, 11:40" when it was taken from the viewer; "Lo atiende Daniela
+ *   Ríos · Lucía Herrera se lo pasó el 3 oct, 11:40" ("se lo asignó" from the
+ *   queue) for another manual assignment; "Lo atiende Daniela Ríos" otherwise;
+ * - closed, heading "Quién lo atendió": "Lo atendió Julián Ortega".
+ *
+ * No assignment (queued): null.
  */
-export function arrivalLine(
+export function arrivalNote(
   detail: Pick<CaseDetail, 'assignment' | 'case'>,
   meId: string,
-): string | null {
+): ArrivalNoteCopy | null {
   const { assignment } = detail
   if (!assignment) return null
-  if (assignment.analystId !== meId) return `Lo atendió ${assignment.analystName}`
+  if (assignment.analystId !== meId) return othersArrivalNote(detail, assignment, meId)
+  return { heading: 'Cómo llegó a ti', line: myArrivalLine(detail, assignment) }
+}
+
+function myArrivalLine(
+  detail: Pick<CaseDetail, 'case'>,
+  assignment: NonNullable<CaseDetail['assignment']>,
+): string {
   const when = formatDateTime(assignment.assignedAt, { withYear: false })
+  if (assignment.reason === 'manual') {
+    const by = assignment.assignedByName ?? 'Supervisión'
+    if (assignment.previousAnalystId === null) {
+      const waited =
+        assignment.waitedSeconds !== null
+          ? ` después de ${formatWait(assignment.waitedSeconds)}`
+          : ''
+      const queue = assignment.queueLabel ?? QUEUE_LABEL[detail.case.language]
+      return `${by} te asignó este caso${waited} en ${queueInSentence(queue)} · ${when}`
+    }
+    const previous = assignment.previousAnalystName ?? 'otra persona del equipo'
+    return `${by} te pasó este caso; antes lo atendía ${previous} · ${when}`
+  }
   if (assignment.reason === 'queue_drained') {
     const waited =
       assignment.waitedSeconds !== null
@@ -357,6 +410,66 @@ export function arrivalLine(
   const language = LANGUAGE_NAMES[detail.case.language]
   const rule = detail.case.language === 'pt' ? ' (regla 3)' : ''
   return `Te llegó porque estás disponible y hablas ${language}${rule} · ${when}`
+}
+
+function othersArrivalNote(
+  detail: Pick<CaseDetail, 'case'>,
+  assignment: NonNullable<CaseDetail['assignment']>,
+  meId: string,
+): ArrivalNoteCopy {
+  const name = assignment.analystName
+  if (detail.case.status === 'closed') {
+    return { heading: 'Quién lo atendió', line: `Lo atendió ${name}` }
+  }
+  const heading = 'Quién lo atiende'
+  if (assignment.reason !== 'manual') return { heading, line: `Lo atiende ${name}` }
+  const when = formatDateTime(assignment.assignedAt, { withYear: false })
+  const by = assignment.assignedByName ?? 'Supervisión'
+  if (assignment.previousAnalystId === meId) {
+    return { heading, line: `${by} pasó este caso a ${name} · ${when}` }
+  }
+  const verb = assignment.previousAnalystId === null ? 'se lo asignó' : 'se lo pasó'
+  return { heading, line: `Lo atiende ${name} · ${by} ${verb} el ${when}` }
+}
+
+/**
+ * The arrival line of the supervisor's read-only case view (slice 3 §8.3):
+ * - queued: "Espera en la cola en español desde las 10:47: nadie disponible habla español";
+ * - `language_least_loaded`: "Lo atiende Daniela Ríos: le llegó al estar
+ *   disponible y hablar portugués (regla 3) · 5 mar, 10:58";
+ * - `queue_drained`: "Lo atiende Daniela Ríos: le llegó desde la cola en
+ *   portugués tras 6 min · 5 mar, 10:58";
+ * - `manual`: "Lo atiende Julián Ortega: se lo pasó Lucía Herrera · 5 mar, 10:58"
+ *   ("se lo asignó" from the queue);
+ * - closed: "Lo atendió Julián Ortega".
+ */
+export function supervisionArrivalLine(
+  detail: Pick<CaseDetail, 'assignment' | 'case'>,
+): string | null {
+  const { assignment, case: summary } = detail
+  const language = LANGUAGE_NAMES[summary.language]
+  if (summary.status === 'queued') {
+    return `Espera en ${queueInSentence(QUEUE_LABEL[summary.language])} desde las ${formatTime(summary.openedAt)}: nadie disponible habla ${language}`
+  }
+  if (!assignment) return null
+  if (summary.status === 'closed') return `Lo atendió ${assignment.analystName}`
+  const when = formatDateTime(assignment.assignedAt, { withYear: false })
+  const who = `Lo atiende ${assignment.analystName}`
+  switch (assignment.reason) {
+    case 'queue_drained': {
+      const waited =
+        assignment.waitedSeconds !== null ? ` tras ${formatWait(assignment.waitedSeconds)}` : ''
+      return `${who}: le llegó desde ${queueInSentence(assignment.queueLabel ?? QUEUE_LABEL[summary.language])}${waited} · ${when}`
+    }
+    case 'manual': {
+      const verb = assignment.previousAnalystId === null ? 'se lo asignó' : 'se lo pasó'
+      return `${who}: ${verb} ${assignment.assignedByName ?? 'supervisión'} · ${when}`
+    }
+    default: {
+      const rule = summary.language === 'pt' ? ' (regla 3)' : ''
+      return `${who}: le llegó al estar disponible y hablar ${language}${rule} · ${when}`
+    }
+  }
 }
 
 // ── Read-only footer and closure (contract §9.3) ────────────────────────────
@@ -408,6 +521,29 @@ export function readOnlyFooter(
     return [`Solo lectura: este caso es de ${assignment.analystName}.`]
   }
   return [REPLY_BLOCKED_COPY[reason]]
+}
+
+/**
+ * Footer of the supervisor's read-only case view (slice 3 §8.3), which never
+ * has a composer: queued "Vista de supervisión · El caso espera en la cola en
+ * español. Asígnalo para que alguien le responda."; open "Vista de supervisión
+ * · Solo lectura. Lo atiende {analista}."; closed: the closure line (+ "Nota: …").
+ */
+export function supervisionFooter(
+  detail: Pick<CaseDetail, 'case' | 'closure' | 'assignment'>,
+  meId: string,
+): string[] {
+  const { case: summary, closure, assignment } = detail
+  if (closure) {
+    const note = closureNote(closure)
+    return note ? [closureLine(closure, meId), note] : [closureLine(closure, meId)]
+  }
+  if (summary.status === 'queued' || !assignment) {
+    return [
+      `Vista de supervisión · El caso espera en ${queueInSentence(QUEUE_LABEL[summary.language])}. Asígnalo para que alguien le responda.`,
+    ]
+  }
+  return [`Vista de supervisión · Solo lectura. Lo atiende ${assignment.analystName}.`]
 }
 
 // ── Composer ────────────────────────────────────────────────────────────────
@@ -536,7 +672,9 @@ export function describeCloseFailure(error: unknown): string {
   if (isApiProblem(error, 'invalid_transition')) {
     return 'Este caso no se puede cerrar en su estado actual.'
   }
-  if (isApiProblem(error, 'case_not_assigned')) return 'Este caso ya no está asignado a ti.'
+  if (isApiProblem(error, 'case_not_assigned')) {
+    return 'Ya no puedes cerrarlo: supervisión pasó este caso a otra persona.'
+  }
   if (isApiProblem(error, 'validation_error')) return 'Revisa el motivo y la nota.'
   return 'No pudimos cerrar el caso. Inténtalo de nuevo.'
 }

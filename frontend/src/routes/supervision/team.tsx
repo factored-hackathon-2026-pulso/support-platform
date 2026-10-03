@@ -1,12 +1,39 @@
-import { ScreenPlaceholder } from '@/components/layout'
+import { useCallback, useMemo } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
+import { supervisionCasePath } from '@/app/roles'
+import {
+  TeamScreen,
+  parseTeamSearch,
+  toTeamSearch,
+  type TeamUrlState,
+  type UrlStateChangeOptions,
+} from '@/features/supervision'
 
-/** /supervision/equipo — team and queues. */
+/**
+ * /supervision/equipo — Equipo y colas. Shareable state lives in the URL:
+ * `?equipo=&estado=&analista=&asignar=` (slice-3-supervision.md §8.9). Opening a
+ * case hands the full return URL (filters included) to the case view.
+ */
 export default function TeamRoute() {
-  return (
-    <ScreenPlaceholder
-      title="Equipo y colas"
-      subtitle="Analistas, colas y casos en riesgo de SLA del turno"
-      description="Ves quién atiende qué, cómo van las colas y qué casos mover."
-    />
+  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const state = useMemo(() => parseTeamSearch(searchParams), [searchParams])
+
+  const onStateChange = useCallback(
+    (patch: Partial<TeamUrlState>, options?: UrlStateChangeOptions) => {
+      setSearchParams((current) => toTeamSearch({ ...parseTeamSearch(current), ...patch }), {
+        replace: options?.replace ?? false,
+      })
+    },
+    [setSearchParams],
   )
+
+  const from = `${location.pathname}${location.search}`
+  const onOpenCase = useCallback(
+    (caseId: string) => void navigate(supervisionCasePath(caseId), { state: { from } }),
+    [navigate, from],
+  )
+
+  return <TeamScreen state={state} onStateChange={onStateChange} onOpenCase={onOpenCase} />
 }

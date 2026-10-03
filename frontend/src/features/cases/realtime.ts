@@ -69,7 +69,12 @@ export function applyCaseSummaryToInboxes(queryClient: QueryClient, summary: Cas
   }
 }
 
-/** `case.updated` / `case.assigned` (the client already drops repeated envelopes). */
+/**
+ * `case.updated` / `case.assigned` / `case.unassigned` (the client already drops
+ * repeated envelopes). `case.unassigned` reaches the previous assignee after a
+ * reassignment: its `assignedAnalystId` changed, so her inboxes refetch and the
+ * case leaves them.
+ */
 function applyCaseSummary(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
   const summary = readCaseSummary(envelope)
   if (summary) applyCaseSummaryToInboxes(queryClient, summary)
@@ -93,6 +98,7 @@ function applyAvailability(envelope: RealtimeEnvelope, queryClient: QueryClient)
 export const registerCasesRealtime: RealtimeRegistration = (registry) => {
   registry.register('case.updated', applyCaseSummary)
   registry.register('case.assigned', applyCaseSummary)
+  registry.register('case.unassigned', applyCaseSummary)
   registry.register('inbox.counts', applyCounts)
   registry.register('availability.updated', applyAvailability)
 }

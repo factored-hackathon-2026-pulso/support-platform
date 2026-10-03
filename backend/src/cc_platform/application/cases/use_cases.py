@@ -11,6 +11,7 @@ from cc_platform.application.cases.customer_chat import (
     ListPastConversations,
     PostCustomerTurn,
 )
+from cc_platform.application.cases.manual_assignment import SetCaseAssignee
 from cc_platform.application.cases.queries import (
     AuthorizeCaseSubscription,
     GetCaseDetail,
@@ -18,6 +19,7 @@ from cc_platform.application.cases.queries import (
     GetInbox,
     ListCaseTurns,
 )
+from cc_platform.application.cases.supervision import GetQueueOverview, GetTeamOverview
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,3 +36,6 @@ class CasesUseCases:
     past_conversations: ListPastConversations
     past_conversation: GetPastConversation
     authorize_subscription: AuthorizeCaseSubscription
+    team_overview: GetTeamOverview
+    queue_overview: GetQueueOverview
+    set_assignee: SetCaseAssignee

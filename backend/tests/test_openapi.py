@@ -52,7 +52,10 @@ RESPONSE_SCHEMAS = (
     "CaseSummary", "InboxCounts", "CaseDetail", "CaseCustomer", "AssignmentOut", "CaseClosure",
     "CaseHistory", "CaseHistoryItem", "Turn", "CustomerTurn", "CustomerConversation",
     "CustomerConversationResponse", "CustomerConversationSummary", "CustomerConversationDetail",
-    "DemoCustomer", "StaffOut",
+    "DemoCustomer", "StaffOut", "CaseCapabilities", "TeamOverview", "TeamSummary", "TeamRef",
+    "ActivityCounts", "TeamAnalyst", "AnalystCaseCounts", "QueueOverview", "LanguageQueue",
+    "QueueCounts", "QueueCount", "AssignmentResult", "AuditEventPage", "AuditEvent", "AuditActor",
+    "AuditCaseRef",
 )  # fmt: skip
 
 
@@ -77,7 +80,8 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "invalid_credentials", "mfa_invalid", "mfa_challenge_invalid", "account_locked",
         "unauthenticated", "session_expired", "forbidden", "not_found", "method_not_allowed",
         "conflict", "concurrent_update", "invalid_transition", "case_not_assigned", "case_closed",
-        "idempotency_conflict", "invalid_value", "policy_violation", "validation_error",
+        "idempotency_conflict", "analyst_not_eligible", "language_mismatch", "analyst_paused",
+        "assignment_changed", "invalid_value", "policy_violation", "validation_error",
         "domain_error", "application_error", "invalid_topic", "invalid_message", "http_error",
         "internal_error",
     }  # fmt: skip

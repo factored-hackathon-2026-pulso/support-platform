@@ -13,6 +13,8 @@ import structlog
 
 from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
+from cc_platform.application.audit.queries import GetAuditEvent, ListAuditEvents
+from cc_platform.application.audit.use_cases import AuditUseCases
 from cc_platform.application.cases.assignment import (
     QUEUE_DRAINER_EVENTS,
     AssignCase,
@@ -28,6 +30,7 @@ from cc_platform.application.cases.customer_chat import (
     ListPastConversations,
     PostCustomerTurn,
 )
+from cc_platform.application.cases.manual_assignment import SetCaseAssignee
 from cc_platform.application.cases.queries import (
     AuthorizeCaseSubscription,
     GetCaseDetail,
@@ -35,8 +38,17 @@ from cc_platform.application.cases.queries import (
     GetInbox,
     ListCaseTurns,
 )
-from cc_platform.application.cases.realtime import OWNED_EVENTS, CaseRealtimeProjector
+from cc_platform.application.cases.realtime import (
+    OWNED_EVENTS,
+    SILENT_EVENTS,
+    CaseRealtimeProjector,
+)
 from cc_platform.application.cases.sla import FirstResponseSlaPolicy
+from cc_platform.application.cases.supervision import GetQueueOverview, GetTeamOverview
+from cc_platform.application.cases.supervision_realtime import (
+    SUPERVISION_EVENTS,
+    SupervisionRealtimeProjector,
+)
 from cc_platform.application.cases.use_cases import CasesUseCases
 from cc_platform.application.customers.use_cases import (
     AuthenticateCustomer,
@@ -89,9 +101,9 @@ from cc_platform.infrastructure.security.login_attempts import InMemoryUnknownLo
 from cc_platform.infrastructure.security.mfa import DevMfaVerifier
 from cc_platform.infrastructure.security.passwords import Argon2PasswordHasher
 from cc_platform.infrastructure.security.tokens import HmacSessionTokenService
-from cc_platform.infrastructure.seed.cases import seed_demo_cases
+from cc_platform.infrastructure.seed.activity import seed_demo_activity
 from cc_platform.infrastructure.seed.customers import seed_demo_customers
-from cc_platform.infrastructure.seed.people import seed_demo_availability, seed_demo_staff
+from cc_platform.infrastructure.seed.people import seed_demo_staff
 
 _log = structlog.get_logger(__name__)
 
@@ -143,8 +155,9 @@ class Container:
         created = {
             "staff": await seed_demo_staff(self.uow, self.password_hasher),
             "customers": await seed_demo_customers(self.uow),
-            "availability": await seed_demo_availability(self.uow, self.clock),
-            "cases": await seed_demo_cases(self.uow, self.ids, self.clock),
+            **await seed_demo_activity(
+                self.uow, self.ids, self.clock, ttl=self.settings.session_ttl
+            ),
         }
         if any(created.values()):
             _log.info("seed_demo_data", **created)
@@ -213,11 +226,16 @@ def build_container(
     hub = InMemoryRealtimeHub(queue_size=settings.realtime_queue_size)
     mapper = TopicMapper()
     mapper.suppress(*OWNED_EVENTS)  # the cases projection publishes their envelopes
+    mapper.suppress(*SILENT_EVENTS)  # audited reads (case.viewed): never on a socket
     bus.subscribe(RealtimeProjector(hub, mapper))
     bus.subscribe(SessionTerminator(hub), event_types=[SessionEnded])
     bus.subscribe(
         CaseRealtimeProjector(hub, uow, SchemaRealtimePresenter(), clock),
         event_types=OWNED_EVENTS,
+    )
+    bus.subscribe(
+        SupervisionRealtimeProjector(hub, uow, SchemaRealtimePresenter(), clock),
+        event_types=SUPERVISION_EVENTS,
     )
     bus.subscribe(QueueDrainer(background, drain_queue), event_types=QUEUE_DRAINER_EVENTS)
 
@@ -254,7 +272,7 @@ def build_container(
         ),
         cases=CasesUseCases(
             inbox=GetInbox(uow=uow, clock=clock),
-            detail=GetCaseDetail(uow=uow),
+            detail=GetCaseDetail(uow=uow, clock=clock),
             history=GetCaseHistory(uow=uow),
             turns=ListCaseTurns(uow=uow),
             post_analyst_turn=PostAnalystTurn(uow=uow, clock=clock, ids=ids),
@@ -271,6 +289,9 @@ def build_container(
             past_conversations=ListPastConversations(uow=uow),
             past_conversation=GetPastConversation(uow=uow),
             authorize_subscription=AuthorizeCaseSubscription(uow=uow),
+            team_overview=GetTeamOverview(uow=uow, clock=clock),
+            queue_overview=GetQueueOverview(uow=uow, clock=clock),
+            set_assignee=SetCaseAssignee(uow=uow, clock=clock, ids=ids),
         ),
         customers=CustomersUseCases(
             list_demo_customers=ListDemoCustomers(uow=uow),
@@ -282,6 +303,10 @@ def build_container(
                 ttl=settings.customer_session_ttl,
             ),
             authenticate=AuthenticateCustomer(uow=uow, tokens=customer_tokens, clock=clock),
+        ),
+        audit=AuditUseCases(
+            list_events=ListAuditEvents(uow=uow),
+            get_event=GetAuditEvent(uow=uow),
         ),
     )
 

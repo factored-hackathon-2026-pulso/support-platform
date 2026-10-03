@@ -38,7 +38,7 @@ describe('createAppEnvelopeHandlers', () => {
 describe('FEATURE_REALTIME_REGISTRATIONS', () => {
   const at = (type: string): RealtimeEnvelope => ({ ...envelope, type, data: {} })
 
-  it('handles every staff envelope of slice 1 (inbox + open conversation)', () => {
+  it('handles every staff envelope of slices 1–2 (inbox + open conversation)', () => {
     const registry = createAppEnvelopeHandlers()
     const queryClient = new QueryClient()
     expect(registry.dispatch(at('turn.created'), queryClient)).toBe(1) // conversation
@@ -46,6 +46,15 @@ describe('FEATURE_REALTIME_REGISTRATIONS', () => {
     expect(registry.dispatch(at('case.assigned'), queryClient)).toBe(2)
     expect(registry.dispatch(at('inbox.counts'), queryClient)).toBe(1)
     expect(registry.dispatch(at('availability.updated'), queryClient)).toBe(1)
+  })
+
+  it('handles the supervision envelopes of slice 3', () => {
+    const registry = createAppEnvelopeHandlers()
+    const queryClient = new QueryClient()
+    expect(registry.dispatch(at('case.unassigned'), queryClient)).toBe(1) // inbox
+    expect(registry.dispatch(at('queue.updated'), queryClient)).toBe(1)
+    expect(registry.dispatch(at('queue.case_queued'), queryClient)).toBe(1)
+    expect(registry.dispatch(at('team.updated'), queryClient)).toBe(1)
   })
 
   it('leaves customer envelopes to the simulator registry', () => {

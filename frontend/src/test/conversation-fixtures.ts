@@ -105,9 +105,13 @@ export function makeCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail 
       assignedAt: '2026-03-05T15:46:10Z',
       queueLabel: null,
       waitedSeconds: null,
+      assignedByRole: 'system',
+      assignedByName: null,
+      previousAnalystId: null,
+      previousAnalystName: null,
     },
     closure: null,
-    capabilities: { canReply: true, replyBlockedReason: null, canClose: true },
+    capabilities: { canReply: true, replyBlockedReason: null, canClose: true, canAssign: false },
     previousCaseCount: 0,
     ...overrides,
   }
@@ -133,7 +137,12 @@ export function makeClosedDetail(overrides: Partial<CaseDetail> = {}): CaseDetai
       reason: 'resolved',
       note: 'Se explicó el plazo del reverso (5 días hábiles).',
     },
-    capabilities: { canReply: false, replyBlockedReason: 'closed', canClose: false },
+    capabilities: {
+      canReply: false,
+      replyBlockedReason: 'closed',
+      canClose: false,
+      canAssign: false,
+    },
     ...overrides,
   }
 }
@@ -205,6 +214,10 @@ export function makeJulianDetail(): CaseDetail {
       assignedAt: '2026-02-13T15:00:10Z',
       queueLabel: null,
       waitedSeconds: null,
+      assignedByRole: 'system',
+      assignedByName: null,
+      previousAnalystId: null,
+      previousAnalystName: null,
     },
     closure: {
       closedAt: '2026-02-13T15:15:00Z',
@@ -213,7 +226,12 @@ export function makeJulianDetail(): CaseDetail {
       reason: 'resolved',
       note: null,
     },
-    capabilities: { canReply: false, replyBlockedReason: 'closed', canClose: false },
+    capabilities: {
+      canReply: false,
+      replyBlockedReason: 'closed',
+      canClose: false,
+      canAssign: false,
+    },
     previousCaseCount: 2,
   }
 }

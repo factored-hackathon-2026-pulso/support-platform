@@ -51,7 +51,9 @@ def test_openapi_publishes_the_codes_as_an_enum(client) -> None:  # type: ignore
     assert set(schemas["ProblemCode"]["enum"]) == {code.value for code in ProblemCode}
     problem = schemas["ProblemDetails"]["properties"]
     assert problem["code"] == {"$ref": "#/components/schemas/ProblemCode"}
-    assert {"remainingAttempts", "unlockAt", "requiredRoles", "errors", "currentStatus"} <= set(
-        problem
-    )
+    assert {
+        "remainingAttempts", "unlockAt", "requiredRoles", "errors", "currentStatus",
+        "analystId", "policyRuleId", "caseLanguage", "currentAnalystId",
+    } <= set(problem)  # fmt: skip
+    assert problem["caseLanguage"]["anyOf"][0] == {"$ref": "#/components/schemas/Language"}
     assert problem["currentStatus"]["anyOf"][0] == {"$ref": "#/components/schemas/CaseStatus"}

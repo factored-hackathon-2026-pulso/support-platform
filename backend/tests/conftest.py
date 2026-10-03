@@ -13,7 +13,14 @@ from cc_platform.bootstrap.container import Container, build_container
 from cc_platform.infrastructure.clock import FixedClock
 from cc_platform.infrastructure.ids import SequentialIdGenerator
 from cc_platform.infrastructure.seed.customers import seed_customer_id
-from tests.support import DEV_MFA_CODE, PASSWORD, AuthKit, build_auth_kit, make_settings
+from tests.support import (
+    DEV_MFA_CODE,
+    PASSWORD,
+    AuthKit,
+    build_auth_kit,
+    make_available_quietly,
+    make_settings,
+)
 
 
 @pytest.fixture
@@ -67,6 +74,16 @@ def drain(client: TestClient, container: Container) -> Callable[[], None]:
         client.portal.call(container.background.drain)  # type: ignore[union-attr]
 
     return _drain
+
+
+@pytest.fixture
+def available(client: TestClient, container: Container) -> Callable[..., None]:
+    """Make analysts available without draining the seeded queues (``make_available_quietly``)."""
+
+    def _available(*staff_ids: str) -> None:
+        client.portal.call(make_available_quietly, container.uow, *staff_ids)  # type: ignore[union-attr]
+
+    return _available
 
 
 @pytest.fixture

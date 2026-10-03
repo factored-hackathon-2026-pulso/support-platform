@@ -8,6 +8,7 @@ import {
   formatPercent,
   formatRelativeTime,
   formatTime,
+  localDayKey,
   getInitials,
   maskLast4,
 } from './format'
@@ -36,6 +37,9 @@ describe('format', () => {
     // Same instant written in UTC and in Madrid time.
     expect(formatTime('2025-03-05T16:02:00Z')).toBe('11:02')
     expect(formatTime('2025-03-05T17:02:00+01:00')).toBe('11:02')
+    expect(formatTime('2025-03-05T16:02:05Z', { withSeconds: true })).toBe('11:02:05')
+    expect(localDayKey('2025-03-06T04:30:00Z')).toBe('2025-03-05')
+    expect(localDayKey('2025-03-06T05:00:00Z')).toBe('2025-03-06')
     // 03:30 UTC on the 6th is still the 5th in Bogotá.
     expect(formatDate('2025-03-06T03:30:00Z')).toBe('5 mar 2025')
   })

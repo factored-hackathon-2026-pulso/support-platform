@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from cc_platform.infrastructure.seed.cases import seed_case_id
 from cc_platform.infrastructure.seed.customers import seed_customer_id
+from cc_platform.infrastructure.seed.people import seed_staff_id
 from tests.support import ANALYST, SEBASTIAN, bearer
 
 NATALIA, RAFAEL, MARCELA, PATRICIA, CLAUDIA = 2001, 2004, 1001, 1004, 1005
@@ -36,7 +37,8 @@ def test_demo_customers_simulator_first_then_everyone_by_name(client: TestClient
     names = [item["displayName"].split()[0] for item in items]
     assert names == [
         "Natalia", "Ximena", "Lucas", "Rafael", "Andrés",  # simulator customers (by id)
-        "Beatriz", "Claudia", "Gabriela", "Héctor", "Joaquín", "Larissa", "Marcela", "Patricia",
+        "Beatriz", "Camila", "Claudia", "Esteban", "Gabriela", "Héctor", "Joaquín", "Larissa",
+        "Marcela", "Mauricio", "Patricia", "Rosa",
     ]  # fmt: skip
     first = items[0]
     assert set(first) == {
@@ -168,9 +170,20 @@ def test_past_conversations(client: TestClient, customer_session: Callable[..., 
     assert missing.status_code == 404
 
 
+def start_shift(client: TestClient, token: str, drain: Callable[[], None]) -> None:
+    """Daniela switches to "Disponible" (nobody starts available): she takes the seeded
+    queues first, then new chats land on her."""
+    availability(client, token, "available")
+    drain()
+
+
 def test_live_round_trip_customer_to_analyst_and_back(
-    client: TestClient, customer_session: Callable[..., str], sign_in: Callable[[str], str]
+    client: TestClient,
+    customer_session: Callable[..., str],
+    sign_in: Callable[[str], str],
+    drain: Callable[[], None],
 ) -> None:
+    start_shift(client, sign_in(ANALYST.email), drain)
     customer = customer_session(RAFAEL)
     cmid = str(uuid.uuid4())
     first = write(client, customer, "Olá, não reconheço uma compra no meu cartão", cmid)
@@ -219,10 +232,15 @@ def test_live_round_trip_customer_to_analyst_and_back(
 
 
 def test_close_then_write_again_opens_a_linked_case(
-    client: TestClient, customer_session: Callable[..., str], sign_in: Callable[[str], str]
+    client: TestClient,
+    customer_session: Callable[..., str],
+    sign_in: Callable[[str], str],
+    drain: Callable[[], None],
 ) -> None:
     token = customer_session(MARCELA)
-    daniela = bearer(sign_in(ANALYST.email))
+    daniela_token = sign_in(ANALYST.email)
+    start_shift(client, daniela_token, drain)
+    daniela = bearer(daniela_token)
     closed = client.post(
         f"/api/v1/cases/{seed_case_id(101)}/close",
         headers=daniela,
@@ -284,11 +302,27 @@ def test_least_loaded_analyst_gets_the_next_case(
     customer_session: Callable[..., str],
     sign_in: Callable[[str], str],
     drain: Callable[[], None],
+    available: Callable[..., None],
 ) -> None:
+    available(seed_staff_id(ANALYST.number))  # Daniela (5 open) is available too
     sebastian = sign_in(SEBASTIAN.email)
     availability(client, sebastian, "available")
-    drain()  # he speaks Portuguese and holds nothing: the queued case 109 goes to him
+    drain()  # he speaks es + pt and holds nothing: the three queued cases go to him
     case_id = write(client, customer_session(NATALIA), "Hola").json()["conversation"]["caseId"]
     inbox = client.get("/api/v1/cases/inbox", headers=bearer(sebastian)).json()
-    # 1 open case against Daniela's 5: he also gets the next Spanish case.
-    assert {item["id"] for item in inbox["items"]} == {seed_case_id(109), case_id}
+    # 3 open cases against Daniela's 5: he also gets the next Spanish case.
+    queued = {seed_case_id(n) for n in (109, 111, 112)}
+    assert {item["id"] for item in inbox["items"]} == {*queued, case_id}
+
+
+def test_an_overflowing_after_sequence_is_422(
+    client: TestClient, customer_session: Callable[..., str]
+) -> None:
+    token = customer_session(MARCELA)
+    for value in ("9223372036854775808", "9" * 23):
+        response = client.get(
+            "/api/v1/customer/conversation",
+            params={"afterSequence": value},
+            headers=bearer(token),
+        )
+        assert response.status_code == 422, response.text

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from cc_platform.domain.cases.values import CaseStatus
-from cc_platform.domain.shared.errors import ConflictError, InvalidTransitionError
+from cc_platform.domain.cases.values import LANGUAGE_RULE_ID, CaseStatus
+from cc_platform.domain.shared.errors import ConflictError, DomainError, InvalidTransitionError
 
 
 class CaseClosedError(ConflictError):
@@ -21,6 +21,18 @@ class IdempotencyConflictError(ConflictError):
 
     code = "idempotency_conflict"
     default_message = "Ese mensaje ya se envió con otro texto."
+
+
+class LanguageMismatchError(DomainError):
+    """Rule 3 (``H1``): the analyst does not speak the case language (422)."""
+
+    code = "language_mismatch"
+    default_message = "Ese caso necesita a alguien que hable su idioma (regla 3)."
+
+    def __init__(self, *, case_language: str, analyst_id: str) -> None:
+        super().__init__(
+            None, policyRuleId=LANGUAGE_RULE_ID, caseLanguage=case_language, analystId=analyst_id
+        )
 
 
 def invalid_case_transition(current: CaseStatus, target: str) -> InvalidTransitionError:

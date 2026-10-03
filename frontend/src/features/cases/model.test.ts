@@ -6,6 +6,7 @@ import {
   RETURNED_TAG,
   SLA_AT_RISK_MS,
   assignedToastCopy,
+  unassignedToastCopy,
   caseCardLine,
   changesInboxPlacement,
   channelLabel,
@@ -202,6 +203,23 @@ describe('copy', () => {
     expect(assignedToastCopy(makeCaseSummary({ previousCaseId: 'CASE-1' }))).toEqual({
       title: 'Marcela volvió a escribir',
       description: 'Marcela Quintana Pardo',
+    })
+  })
+
+  it('says when a supervisor assigned the case (slice 3)', () => {
+    expect(
+      assignedToastCopy(makeCaseSummary({ previousCaseId: 'CASE-1' }), { fromSupervisor: true }),
+    ).toEqual({
+      title: 'Te asignaron un caso',
+      description: 'Marcela Quintana Pardo · desde supervisión',
+    })
+  })
+
+  it('explains a case supervision took away (case.unassigned)', () => {
+    expect(unassignedToastCopy(makeCaseSummary())).toEqual({
+      title: 'Supervisión reasignó un caso',
+      description:
+        'El caso de Marcela Quintana Pardo pasó a otra persona del equipo. Puedes leerlo, pero ya no responder.',
     })
   })
 })

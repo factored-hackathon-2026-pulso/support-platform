@@ -85,10 +85,17 @@ class TurnAudience(StrEnum):
 
 
 class AssignmentReason(StrEnum):
-    """Why a case reached its analyst. Slice 3 adds ``manual`` (a supervisor)."""
+    """Why a case reached its analyst: on arrival, from the queue when someone became
+    available, or ``manual`` (a supervisor chose her, from the queue or by reassignment)."""
 
     LANGUAGE_LEAST_LOADED = "language_least_loaded"
     QUEUE_DRAINED = "queue_drained"
+    MANUAL = "manual"
+
+
+#: Policy id of rule 3 (docs/policies.md): a case only goes to an analyst who speaks its
+#: language (a Portuguese case only to a Portuguese speaker).
+LANGUAGE_RULE_ID = "H1"
 
 
 class CloseReason(StrEnum):

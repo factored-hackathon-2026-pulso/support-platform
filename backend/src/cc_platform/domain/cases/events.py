@@ -63,6 +63,7 @@ class CaseAssigned(DomainEvent):
     open_cases_at_assignment: int
     strategy: str
     waited_seconds: int | None
+    paused_override: bool
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -109,6 +110,23 @@ class CaseClosed(DomainEvent):
     closed_by_id: str
     reason: str
     note: str | None
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CaseViewed(DomainEvent):
+    """A supervisor opened a case she does not hold (supervision view, read-only).
+
+    The only read that writes: an audit fact, never sent on a socket (not in
+    ``CASE_EVENTS``).
+    """
+
+    event_type = "case.viewed"
+    entity = "case"
+
+    viewer_id: str
+    access: str
+    case_status: str
+    assigned_analyst_id: str | None
 
 
 #: Every event type of the cases context (the realtime projection owns them).

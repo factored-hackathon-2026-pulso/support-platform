@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { topics, useRealtimeStatus, useRealtimeSubscription } from '@/lib/realtime'
+import { topics, useOnReconnect, useRealtimeSubscription } from '@/lib/realtime'
 import { conversationKeys } from '../api'
 
 /**
@@ -11,14 +10,9 @@ import { conversationKeys } from '../api'
  */
 export function useConversationLive(caseId: string): void {
   useRealtimeSubscription(topics.case(caseId))
-  const status = useRealtimeStatus()
   const queryClient = useQueryClient()
-  const previous = useRef(status)
-  useEffect(() => {
-    if (previous.current === 'reconnecting' && status === 'open') {
-      void queryClient.invalidateQueries({ queryKey: conversationKeys.detail(caseId) })
-      void queryClient.invalidateQueries({ queryKey: conversationKeys.turns(caseId) })
-    }
-    previous.current = status
-  }, [status, caseId, queryClient])
+  useOnReconnect(() => {
+    void queryClient.invalidateQueries({ queryKey: conversationKeys.detail(caseId) })
+    void queryClient.invalidateQueries({ queryKey: conversationKeys.turns(caseId) })
+  })
 }

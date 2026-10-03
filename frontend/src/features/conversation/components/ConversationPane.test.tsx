@@ -408,7 +408,8 @@ describe('ConversationPane · states', () => {
 
   it("shows another analyst's case read-only (history access)", async () => {
     setup(makeJulianDetail(), page({ items: julianTurns(), lastSequence: 3 }))
-    expect(await screen.findByText('Cómo llegó a ti')).toBeInTheDocument()
+    expect(await screen.findByText('Quién lo atendió')).toBeInTheDocument()
+    expect(screen.queryByText('Cómo llegó a ti')).not.toBeInTheDocument()
     expect(screen.getByText(/Lo atendió Julián Ortega/)).toBeInTheDocument()
     const footer = await screen.findByRole('note', { name: 'Solo lectura' })
     expect(footer).toHaveTextContent('Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto')
@@ -421,7 +422,12 @@ describe('ConversationPane · states', () => {
     const base = makeCaseDetail()
     setup(
       makeCaseDetail({
-        capabilities: { canReply: false, replyBlockedReason: 'not_assignee', canClose: false },
+        capabilities: {
+          canReply: false,
+          replyBlockedReason: 'not_assignee',
+          canClose: false,
+          canAssign: false,
+        },
         assignment: { ...base.assignment!, analystId: 'STF-2', analystName: 'Julián Ortega' },
       }),
     )
@@ -430,6 +436,51 @@ describe('ConversationPane · states', () => {
     ).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cerrar caso' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the draft and says who holds the case once supervision took it away', async () => {
+    const { user, queryClient } = setup()
+    const box = await screen.findByRole('textbox', { name: 'Escribe al cliente' })
+    await user.type(box, 'Ya casi lo tengo,{Shift>}{Enter}{/Shift}un momento')
+
+    const base = makeCaseDetail()
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue(
+      makeCaseDetail({
+        capabilities: {
+          canReply: false,
+          replyBlockedReason: 'not_assignee',
+          canClose: false,
+          canAssign: false,
+        },
+        assignment: {
+          ...base.assignment!,
+          analystId: 'STF-2',
+          analystName: 'Julián Ortega',
+          reason: 'manual',
+          assignedByRole: 'supervisor',
+          assignedByName: 'Lucía Herrera',
+          previousAnalystId: analystStaff.id,
+          previousAnalystName: analystStaff.name,
+        },
+      }),
+    )
+    await act(() =>
+      queryClient.invalidateQueries({ queryKey: api.conversationKeys.detail(CASE_ID) }),
+    )
+
+    expect(await screen.findByText('Quién lo atiende')).toBeInTheDocument()
+    expect(screen.queryByText('Cómo llegó a ti')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Lucía Herrera pasó este caso a Julián Ortega · 5 mar, 10:46'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
+    const draft = screen.getByRole('note', { name: 'Borrador sin enviar' })
+    expect(draft).toHaveTextContent('Tu borrador no se envió')
+    expect(draft).toHaveTextContent('Ya casi lo tengo, un momento')
+    expect(screen.getByText('Solo lectura: este caso es de Julián Ortega.')).toBeInTheDocument()
+
+    await user.click(within(draft).getByRole('button', { name: 'Descartar borrador' }))
+    expect(screen.queryByText('Tu borrador no se envió')).not.toBeInTheDocument()
   })
 
   it('shows why a case cannot be opened', async () => {
@@ -525,5 +576,50 @@ describe('ConversationPane · close', () => {
     await user.click(within(dialog).getByRole('radio', { name: 'Resuelto' }))
     await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
     expect(await within(dialog).findByText('Este caso ya estaba cerrado.')).toBeInTheDocument()
+  })
+})
+
+describe('ConversationPane · supervision mode (slice 3)', () => {
+  it('never offers the composer, the close or the read cursor, even to the assignee', async () => {
+    const detail = makeCaseDetail()
+    detail.case = { ...detail.case, status: 'assigned', inboxStatus: 'new', unreadCount: 1 }
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue(detail)
+    vi.mocked(api.fetchTurns).mockResolvedValue(page())
+    renderWithProviders(
+      <ConversationPane
+        caseId={CASE_ID}
+        mode="supervision"
+        headerActions={<button type="button">Reasignar</button>}
+      />,
+      { staff: analystStaff },
+    )
+    expect(await screen.findByRole('button', { name: 'Reasignar' })).toBeInTheDocument()
+    await screen.findByRole('list', { name: 'Mensajes' })
+    expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cerrar caso' })).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Vista de supervisión · Solo lectura. Lo atiende Daniela Ríos.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Cómo llegó').parentElement).toHaveTextContent(
+      'Lo atiende Daniela Ríos: le llegó al estar disponible y hablar español · 5 mar, 10:46',
+    )
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+    expect(api.markCaseRead).not.toHaveBeenCalled()
+  })
+
+  it('says "Ya no puedes cerrarlo" when supervision reassigned the case meanwhile', async () => {
+    vi.mocked(api.closeCase).mockRejectedValueOnce(
+      new ApiProblem({ status: 403, code: 'case_not_assigned' }),
+    )
+    const { user } = setup()
+    await user.click(await screen.findByRole('button', { name: 'Cerrar caso' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
+    await user.click(within(dialog).getByRole('radio', { name: 'Resuelto' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
+    expect(
+      await within(dialog).findByText(
+        'Ya no puedes cerrarlo: supervisión pasó este caso a otra persona.',
+      ),
+    ).toBeInTheDocument()
   })
 })

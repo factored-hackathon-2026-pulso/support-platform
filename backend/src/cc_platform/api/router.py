@@ -6,12 +6,14 @@ from fastapi import APIRouter
 from fastapi.routing import APIRoute
 
 from cc_platform.api.routers import (
+    audit,
     auth,
     availability,
     cases,
     customer,
     people,
     realtime,
+    supervision,
     system,
 )
 
@@ -25,6 +27,8 @@ def build_api_router() -> APIRouter:
     router.include_router(people.router)
     router.include_router(availability.router)
     router.include_router(cases.router)
+    router.include_router(supervision.router)
+    router.include_router(audit.router)
     router.include_router(customer.router)
     router.include_router(realtime.router)
     return router

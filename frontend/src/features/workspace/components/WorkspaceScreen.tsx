@@ -53,16 +53,26 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
   // Same cache entry as the conversation: the customer's name for the history sheet.
   const detail = useCaseDetail(state.caseId)
 
+  /**
+   * The filter whose first load already had its chance to auto-select. Auto-select runs
+   * once per loaded list (the screen opening, or the analyst picking another filter),
+   * never for a case that arrives over the socket afterwards: opening it would mark it
+   * read and record an open she never made, and hide the "Te asignaron un caso" toast.
+   */
+  const autoSelectedFor = useRef<InboxStatus | null | undefined>(undefined)
+
   useEffect(() => {
-    if (state.caseId || !ready || !items) return
+    if (autoSelectedFor.current === state.filter) return
+    if (state.caseId) {
+      autoSelectedFor.current = state.filter
+      return
+    }
+    if (!ready || !items) return
+    autoSelectedFor.current = state.filter
     const first = firstSelectableCase(items, closedHere.current)
     if (!first) return
-    // A case that arrives while the empty state holds the focus takes it over.
-    setFocusRequest((request) =>
-      request?.kind === 'empty' ? { kind: 'case', caseId: first } : request,
-    )
     onStateChange({ caseId: first }, { replace: true })
-  }, [state.caseId, ready, items, onStateChange])
+  }, [state.caseId, state.filter, ready, items, onStateChange])
 
   // Another case closes the history sheet: it belongs to the previous customer.
   const selectCase = useCallback(

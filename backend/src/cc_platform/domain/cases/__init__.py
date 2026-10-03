@@ -1,6 +1,6 @@
 """Cases context: the case, its transcript, its assignment and the one-open-case rule."""
 
-from cc_platform.domain.cases.assignment import Assignment
+from cc_platform.domain.cases.assignment import Assignment, ensure_speaks_case_language
 from cc_platform.domain.cases.case import (
     MAX_CLOSE_NOTE,
     Case,
@@ -10,7 +10,11 @@ from cc_platform.domain.cases.case import (
     search_key,
 )
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
-from cc_platform.domain.cases.errors import CaseClosedError, IdempotencyConflictError
+from cc_platform.domain.cases.errors import (
+    CaseClosedError,
+    IdempotencyConflictError,
+    LanguageMismatchError,
+)
 from cc_platform.domain.cases.events import (
     CASE_EVENTS,
     CaseAssigned,
@@ -20,11 +24,13 @@ from cc_platform.domain.cases.events import (
     CaseQueued,
     CaseRead,
     CaseStatusChanged,
+    CaseViewed,
     TurnCreated,
 )
 from cc_platform.domain.cases.turn import MAX_TURN_TEXT, Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
     CLOSABLE_STATUSES,
+    LANGUAGE_RULE_ID,
     OPEN_ASSIGNED_STATUSES,
     REPLYABLE_STATUSES,
     AssignmentReason,
@@ -43,6 +49,7 @@ from cc_platform.domain.cases.values import (
 __all__ = [
     "CASE_EVENTS",
     "CLOSABLE_STATUSES",
+    "LANGUAGE_RULE_ID",
     "MAX_CLOSE_NOTE",
     "MAX_TURN_TEXT",
     "OPEN_ASSIGNED_STATUSES",
@@ -62,17 +69,20 @@ __all__ = [
     "CaseRead",
     "CaseStatus",
     "CaseStatusChanged",
+    "CaseViewed",
     "CloseReason",
     "CustomerCaseSlot",
     "CustomerConversationStatus",
     "CustomerTurnAuthor",
     "IdempotencyConflictError",
     "InboxStatus",
+    "LanguageMismatchError",
     "Turn",
     "TurnAudience",
     "TurnAuthorRole",
     "TurnCreated",
     "TurnKind",
+    "ensure_speaks_case_language",
     "normalize_close_note",
     "normalize_turn_text",
     "preview_of",

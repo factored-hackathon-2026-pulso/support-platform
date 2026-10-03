@@ -12,6 +12,7 @@ from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import CaseStatus, TurnAudience
+from cc_platform.domain.people.staff import Language
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +21,14 @@ class AssigneeLoad:
 
     open_cases: int
     last_assigned_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class CaseRef:
+    """The few case facts the audit needs per row (who the customer is, which language)."""
+
+    customer_id: str
+    language: Language
 
 
 class CaseRepository(Protocol):
@@ -41,6 +50,14 @@ class CaseRepository(Protocol):
         """Cases in ``status``, oldest ``opened_at`` first."""
         ...
 
+    async def list_by_statuses(self, statuses: Collection[CaseStatus]) -> list[Case]:
+        """Cases in any of ``statuses`` (any order): one query for the team overview."""
+        ...
+
+    async def refs(self, case_ids: Collection[str]) -> dict[str, CaseRef]:
+        """Customer and language of each known case id (unknown ids are left out)."""
+        ...
+
     async def list_closed_for_assignee(self, staff_id: str, closed_since: datetime) -> list[Case]:
         """``staff_id``'s closed cases with ``closed_at >= closed_since`` (any order)."""
         ...
@@ -54,7 +71,10 @@ class CaseRepository(Protocol):
         ...
 
     async def exists_for_customer_and_assignee(self, customer_id: str, staff_id: str) -> bool:
-        """Whether ``staff_id`` holds (or held) any case of the customer (history access)."""
+        """Whether ``staff_id`` holds, or held, any case of the customer (history access).
+
+        "Held" includes past assignments: an analyst whose case was reassigned away still
+        reads it (and the customer's other cases), read-only."""
         ...
 
     async def assignee_loads(

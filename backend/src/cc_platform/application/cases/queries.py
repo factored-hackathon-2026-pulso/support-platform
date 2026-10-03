@@ -1,15 +1,20 @@
 """Read-side use cases of the analyst Workspace: inbox, case detail, transcript pages, the
 customer's other cases ("Casos anteriores"), and the case-topic check of the socket.
 
-Who may see a case (contract §4.3, ``load_case_for``): its assignee reads and writes; a
-supervisor reads; an analyst who holds (or held) another case of the same customer reads
-it (history access). Everyone else gets ``case_not_assigned``.
+Who may see a case (slice 3 contract §3.7, ``load_case_access``), in this order: its
+assignee reads and writes; an analyst who holds or held a case of the same customer reads it
+(history access; "held" includes past assignments, so a case reassigned away stays
+readable); a supervisor reads it. Everyone else gets ``case_not_assigned``.
+
+A supervisor-only read of the detail is audited (``case.viewed``, at most once per 15
+minutes per supervisor and case): the one read that writes.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from enum import StrEnum
 
 from cc_platform.application.cases.dto import (
     CaseDetailView,
@@ -25,10 +30,12 @@ from cc_platform.application.cases.read_model import (
     count_inbox,
     customer_of,
 )
+from cc_platform.application.pagination import decode_sequence_cursor
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
 from cc_platform.domain.cases.case import Case, search_key
+from cc_platform.domain.cases.events import CaseViewed
 from cc_platform.domain.cases.values import InboxStatus
 from cc_platform.domain.people.staff import StaffRole
 from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
@@ -40,12 +47,22 @@ MAX_TURN_PAGE = 200
 CLOSED_INBOX_WINDOW = timedelta(days=7)
 #: "Casos anteriores" lists at most this many of the customer's other cases.
 MAX_HISTORY_ITEMS = 20
+#: A supervisor re-reading the same case inside this window records no new ``case.viewed``.
+SUPERVISOR_VIEW_AUDIT_WINDOW = timedelta(minutes=15)
 
 
-async def load_case_for(
+class CaseAccess(StrEnum):
+    """How the caller reaches a case (the first path that applies, in this order)."""
+
+    ASSIGNEE = "assignee"
+    HISTORY = "history"
+    SUPERVISOR = "supervisor"
+
+
+async def load_case_access(
     uow: UnitOfWork, actor: Actor, case_id: str, *, write: bool, history_access: bool = True
-) -> Case:
-    """The case if ``actor`` may see it (``write``: only its assignee analyst).
+) -> tuple[Case, CaseAccess]:
+    """The case and the access path of ``actor`` (``write``: only its assignee analyst).
 
     ``history_access=False`` leaves out analysts who only reach the case through another
     case of the same customer (the ``case:`` socket topic is assignee-or-supervisor).
@@ -54,25 +71,34 @@ async def load_case_for(
     case = await uow.cases.get(case_id) if is_valid_id(case_id, IdPrefix.CASE) else None
     if case is None:
         raise NotFoundError("No encontramos ese caso.", caseId=case_id)
-    if case.is_assignee(actor.staff_id) and actor.has_any_role({StaffRole.ANALYST}):
-        return case
+    is_analyst = actor.has_any_role({StaffRole.ANALYST})
+    if case.is_assignee(actor.staff_id) and is_analyst:
+        return case, CaseAccess.ASSIGNEE
     if write:
         raise CaseNotAssignedError()
-    if actor.has_any_role({StaffRole.SUPERVISOR}):
-        return case
     if (
         history_access
-        and actor.has_any_role({StaffRole.ANALYST})
+        and is_analyst
         and await uow.cases.exists_for_customer_and_assignee(case.customer_id, actor.staff_id)
     ):
-        return case
+        return case, CaseAccess.HISTORY
+    if actor.has_any_role({StaffRole.SUPERVISOR}):
+        return case, CaseAccess.SUPERVISOR
     raise CaseNotAssignedError()
 
 
+async def load_case_for(
+    uow: UnitOfWork, actor: Actor, case_id: str, *, write: bool, history_access: bool = True
+) -> Case:
+    """``load_case_access`` without the access path."""
+    case, _access = await load_case_access(
+        uow, actor, case_id, write=write, history_access=history_access
+    )
+    return case
+
+
 def decode_turn_cursor(cursor: str) -> int:
-    if not cursor.isdigit() or int(cursor) < 1:
-        raise InvalidValueError("El cursor no es válido.", field="cursor")
-    return int(cursor)
+    return decode_sequence_cursor(cursor)
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,15 +135,42 @@ class GetInbox:
 
 @dataclass(frozen=True, slots=True)
 class GetCaseDetail:
+    """The case detail. Read only through supervision (not the assignee, not a history
+    reader), it records ``case.viewed``, deduped per supervisor and case within 15 minutes
+    (two parallel first reads may both record: accepted)."""
+
     uow: UnitOfWorkFactory
+    clock: Clock
 
     async def execute(self, actor: Actor, case_id: str) -> CaseDetailView:
         async with self.uow() as uow:
-            case = await load_case_for(uow, actor, case_id, write=False)
-            return await case_detail(uow, case, actor.staff_id)
+            case, access = await load_case_access(uow, actor, case_id, write=False)
+            detail = await case_detail(uow, case, actor)
+            if access is CaseAccess.SUPERVISOR:
+                await self._audit_view(uow, actor, case)
+        return detail
+
+    async def _audit_view(self, uow: UnitOfWork, actor: Actor, case: Case) -> None:
+        now = self.clock.now()
+        last = await uow.event_log.latest(CaseViewed.event_type, actor.staff_id, case.id)
+        if last is not None and last.event_time >= now - SUPERVISOR_VIEW_AUDIT_WINDOW:
+            return
+        uow.record(
+            CaseViewed(
+                occurred_at=now,
+                actor=actor.acting_as({StaffRole.SUPERVISOR}),
+                entity_id=case.id,
+                case_id=case.id,
+                viewer_id=actor.staff_id,
+                access=CaseAccess.SUPERVISOR.value,
+                case_status=case.status.value,
+                assigned_analyst_id=case.assigned_analyst_id,
+            )
+        )
+        await uow.commit()
 
 
-async def case_detail(uow: UnitOfWork, case: Case, viewer_id: str) -> CaseDetailView:
+async def case_detail(uow: UnitOfWork, case: Case, viewer: Actor) -> CaseDetailView:
     reader = CaseReader(uow)
     customer = await uow.customers.get(case.customer_id)
     if customer is None:
@@ -128,7 +181,7 @@ async def case_detail(uow: UnitOfWork, case: Case, viewer_id: str) -> CaseDetail
         customer=customer_of(customer),
         assignment=await reader.assignment(case),
         closure=await reader.closure(case),
-        capabilities=capabilities_for(case, viewer_id),
+        capabilities=capabilities_for(case, viewer),
         previous_case_count=len(others),
     )
 

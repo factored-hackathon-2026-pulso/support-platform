@@ -1,12 +1,32 @@
-import { ScreenPlaceholder } from '@/components/layout'
+import { useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router'
+import {
+  AuditScreen,
+  parseAuditSearch,
+  toAuditSearch,
+  type AuditStateChangeOptions,
+  type AuditUrlState,
+} from '@/features/audit'
+import { useQueueNotices } from '@/features/supervision'
 
-/** /supervision/auditoria — audit log (slice 3). */
+/**
+ * /supervision/auditoria — Auditoría. Filters, search and the selected event
+ * live in the URL (slice-3-supervision.md §8.9). Like every supervision screen
+ * it shows the "Un caso espera…" notice (the route composes both features).
+ */
 export default function AuditRoute() {
-  return (
-    <ScreenPlaceholder
-      title="Auditoría"
-      subtitle="Quién hizo qué, en qué caso y cuándo"
-      description="Cada acción del equipo queda registrada y se puede revisar aquí."
-    />
+  useQueueNotices()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const state = useMemo(() => parseAuditSearch(searchParams), [searchParams])
+
+  const onStateChange = useCallback(
+    (patch: Partial<AuditUrlState>, options?: AuditStateChangeOptions) => {
+      setSearchParams((current) => toAuditSearch({ ...parseAuditSearch(current), ...patch }), {
+        replace: options?.replace ?? false,
+      })
+    },
+    [setSearchParams],
   )
+
+  return <AuditScreen state={state} onStateChange={onStateChange} />
 }

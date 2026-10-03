@@ -37,7 +37,13 @@ from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryU
 from cc_platform.infrastructure.seed.cases import seed_case_id, seed_demo_cases
 from cc_platform.infrastructure.seed.customers import seed_demo_customers
 from cc_platform.infrastructure.seed.people import seed_demo_availability, seed_demo_staff
-from tests.support import ANALYST, PlainHasher, actor_for, customer_actor
+from tests.support import (
+    ANALYST,
+    PlainHasher,
+    actor_for,
+    customer_actor,
+    make_available_quietly,
+)
 
 MARCELA = seed_case_id(101)
 CLOSE = CloseCaseCommand(reason=CloseReason.RESOLVED, note=None)
@@ -102,6 +108,7 @@ async def set_everyone(k: Kit, status: AvailabilityStatus) -> None:
 
 async def test_concurrent_first_messages_open_exactly_one_case() -> None:
     k = await kit()
+    await make_available_quietly(k.uow, actor_for(ANALYST).staff_id)  # someone to assign
     natalia = customer_actor(2001)
     results = await asyncio.gather(
         *(k.post_customer.execute(natalia, message(f"Mensaje {i}")) for i in range(8))
@@ -219,7 +226,7 @@ async def test_two_drains_assign_each_queued_case_once() -> None:
 
     await set_everyone(k, AvailabilityStatus.AVAILABLE)
     drained = await asyncio.gather(k.drain.execute(), k.drain.execute())
-    assert sum(drained) == 4  # the three new ones + the seeded Portuguese case (109)
+    assert sum(drained) == 6  # the three new ones + the seeded queued cases (109, 111, 112)
     assert {k.store.cases[c].status for c in case_ids} == {CaseStatus.ASSIGNED}
     per_case = Counter(a.case_id for a in k.store.assignments.values() if a.case_id in case_ids)
     assert per_case == dict.fromkeys(case_ids, 1)

@@ -48,6 +48,13 @@ async def container() -> Container:
     return await memory_container()
 
 
+async def start_shift(container: Container) -> None:
+    """Daniela switches to "Disponible" (nobody starts available): the seeded queues drain
+    to her, and new chats land on her."""
+    await container.use_cases.people.set_availability.execute(DANIELA, AvailabilityStatus.AVAILABLE)
+    await container.background.drain()
+
+
 def message(text: str, client_message_id: str | None = None) -> PostTurnCommand:
     return PostTurnCommand(text=text, client_message_id=client_message_id or str(uuid.uuid4()))
 
@@ -62,6 +69,7 @@ def close_with(
 async def test_first_message_opens_an_assigned_case_and_the_next_one_appends(
     container: Container,
 ) -> None:
+    await start_shift(container)
     natalia = customer_actor(2001)
     post = container.use_cases.cases.post_customer_turn
     first = await post.execute(natalia, message("  No reconozco un cargo  "))
@@ -269,6 +277,7 @@ async def test_close_twice_and_strangers(container: Container) -> None:
 
 # ----------------------------------------------------------------------------- linked cases
 async def test_writing_after_a_close_opens_a_new_linked_case(container: Container) -> None:
+    await start_shift(container)
     await container.use_cases.cases.close.execute(DANIELA, MARCELA, close_with())
     reopened = await container.use_cases.cases.post_customer_turn.execute(
         customer_actor(1001), message("Hola de nuevo")
@@ -343,6 +352,7 @@ async def test_history_access_is_read_only(container: Container) -> None:
 async def test_history_caps_at_20_newest_first() -> None:
     clock = FixedClock()
     container = await memory_container(clock=clock)
+    await start_shift(container)
     natalia = customer_actor(2001)
     opened: list[str] = []
     for i in range(23):
@@ -363,7 +373,7 @@ async def test_history_caps_at_20_newest_first() -> None:
 async def test_inbox_lists_counts_and_search(container: Container) -> None:
     inbox = container.use_cases.cases.inbox
     everything = await inbox.execute(DANIELA)
-    assert [i.id for i in everything.items] == [PATRICIA_AGAIN, MARCELA, LARISSA, BEATRIZ, JOAQUIN]
+    assert [i.id for i in everything.items] == [PATRICIA_AGAIN, LARISSA, MARCELA, BEATRIZ, JOAQUIN]
     to_reply = await inbox.execute(DANIELA, status=InboxStatus.TO_REPLY)
     assert [i.id for i in to_reply.items] == [MARCELA, BEATRIZ]
     closed = await inbox.execute(DANIELA, status=InboxStatus.CLOSED)
@@ -384,7 +394,8 @@ async def test_inbox_lists_counts_and_search(container: Container) -> None:
     assert [i.id for i in patricia_closed.items] == [PATRICIA_REFUND]
     assert [i.id for i in (await inbox.execute(DANIELA, query="0103")).items] == [LARISSA]
     julian = await inbox.execute(actor_for(JULIAN))
-    assert (julian.counts.all, julian.counts.closed) == (0, 0)  # 110 is 20 days old
+    # 113 (Por responder) and 114 (Esperando); 110 is 20 days old, outside Cerrados.
+    assert (julian.counts.all, julian.counts.to_reply, julian.counts.closed) == (2, 1, 0)
 
 
 async def test_closed_window_is_seven_days() -> None:
@@ -446,5 +457,9 @@ async def test_availability_round_trip(container: Container) -> None:
     assert same.since == changed.since
     async with container.uow() as uow:
         events = (await uow.event_log.page(entity_id=julian.staff_id)).items
-    assert [e.event_type for e in events] == ["staff.availability_changed"]
-    assert events[0].payload == {"from_status": "paused", "to_status": "available"}
+    # The seeded pause (slice 3 §9.3), then this change only (the repeat records nothing).
+    assert [e.event_type for e in events] == ["staff.availability_changed"] * 2
+    assert [e.payload for e in events] == [
+        {"from_status": "available", "to_status": "paused"},
+        {"from_status": "paused", "to_status": "available"},
+    ]

@@ -229,9 +229,15 @@ def test_close_notice_reaches_the_customer_never_the_reason(
 
 
 def test_writing_after_a_close_switches_the_conversation_and_reaches_the_analyst(
-    client: TestClient, sign_in: Callable[[str], str], customer_session: Callable[..., str]
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    customer_session: Callable[..., str],
+    drain: Callable[[], None],
 ) -> None:
     token = sign_in(ANALYST.email)
+    # Daniela switches to "Disponible": she takes the seeded queues, then new chats.
+    client.put("/api/v1/me/availability", headers=bearer(token), json={"status": "available"})
+    drain()
     close_case(client, bearer(token), MARCELA_CASE)
     customer_token = customer_session(MARCELA)
     with (
@@ -266,14 +272,16 @@ def test_writing_after_a_close_switches_the_conversation_and_reaches_the_analyst
         (new_id, MARCELA_CASE, "new")
     ]
     counts = [e for e in to_analyst if e["type"] == "inbox.counts"][-1]["data"]["payload"]
-    assert (counts["all"], counts["new"], counts["closed"]) == (5, 3, 4)
+    # 4 open + the 3 drained queued cases + the new one; 101 closed (4 in Cerrados).
+    assert (counts["all"], counts["new"], counts["closed"]) == (8, 6, 4)
     assert not {e["type"] for e in to_analyst} & {"case.opened", "case.queued"}
     assert_contract_payloads(to_analyst)
 
 
 def test_availability_updates_reach_the_own_inbox(
-    client: TestClient, sign_in: Callable[[str], str]
+    client: TestClient, sign_in: Callable[[str], str], available: Callable[..., None]
 ) -> None:
+    available(DANIELA_ID)  # so that pausing is a change
     token = sign_in(ANALYST.email)
     with connect(client, token) as analyst:
         analyst.receive_json()

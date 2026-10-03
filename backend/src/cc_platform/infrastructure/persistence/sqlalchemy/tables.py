@@ -190,6 +190,11 @@ assignments = Table(
     Column("assigned_by_role", String(20), nullable=False),
     Column("assigned_by_id", String(120), nullable=False),
     Column("waited_seconds", Integer, nullable=True),
+    # Slice 3: who held the case before a reassignment, and a paused target confirmed.
+    Column("previous_staff_id", String(ID), nullable=True),
+    Column("paused_override", Boolean, nullable=False, default=False),
+    # "held a case of this customer" (history access) also looks at past assignments.
+    Index("ix_assignments_staff_case", "staff_id", "case_id"),
 )
 
 customer_case_slots = Table(
@@ -219,4 +224,7 @@ event_log = Table(
     Index("ix_event_log_case_sequence", "case_id", "sequence"),
     Index("ix_event_log_entity", "entity", "entity_id"),
     Index("ix_event_log_event_time", "event_time"),
+    # Audit: "Persona" filter and the supervisor-view dedupe (``latest``).
+    Index("ix_event_log_actor_sequence", "actor_id", "sequence"),
+    Index("ix_event_log_type_actor_case", "event_type", "actor_id", "case_id"),
 )

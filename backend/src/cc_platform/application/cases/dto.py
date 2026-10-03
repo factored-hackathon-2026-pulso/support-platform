@@ -22,6 +22,7 @@ from cc_platform.domain.cases.values import (
 )
 from cc_platform.domain.customers.customer import CountryCode, CustomerLocale
 from cc_platform.domain.people.staff import Language
+from cc_platform.domain.shared.actor import ActorRole
 
 
 class ReplyBlockedReason(StrEnum):
@@ -91,7 +92,8 @@ class CaseCustomerView:
 
 @dataclass(frozen=True, slots=True)
 class AssignmentView:
-    """ "Cómo llegó a ti": people-based assignment only (available + language + queue)."""
+    """ "Cómo llegó a ti": people-based assignment only (available + language + queue, or
+    a supervisor's choice)."""
 
     id: str
     analyst_id: str
@@ -101,6 +103,11 @@ class AssignmentView:
     assigned_at: datetime
     queue_label: str | None
     waited_seconds: int | None
+    assigned_by_role: ActorRole
+    """``system`` (on arrival, queue drain) or ``supervisor`` (``manual``)."""
+    assigned_by_name: str | None
+    previous_analyst_id: str | None
+    previous_analyst_name: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +124,8 @@ class CaseCapabilitiesView:
     can_reply: bool
     reply_blocked_reason: ReplyBlockedReason | None
     can_close: bool
+    can_assign: bool
+    """The caller holds ``supervisor`` and the case is not closed ("Asignar"/"Reasignar")."""
 
 
 @dataclass(frozen=True, slots=True)

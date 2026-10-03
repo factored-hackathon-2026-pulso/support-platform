@@ -37,6 +37,11 @@ class ProblemCode(StrEnum):
     CASE_NOT_ASSIGNED = "case_not_assigned"
     CASE_CLOSED = "case_closed"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
+    # supervision (manual assignment)
+    ANALYST_NOT_ELIGIBLE = "analyst_not_eligible"
+    LANGUAGE_MISMATCH = "language_mismatch"
+    ANALYST_PAUSED = "analyst_paused"
+    ASSIGNMENT_CHANGED = "assignment_changed"
     # input and business rules
     INVALID_VALUE = "invalid_value"
     POLICY_VIOLATION = "policy_violation"
@@ -79,6 +84,22 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
     P.CASE_CLOSED: ProblemSpec(409, "Case closed", "Este caso ya está cerrado."),
     P.IDEMPOTENCY_CONFLICT: ProblemSpec(
         409, "Idempotency conflict", "Ese mensaje ya se envió con otro texto."
+    ),
+    P.ANALYST_NOT_ELIGIBLE: ProblemSpec(
+        422, "Analyst not eligible", "Esa persona no puede recibir casos."
+    ),
+    P.LANGUAGE_MISMATCH: ProblemSpec(
+        422,
+        "Language rule violated",
+        "Ese caso necesita a alguien que hable su idioma (regla 3).",
+    ),
+    P.ANALYST_PAUSED: ProblemSpec(
+        409,
+        "Analyst paused",
+        "Esa persona está en pausa. Confirma para asignarle el caso igual.",
+    ),
+    P.ASSIGNMENT_CHANGED: ProblemSpec(
+        409, "Assignment changed", "El caso cambió de manos mientras decidías."
     ),
     P.INVALID_VALUE: ProblemSpec(422, "Invalid value"),
     P.POLICY_VIOLATION: ProblemSpec(422, "Policy violation"),

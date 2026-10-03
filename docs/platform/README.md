@@ -9,6 +9,7 @@ Start with the brief; everything else hangs off it.
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | **Superseded (2026-10-03):** AI is out of the platform scope. Kept only as a record; do not implement it. |
 | [api/slice-1-cases.md](./api/slice-1-cases.md) | Slice 1 API contract (implemented): cases, turns, assignment, inbox, customer simulator, realtime topics, seed. Partly superseded by slice 2. |
 | [api/slice-2-case-lifecycle.md](./api/slice-2-case-lifecycle.md) | Slice 2 contract: the scope-cut removal list, the case lifecycle (statuses, close with a reason, new case after a close, case history, first-response SLA), REST + realtime changes, seed, frontend changes. |
+| [api/slice-3-supervision.md](./api/slice-3-supervision.md) | Slice 3 contract: team and queues read models, manual assignment and reassignment (rule 3, paused confirmation, CAS rules), supervisor read-only case view (audited), audit queries and catalog, supervision realtime topics, seed, frontend screens. |
 | [../../backend/README.md](../../backend/README.md) | API: run, seeded sign-in accounts, conventions, gates, known gaps. |
 | [../../frontend/README.md](../../frontend/README.md), [../../frontend/ARCHITECTURE.md](../../frontend/ARCHITECTURE.md) | SPA: run, folder and slice rules, routing, components, data layer, realtime, testing. |
 

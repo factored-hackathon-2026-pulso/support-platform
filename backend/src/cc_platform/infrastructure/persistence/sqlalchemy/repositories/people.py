@@ -5,6 +5,7 @@ Writes use optimistic locking (``VersionedRepository`` in ``base.py``).
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Column, select
@@ -154,6 +155,13 @@ class SqlStaffSessionRepository(VersionedRepository[StaffSession]):
             ended_at=row["ended_at"],
             end_reason=SessionEndReason(row["end_reason"]) if row["end_reason"] else None,
         )
+
+    async def active_staff_ids(self, now: datetime) -> set[str]:
+        c = tables.staff_sessions.c
+        result = await self._session.execute(
+            select(c.staff_id).where(c.ended_at.is_(None), c.expires_at > now).distinct()
+        )
+        return {staff_id for (staff_id,) in result}
 
 
 # ----------------------------------------------------------------------------- availability

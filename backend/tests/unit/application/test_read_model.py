@@ -27,10 +27,10 @@ from cc_platform.domain.cases import (
     InboxStatus,
     TurnAuthorRole,
 )
-from cc_platform.domain.people.staff import Language
+from cc_platform.domain.people.staff import Language, StaffRole
 from cc_platform.domain.shared.actor import ActorRole
 from cc_platform.infrastructure.seed.people import seed_staff_id
-from tests.support import memory_container
+from tests.support import make_actor, memory_container
 
 NOW = datetime(2026, 10, 2, 14, tzinfo=UTC)
 DANIELA = seed_staff_id(1)
@@ -131,20 +131,30 @@ def test_summary_carries_the_lifecycle_fields() -> None:
 
 def test_capabilities_for_assignee_others_and_closed() -> None:
     open_chat = case_in(CaseStatus.IN_PROGRESS, TurnAuthorRole.CUSTOMER)
-    mine = capabilities_for(open_chat, DANIELA)
+    daniela = make_actor(StaffRole.ANALYST, staff_id=DANIELA)
+    mine = capabilities_for(open_chat, daniela)
     assert (mine.can_reply, mine.reply_blocked_reason, mine.can_close) == (True, None, True)
-    other = capabilities_for(open_chat, seed_staff_id(5))
+    assert mine.can_assign is False
+    lucia = make_actor(StaffRole.SUPERVISOR, staff_id=seed_staff_id(5))
+    other = capabilities_for(open_chat, lucia)
     assert (other.can_reply, other.reply_blocked_reason, other.can_close) == (
         False,
         ReplyBlockedReason.NOT_ASSIGNEE,
         False,
     )
-    closed = capabilities_for(case_in(CaseStatus.CLOSED), DANIELA)
+    assert other.can_assign is True  # "Reasignar"
+    assert capabilities_for(case_in(CaseStatus.QUEUED), lucia).can_assign is True  # "Asignar"
+    closed = capabilities_for(case_in(CaseStatus.CLOSED), daniela)
     assert (closed.can_reply, closed.reply_blocked_reason, closed.can_close) == (
         False,
         ReplyBlockedReason.CLOSED,
         False,
     )
+    assert capabilities_for(case_in(CaseStatus.CLOSED), lucia).can_assign is False
+    # Felipe (Analista + Supervisora) on his own case: replies, closes and may reassign.
+    felipe = make_actor(StaffRole.ANALYST, StaffRole.SUPERVISOR, staff_id=DANIELA)
+    lead = capabilities_for(open_chat, felipe)
+    assert (lead.can_reply, lead.can_close, lead.can_assign) == (True, True, True)
     assert [r.value for r in ReplyBlockedReason] == ["not_assignee", "closed"]
 
 
@@ -159,9 +169,9 @@ async def test_seeded_inbox_order_and_counts() -> None:
             DANIELA, closed_since=now - CLOSED_INBOX_WINDOW, computed_at=now
         )
     names = [item.customer.display_name.split()[0] for item in items]
-    # new/to_reply by the oldest last interaction (Patricia 4 min, Marcela and Larissa 2 min,
-    # the older case first, Beatriz 1 min), then the case waiting on the customer.
-    assert names == ["Patricia", "Marcela", "Larissa", "Beatriz", "Joaquín"]
+    # new/to_reply by the oldest last interaction (Patricia 14 min, Larissa 12.5 min, Marcela
+    # 2 min, Beatriz 1 min), then the case waiting on the customer.
+    assert names == ["Patricia", "Larissa", "Marcela", "Beatriz", "Joaquín"]
     assert [c.customer.display_name.split()[0] for c in closed] == ["Héctor", "Claudia", "Patricia"]
     assert (counts.all, counts.to_reply, counts.new, counts.waiting, counts.closed) == (
         5,

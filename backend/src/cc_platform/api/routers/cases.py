@@ -28,6 +28,7 @@ from cc_platform.api.schemas.cases import (
 )
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.application.cases.dto import CloseCaseCommand, PostTurnCommand
+from cc_platform.application.pagination import MAX_SEQUENCE
 from cc_platform.application.security import Actor
 from cc_platform.domain.cases.values import InboxStatus
 from cc_platform.domain.people.staff import StaffRole
@@ -138,7 +139,9 @@ async def list_turns(
     actor: AnalystOrSupervisor,
     api: ApiContextDep,
     cursor: Annotated[str | None, Query(max_length=32)] = None,
-    after_sequence: Annotated[int | None, Query(alias="afterSequence", ge=0)] = None,
+    after_sequence: Annotated[
+        int | None, Query(alias="afterSequence", ge=0, le=MAX_SEQUENCE)
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> TurnPage:
     if cursor is not None and after_sequence is not None:

@@ -15,14 +15,19 @@ All seeded accounts share the development password ``DEMO_PASSWORD`` (documented
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.security import PasswordHasher
-from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
+from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
 from cc_platform.domain.people.login_account import LoginAccount
+from cc_platform.domain.people.mfa import MfaMethod
+from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Language, Staff, StaffRole
+from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.ids import BODY_LENGTH, IdPrefix, make_id
+from cc_platform.infrastructure.seed.timeline import SeedTimeline
 
 DEMO_PASSWORD = "demo1234"
 DEMO_EMAIL_DOMAIN = "latambank.example"
@@ -115,10 +120,127 @@ async def seed_demo_staff(
     return created
 
 
-#: Only Daniela takes new cases at first, so the demo lands on her. Signing in as Sebastián
-#: or Tomás (es, pt, no cases) and switching to "Disponible" shows the least-loaded
-#: balancing (and drains the seeded Portuguese queue).
-DEMO_AVAILABLE_ANALYSTS: frozenset[int] = frozenset({1})
+#: Analysts who start ``available``. Nobody: the seeded queues hold cases nobody available
+#: could take (rule 3), so an available Spanish or Portuguese speaker would contradict them.
+#: Sign in as Daniela (es, pt) and switch to "Disponible": the queues drain to her, oldest
+#: first, and new chats land on her. Sebastián or Tomás (es, pt, no cases) then show the
+#: least-loaded balancing.
+DEMO_AVAILABLE_ANALYSTS: frozenset[int] = frozenset()
+
+#: Analysts who were available and paused this long before the first seed (slice 3 §9.3),
+#: each with a ``staff.availability_changed`` at the story's time:
+#: - Paula paused before Lucía moved her case (114) to Julián;
+#: - Julián is the "En pausa" row of "Equipo y colas" (signed in, see ``DEMO_SESSIONS``);
+#: - Daniela paused right after her last new case (103) and before the queued cases (111,
+#:   112, 109) arrived, which is why they wait.
+DEMO_PAUSED_BEFORE: dict[int, timedelta] = {
+    3: timedelta(minutes=33),
+    2: timedelta(minutes=20),
+    1: timedelta(minutes=12),
+}
+
+#: Seeded staff sessions, started this long before the first seed (slice 3 §9.3): Julián is
+#: signed in (so "En pausa", not "Desconectada") until the session's normal TTL runs out.
+DEMO_SESSIONS: dict[int, timedelta] = {2: timedelta(minutes=45)}
+#: How long the paused analysts had been available before pausing (the story). Daniela's
+#: oldest open case arrived 50 minutes before the seed, so her shift started earlier.
+_AVAILABLE_SINCE = timedelta(minutes=45)
+_AVAILABLE_SINCE_BY_ANALYST: dict[int, timedelta] = {1: timedelta(minutes=60)}
+
+
+def seed_session_id(number: int) -> str:
+    """Stable id of a seeded session. The ``Z…`` body keeps it apart from generated ids
+    (time-ordered ULIDs, or the sequential ids of the tests)."""
+    return make_id(IdPrefix.SESSION, str(number).rjust(BODY_LENGTH, "Z"))
+
+
+def _analyst_ref(number: int) -> ActorRef:
+    return ActorRef(ActorRole.ANALYST, seed_staff_id(number))
+
+
+async def add_demo_sessions(
+    unit: UnitOfWork,
+    t: datetime,
+    timeline: SeedTimeline,
+    *,
+    ttl: timedelta,
+    sessions: dict[int, timedelta] = DEMO_SESSIONS,
+) -> int:
+    """Seeded sign-ins (``auth.session_started`` with the story's time) missing from
+    ``unit``; their events go to ``timeline``. Returns how many."""
+    created = 0
+    for number, ago in sessions.items():
+        session_id = seed_session_id(number)
+        if await unit.sessions.get(session_id) is not None:
+            continue
+        session = StaffSession.start(
+            session_id=session_id,
+            staff_id=seed_staff_id(number),
+            now=t - ago,
+            ttl=ttl,
+            mfa_method=MfaMethod.TOTP,
+            actor=_analyst_ref(number),
+        )
+        await unit.sessions.add(session)
+        timeline.take(session)
+        created += 1
+    return created
+
+
+async def seed_demo_sessions(
+    uow: UnitOfWorkFactory,
+    clock: Clock,
+    *,
+    ttl: timedelta,
+    sessions: dict[int, timedelta] = DEMO_SESSIONS,
+) -> int:
+    """``add_demo_sessions`` in its own Unit of Work. Idempotent; the session expires after
+    ``ttl`` like any other (delete the database to re-anchor)."""
+    timeline = SeedTimeline()
+    async with uow() as unit:
+        created = await add_demo_sessions(unit, clock.now(), timeline, ttl=ttl, sessions=sessions)
+        timeline.record_into(unit)
+        await unit.commit()
+    return created
+
+
+async def add_demo_availability(
+    unit: UnitOfWork,
+    t: datetime,
+    timeline: SeedTimeline,
+    *,
+    seeds: tuple[StaffSeed, ...] = DEMO_STAFF,
+    available: frozenset[int] = DEMO_AVAILABLE_ANALYSTS,
+    paused_before: dict[int, timedelta] = DEMO_PAUSED_BEFORE,
+) -> int:
+    """Availability rows for every seeded analyst that has none; the pauses' events go to
+    ``timeline``. Returns how many."""
+    created = 0
+    for seed in seeds:
+        if StaffRole.ANALYST not in seed.roles:
+            continue
+        staff_id = seed_staff_id(seed.number)
+        if await unit.availability.get(staff_id) is not None:
+            continue
+        ago = paused_before.get(seed.number)
+        if ago is not None:
+            # Through the domain, so the log has the pause at the story's time.
+            since = _AVAILABLE_SINCE_BY_ANALYST.get(seed.number, _AVAILABLE_SINCE)
+            row = AnalystAvailability(
+                staff_id=staff_id, status=AvailabilityStatus.AVAILABLE, since=t - since
+            )
+            row.change(AvailabilityStatus.PAUSED, now=t - ago, actor=_analyst_ref(seed.number))
+        else:
+            status = (
+                AvailabilityStatus.AVAILABLE
+                if seed.number in available
+                else AvailabilityStatus.PAUSED
+            )
+            row = AnalystAvailability(staff_id=staff_id, status=status, since=t)
+        await unit.availability.add(row)
+        timeline.take(row)
+        created += 1
+    return created
 
 
 async def seed_demo_availability(
@@ -127,25 +249,19 @@ async def seed_demo_availability(
     *,
     seeds: tuple[StaffSeed, ...] = DEMO_STAFF,
     available: frozenset[int] = DEMO_AVAILABLE_ANALYSTS,
+    paused_before: dict[int, timedelta] = DEMO_PAUSED_BEFORE,
 ) -> int:
-    """Availability rows for every seeded analyst that has none. Idempotent."""
-    created = 0
-    now = clock.now()
+    """``add_demo_availability`` in its own Unit of Work. Idempotent."""
+    timeline = SeedTimeline()
     async with uow() as unit:
-        for seed in seeds:
-            if StaffRole.ANALYST not in seed.roles:
-                continue
-            staff_id = seed_staff_id(seed.number)
-            if await unit.availability.get(staff_id) is not None:
-                continue
-            status = (
-                AvailabilityStatus.AVAILABLE
-                if seed.number in available
-                else AvailabilityStatus.PAUSED
-            )
-            await unit.availability.add(
-                AnalystAvailability(staff_id=staff_id, status=status, since=now)
-            )
-            created += 1
+        created = await add_demo_availability(
+            unit,
+            clock.now(),
+            timeline,
+            seeds=seeds,
+            available=available,
+            paused_before=paused_before,
+        )
+        timeline.record_into(unit)
         await unit.commit()
     return created

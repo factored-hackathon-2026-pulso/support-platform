@@ -49,7 +49,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.sessions = InMemoryStaffSessionRepository(store.sessions, track)
         self.availability = InMemoryAnalystAvailabilityRepository(store.availability, track)
         self.customers = InMemoryCustomerRepository(store.customers)
-        self.cases = InMemoryCaseRepository(store.cases, track)
+        self.cases = InMemoryCaseRepository(store.cases, track, store.assignments)
         self.turns = InMemoryTurnRepository(store.turns)
         self.assignments = InMemoryAssignmentRepository(store.assignments)
         self.case_slots = InMemoryCustomerCaseSlotRepository(store.case_slots, track)

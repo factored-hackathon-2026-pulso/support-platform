@@ -31,6 +31,7 @@ from cc_platform.api.schemas.customer import (
     PostCustomerTurnResponse,
 )
 from cc_platform.application.cases.dto import PostTurnCommand
+from cc_platform.application.pagination import MAX_SEQUENCE
 from cc_platform.domain.cases.values import CaseChannel
 
 router = APIRouter(prefix="/customer", tags=["customer"])
@@ -72,7 +73,9 @@ async def create_session(
 async def get_conversation(
     customer: CurrentCustomer,
     api: ApiContextDep,
-    after_sequence: Annotated[int | None, Query(alias="afterSequence", ge=0)] = None,
+    after_sequence: Annotated[
+        int | None, Query(alias="afterSequence", ge=0, le=MAX_SEQUENCE)
+    ] = None,
 ) -> CustomerConversationResponse:
     result = await api.use_cases.cases.customer_conversation.execute(
         customer, after_sequence=after_sequence

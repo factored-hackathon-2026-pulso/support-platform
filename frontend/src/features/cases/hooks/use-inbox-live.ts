@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@/components/ui'
-import { useRealtimeClient, useRealtimeStatus } from '@/lib/realtime'
+import { envelopeActor, useOnReconnect, useRealtimeClient } from '@/lib/realtime'
 import { availabilityKeys, caseKeys } from '../api'
-import { assignedToastCopy } from '../model'
+import { assignedToastCopy, unassignedToastCopy } from '../model'
 import { readCaseSummary } from '../realtime'
 
 /** Time on screen of the new-case toast (paused while hovered or focused). */
@@ -12,11 +12,14 @@ export const ASSIGNED_TOAST_MS = 6000
 /**
  * Live behaviour of the list that needs React (the cache handlers live in
  * realtime.ts):
- * - `case.assigned` → toast "Te llegó un caso nuevo", or "{Nombre} volvió a
- *   escribir" when the case continues a closed one (once per envelope id). The
+ * - `case.assigned` → toast "Te llegó un caso nuevo", "{Nombre} volvió a
+ *   escribir" when the case continues a closed one, or "Te asignaron un caso"
+ *   when a supervisor chose her (once per envelope id). The
  *   toast goes away as soon as its case is the selected one or closes, so "Ver
  *   caso" never points at a case already open or closed; no toast for a case
  *   that is already selected;
+ * - `case.unassigned` → toast "Supervisión reasignó un caso" (once per envelope
+ *   id; the cache handler drops the case from her lists);
  * - socket back from `reconnecting` → refetch the inbox and the availability,
  *   since envelopes may have been missed while it was down (contract §5.3).
  */
@@ -25,7 +28,6 @@ export function useInboxLive(
   selectedCaseId: string | null,
 ): void {
   const client = useRealtimeClient()
-  const status = useRealtimeStatus()
   const queryClient = useQueryClient()
   const { toast, dismiss } = useToast()
 
@@ -61,14 +63,24 @@ export function useInboxLive(
           if (summary?.status === 'closed') dismissFor(summary.id)
           return
         }
+        if (envelope.type === 'case.unassigned') {
+          if (seen.current.has(envelope.id)) return
+          const summary = readCaseSummary(envelope)
+          if (!summary) return
+          seen.current.add(envelope.id)
+          dismissFor(summary.id)
+          toast({ ...unassignedToastCopy(summary), duration: ASSIGNED_TOAST_MS })
+          return
+        }
         if (envelope.type !== 'case.assigned' || seen.current.has(envelope.id)) return
         const summary = readCaseSummary(envelope)
         if (!summary) return
         seen.current.add(envelope.id)
         if (summary.id === selected.current) return
         dismissFor(summary.id)
+        const fromSupervisor = envelopeActor(envelope)?.role === 'supervisor'
         const toastId = toast({
-          ...assignedToastCopy(summary),
+          ...assignedToastCopy(summary, { fromSupervisor }),
           duration: ASSIGNED_TOAST_MS,
           actions: [{ label: 'Ver caso', onClick: () => openCase.current(summary.id) }],
         })
@@ -77,12 +89,8 @@ export function useInboxLive(
     [client, toast, dismissFor],
   )
 
-  const previous = useRef(status)
-  useEffect(() => {
-    if (previous.current === 'reconnecting' && status === 'open') {
-      void queryClient.invalidateQueries({ queryKey: caseKeys.inboxes() })
-      void queryClient.invalidateQueries({ queryKey: availabilityKeys.me() })
-    }
-    previous.current = status
-  }, [status, queryClient])
+  useOnReconnect(() => {
+    void queryClient.invalidateQueries({ queryKey: caseKeys.inboxes() })
+    void queryClient.invalidateQueries({ queryKey: availabilityKeys.me() })
+  })
 }

@@ -256,12 +256,13 @@ class AssignCase:
 - **Contract of `place`.** It runs **inside the caller's Unit of Work** and never commits. It reads the candidates through `AnalystDirectory.candidates(uow)`: active analysts, availability `available`, `open_case_count` over `assigned | in_progress`, `last_assigned_at`.
 - **Assigned.** If the strategy picks someone: `Case.assign` + an `Assignment` row (`waited_seconds` = `now − queued_at` for `queue_drained`, else `None`) + a staff-only `routing` banner. Returns True.
 - **Nobody eligible.** Only when the case has no `case.queued` yet: `mark_waiting_in_queue` + the queued banner. Returns False. A drain attempt that still finds nobody changes nothing.
+- **First in, first out per language queue (slice 3 review fix).** For a new arrival (`language_least_loaded`), `place` first assigns the cases already waiting in that language's queue, oldest first (`queue_drained`, same Unit of Work, the chosen analyst's load updated after each pick), and only then the new case. Normally the queue is empty when someone eligible is available (it drains on availability); this covers a new case racing the background drain. A drain committing first makes the arrival retry on fresh state.
 - **`LanguageLeastLoadedStrategy`** (rule 3, unchanged from slice 1). It keeps the candidates who speak `case.language`, then takes `min(open_case_count, last_assigned_at or epoch, staff_id)`. `policy_rule_id = "H1"` when `pt`, else `None`.
 - **Callers:**
   1. **`PostCustomerTurn`**, when it opens a case. Steps in **one** Unit of Work: CAS the customer slot; `Case.open`; the customer message (seq 1); the opened notice (seq 2); the "volvió a escribir" banner if `previous_case_id` (§4.6); then `assign_case.place(reason=language_least_loaded)`; commit. The POST response therefore already says `with_agent` or `waiting_agent`. No background routing job exists.
   2. **`DrainQueue.execute()`**: queued cases, oldest `opened_at` first, each in its own UoW with `retry_on_conflict`, `reason=queue_drained`. It returns how many were assigned.
 - **`QueueDrainer`** (process manager, bus subscriber on `staff.availability_changed`, `to_status = available`). It spawns `DrainQueue` through the `BackgroundTasks` port.
-- **Known limits (documented, accepted).** Two cases opened at the same instant may both pick the same least-loaded analyst. An analyst who pauses at the same instant may still get one case. A new case may be assigned while an older queued case waits, if the new one's language has an available speaker and the old one's does not. Slice 3 shows the queue to supervisors.
+- **Known limits (documented, accepted).** Two cases opened at the same instant may both pick the same least-loaded analyst. An analyst who pauses at the same instant may still get one case. A new case may be assigned while an older queued case of **another** language waits, if the new one's language has an available speaker and the old one's does not (never one of its own language: see the FIFO rule above). Slice 3 shows the queue to supervisors.
 
 ### 3.2 Startup
 
@@ -579,7 +580,7 @@ The ids are stable (`seed_staff_id(n)`, `seed_customer_id(n)`, `seed_case_id(n)`
 
 | n | Name | Roles | Languages | Team | Availability |
 |---|---|---|---|---|---|
-| 1 | Daniela Ríos | Analista | es, pt | Disputas · Equipo Andes | **available** |
+| 1 | Daniela Ríos | Analista | es, pt | Disputas · Equipo Andes | **available** (slice 3 §9.3: paused since T−12m) |
 | 2 | Julián Ortega | Analista | es | Disputas · Equipo Andes | paused |
 | 3 | Paula Medina | Analista | es | Disputas · Equipo Pacífico | paused |
 | 4 | Sebastián Cárdenas | Analista | es, pt | Disputas · Equipo Pacífico | paused |
@@ -637,7 +638,8 @@ Shorthand in this table: **c** = a customer message; **a** = a message by the ca
 | 109 | 1008 Gabriela | `web_chat` · **pt** · medium | **queued** in "Cola en portugués" (no inbox) | opened T−6m; SLA due T+9m | none | c "Olá, preciso de ajuda com uma compra que não reconheço." · notice (pt) · banner "No hay personas disponibles que hablen portugués: el caso espera en la cola en portugués." |
 
 Notes:
-- **Case 109 is deliberately queued** while Daniela (es, pt) is available. The story is that she was paused when it arrived; startup runs no drain (§3.2). Two ways to drain it:
+- **Superseded by slice 3 §9.** Rule 3 forbids a queued case while an eligible analyst is available, so slice 3 seeds Daniela **paused** (since T−12m, before 109, 111 and 112 arrived) and moves her new cases 101, 108, 102 and 103 before that pause. Her inbox counts are unchanged.
+- **Case 109 is deliberately queued**: nobody available speaks Portuguese (Daniela paused before it arrived); startup runs no drain (§3.2). Two ways to drain it:
   - Daniela: "En pausa" → "Disponible", and she gets it;
   - sign in as Sebastián or Tomás (es, pt, 0 cases) and switch to "Disponible", and he gets it (least loaded).
 
@@ -727,7 +729,7 @@ One agent owns all of `frontend/`. It may extend `components/ui` and `styles/ind
     history: 'lista' | string | null      // null = sheet closed
   }
   ```
-- **Auto-select:** the first case of the current filter when `caso` is missing (unchanged, also in Cerrados).
+- **Auto-select:** the first case of the current filter when `caso` is missing (unchanged, also in Cerrados), once per loaded list (the screen opening, or the analyst picking another filter). Never for a case that arrives over the socket afterwards (slice 3 review fix): opening it would mark it read and record an open the analyst never made, and the "Te asignaron un caso" / "Te llegó un caso nuevo" toast with "Ver caso" is how she opens it.
 - **After a close:** the case moves to Cerrados, and the Workspace selects the next open case as today (`nextCaseAfterClose`).
 - **Empty state (`emptyWorkspaceCopy`):**
   - Available: "No tienes casos abiertos" / "Estás disponible. Cuando un cliente escriba y te corresponda, aparece aquí."
@@ -743,7 +745,7 @@ One agent owns all of `frontend/`. It may extend `components/ui` and `styles/ind
 - **`ArrivalNote`.** One muted line under the header, labelled "Cómo llegó a ti", built by `arrivalLine(detail, meId)` from `assignment` only:
   - Assignee is me, `language_least_loaded`: "Te llegó porque estás disponible y hablas {español|portugués}{' (regla 3)' if pt} · {fecha, hora}".
   - Assignee is me, `queue_drained`: "Esperó {formatWait(waitedSeconds)} en la {queueLabel en minúscula} y te llegó cuando quedaste disponible · {fecha, hora}".
-  - Assignee is someone else (history or supervisor view): "Lo atendió {analystName}".
+  - Assignee is someone else (history or supervisor view): "Lo atendió {analystName}". Superseded in slice 3 §8.3 (`arrivalNote`: "Quién lo atiende" / "Quién lo atendió").
   - `assignment === null`: nothing.
 - **Transcript:**
   - variants `customer`, `own`, `analyst` (another analyst, e.g. Julián in a history case), `routing` (centred accent banner, staff only) and `notice` (centred muted);

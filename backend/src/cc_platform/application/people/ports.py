@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
 
 from cc_platform.domain.people.availability import AnalystAvailability
@@ -46,6 +47,10 @@ class MfaChallengeRepository(Protocol):
 
 class StaffSessionRepository(Protocol):
     async def get(self, session_id: str) -> StaffSession | None: ...
+
+    async def active_staff_ids(self, now: datetime) -> set[str]:
+        """Staff with at least one active session (not ended, ``expires_at > now``)."""
+        ...
 
     async def add(self, session: StaffSession) -> None: ...
 

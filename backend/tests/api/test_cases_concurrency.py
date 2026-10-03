@@ -52,7 +52,12 @@ def send(http: httpx.AsyncClient, token: str, text: str, cmid: str) -> object:
 async def test_parallel_first_messages_open_one_case(
     setup: tuple[httpx.AsyncClient, Container],
 ) -> None:
-    http, _ = setup
+    http, container = setup
+    # Daniela starts her shift ("Disponible"): she takes the seeded queues, then new chats.
+    await http.put(
+        "/api/v1/me/availability", headers=await daniela_headers(http), json={"status": "available"}
+    )
+    await container.background.drain()
     token = await customer_token(http, 2001)
     responses = await asyncio.gather(
         *(send(http, token, f"Mensaje {i}", str(uuid.uuid4())) for i in range(6))  # type: ignore[misc]

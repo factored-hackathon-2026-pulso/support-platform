@@ -9,7 +9,7 @@ export type RoleId = 'analyst' | 'supervisor' | 'admin'
  * owns the data (app/rail-indicators.ts); a key nobody feeds shows nothing.
  */
 export type RailIndicatorKey =
-  /** Cases waiting in a language queue (slice 3 feeds it; nobody does yet). */
+  /** Cases waiting in a language queue (fed by `useQueuedCasesCount`, supervision). */
   'queuedCases'
 
 /** Value of one indicator: a count (orange badge) and/or a dot (something new). */
@@ -66,7 +66,14 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
     home: '/supervision/equipo',
     avatarTone: 'peach',
     nav: [
-      { to: '/supervision/equipo', label: 'Equipo y colas', icon: Users },
+      {
+        to: '/supervision/equipo',
+        label: 'Equipo y colas',
+        icon: Users,
+        indicator: 'queuedCases',
+        // The read-only case view is reached from the team screen.
+        alsoActiveOn: ['/supervision/casos'],
+      },
       { to: '/supervision/auditoria', label: 'Auditoría', icon: Shield },
     ],
   },
@@ -78,6 +85,11 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
     avatarTone: 'success',
     nav: [{ to: '/administracion/usuarios', label: 'Usuarios y roles', icon: UserPlus }],
   },
+}
+
+/** Supervisor read-only view of one case (slice 3 §8.1). */
+export function supervisionCasePath(caseId: string): string {
+  return `/supervision/casos/${caseId}`
 }
 
 /** Display order in the role switcher and priority for "first role home". */

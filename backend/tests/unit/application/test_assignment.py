@@ -30,6 +30,7 @@ from tests.support import (
     TOMAS,
     actor_for,
     customer_actor,
+    make_available_quietly,
     memory_container,
 )
 
@@ -37,6 +38,7 @@ ES, PT = Language.SPANISH, Language.PORTUGUESE
 T = datetime(2026, 10, 2, 14, tzinfo=UTC)
 CASE = "CASE-" + "0" * 25 + "1"
 GABRIELA_QUEUED = seed_case_id(109)
+DANIELA = seed_staff_id(1)
 
 
 def candidate(
@@ -96,7 +98,10 @@ def test_least_loaded_then_longest_idle_then_staff_id() -> None:
 
 
 async def test_directory_lists_only_available_analysts_with_their_open_load() -> None:
-    container = await memory_container()  # Daniela available (5 open cases), others paused
+    container = await memory_container()  # nobody available at seed
+    async with container.uow() as uow:
+        assert await RepositoryAnalystDirectory().candidates(uow) == []
+    await make_available_quietly(container.uow, DANIELA)  # 5 open cases
     async with container.uow() as uow:
         candidates = await RepositoryAnalystDirectory().candidates(uow)
     assert [(c.name, c.open_case_count) for c in candidates] == [("Daniela Ríos", 5)]
@@ -110,6 +115,7 @@ async def test_directory_lists_only_available_analysts_with_their_open_load() ->
 # ----------------------------------------------------------------------------- AssignCase
 async def test_assign_case_runs_in_the_opens_unit_of_work() -> None:
     container = await memory_container()
+    await make_available_quietly(container.uow, DANIELA)
     result = await container.use_cases.cases.post_customer_turn.execute(
         customer_actor(2004), message("Olá, não reconheço uma compra")
     )
@@ -206,12 +212,64 @@ async def test_queue_drains_oldest_first_with_the_wait() -> None:
 
 async def test_least_loaded_bilingual_analyst_gets_the_queued_portuguese_case() -> None:
     container = await memory_container()
+    await make_available_quietly(container.uow, DANIELA)
     await set_availability(container, TOMAS.number, AvailabilityStatus.AVAILABLE)
     await container.background.drain()
     async with container.uow() as uow:
         gabriela = await uow.cases.get(GABRIELA_QUEUED)
     assert gabriela is not None
     assert gabriela.assigned_analyst_id == seed_staff_id(TOMAS.number)  # 0 cases vs Daniela's 5
+
+
+async def test_a_new_arrival_never_jumps_its_language_queue() -> None:
+    """FIFO per language queue: an eligible analyst available while cases of that language
+    still wait (a new case racing the background drain) takes the waiting ones first, in
+    the arrival's Unit of Work; the other language's queue is not touched."""
+    container = await memory_container()
+    await make_available_quietly(container.uow, DANIELA)
+    rafael = await container.use_cases.cases.post_customer_turn.execute(
+        customer_actor(2004), message("Olá")
+    )
+    assert rafael.conversation.status.value == "with_agent"
+    async with container.uow() as uow:
+        gabriela = await uow.cases.get(GABRIELA_QUEUED)
+        drained = await uow.assignments.latest_for_case(GABRIELA_QUEUED)
+        arrival = await uow.assignments.latest_for_case(rafael.conversation.case_id)
+        queued = [c.id for c in await uow.cases.list_by_status(CaseStatus.QUEUED)]
+        banner = (await uow.turns.page(GABRIELA_QUEUED, limit=10))[-1]
+    assert gabriela is not None
+    assert (gabriela.status, gabriela.assigned_analyst_id) == (CaseStatus.ASSIGNED, DANIELA)
+    assert drained is not None
+    assert arrival is not None
+    assert (drained.reason, drained.waited_seconds) == (AssignmentReason.QUEUE_DRAINED, 6 * 60)
+    assert drained.id < arrival.id  # the older case first
+    assert arrival.reason is AssignmentReason.LANGUAGE_LEAST_LOADED
+    assert arrival.open_cases_at_assignment == drained.open_cases_at_assignment + 1
+    assert banner.text == "Asignado a Daniela Ríos después de 6 min en la cola en portugués."
+    assert queued == [seed_case_id(111), seed_case_id(112)]  # Spanish queue untouched
+
+
+async def test_serving_the_queue_first_keeps_the_least_loaded_choice() -> None:
+    container = await memory_container()
+    sebastian, tomas = seed_staff_id(SEBASTIAN.number), seed_staff_id(TOMAS.number)
+    await make_available_quietly(container.uow, sebastian, tomas)
+    natalia = await container.use_cases.cases.post_customer_turn.execute(
+        customer_actor(2001), message("Hola")
+    )
+    async with container.uow() as uow:
+        rosa = await uow.cases.get(seed_case_id(111))
+        mauricio = await uow.cases.get(seed_case_id(112))
+        mine = await uow.cases.get(natalia.conversation.case_id)
+    assert rosa is not None
+    assert mauricio is not None
+    assert mine is not None
+    # Both start with 0 open: Rosa → Sebastián (staff id), Mauricio → Tomás (Sebastián now
+    # holds one), the new case → Sebastián (1 each; the staff id breaks the tie).
+    assert [rosa.assigned_analyst_id, mauricio.assigned_analyst_id, mine.assigned_analyst_id] == [
+        sebastian,
+        tomas,
+        sebastian,
+    ]
 
 
 async def test_queue_drainer_reacts_only_to_becoming_available() -> None:

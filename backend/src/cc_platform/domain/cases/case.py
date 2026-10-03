@@ -3,8 +3,10 @@
 State machine (slice 2 contract §2.3; explicit transitions, anything else raises
 ``InvalidTransitionError``, and writing to a closed case raises ``CaseClosedError``)::
 
-    open ──▶ queued ──▶ assigned        (AssignCase in the open's Unit of Work, or a drain)
+    open ──▶ queued ──▶ assigned        (AssignCase in the open's Unit of Work, a drain, or a
+                                          supervisor by hand)
     assigned ──▶ in_progress            (the assignee opens or replies)
+    assigned | in_progress ──▶ assigned (a supervisor reassigns it to another analyst)
     assigned | in_progress ──▶ closed   (the assignee closes with a reason; terminal)
 
 A closed case never reopens: the customer's next message opens a new case linked through
@@ -37,6 +39,7 @@ from cc_platform.domain.cases.events import (
 from cc_platform.domain.cases.turn import Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
     CLOSABLE_STATUSES,
+    OPEN_ASSIGNED_STATUSES,
     REPLYABLE_STATUSES,
     CaseChannel,
     CasePriority,
@@ -322,11 +325,45 @@ class Case(AggregateRoot):
         return True
 
     def assign(self, assignment: Assignment) -> None:
-        """``queued → assigned`` (slice 3 adds reassignment of an open case)."""
+        """``queued → assigned``: on arrival, from the queue (drain) or by a supervisor."""
         self._require(CaseStatus.QUEUED, target=CaseStatus.ASSIGNED)
+        self._check_assignment(assignment)
+        if assignment.previous_staff_id is not None:
+            raise InvalidValueError("a queued case has no previous analyst", field="previous")
+        self._hand_to(assignment, previous=None)
+
+    def reassign(self, assignment: Assignment) -> None:
+        """``assigned | in_progress → assigned`` to **another** analyst (a supervisor).
+
+        The case is Nuevo for her until she opens it: the read cursor restarts, the unread
+        customer messages stay unread. From ``in_progress`` it first records
+        ``case.status_changed`` (``reason: reassigned``). The SLA is untouched: a pending
+        first response is now hers.
+        """
+        if self.is_closed:
+            raise CaseClosedError()
+        if self.status not in OPEN_ASSIGNED_STATUSES:
+            raise invalid_case_transition(self.status, CaseStatus.ASSIGNED.value)
+        self._check_assignment(assignment)
+        previous = self.assigned_analyst_id
+        if assignment.staff_id == previous:
+            raise InvalidValueError("the case already belongs to that analyst", field="staff_id")
+        if assignment.previous_staff_id != previous:
+            raise InvalidValueError("previous analyst does not match", field="previous")
+        if self.status is CaseStatus.IN_PROGRESS:
+            self._change_status(
+                CaseStatus.ASSIGNED,
+                at=assignment.assigned_at,
+                actor=assignment.assigned_by,
+                reason="reassigned",
+            )
+        self._hand_to(assignment, previous=previous)
+
+    def _check_assignment(self, assignment: Assignment) -> None:
         if assignment.case_id != self.id:
             raise InvalidValueError("assignment belongs to another case", field="case_id")
-        previous = self.assigned_analyst_id
+
+    def _hand_to(self, assignment: Assignment, *, previous: str | None) -> None:
         self.status = CaseStatus.ASSIGNED
         self.assigned_analyst_id = assignment.staff_id
         self.assigned_at = assignment.assigned_at
@@ -346,6 +383,7 @@ class Case(AggregateRoot):
                 open_cases_at_assignment=assignment.open_cases_at_assignment,
                 strategy=assignment.strategy,
                 waited_seconds=assignment.waited_seconds,
+                paused_override=assignment.paused_override,
             )
         )
 

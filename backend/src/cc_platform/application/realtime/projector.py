@@ -19,6 +19,7 @@ from cc_platform.application.ports.realtime import RealtimeEnvelope, RealtimeHub
 from cc_platform.application.realtime.topics import Topic
 from cc_platform.domain.people.events import SessionEnded
 from cc_platform.domain.shared.events import DomainEvent
+from cc_platform.domain.shared.json import JsonObject
 
 type TopicRule = Callable[[DomainEvent], Iterable[Topic]]
 
@@ -60,6 +61,31 @@ def envelope_for(record: EventRecord) -> RealtimeEnvelope:
             "caseId": record.case_id,
             "actor": {"role": record.actor_role, "id": record.actor_id},
             "payload": record.payload(),
+        },
+    )
+
+
+def derived_envelope(
+    record: EventRecord,
+    kind: str,
+    payload: JsonObject,
+    *,
+    actor_role: str | None = None,
+    actor_id: str | None,
+) -> RealtimeEnvelope:
+    """An envelope a context projection derives from a committed event (``id`` = the source
+    event id, payload = a REST-shaped view). ``actor_role``/``actor_id`` let the caller hide
+    who acted (customer topics never learn staff ids)."""
+    return RealtimeEnvelope(
+        type=kind,
+        id=record.event_id,
+        occurred_at=record.event_time,
+        data={
+            "entity": record.entity,
+            "entityId": record.entity_id,
+            "caseId": record.case_id,
+            "actor": {"role": actor_role or record.actor_role, "id": actor_id},
+            "payload": payload,
         },
     )
 

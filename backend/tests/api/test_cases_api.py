@@ -69,12 +69,12 @@ def test_inbox_lists_the_open_cases_with_counts(
         "closed": 3,
         "computedAt": "2026-10-02T14:00:00Z",
     }
-    assert [i["id"] for i in body["items"]] == [PATRICIA_AGAIN, MARCELA, LARISSA, BEATRIZ, JOAQUIN]
+    assert [i["id"] for i in body["items"]] == [PATRICIA_AGAIN, LARISSA, MARCELA, BEATRIZ, JOAQUIN]
     first = body["items"][0]
     assert set(first) == SUMMARY_KEYS
     assert (first["inboxStatus"], first["previousCaseId"]) == ("new", PATRICIA_REFUND)
     beatriz = body["items"][3]
-    assert (beatriz["firstResponseAt"], beatriz["slaDueAt"]) == (None, "2026-10-02T14:03:00Z")
+    assert (beatriz["firstResponseAt"], beatriz["slaDueAt"]) == (None, "2026-10-02T14:02:00Z")
     assert body["serverTime"] == "2026-10-02T14:00:00Z"
 
 
@@ -152,6 +152,7 @@ def test_case_detail_for_the_assignee(client: TestClient, daniela: dict[str, str
         "canReply": True,
         "replyBlockedReason": None,
         "canClose": True,
+        "canAssign": False,
     }
     portuguese = client.get(f"/api/v1/cases/{LARISSA}", headers=daniela).json()
     assert portuguese["assignment"]["policyRuleId"] == "H1"
@@ -170,6 +171,7 @@ def test_closed_case_detail(client: TestClient, daniela: dict[str, str]) -> None
         "canReply": False,
         "replyBlockedReason": "closed",
         "canClose": False,
+        "canAssign": False,
     }
 
 
@@ -229,6 +231,7 @@ def test_history_access_is_read_only(
         "canReply": False,
         "replyBlockedReason": "not_assignee",
         "canClose": False,
+        "canAssign": False,
     }
     turns = client.get(f"/api/v1/cases/{PATRICIA_OLD}/turns", headers=daniela).json()
     assert [t["authorName"] for t in turns["items"] if t["authorRole"] == "analyst"] == [
@@ -273,6 +276,36 @@ def test_turn_pages(client: TestClient, daniela: dict[str, str]) -> None:
     assert (both.status_code, both.json()["code"]) == (422, "validation_error")
     bad = client.get(f"/api/v1/cases/{BEATRIZ}/turns?cursor=abc", headers=daniela)
     assert bad.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"cursor": "²"},  # str.isdigit() accepts it, int() does not
+        {"cursor": "٣"},  # an Arabic-Indic digit: int() would read it as 3
+        {"cursor": "0"},
+        {"cursor": "9223372036854775808"},  # 2**63: no SQLite INTEGER holds it
+        {"cursor": "9" * 23},
+        {"afterSequence": "9223372036854775808"},
+        {"afterSequence": "99999999999999999999999"},
+        {"afterSequence": "-1"},
+    ],
+)
+def test_tampered_turn_cursors_are_422(
+    client: TestClient, daniela: dict[str, str], params: dict[str, str]
+) -> None:
+    response = client.get(f"/api/v1/cases/{BEATRIZ}/turns", params=params, headers=daniela)
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] in {"validation_error", "invalid_value"}
+
+
+def test_the_largest_sequence_is_still_a_valid_cursor(
+    client: TestClient, daniela: dict[str, str]
+) -> None:
+    edge = str(2**63 - 1)
+    for params in ({"cursor": edge}, {"afterSequence": edge}):
+        response = client.get(f"/api/v1/cases/{BEATRIZ}/turns", params=params, headers=daniela)
+        assert response.status_code == 200, response.text
 
 
 # ----------------------------------------------------------------------------- replies
@@ -360,6 +393,7 @@ def test_close_with_every_reason(client: TestClient, daniela: dict[str, str], re
         "canReply": False,
         "replyBlockedReason": "closed",
         "canClose": False,
+        "canAssign": False,
     }
 
 
@@ -418,7 +452,10 @@ def test_availability(
     client: TestClient, daniela: dict[str, str], sign_in: Callable[[str], str]
 ) -> None:
     mine = client.get("/api/v1/me/availability", headers=daniela)
-    assert mine.json()["status"] == "available"
+    assert mine.json()["status"] == "paused"  # nobody starts available (seed)
+    back = client.put("/api/v1/me/availability", headers=daniela, json={"status": "available"})
+    assert back.status_code == 200
+    assert back.json()["status"] == "available"
     paused = client.put("/api/v1/me/availability", headers=daniela, json={"status": "paused"})
     assert paused.status_code == 200
     assert paused.json()["status"] == "paused"

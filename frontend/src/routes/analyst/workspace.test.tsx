@@ -301,6 +301,38 @@ describe('/analista (Workspace)', () => {
     await waitFor(() => expect(heading).toHaveFocus())
   })
 
+  it('keeps a case assigned over the socket in the toast and never opens it on its own', async () => {
+    const assigned = { ...seededInbox[1]!, version: 99 }
+    vi.mocked(fetchInbox)
+      .mockResolvedValueOnce(emptyInbox)
+      .mockResolvedValue(makeInbox([assigned]))
+    const { router, sockets } = renderWorkspace()
+    await screen.findByRole('heading', { level: 2, name: 'No tienes casos abiertos' })
+    act(() => {
+      sockets.last()?.open()
+      sockets.last()?.receive({
+        type: 'case.assigned',
+        id: 'EVT-ASSIGNED-10',
+        occurredAt: NOW.toISOString(),
+        data: {
+          entity: 'case',
+          entityId: SECOND,
+          caseId: SECOND,
+          actor: { role: 'supervisor', id: 'STF-00000000000000000000000005' },
+          payload: assigned,
+        },
+      })
+    })
+    expect(await screen.findByText('Te asignaron un caso')).toBeInTheDocument()
+    const list = await screen.findByRole('list', { name: 'Casos' })
+    await within(list).findByRole('button', { name: /Marcela Quintana Pardo/ })
+    // Opening it would mark it read and log an open she never made: it stays Nuevo.
+    expect(searchOf(router).get('caso')).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Conversación del caso' })).not.toBeInTheDocument()
+    expect(screen.getByText('Te asignaron un caso')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ver caso' })).toBeInTheDocument()
+  })
+
   it('subscribes to the analyst inbox topic', async () => {
     const { sockets } = renderWorkspace()
     await screen.findByText(`Conversación ${FIRST}`)

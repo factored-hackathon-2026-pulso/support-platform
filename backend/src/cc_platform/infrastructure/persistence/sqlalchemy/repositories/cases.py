@@ -6,12 +6,12 @@ from collections.abc import Collection
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Column, exists, func, insert, select
+from sqlalchemy import Column, exists, func, insert, or_, select
 from sqlalchemy import case as sql_case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cc_platform.application.cases.ports import AssigneeLoad
+from cc_platform.application.cases.ports import AssigneeLoad, CaseRef
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case, CaseClosure
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
@@ -156,6 +156,22 @@ class SqlCaseRepository(VersionedRepository[Case]):
         c = self.table.c
         return await self._list(c.status == status.value, order=(c.opened_at, c.id))
 
+    async def list_by_statuses(self, statuses: Collection[CaseStatus]) -> list[Case]:
+        c = self.table.c
+        return await self._list(c.status.in_([s.value for s in statuses]))
+
+    async def refs(self, case_ids: Collection[str]) -> dict[str, CaseRef]:
+        if not case_ids:
+            return {}
+        c = self.table.c
+        rows = await self._session.execute(
+            select(c.id, c.customer_id, c.language).where(c.id.in_(list(case_ids)))
+        )
+        return {
+            row.id: CaseRef(customer_id=row.customer_id, language=Language(row.language))
+            for row in rows
+        }
+
     async def list_for_customer(self, customer_id: str) -> list[Case]:
         c = self.table.c
         return await self._list(
@@ -163,9 +179,17 @@ class SqlCaseRepository(VersionedRepository[Case]):
         )
 
     async def exists_for_customer_and_assignee(self, customer_id: str, staff_id: str) -> bool:
-        c = self.table.c
+        c, a = self.table.c, tables.assignments.c
+        held_before = (
+            select(a.id)
+            .join(self.table, self.table.c.id == a.case_id)
+            .where(a.staff_id == staff_id, c.customer_id == customer_id)
+        )
         statement = select(
-            exists().where(c.customer_id == customer_id, c.assigned_analyst_id == staff_id)
+            or_(
+                exists().where(c.customer_id == customer_id, c.assigned_analyst_id == staff_id),
+                held_before.exists(),
+            )
         )
         return bool((await self._session.execute(statement)).scalar())
 
@@ -325,6 +349,8 @@ class SqlAssignmentRepository(_AppendOnly):
                 "assigned_by_role": assignment.assigned_by.role.value,
                 "assigned_by_id": assignment.assigned_by.actor_id,
                 "waited_seconds": assignment.waited_seconds,
+                "previous_staff_id": assignment.previous_staff_id,
+                "paused_override": assignment.paused_override,
             },
         )
 
@@ -350,6 +376,8 @@ class SqlAssignmentRepository(_AppendOnly):
             assigned_at=row["assigned_at"],
             assigned_by=ActorRef(ActorRole(row["assigned_by_role"]), row["assigned_by_id"]),
             waited_seconds=row["waited_seconds"],
+            previous_staff_id=row["previous_staff_id"],
+            paused_override=bool(row["paused_override"]),
         )
 
 

@@ -1,4 +1,4 @@
-import { use, useCallback, useEffect, useSyncExternalStore } from 'react'
+import { use, useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { RealtimeClient } from './client'
 import { RealtimeContext } from './context'
 import type { ConnectionStatus, RealtimeTopic } from './types'
@@ -23,4 +23,23 @@ export function useRealtimeStatus(): ConnectionStatus {
   const client = useRealtimeClient()
   const subscribe = useCallback((onChange: () => void) => client.onStatusChange(onChange), [client])
   return useSyncExternalStore(subscribe, () => client.getStatus())
+}
+
+/**
+ * Runs `callback` when the socket comes back from `reconnecting` to `open`:
+ * envelopes may have been missed while it was down, so callers refetch what the
+ * missed events would have patched. The latest `callback` is used (no need to
+ * memoize it); nothing runs while `enabled` is false.
+ */
+export function useOnReconnect(callback: () => void, enabled = true): void {
+  const status = useRealtimeStatus()
+  const previous = useRef(status)
+  const latest = useRef(callback)
+  useEffect(() => {
+    latest.current = callback
+  })
+  useEffect(() => {
+    if (enabled && previous.current === 'reconnecting' && status === 'open') latest.current()
+    previous.current = status
+  }, [status, enabled])
 }

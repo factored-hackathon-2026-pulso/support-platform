@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import type { ApiProblem } from '@/lib/api'
-import { topics, useRealtimeStatus, useRealtimeSubscription } from '@/lib/realtime'
+import { topics, useOnReconnect, useRealtimeSubscription } from '@/lib/realtime'
 import {
   customerChatKeys,
   customerChatMutationKeys,
@@ -83,15 +83,10 @@ export function usePastConversation(
  */
 export function useCustomerChatLive(customerId: string): void {
   useRealtimeSubscription(topics.customer(customerId))
-  const status = useRealtimeStatus()
   const queryClient = useQueryClient()
-  const previous = useRef(status)
-  useEffect(() => {
-    if (previous.current === 'reconnecting' && status === 'open') {
-      void queryClient.invalidateQueries({ queryKey: customerChatKeys.conversation(customerId) })
-    }
-    previous.current = status
-  }, [status, customerId, queryClient])
+  useOnReconnect(() => {
+    void queryClient.invalidateQueries({ queryKey: customerChatKeys.conversation(customerId) })
+  })
 }
 
 /**

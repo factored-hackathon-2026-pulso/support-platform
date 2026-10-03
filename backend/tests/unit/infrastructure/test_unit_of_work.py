@@ -326,3 +326,26 @@ async def test_an_outdated_database_fails_fast_at_startup(tmp_path: Path) -> Non
     with pytest.raises(OutdatedSchemaError, match=r"staff\.version"):
         await database.create_schema()
     await database.dispose()
+
+
+async def test_a_slice_2_database_lists_the_new_assignment_columns(tmp_path: Path) -> None:
+    url = f"sqlite+aiosqlite:///{tmp_path / 'slice2.db'}"
+    old = Database(url)
+    async with old.engine.begin() as connection:  # slice 2 ``assignments``, no slice 3 columns
+        await connection.execute(
+            text(
+                "CREATE TABLE assignments (id VARCHAR(40) PRIMARY KEY, case_id VARCHAR(40), "
+                "staff_id VARCHAR(40), reason VARCHAR(40), policy_rule_id VARCHAR(20), "
+                "open_cases_at_assignment INTEGER, strategy VARCHAR(80), assigned_at DATETIME, "
+                "assigned_by_role VARCHAR(20), assigned_by_id VARCHAR(120), "
+                "waited_seconds INTEGER)"
+            )
+        )
+    await old.dispose()
+
+    database = Database(url)
+    with pytest.raises(OutdatedSchemaError) as raised:
+        await database.create_schema()
+    assert "assignments.previous_staff_id" in str(raised.value)
+    assert "assignments.paused_override" in str(raised.value)
+    await database.dispose()

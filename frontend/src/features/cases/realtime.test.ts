@@ -42,7 +42,13 @@ function envelope(type: string, payload: unknown, id = 'EVT-1'): RealtimeEnvelop
 describe('registerCasesRealtime', () => {
   it('handles the inbox event types of the contract', () => {
     const { registry, queryClient } = setup()
-    for (const type of ['case.updated', 'case.assigned', 'inbox.counts', 'availability.updated']) {
+    for (const type of [
+      'case.updated',
+      'case.assigned',
+      'case.unassigned',
+      'inbox.counts',
+      'availability.updated',
+    ]) {
       expect(registry.dispatch(envelope(type, {}), queryClient)).toBe(1)
     }
   })
@@ -92,6 +98,14 @@ describe('registerCasesRealtime', () => {
     expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(nuevos)?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(toReply)?.isInvalidated).toBe(false)
+  })
+
+  it('case.unassigned drops a reassigned case from the previous assignee inboxes', () => {
+    const { registry, queryClient, todos, toReply } = setup()
+    const gone = makeCaseSummary({ version: 4, assignedAnalystId: 'STF-OTHER', inboxStatus: 'new' })
+    registry.dispatch(envelope('case.unassigned', gone), queryClient)
+    expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(toReply)?.isInvalidated).toBe(true)
   })
 
   it('a close moves the card out of the open inboxes and into Cerrados', () => {

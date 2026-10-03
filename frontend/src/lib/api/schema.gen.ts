@@ -3,6 +3,43 @@
  * Import it only from `src/lib/api/client.ts` (the API boundary).
  */
 export interface paths {
+  '/api/v1/audit/events': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The event log, newest first, with filters
+     * @description Filters combine with AND. `actorKind`: staff (any staff role), customer or system. `family` and `changesOnly` come from the backend catalog. `from` is inclusive and `to` exclusive (on the event time). `q` is a case-insensitive contains on ids only (event, entity, case, actor). `nextCursor` is opaque: pass it as `cursor`.
+     */
+    get: operations['audit_list_events']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/audit/events/{eventId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** One event of the log (redacted like the list) */
+    get: operations['audit_get_event']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/auth/login': {
     parameters: {
       query?: never
@@ -378,10 +415,103 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/supervision/cases/{caseId}/assignee': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Assign a queued case, or reassign an open case, to an analyst
+     * @description Checks in this order: the case exists (404) · it is not closed (409 `case_closed`) · the target is an active analyst (422 `analyst_not_eligible`) · she speaks the case language (rule 3, 422 `language_mismatch`) · she already holds it (200, `changed: false`, nothing happens) · the holder is still `expectedAnalystId` (409 `assignment_changed`) · a paused target needs `confirmPaused` (409 `analyst_paused`). A reassignment tells the customer who attends them now; a staff banner records every assignment.
+     */
+    put: operations['supervision_set_assignee']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/queues': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The language queues (es, pt) with their cases, oldest first */
+    get: operations['supervision_get_queues']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/team': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Analysts by team: what each one is doing now, her load and open cases
+     * @description Active staff holding the analyst role. `activity` is derived (never stored): busy or available while available (with or without open cases, even without a session), paused when paused and signed in, offline when paused and not signed in.
+     */
+    get: operations['supervision_get_team']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
 }
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** ActivityCounts */
+    ActivityCounts: {
+      /** Available */
+      available: number
+      /** Busy */
+      busy: number
+      /** Offline */
+      offline: number
+      /** Paused */
+      paused: number
+    }
+    /**
+     * ActorRole
+     * @enum {string}
+     */
+    ActorRole: 'analyst' | 'supervisor' | 'admin' | 'customer' | 'system'
+    /**
+     * AnalystActivity
+     * @description What an analyst is doing now ("Ahora"), derived from availability, sessions and load.
+     *
+     *     ``busy`` "Atendiendo" · ``available`` "Disponible" · ``paused`` "En pausa" ·
+     *     ``offline`` "Desconectada" (paused and not signed in).
+     * @enum {string}
+     */
+    AnalystActivity: 'busy' | 'available' | 'paused' | 'offline'
+    /** AnalystCaseCounts */
+    AnalystCaseCounts: {
+      /** New */
+      new: number
+      /** Open */
+      open: number
+      /** Toreply */
+      toReply: number
+      /** Waiting */
+      waiting: number
+    }
     /** AssignmentOut */
     AssignmentOut: {
       /** Analystid */
@@ -393,10 +523,24 @@ export interface components {
        * Format: date-time
        */
       assignedAt: string
+      /**
+       * Assignedbyname
+       * @description The supervisor's name; null for system.
+       */
+      assignedByName: string | null
+      /** @description 'system' (language_least_loaded, queue_drained) or 'supervisor' (manual). */
+      assignedByRole: components['schemas']['ActorRole']
       /** Id */
       id: string
       /** Policyruleid */
       policyRuleId: string | null
+      /**
+       * Previousanalystid
+       * @description Who held it before (reassignment).
+       */
+      previousAnalystId: string | null
+      /** Previousanalystname */
+      previousAnalystName: string | null
       /**
        * Queuelabel
        * @description Set when the case waited in a queue.
@@ -405,16 +549,127 @@ export interface components {
       reason: components['schemas']['AssignmentReason']
       /**
        * Waitedseconds
-       * @description Queue wait (queue_drained), else null.
+       * @description Queue wait (queue_drained, or manual from the queue), else null.
        */
       waitedSeconds: number | null
     }
     /**
      * AssignmentReason
-     * @description Why a case reached its analyst. Slice 3 adds ``manual`` (a supervisor).
+     * @description Why a case reached its analyst: on arrival, from the queue when someone became
+     *     available, or ``manual`` (a supervisor chose her, from the queue or by reassignment).
      * @enum {string}
      */
-    AssignmentReason: 'language_least_loaded' | 'queue_drained'
+    AssignmentReason: 'language_least_loaded' | 'queue_drained' | 'manual'
+    /** AssignmentResult */
+    AssignmentResult: {
+      assignment: components['schemas']['AssignmentOut']
+      case: components['schemas']['CaseSummary']
+      /**
+       * Changed
+       * @description false: the analyst already held it (no-op).
+       */
+      changed: boolean
+    }
+    /** AuditActor */
+    AuditActor: {
+      /** Id */
+      id: string
+      /**
+       * Name
+       * @description Staff or customer name; null for the platform.
+       */
+      name: string | null
+      role: components['schemas']['ActorRole']
+    }
+    /**
+     * AuditActorKind
+     * @description "Quién": the team (any staff role), customers, or the platform itself.
+     * @enum {string}
+     */
+    AuditActorKind: 'staff' | 'customer' | 'system'
+    /** AuditCaseRef */
+    AuditCaseRef: {
+      /** Customername */
+      customerName: string | null
+      /** Id */
+      id: string
+    }
+    /** AuditEvent */
+    AuditEvent: {
+      actor: components['schemas']['AuditActor']
+      /** @description Set when the event concerns a case. */
+      caseRef: components['schemas']['AuditCaseRef'] | null
+      /**
+       * Changesstate
+       * @description "CAMBIO": the event changed something.
+       */
+      changesState: boolean
+      /**
+       * Description
+       * @description Spanish, from the backend catalog.
+       */
+      description: string
+      /**
+       * Entity
+       * @description case | turn | staff | staff_session | mfa_challenge | customer.
+       */
+      entity: string
+      /** Entityid */
+      entityId: string
+      family: components['schemas']['AuditFamily']
+      /**
+       * Id
+       * @example EVT-01J…
+       */
+      id: string
+      /**
+       * Ingestedat
+       * Format: date-time
+       */
+      ingestedAt: string
+      /**
+       * Occurredat
+       * Format: date-time
+       * @description event_time.
+       */
+      occurredAt: string
+      /**
+       * Payload
+       * @description snake_case keys as stored, after redaction (no message text).
+       */
+      payload: {
+        [key: string]: unknown
+      }
+      /**
+       * Redactedfields
+       * @description Payload keys removed by the PII policy.
+       */
+      redactedFields: string[]
+      /**
+       * Type
+       * @description event_type, e.g. case.assigned.
+       * @example case.assigned
+       */
+      type: string
+    }
+    /** AuditEventPage */
+    AuditEventPage: {
+      /**
+       * Items
+       * @description Newest first.
+       */
+      items: components['schemas']['AuditEvent'][]
+      /**
+       * Nextcursor
+       * @description Opaque; null on the last page.
+       */
+      nextCursor: string | null
+    }
+    /**
+     * AuditFamily
+     * @enum {string}
+     */
+    AuditFamily: 'conversation' | 'assignment' | 'lifecycle' | 'availability' | 'access' | 'other'
     /** Availability */
     Availability: {
       /**
@@ -431,6 +686,11 @@ export interface components {
     AvailabilityStatus: 'available' | 'paused'
     /** CaseCapabilities */
     CaseCapabilities: {
+      /**
+       * Canassign
+       * @description The caller is a supervisor and the case is open ("Asignar"/"Reasignar").
+       */
+      canAssign: boolean
       /** Canclose */
       canClose: boolean
       /** Canreply */
@@ -875,6 +1135,39 @@ export interface components {
      * @enum {string}
      */
     Language: 'es' | 'pt'
+    /** LanguageQueue */
+    LanguageQueue: {
+      /**
+       * Atrisk
+       * @description At serverTime; the UI recomputes it.
+       */
+      atRisk: number
+      /**
+       * Availablespeakers
+       * @description Active analysts, available, who speak it.
+       */
+      availableSpeakers: number
+      /**
+       * Cases
+       * @description Queued, oldest openedAt first.
+       */
+      cases: components['schemas']['CaseSummary'][]
+      /**
+       * Label
+       * @example Cola en español
+       */
+      label: string
+      language: components['schemas']['Language']
+      /** Oldestqueuedat */
+      oldestQueuedAt: string | null
+      /**
+       * Speakers
+       * @description Active analysts who speak it (any availability).
+       */
+      speakers: number
+      /** Waiting */
+      waiting: number
+    }
     /** LoginRequest */
     LoginRequest: {
       /**
@@ -996,6 +1289,10 @@ export interface components {
       | 'case_not_assigned'
       | 'case_closed'
       | 'idempotency_conflict'
+      | 'analyst_not_eligible'
+      | 'language_mismatch'
+      | 'analyst_paused'
+      | 'assignment_changed'
       | 'invalid_value'
       | 'policy_violation'
       | 'validation_error'
@@ -1014,7 +1311,24 @@ export interface components {
      *     ``additionalProperties``.
      */
     ProblemDetails: {
+      /**
+       * Analystid
+       * @description analyst_not_eligible, language_mismatch, analyst_paused: the target.
+       * @default null
+       */
+      analystId: string | null
+      /**
+       * @description language_mismatch: the language of the case.
+       * @default null
+       */
+      caseLanguage: components['schemas']['Language'] | null
       code: components['schemas']['ProblemCode']
+      /**
+       * Currentanalystid
+       * @description assignment_changed: who holds the case now (null = it is queued).
+       * @default null
+       */
+      currentAnalystId: string | null
       /**
        * @description invalid_transition, case_closed: the case status now.
        * @default null
@@ -1036,6 +1350,12 @@ export interface components {
        * @default null
        */
       instance: string | null
+      /**
+       * Policyruleid
+       * @description language_mismatch: the rule behind it ("H1", rule 3).
+       * @default null
+       */
+      policyRuleId: string | null
       /**
        * Remainingattempts
        * @description invalid_credentials, mfa_invalid: failed attempts left before the lock.
@@ -1071,6 +1391,43 @@ export interface components {
     } & {
       [key: string]: unknown
     }
+    /** QueueCount */
+    QueueCount: {
+      language: components['schemas']['Language']
+      /** Oldestqueuedat */
+      oldestQueuedAt: string | null
+      /** Waiting */
+      waiting: number
+    }
+    /** QueueCounts */
+    QueueCounts: {
+      /**
+       * Bylanguage
+       * @description es then pt.
+       */
+      byLanguage: components['schemas']['QueueCount'][]
+      /**
+       * Computedat
+       * Format: date-time
+       */
+      computedAt: string
+      /** Total */
+      total: number
+    }
+    /** QueueOverview */
+    QueueOverview: {
+      counts: components['schemas']['QueueCounts']
+      /**
+       * Queues
+       * @description Always es then pt, even when empty.
+       */
+      queues: components['schemas']['LanguageQueue'][]
+      /**
+       * Servertime
+       * Format: date-time
+       */
+      serverTime: string
+    }
     /**
      * ReplyBlockedReason
      * @enum {string}
@@ -1099,6 +1456,25 @@ export interface components {
        */
       tokenType: 'Bearer'
     }
+    /** SetAssigneeRequest */
+    SetAssigneeRequest: {
+      /**
+       * Analystid
+       * @description STF-… of the analyst to assign.
+       */
+      analystId: string
+      /**
+       * Confirmpaused
+       * @description Assign even if the analyst is paused.
+       * @default false
+       */
+      confirmPaused: boolean
+      /**
+       * Expectedanalystid
+       * @description Required: who the caller saw holding the case (null = it was queued).
+       */
+      expectedAnalystId: string | null
+    }
     /** StaffListResponse */
     StaffListResponse: {
       /** Items */
@@ -1125,6 +1501,98 @@ export interface components {
      * @enum {string}
      */
     StaffRole: 'analyst' | 'supervisor' | 'admin'
+    /** TeamAnalyst */
+    TeamAnalyst: {
+      /** @description Derived: busy/available (available, with or without open cases), paused (paused and signed in), offline (paused and not signed in). */
+      activity: components['schemas']['AnalystActivity']
+      /** @description No availability row = paused. */
+      availability: components['schemas']['AvailabilityStatus']
+      /**
+       * Availabilitysince
+       * @description null when never set.
+       */
+      availabilitySince: string | null
+      counts: components['schemas']['AnalystCaseCounts']
+      /** Id */
+      id: string
+      /**
+       * Languages
+       * @description Sorted (es, pt).
+       */
+      languages: components['schemas']['Language'][]
+      /** Name */
+      name: string
+      /**
+       * Oldestwaitingsince
+       * @description Oldest lastInteractionAt of her new/to_reply cases; null if none.
+       */
+      oldestWaitingSince: string | null
+      /**
+       * Opencases
+       * @description assigned | in_progress, inbox order.
+       */
+      openCases: components['schemas']['CaseSummary'][]
+      /**
+       * Roles
+       * @description Canonical order.
+       */
+      roles: components['schemas']['StaffRole'][]
+      /**
+       * Signedin
+       * @description At least one active staff session.
+       */
+      signedIn: boolean
+      team: components['schemas']['TeamRef']
+    }
+    /** TeamOverview */
+    TeamOverview: {
+      /**
+       * Analysts
+       * @description By activity (busy, available, paused, offline), then name, then id.
+       */
+      analysts: components['schemas']['TeamAnalyst'][]
+      /**
+       * Servertime
+       * Format: date-time
+       */
+      serverTime: string
+      /**
+       * Teams
+       * @description By name.
+       */
+      teams: components['schemas']['TeamSummary'][]
+    }
+    /** TeamRef */
+    TeamRef: {
+      /**
+       * Key
+       * @description Stable slug of the team name (opaque to clients).
+       */
+      key: string
+      /** Name */
+      name: string
+    }
+    /** TeamSummary */
+    TeamSummary: {
+      /** @description The team's analysts by activity. */
+      activity: components['schemas']['ActivityCounts']
+      /** Analystcount */
+      analystCount: number
+      /**
+       * Atriskcases
+       * @description At serverTime; the UI recomputes it.
+       */
+      atRiskCases: number
+      /** Key */
+      key: string
+      /** Name */
+      name: string
+      /**
+       * Opencases
+       * @description Open cases of the team's analysts.
+       */
+      openCases: number
+    }
     /** Turn */
     Turn: {
       audience: components['schemas']['TurnAudience']
@@ -1207,6 +1675,122 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  audit_list_events: {
+    parameters: {
+      query?: {
+        actorKind?: components['schemas']['AuditActorKind'] | null
+        actorId?: string | null
+        caseId?: string | null
+        family?: components['schemas']['AuditFamily'] | null
+        changesOnly?: boolean
+        from?: string | null
+        to?: string | null
+        q?: string | null
+        cursor?: string | null
+        limit?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AuditEventPage']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  audit_get_event: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        eventId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AuditEvent']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   auth_login: {
     parameters: {
       query?: never
@@ -2233,6 +2817,153 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807): validation_error */
       422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  supervision_set_assignee: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetAssigneeRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AssignmentResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  supervision_get_queues: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['QueueOverview']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  supervision_get_team: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeamOverview']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
         headers: {
           [name: string]: unknown
         }

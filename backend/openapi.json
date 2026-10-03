@@ -1,6 +1,84 @@
 {
   "components": {
     "schemas": {
+      "ActivityCounts": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "integer"
+          },
+          "busy": {
+            "title": "Busy",
+            "type": "integer"
+          },
+          "offline": {
+            "title": "Offline",
+            "type": "integer"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "busy",
+          "available",
+          "paused",
+          "offline"
+        ],
+        "title": "ActivityCounts",
+        "type": "object"
+      },
+      "ActorRole": {
+        "enum": [
+          "analyst",
+          "supervisor",
+          "admin",
+          "customer",
+          "system"
+        ],
+        "title": "ActorRole",
+        "type": "string"
+      },
+      "AnalystActivity": {
+        "description": "What an analyst is doing now (\"Ahora\"), derived from availability, sessions and load.\n\n``busy`` \"Atendiendo\" · ``available`` \"Disponible\" · ``paused`` \"En pausa\" ·\n``offline`` \"Desconectada\" (paused and not signed in).",
+        "enum": [
+          "busy",
+          "available",
+          "paused",
+          "offline"
+        ],
+        "title": "AnalystActivity",
+        "type": "string"
+      },
+      "AnalystCaseCounts": {
+        "properties": {
+          "new": {
+            "title": "New",
+            "type": "integer"
+          },
+          "open": {
+            "title": "Open",
+            "type": "integer"
+          },
+          "toReply": {
+            "title": "Toreply",
+            "type": "integer"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "open",
+          "new",
+          "toReply",
+          "waiting"
+        ],
+        "title": "AnalystCaseCounts",
+        "type": "object"
+      },
       "AssignmentOut": {
         "properties": {
           "analystId": {
@@ -16,6 +94,22 @@
             "title": "Assignedat",
             "type": "string"
           },
+          "assignedByName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The supervisor's name; null for system.",
+            "title": "Assignedbyname"
+          },
+          "assignedByRole": {
+            "$ref": "#/components/schemas/ActorRole",
+            "description": "'system' (language_least_loaded, queue_drained) or 'supervisor' (manual)."
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -30,6 +124,29 @@
               }
             ],
             "title": "Policyruleid"
+          },
+          "previousAnalystId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who held it before (reassignment).",
+            "title": "Previousanalystid"
+          },
+          "previousAnalystName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previousanalystname"
           },
           "queueLabel": {
             "anyOf": [
@@ -55,7 +172,7 @@
                 "type": "null"
               }
             ],
-            "description": "Queue wait (queue_drained), else null.",
+            "description": "Queue wait (queue_drained, or manual from the queue), else null.",
             "title": "Waitedseconds"
           }
         },
@@ -67,18 +184,249 @@
           "policyRuleId",
           "assignedAt",
           "queueLabel",
-          "waitedSeconds"
+          "waitedSeconds",
+          "assignedByRole",
+          "assignedByName",
+          "previousAnalystId",
+          "previousAnalystName"
         ],
         "title": "AssignmentOut",
         "type": "object"
       },
       "AssignmentReason": {
-        "description": "Why a case reached its analyst. Slice 3 adds ``manual`` (a supervisor).",
+        "description": "Why a case reached its analyst: on arrival, from the queue when someone became\navailable, or ``manual`` (a supervisor chose her, from the queue or by reassignment).",
         "enum": [
           "language_least_loaded",
-          "queue_drained"
+          "queue_drained",
+          "manual"
         ],
         "title": "AssignmentReason",
+        "type": "string"
+      },
+      "AssignmentResult": {
+        "properties": {
+          "assignment": {
+            "$ref": "#/components/schemas/AssignmentOut"
+          },
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "changed": {
+            "description": "false: the analyst already held it (no-op).",
+            "title": "Changed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "changed",
+          "case",
+          "assignment"
+        ],
+        "title": "AssignmentResult",
+        "type": "object"
+      },
+      "AuditActor": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Staff or customer name; null for the platform.",
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ActorRole"
+          }
+        },
+        "required": [
+          "role",
+          "id",
+          "name"
+        ],
+        "title": "AuditActor",
+        "type": "object"
+      },
+      "AuditActorKind": {
+        "description": "\"Quién\": the team (any staff role), customers, or the platform itself.",
+        "enum": [
+          "staff",
+          "customer",
+          "system"
+        ],
+        "title": "AuditActorKind",
+        "type": "string"
+      },
+      "AuditCaseRef": {
+        "properties": {
+          "customerName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customername"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "customerName"
+        ],
+        "title": "AuditCaseRef",
+        "type": "object"
+      },
+      "AuditEvent": {
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/AuditActor"
+          },
+          "caseRef": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuditCaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the event concerns a case."
+          },
+          "changesState": {
+            "description": "\"CAMBIO\": the event changed something.",
+            "title": "Changesstate",
+            "type": "boolean"
+          },
+          "description": {
+            "description": "Spanish, from the backend catalog.",
+            "title": "Description",
+            "type": "string"
+          },
+          "entity": {
+            "description": "case | turn | staff | staff_session | mfa_challenge | customer.",
+            "title": "Entity",
+            "type": "string"
+          },
+          "entityId": {
+            "title": "Entityid",
+            "type": "string"
+          },
+          "family": {
+            "$ref": "#/components/schemas/AuditFamily"
+          },
+          "id": {
+            "examples": [
+              "EVT-01J…"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "ingestedAt": {
+            "format": "date-time",
+            "title": "Ingestedat",
+            "type": "string"
+          },
+          "occurredAt": {
+            "description": "event_time.",
+            "format": "date-time",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "description": "snake_case keys as stored, after redaction (no message text).",
+            "title": "Payload",
+            "type": "object"
+          },
+          "redactedFields": {
+            "description": "Payload keys removed by the PII policy.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Redactedfields",
+            "type": "array"
+          },
+          "type": {
+            "description": "event_type, e.g. case.assigned.",
+            "examples": [
+              "case.assigned"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "family",
+          "changesState",
+          "description",
+          "occurredAt",
+          "ingestedAt",
+          "actor",
+          "entity",
+          "entityId",
+          "caseRef",
+          "payload",
+          "redactedFields"
+        ],
+        "title": "AuditEvent",
+        "type": "object"
+      },
+      "AuditEventPage": {
+        "properties": {
+          "items": {
+            "description": "Newest first.",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; null on the last page.",
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "title": "AuditEventPage",
+        "type": "object"
+      },
+      "AuditFamily": {
+        "enum": [
+          "conversation",
+          "assignment",
+          "lifecycle",
+          "availability",
+          "access",
+          "other"
+        ],
+        "title": "AuditFamily",
         "type": "string"
       },
       "Availability": {
@@ -109,6 +457,11 @@
       },
       "CaseCapabilities": {
         "properties": {
+          "canAssign": {
+            "description": "The caller is a supervisor and the case is open (\"Asignar\"/\"Reasignar\").",
+            "title": "Canassign",
+            "type": "boolean"
+          },
           "canClose": {
             "title": "Canclose",
             "type": "boolean"
@@ -131,7 +484,8 @@
         "required": [
           "canReply",
           "replyBlockedReason",
-          "canClose"
+          "canClose",
+          "canAssign"
         ],
         "title": "CaseCapabilities",
         "type": "object"
@@ -1259,6 +1613,71 @@
         "title": "Language",
         "type": "string"
       },
+      "LanguageQueue": {
+        "properties": {
+          "atRisk": {
+            "description": "At serverTime; the UI recomputes it.",
+            "title": "Atrisk",
+            "type": "integer"
+          },
+          "availableSpeakers": {
+            "description": "Active analysts, available, who speak it.",
+            "title": "Availablespeakers",
+            "type": "integer"
+          },
+          "cases": {
+            "description": "Queued, oldest openedAt first.",
+            "items": {
+              "$ref": "#/components/schemas/CaseSummary"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "label": {
+            "examples": [
+              "Cola en español"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "oldestQueuedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldestqueuedat"
+          },
+          "speakers": {
+            "description": "Active analysts who speak it (any availability).",
+            "title": "Speakers",
+            "type": "integer"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "language",
+          "label",
+          "waiting",
+          "oldestQueuedAt",
+          "atRisk",
+          "availableSpeakers",
+          "speakers",
+          "cases"
+        ],
+        "title": "LanguageQueue",
+        "type": "object"
+      },
       "LoginRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1533,6 +1952,10 @@
           "case_not_assigned",
           "case_closed",
           "idempotency_conflict",
+          "analyst_not_eligible",
+          "language_mismatch",
+          "analyst_paused",
+          "assignment_changed",
           "invalid_value",
           "policy_violation",
           "validation_error",
@@ -1550,8 +1973,46 @@
         "additionalProperties": true,
         "description": "RFC 7807 problem. ``code`` is the stable machine identifier clients branch on.\n\nThe optional members below are the documented extensions; a domain error may add other\nstructured details (e.g. ``openCaseId`` on ``conflict``), hence\n``additionalProperties``.",
         "properties": {
+          "analystId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "analyst_not_eligible, language_mismatch, analyst_paused: the target.",
+            "title": "Analystid"
+          },
+          "caseLanguage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Language"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "language_mismatch: the language of the case."
+          },
           "code": {
             "$ref": "#/components/schemas/ProblemCode"
+          },
+          "currentAnalystId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "assignment_changed: who holds the case now (null = it is queued).",
+            "title": "Currentanalystid"
           },
           "currentStatus": {
             "anyOf": [
@@ -1604,6 +2065,19 @@
             ],
             "default": null,
             "title": "Instance"
+          },
+          "policyRuleId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "language_mismatch: the rule behind it (\"H1\", rule 3).",
+            "title": "Policyruleid"
           },
           "remainingAttempts": {
             "anyOf": [
@@ -1685,6 +2159,91 @@
         "title": "ProblemDetails",
         "type": "object"
       },
+      "QueueCount": {
+        "properties": {
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "oldestQueuedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldestqueuedat"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "language",
+          "waiting",
+          "oldestQueuedAt"
+        ],
+        "title": "QueueCount",
+        "type": "object"
+      },
+      "QueueCounts": {
+        "properties": {
+          "byLanguage": {
+            "description": "es then pt.",
+            "items": {
+              "$ref": "#/components/schemas/QueueCount"
+            },
+            "title": "Bylanguage",
+            "type": "array"
+          },
+          "computedAt": {
+            "format": "date-time",
+            "title": "Computedat",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "byLanguage",
+          "computedAt"
+        ],
+        "title": "QueueCounts",
+        "type": "object"
+      },
+      "QueueOverview": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/QueueCounts"
+          },
+          "queues": {
+            "description": "Always es then pt, even when empty.",
+            "items": {
+              "$ref": "#/components/schemas/LanguageQueue"
+            },
+            "title": "Queues",
+            "type": "array"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "queues",
+          "counts",
+          "serverTime"
+        ],
+        "title": "QueueOverview",
+        "type": "object"
+      },
       "ReplyBlockedReason": {
         "enum": [
           "not_assignee",
@@ -1737,6 +2296,42 @@
           "staff"
         ],
         "title": "SessionResponse",
+        "type": "object"
+      },
+      "SetAssigneeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "analystId": {
+            "description": "STF-… of the analyst to assign.",
+            "maxLength": 64,
+            "title": "Analystid",
+            "type": "string"
+          },
+          "confirmPaused": {
+            "default": false,
+            "description": "Assign even if the analyst is paused.",
+            "title": "Confirmpaused",
+            "type": "boolean"
+          },
+          "expectedAnalystId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required: who the caller saw holding the case (null = it was queued).",
+            "title": "Expectedanalystid"
+          }
+        },
+        "required": [
+          "analystId",
+          "expectedAnalystId"
+        ],
+        "title": "SetAssigneeRequest",
         "type": "object"
       },
       "StaffListResponse": {
@@ -1808,6 +2403,194 @@
         ],
         "title": "StaffRole",
         "type": "string"
+      },
+      "TeamAnalyst": {
+        "properties": {
+          "activity": {
+            "$ref": "#/components/schemas/AnalystActivity",
+            "description": "Derived: busy/available (available, with or without open cases), paused (paused and signed in), offline (paused and not signed in)."
+          },
+          "availability": {
+            "$ref": "#/components/schemas/AvailabilityStatus",
+            "description": "No availability row = paused."
+          },
+          "availabilitySince": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when never set.",
+            "title": "Availabilitysince"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/AnalystCaseCounts"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "languages": {
+            "description": "Sorted (es, pt).",
+            "items": {
+              "$ref": "#/components/schemas/Language"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oldestWaitingSince": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Oldest lastInteractionAt of her new/to_reply cases; null if none.",
+            "title": "Oldestwaitingsince"
+          },
+          "openCases": {
+            "description": "assigned | in_progress, inbox order.",
+            "items": {
+              "$ref": "#/components/schemas/CaseSummary"
+            },
+            "title": "Opencases",
+            "type": "array"
+          },
+          "roles": {
+            "description": "Canonical order.",
+            "items": {
+              "$ref": "#/components/schemas/StaffRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "signedIn": {
+            "description": "At least one active staff session.",
+            "title": "Signedin",
+            "type": "boolean"
+          },
+          "team": {
+            "$ref": "#/components/schemas/TeamRef"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "team",
+          "languages",
+          "roles",
+          "availability",
+          "availabilitySince",
+          "signedIn",
+          "activity",
+          "counts",
+          "oldestWaitingSince",
+          "openCases"
+        ],
+        "title": "TeamAnalyst",
+        "type": "object"
+      },
+      "TeamOverview": {
+        "properties": {
+          "analysts": {
+            "description": "By activity (busy, available, paused, offline), then name, then id.",
+            "items": {
+              "$ref": "#/components/schemas/TeamAnalyst"
+            },
+            "title": "Analysts",
+            "type": "array"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          },
+          "teams": {
+            "description": "By name.",
+            "items": {
+              "$ref": "#/components/schemas/TeamSummary"
+            },
+            "title": "Teams",
+            "type": "array"
+          }
+        },
+        "required": [
+          "teams",
+          "analysts",
+          "serverTime"
+        ],
+        "title": "TeamOverview",
+        "type": "object"
+      },
+      "TeamRef": {
+        "properties": {
+          "key": {
+            "description": "Stable slug of the team name (opaque to clients).",
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "TeamRef",
+        "type": "object"
+      },
+      "TeamSummary": {
+        "properties": {
+          "activity": {
+            "$ref": "#/components/schemas/ActivityCounts",
+            "description": "The team's analysts by activity."
+          },
+          "analystCount": {
+            "title": "Analystcount",
+            "type": "integer"
+          },
+          "atRiskCases": {
+            "description": "At serverTime; the UI recomputes it.",
+            "title": "Atriskcases",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "openCases": {
+            "description": "Open cases of the team's analysts.",
+            "title": "Opencases",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "analystCount",
+          "activity",
+          "openCases",
+          "atRiskCases"
+        ],
+        "title": "TeamSummary",
+        "type": "object"
       },
       "Turn": {
         "properties": {
@@ -2019,6 +2802,303 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/audit/events": {
+      "get": {
+        "description": "Filters combine with AND. `actorKind`: staff (any staff role), customer or system. `family` and `changesOnly` come from the backend catalog. `from` is inclusive and `to` exclusive (on the event time). `q` is a case-insensitive contains on ids only (event, entity, case, actor). `nextCursor` is opaque: pass it as `cursor`.",
+        "operationId": "audit_list_events",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "actorKind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AuditActorKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actorkind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actorId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actorid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "caseId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Caseid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AuditFamily"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "changesOnly",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Changesonly",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditEventPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The event log, newest first, with filters",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/api/v1/audit/events/{eventId}": {
+      "get": {
+        "operationId": "audit_get_event",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "EVT-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Eventid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditEvent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "One event of the log (redacted like the list)",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "description": "Wrong credentials return `invalid_credentials` with `remainingAttempts`; the fifth consecutive failure returns `account_locked` (423) with `unlockAt`.",
@@ -2703,6 +3783,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 9223372036854775807,
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -2923,6 +4004,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 9223372036854775807,
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -3483,6 +4565,201 @@
         "summary": "List active staff, optionally by role",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/api/v1/supervision/cases/{caseId}/assignee": {
+      "put": {
+        "description": "Checks in this order: the case exists (404) · it is not closed (409 `case_closed`) · the target is an active analyst (422 `analyst_not_eligible`) · she speaks the case language (rule 3, 422 `language_mismatch`) · she already holds it (200, `changed: false`, nothing happens) · the holder is still `expectedAnalystId` (409 `assignment_changed`) · a paused target needs `confirmPaused` (409 `analyst_paused`). A reassignment tells the customer who attends them now; a staff banner records every assignment.",
+        "operationId": "supervision_set_assignee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAssigneeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Assign a queued case, or reassign an open case, to an analyst",
+        "tags": [
+          "supervision"
+        ]
+      }
+    },
+    "/api/v1/supervision/queues": {
+      "get": {
+        "operationId": "supervision_get_queues",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The language queues (es, pt) with their cases, oldest first",
+        "tags": [
+          "supervision"
+        ]
+      }
+    },
+    "/api/v1/supervision/team": {
+      "get": {
+        "description": "Active staff holding the analyst role. `activity` is derived (never stored): busy or available while available (with or without open cases, even without a session), paused when paused and signed in, offline when paused and not signed in.",
+        "operationId": "supervision_get_team",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Analysts by team: what each one is doing now, her load and open cases",
+        "tags": [
+          "supervision"
         ]
       }
     }

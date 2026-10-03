@@ -40,6 +40,7 @@ from cc_platform.domain.cases.values import (
 )
 from cc_platform.domain.customers.customer import CountryCode, CustomerLocale
 from cc_platform.domain.people.staff import Language
+from cc_platform.domain.shared.actor import ActorRole
 
 TurnText = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_TURN_TEXT)
@@ -175,7 +176,15 @@ class AssignmentOut(ApiModel):
     policy_rule_id: str | None
     assigned_at: datetime
     queue_label: str | None = Field(description="Set when the case waited in a queue.")
-    waited_seconds: int | None = Field(description="Queue wait (queue_drained), else null.")
+    waited_seconds: int | None = Field(
+        description="Queue wait (queue_drained, or manual from the queue), else null."
+    )
+    assigned_by_role: ActorRole = Field(
+        description="'system' (language_least_loaded, queue_drained) or 'supervisor' (manual)."
+    )
+    assigned_by_name: str | None = Field(description="The supervisor's name; null for system.")
+    previous_analyst_id: str | None = Field(description="Who held it before (reassignment).")
+    previous_analyst_name: str | None
 
     @classmethod
     def from_view(cls, view: AssignmentView) -> AssignmentOut:
@@ -188,6 +197,10 @@ class AssignmentOut(ApiModel):
             assigned_at=view.assigned_at,
             queue_label=view.queue_label,
             waited_seconds=view.waited_seconds,
+            assigned_by_role=view.assigned_by_role,
+            assigned_by_name=view.assigned_by_name,
+            previous_analyst_id=view.previous_analyst_id,
+            previous_analyst_name=view.previous_analyst_name,
         )
 
 
@@ -213,6 +226,9 @@ class CaseCapabilities(ApiModel):
     can_reply: bool
     reply_blocked_reason: ReplyBlockedReason | None
     can_close: bool
+    can_assign: bool = Field(
+        description='The caller is a supervisor and the case is open ("Asignar"/"Reasignar").'
+    )
 
     @classmethod
     def from_view(cls, view: CaseCapabilitiesView) -> CaseCapabilities:
@@ -220,6 +236,7 @@ class CaseCapabilities(ApiModel):
             can_reply=view.can_reply,
             reply_blocked_reason=view.reply_blocked_reason,
             can_close=view.can_close,
+            can_assign=view.can_assign,
         )
 
 

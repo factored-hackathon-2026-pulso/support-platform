@@ -1,14 +1,20 @@
-"""Seed cases — "Datos de ejemplo" (slice 2 contract §8.3). Chat only, invented people.
+"""Seed cases — "Datos de ejemplo" (slice 2 contract §8.3, slice 3 §9). Chat only, invented
+people.
 
 Daniela's inbox: Todos 5 · Por responder 2 · Nuevos 2 · Esperando al cliente 1 · Cerrados 3.
-Besides it: one case queued in the Portuguese queue (in no inbox) and one closed case of
-Julián outside the 7-day window (Patricia's history). Times are relative to the clock at
-the **first** seed (``T``); seeding is idempotent per case id, so an existing database keeps
-its old times (delete it, or run with ``CC_PERSISTENCE=memory``, to re-anchor).
+Besides it: three queued cases (two in "Cola en español", one at risk and one overdue; one
+in "Cola en portugués"), Julián's two open cases (one overdue, one that Lucía reassigned to
+him from Paula), one closed case of Julián outside the 7-day window (Patricia's history),
+and Lucía's supervision view of Julián's overdue case (so the audit shows an access event).
+Times are relative to the clock at the **first** seed (``T``); seeding is idempotent per
+case id, so an existing database keeps its old times (delete it, or run with
+``CC_PERSISTENCE=memory``, to re-anchor).
 
 Everything goes through the domain (``Case.open``, ``append_turn``, ``assign``,
-``mark_read``, ``close``) and records its events with the story's own time, so the event
-log, the first-response SLA and "Cómo llegó a ti" agree. There are no bot turns.
+``reassign``, ``mark_read``, ``close``) and records its events with the story's own time,
+so the event log, the first-response SLA and "Cómo llegó a ti" agree. The events reach the
+log in story-time order across every case (``SeedTimeline``), so the audit, which reads the
+log by sequence, lists them as they happened. There are no bot turns.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from cc_platform.application.cases.assignment import (
     LanguageLeastLoadedStrategy,
     language_rule,
 )
+from cc_platform.application.cases.manual_assignment import MANUAL_STRATEGY
 from cc_platform.application.cases.sla import FirstResponseSlaPolicy
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
@@ -30,6 +37,7 @@ from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFac
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
+from cc_platform.domain.cases.events import CaseViewed
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
     AssignmentReason,
@@ -45,8 +53,9 @@ from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.ids import BODY_LENGTH, IdPrefix, make_id
 from cc_platform.infrastructure.seed.customers import DEMO_CUSTOMERS, seed_customer_id
 from cc_platform.infrastructure.seed.people import DEMO_STAFF, seed_staff_id
+from cc_platform.infrastructure.seed.timeline import SeedTimeline
 
-DANIELA, JULIAN = 1, 2
+DANIELA, JULIAN, PAULA, LUCIA = 1, 2, 3, 5
 STRATEGY = LanguageLeastLoadedStrategy().strategy
 SLA = FirstResponseSlaPolicy()
 ES, PT = Language.SPANISH, Language.PORTUGUESE
@@ -59,6 +68,10 @@ def seed_case_id(number: int) -> str:
 
 def _staff_name(number: int) -> str:
     return next(seed.name for seed in DEMO_STAFF if seed.number == number)
+
+
+def _staff_name_of(staff_id: str) -> str:
+    return next(s.name for s in DEMO_STAFF if seed_staff_id(s.number) == staff_id)
 
 
 def _customer_name(number: int) -> str:
@@ -144,6 +157,34 @@ class _Story:
         self.case.assign(assignment)
         self.assignments.append(assignment)
         self.banner(at, copy.assigned_on_arrival(_staff_name(staff), self.case.language))
+
+    def reassign(self, at: datetime, staff: int, *, by: int, open_cases: int) -> None:
+        """A supervisor (``by``) passes the open case to ``staff``: staff banner and the
+        customer notice, as ``SetCaseAssignee`` writes them."""
+        previous = self.case.assigned_analyst_id
+        assignment = Assignment(
+            id=self.ids.new_id(IdPrefix.ASSIGNMENT),
+            case_id=self.case.id,
+            staff_id=seed_staff_id(staff),
+            reason=AssignmentReason.MANUAL,
+            policy_rule_id=language_rule(self.case.language),
+            open_cases_at_assignment=open_cases,
+            strategy=MANUAL_STRATEGY,
+            assigned_at=at,
+            assigned_by=ActorRef(ActorRole.SUPERVISOR, seed_staff_id(by)),
+            previous_staff_id=previous,
+        )
+        self.case.reassign(assignment)
+        self.assignments.append(assignment)
+        previous_name = _staff_name_of(previous) if previous else ""
+        self.banner(at, copy.reassigned(_staff_name(by), previous_name, _staff_name(staff)))
+        self._turn(
+            at,
+            copy.reassigned_notice(self.case.language, _staff_name(staff).split()[0]),
+            kind=TurnKind.NOTICE,
+            role=TurnAuthorRole.SYSTEM,
+            author=None,
+        )
 
     def wait_in_queue(self, at: datetime) -> None:
         label = copy.QUEUE_LABEL[self.case.language]
@@ -314,7 +355,7 @@ def _joaquin_waiting(ids: IdGenerator, t: datetime) -> _Story:
 
 def _marcela_to_reply(ids: IdGenerator, t: datetime) -> _Story:
     """101 · Marcela, web chat; she answered Daniela's question → Por responder."""
-    opened = t - timedelta(minutes=14)
+    opened = t - timedelta(minutes=19)
     s = _open(ids, number=101, customer=1001, channel=WEB, language=ES, opened=opened)
     s.customer(opened, "hola buenas, hay un cargo en mi tarjeta q no reconozco, me colaboran?")
     s.opened_notice(opened)
@@ -330,11 +371,11 @@ def _marcela_to_reply(ids: IdGenerator, t: datetime) -> _Story:
 
 def _beatriz_impatient(ids: IdGenerator, t: datetime) -> _Story:
     """102 · Beatriz, app chat, no answer yet, SLA at risk → Por responder (3 unread)."""
-    opened = t - timedelta(minutes=12)
+    opened = t - timedelta(minutes=13)
     s = _open(ids, number=102, customer=1002, channel=APP, language=ES, opened=opened)
     s.customer(opened, "no reconozco un cargo en mi tarjeta y estoy muy molesta")
     s.opened_notice(opened)
-    s.assign(opened, DANIELA, open_cases=2)
+    s.assign(opened, DANIELA, open_cases=3)
     s.read_up_to(t - timedelta(minutes=9), 3)
     s.customer(t - timedelta(minutes=8), "hola?")
     s.customer(t - timedelta(minutes=5), "hola?? hay alguien??")
@@ -344,7 +385,7 @@ def _beatriz_impatient(ids: IdGenerator, t: datetime) -> _Story:
 
 def _patricia_again(ids: IdGenerator, t: datetime) -> _Story:
     """108 · Patricia wrote again after 104 closed → Nuevos ("Volvió a escribir")."""
-    opened = t - timedelta(minutes=4)
+    opened = t - timedelta(minutes=14)
     s = _open(ids, number=108, customer=1004, channel=APP, language=ES, opened=opened,
               previous=104)  # fmt: skip
     s.customer(opened,
@@ -352,13 +393,14 @@ def _patricia_again(ids: IdGenerator, t: datetime) -> _Story:
                "cuenta.")  # fmt: skip
     s.opened_notice(opened)
     s.wrote_again(opened, t - PATRICIA_104_CLOSED, CloseReason.RESOLVED)
-    s.assign(opened, DANIELA, open_cases=3)
+    s.assign(opened, DANIELA, open_cases=2)
     return s
 
 
 def _larissa_portuguese(ids: IdGenerator, t: datetime) -> _Story:
-    """103 · Larissa, Portuguese web chat, rule 3 → Nuevos."""
-    opened = t - timedelta(minutes=2)
+    """103 · Larissa, Portuguese web chat, rule 3 → Nuevos. Daniela's last new case before
+    her pause (``DEMO_PAUSED_BEFORE``)."""
+    opened = t - timedelta(minutes=12, seconds=30)
     s = _open(ids, number=103, customer=1003, channel=WEB, language=PT, opened=opened)
     s.customer(opened, "Oi, cobraram uma coisa que não corresponde, já estou no limite com isso!")
     s.opened_notice(opened)
@@ -367,9 +409,11 @@ def _larissa_portuguese(ids: IdGenerator, t: datetime) -> _Story:
 
 
 def _gabriela_queued(ids: IdGenerator, t: datetime) -> _Story:
-    """109 · Gabriela, Portuguese web chat that arrived while Daniela was paused → queued.
+    """109 · Gabriela, Portuguese web chat that arrived after Daniela paused (T−12m) →
+    queued: nobody available speaks Portuguese.
 
-    Startup runs no drain: it waits until a Portuguese speaker switches to "Disponible".
+    Startup runs no drain: it waits until a supervisor assigns it or a Portuguese speaker
+    switches to "Disponible".
     """
     opened = t - timedelta(minutes=6)
     s = _open(ids, number=109, customer=1008, channel=WEB, language=PT, opened=opened)
@@ -379,40 +423,137 @@ def _gabriela_queued(ids: IdGenerator, t: datetime) -> _Story:
     return s
 
 
+# ----------------------------------------------------------------------------- slice 3
+def _esteban_reassigned(ids: IdGenerator, t: datetime) -> _Story:
+    """114 · Esteban, web chat (low): Paula got it (Julián tied on load but was assigned
+    more recently), paused at T−33m, and Lucía passed it to Julián, who answered → Julián's
+    Esperando al cliente."""
+    opened = t - timedelta(minutes=40)
+    s = _open(ids, number=114, customer=1012, channel=WEB, language=ES, opened=opened,
+              priority=CasePriority.LOW)  # fmt: skip
+    s.customer(opened, "Quiero saber por qué me cobraron una comisión por manejo.")
+    s.opened_notice(opened)
+    s.assign(opened, PAULA, open_cases=0)
+    s.reassign(t - timedelta(minutes=32), JULIAN, by=LUCIA, open_cases=1)
+    s.analyst(t - timedelta(minutes=30),
+              "Hola, Esteban. Soy Julián, de LATAM Bank. Ya reviso la comisión; ¿de qué mes "
+              "es el cobro?")  # fmt: skip
+    return s
+
+
+def _camila_overdue(ids: IdGenerator, t: datetime) -> _Story:
+    """113 · Camila, app chat with Julián (the least loaded: Daniela and Paula held one case
+    each): he opened it but never answered, SLA vencido → Julián's Por responder (he paused
+    afterwards)."""
+    opened = t - timedelta(minutes=34)
+    s = _open(ids, number=113, customer=1011, channel=APP, language=ES, opened=opened)
+    s.customer(opened, "Hola, hice una transferencia y no le llegó a mi hermano.")
+    s.opened_notice(opened)
+    s.assign(opened, JULIAN, open_cases=0)
+    s.read_up_to(t - timedelta(minutes=22), 3)
+    s.customer(t - timedelta(minutes=12), "¿Me ayudan por favor?")
+    return s
+
+
+def _rosa_queued(ids: IdGenerator, t: datetime) -> _Story:
+    """111 · Rosa, app chat, the first case after Daniela paused → queued in "Cola en
+    español", SLA at risk (due in 4 min)."""
+    opened = t - timedelta(minutes=11)
+    s = _open(ids, number=111, customer=1009, channel=APP, language=ES, opened=opened)
+    s.customer(opened, "Buenas, me llegó un cobro de una suscripción que cancelé hace meses.")
+    s.opened_notice(opened)
+    s.wait_in_queue(opened)
+    return s
+
+
+def _mauricio_queued(ids: IdGenerator, t: datetime) -> _Story:
+    """112 · Mauricio, web chat, high priority → queued, SLA vencido, wrote again."""
+    opened = t - timedelta(minutes=8)
+    s = _open(ids, number=112, customer=1010, channel=WEB, language=ES, opened=opened,
+              priority=CasePriority.HIGH)  # fmt: skip
+    s.customer(opened,
+               "Me están cobrando dos veces el mismo pago del celular, necesito que lo frenen "
+               "ya.")  # fmt: skip
+    s.opened_notice(opened)
+    s.wait_in_queue(opened)
+    s.customer(t - timedelta(minutes=4), "¿Alguien me puede atender?")
+    return s
+
+
+#: Lucía opened Julián's overdue case in supervision mode (an audited read).
+SUPERVISOR_VIEW = (LUCIA, 113, timedelta(minutes=5))
+
+
 type StoryFactory = Callable[[IdGenerator, datetime], _Story]
 
-#: Chronological order (a customer's older case is stored before the one that follows it).
+#: By opening time (a customer's older case is stored before the one that follows it).
+#: Every arrival agrees with rule 3 and the least-loaded strategy at its time, given the
+#: availability story of ``people.DEMO_PAUSED_BEFORE``: Daniela takes every new case until
+#: she pauses at T−12m, and the queued cases (111, 112, 109) all arrive after that.
 DEMO_STORIES: tuple[tuple[int, StoryFactory], ...] = (
     (110, _patricia_old),
     (104, _patricia_refund),
     (105, _claudia_unresponsive),
     (106, _hector_out_of_scope),
     (107, _joaquin_waiting),
+    (114, _esteban_reassigned),
+    (113, _camila_overdue),
     (101, _marcela_to_reply),
-    (102, _beatriz_impatient),
-    (109, _gabriela_queued),
     (108, _patricia_again),
+    (102, _beatriz_impatient),
     (103, _larissa_portuguese),
+    (111, _rosa_queued),
+    (112, _mauricio_queued),
+    (109, _gabriela_queued),
 )
 
 
-async def seed_demo_cases(uow: UnitOfWorkFactory, ids: IdGenerator, clock: Clock) -> int:
-    """Insert the missing seeded cases (one Unit of Work each). Returns how many."""
-    t = clock.now()
-    created = 0
+async def add_demo_cases(
+    unit: UnitOfWork, ids: IdGenerator, t: datetime, timeline: SeedTimeline
+) -> int:
+    """Add the seeded cases missing from ``unit`` and Lucía's supervision view; their events
+    go to ``timeline``. Returns how many cases."""
+    built: dict[str, Case] = {}
     for number, factory in DEMO_STORIES:
-        if await _seed_one(uow, ids, t, number, factory):
-            created += 1
+        if await unit.cases.get(seed_case_id(number)) is not None:
+            continue
+        story = factory(ids, t)
+        await story.save(unit)
+        timeline.take(story.case)
+        built[story.case.id] = story.case
+    await _add_supervisor_view(unit, t, timeline, built)
+    return len(built)
+
+
+async def seed_demo_cases(uow: UnitOfWorkFactory, ids: IdGenerator, clock: Clock) -> int:
+    """``add_demo_cases`` in its own Unit of Work (events in story-time order). Idempotent
+    per case; returns how many cases it added."""
+    timeline = SeedTimeline()
+    async with uow() as unit:
+        created = await add_demo_cases(unit, ids, clock.now(), timeline)
+        timeline.record_into(unit)
+        await unit.commit()
     return created
 
 
-async def _seed_one(
-    uow: UnitOfWorkFactory, ids: IdGenerator, t: datetime, number: int, factory: StoryFactory
-) -> bool:
-    async with uow() as unit:
-        if await unit.cases.get(seed_case_id(number)) is not None:
-            return False
-        story = factory(ids, t)
-        await story.save(unit)
-        await unit.commit()
-    return True
+async def _add_supervisor_view(
+    unit: UnitOfWork, t: datetime, timeline: SeedTimeline, built: dict[str, Case]
+) -> None:
+    """``case.viewed`` by Lucía (idempotent: skipped when she already has one there)."""
+    supervisor, number, ago = SUPERVISOR_VIEW
+    viewer_id, case_id = seed_staff_id(supervisor), seed_case_id(number)
+    case = built.get(case_id) or await unit.cases.get(case_id)
+    if case is None or await unit.event_log.latest(CaseViewed.event_type, viewer_id, case_id):
+        return
+    timeline.add(
+        CaseViewed(
+            occurred_at=t - ago,
+            actor=ActorRef(ActorRole.SUPERVISOR, viewer_id),
+            entity_id=case_id,
+            case_id=case_id,
+            viewer_id=viewer_id,
+            access="supervisor",
+            case_status=case.status.value,
+            assigned_analyst_id=case.assigned_analyst_id,
+        )
+    )

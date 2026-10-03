@@ -431,6 +431,65 @@ describe('CaseListPanel', () => {
     await waitFor(() => expect(within(toasts).queryByText('Te llegó un caso nuevo')).toBeNull())
   })
 
+  it('says "Te asignaron un caso" when a supervisor assigned it', async () => {
+    const { sockets } = renderPanel()
+    await screen.findByRole('list', { name: 'Casos' })
+    const fresh = makeCaseSummary({
+      id: 'CASE-00000000000000000000000113',
+      customer: { id: 'CUS-00000000000000000000001011', displayName: 'Camila Torres Benavides' },
+      status: 'assigned',
+      inboxStatus: 'new',
+      version: 7,
+    })
+    act(() => {
+      sockets.last()?.open()
+      sockets.last()?.receive({
+        type: 'case.assigned',
+        id: 'EVT-MANUAL-1',
+        occurredAt: NOW.toISOString(),
+        data: {
+          entity: 'case',
+          entityId: fresh.id,
+          caseId: fresh.id,
+          actor: { role: 'supervisor', id: 'STF-SUP0000001' },
+          payload: fresh,
+        },
+      })
+    })
+    expect(await screen.findByText('Te asignaron un caso')).toBeInTheDocument()
+    expect(screen.getByText('Camila Torres Benavides · desde supervisión')).toBeInTheDocument()
+  })
+
+  it('toasts once when supervision reassigns one of her cases away', async () => {
+    const { sockets } = renderPanel()
+    await screen.findByRole('list', { name: 'Casos' })
+    const gone = makeCaseSummary({ version: 9, assignedAnalystId: 'STF-OTHER', inboxStatus: 'new' })
+    const unassigned = {
+      type: 'case.unassigned',
+      id: 'EVT-UNASSIGNED-1',
+      occurredAt: NOW.toISOString(),
+      data: {
+        entity: 'case',
+        entityId: gone.id,
+        caseId: gone.id,
+        actor: { role: 'supervisor', id: 'STF-SUP0000001' },
+        payload: gone,
+      },
+    }
+    act(() => {
+      sockets.last()?.open()
+      sockets.last()?.receive(unassigned)
+      sockets.last()?.receive(unassigned)
+    })
+    expect(await screen.findByText('Supervisión reasignó un caso')).toBeInTheDocument()
+    expect(screen.getAllByText('Supervisión reasignó un caso')).toHaveLength(1)
+    expect(
+      screen.getByText(
+        'El caso de Marcela Quintana Pardo pasó a otra persona del equipo. Puedes leerlo, pero ya no responder.',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('does not toast a case that is already the selected one', async () => {
     const { sockets } = renderPanel()
     await screen.findByRole('list', { name: 'Casos' })

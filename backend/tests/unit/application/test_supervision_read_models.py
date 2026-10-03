@@ -15,7 +15,6 @@ from cc_platform.application.cases.supervision import (
     TeamAnalystView,
     TeamOverviewView,
     activity_of,
-    team_key,
 )
 from cc_platform.application.people.dto import LoginCommand, VerifyMfaCommand
 from cc_platform.domain.people.availability import AvailabilityStatus
@@ -26,6 +25,7 @@ from cc_platform.infrastructure.seed.people import (
     seed_demo_availability,
     seed_demo_staff,
     seed_staff_id,
+    seed_team_id,
 )
 from tests.support import (
     SUPERVISOR,
@@ -57,10 +57,7 @@ def test_activity_table(
     assert activity_of(availability, signed_in=signed_in, open_cases=open_cases) is expected
 
 
-def test_team_keys_are_stable_slugs() -> None:
-    assert team_key("Disputas · Equipo Andes") == "disputas-equipo-andes"
-    assert team_key("Disputas · Equipo Pacífico") == "disputas-equipo-pacifico"
-    assert team_key("  ¡Ñandú!  Sur ") == "nandu-sur"
+def test_sla_risk_window_is_five_minutes() -> None:
     assert timedelta(minutes=5) == SLA_AT_RISK
 
 
@@ -116,18 +113,20 @@ async def test_seeded_team_matches_the_contract() -> None:
     )
     assert [r.value for r in felipe.roles] == ["analyst", "supervisor"]
     assert seed_staff_id(5) not in {a.id for a in team.analysts}  # Lucía: supervisor only
+    assert seed_staff_id(13) not in {a.id for a in team.analysts}  # Andrés: inactive
+    assert daniela.team.id == seed_team_id(1)
 
     andes, pacifico = team.teams
-    assert (andes.key, andes.name, andes.analyst_count) == (
-        "disputas-equipo-andes",
+    assert (andes.id, andes.name, andes.analyst_count) == (
+        seed_team_id(1),
         "Disputas · Equipo Andes",
         3,
     )
     assert (andes.activity.busy, andes.activity.paused, andes.activity.offline) == (0, 1, 2)
     # 108, 102 and 103 (first response due within 5 min) and 113 (overdue).
     assert (andes.open_cases, andes.at_risk_cases) == (7, 4)
-    assert (pacifico.key, pacifico.analyst_count, pacifico.activity.offline) == (
-        "disputas-equipo-pacifico",
+    assert (pacifico.id, pacifico.analyst_count, pacifico.activity.offline) == (
+        seed_team_id(2),
         3,
         3,
     )

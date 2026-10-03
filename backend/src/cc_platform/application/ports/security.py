@@ -48,3 +48,9 @@ class MfaVerifier(Protocol):
     async def verify(self, *, staff_id: str, method: MfaMethod, code: str) -> bool:
         """Check a one-time code. Dev implementation accepts a fixed code (``000000``)."""
         ...
+
+
+class TemporaryPasswordGenerator(Protocol):
+    """Temporary passwords for new accounts and resets (slice 4 §1.3), shown once."""
+
+    def generate(self) -> str: ...

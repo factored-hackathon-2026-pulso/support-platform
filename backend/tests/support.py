@@ -217,12 +217,30 @@ def make_actor(*roles: StaffRole, staff_id: str = "STF-" + "0" * 25 + "7") -> Ac
 
 
 # ----------------------------------------------------------------------------- slice 1 helpers
-async def memory_container(*, seed: bool = True, clock: FixedClock | None = None) -> Container:
+class FixedPasswords:
+    """``TemporaryPasswordGenerator`` for tests: predictable ``abcd-efgh-0001``, ``…-0002``."""
+
+    def __init__(self) -> None:
+        self.issued: list[str] = []
+
+    def generate(self) -> str:
+        password = f"abcd-efgh-{len(self.issued) + 1:04d}"
+        self.issued.append(password)
+        return password
+
+
+async def memory_container(
+    *,
+    seed: bool = True,
+    clock: FixedClock | None = None,
+    passwords: FixedPasswords | None = None,
+) -> Container:
     """The real composition (use cases, projections, queue drainer) over the in-memory UoW."""
     container = build_container(
         make_settings(persistence="memory", seed_demo_data=seed),
         clock=clock or FixedClock(),
         ids=SequentialIdGenerator(),
+        temporary_passwords=passwords,
     )
     await container.startup()
     return container
@@ -253,3 +271,5 @@ SEBASTIAN = next(s for s in DEMO_STAFF if s.name == "Sebastián Cárdenas")
 JULIAN = next(s for s in DEMO_STAFF if s.name == "Julián Ortega")
 TOMAS = next(s for s in DEMO_STAFF if s.name == "Tomás Arango")
 PAULA = next(s for s in DEMO_STAFF if s.name == "Paula Medina")
+MARIANA = next(s for s in DEMO_STAFF if s.name == "Mariana Duque")
+ANDRES = next(s for s in DEMO_STAFF if s.name == "Andrés Villamil")

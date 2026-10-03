@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -9,10 +10,13 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
+from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.domain.people.login_account import LockoutPolicy, LoginAccount
 from cc_platform.domain.people.staff import Language, Staff, StaffRole
+from cc_platform.domain.people.team import Team
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.errors import (
     ConcurrentUpdateError,
@@ -35,6 +39,17 @@ from tests.support import RecordingHandler, emit
 
 STAFF_ID = "STF-" + "0" * 25 + "1"
 CASE_ID = "CASE-" + "0" * 25 + "1"
+TEAM_ID = "TEAM-" + "0" * 25 + "1"
+OTHER_TEAM_ID = "TEAM-" + "0" * 25 + "2"
+CREATED_AT = datetime(2026, 9, 2, 12, tzinfo=UTC)
+
+
+async def add_teams(factory: UnitOfWorkFactory) -> None:
+    """Staff rows reference a team (foreign key on the SQL adapter)."""
+    async with factory() as uow:
+        for team_id, name in ((TEAM_ID, "Disputas · Equipo Andes"), (OTHER_TEAM_ID, "Otro equipo")):
+            await uow.teams.add(Team(id=team_id, name=name, active=True, created_at=CREATED_AT))
+        await uow.commit()
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -64,6 +79,7 @@ async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
         def memory() -> UnitOfWork:
             return InMemoryUnitOfWork(store, bus=bus, ids=ids, clock=clock)
 
+        await add_teams(memory)
         yield Harness(memory, clock, published)
         return
 
@@ -73,6 +89,7 @@ async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
     def sql() -> UnitOfWork:
         return SqlAlchemyUnitOfWork(database.session_factory, bus=bus, ids=ids, clock=clock)
 
+    await add_teams(sql)
     yield Harness(sql, clock, published)
     await database.dispose()
 
@@ -84,7 +101,8 @@ def make_staff(staff_id: str = STAFF_ID, email: str = "daniela.rios@latambank.ex
         email=email,
         roles=frozenset({StaffRole.ANALYST, StaffRole.SUPERVISOR}),
         languages=frozenset({Language.SPANISH, Language.PORTUGUESE}),
-        team="Disputas · Equipo Andes",
+        team_id=TEAM_ID,
+        created_at=CREATED_AT,
     )
 
 
@@ -178,6 +196,49 @@ async def test_error_inside_block_rolls_back(harness: Harness) -> None:
         assert await uow.staff.get(STAFF_ID) is None
 
 
+async def test_sqlite_lock_contention_is_a_concurrent_update(tmp_path: Path) -> None:
+    """``database is locked`` rolls back like a lost CAS, so ``retry_on_conflict`` re-runs
+    the command instead of the API answering 500; any other driver error stays as it is."""
+    database = Database(f"sqlite+aiosqlite:///{tmp_path / 'lock.db'}")
+    await database.create_schema()
+    bus = InProcessEventBus()
+
+    def factory() -> UnitOfWork:
+        return SqlAlchemyUnitOfWork(
+            database.session_factory, bus=bus, ids=SequentialIdGenerator(), clock=FixedClock()
+        )
+
+    await add_teams(factory)
+    attempts = 0
+
+    async def write_once_locked() -> str:
+        nonlocal attempts
+        attempts += 1
+        async with factory() as uow:
+            await uow.staff.add(make_staff())
+            if attempts == 1:
+                raise OperationalError(
+                    "INSERT ...", None, sqlite3.OperationalError("database is locked")
+                )
+            await uow.commit()
+        return "saved"
+
+    assert await retry_on_conflict(write_once_locked) == "saved"
+    assert attempts == 2
+    with pytest.raises(ConcurrentUpdateError) as locked:
+        async with factory():
+            raise OperationalError(
+                "UPDATE ...", None, sqlite3.OperationalError("database is locked")
+            )
+    assert isinstance(locked.value.__cause__, OperationalError)
+    with pytest.raises(OperationalError):
+        async with factory():
+            raise OperationalError("SELECT ...", None, sqlite3.OperationalError("no such table: x"))
+    async with factory() as uow:
+        assert await uow.staff.get(STAFF_ID) is not None
+    await database.dispose()
+
+
 async def test_duplicate_insert_is_a_conflict(harness: Harness) -> None:
     async with harness.uow() as uow:
         await uow.staff.add(make_staff())
@@ -239,7 +300,7 @@ async def test_versions_start_at_one_and_bump_on_every_save(harness: Harness) ->
         assert loaded.version == 1
         loaded.name = "Daniela R."
         await uow.staff.save(loaded)
-        loaded.team = "Otro equipo"
+        loaded.team_id = OTHER_TEAM_ID
         await uow.staff.save(loaded)  # a second save in the same unit is fine
         assert loaded.version == 3
         await uow.commit()
@@ -247,7 +308,7 @@ async def test_versions_start_at_one_and_bump_on_every_save(harness: Harness) ->
         again = await uow.staff.get(STAFF_ID)
         listed = await uow.staff.list()
     assert again is not None
-    assert (again.version, again.name, again.team) == (3, "Daniela R.", "Otro equipo")
+    assert (again.version, again.name, again.team_id) == (3, "Daniela R.", OTHER_TEAM_ID)
     assert [s.version for s in listed] == [3]
 
 

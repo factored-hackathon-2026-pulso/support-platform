@@ -3,6 +3,7 @@ import { ApiProblem } from '@/lib/api'
 import { NOW, minutesFrom, seededInbox } from '@/test/case-fixtures'
 import {
   ANDES,
+  PACIFICO,
   DANIELA_ID,
   JULIAN_ID,
   daniela,
@@ -95,7 +96,7 @@ describe('team and activity filters', () => {
 
   it('counts each filter after the team filter (seed §9.4)', () => {
     expect(countByFilter(seededAnalysts)).toEqual({ connected: 1, paused: 1, offline: 4 })
-    const andes = analystsOfTeam(seededAnalysts, ANDES.key)
+    const andes = analystsOfTeam(seededAnalysts, ANDES.id)
     expect(andes.map((a) => a.name)).toEqual(['Daniela Ríos', 'Julián Ortega', 'Felipe Echeverri'])
     expect(countByFilter(andes)).toEqual({ connected: 1, paused: 1, offline: 1 })
     expect(analystsOfTeam(seededAnalysts, null)).toHaveLength(6)
@@ -107,22 +108,23 @@ describe('team and activity filters', () => {
     ])
   })
 
-  it('resolves the selected team, unknown keys meaning all', () => {
+  it('resolves the selected team by id, unknown ids (old slugs too) meaning all', () => {
     const { teams } = makeTeamOverview()
-    expect(selectedTeam(teams, ANDES.key)?.name).toBe('Disputas · Equipo Andes')
-    expect(selectedTeam(teams, 'equipo-que-no-existe')).toBeNull()
+    expect(selectedTeam(teams, ANDES.id)?.name).toBe('Disputas · Equipo Andes')
+    expect(selectedTeam(teams, 'disputas-equipo-andes')).toBeNull()
     expect(selectedTeam(teams, null)).toBeNull()
   })
 
   it('drops the prefix every team shares from the pills', () => {
     const { teams } = makeTeamOverview()
     expect(teamPillLabels(teams)).toEqual({
-      'disputas-equipo-andes': 'Equipo Andes',
-      'disputas-equipo-pacifico': 'Equipo Pacífico',
+      [ANDES.id]: 'Equipo Andes',
+      [PACIFICO.id]: 'Equipo Pacífico',
     })
-    const mixed = [...teams, makeTeamSummary({ key: 'cobranzas', name: 'Cobranzas' })]
-    expect(teamPillLabels(mixed).cobranzas).toBe('Cobranzas')
-    expect(teamPillLabels(mixed)['disputas-equipo-andes']).toBe('Disputas · Equipo Andes')
+    const cobranzas = 'TEAM-00000000000000000000000009'
+    const mixed = [...teams, makeTeamSummary({ id: cobranzas, name: 'Cobranzas' })]
+    expect(teamPillLabels(mixed)[cobranzas]).toBe('Cobranzas')
+    expect(teamPillLabels(mixed)[ANDES.id]).toBe('Disputas · Equipo Andes')
   })
 
   it('writes the subtitle', () => {
@@ -352,18 +354,16 @@ describe('supervisor notice', () => {
 describe('URL state', () => {
   it('parses and serializes the team screen, unknown values falling back', () => {
     const state = parseTeamSearch(
-      new URLSearchParams(
-        'equipo=disputas-equipo-andes&estado=en-pausa&analista=STF-1&asignar=CASE-1',
-      ),
+      new URLSearchParams(`equipo=${ANDES.id}&estado=en-pausa&analista=STF-1&asignar=CASE-1`),
     )
     expect(state).toEqual({
-      team: 'disputas-equipo-andes',
+      team: ANDES.id,
       activity: 'paused',
       analystId: 'STF-1',
       assignCaseId: 'CASE-1',
     })
     expect(toTeamSearch(state).toString()).toBe(
-      'equipo=disputas-equipo-andes&estado=en-pausa&analista=STF-1&asignar=CASE-1',
+      `equipo=${ANDES.id}&estado=en-pausa&analista=STF-1&asignar=CASE-1`,
     )
     const fallback = parseTeamSearch(new URLSearchParams('estado=vacaciones&analista=%20'))
     expect(fallback).toEqual({

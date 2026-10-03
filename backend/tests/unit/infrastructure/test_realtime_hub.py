@@ -82,3 +82,22 @@ async def test_close_session_closes_every_socket_of_the_session() -> None:
     assert tab1.close_reason == tab2.close_reason == "session_ended"
     assert other.close_reason is None
     assert hub.connection_count == 1
+
+
+async def test_close_principal_closes_every_connection_of_that_person() -> None:
+    from cc_platform.infrastructure.realtime.in_memory_hub import InMemoryRealtimeHub
+
+    hub = InMemoryRealtimeHub()
+    first = hub.connect(connection_id="CON-1", principal_id="STF-A", session_id="SES-1")
+    second = hub.connect(connection_id="CON-2", principal_id="STF-A", session_id="SES-2")
+    other = hub.connect(connection_id="CON-3", principal_id="STF-B", session_id="SES-3")
+    hub.subscribe("CON-1", "inbox:STF-A")
+    assert hub.close_principal("STF-A", "access_changed") == 2
+    assert await first.next_envelope() is None
+    assert (first.close_reason, second.close_reason, other.close_reason) == (
+        "access_changed",
+        "access_changed",
+        None,
+    )
+    assert hub.connection_count == 1
+    assert hub.subscriber_count("inbox:STF-A") == 0

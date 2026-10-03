@@ -3,6 +3,204 @@
  * Import it only from `src/lib/api/client.ts` (the API boundary).
  */
 export interface paths {
+  '/api/v1/admin/teams': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Teams with their member counts */
+    get: operations['admin_list_teams']
+    put?: never
+    /**
+     * Create a team
+     * @description Names are unique among all teams, ignoring case and accents (409 `team_name_taken`).
+     */
+    post: operations['admin_create_team']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/teams/{teamId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** One team and its members (active first, then inactive) */
+    get: operations['admin_get_team']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /** Rename a team */
+    patch: operations['admin_rename_team']
+    trace?: never
+  }
+  '/api/v1/admin/teams/{teamId}/deactivate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Deactivate a team without active members
+     * @description With active members: 409 `team_not_empty` with `memberCount`.
+     */
+    post: operations['admin_deactivate_team']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/teams/{teamId}/reactivate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Reactivate a team */
+    post: operations['admin_reactivate_team']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/users': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The directory: people with their roles, languages, team and account status
+     * @description Filters combine with AND. `q` is a case- and accent-insensitive contains on name, email or id. `status=active` (default) includes locked accounts. `roleCounts` cover every filter except `role`; `statusCounts` every filter except `status`. At most 500 rows, by name.
+     */
+    get: operations['admin_list_users']
+    put?: never
+    /**
+     * Create an account; the temporary password is returned once
+     * @description Checks in this order: the caller is an active admin (403) · `Idempotency-Key` replay (200, `temporaryPassword: null`; another email → `idempotency_conflict`) · name, email, roles, analyst ⇒ at least one language (422 `invalid_value` with `field`) · the email is free (409 `email_taken`) · the team exists (422 `invalid_value`, `field: teamId`) and is active (422 `team_inactive`). The new person starts En pausa.
+     */
+    post: operations['admin_create_user']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/users/{staffId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** One person of the directory (any status) */
+    get: operations['admin_get_user']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /**
+     * Edit a person: name, email, roles, languages, team
+     * @description Absent fields are unchanged (send at least one). Checks in this order: 403 · 404 · `version_conflict` (with `current`) · `invalid_value` · `email_taken` · the team (`invalid_value` / `team_inactive`) · `self_change_forbidden` (`remove_own_admin`) · `staff_has_open_cases` (removing analyst, or a language of one of her open cases) · `last_admin`. Removing analyst pauses her; a role change applies on her next request and closes her sockets (4409).
+     */
+    patch: operations['admin_update_user']
+    trace?: never
+  }
+  '/api/v1/admin/users/{staffId}/deactivate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Deactivate an account: she can no longer sign in and her sessions end
+     * @description Checks: 403 · 404 · `version_conflict` · `self_change_forbidden` (`deactivate_self`) · already inactive (200, `changed: false`) · `staff_has_open_cases` (`deactivate`) · `last_admin`. She is paused and every session ends now (her sockets close with 4401).
+     */
+    post: operations['admin_deactivate_user']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/users/{staffId}/password-reset': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Issue a new temporary password; her sessions end and a lock is cleared
+     * @description Not idempotent: each call issues a new password, returned once.
+     */
+    post: operations['admin_reset_password']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/users/{staffId}/reactivate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Reactivate an account (she starts En pausa; her old password works again) */
+    post: operations['admin_reactivate_user']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/users/{staffId}/unlock': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Unlock a locked account (resets the failed-attempt counter)
+     * @description `changed: false` when the counter was already clear.
+     */
+    post: operations['admin_unlock_user']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/audit/events': {
     parameters: {
       query?: never
@@ -405,7 +603,7 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** List active staff, optionally by role */
+    /** List staff (active only unless includeInactive), optionally by role */
     get: operations['people_list_staff']
     put?: never
     post?: never
@@ -476,6 +674,13 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /**
+     * AccountStatus
+     * @description Derived, never stored (§1.1): ``inactive`` = ``Staff.active`` false; ``locked`` =
+     *     active and the login account is locked now; else ``active``.
+     * @enum {string}
+     */
+    AccountStatus: 'active' | 'locked' | 'inactive'
     /** ActivityCounts */
     ActivityCounts: {
       /** Available */
@@ -492,6 +697,169 @@ export interface components {
      * @enum {string}
      */
     ActorRole: 'analyst' | 'supervisor' | 'admin' | 'customer' | 'system'
+    /** AdminTeam */
+    AdminTeam: {
+      /** Active */
+      active: boolean
+      /**
+       * Analystcount
+       * @description Active analysts.
+       */
+      analystCount: number
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      /** Id */
+      id: string
+      /** Inactivemembercount */
+      inactiveMemberCount: number
+      /**
+       * Membercount
+       * @description Active people.
+       */
+      memberCount: number
+      /** Name */
+      name: string
+      /**
+       * Version
+       * @description Send it back as expectedVersion.
+       */
+      version: number
+    }
+    /** AdminTeamChange */
+    AdminTeamChange: {
+      /**
+       * Changed
+       * @description false: nothing changed (no event, same version).
+       */
+      changed: boolean
+      team: components['schemas']['AdminTeam']
+    }
+    /** AdminTeamDetail */
+    AdminTeamDetail: {
+      /**
+       * Members
+       * @description Active first, then inactive; each by name.
+       */
+      members: components['schemas']['AdminTeamMember'][]
+      team: components['schemas']['AdminTeam']
+    }
+    /** AdminTeamList */
+    AdminTeamList: {
+      /**
+       * Items
+       * @description By name (accent-insensitive).
+       */
+      items: components['schemas']['AdminTeam'][]
+      statusCounts: components['schemas']['TeamStatusCounts']
+    }
+    /** AdminTeamMember */
+    AdminTeamMember: {
+      /** Id */
+      id: string
+      /** Languages */
+      languages: components['schemas']['Language'][]
+      /** Name */
+      name: string
+      /** Roles */
+      roles: components['schemas']['StaffRole'][]
+      status: components['schemas']['AccountStatus']
+    }
+    /** AdminUser */
+    AdminUser: {
+      /** @description Analysts only (no row = paused); null otherwise. */
+      availability: components['schemas']['AvailabilityStatus'] | null
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      /** Email */
+      email: string
+      /**
+       * Failedattempts
+       * @description The current counter (0 after an expired lock).
+       */
+      failedAttempts: number
+      guards: components['schemas']['AdminUserGuards']
+      /** Id */
+      id: string
+      /**
+       * Languages
+       * @description Sorted; may be [] only without analyst.
+       */
+      languages: components['schemas']['Language'][]
+      /** Lastloginat */
+      lastLoginAt: string | null
+      /**
+       * Lockeduntil
+       * @description null unless locked now.
+       */
+      lockedUntil: string | null
+      /** Name */
+      name: string
+      /** @description Her assigned | in_progress cases. */
+      openCases: components['schemas']['OpenCaseCounts']
+      /**
+       * Roles
+       * @description Canonical order: analyst, supervisor, admin.
+       */
+      roles: components['schemas']['StaffRole'][]
+      /** @description At serverTime (derived, never stored). */
+      status: components['schemas']['AccountStatus']
+      team: components['schemas']['TeamRef']
+      /**
+       * Version
+       * @description Send it back as expectedVersion.
+       */
+      version: number
+    }
+    /** AdminUserChange */
+    AdminUserChange: {
+      /**
+       * Changed
+       * @description false: nothing changed (no event, same version).
+       */
+      changed: boolean
+      /**
+       * Revokedsessions
+       * @description > 0 only on a deactivation.
+       */
+      revokedSessions: number
+      user: components['schemas']['AdminUser']
+    }
+    /** AdminUserGuards */
+    AdminUserGuards: {
+      /**
+       * Isself
+       * @description She is the caller.
+       */
+      isSelf: boolean
+      /**
+       * Lastactiveadmin
+       * @description She is active, holds admin and is the only such person.
+       */
+      lastActiveAdmin: boolean
+    }
+    /** AdminUserList */
+    AdminUserList: {
+      /**
+       * Items
+       * @description By name (accent-insensitive), then id; ≤ 500.
+       */
+      items: components['schemas']['AdminUser'][]
+      /** @description Over every filter except role. */
+      roleCounts: components['schemas']['RoleCounts']
+      /**
+       * Servertime
+       * Format: date-time
+       */
+      serverTime: string
+      /** @description Over every filter except status. */
+      statusCounts: components['schemas']['UserStatusCounts']
+    }
     /**
      * AnalystActivity
      * @description What an analyst is doing now ("Ahora"), derived from availability, sessions and load.
@@ -611,7 +979,7 @@ export interface components {
       description: string
       /**
        * Entity
-       * @description case | turn | staff | staff_session | mfa_challenge | customer.
+       * @description case | turn | staff | staff_session | mfa_challenge | customer | team.
        */
       entity: string
       /** Entityid */
@@ -669,7 +1037,14 @@ export interface components {
      * AuditFamily
      * @enum {string}
      */
-    AuditFamily: 'conversation' | 'assignment' | 'lifecycle' | 'availability' | 'access' | 'other'
+    AuditFamily:
+      | 'conversation'
+      | 'assignment'
+      | 'lifecycle'
+      | 'availability'
+      | 'access'
+      | 'administration'
+      | 'other'
     /** Availability */
     Availability: {
       /**
@@ -881,6 +1256,51 @@ export interface components {
       channel?: ('app_chat' | 'web_chat') | null
       /** Customerid */
       customerId: string
+    }
+    /** CreateTeamRequest */
+    CreateTeamRequest: {
+      /**
+       * Name
+       * @description 2–80 characters after trimming.
+       */
+      name: string
+    }
+    /** CreateUserRequest */
+    CreateUserRequest: {
+      /**
+       * Email
+       * @description At most 254 after normalising.
+       */
+      email: string
+      /**
+       * Languages
+       * @description Unique; at least one with analyst (else invalid_value).
+       */
+      languages: components['schemas']['Language'][]
+      /**
+       * Name
+       * @description 2–120 characters after trimming.
+       */
+      name: string
+      /**
+       * Roles
+       * @description Unique.
+       */
+      roles: components['schemas']['StaffRole'][]
+      /**
+       * Teamid
+       * @description An active team (TEAM-…).
+       */
+      teamId: string
+    }
+    /** CreatedUser */
+    CreatedUser: {
+      /**
+       * Temporarypassword
+       * @description Shown once (xxxx-xxxx-xxxx); null only on an idempotent replay.
+       */
+      temporaryPassword: string | null
+      user: components['schemas']['AdminUser']
     }
     /** CustomerConversation */
     CustomerConversation: {
@@ -1235,6 +1655,32 @@ export interface components {
       /** @default totp */
       method: components['schemas']['MfaMethod']
     }
+    /** OpenCaseCounts */
+    OpenCaseCounts: {
+      /** Es */
+      es: number
+      /** Pt */
+      pt: number
+      /** Total */
+      total: number
+    }
+    /**
+     * OpenCasesBlock
+     * @description Extension ``blockReason`` of ``staff_has_open_cases``.
+     * @enum {string}
+     */
+    OpenCasesBlock: 'deactivate' | 'remove_analyst' | 'remove_language'
+    /** PasswordResetResult */
+    PasswordResetResult: {
+      /** Revokedsessions */
+      revokedSessions: number
+      /**
+       * Temporarypassword
+       * @description Shown once (xxxx-xxxx-xxxx).
+       */
+      temporaryPassword: string
+      user: components['schemas']['AdminUser']
+    }
     /** PostAnalystTurnRequest */
     PostAnalystTurnRequest: {
       /**
@@ -1293,6 +1739,15 @@ export interface components {
       | 'language_mismatch'
       | 'analyst_paused'
       | 'assignment_changed'
+      | 'version_conflict'
+      | 'email_taken'
+      | 'team_name_taken'
+      | 'self_change_forbidden'
+      | 'last_admin'
+      | 'staff_has_open_cases'
+      | 'team_not_empty'
+      | 'team_inactive'
+      | 'staff_inactive'
       | 'invalid_value'
       | 'policy_violation'
       | 'validation_error'
@@ -1312,17 +1767,41 @@ export interface components {
      */
     ProblemDetails: {
       /**
+       * @description self_change_forbidden: which change on her own account.
+       * @default null
+       */
+      action: components['schemas']['SelfChangeAction'] | null
+      /**
        * Analystid
        * @description analyst_not_eligible, language_mismatch, analyst_paused: the target.
        * @default null
        */
       analystId: string | null
       /**
-       * @description language_mismatch: the language of the case.
+       * @description staff_has_open_cases: which change the open cases block.
+       * @default null
+       */
+      blockReason: components['schemas']['OpenCasesBlock'] | null
+      /**
+       * Caseids
+       * @description staff_has_open_cases: those cases (at most 20).
+       * @default null
+       */
+      caseIds: string[] | null
+      /**
+       * @description language_mismatch: the language of the case; staff_has_open_cases (remove_language): the language of the blocking cases.
        * @default null
        */
       caseLanguage: components['schemas']['Language'] | null
       code: components['schemas']['ProblemCode']
+      /**
+       * Current
+       * @description version_conflict: the record as its GET returns it now (AdminUser or AdminTeam).
+       * @default null
+       */
+      current: {
+        [key: string]: unknown
+      } | null
       /**
        * Currentanalystid
        * @description assignment_changed: who holds the case now (null = it is queued).
@@ -1335,6 +1814,12 @@ export interface components {
        */
       currentStatus: components['schemas']['CaseStatus'] | null
       /**
+       * Currentversion
+       * @description version_conflict: the record's version now.
+       * @default null
+       */
+      currentVersion: number | null
+      /**
        * Detail
        * @default null
        */
@@ -1346,10 +1831,28 @@ export interface components {
        */
       errors: components['schemas']['ValidationIssue'][] | null
       /**
+       * Field
+       * @description invalid_value, email_taken, team_name_taken: the request field at fault (name, email, roles, languages, teamId).
+       * @default null
+       */
+      field: string | null
+      /**
        * Instance
        * @default null
        */
       instance: string | null
+      /**
+       * Membercount
+       * @description team_not_empty: the team's active members.
+       * @default null
+       */
+      memberCount: number | null
+      /**
+       * Opencases
+       * @description staff_has_open_cases: how many open cases block it.
+       * @default null
+       */
+      openCases: number | null
       /**
        * Policyruleid
        * @description language_mismatch: the rule behind it ("H1", rule 3).
@@ -1375,6 +1878,12 @@ export interface components {
       requiredRoles: components['schemas']['StaffRole'][] | null
       /** Status */
       status: number
+      /**
+       * Teamid
+       * @description team_inactive: the team.
+       * @default null
+       */
+      teamId: string | null
       /** Title */
       title: string
       /**
@@ -1428,11 +1937,41 @@ export interface components {
        */
       serverTime: string
     }
+    /** RenameTeamRequest */
+    RenameTeamRequest: {
+      /**
+       * Expectedversion
+       * @description The version the admin saw.
+       */
+      expectedVersion: number
+      /**
+       * Name
+       * @description 2–80 characters after trimming.
+       */
+      name: string
+    }
     /**
      * ReplyBlockedReason
      * @enum {string}
      */
     ReplyBlockedReason: 'not_assignee' | 'closed'
+    /** RoleCounts */
+    RoleCounts: {
+      /** Admin */
+      admin: number
+      /** All */
+      all: number
+      /** Analyst */
+      analyst: number
+      /** Supervisor */
+      supervisor: number
+    }
+    /**
+     * SelfChangeAction
+     * @description Extension ``action`` of ``self_change_forbidden``.
+     * @enum {string}
+     */
+    SelfChangeAction: 'remove_own_admin' | 'deactivate_self' | 'reset_own_password'
     /** SessionOut */
     SessionOut: {
       /**
@@ -1482,18 +2021,25 @@ export interface components {
     }
     /** StaffOut */
     StaffOut: {
+      /** Active */
+      active: boolean
       /** Email */
       email: string
       /** Id */
       id: string
-      /** Languages */
+      /**
+       * Languages
+       * @description Sorted; may be empty without analyst.
+       */
       languages: components['schemas']['Language'][]
       /** Name */
       name: string
-      /** Roles */
+      /**
+       * Roles
+       * @description Canonical order: analyst, supervisor, admin.
+       */
       roles: components['schemas']['StaffRole'][]
-      /** Team */
-      team: string
+      team: components['schemas']['TeamRef']
     }
     /**
      * StaffRole
@@ -1565,13 +2111,31 @@ export interface components {
     /** TeamRef */
     TeamRef: {
       /**
-       * Key
-       * @description Stable slug of the team name (opaque to clients).
+       * Id
+       * @description TEAM-… id of the team.
+       * @example TEAM-01J…
        */
-      key: string
-      /** Name */
+      id: string
+      /**
+       * Name
+       * @description The team's current name.
+       */
       name: string
     }
+    /** TeamStatusCounts */
+    TeamStatusCounts: {
+      /** Active */
+      active: number
+      /** All */
+      all: number
+      /** Inactive */
+      inactive: number
+    }
+    /**
+     * TeamStatusFilter
+     * @enum {string}
+     */
+    TeamStatusFilter: 'active' | 'inactive' | 'all'
     /** TeamSummary */
     TeamSummary: {
       /** @description The team's analysts by activity. */
@@ -1583,8 +2147,11 @@ export interface components {
        * @description At serverTime; the UI recomputes it.
        */
       atRiskCases: number
-      /** Key */
-      key: string
+      /**
+       * Id
+       * @description TEAM-… id (the `?equipo=` filter).
+       */
+      id: string
       /** Name */
       name: string
       /**
@@ -1657,6 +2224,44 @@ export interface components {
     UpdateAvailabilityRequest: {
       status: components['schemas']['AvailabilityStatus']
     }
+    /** UpdateUserRequest */
+    UpdateUserRequest: {
+      /** Email */
+      email?: string | null
+      /**
+       * Expectedversion
+       * @description The version the admin saw.
+       */
+      expectedVersion: number
+      /** Languages */
+      languages?: components['schemas']['Language'][] | null
+      /** Name */
+      name?: string | null
+      /** Roles */
+      roles?: components['schemas']['StaffRole'][] | null
+      /** Teamid */
+      teamId?: string | null
+    }
+    /** UserStatusCounts */
+    UserStatusCounts: {
+      /**
+       * Active
+       * @description Every active account, locked ones included.
+       */
+      active: number
+      /** All */
+      all: number
+      /** Inactive */
+      inactive: number
+      /** Locked */
+      locked: number
+    }
+    /**
+     * UserStatusFilter
+     * @description ``active`` = every active account, locked ones included; ``locked`` = only those.
+     * @enum {string}
+     */
+    UserStatusFilter: 'active' | 'locked' | 'inactive' | 'all'
     /** ValidationIssue */
     ValidationIssue: {
       /** Loc */
@@ -1665,6 +2270,14 @@ export interface components {
       msg: string
       /** Type */
       type: string
+    }
+    /** VersionRequest */
+    VersionRequest: {
+      /**
+       * Expectedversion
+       * @description The version the admin saw.
+       */
+      expectedVersion: number
     }
   }
   responses: never
@@ -1675,6 +2288,919 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  admin_list_teams: {
+    parameters: {
+      query?: {
+        status?: components['schemas']['TeamStatusFilter']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminTeamList']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_create_team: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Optional. A retry with the same key and the same email (user) or name (team) answers 200 with the existing record and `Idempotent-Replayed: true`. */
+        'Idempotency-Key'?: string | null
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateTeamRequest']
+      }
+    }
+    responses: {
+      /** @description Idempotent replay of an existing team */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminTeam']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminTeam']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_get_team: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        teamId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminTeamDetail']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_rename_team: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        teamId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RenameTeamRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminTeamChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_deactivate_team: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        teamId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VersionRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminTeamChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_reactivate_team: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        teamId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VersionRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminTeamChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_list_users: {
+    parameters: {
+      query?: {
+        q?: string | null
+        role?: components['schemas']['StaffRole'] | null
+        status?: components['schemas']['UserStatusFilter']
+        teamId?: string | null
+        language?: components['schemas']['Language'] | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminUserList']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_create_user: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Optional. A retry with the same key and the same email (user) or name (team) answers 200 with the existing record and `Idempotent-Replayed: true`. */
+        'Idempotency-Key'?: string | null
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateUserRequest']
+      }
+    }
+    responses: {
+      /** @description Idempotent replay of an existing account */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CreatedUser']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CreatedUser']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_get_user: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        staffId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminUser']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_update_user: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        staffId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateUserRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminUserChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_deactivate_user: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        staffId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VersionRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminUserChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_reset_password: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        staffId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PasswordResetResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_reactivate_user: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        staffId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VersionRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminUserChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_unlock_user: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        staffId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminUserChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   audit_list_events: {
     parameters: {
       query?: {
@@ -2781,6 +4307,8 @@ export interface operations {
       query?: {
         /** @description Only staff holding this role */
         role?: components['schemas']['StaffRole'] | null
+        /** @description Also deactivated accounts */
+        includeInactive?: boolean
       }
       header?: never
       path?: never

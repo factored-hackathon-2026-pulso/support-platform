@@ -70,3 +70,20 @@ class ForbiddenError(ApplicationError):
 class InvalidTopicError(ApplicationError):
     code = "invalid_topic"
     default_message = "El tema de suscripción no existe."
+
+
+class VersionConflictError(ApplicationError):
+    """The record changed since the caller loaded it (``expectedVersion`` is stale).
+
+    Never retried. Carries ``current_version`` and ``current_view`` (the record as its
+    ``GET`` returns it now, as an application view): the API layer renders the view with
+    the response schema into the ``current`` member (the application never builds JSON).
+    """
+
+    code = "version_conflict"
+    default_message = "Alguien más cambió este registro mientras editabas."
+
+    def __init__(self, *, current_version: int, current_view: object) -> None:
+        super().__init__(None, currentVersion=current_version)
+        self.current_version = current_version
+        self.current_view = current_view

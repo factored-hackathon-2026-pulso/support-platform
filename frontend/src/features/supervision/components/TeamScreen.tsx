@@ -24,7 +24,7 @@ import { ResultStrip } from './ResultStrip'
 /** Clock of the screen: SLA tags, waits and risk counts (minute resolution). */
 export const TEAM_TICK_MS = 15_000
 
-/** "Todos los equipos" pill value (team keys are slugs, never this). */
+/** "Todos los equipos" pill value (team ids are `TEAM-…`, never this). */
 const ALL_TEAMS = '__todos'
 
 export interface TeamScreenProps {
@@ -50,10 +50,10 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
 
   const teams = team.data?.teams ?? []
   const current = selectedTeam(teams, state.team)
-  const teamKey = current?.key ?? null
+  const teamId = current?.id ?? null
   const analysts = team.data?.analysts
   const subtitle = analysts
-    ? teamSubtitle(current, analystsOfTeam(analysts, teamKey).length)
+    ? teamSubtitle(current, analystsOfTeam(analysts, teamId).length)
     : 'Cargando el equipo…'
 
   // ?analista= of someone not (or no longer) listed: close the sheet.
@@ -123,13 +123,13 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
               <SegmentedControl
                 label="Equipo"
                 variant="pills"
-                value={teamKey ?? ALL_TEAMS}
+                value={teamId ?? ALL_TEAMS}
                 onValueChange={(value) =>
                   onStateChange({ team: value === ALL_TEAMS ? null : value }, { replace: true })
                 }
                 options={[
                   { value: ALL_TEAMS, label: 'Todos los equipos' },
-                  ...teams.map((t) => ({ value: t.key, label: pillLabels[t.key] ?? t.name })),
+                  ...teams.map((t) => ({ value: t.id, label: pillLabels[t.id] ?? t.name })),
                 ]}
               />
             ) : null
@@ -145,7 +145,7 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
         <QueuesColumn query={queues} now={now} onAssign={openAssign} onOpenCase={onOpenCase} />
         <AnalystsPanel
           query={team}
-          teamKey={teamKey}
+          teamId={teamId}
           filter={state.activity}
           selectedAnalystId={state.analystId}
           now={now}

@@ -13,7 +13,7 @@ import {
   isNewerCase,
   priorityLabel,
   type CloseReason,
-} from '@/features/cases'
+} from '@/features/cases/core'
 import { isApiProblem } from '@/lib/api'
 import { formatDate, formatDateTime, formatDuration, formatTime } from '@/lib/format'
 import type {

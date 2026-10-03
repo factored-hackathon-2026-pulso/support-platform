@@ -21,6 +21,9 @@ export type KnownRealtimeEventType =
   | 'queue.updated'
   | 'queue.case_queued'
   | 'team.updated'
+  // Slice 4 (administration, slice-4-administration.md §9.2)
+  | 'directory.updated'
+  | 'me.updated'
 
 export type RealtimeEventType = KnownRealtimeEventType | ControlEnvelopeType | (string & {})
 
@@ -38,11 +41,17 @@ export type SupervisionTopicKey = 'queues' | 'team'
 
 /**
  * `case:<caseId>`, `inbox:<staffId>` (staff tokens), `customer:<customerId>`
- * (only the customer token whose subject is that id) and `supervision:queues` /
- * `supervision:team` (staff holding the supervisor role).
+ * (only the customer token whose subject is that id), `supervision:queues` /
+ * `supervision:team` (staff holding the supervisor role), `admin:directory`
+ * (staff holding the admin role) and `staff:<staffId>` (only that person).
  */
 export type RealtimeTopic =
-  `case:${string}` | `inbox:${string}` | `customer:${string}` | `supervision:${SupervisionTopicKey}`
+  | `case:${string}`
+  | `inbox:${string}`
+  | `customer:${string}`
+  | `supervision:${SupervisionTopicKey}`
+  | 'admin:directory'
+  | `staff:${string}`
 
 /** Messages the client sends (one topic per message, backend `api/routers/realtime.py`). */
 export type ClientMessage =
@@ -75,6 +84,8 @@ export const topics = {
   customer: (customerId: string): RealtimeTopic => `customer:${customerId}`,
   supervisionQueues: (): RealtimeTopic => 'supervision:queues',
   supervisionTeam: (): RealtimeTopic => 'supervision:team',
+  adminDirectory: (): RealtimeTopic => 'admin:directory',
+  staff: (staffId: string): RealtimeTopic => `staff:${staffId}`,
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from cc_platform.application.audit.use_cases import AuditUseCases
 from cc_platform.application.cases.use_cases import CasesUseCases
 from cc_platform.application.customers.use_cases import CustomersUseCases
+from cc_platform.application.people.admin.use_cases import AdministrationUseCases
 from cc_platform.application.people.use_cases import PeopleUseCases
 
 
@@ -20,3 +21,4 @@ class UseCases:
     cases: CasesUseCases
     customers: CustomersUseCases
     audit: AuditUseCases
+    administration: AdministrationUseCases

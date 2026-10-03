@@ -31,6 +31,14 @@ class CaseRef:
     language: Language
 
 
+@dataclass(frozen=True, slots=True)
+class OpenCaseRef:
+    """An open case (``assigned | in_progress``) of an assignee, for administration."""
+
+    case_id: str
+    language: Language
+
+
 class CaseRepository(Protocol):
     async def get(self, case_id: str) -> Case | None: ...
 
@@ -81,6 +89,13 @@ class CaseRepository(Protocol):
         self, open_statuses: Collection[CaseStatus]
     ) -> dict[str, AssigneeLoad]:
         """Per assigned analyst: cases in ``open_statuses`` and the last assignment time."""
+        ...
+
+    async def open_refs_by_assignee(
+        self, staff_ids: Collection[str] | None = None
+    ) -> dict[str, list[OpenCaseRef]]:
+        """Each assignee's open cases (``assigned | in_progress``), by case id, in one query;
+        only ``staff_ids`` when given. People without open cases are left out."""
         ...
 
 

@@ -10,22 +10,30 @@ import copy
 from collections.abc import Callable, Collection, Iterable, Sequence
 from datetime import datetime
 
-from cc_platform.application.cases.ports import AssigneeLoad, CaseRef
+from cc_platform.application.cases.ports import AssigneeLoad, CaseRef, OpenCaseRef
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
 from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.turn import Turn
-from cc_platform.domain.cases.values import CaseStatus, TurnAudience
+from cc_platform.domain.cases.values import OPEN_ASSIGNED_STATUSES, CaseStatus, TurnAudience
 from cc_platform.domain.customers.customer import Customer
+from cc_platform.domain.people.admin_roster import ROSTER_ID, AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability
+from cc_platform.domain.people.errors import EmailTakenError, TeamNameTakenError
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff, StaffRole
+from cc_platform.domain.people.team import Team
 from cc_platform.domain.shared.aggregate import AggregateRoot
-from cc_platform.domain.shared.errors import ConcurrentUpdateError, ConflictError, NotFoundError
+from cc_platform.domain.shared.errors import (
+    ConcurrentUpdateError,
+    ConflictError,
+    DomainError,
+    NotFoundError,
+)
 from cc_platform.infrastructure.persistence.cursors import clamp_limit, decode_cursor, encode_cursor
 
 type Tracker = Callable[[AggregateRoot], None]
@@ -72,10 +80,25 @@ class _StagedRepository[A: AggregateRoot]:
         self._track(aggregate)
         return aggregate
 
+    def _unique_violation(self, aggregate: A, other: A) -> DomainError | None:
+        """Hook for secondary unique keys: the error when ``other`` (another row) clashes
+        with ``aggregate``, else ``None``. Checked on add/save and again at commit."""
+        return None
+
+    def _check_unique(self, aggregate: A, others: Iterable[A]) -> None:
+        key = self._key(aggregate)
+        for other in others:
+            if self._key(other) == key:
+                continue
+            violation = self._unique_violation(aggregate, other)
+            if violation is not None:
+                raise violation
+
     async def add(self, aggregate: A) -> None:
         key = self._key(aggregate)
         if key in self._staged or key in self._committed:
             raise self._duplicate(key)
+        self._check_unique(aggregate, self._all())
         aggregate.mark_persisted(1)
         self._base_versions[key] = 0
         self._staged[key] = _clone(aggregate)
@@ -89,6 +112,7 @@ class _StagedRepository[A: AggregateRoot]:
             raise NotFoundError(id=key)
         if stored.version != expected:
             raise ConcurrentUpdateError(id=key)
+        self._check_unique(aggregate, self._all())
         self._base_versions.setdefault(key, expected)
         aggregate.mark_persisted(expected + 1)
         self._staged[key] = _clone(aggregate)
@@ -105,6 +129,8 @@ class _StagedRepository[A: AggregateRoot]:
                 raise self._duplicate(key)
             if base > 0 and (committed is None or committed.version != base):
                 raise ConcurrentUpdateError(id=key)
+        for staged in self._staged.values():
+            self._check_unique(staged, self._committed.values())
 
     def apply(self) -> None:
         self._committed.update(self._staged)
@@ -133,10 +159,64 @@ class InMemoryStaffRepository(_StagedRepository[Staff]):
         people = [s for s in self._all() if role is None or s.has_role(role)]
         return sorted(people, key=lambda staff: (staff.name, staff.id))
 
-    async def add(self, aggregate: Staff) -> None:
-        if any(other.email == aggregate.email for other in self._all()):
-            raise ConflictError("Ya existe una persona con ese correo.", email=aggregate.email)
-        await super().add(aggregate)
+    async def get_by_creation_key(self, key: str) -> Staff | None:
+        for staff in self._all():
+            if staff.creation_key is not None and staff.creation_key == key:
+                self._track(staff)
+                return staff
+        return None
+
+    def _unique_violation(self, aggregate: Staff, other: Staff) -> DomainError | None:
+        if aggregate.creation_key is not None and aggregate.creation_key == other.creation_key:
+            return ConcurrentUpdateError(creationKey=aggregate.creation_key)
+        if aggregate.email == other.email:
+            return EmailTakenError()
+        return None
+
+
+class InMemoryTeamRepository(_StagedRepository[Team]):
+    def __init__(self, committed: dict[str, Team], track: Tracker) -> None:
+        super().__init__(committed, lambda team: team.id, track)
+
+    async def get(self, team_id: str) -> Team | None:
+        return await self._get(team_id)
+
+    async def get_many(self, team_ids: Collection[str]) -> dict[str, Team]:
+        wanted = set(team_ids)
+        found = {team.id: team for team in self._all() if team.id in wanted}
+        for team in found.values():
+            self._track(team)
+        return found
+
+    async def get_by_creation_key(self, key: str) -> Team | None:
+        for team in self._all():
+            if team.creation_key is not None and team.creation_key == key:
+                self._track(team)
+                return team
+        return None
+
+    async def list(self) -> list[Team]:
+        teams = sorted(self._all(), key=lambda team: (team.name_key, team.id))
+        for team in teams:
+            self._track(team)
+        return teams
+
+    def _unique_violation(self, aggregate: Team, other: Team) -> DomainError | None:
+        if aggregate.creation_key is not None and aggregate.creation_key == other.creation_key:
+            return ConcurrentUpdateError(creationKey=aggregate.creation_key)
+        if aggregate.name_key == other.name_key:
+            return TeamNameTakenError()
+        return None
+
+
+class InMemoryAdminRosterRepository(_StagedRepository[AdminRoster]):
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, AdminRoster], track: Tracker) -> None:
+        super().__init__(committed, lambda roster: roster.id, track)
+
+    async def get(self, key: str = ROSTER_ID) -> AdminRoster | None:
+        return await self._get(key)
 
 
 class InMemoryLoginAccountRepository(_StagedRepository[LoginAccount]):
@@ -146,6 +226,9 @@ class InMemoryLoginAccountRepository(_StagedRepository[LoginAccount]):
     async def get(self, staff_id: str) -> LoginAccount | None:
         return await self._get(staff_id)
 
+    async def list(self) -> list[LoginAccount]:
+        return sorted(self._all(), key=lambda account: account.staff_id)
+
 
 class InMemoryMfaChallengeRepository(_StagedRepository[MfaChallenge]):
     def __init__(self, committed: dict[str, MfaChallenge], track: Tracker) -> None:
@@ -153,6 +236,13 @@ class InMemoryMfaChallengeRepository(_StagedRepository[MfaChallenge]):
 
     async def get(self, challenge_id: str) -> MfaChallenge | None:
         return await self._get(challenge_id)
+
+    async def list_pending_for(self, staff_id: str, now: datetime) -> list[MfaChallenge]:
+        mine = [c for c in self._all() if c.staff_id == staff_id and c.is_open(now)]
+        mine.sort(key=lambda challenge: (challenge.issued_at, challenge.id))
+        for challenge in mine:
+            self._track(challenge)
+        return mine
 
 
 class InMemoryStaffSessionRepository(_StagedRepository[StaffSession]):
@@ -164,6 +254,13 @@ class InMemoryStaffSessionRepository(_StagedRepository[StaffSession]):
 
     async def active_staff_ids(self, now: datetime) -> set[str]:
         return {session.staff_id for session in self._all() if session.is_active(now)}
+
+    async def list_active_for(self, staff_id: str, now: datetime) -> list[StaffSession]:
+        mine = [s for s in self._all() if s.staff_id == staff_id and s.is_active(now)]
+        mine.sort(key=lambda session: (session.issued_at, session.id))
+        for session in mine:
+            self._track(session)
+        return mine
 
 
 class InMemoryEventLogRepository:
@@ -374,6 +471,22 @@ class InMemoryCaseRepository(_StagedRepository[Case]):
                 last_assigned_at=last,
             )
         return loads
+
+    async def open_refs_by_assignee(
+        self, staff_ids: Collection[str] | None = None
+    ) -> dict[str, list[OpenCaseRef]]:
+        wanted = set(staff_ids) if staff_ids is not None else None
+        refs: dict[str, list[OpenCaseRef]] = {}
+        for case in sorted(self._all(), key=lambda c: c.id):
+            staff_id = case.assigned_analyst_id
+            if staff_id is None or case.status not in OPEN_ASSIGNED_STATUSES:
+                continue
+            if wanted is not None and staff_id not in wanted:
+                continue
+            refs.setdefault(staff_id, []).append(
+                OpenCaseRef(case_id=case.id, language=case.language)
+            )
+        return refs
 
 
 class InMemoryCustomerCaseSlotRepository(_StagedRepository[CustomerCaseSlot]):

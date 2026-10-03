@@ -32,12 +32,14 @@ from cc_platform.application.cases.dto import CloseCaseCommand, PostTurnCommand
 from cc_platform.application.cases.manual_assignment import SetAssigneeCommand
 from cc_platform.application.errors import InvalidCredentialsError
 from cc_platform.application.events import StoredEvent
+from cc_platform.application.people.admin.dto import CreateUserCommand, UpdateUserCommand
 from cc_platform.application.people.dto import LoginCommand, VerifyMfaCommand
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.bootstrap.container import Container
 from cc_platform.domain.cases import CloseReason
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.errors import AccountLockedError
+from cc_platform.domain.people.staff import Language, StaffRole
 from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
 from cc_platform.domain.shared.events import DomainEvent
@@ -51,12 +53,15 @@ from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAl
 from cc_platform.infrastructure.seed.cases import seed_case_id, seed_demo_cases
 from cc_platform.infrastructure.seed.customers import seed_customer_id, seed_demo_customers
 from cc_platform.infrastructure.seed.people import (
+    seed_demo_admin_story,
     seed_demo_availability,
     seed_demo_sessions,
     seed_demo_staff,
     seed_staff_id,
+    seed_team_id,
 )
 from tests.support import (
+    ADMIN_ONLY,
     ANALYST,
     PASSWORD,
     SEBASTIAN,
@@ -156,6 +161,46 @@ async def emit_everything(container: Container) -> None:
     await people.set_availability.execute(daniela, AvailabilityStatus.PAUSED)
     await people.set_availability.execute(daniela, AvailabilityStatus.AVAILABLE)
     await container.background.drain()  # the drain assigns what is left in the queues
+    await emit_administration(container)
+
+
+async def emit_administration(container: Container) -> None:
+    """Every administration event (slice 4 §2.4) through the real use cases."""
+    admin = container.use_cases.administration
+    valeria = actor_for(ADMIN_ONLY)
+    team = await admin.create_team.execute(valeria, "Disputas · Equipo Sur")
+    created = await admin.create_user.execute(
+        valeria,
+        CreateUserCommand(
+            name="Ana Gil",
+            email="ana.gil@latambank.example",
+            roles=(StaffRole.ANALYST,),
+            languages=(Language.PORTUGUESE,),
+            team_id=team.team.id,
+        ),
+    )
+    ana = created.user
+    changed = await admin.update_user.execute(
+        valeria,
+        ana.id,
+        UpdateUserCommand(
+            expected_version=ana.version,
+            name="Ana María Gil",
+            roles=(StaffRole.ANALYST, StaffRole.SUPERVISOR),
+            languages=(Language.SPANISH, Language.PORTUGUESE),
+            team_id=seed_team_id(1),
+        ),
+    )
+    current = await admin.get_team.execute(valeria, team.team.id)  # moves in/out touched it
+    renamed = await admin.rename_team.execute(
+        valeria, team.team.id, current.team.version, "Disputas · Equipo Austral"
+    )
+    deactivated = await admin.deactivate_team.execute(valeria, team.team.id, renamed.team.version)
+    await admin.reactivate_team.execute(valeria, team.team.id, deactivated.team.version)
+    await admin.unlock_user.execute(valeria, seed_staff_id(3))  # Paula, locked above
+    await admin.reset_password.execute(valeria, ana.id)
+    off = await admin.deactivate_user.execute(valeria, ana.id, changed.user.version)
+    await admin.reactivate_user.execute(valeria, ana.id, off.user.version)
 
 
 async def all_events(uow_factory: UnitOfWorkFactory) -> list[AuditEventView]:
@@ -280,6 +325,7 @@ async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
     await seed_demo_sessions(factory, clock, ttl=timedelta(hours=8))
     await seed_demo_availability(factory, clock)
     await seed_demo_cases(factory, ids, clock)
+    await seed_demo_admin_story(factory, clock)
     async with factory() as uow:  # an event type the catalog does not know
         uow.record(_Unknown(occurred_at=T, actor=ActorRef.system(), entity_id="x_100%"))
         await uow.commit()
@@ -321,7 +367,7 @@ async def test_filter_by_actor_kind_and_person(harness: Harness) -> None:
     staff = await search(harness, actor_kind=AuditActorKind.STAFF)
     customers = await search(harness, actor_kind=AuditActorKind.CUSTOMER)
     system = await search(harness, actor_kind=AuditActorKind.SYSTEM)
-    assert {e.actor.role.value for e in staff} == {"analyst", "supervisor"}
+    assert {e.actor.role.value for e in staff} == {"analyst", "supervisor", "admin"}
     assert {e.actor.role.value for e in customers} == {"customer"}
     assert {e.actor.role.value for e in system} == {"system"}
     assert len(staff) + len(customers) + len(system) == len(every)

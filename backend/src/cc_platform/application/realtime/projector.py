@@ -7,7 +7,11 @@ an assignment change also goes to ``inbox:<analyst>``). A context that publishes
 richer envelopes (the cases context: ``CaseRealtimeProjector``) ``suppress``es its event
 types here so they are not forwarded raw as well.
 
-``SessionTerminator`` closes the sockets of a session as soon as it ends (logout).
+``SessionTerminator`` closes the sockets of a session as soon as it ends (logout,
+deactivation, password reset: close code 4401). ``AccessTerminator`` closes every socket of
+a person whose roles changed (close code 4409, ``access_changed``): a socket keeps the
+roles it authenticated with and topics are checked at subscribe time, so it reconnects
+right away and its subscriptions are re-checked with the new roles (slice 4 §9.3).
 """
 
 from __future__ import annotations
@@ -17,11 +21,14 @@ from collections.abc import Callable, Iterable
 from cc_platform.application.events import EventRecord
 from cc_platform.application.ports.realtime import RealtimeEnvelope, RealtimeHub
 from cc_platform.application.realtime.topics import Topic
-from cc_platform.domain.people.events import SessionEnded
+from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.shared.events import DomainEvent
 from cc_platform.domain.shared.json import JsonObject
 
 type TopicRule = Callable[[DomainEvent], Iterable[Topic]]
+
+#: Hub close reason (and WebSocket close reason) after a roles change.
+ACCESS_CHANGED = "access_changed"
 
 
 class TopicMapper:
@@ -109,3 +116,12 @@ class SessionTerminator:
     async def __call__(self, record: EventRecord) -> None:
         if isinstance(record.event, SessionEnded):
             self._hub.close_session(record.entity_id)
+
+
+class AccessTerminator:
+    def __init__(self, hub: RealtimeHub) -> None:
+        self._hub = hub
+
+    async def __call__(self, record: EventRecord) -> None:
+        if isinstance(record.event, StaffRolesChanged):
+            self._hub.close_principal(record.entity_id, ACCESS_CHANGED)

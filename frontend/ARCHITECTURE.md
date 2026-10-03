@@ -19,13 +19,15 @@ oxlint + prettier. Fonts are self-hosted (`@fontsource/*`).
 src/
   main.tsx              entry: providers + RouterProvider
   app/                  composition root of the SPA
-    providers.tsx       QueryClient → Session → Realtime → Toasts
+    providers.tsx       QueryClient → Session → Realtime → Toasts (+ SessionLiveSync)
     router.tsx          route table (lazy route modules, guards)
     guards.tsx          RequireSession, RequireRole, GuestOnly, RootRedirect
     redirect.ts         "from" state carried to /login
     roles.ts            role definitions, rail destinations, path helpers (pure, tested)
     rail-indicators.ts  useRailIndicators: live rail badges/dots fed by features
     session.tsx         SessionProvider, useSession, useCurrentUser, useCurrentRole
+    session-realtime.ts `me.updated` → the session cache (registerSessionRealtime)
+    session-live.tsx    SessionLiveSync: `staff:<me>` topic, 4409 → reload /auth/me, roles toast
     realtime.ts         the app RealtimeClient (token + auth-error wiring)
     realtime-handlers.ts  composition point: every feature's realtime registration
     query-client.ts     TanStack Query defaults
@@ -40,7 +42,7 @@ src/
     realtime/           WebSocket client, envelope → cache handlers, React hooks
     session-token.ts    token store (memory + sessionStorage)
     config.ts           VITE_API_URL, realtime URL
-    format.ts, cn.ts    formatters, class names
+    format.ts, cn.ts    formatters (incl. joinEs "A, B y C"), class names
     hooks.ts            generic React hooks shared by features: useDebouncedValue, useNow
   styles/index.css      tokens (@theme) and base styles
   test/                 render helpers, fixtures (invented people), fake socket,
@@ -57,13 +59,27 @@ features/<name>/
   hooks/         TanStack Query hooks and small UI-state hooks
   components/    presentational pieces + the screen component(s)
   realtime.ts    `registerXRealtime: RealtimeRegistration` (envelope → cache handlers, when needed)
-  index.ts       public API: the only file other modules may import
+  core.ts        screen-free public API: what the always-loaded shell may import (when needed)
+  index.ts       public API: `export * from './core'` + the screens and screen hooks
 ```
+
+Two public files: other modules import a feature only through `index.ts` or
+`core.ts`. `core.ts` holds what can load with the entry chunk: the realtime
+registration, the count hooks behind rail badges, query keys, shared labels and
+readers, and types. It never reaches a component or a feature `index.ts`,
+transitively (anything it loads imports other features through their `core.ts`).
+`index.ts` re-exports it and adds the screens. The app shell (`src/app` except the
+route table, and `main.tsx`) imports features only through `core.ts`: an import of
+an `index.ts` there would put every screen of that feature in the entry chunk, since
+the barrel statically depends on them (lazy routes would then be empty shells).
+Today `cases`, `conversation`, `supervision` and `admin` have one. The vocabulary the
+shell itself shows (role names, "Ahora tienes: …") lives in `app/roles.ts`.
 
 Rules:
 
-- Import a feature only through its `index.ts` (`@/features/auth`). No deep imports
-  across features. Inside a feature, use relative imports.
+- Import a feature only through its `index.ts` (`@/features/auth`) or its `core.ts`
+  (`@/features/cases/core`). No deep imports across features. Inside a feature, use
+  relative imports. The app shell uses `core.ts` only (above).
 - Features never import `src/routes`. They may import `@/components/*`, `@/lib/*`
   and, for the session and role helpers, `@/app/session` / `@/app/roles`.
 - Layers: `components/ui` imports nothing from `app`, `features`, `routes` or
@@ -72,8 +88,11 @@ Rules:
   `app/rail-indicators.ts`); `src/test` is for tests only. Tests may import (and
   `vi.mock`) a feature's `api.ts` directly.
 - These rules are enforced: `src/test/architecture.test.ts` (runs in `pnpm test`,
-  resolves alias, relative and dynamic imports) and oxlint `no-restricted-imports`
-  (deep `@/features/*/*` and `@/routes` imports, in the editor).
+  resolves alias, relative and dynamic imports; walks every `core.ts` runtime graph,
+  `import type` excluded, and fails on a component or a feature `index.ts`) and oxlint
+  `no-restricted-imports` (deep `@/features/*/*` other than `core`, and `@/routes`
+  imports, in the editor). Check the result with `pnpm build`: copy of a screen (e.g.
+  "Crear cuenta", "Reasignar") must only appear in a lazy chunk, never in `index-*.js`.
 - Route modules (`src/routes`) are thin: read URL params / router state, call the
   feature's screen component, translate callbacks into navigation. No fetching and
   no business rules there.
@@ -159,6 +178,48 @@ mode="supervision"` + "Asignar"/"Reasignar" + "Casos anteriores"), the assign
   `?asignar=` changes and names the link "Volver a Auditoría" or "Volver a Equipo y
   colas".
 
+### Administration (slice 4)
+
+Contract: `docs/platform/api/slice-4-administration.md` §10. `features/admin` imports
+no other feature (only `@/app/roles`, `@/components/*`, `@/lib/*`); the admin audit
+route composes `@/features/audit`, and `app/` composes the badge and the session sync.
+
+- **`admin`**: "Usuarios y roles" (`UsersScreen`: role pills with counts, Cuenta /
+  Equipo / Idioma selects, debounced search, the table with role chips and the account
+  status recomputed with a 15 s clock from `lockedUntil`, and the 400 px aside
+  `UserPanel`) and "Equipos" (`TeamsScreen`: status pills, table, `TeamPanel` with
+  rename, members, "Agregar persona", deactivate / reactivate). One `UserForm` serves
+  the aside and `CreateUserDialog`. Role names (`ROLE_LABEL`, pinned to the backend,
+  `rolesLabel`, `rolesNowCopy`) live in `app/roles.ts`, shared with the session toast.
+  Rules live in `model.ts`: labels, `accountStatusAt`, URL state, the draft diff (`userChanges`
+  sends only what changed, with the `expectedVersion` the admin saw), client
+  validation, guard rails (`userGuardState`: own Administración / deactivation /
+  password; last active admin) and open-case blocks (`openCaseBlocks`, checked at
+  submit with no request), and `describeAdminFailure` (one copy per problem code).
+  `useFailureHandler` applies a failure to the cache: `version_conflict` writes
+  `current` (validated by `readAdminUser` / `readAdminTeam`) and resets the draft.
+- **Drafts and live data**: without a draft the form follows the cache; with one it
+  keeps it and, when the cached `version` moves past the draft's base, says so ("Alguien
+  más acaba de cambiar a esta persona…"). "Guardar cambios" is enabled while the draft
+  differs; validation runs on submit and focuses the first invalid control.
+- **Temporary passwords** (create, reset) live only in `UsersScreen` component state
+  and `TemporaryPasswordDialog`: never in the URL, the query cache or storage. Creates
+  send one `Idempotency-Key` per open dialog; a replay (`temporaryPassword: null`)
+  offers "Restablecer contraseña".
+- **Realtime** (`core.ts`: `registerAdminRealtime`, `useLockedAccountsCount`, keys,
+  types): `registerAdminRealtime` (`directory.updated` → invalidate the user and
+  team lists, the named people and teams, every team detail when people moved);
+  `useAdminLive` subscribes `admin:directory` and refetches after a reconnect;
+  `useLockedAccountsCount` (rail badge, Administración role only) shares the default
+  list cache and refetches every 60 s (locks expire on their own).
+- **Supervision migration**: teams are records; `TeamRef.id` / `TeamSummary.id`
+  (`TEAM-…`) replace the slice 3 slugs, `?equipo=` holds the id (an old slug URL falls
+  back to "Todos los equipos").
+- **Audit**: `/administracion/auditoria` renders the same `AuditScreen` with
+  `canOpenCases={hasRole('supervisor')}` (no "Ver la conversación" for an admin without
+  Supervisora) and without the queue notices; the "Tipo" select gains
+  "Administración"; the "Persona" select lists inactive people "(desactivada)".
+
 ## 4. Routing
 
 `src/app/router.tsx` holds the table. Paths are Spanish:
@@ -171,7 +232,9 @@ mode="supervision"` + "Asignar"/"Reasignar" + "Casos anteriores"), the assign
 | `/supervision/equipo?equipo=&estado=&analista=&asignar=`                               | Equipo y colas                                     | supervisor |
 | `/supervision/casos/:caseId?historial=&asignar=`                                       | supervisor read-only case view (`state.from`)      | supervisor |
 | `/supervision/auditoria?quien=&persona=&caso=&tipo=&desde=&hasta=&q=&cambios=&evento=` | Auditoría                                          | supervisor |
-| `/administracion/usuarios`                                                             | users and roles (placeholder, slice 4)             | admin      |
+| `/administracion/usuarios?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=`             | Usuarios y roles                                   | admin      |
+| `/administracion/equipos?estado=&equipo=&nuevo=`                                       | Equipos                                            | admin      |
+| `/administracion/auditoria?…` (the supervision audit params)                           | Auditoría (same screen, `canOpenCases`)            | admin      |
 | `/cliente`                                                                             | customer chat simulator (dev tool, no staff shell) | —          |
 
 Any other path inside a role section shows that role's not-found page; any other
@@ -241,16 +304,27 @@ it with `lazyRoute()` in the right role section. Until it is built, render
   token loss clears the whole query cache so the next person never sees the
   previous one's data. Covered by `app/session.test.tsx` with a fake `fetch`.
 - The token lives in memory and in `sessionStorage` (survives reload, dies with the tab).
+- **Live profile** (slice 4): `SessionLiveSync` subscribes `staff:<me.id>`;
+  `me.updated` replaces the `me` cache (`app/session-realtime.ts`), so the rail, the role
+  switcher, the summary line and the guards follow an admin's change without signing in
+  again. A roles change also closes her sockets with 4409: the client reconnects at
+  once and `SessionLiveSync` reloads `/auth/me`. When `roleIds` change it toasts
+  "Cambiaron tus roles · Ahora tienes: …"; `RequireRole` sends her to her first role
+  home if the section she is in is gone. Deactivation and password reset end the
+  session (4401 → sign out).
 
 ## 7. Realtime
 
 `src/lib/realtime` is framework-free except `react.tsx` / `hooks.ts`:
 
 - `RealtimeClient`: one WebSocket to `/api/v1/ws?token=`; ref-counted topic
-  subscriptions (`case:<id>`, `inbox:<staffId>`, `supervision:queues|team`) replayed after every
+  subscriptions (`case:<id>`, `inbox:<staffId>`, `supervision:queues|team`, `admin:directory`, `staff:<id>`) replayed after every
   reconnect; exponential backoff with jitter (`computeBackoff`), reset on open;
   close code 4401 (token rejected, logout, expiry; also 4403/1008) stops and ends the
-  session, 1013 and network drops reconnect. `disconnect()` closes a socket that is
+  session, 1013 and network drops reconnect. 4409 (`access_changed`, slice 4: her
+  roles changed) is not an auth error: it reconnects at once (no backoff, a
+  `reconnecting` → `open` edge so screens refetch) and notifies
+  `client.onAccessChanged` listeners. `disconnect()` closes a socket that is
   still connecting once it opens (never mid-handshake), so StrictMode's dev remount of
   a provider that already holds a token logs nothing. The customer simulator runs a
   second client with the customer token (`customer:<customerId>` topic, own registry).
@@ -262,8 +336,8 @@ it with `lazyRoute()` in the right role section. Until it is built, render
   `error`) share the shape (`isControlEnvelope`). Domain envelopes carry
   `data = { entity, entityId, caseId, actor, payload }`; read them only through
   `envelopePayload` / `envelopeCaseId` (`@/lib/realtime`). Each payload type has one
-  reader, owned by its feature and shared through its `index.ts` (e.g.
-  `readCaseSummary` and `isNewerCase` from `@/features/cases`), never copied.
+  reader, owned by its feature and shared through its `core.ts` (e.g.
+  `readCaseSummary` and `isNewerCase` from `@/features/cases/core`), never copied.
 - Handler registry (`createEnvelopeHandlerRegistry`): one handler per event type
   that updates the TanStack Query cache (`setQueryData` / `invalidateQueries`).
   Handlers must still be idempotent (a late payload can be older than the cache) and
@@ -273,7 +347,7 @@ it with `lazyRoute()` in the right role section. Until it is built, render
   effects would depend on which screen loaded first). Instead:
   1. the feature writes `export const registerCasesRealtime: RealtimeRegistration =
 (registry) => { registry.register('turn.created', …) }` in its `realtime.ts`
-     and exports it from `index.ts` (keep that module light: keys + handlers);
+     and exports it from `core.ts` (keep that module light: keys + handlers);
   2. it is added to `FEATURE_REALTIME_REGISTRATIONS` in `app/realtime-handlers.ts`,
      the single composition point;
   3. `AppProviders` builds one registry per provider tree with
@@ -290,7 +364,9 @@ it with `lazyRoute()` in the right role section. Until it is built, render
   `queue.case_queued` (topic `supervision:queues`) and `team.updated` (topic
   `supervision:team`, ids only). Supervision topics are for the supervisor role
   (`topics.supervisionQueues()`, `topics.supervisionTeam()`); read the envelope
-  actor with `envelopeActor`.
+  actor with `envelopeActor`. Slice 4: `directory.updated` (topic `admin:directory`,
+  admins only, `{ staffIds, teamIds }`) and `me.updated` (topic `staff:<id>`, only
+  that person, a fresh `StaffOut`): `topics.adminDirectory()`, `topics.staff(id)`.
 
 ## 8. Tokens and styling
 

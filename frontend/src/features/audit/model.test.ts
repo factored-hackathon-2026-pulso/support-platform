@@ -17,12 +17,14 @@ import {
   emptyLogCopy,
   eventInstant,
   eventTime,
+  familyLabel,
   groupByDay,
   hasAuditFilters,
   hidesMessageText,
   isDateKey,
   parseAuditSearch,
   payloadLines,
+  personOptionLabel,
   shownCountLabel,
   showsPersonFilter,
   toAuditSearch,
@@ -67,8 +69,17 @@ describe('URL state', () => {
       'ciclo',
       'disponibilidad',
       'accesos',
+      'administracion',
       'otros',
     ])
+    expect(parseAuditSearch(new URLSearchParams('tipo=administracion')).family).toBe(
+      'administration',
+    )
+    expect(familyLabel('administration')).toBe('Administración')
+    expect(personOptionLabel({ name: 'Andrés Villamil', active: false })).toBe(
+      'Andrés Villamil (desactivada)',
+    )
+    expect(personOptionLabel({ name: 'Lucía Herrera', active: true })).toBe('Lucía Herrera')
     expect(AUDIT_KIND_FILTERS.map((k) => k.label)).toEqual([
       'Todos',
       'Equipo',

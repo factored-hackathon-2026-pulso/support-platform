@@ -46,7 +46,7 @@ from cc_platform.domain.cases.values import (
     TurnKind,
 )
 from cc_platform.domain.people.availability import AvailabilityStatus
-from cc_platform.domain.people.events import StaffAvailabilityChanged
+from cc_platform.domain.people.events import StaffAvailabilityChanged, StaffLanguagesChanged
 from cc_platform.domain.people.staff import Language, StaffRole
 from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.events import DomainEvent
@@ -282,14 +282,20 @@ class DrainQueue:
 
 
 #: Events ``QueueDrainer`` subscribes to.
-QUEUE_DRAINER_EVENTS: tuple[type[DomainEvent], ...] = (StaffAvailabilityChanged,)
+QUEUE_DRAINER_EVENTS: tuple[type[DomainEvent], ...] = (
+    StaffAvailabilityChanged,
+    StaffLanguagesChanged,
+)
 
 
 class QueueDrainer:
-    """Process manager: an analyst became ``available`` → drain the queue in the background.
+    """Process manager: an analyst became ``available``, or administration gave someone new
+    languages (slice 4 §3.2) → drain the queue in the background.
 
     The job is idempotent (each case is re-read and skipped if it already left the queue),
-    so a duplicate event or two analysts becoming available at once is harmless.
+    so a duplicate event or two analysts becoming available at once is harmless. After a
+    languages change it only assigns when that person is an active, available analyst
+    (``RepositoryAnalystDirectory``), so a paused one changes nothing.
     """
 
     def __init__(self, tasks: BackgroundTasks, drain_queue: DrainQueue) -> None:
@@ -298,8 +304,10 @@ class QueueDrainer:
 
     async def __call__(self, record: EventRecord) -> None:
         event = record.event
-        if (
+        became_available = (
             isinstance(event, StaffAvailabilityChanged)
             and event.to_status == AvailabilityStatus.AVAILABLE.value
-        ):
+        )
+        speaks_more = isinstance(event, StaffLanguagesChanged) and bool(event.added)
+        if became_available or speaks_more:
             self._tasks.spawn("drain_queue", self._drain_queue.execute)

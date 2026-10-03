@@ -24,6 +24,9 @@ class MfaChallengeStatus(StrEnum):
     PENDING = "pending"
     VERIFIED = "verified"
     EXHAUSTED = "exhausted"
+    #: Withdrawn because her credential or her access changed after it was issued (a
+    #: password reset or a deactivation): the password step it proves is no longer valid.
+    CANCELLED = "cancelled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +115,17 @@ class MfaChallenge(AggregateRoot):
             )
         )
         return self.remaining_attempts
+
+    def cancel(self, *, now: datetime) -> bool:
+        """Withdraw a pending challenge (slice 4 §3.3, §3.5); ``False`` when it was no
+        longer open (verified, exhausted, expired or already cancelled), nothing to save.
+
+        No event of its own: the reset or deactivation that cancels it is the audited fact.
+        """
+        if not self.is_open(now):
+            return False
+        self.status = MfaChallengeStatus.CANCELLED
+        return True
 
     def complete(self, *, now: datetime, method: MfaMethod) -> None:
         if not self.is_open(now):

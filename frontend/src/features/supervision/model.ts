@@ -102,9 +102,9 @@ export function activityFilterOf(activity: AnalystActivity): ActivityFilter {
 /** The analysts of one team (`null` = every team). */
 export function analystsOfTeam(
   analysts: readonly TeamAnalyst[],
-  teamKey: string | null,
+  teamId: string | null,
 ): TeamAnalyst[] {
-  return teamKey ? analysts.filter((a) => a.team.key === teamKey) : analysts.slice()
+  return teamId ? analysts.filter((a) => a.team.id === teamId) : analysts.slice()
 }
 
 export function analystsInFilter(
@@ -121,16 +121,19 @@ export function countByFilter(analysts: readonly TeamAnalyst[]): Record<Activity
   return counts
 }
 
-/** The team of `?equipo=`, or null for "Todos los equipos" (unknown keys too). */
+/**
+ * The team of `?equipo=` (a `TEAM-…` id), or null for "Todos los equipos"
+ * (unknown ids too, e.g. an old slice 3 slug URL).
+ */
 export function selectedTeam(
   teams: readonly TeamSummary[],
-  key: string | null,
+  teamId: string | null,
 ): TeamSummary | null {
-  return key ? (teams.find((team) => team.key === key) ?? null) : null
+  return teamId ? (teams.find((team) => team.id === teamId) ?? null) : null
 }
 
 /**
- * Pill labels by team key: the team names without the prefix they all share
+ * Pill labels by team id: the team names without the prefix they all share
  * ("Disputas · Equipo Andes" → "Equipo Andes"), or the full names otherwise.
  */
 export function teamPillLabels(teams: readonly TeamSummary[]): Record<string, string> {
@@ -141,7 +144,7 @@ export function teamPillLabels(teams: readonly TeamSummary[]): Record<string, st
   const first = teams[0] ? prefixOf(teams[0].name) : null
   const shared = first !== null && teams.every((team) => team.name.startsWith(first))
   return Object.fromEntries(
-    teams.map((team) => [team.key, shared ? team.name.slice(first.length) : team.name]),
+    teams.map((team) => [team.id, shared ? team.name.slice(first.length) : team.name]),
   )
 }
 
@@ -524,7 +527,7 @@ export function queuedNoticeCopy(summary: Pick<CaseSummary, 'language' | 'custom
 // ── URL state (frozen, contract §8.9) ────────────────────────────────────────
 
 export interface TeamUrlState {
-  /** `?equipo=<TeamSummary.key>`; unknown → treated as all (`selectedTeam`). */
+  /** `?equipo=<TeamSummary.id>` (`TEAM-…`); unknown → treated as all (`selectedTeam`). */
   team: string | null
   /** `?estado=conectadas|en-pausa|desconectadas` (default conectadas). */
   activity: ActivityFilter

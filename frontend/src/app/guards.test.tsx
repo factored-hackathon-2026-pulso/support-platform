@@ -95,6 +95,25 @@ describe('route guards', () => {
     expect(screen.getByRole('navigation', { name: 'Principal' })).toBeInTheDocument()
   })
 
+  it.each(['/administracion/herramientas', '/administracion/retencion'])(
+    'keeps the removed admin screen %s as a not found page',
+    async (path) => {
+      renderRoute(path, { staff: adminStaff })
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Página no encontrada' }),
+      ).toBeInTheDocument()
+    },
+  )
+
+  it('opens the new admin screens for an admin only', async () => {
+    const { unmount } = renderRoute('/administracion/equipos', { staff: adminStaff })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Equipos' })).toBeInTheDocument()
+    unmount()
+    const { router } = renderRoute('/administracion/auditoria', { staff: supervisorStaff })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Casos' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/analista')
+  })
+
   it('renders the customer simulator without the staff shell or a session', async () => {
     renderRoute('/cliente')
     expect(

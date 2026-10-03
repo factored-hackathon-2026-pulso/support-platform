@@ -38,7 +38,8 @@ def test_full_login_flow_returns_session_and_staff(client: TestClient, clock: Fi
         "email": "daniela.rios@latambank.example",
         "roles": ["analyst"],
         "languages": ["es", "pt"],
-        "team": "Disputas · Equipo Andes",
+        "team": {"id": "TEAM-00000000000000000000000001", "name": "Disputas · Equipo Andes"},
+        "active": True,
     }
 
     me = client.get("/api/v1/auth/me", headers=bearer(session["token"]))

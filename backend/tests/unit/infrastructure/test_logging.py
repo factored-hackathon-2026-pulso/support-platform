@@ -6,6 +6,7 @@ import logging
 from collections.abc import Iterator
 
 import pytest
+import structlog
 
 from cc_platform.infrastructure.logging import REDACTED, configure_logging, redact_secrets
 
@@ -39,7 +40,28 @@ def test_uvicorn_websocket_handshake_line_is_redacted(capsys: pytest.CaptureFixt
         ('GET /x?access_token=abc"', f'GET /x?access_token={REDACTED}"'),
         ("password=hunter2 next", f"password={REDACTED} next"),
         ("no secrets here", "no secrets here"),
+        (
+            "[parameters: ('STF-1', '$argon2id$v=19$m=65536,t=3,p=4$jsGCOMDY05/x$EN/HoR1n+q')]",
+            f"[parameters: ('STF-1', '{REDACTED}')]",
+        ),
+        ("SET password_hash=? WHERE", "SET password_hash=? WHERE"),
     ],
 )
 def test_redact_secrets(raw: str, expected: str) -> None:
     assert redact_secrets(raw) == expected
+
+
+@pytest.mark.usefixtures("restore_logging")
+def test_exception_text_is_redacted_too(capsys: pytest.CaptureFixture[str]) -> None:
+    """The traceback ``format_exc_info`` renders is masked, not only the message."""
+    configure_logging(level="INFO", fmt="json")
+    secret_hash = "$argon2id$v=19$m=65536,t=3,p=4$c2FsdA$aGFzaA"
+    try:
+        raise RuntimeError(f"write failed: {secret_hash} /ws?token={TOKEN}")
+    except RuntimeError:
+        structlog.get_logger("cc_platform.api.errors").exception("unhandled_error")
+    output = capsys.readouterr().err
+    assert "unhandled_error" in output
+    assert "RuntimeError: write failed" in output
+    assert "argon2" not in output
+    assert TOKEN not in output

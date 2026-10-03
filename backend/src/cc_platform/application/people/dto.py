@@ -6,7 +6,26 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.domain.people.mfa import MfaMethod
-from cc_platform.domain.people.staff import Language, Staff, StaffRole
+from cc_platform.domain.people.staff import (
+    Language,
+    Staff,
+    StaffRole,
+    canonical_roles,
+    sorted_languages,
+)
+from cc_platform.domain.people.team import Team
+
+
+@dataclass(frozen=True, slots=True)
+class TeamRefView:
+    """A team as other views reference it (supervision rows, ``StaffOut.team``)."""
+
+    id: str
+    name: str
+
+    @classmethod
+    def of(cls, team: Team) -> TeamRefView:
+        return cls(id=team.id, name=team.name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,22 +35,20 @@ class StaffView:
     email: str
     roles: tuple[StaffRole, ...]
     languages: tuple[Language, ...]
-    team: str
+    team: TeamRefView
+    active: bool
 
     @classmethod
-    def from_staff(cls, staff: Staff) -> StaffView:
+    def from_staff(cls, staff: Staff, team: Team) -> StaffView:
         return cls(
             id=staff.id,
             name=staff.name,
             email=staff.email,
-            roles=tuple(sorted(staff.roles, key=_role_order)),
-            languages=tuple(sorted(staff.languages)),
-            team=staff.team,
+            roles=canonical_roles(staff.roles),
+            languages=sorted_languages(staff.languages),
+            team=TeamRefView.of(team),
+            active=staff.active,
         )
-
-
-def _role_order(role: StaffRole) -> int:
-    return list(StaffRole).index(role)
 
 
 @dataclass(frozen=True, slots=True)

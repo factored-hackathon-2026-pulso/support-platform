@@ -38,7 +38,7 @@ import type { TeamAnalyst, TeamOverview } from '../types'
 export interface AnalystsPanelProps {
   query: QueryLike<TeamOverview>
   /** `null` = every team (the row then names the team). */
-  teamKey: string | null
+  teamId: string | null
   filter: ActivityFilter
   selectedAnalystId: string | null
   now: number
@@ -53,14 +53,14 @@ export interface AnalystsPanelProps {
  */
 export function AnalystsPanel({
   query,
-  teamKey,
+  teamId,
   filter,
   selectedAnalystId,
   now,
   onFilterChange,
   onSelectAnalyst,
 }: AnalystsPanelProps) {
-  const ofTeam = query.data ? analystsOfTeam(query.data.analysts, teamKey) : []
+  const ofTeam = query.data ? analystsOfTeam(query.data.analysts, teamId) : []
   const counts = countByFilter(ofTeam)
   // The row names the team like the pills do ("Equipo Andes"): the shared prefix costs width.
   const teamLabels = query.data ? teamPillLabels(query.data.teams) : {}
@@ -132,7 +132,7 @@ export function AnalystsPanel({
                     key={analyst.id}
                     analyst={analyst}
                     teamLabel={
-                      teamKey === null ? (teamLabels[analyst.team.key] ?? analyst.team.name) : null
+                      teamId === null ? (teamLabels[analyst.team.id] ?? analyst.team.name) : null
                     }
                     selected={analyst.id === selectedAnalystId}
                     now={now}

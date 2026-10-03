@@ -47,7 +47,7 @@ class AuditEvent(ApiModel):
     ingested_at: datetime
     actor: AuditActor
     entity: str = Field(
-        description="case | turn | staff | staff_session | mfa_challenge | customer."
+        description="case | turn | staff | staff_session | mfa_challenge | customer | team."
     )
     entity_id: str
     case_ref: AuditCaseRef | None = Field(description="Set when the event concerns a case.")

@@ -56,6 +56,28 @@ from cc_platform.application.customers.use_cases import (
     ListDemoCustomers,
     StartCustomerSession,
 )
+from cc_platform.application.people.admin.commands import (
+    CreateUser,
+    DeactivateUser,
+    ReactivateUser,
+    ResetPassword,
+    UnlockAccount,
+    UpdateUser,
+)
+from cc_platform.application.people.admin.guards import ensure_admin_roster
+from cc_platform.application.people.admin.queries import GetTeam, GetUser, ListTeams, ListUsers
+from cc_platform.application.people.admin.realtime import (
+    ADMIN_OWNED_EVENTS,
+    ADMIN_REALTIME_EVENTS,
+    AdministrationRealtimeProjector,
+)
+from cc_platform.application.people.admin.team_commands import (
+    CreateTeam,
+    DeactivateTeam,
+    ReactivateTeam,
+    RenameTeam,
+)
+from cc_platform.application.people.admin.use_cases import AdministrationUseCases
 from cc_platform.application.people.auth import (
     AuthenticateSession,
     LoginWithPassword,
@@ -74,9 +96,11 @@ from cc_platform.application.ports.security import (
     MfaVerifier,
     PasswordHasher,
     SessionTokenService,
+    TemporaryPasswordGenerator,
 )
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.realtime.projector import (
+    AccessTerminator,
     RealtimeProjector,
     SessionTerminator,
     TopicMapper,
@@ -84,7 +108,7 @@ from cc_platform.application.realtime.projector import (
 from cc_platform.application.realtime.topics import TopicAccessPolicy
 from cc_platform.application.use_cases import UseCases
 from cc_platform.bootstrap.settings import Settings
-from cc_platform.domain.people.events import SessionEnded
+from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
 from cc_platform.infrastructure.background import AsyncioBackgroundTasks
@@ -100,6 +124,9 @@ from cc_platform.infrastructure.security.customer_tokens import HmacCustomerToke
 from cc_platform.infrastructure.security.login_attempts import InMemoryUnknownLoginAttempts
 from cc_platform.infrastructure.security.mfa import DevMfaVerifier
 from cc_platform.infrastructure.security.passwords import Argon2PasswordHasher
+from cc_platform.infrastructure.security.temporary_passwords import (
+    SecretsTemporaryPasswordGenerator,
+)
 from cc_platform.infrastructure.security.tokens import HmacSessionTokenService
 from cc_platform.infrastructure.seed.activity import seed_demo_activity
 from cc_platform.infrastructure.seed.customers import seed_demo_customers
@@ -147,13 +174,15 @@ class Container:
             await self.database.create_schema()
         if self.settings.seed_demo_data:
             await self.seed_demo_data()
+        # Slice 4 §2.3: the admin roster exists from the start (idempotent).
+        await ensure_admin_roster(self.uow)
         # No startup drain (contract §3.2): the queue drains when an analyst becomes
         # available (``QueueDrainer``) and, in slice 3, by hand.
 
     async def seed_demo_data(self) -> None:
         """ "Datos de ejemplo": invented staff, customers, availability and the seeded cases."""
         created = {
-            "staff": await seed_demo_staff(self.uow, self.password_hasher),
+            "staff": await seed_demo_staff(self.uow, self.password_hasher, now=self.clock.now()),
             "customers": await seed_demo_customers(self.uow),
             **await seed_demo_activity(
                 self.uow, self.ids, self.clock, ttl=self.settings.session_ttl
@@ -173,6 +202,7 @@ def build_container(
     *,
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
+    temporary_passwords: TemporaryPasswordGenerator | None = None,
 ) -> Container:
     if settings.env == "prod":
         # Fail fast: only the development MFA verifier exists today.
@@ -210,6 +240,7 @@ def build_container(
     mfa_verifier = DevMfaVerifier(settings.dev_mfa_code)
 
     customer_tokens = HmacCustomerTokenService(settings.session_secret.get_secret_value())
+    passwords = temporary_passwords or SecretsTemporaryPasswordGenerator()
     background = AsyncioBackgroundTasks()
 
     # Assignment (brief §4.6): one use case, two callers. ``AssignCase`` runs inside the
@@ -227,8 +258,14 @@ def build_container(
     mapper = TopicMapper()
     mapper.suppress(*OWNED_EVENTS)  # the cases projection publishes their envelopes
     mapper.suppress(*SILENT_EVENTS)  # audited reads (case.viewed): never on a socket
+    mapper.suppress(*ADMIN_OWNED_EVENTS)  # the administration projection signals them
     bus.subscribe(RealtimeProjector(hub, mapper))
     bus.subscribe(SessionTerminator(hub), event_types=[SessionEnded])
+    bus.subscribe(AccessTerminator(hub), event_types=[StaffRolesChanged])
+    bus.subscribe(
+        AdministrationRealtimeProjector(hub, uow, SchemaRealtimePresenter()),
+        event_types=ADMIN_REALTIME_EVENTS,
+    )
     bus.subscribe(
         CaseRealtimeProjector(hub, uow, SchemaRealtimePresenter(), clock),
         event_types=OWNED_EVENTS,
@@ -307,6 +344,24 @@ def build_container(
         audit=AuditUseCases(
             list_events=ListAuditEvents(uow=uow),
             get_event=GetAuditEvent(uow=uow),
+        ),
+        administration=AdministrationUseCases(
+            list_users=ListUsers(uow=uow, clock=clock),
+            get_user=GetUser(uow=uow, clock=clock),
+            create_user=CreateUser(
+                uow=uow, clock=clock, ids=ids, hasher=hasher, passwords=passwords
+            ),
+            update_user=UpdateUser(uow=uow, clock=clock),
+            deactivate_user=DeactivateUser(uow=uow, clock=clock),
+            reactivate_user=ReactivateUser(uow=uow, clock=clock),
+            unlock_user=UnlockAccount(uow=uow, clock=clock),
+            reset_password=ResetPassword(uow=uow, clock=clock, hasher=hasher, passwords=passwords),
+            list_teams=ListTeams(uow=uow),
+            get_team=GetTeam(uow=uow, clock=clock),
+            create_team=CreateTeam(uow=uow, clock=clock, ids=ids),
+            rename_team=RenameTeam(uow=uow, clock=clock),
+            deactivate_team=DeactivateTeam(uow=uow, clock=clock),
+            reactivate_team=ReactivateTeam(uow=uow, clock=clock),
         ),
     )
 

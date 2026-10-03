@@ -4,23 +4,13 @@
  * the queue notice and their realtime handlers
  * (docs/platform/api/slice-3-supervision.md §8.10). Depends on
  * `@/features/conversation` and `@/features/cases`.
+ * Everything in `./core` is re-exported here; the app shell imports `core` only.
  */
+export * from './core'
 export { TeamScreen } from './components/TeamScreen'
 export type { TeamScreenProps } from './components/TeamScreen'
 export { SupervisorCaseScreen } from './components/SupervisorCaseScreen'
 export type { SupervisorCaseScreenProps } from './components/SupervisorCaseScreen'
-export { useQueuedCasesCount, useQueueNotices } from './hooks'
-export { supervisionKeys, supervisionMutationKeys } from './api'
-export { registerSupervisionRealtime } from './realtime'
+export { useQueueNotices } from './hooks'
 export { parseCaseViewSearch, parseTeamSearch, toCaseViewSearch, toTeamSearch } from './model'
 export type { CaseViewUrlState, TeamUrlState, UrlStateChangeOptions } from './model'
-export type {
-  AnalystActivity,
-  AssignmentResult,
-  LanguageQueue,
-  QueueCounts,
-  QueueOverview,
-  TeamAnalyst,
-  TeamOverview,
-  TeamSummary,
-} from './types'

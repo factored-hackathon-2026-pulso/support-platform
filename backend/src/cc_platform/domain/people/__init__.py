@@ -1,8 +1,23 @@
-"""People context: staff, their roles and how they sign in."""
+"""People context: staff, their roles and teams, and how they sign in."""
 
-from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
-from cc_platform.domain.people.errors import AccountLockedError, MfaChallengeInvalidError
+from cc_platform.domain.people.admin_roster import ROSTER_ID, AdminRoster
+from cc_platform.domain.people.availability import (
+    AnalystAvailability,
+    AvailabilityChangeReason,
+    AvailabilityStatus,
+)
+from cc_platform.domain.people.errors import (
+    AccountLockedError,
+    EmailTakenError,
+    LastAdminError,
+    MfaChallengeInvalidError,
+    TeamInactiveError,
+    TeamNameTakenError,
+    TeamNotEmptyError,
+)
 from cc_platform.domain.people.events import (
+    STAFF_ADMIN_EVENTS,
+    TEAM_EVENTS,
     AccountLocked,
     LoginFailed,
     MfaChallengeIssued,
@@ -10,7 +25,20 @@ from cc_platform.domain.people.events import (
     PasswordAccepted,
     SessionEnded,
     SessionStarted,
+    StaffAccountUnlocked,
     StaffAvailabilityChanged,
+    StaffCreated,
+    StaffDeactivated,
+    StaffLanguagesChanged,
+    StaffPasswordReset,
+    StaffProfileUpdated,
+    StaffReactivated,
+    StaffRolesChanged,
+    StaffTeamChanged,
+    TeamCreated,
+    TeamDeactivated,
+    TeamReactivated,
+    TeamRenamed,
 )
 from cc_platform.domain.people.login_account import (
     AuthFactor,
@@ -20,25 +48,37 @@ from cc_platform.domain.people.login_account import (
     LoginAccount,
 )
 from cc_platform.domain.people.mfa import MfaChallenge, MfaChallengeStatus, MfaMethod, MfaPolicy
+from cc_platform.domain.people.names import fold, normalize_person_name, normalize_team_name
 from cc_platform.domain.people.session import SessionEndReason, StaffSession
 from cc_platform.domain.people.staff import (
     ROLE_PRECEDENCE,
     Language,
     Staff,
+    StaffEdit,
     StaffRole,
+    canonical_roles,
     normalize_email,
+    sorted_languages,
 )
+from cc_platform.domain.people.team import Team
 
 __all__ = [
     "ROLE_PRECEDENCE",
+    "ROSTER_ID",
+    "STAFF_ADMIN_EVENTS",
+    "TEAM_EVENTS",
     "AccountLocked",
     "AccountLockedError",
+    "AdminRoster",
     "AnalystAvailability",
     "AuthFactor",
+    "AvailabilityChangeReason",
     "AvailabilityStatus",
+    "EmailTakenError",
     "FailedAttemptCounter",
     "FailedAttemptOutcome",
     "Language",
+    "LastAdminError",
     "LockoutPolicy",
     "LoginAccount",
     "LoginFailed",
@@ -54,8 +94,31 @@ __all__ = [
     "SessionEnded",
     "SessionStarted",
     "Staff",
+    "StaffAccountUnlocked",
     "StaffAvailabilityChanged",
+    "StaffCreated",
+    "StaffDeactivated",
+    "StaffEdit",
+    "StaffLanguagesChanged",
+    "StaffPasswordReset",
+    "StaffProfileUpdated",
+    "StaffReactivated",
     "StaffRole",
+    "StaffRolesChanged",
     "StaffSession",
+    "StaffTeamChanged",
+    "Team",
+    "TeamCreated",
+    "TeamDeactivated",
+    "TeamInactiveError",
+    "TeamNameTakenError",
+    "TeamNotEmptyError",
+    "TeamReactivated",
+    "TeamRenamed",
+    "canonical_roles",
+    "fold",
     "normalize_email",
+    "normalize_person_name",
+    "normalize_team_name",
+    "sorted_languages",
 ]

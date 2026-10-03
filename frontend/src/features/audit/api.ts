@@ -15,7 +15,7 @@ export const auditKeys = {
 }
 
 /** The staff directory behind the "Persona" filter (not audit data, so not under `auditKeys`). */
-export const staffDirectoryKeys = { list: () => ['staff', 'directory'] as const }
+export const staffDirectoryKeys = { list: () => ['staff', 'directory', 'all'] as const }
 
 /** Page size of the log ("Cargar más" asks for the next one). */
 export const AUDIT_PAGE_SIZE = 50
@@ -43,8 +43,13 @@ export async function fetchAuditEvent(eventId: string, signal?: AbortSignal): Pr
   )
 }
 
-/** GET /staff: active staff, for the "Persona" filter. */
+/**
+ * GET /staff?includeInactive=true, for the "Persona" filter: deactivated people
+ * are still in the log (slice 4 §10.6).
+ */
 export async function fetchStaffDirectory(signal?: AbortSignal): Promise<StaffMember[]> {
-  const response = await unwrap(api.GET('/api/v1/staff', { signal }))
+  const response = await unwrap(
+    api.GET('/api/v1/staff', { params: { query: { includeInactive: true } }, signal }),
+  )
   return response.items
 }

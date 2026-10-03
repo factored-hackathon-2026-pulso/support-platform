@@ -11,12 +11,13 @@ from sqlalchemy import case as sql_case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cc_platform.application.cases.ports import AssigneeLoad, CaseRef
+from cc_platform.application.cases.ports import AssigneeLoad, CaseRef, OpenCaseRef
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case, CaseClosure
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
+    OPEN_ASSIGNED_STATUSES,
     AssignmentReason,
     CaseChannel,
     CasePriority,
@@ -225,6 +226,29 @@ class SqlCaseRepository(VersionedRepository[Case]):
             )
             for row in rows
         }
+
+    async def open_refs_by_assignee(
+        self, staff_ids: Collection[str] | None = None
+    ) -> dict[str, list[OpenCaseRef]]:
+        c = self.table.c
+        statement = (
+            select(c.id, c.assigned_analyst_id, c.language)
+            .where(
+                c.assigned_analyst_id.is_not(None),
+                c.status.in_([s.value for s in OPEN_ASSIGNED_STATUSES]),
+            )
+            .order_by(c.id)
+        )
+        if staff_ids is not None:
+            if not staff_ids:
+                return {}
+            statement = statement.where(c.assigned_analyst_id.in_(list(staff_ids)))
+        refs: dict[str, list[OpenCaseRef]] = {}
+        for row in await self._session.execute(statement):
+            refs.setdefault(row.assigned_analyst_id, []).append(
+                OpenCaseRef(case_id=row.id, language=Language(row.language))
+            )
+        return refs
 
 
 class SqlCustomerCaseSlotRepository(VersionedRepository[CustomerCaseSlot]):

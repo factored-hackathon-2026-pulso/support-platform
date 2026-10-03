@@ -137,6 +137,12 @@ class InMemoryRealtimeHub:
             self.disconnect(connection_id, SESSION_ENDED)
         return len(doomed)
 
+    def close_principal(self, principal_id: str, reason: str) -> int:
+        doomed = [c.id for c in self._connections.values() if c.principal_id == principal_id]
+        for connection_id in doomed:
+            self.disconnect(connection_id, reason)
+        return len(doomed)
+
     @property
     def connection_count(self) -> int:
         return len(self._connections)

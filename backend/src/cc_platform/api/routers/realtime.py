@@ -14,9 +14,13 @@ session token (``welcome.data`` = ``{connectionId, staffId}``) or a customer tok
 simulator (``{connectionId, customerId}``). A customer may only subscribe to its own
 ``customer:<CUS-id>`` topic; staff ``case:<id>`` subscriptions also pass an async check
 (assignee analyst or supervisor). On failure the server sends an ``error`` envelope and
-closes with code 4401. The socket is also closed with 4401 when the session ends (logout, reason
-``session_ended``) or expires (reason ``session_expired``, even if the client stays silent),
-and with 1013 when the client cannot keep up with its queue.
+closes with code 4401. The socket is also closed with 4401 when the session ends (logout,
+deactivation or password reset, reason ``session_ended``) or expires (reason
+``session_expired``, even if the client stays silent), with 4409 when the person's roles
+changed (reason ``access_changed``: refetch ``/auth/me`` and reconnect right away; the
+subscriptions are re-checked with the new roles), and with 1013 when the client cannot keep
+up with its queue. Staff may also follow ``admin:directory`` (admins) and their own
+``staff:<STF-id>`` (slice 4).
 """
 
 from __future__ import annotations
@@ -41,6 +45,7 @@ from cc_platform.application.errors import (
     InvalidTopicError,
 )
 from cc_platform.application.ports.realtime import RealtimeConnection, RealtimeEnvelope
+from cc_platform.application.realtime.projector import ACCESS_CHANGED
 from cc_platform.application.realtime.topics import Topic, TopicKind
 from cc_platform.application.security import Actor, CustomerActor
 from cc_platform.domain.shared.errors import DomainError
@@ -50,6 +55,7 @@ from cc_platform.domain.shared.json import JsonObject
 router = APIRouter(tags=["realtime"])
 
 CLOSE_UNAUTHENTICATED = 4401
+CLOSE_ACCESS_CHANGED = 4409
 CLOSE_TRY_AGAIN_LATER = 1013
 SESSION_EXPIRED_DETAIL = "Tu sesión venció. Vuelve a ingresar."
 
@@ -172,8 +178,7 @@ class RealtimeSocketSession:
             await self._ws.close(code=CLOSE_UNAUTHENTICATED, reason=ProblemCode.SESSION_EXPIRED)
         elif pump in done:
             reason = connection.close_reason or "closed"
-            code = CLOSE_TRY_AGAIN_LATER if reason == "slow_consumer" else CLOSE_UNAUTHENTICATED
-            await self._ws.close(code=code, reason=reason)
+            await self._ws.close(code=_close_code(reason), reason=reason)
 
     async def _authenticate(self) -> _Principal:
         """Staff session token first; a token of the customer audience falls through."""
@@ -281,6 +286,16 @@ class RealtimeSocketSession:
         if topic is not None:
             data["topic"] = topic
         await self._send_control("error", data)
+
+
+def _close_code(reason: str) -> int:
+    """Hub close reason → WebSocket close code. 4409: roles changed, reconnect right away
+    (not an auth error); 1013: too slow; anything else (session ended): 4401."""
+    if reason == "slow_consumer":
+        return CLOSE_TRY_AGAIN_LATER
+    if reason == ACCESS_CHANGED:
+        return CLOSE_ACCESS_CHANGED
+    return CLOSE_UNAUTHENTICATED
 
 
 def _raised(task: asyncio.Task[None], error: type[BaseException]) -> bool:

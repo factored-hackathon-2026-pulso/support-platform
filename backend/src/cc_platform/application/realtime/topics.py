@@ -11,6 +11,10 @@ Topics (brief §4.4):
   supervisors only.
 - ``supervision:team``: rows of "Equipo y colas" that may have changed (``team.updated``);
   supervisors only.
+- ``admin:directory``: people and teams of the directory that may have changed
+  (``directory.updated``); admins only (slice 4).
+- ``staff:<STF-id>``: one person's own profile and roles (``me.updated``); only that person,
+  whatever her roles (slice 4).
 
 ``case:`` topics also need a case-level check (assignee or supervisor), which needs the
 case: the WebSocket endpoint runs ``AuthorizeCaseSubscription`` after this role check.
@@ -32,17 +36,21 @@ class TopicKind(StrEnum):
     INBOX = "inbox"
     CUSTOMER = "customer"
     SUPERVISION = "supervision"
+    ADMIN = "admin"
+    STAFF = "staff"
 
 
 _KEY_PREFIX: dict[TopicKind, IdPrefix] = {
     TopicKind.CASE: IdPrefix.CASE,
     TopicKind.INBOX: IdPrefix.STAFF,
     TopicKind.CUSTOMER: IdPrefix.CUSTOMER,
+    TopicKind.STAFF: IdPrefix.STAFF,
 }
 
 SUPERVISION_QUEUES = "queues"
 SUPERVISION_TEAM = "team"
 _SUPERVISION_KEYS = frozenset({SUPERVISION_QUEUES, SUPERVISION_TEAM})
+ADMIN_DIRECTORY = "directory"
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +82,14 @@ class Topic:
         return cls(TopicKind.SUPERVISION, SUPERVISION_TEAM)
 
     @classmethod
+    def admin_directory(cls) -> Topic:
+        return cls(TopicKind.ADMIN, ADMIN_DIRECTORY)
+
+    @classmethod
+    def staff(cls, staff_id: str) -> Topic:
+        return cls(TopicKind.STAFF, staff_id)
+
+    @classmethod
     def parse(cls, raw: str) -> Topic:
         name, sep, key = raw.partition(":")
         try:
@@ -82,6 +98,8 @@ class Topic:
             raise InvalidTopicError(topic=raw) from None
         if kind is TopicKind.SUPERVISION:
             valid = key in _SUPERVISION_KEYS
+        elif kind is TopicKind.ADMIN:
+            valid = key == ADMIN_DIRECTORY
         else:
             valid = is_valid_id(key, _KEY_PREFIX[kind])
         if not sep or not valid:
@@ -103,6 +121,10 @@ class TopicAccessPolicy:
                 return False  # a customer's own channel; staff follow ``case:`` instead
             case TopicKind.SUPERVISION:
                 return actor.has_any_role({StaffRole.SUPERVISOR})
+            case TopicKind.ADMIN:
+                return actor.has_any_role({StaffRole.ADMIN})
+            case TopicKind.STAFF:
+                return topic.key == actor.staff_id
 
     def can_customer_subscribe(self, customer: CustomerActor, topic: Topic) -> bool:
         """A customer token may only follow its own ``customer:<id>`` topic."""

@@ -45,7 +45,8 @@ class RealtimeConnection(Protocol):
 
     @property
     def close_reason(self) -> str | None:
-        """Why the hub closed the connection: ``session_ended`` or ``slow_consumer``."""
+        """Why the hub closed the connection: ``session_ended``, ``slow_consumer`` or
+        ``access_changed``."""
         ...
 
     async def next_envelope(self) -> RealtimeEnvelope | None:
@@ -82,4 +83,9 @@ class RealtimeHub(Protocol):
 
     def close_session(self, session_id: str) -> int:
         """Close every connection opened with ``session_id`` (logout); returns how many."""
+        ...
+
+    def close_principal(self, principal_id: str, reason: str) -> int:
+        """Close every connection of that staff member or customer with ``reason`` (e.g.
+        ``access_changed`` after a roles change); returns how many."""
         ...

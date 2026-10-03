@@ -3,8 +3,9 @@
 FastAPI service for the LATAM Bank support platform: support staff and customers talk by chat.
 Architecture: hexagonal (ports and adapters) + DDD-lite + CQRS-lite with an append-only event
 log. See `docs/platform/ENGINEERING_BRIEF.md`, `docs/platform/adr/0001-architecture.md` and the
-current slice contract, `docs/platform/api/slice-3-supervision.md` (slice 2,
-`slice-2-case-lifecycle.md`, still holds where slice 3 does not change it).
+current slice contract, `docs/platform/api/slice-4-administration.md` (slices 2 and 3,
+`slice-2-case-lifecycle.md` and `slice-3-supervision.md`, still hold where slice 4 does not
+change them).
 
 ## Requirements
 
@@ -24,11 +25,11 @@ uv run uvicorn cc_platform.bootstrap.app:create_app --factory --port 8000
 - Health: `GET /api/v1/health` · Build info: `GET /api/v1/meta`
 - Data lives in `backend/cc_platform.db` (SQLite, git-ignored). Delete the file to reset.
   `CC_PERSISTENCE=memory` runs without any database.
-- **After pulling slice 3, delete `backend/cc_platform.db`** (or run with
-  `CC_PERSISTENCE=memory`): the schema changed (`assignments.previous_staff_id`,
-  `assignments.paused_override`, new indexes) and there are no migrations. An old database
-  fails fast at startup (`OutdatedSchemaError` lists the missing columns), and the seed never
-  rewrites existing rows.
+- **After pulling slice 4, delete `backend/cc_platform.db`** (or run with
+  `CC_PERSISTENCE=memory`): the schema changed (new `teams` and `admin_roster` tables,
+  `staff.team` → `staff.team_id`, new `staff.created_at` / `staff.creation_key`) and there
+  are no migrations. An old database fails fast at startup (`OutdatedSchemaError` lists the
+  missing tables and columns), and the seed never rewrites existing rows.
 - Configuration: environment variables with the `CC_` prefix (or `backend/.env`); see
   `.env.example` and `src/cc_platform/bootstrap/settings.py`.
 
@@ -37,22 +38,28 @@ uv run uvicorn cc_platform.bootstrap.app:create_app --factory --port 8000
 Seeded staff are fictitious ("Datos de ejemplo"). Every account uses the password
 **`demo1234`**, and the MFA code is always **`000000`**.
 
-| Persona | Email | Roles | Languages | Starts |
-|---|---|---|---|---|
-| Daniela Ríos (main analyst) | `daniela.rios@latambank.example` | analyst | es, pt | paused (switch to "Disponible") |
-| Julián Ortega | `julian.ortega@latambank.example` | analyst | es | paused, **signed in** (seeded session) |
-| Paula Medina | `paula.medina@latambank.example` | analyst | es | paused (before Lucía moved 114) |
-| Sebastián Cárdenas | `sebastian.cardenas@latambank.example` | analyst | es, pt | paused |
-| Tomás Arango | `tomas.arango@latambank.example` | analyst | es, pt | paused |
-| Lucía Herrera | `lucia.herrera@latambank.example` | supervisor | es, pt | — |
-| Martín Salazar | `martin.salazar@latambank.example` | supervisor | es | — |
-| Renata Villalba | `renata.villalba@latambank.example` | supervisor | es, pt | — |
-| Felipe Echeverri (team lead) | `felipe.echeverri@latambank.example` | analyst + supervisor | es | paused |
-| Valeria Quintero | `valeria.quintero@latambank.example` | admin | es | — |
-| Carolina Peña | `carolina.pena@latambank.example` | admin | es | — |
+| Persona | Email | Roles | Languages | Team | Starts |
+|---|---|---|---|---|---|
+| Daniela Ríos (main analyst) | `daniela.rios@latambank.example` | analyst | es, pt | Disputas · Equipo Andes | paused (switch to "Disponible") |
+| Julián Ortega | `julian.ortega@latambank.example` | analyst | es | Disputas · Equipo Andes | paused, **signed in** (seeded session) |
+| Paula Medina | `paula.medina@latambank.example` | analyst | es | Disputas · Equipo Pacífico | paused (before Lucía moved 114) |
+| Sebastián Cárdenas | `sebastian.cardenas@latambank.example` | analyst | es, pt | Disputas · Equipo Pacífico | paused |
+| Tomás Arango | `tomas.arango@latambank.example` | analyst | es, pt | Disputas · Equipo Pacífico | paused |
+| Lucía Herrera | `lucia.herrera@latambank.example` | supervisor | es, pt | Disputas · Equipo Andes | — |
+| Martín Salazar | `martin.salazar@latambank.example` | supervisor | es | Disputas · Equipo Pacífico | — |
+| Renata Villalba | `renata.villalba@latambank.example` | supervisor | es, pt | Disputas · Equipo Pacífico | — |
+| Felipe Echeverri (team lead) | `felipe.echeverri@latambank.example` | analyst + supervisor | es | Disputas · Equipo Andes | paused |
+| Valeria Quintero | `valeria.quintero@latambank.example` | admin | es | Administración de la plataforma | — |
+| Carolina Peña | `carolina.pena@latambank.example` | admin | es | Administración de la plataforma | — |
+| Mariana Duque | `mariana.duque@latambank.example` | supervisor | es | Disputas · Equipo Pacífico | **locked** until 13 min after the first start (five wrong passwords); an admin unlocks her |
+| Andrés Villamil | `andres.villamil@latambank.example` | analyst | es | Disputas · Equipo Andes | **inactive** (Carolina deactivated him); cannot sign in |
 
 Roles combine (Analista, Supervisora, Administración). Felipe exercises the role switcher
-(Casos ↔ Equipo y colas). Administration screens arrive in slice 4.
+(Casos ↔ Equipo y colas). Teams are records (`TEAM-…` ids): the three above, plus the
+inactive "Disputas · Equipo Caribe" (no members). The admin story in the audit (family
+"Administración"): Valeria gave Felipe Supervisora (5 days before the first start), created
+the Caribe team (3 days) and deactivated it (1 day); Carolina deactivated Andrés (2 days).
+Signed in as Valeria, the rail shows "Usuarios y roles, 1 pendiente" (Mariana's lock).
 
 Julián has a seeded staff session (started 45 minutes before the first start, normal TTL) and
 paused 20 minutes before it, so "Equipo y colas" shows him **En pausa** (paused and signed
@@ -142,6 +149,42 @@ Analyst endpoints: `GET /cases/inbox?status=&q=` (`status=closed` = the last 7 d
 `docs/platform/api/slice-2-case-lifecycle.md` (slice 1 rules it does not change still hold) and
 `slice-3-supervision.md`.
 
+Administration (Administración; slice 4): `GET|POST /admin/users`
+(`?q=&role=&status=active|locked|inactive|all&teamId=&language=`, with role and status
+counts), `GET|PATCH /admin/users/{staffId}` (`{expectedVersion, name?, email?, roles?,
+languages?, teamId?}`), `POST /admin/users/{staffId}/deactivate|reactivate`
+(`{expectedVersion}`), `POST /admin/users/{staffId}/unlock`,
+`POST /admin/users/{staffId}/password-reset`, `GET|POST /admin/teams`,
+`GET|PATCH /admin/teams/{teamId}`, `POST /admin/teams/{teamId}/deactivate|reactivate`.
+Every edit carries `expectedVersion`; a stale one is `409 version_conflict` with
+`currentVersion` and `current` (the record as its GET returns it). Creating a person or a
+password reset returns a **temporary password once** (`xxxx-xxxx-xxxx`, `Cache-Control:
+no-store`; only its hash is stored, never logged or audited); the new person signs in with
+it and the MFA code `000000`. Both creates take an `Idempotency-Key` (a retry answers `200`
++ `Idempotent-Replayed: true`, with `temporaryPassword: null` for a person). A password
+reset or a deactivation ends her sessions **and cancels her pending MFA challenges**, so a
+sign-in that already passed the password step (the old password) cannot finish
+(`401 mfa_challenge_invalid`), even if she is reactivated within the challenge's 5 minutes.
+
+Guard rails: nobody removes their own Administración, deactivates themself or resets their
+own password (`422 self_change_forbidden` with `action`); there is always an active admin
+(`409 last_admin`, serialised by the `AdminRoster` aggregate); **administration never moves
+cases**: deactivating someone, removing her Analista role or a language one of her open
+cases uses is `409 staff_has_open_cases` (with `caseIds`) until supervision reassigns them.
+Deactivation and password reset end her sessions (her sockets close with 4401); a roles
+change ends none (roles are re-read on every request) and closes her sockets with **4409**
+(`access_changed`) so they reconnect with the new roles. Removing Analista, or deactivating
+an available analyst, pauses her; adding a language drains the queues (rule 3).
+
+```bash
+curl -s -X POST localhost:8000/api/v1/admin/users/STF-00000000000000000000000012/unlock \
+  -H 'Authorization: Bearer <Valeria token>'                      # Mariana can sign in again
+curl -s localhost:8000/api/v1/admin/users -H 'Authorization: Bearer <Valeria token>' \
+  -H 'content-type: application/json' -H 'Idempotency-Key: create-ana-0001' \
+  -d '{"name":"Ana Gil","email":"ana.gil@latambank.example","roles":["analyst"],
+       "languages":["pt"],"teamId":"TEAM-00000000000000000000000002"}'  # → temporaryPassword
+```
+
 ```bash
 # 1) password → MFA challenge
 curl -s localhost:8000/api/v1/auth/login -H 'content-type: application/json' \
@@ -168,8 +211,11 @@ locking), so batching guesses does not bypass the lock, and a challenge is redee
   codes are the `ProblemCode` enum (`src/cc_platform/api/problems.py`, one registry with the
   status and title of each), published in `openapi.json`; the frontend derives its code type
   from it, so `pnpm check:api` catches drift. `409 concurrent_update` means another request
-  changed the same record first: reload and retry. Unexpected errors are `500 internal_error`
-  problems that still carry CORS headers, so the browser can read them.
+  changed the same record first: reload and retry (SQLite's `database is locked` is treated
+  the same way: commands retry it on fresh state instead of failing). Unexpected errors are
+  `500 internal_error` problems that still carry CORS headers, so the browser can read them;
+  their logged traceback never carries SQL bind values (`hide_parameters`) and password
+  hashes or tokens in any log line are masked.
 - Every response carries `X-Request-ID` / `X-Correlation-ID` (accepted from the client).
 - Cursors (`cursor`, `afterSequence`) are sequences: anything but ASCII digits that fit a
   signed 64-bit integer (`²`, `٣`, 2**63, a 30-digit string) is `422`, never a `500`
@@ -183,13 +229,18 @@ locking), so batching guesses does not bypass the lock, and a challenge is redee
   `{type,id,occurredAt,data}` envelopes. `case:` topics are limited to the assignee analyst
   and supervisors (history readers use REST only). Supervisors also subscribe to
   `supervision:queues` (`queue.updated` with `QueueCounts`, `queue.case_queued` with a
-  `CaseSummary`) and `supervision:team` (`team.updated` with `{staffIds}`: refetch the team).
+  `CaseSummary`) and `supervision:team` (`team.updated` with `{staffIds}`: refetch the team). Admins subscribe
+  to `admin:directory` (`directory.updated` with `{staffIds, teamIds}`: refetch the users
+  and teams shown; also after a case is assigned, reassigned or closed, naming the analysts
+  whose open cases changed), and every staff member to her own `staff:STF-…` (`me.updated` with her
+  fresh `StaffOut` after a change of her name, email, roles, languages or team).
   A reassignment sends `case.unassigned` (+ `case.updated`, `inbox.counts`) to the previous
   assignee's `inbox:`. `case.viewed` never reaches a socket. Case envelopes (`turn.created`, `case.updated`, `case.assigned`,
   `inbox.counts`, `availability.updated`, `conversation.updated`) carry camelCase payloads
   equal to the REST schemas (`CaseRealtimeProjector`). An envelope bound to several topics
   (`case.updated` → `case:` + `inbox:`) reaches each connection once (`publish_many`). Close code 4401 means "sign in again"
-  (bad token, logout, expiry).
+  (bad token, logout, expiry, deactivation, password reset); 4409 means "your roles
+  changed": refetch `/auth/me` and reconnect right away.
 
 ## Quality gates
 
@@ -230,8 +281,8 @@ realtime hub, topic policy, health probes, build info), never the container or a
 
 ## Concurrency (optimistic locking)
 
-Every aggregate (staff, sessions, cases, the one-open-case slot per customer, availability)
-has a `version`. Repositories save with a compare-and-set
+Every aggregate (staff, teams, the admin roster, sessions, cases, the one-open-case slot
+per customer, availability) has a `version`. Repositories save with a compare-and-set
 (`UPDATE … WHERE id = :id AND version = :loaded`, then `version + 1`; the in-memory adapter
 checks the same at commit) and raise `ConcurrentUpdateError` when another request saved
 first. Commands that are safe to repeat run inside `retry_on_conflict`
@@ -270,7 +321,18 @@ lands first (and the closing notice follows it) or it retries and opens a new li
   clients apply the newest `computedAt` and refetch. A case assigned on arrival sends none.
 - Two parallel first reads of a case by the same supervisor may both record `case.viewed`
   (accepted; the 15-minute dedupe is a read before the write, no lock).
-- Teams are the `Staff.team` names (slug keys) until slice 4 turns them into records.
+- The directory (`GET /admin/users`) is not paginated: at most 500 rows (team-generated),
+  filtered and searched in memory over the loaded rows.
+- Temporary passwords travel in the response body (dev only, `Cache-Control: no-store`); no
+  forced change at first sign-in, no password policy, no self-service password change.
+- Deactivated and locked people get the same `invalid_credentials` / lock answers as
+  before (anti-enumeration): the login never says "desactivada".
+- An assignment racing a deactivation or a role/language removal may land on someone who
+  just lost eligibility (different aggregates): supervision reassigns it; no automatic sweep.
+- Team renames do not rewrite old audit payloads (names are historical by design). No
+  deletion of people or teams, no bulk moves.
+- The access-changed close (4409) reconnects every socket of that person, even for a role
+  that changes no topic (cheap, accepted).
 - No presence: availability persists across sign-ins (an analyst who closes the browser
   while "Disponible" keeps receiving cases). No capacity cap per analyst yet.
 - Live cases open with priority `medium` (nothing sets another priority yet); seeds vary it.

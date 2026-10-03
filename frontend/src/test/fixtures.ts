@@ -1,5 +1,16 @@
 import type { Staff } from '@/app/session'
 
+/** Seeded teams (slice 4 §11.1): invented names, `TEAM-…` ids. */
+export const TEAM_ANDES = { id: 'TEAM-00000000000000000000000001', name: 'Disputas · Equipo Andes' }
+export const TEAM_PACIFICO = {
+  id: 'TEAM-00000000000000000000000002',
+  name: 'Disputas · Equipo Pacífico',
+}
+export const TEAM_PLATFORM = {
+  id: 'TEAM-00000000000000000000000003',
+  name: 'Administración de la plataforma',
+}
+
 /**
  * Invented staff for tests ("Datos de ejemplo"): never copy dataset records here.
  */
@@ -9,7 +20,8 @@ export const analystStaff: Staff = {
   email: 'daniela.rios@latambank.example',
   roles: ['analyst'],
   languages: ['es', 'pt'],
-  team: 'Disputas · Equipo Andes',
+  team: TEAM_ANDES,
+  active: true,
 }
 
 /** Analista + Supervisora (team lead): exercises the role switcher. */
@@ -19,7 +31,8 @@ export const supervisorStaff: Staff = {
   email: 'laura.mendez@latambank.example',
   roles: ['supervisor', 'analyst'],
   languages: ['es'],
-  team: 'Disputas · Equipo Andes',
+  team: TEAM_ANDES,
+  active: true,
 }
 
 /** Administración only. */
@@ -29,7 +42,8 @@ export const adminStaff: Staff = {
   email: 'andres.salazar@latambank.example',
   roles: ['admin'],
   languages: ['es'],
-  team: 'Administración de la plataforma',
+  team: TEAM_PLATFORM,
+  active: true,
 }
 
 /** Supervisora + Administración: two roles without the analyst one. */
@@ -39,7 +53,8 @@ export const supervisorAdminStaff: Staff = {
   email: 'carolina.pena@latambank.example',
   roles: ['admin', 'supervisor'],
   languages: ['es'],
-  team: 'Administración de la plataforma',
+  team: TEAM_PLATFORM,
+  active: true,
 }
 
 export const allRolesStaff: Staff = {
@@ -48,5 +63,6 @@ export const allRolesStaff: Staff = {
   email: 'sofia.herrera@latambank.example',
   roles: ['admin', 'supervisor', 'analyst'],
   languages: ['es'],
-  team: 'Disputas · Equipo Pacífico',
+  team: TEAM_PACIFICO,
+  active: true,
 }

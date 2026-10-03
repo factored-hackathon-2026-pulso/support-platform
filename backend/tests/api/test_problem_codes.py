@@ -54,6 +54,11 @@ def test_openapi_publishes_the_codes_as_an_enum(client) -> None:  # type: ignore
     assert {
         "remainingAttempts", "unlockAt", "requiredRoles", "errors", "currentStatus",
         "analystId", "policyRuleId", "caseLanguage", "currentAnalystId",
+        # slice 4
+        "field", "currentVersion", "current", "action", "blockReason", "openCases", "caseIds",
+        "memberCount", "teamId",
     } <= set(problem)  # fmt: skip
+    assert problem["action"]["anyOf"][0] == {"$ref": "#/components/schemas/SelfChangeAction"}
+    assert problem["blockReason"]["anyOf"][0] == {"$ref": "#/components/schemas/OpenCasesBlock"}
     assert problem["caseLanguage"]["anyOf"][0] == {"$ref": "#/components/schemas/Language"}
     assert problem["currentStatus"]["anyOf"][0] == {"$ref": "#/components/schemas/CaseStatus"}

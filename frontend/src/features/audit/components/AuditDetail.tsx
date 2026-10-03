@@ -33,6 +33,8 @@ export interface AuditDetailProps {
   error: ApiProblem | null
   onRetry(): void
   onFilterByCase(caseId: string): void
+  /** Offer "Ver la conversación" (the supervisor case view). Default true. */
+  canOpenCases?: boolean
 }
 
 /**
@@ -47,6 +49,7 @@ export function AuditDetail({
   error,
   onRetry,
   onFilterByCase,
+  canOpenCases = true,
 }: AuditDetailProps) {
   let body
   if (!eventId) {
@@ -60,7 +63,7 @@ export function AuditDetail({
       />
     )
   } else if (event) {
-    body = <EventDetail event={event} onFilterByCase={onFilterByCase} />
+    body = <EventDetail event={event} onFilterByCase={onFilterByCase} canOpenCases={canOpenCases} />
   } else if (error) {
     body = isApiProblem(error, 'not_found') ? (
       <EmptyState size="compact" as="h2" title="No encontramos ese evento." className="grow" />
@@ -99,9 +102,11 @@ export function AuditDetail({
 function EventDetail({
   event,
   onFilterByCase,
+  canOpenCases,
 }: {
   event: AuditEvent
   onFilterByCase(caseId: string): void
+  canOpenCases: boolean
 }) {
   const location = useLocation()
   const lines = payloadLines(event.payload)
@@ -160,13 +165,15 @@ function EventDetail({
       </div>
       {caseRef ? (
         <div className="mt-auto flex flex-wrap gap-2 border-t border-border-soft px-5 py-3.5">
-          <LinkButton
-            to={supervisionCasePath(caseRef.id)}
-            state={{ from: `${location.pathname}${location.search}` }}
-            variant="secondary"
-          >
-            Ver la conversación
-          </LinkButton>
+          {canOpenCases ? (
+            <LinkButton
+              to={supervisionCasePath(caseRef.id)}
+              state={{ from: `${location.pathname}${location.search}` }}
+              variant="secondary"
+            >
+              Ver la conversación
+            </LinkButton>
+          ) : null}
           <Button variant="ghost" onClick={() => onFilterByCase(caseRef.id)}>
             Filtrar por este caso
           </Button>

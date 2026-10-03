@@ -42,6 +42,20 @@ metadata = MetaData(
     }
 )
 
+# Slice 4: teams are records. ``name_key`` (case- and accent-insensitive name) is unique among
+# all teams; ``creation_key`` is the ``Idempotency-Key`` of the create.
+teams = Table(
+    "teams",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("name", String(80), nullable=False),
+    Column("name_key", String(80), nullable=False, unique=True),
+    Column("active", Boolean, nullable=False),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("creation_key", String(64), nullable=True, unique=True),
+    _version(),
+)
+
 staff = Table(
     "staff",
     metadata,
@@ -50,8 +64,19 @@ staff = Table(
     Column("email", String(320), nullable=False, unique=True),
     Column("roles", JSON, nullable=False),
     Column("languages", JSON, nullable=False),
-    Column("team", String(120), nullable=False),
+    Column("team_id", String(ID), ForeignKey("teams.id"), nullable=False, index=True),
     Column("active", Boolean, nullable=False, default=True),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("creation_key", String(64), nullable=True, unique=True),
+    _version(),
+)
+
+# Singleton (``id = "default"``): the active admins, serialising "at least one admin".
+admin_roster = Table(
+    "admin_roster",
+    metadata,
+    Column("id", String(20), primary_key=True),
+    Column("admin_ids", JSON, nullable=False),
     _version(),
 )
 

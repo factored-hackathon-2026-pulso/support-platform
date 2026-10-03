@@ -4,9 +4,16 @@ import {
   isNavItemActive,
   resolvePostLoginPath,
   roleFromPath,
+  ROLE_LABEL,
   ROLE_ORDER,
   ROLES,
+  rolesLabel,
+  rolesNowCopy,
   sortRoles,
+  adminAuditPath,
+  adminTeamPath,
+  adminUserPath,
+  supervisionAnalystPath,
   supervisionCasePath,
   type NavItem,
 } from './roles'
@@ -20,7 +27,12 @@ describe('roles', () => {
   it('lists the destinations of each role', () => {
     expect(ROLES.analyst.nav.map((item) => item.label)).toEqual(['Casos'])
     expect(ROLES.supervisor.nav.map((item) => item.label)).toEqual(['Equipo y colas', 'Auditoría'])
-    expect(ROLES.admin.nav.map((item) => item.label)).toEqual(['Usuarios y roles'])
+    expect(ROLES.admin.nav.map((item) => item.label)).toEqual([
+      'Usuarios y roles',
+      'Equipos',
+      'Auditoría',
+    ])
+    expect(ROLES.admin.nav[0]?.indicator).toBe('lockedAccounts')
   })
 
   it('maps paths to the owning role', () => {
@@ -38,6 +50,19 @@ describe('roles', () => {
     expect(firstRoleHome([])).toBeNull()
   })
 
+  it('names roles like the backend copy (copy.ROLE_LABEL) and says what she has now', () => {
+    expect(ROLE_LABEL).toEqual({
+      analyst: 'Analista',
+      supervisor: 'Supervisora',
+      admin: 'Administración',
+    })
+    expect(rolesLabel(['admin', 'ghost', 'analyst'])).toBe('Analista y Administración')
+    expect(rolesLabel(['admin', 'supervisor', 'analyst'])).toBe(
+      'Analista, Supervisora y Administración',
+    )
+    expect(rolesNowCopy(['analyst'])).toBe('Ahora tienes: Analista.')
+  })
+
   it('marks an item active on its path, an `end` item only on the exact path', () => {
     const team: NavItem = ROLES.supervisor.nav[0]!
     expect(isNavItemActive(team, '/supervision/equipo')).toBe(true)
@@ -51,6 +76,14 @@ describe('roles', () => {
   it('builds the supervisor case path', () => {
     expect(supervisionCasePath('CASE-1')).toBe('/supervision/casos/CASE-1')
     expect(roleFromPath(supervisionCasePath('CASE-1'))).toBe('supervisor')
+  })
+
+  it('builds the administration paths', () => {
+    expect(adminUserPath('STF-1')).toBe('/administracion/usuarios?persona=STF-1')
+    expect(adminTeamPath('TEAM-1')).toBe('/administracion/equipos?equipo=TEAM-1')
+    expect(adminAuditPath('STF-1')).toBe('/administracion/auditoria?q=STF-1')
+    expect(supervisionAnalystPath('STF-1')).toBe('/supervision/equipo?analista=STF-1')
+    expect(roleFromPath(adminTeamPath('TEAM-1').split('?')[0]!)).toBe('admin')
   })
 
   it('returns to the requested page only when the user may open it', () => {

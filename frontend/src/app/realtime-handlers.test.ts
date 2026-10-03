@@ -57,6 +57,13 @@ describe('FEATURE_REALTIME_REGISTRATIONS', () => {
     expect(registry.dispatch(at('team.updated'), queryClient)).toBe(1)
   })
 
+  it('handles the administration and personal envelopes of slice 4', () => {
+    const registry = createAppEnvelopeHandlers()
+    const queryClient = new QueryClient()
+    expect(registry.dispatch(at('directory.updated'), queryClient)).toBe(1)
+    expect(registry.dispatch(at('me.updated'), queryClient)).toBe(1)
+  })
+
   it('leaves customer envelopes to the simulator registry', () => {
     const registry = createAppEnvelopeHandlers()
     expect(registry.dispatch(at('conversation.updated'), new QueryClient())).toBe(0)

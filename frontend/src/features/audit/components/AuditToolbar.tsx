@@ -18,6 +18,7 @@ import {
   clearAuditFilters,
   dateRangeError,
   hasAuditFilters,
+  personOptionLabel,
   showsPersonFilter,
   withActorKind,
   type AuditStateChangeOptions,
@@ -83,7 +84,7 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
   )
   const personOptions = [
     { value: ALL, label: 'Todas las personas' },
-    ...people.map((person) => ({ value: person.id, label: person.name })),
+    ...people.map((person) => ({ value: person.id, label: personOptionLabel(person) })),
   ]
   if (state.actorId && !people.some((person) => person.id === state.actorId)) {
     personOptions.push({ value: state.actorId, label: state.actorId })

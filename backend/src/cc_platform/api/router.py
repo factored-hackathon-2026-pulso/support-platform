@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.routing import APIRoute
 
 from cc_platform.api.routers import (
+    administration,
     audit,
     auth,
     availability,
@@ -29,12 +30,17 @@ def build_api_router() -> APIRouter:
     router.include_router(cases.router)
     router.include_router(supervision.router)
     router.include_router(audit.router)
+    router.include_router(administration.router)
     router.include_router(customer.router)
     router.include_router(realtime.router)
     return router
 
 
+#: Short operation-id prefixes for long tags (``administration`` → ``admin_list_users``).
+OPERATION_PREFIX: dict[str, str] = {"administration": "admin"}
+
+
 def operation_id(route: APIRoute) -> str:
     """Stable, readable operation ids for generated clients (``auth_login``)."""
-    tag = route.tags[0] if route.tags else "default"
-    return f"{tag}_{route.name}"
+    tag = str(route.tags[0]) if route.tags else "default"
+    return f"{OPERATION_PREFIX.get(tag, tag)}_{route.name}"

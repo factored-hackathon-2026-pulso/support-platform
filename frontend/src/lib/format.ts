@@ -246,3 +246,12 @@ export function getInitials(fullName: string): string {
 export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${formatNumber(count)} ${count === 1 ? singular : plural}`
 }
+
+/**
+ * A list in Spanish: "A", "A y B", "A, B y C" (same rule as the backend
+ * `copy.join_es`, slice-4-administration.md §1.2). Empty → "".
+ */
+export function joinEs(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? ''
+  return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`
+}

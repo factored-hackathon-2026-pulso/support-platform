@@ -1,4 +1,4 @@
-"""Seed staff — "Datos de ejemplo" (slice 2 contract §8.1).
+"""Seed staff and teams — "Datos de ejemplo" (slice 2 contract §8.1, slice 4 §11).
 
 Every name, email and id here is invented (brief §4.7: staff names in the dataset are records
 too and must never be copied). Roles combine (Analista, Supervisora, Administración):
@@ -7,24 +7,31 @@ too and must never be copied). Roles combine (Analista, Supervisora, Administrac
 - more analysts, two of them bilingual (Sebastián, Tomás) to show least-loaded balancing;
 - supervisors, plus a team lead holding Analista + Supervisora (Felipe exercises the
   role switcher: Casos ↔ Equipo y colas);
-- administrators.
+- administrators;
+- slice 4: Mariana (Supervisora, locked by the admin story) and Andrés (an analyst whose
+  account Carolina deactivated). Neither appears in "Equipo y colas", so the slice 3
+  numbers do not move.
 
-All seeded accounts share the development password ``DEMO_PASSWORD`` (documented in README).
+Teams are records (slice 4): three active teams that existed before the event log (no
+creation event) and "Disputas · Equipo Caribe", created and deactivated by Valeria in the
+admin story (``add_demo_admin_story``). Every seeded account uses ``DEMO_PASSWORD``.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
 
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.security import PasswordHasher
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from cc_platform.domain.people.admin_roster import AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
-from cc_platform.domain.people.login_account import LoginAccount
+from cc_platform.domain.people.login_account import LockoutPolicy, LoginAccount
 from cc_platform.domain.people.mfa import MfaMethod
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Language, Staff, StaffRole
+from cc_platform.domain.people.team import Team
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.ids import BODY_LENGTH, IdPrefix, make_id
 from cc_platform.infrastructure.seed.timeline import SeedTimeline
@@ -34,9 +41,33 @@ DEMO_EMAIL_DOMAIN = "latambank.example"
 
 ES = Language.SPANISH
 PT = Language.PORTUGUESE
-TEAM_ANDES = "Disputas · Equipo Andes"
-TEAM_PACIFICO = "Disputas · Equipo Pacífico"
-TEAM_PLATFORM = "Administración de la plataforma"
+
+#: Teams 1–3 (and every seeded person) exist since this long before the first seed.
+SEEDED_DIRECTORY_AGE = timedelta(days=30)
+
+
+def seed_team_id(number: int) -> str:
+    return make_id(IdPrefix.TEAM, str(number).zfill(BODY_LENGTH))
+
+
+@dataclass(frozen=True, slots=True)
+class TeamSeed:
+    number: int
+    name: str
+
+    @property
+    def id(self) -> str:
+        return seed_team_id(self.number)
+
+
+TEAM_ANDES = TeamSeed(1, "Disputas · Equipo Andes")
+TEAM_PACIFICO = TeamSeed(2, "Disputas · Equipo Pacífico")
+TEAM_PLATFORM = TeamSeed(3, "Administración de la plataforma")
+#: Created and deactivated in the admin story (inactive, no members).
+TEAM_CARIBE = TeamSeed(4, "Disputas · Equipo Caribe")
+
+#: Teams the staff seed creates (active, no event: they existed before the log).
+DEMO_TEAMS: tuple[TeamSeed, ...] = (TEAM_ANDES, TEAM_PACIFICO, TEAM_PLATFORM)
 
 
 def seed_staff_id(number: int) -> str:
@@ -51,20 +82,27 @@ class StaffSeed:
     username: str
     roles: frozenset[StaffRole]
     languages: frozenset[Language]
-    team: str
+    team: TeamSeed
+    active: bool = True
+
+    @property
+    def id(self) -> str:
+        return seed_staff_id(self.number)
 
     @property
     def email(self) -> str:
         return f"{self.username}@{DEMO_EMAIL_DOMAIN}"
 
-    def to_staff(self) -> Staff:
+    def to_staff(self, created_at: datetime) -> Staff:
         return Staff(
-            id=seed_staff_id(self.number),
+            id=self.id,
             name=self.name,
             email=self.email,
             roles=self.roles,
             languages=self.languages,
-            team=self.team,
+            team_id=self.team.id,
+            created_at=created_at,
+            active=self.active,
         )
 
 
@@ -91,33 +129,106 @@ DEMO_STAFF: tuple[StaffSeed, ...] = (
               TEAM_PLATFORM),
     StaffSeed(10, "Renata Villalba", "renata.villalba", frozenset({S}), frozenset({ES, PT}),
               TEAM_PACIFICO),
-    # Team lead: Analista + Supervisora (works cases and watches the team's queues).
+    # Team lead: Analista + Supervisora (works cases and watches the team's queues). Valeria
+    # gave him Supervisora five days before the first seed (admin story).
     StaffSeed(11, "Felipe Echeverri", "felipe.echeverri", frozenset({A, S}), frozenset({ES}),
               TEAM_ANDES),
+    # Slice 4: locked by five wrong passwords (admin story); the rail badge shows 1.
+    StaffSeed(12, "Mariana Duque", "mariana.duque", frozenset({S}), frozenset({ES}),
+              TEAM_PACIFICO),
+    # Slice 4: deactivated by Carolina two days before the first seed (admin story).
+    StaffSeed(13, "Andrés Villamil", "andres.villamil", frozenset({A}), frozenset({ES}),
+              TEAM_ANDES, active=False),
 )  # fmt: skip
+
+FELIPE = next(seed for seed in DEMO_STAFF if seed.number == 11)
+MARIANA = next(seed for seed in DEMO_STAFF if seed.number == 12)
+ANDRES = next(seed for seed in DEMO_STAFF if seed.number == 13)
+VALERIA = next(seed for seed in DEMO_STAFF if seed.number == 7)
+CAROLINA = next(seed for seed in DEMO_STAFF if seed.number == 9)
 
 
 async def seed_demo_staff(
     uow: UnitOfWorkFactory,
     hasher: PasswordHasher,
     *,
+    now: datetime | None = None,
     password: str = DEMO_PASSWORD,
     seeds: tuple[StaffSeed, ...] = DEMO_STAFF,
+    teams: tuple[TeamSeed, ...] = DEMO_TEAMS,
 ) -> int:
-    """Insert missing seed staff and their login accounts. Idempotent; returns how many."""
+    """Insert missing seed teams, staff, their login accounts and the admin roster.
+
+    Idempotent; returns how many people it created. Nothing here records an event: the
+    directory existed before the log (the admin story adds the events that tell it).
+    """
+    created_at = (now or datetime.now(UTC)) - SEEDED_DIRECTORY_AGE
     created = 0
     async with uow() as unit:
+        for team_seed in teams:
+            if await unit.teams.get(team_seed.id) is None:
+                await unit.teams.add(
+                    Team(id=team_seed.id, name=team_seed.name, active=True, created_at=created_at)
+                )
         for seed in seeds:
-            staff = seed.to_staff()
-            if await unit.staff.get(staff.id) is not None:
+            if await unit.staff.get(seed.id) is not None:
                 continue
+            staff = seed.to_staff(created_at)
             await unit.staff.add(staff)
             await unit.login_accounts.add(
                 LoginAccount(staff_id=staff.id, password_hash=await hasher.hash(password))
             )
             created += 1
+        if await unit.admin_roster.get() is None:
+            admins = frozenset(seed.id for seed in seeds if seed.active and AD in seed.roles)
+            await unit.admin_roster.add(AdminRoster(admin_ids=admins))
         await unit.commit()
     return created
+
+
+def _admin(seed: StaffSeed) -> ActorRef:
+    return ActorRef(ActorRole.ADMIN, seed.id)
+
+
+async def add_demo_admin_story(unit: UnitOfWork, t: datetime, timeline: SeedTimeline) -> int:
+    """Slice 4 §11: what administration did before the first seed, through the domain, with
+    the story's times (its events go to ``timeline``). Runs once (marker: team Caribe).
+
+    - Valeria gave Felipe the Supervisora role at T−5d (his stored row already has it: the
+      event is recorded on his earlier revision);
+    - Valeria created "Disputas · Equipo Caribe" at T−3d and deactivated it at T−1d;
+    - Carolina deactivated Andrés at T−2d (no sessions to end);
+    - Mariana typed a wrong password five times (T−6m … T−2m): locked until T+13m.
+    """
+    if await unit.teams.get(TEAM_CARIBE.id) is not None:
+        return 0
+    created_at = t - SEEDED_DIRECTORY_AGE
+    felipe = replace(FELIPE, roles=frozenset({A})).to_staff(created_at)
+    felipe.set_roles(FELIPE.roles, now=t - timedelta(days=5), actor=_admin(VALERIA))
+    andres = replace(ANDRES, active=True).to_staff(created_at)
+    andres.deactivate(revoked_sessions=0, now=t - timedelta(days=2), actor=_admin(CAROLINA))
+    timeline.take(felipe, andres)
+
+    caribe = Team.create(
+        team_id=TEAM_CARIBE.id,
+        name=TEAM_CARIBE.name,
+        now=t - timedelta(days=3),
+        actor=_admin(VALERIA),
+    )
+    caribe.deactivate(active_members=0, now=t - timedelta(days=1), actor=_admin(VALERIA))
+    await unit.teams.add(caribe)
+    timeline.take(caribe)
+
+    account = await unit.login_accounts.get(MARIANA.id)
+    if account is not None:
+        herself = ActorRef(ActorRole.SUPERVISOR, MARIANA.id)
+        for minutes in (6, 5, 4, 3, 2):
+            account.register_failed_attempt(
+                now=t - timedelta(minutes=minutes), policy=LockoutPolicy(), actor=herself
+            )
+        await unit.login_accounts.save(account)
+        timeline.take(account)
+    return 1
 
 
 #: Analysts who start ``available``. Nobody: the seeded queues hold cases nobody available
@@ -217,8 +328,8 @@ async def add_demo_availability(
     ``timeline``. Returns how many."""
     created = 0
     for seed in seeds:
-        if StaffRole.ANALYST not in seed.roles:
-            continue
+        if StaffRole.ANALYST not in seed.roles or not seed.active:
+            continue  # an inactive analyst (Andrés) has no availability row
         staff_id = seed_staff_id(seed.number)
         if await unit.availability.get(staff_id) is not None:
             continue
@@ -262,6 +373,16 @@ async def seed_demo_availability(
             available=available,
             paused_before=paused_before,
         )
+        timeline.record_into(unit)
+        await unit.commit()
+    return created
+
+
+async def seed_demo_admin_story(uow: UnitOfWorkFactory, clock: Clock) -> int:
+    """``add_demo_admin_story`` in its own Unit of Work (tests). Idempotent."""
+    timeline = SeedTimeline()
+    async with uow() as unit:
+        created = await add_demo_admin_story(unit, clock.now(), timeline)
         timeline.record_into(unit)
         await unit.commit()
     return created

@@ -4,6 +4,9 @@
  *
  * Every static import, re-export, dynamic `import()` and `vi.mock()` under src/ is
  * resolved (alias `@/` and relative paths) and checked against the rules below.
+ * A feature has two public files: `index.ts` (everything, screens included) and
+ * `core.ts` (no components, transitively). The always-loaded app shell imports
+ * `core.ts` only, so no screen ends up in the entry chunk (ARCHITECTURE.md §3).
  * oxlint's `no-restricted-imports` (.oxlintrc.json) flags the most common case,
  * deep feature imports, in the editor; this test is the authoritative check.
  */
@@ -24,7 +27,11 @@ interface ImportEdge {
   specifier: string
   /** Resolved module path without extension or "/index", e.g. "src/features/auth". */
   target: string
+  /** `import type` / `export type`: erased at build time, so it never loads the target. */
+  typeOnly: boolean
 }
+
+const TYPE_ONLY = /^(?:import|export)\s+type\s/
 
 const IMPORT_PATTERNS = [
   // import x from '…' / import type { x } from '…' / export { x } from '…' / export * from '…'
@@ -79,7 +86,7 @@ function collectEdges(): ImportEdge[] {
         const specifier = match[1]
         if (!specifier) continue
         const target = resolveSpecifier(from, specifier)
-        if (target) edges.push({ from, specifier, target })
+        if (target) edges.push({ from, specifier, target, typeOnly: TYPE_ONLY.test(match[0]) })
       }
     }
   }
@@ -90,6 +97,16 @@ const isTestFile = (file: string) => /\.test\.tsx?$/.test(file) || file.startsWi
 const inDir = (path: string, dir: string) => path === dir || path.startsWith(`${dir}/`)
 /** "auth" for "src/features/auth/…", else null. */
 const featureOf = (path: string) => /^src\/features\/([^/]+)/.exec(path)?.[1] ?? null
+/** The two public files of a feature: its `index.ts` ("src/features/x") and its `core.ts`. */
+const isFeatureIndex = (path: string) => /^src\/features\/[^/]+$/.test(path)
+const isFeatureCore = (path: string) => /^src\/features\/[^/]+\/core$/.test(path)
+/** Modules that render: a feature's components, the design system and the layout. */
+const isUiModule = (path: string) =>
+  /^src\/features\/[^/]+\/components\//.test(path) || inDir(path, 'src/components/layout')
+/** The always-loaded shell: everything in src/app but the route table, plus the entry. */
+const isAppShell = (file: string) =>
+  !isTestFile(file) &&
+  (file === 'src/main.tsx' || (inDir(file, 'src/app') && file !== 'src/app/router.tsx'))
 
 interface Rule {
   name: string
@@ -99,14 +116,19 @@ interface Rule {
 
 const RULES: Rule[] = [
   {
-    name: 'features are imported only through their index.ts (tests may mock api.ts)',
+    name: 'features are imported only through their index.ts or core.ts (tests may mock api.ts)',
     violates: ({ from, target }) => {
       const feature = featureOf(target)
       if (!feature || featureOf(from) === feature) return false
       const root = `src/features/${feature}`
-      if (target === root) return false
+      if (target === root || target === `${root}/core`) return false
       return !(isTestFile(from) && target === `${root}/api`)
     },
+  },
+  {
+    name: 'the app shell imports features only through their core.ts (no screens in the entry)',
+    violates: ({ from, target, typeOnly }) =>
+      isAppShell(from) && !typeOnly && featureOf(target) !== null && !isFeatureCore(target),
   },
   {
     name: 'only src/routes and the route table (app/router.tsx) import route modules',
@@ -163,11 +185,77 @@ describe('import boundaries', () => {
   })
 })
 
+/** Source file of a resolved module path ("src/features/x/core" → "src/features/x/core.ts"). */
+function fileOf(target: string): string | null {
+  for (const candidate of [
+    `${target}.ts`,
+    `${target}.tsx`,
+    `${target}/index.ts`,
+    `${target}/index.tsx`,
+  ]) {
+    if (`/${candidate}` in SOURCES) return candidate
+  }
+  return null
+}
+
+/**
+ * Every module a file loads at runtime (type-only imports skipped), with the
+ * chain that reaches it, e.g. "core → realtime → api".
+ */
+function runtimeClosure(start: string, edges: readonly ImportEdge[]): Map<string, string[]> {
+  const byFile = new Map<string, ImportEdge[]>()
+  for (const edge of edges) {
+    if (edge.typeOnly) continue
+    byFile.set(edge.from, [...(byFile.get(edge.from) ?? []), edge])
+  }
+  const reached = new Map<string, string[]>([[start, [start]]])
+  const queue = [start]
+  while (queue.length > 0) {
+    const file = queue.shift()!
+    for (const { target } of byFile.get(file) ?? []) {
+      const next = fileOf(target)
+      if (!next || reached.has(next)) continue
+      reached.set(next, [...reached.get(file)!, next])
+      queue.push(next)
+    }
+  }
+  return reached
+}
+
+const moduleOf = (file: string) => file.replace(/\.tsx?$/, '').replace(/\/index$/, '')
+
+describe('feature core files', () => {
+  const edges = collectEdges()
+  const cores = Object.keys(SOURCES)
+    .map((key) => key.replace(/^\//, ''))
+    .filter((file) => isFeatureCore(moduleOf(file)))
+
+  it('exist for the features the app shell composes', () => {
+    expect(cores.sort()).toEqual(
+      expect.arrayContaining([
+        'src/features/admin/core.ts',
+        'src/features/cases/core.ts',
+        'src/features/conversation/core.ts',
+        'src/features/supervision/core.ts',
+      ]),
+    )
+  })
+
+  it.each(cores)('%s never loads a component or a feature index.ts', (core) => {
+    const offending = [...runtimeClosure(core, edges).entries()]
+      .filter(([file]) => isUiModule(moduleOf(file)) || isFeatureIndex(moduleOf(file)))
+      .map(([, chain]) => chain.join(' → '))
+    expect(offending).toEqual([])
+  })
+})
+
 describe('import boundary rules', () => {
-  const check = (from: string, specifier: string) => {
+  const check = (from: string, specifier: string, typeOnly = false) => {
     const target = resolveSpecifier(from, specifier)
     if (!target) return []
-    return RULES.filter((rule) => rule.violates({ from, specifier, target })).map((r) => r.name)
+    return RULES.filter((rule) => rule.violates({ from, specifier, target, typeOnly })).map(
+      (r) => r.name,
+    )
   }
 
   it('resolves aliases and relative paths', () => {
@@ -188,6 +276,10 @@ describe('import boundary rules', () => {
     expect(check('src/components/ui/Button.tsx', '@/app/session')).toHaveLength(1)
     expect(check('src/lib/format.ts', '@/components/ui')).toHaveLength(1)
     expect(check('src/features/auth/x.ts', '@/app/router')).toHaveLength(1)
+    expect(check('src/app/rail-indicators.ts', '@/features/admin')).toHaveLength(1)
+    expect(check('src/app/session-live.tsx', '../features/admin/index.ts')).toHaveLength(1)
+    expect(check('src/main.tsx', '@/features/cases')).toHaveLength(1)
+    expect(check('src/routes/admin/users.tsx', '@/features/admin/realtime')).toHaveLength(1)
   })
 
   it('allows the documented imports', () => {
@@ -197,5 +289,9 @@ describe('import boundary rules', () => {
     expect(check('src/features/auth/x.ts', '@/app/session')).toEqual([])
     expect(check('src/components/layout/AppShell.tsx', '@/app/rail-indicators')).toEqual([])
     expect(check('src/app/router.tsx', '@/routes/auth/login')).toEqual([])
+    expect(check('src/app/rail-indicators.ts', '@/features/admin/core')).toEqual([])
+    expect(check('src/app/x.ts', '@/features/admin', true)).toEqual([])
+    expect(check('src/features/conversation/model.ts', '@/features/cases/core')).toEqual([])
+    expect(check('src/app/rail-indicators.test.tsx', '@/features/admin')).toEqual([])
   })
 })

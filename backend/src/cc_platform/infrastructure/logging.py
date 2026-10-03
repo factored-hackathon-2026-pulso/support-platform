@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import re
 import sys
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
 from structlog.types import Processor
@@ -23,10 +23,22 @@ type LogFormat = Literal["json", "console"]
 REDACTED = "[REDACTED]"
 # token=…, access_token=…, password=… in query strings or free text.
 _SECRET_PARAM = re.compile(r"(?i)\b((?:access_|session_)?token|password|secret)=([^\s\"'&]+)")
+# A password hash in PHC form (``$argon2id$v=19$m=…,t=…,p=…$salt$hash``), wherever it is.
+_PASSWORD_HASH = re.compile(r"\$argon2(?:id|i|d)\$[A-Za-z0-9+/=$,.\-]+")
 
 
 def redact_secrets(text: str) -> str:
+    text = _PASSWORD_HASH.sub(REDACTED, text)
     return _SECRET_PARAM.sub(lambda match: f"{match.group(1)}={REDACTED}", text)
+
+
+def _redact_rendered(_logger: object, _method: str, rendered: Any) -> Any:
+    """Last processor: masks secrets in the whole rendered line, including the exception
+    text ``format_exc_info`` adds (``SecretRedactionFilter`` only sees the message).
+
+    Runs after the renderer, so it receives the rendered ``str``.
+    """
+    return redact_secrets(rendered) if isinstance(rendered, str) else rendered
 
 
 class SecretRedactionFilter(logging.Filter):
@@ -73,6 +85,7 @@ def configure_logging(*, level: str = "INFO", fmt: LogFormat = "json") -> None:
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.processors.format_exc_info,
             renderer,
+            _redact_rendered,
         ],
     )
     handler = logging.StreamHandler()

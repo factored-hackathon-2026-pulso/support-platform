@@ -17,7 +17,6 @@ and the UI recomputes it from the rows with its own ticking clock.
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -27,12 +26,15 @@ from enum import StrEnum
 from cc_platform.application.cases import copy
 from cc_platform.application.cases.dto import CaseSummaryView
 from cc_platform.application.cases.read_model import CaseReader, inbox_order
+from cc_platform.application.people.dto import TeamRefView
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.domain.cases.case import search_key
 from cc_platform.domain.cases.values import OPEN_ASSIGNED_STATUSES, CaseStatus, InboxStatus
 from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
-from cc_platform.domain.people.staff import Language, Staff, StaffRole
+from cc_platform.domain.people.names import fold
+from cc_platform.domain.people.staff import Language, Staff, StaffRole, canonical_roles
+from cc_platform.domain.people.team import Team
 
 #: Team-generated: a pending first response is "at risk" 5 minutes before ``slaDueAt``
 #: (overdue included). The frontend keeps the same value (``SLA_AT_RISK_MS``).
@@ -77,22 +79,7 @@ def at_sla_risk(summary: CaseSummaryView, now: datetime) -> bool:
     )
 
 
-def team_key(name: str) -> str:
-    """Stable slug of a team name (lower-case, accents stripped, non-alphanumerics → ``-``).
-
-    ``"Disputas · Equipo Andes"`` → ``"disputas-equipo-andes"``. Slice 4 turns teams into
-    records; clients treat the key as opaque.
-    """
-    return re.sub(r"[^a-z0-9]+", "-", search_key(name)).strip("-")
-
-
 # ----------------------------------------------------------------------------- views
-@dataclass(frozen=True, slots=True)
-class TeamRefView:
-    key: str
-    name: str
-
-
 @dataclass(frozen=True, slots=True)
 class ActivityCountsView:
     busy: int
@@ -103,7 +90,7 @@ class ActivityCountsView:
 
 @dataclass(frozen=True, slots=True)
 class TeamSummaryView:
-    key: str
+    id: str
     name: str
     analyst_count: int
     activity: ActivityCountsView
@@ -177,7 +164,7 @@ class QueueOverviewView:
 
 # ----------------------------------------------------------------------------- helpers
 def _ordered_roles(staff: Staff) -> tuple[StaffRole, ...]:
-    return tuple(role for role in StaffRole if role in staff.roles)
+    return canonical_roles(staff.roles)
 
 
 def _case_counts(cases: Sequence[CaseSummaryView]) -> AnalystCaseCountsView:
@@ -245,6 +232,7 @@ class GetTeamOverview:
         now = self.clock.now()
         async with self.uow() as uow:
             analysts = await active_analysts(uow)
+            teams = await uow.teams.get_many({analyst.team_id for analyst in analysts})
             availability = {a.staff_id: a for a in await uow.availability.list()}
             signed_in = await uow.sessions.active_staff_ids(now)
             reader = CaseReader(uow)
@@ -259,6 +247,7 @@ class GetTeamOverview:
         rows = [
             self._row(
                 analyst,
+                _team_ref(teams, analyst.team_id),
                 availability.get(analyst.id),
                 signed_in=analyst.id in signed_in,
                 cases=sorted(by_analyst.get(analyst.id, []), key=inbox_order),
@@ -266,11 +255,15 @@ class GetTeamOverview:
             for analyst in analysts
         ]
         rows.sort(key=lambda r: (_ACTIVITY_ORDER[r.activity], search_key(r.name), r.id))
-        return TeamOverviewView(teams=_teams(rows, now), analysts=tuple(rows), server_time=now)
+        active_team_ids = {team.id for team in teams.values() if team.active}
+        return TeamOverviewView(
+            teams=_teams(rows, now, active_team_ids), analysts=tuple(rows), server_time=now
+        )
 
     @staticmethod
     def _row(
         analyst: Staff,
+        team: TeamRefView,
         availability: AnalystAvailability | None,
         *,
         signed_in: bool,
@@ -281,7 +274,7 @@ class GetTeamOverview:
         return TeamAnalystView(
             id=analyst.id,
             name=analyst.name,
-            team=TeamRefView(key=team_key(analyst.team), name=analyst.team),
+            team=team,
             languages=tuple(sorted(analyst.languages)),
             roles=_ordered_roles(analyst),
             availability=status,
@@ -294,19 +287,31 @@ class GetTeamOverview:
         )
 
 
-def _teams(rows: Sequence[TeamAnalystView], now: datetime) -> tuple[TeamSummaryView, ...]:
+def _team_ref(teams: dict[str, Team], team_id: str) -> TeamRefView:
+    team = teams.get(team_id)
+    # Every staff row references a team (foreign key); the fallback only guards a gap.
+    return TeamRefView.of(team) if team is not None else TeamRefView(id=team_id, name=team_id)
+
+
+def _teams(
+    rows: Sequence[TeamAnalystView], now: datetime, active_team_ids: set[str]
+) -> tuple[TeamSummaryView, ...]:
+    """The active teams with at least one active analyst, by name (slice 4 §6)."""
     members: dict[str, list[TeamAnalystView]] = defaultdict(list)
+    refs: dict[str, TeamRefView] = {}
     for row in rows:
-        members[row.team.name].append(row)
+        if row.team.id in active_team_ids:
+            members[row.team.id].append(row)
+            refs[row.team.id] = row.team
     teams = []
-    for name in sorted(members, key=lambda n: (search_key(n), n)):
-        team = members[name]
+    for team_id in sorted(members, key=lambda i: (fold(refs[i].name), refs[i].name, i)):
+        team = members[team_id]
         activities = [row.activity for row in team]
         cases = [case for row in team for case in row.open_cases]
         teams.append(
             TeamSummaryView(
-                key=team_key(name),
-                name=name,
+                id=team_id,
+                name=refs[team_id].name,
                 analyst_count=len(team),
                 activity=ActivityCountsView(
                     busy=activities.count(AnalystActivity.BUSY),

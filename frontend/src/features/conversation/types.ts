@@ -3,7 +3,7 @@
  * aliases of the schemas generated from `backend/openapi.json` (`pnpm gen:api`),
  * plus the UI-only transcript cache.
  */
-import type { CaseChannel, CaseSummary, CloseReason } from '@/features/cases'
+import type { CaseChannel, CaseSummary, CloseReason } from '@/features/cases/core'
 import type { Schemas } from '@/lib/api'
 
 export type { CaseChannel, CaseSummary, CloseReason }

@@ -37,11 +37,17 @@ class UlidIdGenerator:
         return make_id(prefix, encode_body(timestamp_ms, randomness))
 
 
+#: Seeded people and teams use the low numbers (``STF-…01``–``13``, ``TEAM-…01``–``04``);
+#: generated ones start above them so a test can create people and teams over the seed.
+_FIRST_SEQUENTIAL: dict[IdPrefix, int] = {IdPrefix.STAFF: 1000, IdPrefix.TEAM: 1000}
+
+
 class SequentialIdGenerator:
-    """Readable deterministic ids for tests: ``CASE-00000000000000000000000001``."""
+    """Readable deterministic ids for tests: ``CASE-00000000000000000000000001``
+    (``STF-…1001`` and ``TEAM-…1001`` onwards, above the seeded ones)."""
 
     def __init__(self) -> None:
-        self._counters: defaultdict[IdPrefix, int] = defaultdict(int)
+        self._counters: defaultdict[IdPrefix, int] = defaultdict(int, _FIRST_SEQUENTIAL)
         self._lock = threading.Lock()
 
     def new_id(self, prefix: IdPrefix) -> str:

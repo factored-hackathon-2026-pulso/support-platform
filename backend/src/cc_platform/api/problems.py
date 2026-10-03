@@ -42,6 +42,16 @@ class ProblemCode(StrEnum):
     LANGUAGE_MISMATCH = "language_mismatch"
     ANALYST_PAUSED = "analyst_paused"
     ASSIGNMENT_CHANGED = "assignment_changed"
+    # administration (slice 4)
+    VERSION_CONFLICT = "version_conflict"
+    EMAIL_TAKEN = "email_taken"
+    TEAM_NAME_TAKEN = "team_name_taken"
+    SELF_CHANGE_FORBIDDEN = "self_change_forbidden"
+    LAST_ADMIN = "last_admin"
+    STAFF_HAS_OPEN_CASES = "staff_has_open_cases"
+    TEAM_NOT_EMPTY = "team_not_empty"
+    TEAM_INACTIVE = "team_inactive"
+    STAFF_INACTIVE = "staff_inactive"
     # input and business rules
     INVALID_VALUE = "invalid_value"
     POLICY_VIOLATION = "policy_violation"
@@ -101,6 +111,31 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
     P.ASSIGNMENT_CHANGED: ProblemSpec(
         409, "Assignment changed", "El caso cambió de manos mientras decidías."
     ),
+    P.VERSION_CONFLICT: ProblemSpec(
+        409, "Version conflict", "Alguien más cambió este registro mientras editabas."
+    ),
+    P.EMAIL_TAKEN: ProblemSpec(409, "Email already in use", "Ya existe una cuenta con ese correo."),
+    P.TEAM_NAME_TAKEN: ProblemSpec(
+        409, "Team name already in use", "Ya existe un equipo con ese nombre."
+    ),
+    P.SELF_CHANGE_FORBIDDEN: ProblemSpec(
+        422, "Self change forbidden", "No puedes hacer ese cambio sobre tu propia cuenta."
+    ),
+    P.LAST_ADMIN: ProblemSpec(
+        409,
+        "Last administrator",
+        "Debe quedar al menos una persona activa con el rol de Administración.",
+    ),
+    P.STAFF_HAS_OPEN_CASES: ProblemSpec(
+        409,
+        "Staff has open cases",
+        "Tiene casos abiertos. Supervisión tiene que reasignarlos antes de este cambio.",
+    ),
+    P.TEAM_NOT_EMPTY: ProblemSpec(
+        409, "Team not empty", "El equipo todavía tiene personas activas."
+    ),
+    P.TEAM_INACTIVE: ProblemSpec(422, "Team inactive", "Ese equipo está desactivado."),
+    P.STAFF_INACTIVE: ProblemSpec(409, "Account inactive", "Esta cuenta está desactivada."),
     P.INVALID_VALUE: ProblemSpec(422, "Invalid value"),
     P.POLICY_VIOLATION: ProblemSpec(422, "Policy violation"),
     P.VALIDATION_ERROR: ProblemSpec(

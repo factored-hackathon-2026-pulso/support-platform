@@ -6,6 +6,7 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.infrastructure.persistence.memory.repositories import (
+    InMemoryAdminRosterRepository,
     InMemoryAnalystAvailabilityRepository,
     InMemoryAssignmentRepository,
     InMemoryCaseRepository,
@@ -16,6 +17,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryMfaChallengeRepository,
     InMemoryStaffRepository,
     InMemoryStaffSessionRepository,
+    InMemoryTeamRepository,
     InMemoryTurnRepository,
 )
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
@@ -24,6 +26,8 @@ from cc_platform.infrastructure.persistence.unit_of_work_base import BaseUnitOfW
 
 class InMemoryUnitOfWork(BaseUnitOfWork):
     staff: InMemoryStaffRepository
+    teams: InMemoryTeamRepository
+    admin_roster: InMemoryAdminRosterRepository
     login_accounts: InMemoryLoginAccountRepository
     mfa_challenges: InMemoryMfaChallengeRepository
     sessions: InMemoryStaffSessionRepository
@@ -44,6 +48,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     async def _begin(self) -> None:
         store, track = self._store, self.track
         self.staff = InMemoryStaffRepository(store.staff, track)
+        self.teams = InMemoryTeamRepository(store.teams, track)
+        self.admin_roster = InMemoryAdminRosterRepository(store.admin_roster, track)
         self.login_accounts = InMemoryLoginAccountRepository(store.login_accounts, track)
         self.mfa_challenges = InMemoryMfaChallengeRepository(store.mfa_challenges, track)
         self.sessions = InMemoryStaffSessionRepository(store.sessions, track)
@@ -59,6 +65,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self,
     ) -> tuple[
         InMemoryStaffRepository
+        | InMemoryTeamRepository
+        | InMemoryAdminRosterRepository
         | InMemoryLoginAccountRepository
         | InMemoryMfaChallengeRepository
         | InMemoryStaffSessionRepository
@@ -73,7 +81,9 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     ]:
         # Aggregates with a version first: a lost race surfaces as ConcurrentUpdateError.
         return (
+            self.teams,
             self.staff,
+            self.admin_roster,
             self.login_accounts,
             self.mfa_challenges,
             self.sessions,

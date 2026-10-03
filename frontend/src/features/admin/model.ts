@@ -1,0 +1,714 @@
+/**
+ * Pure rules and copy of administration (Admin.dc.html section `usuarios`,
+ * contract docs/platform/api/slice-4-administration.md §1.2, §10): labels, the
+ * account status at a given time, the URL state of both screens, the user
+ * draft (diff, validation, guard rails, open-case blocks), the failure copy of
+ * every problem code and the toasts. No React, no I/O: unit-tested in
+ * model.test.ts.
+ */
+import { rolesLabel, sortRoles, type RoleId } from '@/app/roles'
+import { isApiProblem } from '@/lib/api'
+import { formatTime, joinEs, pluralize } from '@/lib/format'
+import type {
+  AccountStatus,
+  AdminTeam,
+  AdminTeamMember,
+  AdminUser,
+  AdminUserFilters,
+  Language,
+  OpenCasesBlock,
+  SelfChangeAction,
+  StaffRole,
+  TeamStatusFilter,
+  UpdateUserRequest,
+  UserStatusFilter,
+} from './types'
+
+export { joinEs }
+
+type DateInput = Date | string | number
+
+const toMs = (value: DateInput) =>
+  value instanceof Date ? value.getTime() : new Date(value).getTime()
+
+// ── Labels (contract §1.2) ───────────────────────────────────────────────────
+
+/** Second line of the role checkbox cards. */
+export const ROLE_DESCRIPTION: Record<RoleId, string> = {
+  analyst: 'Atiende casos por chat con los clientes.',
+  supervisor: 'Ve el equipo y las colas, asigna y reasigna casos, y revisa la auditoría.',
+  admin: 'Crea y edita cuentas, roles, idiomas y equipos.',
+}
+
+export const LANGUAGES: readonly Language[] = ['es', 'pt']
+
+/** "Español" (controls) and "español" (inside a sentence). */
+export const LANGUAGE_LABEL: Record<Language, string> = { es: 'Español', pt: 'Portugués' }
+export const LANGUAGE_IN_SENTENCE: Record<Language, string> = { es: 'español', pt: 'portugués' }
+
+/** Account status: they qualify "cuenta". */
+export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = {
+  active: 'Activa',
+  locked: 'Bloqueada',
+  inactive: 'Desactivada',
+}
+
+export function teamStatusLabel(team: Pick<AdminTeam, 'active'>): string {
+  return team.active ? 'Activo' : 'Inactivo'
+}
+
+/** "español, portugués", or "—" without languages. */
+export function languagesLabel(languages: readonly Language[]): string {
+  const sorted = LANGUAGES.filter((language) => languages.includes(language))
+  return sorted.length > 0
+    ? sorted.map((language) => LANGUAGE_IN_SENTENCE[language]).join(', ')
+    : '—'
+}
+
+/** "Disputas · Equipo Andes (inactivo)" for options naming an inactive team. */
+export function teamOptionLabel(team: Pick<AdminTeam, 'name' | 'active'>): string {
+  return team.active ? team.name : `${team.name} (inactivo)`
+}
+
+/** By name, accent-insensitive, then id (the server order, §4.1). */
+export function byName(a: { name: string; id: string }, b: { name: string; id: string }): number {
+  return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }) || a.id.localeCompare(b.id)
+}
+
+// ── Account status (contract §1.1, §10.2) ────────────────────────────────────
+
+/**
+ * The status at `now`: the server computes it at `serverTime`, but a lock
+ * expires on its own, so the screen recomputes it from `lockedUntil` with a
+ * ticking clock (an expired lock reads "Activa").
+ */
+export function accountStatusAt(
+  user: Pick<AdminUser, 'status' | 'lockedUntil'>,
+  now: DateInput,
+): AccountStatus {
+  if (user.status === 'inactive') return 'inactive'
+  if (user.lockedUntil && toMs(user.lockedUntil) > toMs(now)) return 'locked'
+  return 'active'
+}
+
+/** `title` of a locked status: "Hasta las 10:47". */
+export function lockedUntilTitle(lockedUntil: string): string {
+  return `Hasta las ${formatTime(lockedUntil)}`
+}
+
+/** Status callout of the aside (null while active). */
+export function statusCallout(
+  user: Pick<AdminUser, 'status' | 'lockedUntil' | 'failedAttempts'>,
+  now: DateInput,
+): { tone: 'warn' | 'neutral'; text: string; action: 'unlock' | 'reactivate' } | null {
+  const status = accountStatusAt(user, now)
+  if (status === 'locked' && user.lockedUntil) {
+    return {
+      tone: 'warn',
+      text: `Cuenta bloqueada hasta las ${formatTime(user.lockedUntil)} tras ${pluralize(user.failedAttempts, 'intento fallido', 'intentos fallidos')}.`,
+      action: 'unlock',
+    }
+  }
+  if (status === 'inactive') {
+    return { tone: 'neutral', text: 'Cuenta desactivada. No puede ingresar.', action: 'reactivate' }
+  }
+  return null
+}
+
+/** "Casos abiertos": "5 · 4 en español · 1 en portugués", "0". */
+export function openCasesFact(openCases: AdminUser['openCases']): string {
+  if (openCases.total === 0) return '0'
+  const parts = LANGUAGES.filter((language) => openCases[language] > 0).map(
+    (language) => `${openCases[language]} en ${LANGUAGE_IN_SENTENCE[language]}`,
+  )
+  return [String(openCases.total), ...parts].join(' · ')
+}
+
+/** Aside line: "Analista · español, portugués · Disputas · Equipo Andes". */
+export function userSummaryLine(user: Pick<AdminUser, 'roles' | 'languages' | 'team'>): string {
+  return [rolesLabel(user.roles), languagesLabel(user.languages), user.team.name].join(' · ')
+}
+
+// ── URL state (frozen, contract §10.11) ──────────────────────────────────────
+
+export interface UsersUrlState {
+  /** `?rol=analistas|supervisoras|administracion`. */
+  role: RoleId | null
+  /** `?estado=activas|bloqueadas|desactivadas|todas` (default activas). */
+  status: UserStatusFilter
+  /** `?equipo=TEAM-…`. */
+  teamId: string | null
+  /** `?idioma=es|pt`. */
+  language: Language | null
+  /** `?q=`. */
+  query: string
+  /** `?persona=STF-…`: the selected person (aside). */
+  staffId: string | null
+  /** `?nueva=1`: the create dialog. */
+  create: boolean
+}
+
+export interface TeamsUrlState {
+  /** `?estado=activos|inactivos|todos` (default activos). */
+  status: TeamStatusFilter
+  /** `?equipo=TEAM-…`: the selected team (aside). */
+  teamId: string | null
+  /** `?nuevo=1`: the create dialog. */
+  create: boolean
+}
+
+export interface UrlStateChangeOptions {
+  /** Replace the history entry (filters) instead of pushing one (selection, dialogs). */
+  replace?: boolean
+}
+
+const ROLE_SLUGS: Record<RoleId, string> = {
+  analyst: 'analistas',
+  supervisor: 'supervisoras',
+  admin: 'administracion',
+}
+
+const USER_STATUS_SLUGS: Record<UserStatusFilter, string> = {
+  active: 'activas',
+  locked: 'bloqueadas',
+  inactive: 'desactivadas',
+  all: 'todas',
+}
+
+const TEAM_STATUS_SLUGS: Record<TeamStatusFilter, string> = {
+  active: 'activos',
+  inactive: 'inactivos',
+  all: 'todos',
+}
+
+/** Max length of `q` (the API accepts 1–80). */
+export const USER_SEARCH_MAX_LENGTH = 80
+
+function fromSlug<K extends string>(slugs: Record<K, string>, slug: string | null): K | null {
+  if (!slug) return null
+  const entry = (Object.entries(slugs) as [K, string][]).find(([, value]) => value === slug)
+  return entry ? entry[0] : null
+}
+
+const trimmed = (value: string | null) => value?.trim() || null
+
+export const EMPTY_USERS_STATE: UsersUrlState = {
+  role: null,
+  status: 'active',
+  teamId: null,
+  language: null,
+  query: '',
+  staffId: null,
+  create: false,
+}
+
+export function parseUsersSearch(params: URLSearchParams): UsersUrlState {
+  const language = params.get('idioma')
+  return {
+    role: fromSlug(ROLE_SLUGS, params.get('rol')),
+    status: fromSlug(USER_STATUS_SLUGS, params.get('estado')) ?? 'active',
+    teamId: trimmed(params.get('equipo')),
+    language: language === 'es' || language === 'pt' ? language : null,
+    query: (params.get('q') ?? '').slice(0, USER_SEARCH_MAX_LENGTH),
+    staffId: trimmed(params.get('persona')),
+    create: params.get('nueva') === '1',
+  }
+}
+
+export function toUsersSearch(state: UsersUrlState): URLSearchParams {
+  const params = new URLSearchParams()
+  if (state.role) params.set('rol', ROLE_SLUGS[state.role])
+  if (state.status !== 'active') params.set('estado', USER_STATUS_SLUGS[state.status])
+  if (state.teamId) params.set('equipo', state.teamId)
+  if (state.language) params.set('idioma', state.language)
+  if (state.query) params.set('q', state.query)
+  if (state.staffId) params.set('persona', state.staffId)
+  if (state.create) params.set('nueva', '1')
+  return params
+}
+
+export function parseTeamsSearch(params: URLSearchParams): TeamsUrlState {
+  return {
+    status: fromSlug(TEAM_STATUS_SLUGS, params.get('estado')) ?? 'active',
+    teamId: trimmed(params.get('equipo')),
+    create: params.get('nuevo') === '1',
+  }
+}
+
+export function toTeamsSearch(state: TeamsUrlState): URLSearchParams {
+  const params = new URLSearchParams()
+  if (state.status !== 'active') params.set('estado', TEAM_STATUS_SLUGS[state.status])
+  if (state.teamId) params.set('equipo', state.teamId)
+  if (state.create) params.set('nuevo', '1')
+  return params
+}
+
+/** URL state → GET /admin/users filters (defaults and empty values left out). */
+export function usersQueryOf(state: UsersUrlState): AdminUserFilters {
+  const filters: AdminUserFilters = {}
+  const q = state.query.trim().slice(0, USER_SEARCH_MAX_LENGTH)
+  if (q) filters.q = q
+  if (state.role) filters.role = state.role
+  if (state.status !== 'active') filters.status = state.status
+  if (state.teamId) filters.teamId = state.teamId
+  if (state.language) filters.language = state.language
+  return filters
+}
+
+/** Any list filter set (the selection and the dialog are not filters). */
+export function hasUserFilters(state: UsersUrlState): boolean {
+  return (
+    state.role !== null ||
+    state.status !== 'active' ||
+    state.teamId !== null ||
+    state.language !== null ||
+    state.query.trim() !== ''
+  )
+}
+
+/** "Limpiar filtros": every filter back to its default; the selection stays. */
+export function clearUserFilters(state: UsersUrlState): UsersUrlState {
+  return { ...EMPTY_USERS_STATE, staffId: state.staffId }
+}
+
+/** Header subtitle: "Quién puede hacer qué en la plataforma · 13 personas". */
+export function usersSubtitle(total: number | undefined): string {
+  const base = 'Quién puede hacer qué en la plataforma'
+  return total === undefined ? base : `${base} · ${pluralize(total, 'persona')}`
+}
+
+/** Header subtitle: "Cómo se agrupan las personas en la plataforma · 4 equipos". */
+export function teamsSubtitle(total: number | undefined): string {
+  const base = 'Cómo se agrupan las personas en la plataforma'
+  return total === undefined ? base : `${base} · ${pluralize(total, 'equipo')}`
+}
+
+// ── The user draft (contract §10.2–§10.4) ────────────────────────────────────
+
+export interface UserDraft {
+  name: string
+  email: string
+  roles: RoleId[]
+  languages: Language[]
+  /** '' = none chosen yet (create). */
+  teamId: string
+}
+
+export type UserDraftField = keyof UserDraft
+
+/** Fields in form order: the first invalid one gets the focus. */
+export const USER_DRAFT_FIELDS: readonly UserDraftField[] = [
+  'name',
+  'email',
+  'roles',
+  'languages',
+  'teamId',
+]
+
+export type UserDraftErrors = Partial<Record<UserDraftField, string>>
+
+export const EMPTY_USER_DRAFT: UserDraft = {
+  name: '',
+  email: '',
+  roles: [],
+  languages: [],
+  teamId: '',
+}
+
+/** Team-generated limits (contract §1.3). */
+export const NAME_MAX_LENGTH = 120
+export const TEAM_NAME_MAX_LENGTH = 80
+export const EMAIL_MAX_LENGTH = 254
+
+/** Trimmed, inner runs of spaces collapsed to one (the domain rule). */
+export function normalizeName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+export function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+export const FIELD_ERROR: Record<UserDraftField, string> = {
+  name: 'Escribe el nombre completo (al menos 2 caracteres).',
+  email: 'Escribe un correo válido, como nombre@latambank.example.',
+  roles: 'Elige al menos un rol.',
+  languages: 'Quien atiende casos necesita al menos un idioma.',
+  teamId: 'Elige un equipo.',
+}
+
+export const TEAM_NAME_ERROR = 'Escribe un nombre de al menos 2 caracteres.'
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Client validation before any request (contract §10.4). */
+export function validateUserDraft(draft: UserDraft): UserDraftErrors {
+  const errors: UserDraftErrors = {}
+  const name = normalizeName(draft.name)
+  if (name.length < 2 || name.length > NAME_MAX_LENGTH) errors.name = FIELD_ERROR.name
+  const email = draft.email.trim()
+  if (!EMAIL_PATTERN.test(email) || email.length > EMAIL_MAX_LENGTH)
+    errors.email = FIELD_ERROR.email
+  if (draft.roles.length === 0) errors.roles = FIELD_ERROR.roles
+  if (draft.roles.includes('analyst') && draft.languages.length === 0) {
+    errors.languages = FIELD_ERROR.languages
+  }
+  if (!draft.teamId) errors.teamId = FIELD_ERROR.teamId
+  return errors
+}
+
+export function validateTeamName(name: string): string | null {
+  const normalized = normalizeName(name)
+  return normalized.length < 2 || normalized.length > TEAM_NAME_MAX_LENGTH ? TEAM_NAME_ERROR : null
+}
+
+/** The first field with an error, in form order (it gets the focus). */
+export function firstInvalidField(errors: UserDraftErrors): UserDraftField | null {
+  return USER_DRAFT_FIELDS.find((field) => errors[field]) ?? null
+}
+
+export function draftFromUser(user: AdminUser): UserDraft {
+  return {
+    name: user.name,
+    email: user.email,
+    roles: sortRoles(user.roles),
+    languages: LANGUAGES.filter((language) => user.languages.includes(language)),
+    teamId: user.team.id,
+  }
+}
+
+const sameSet = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((value) => b.includes(value))
+
+/**
+ * What the draft changes on `base` (the person the admin started editing): only
+ * the changed fields, normalized, in the shape of the PATCH body.
+ */
+export function userChanges(
+  base: AdminUser,
+  draft: UserDraft,
+): Omit<UpdateUserRequest, 'expectedVersion'> {
+  const changes: Omit<UpdateUserRequest, 'expectedVersion'> = {}
+  const name = normalizeName(draft.name)
+  if (name !== base.name) changes.name = name
+  if (normalizeEmail(draft.email) !== normalizeEmail(base.email)) changes.email = draft.email.trim()
+  if (!sameSet(draft.roles, base.roles)) changes.roles = sortRoles(draft.roles)
+  if (!sameSet(draft.languages, base.languages)) {
+    changes.languages = LANGUAGES.filter((language) => draft.languages.includes(language))
+  }
+  if (draft.teamId !== base.team.id) changes.teamId = draft.teamId
+  return changes
+}
+
+export function isDraftDirty(base: AdminUser, draft: UserDraft): boolean {
+  return Object.keys(userChanges(base, draft)).length > 0
+}
+
+/** POST /admin/users body from a valid draft. */
+export function createUserBody(draft: UserDraft) {
+  return {
+    name: normalizeName(draft.name),
+    email: draft.email.trim(),
+    roles: sortRoles(draft.roles),
+    languages: LANGUAGES.filter((language) => draft.languages.includes(language)),
+    teamId: draft.teamId,
+  }
+}
+
+export function toggleValue<T extends string>(values: readonly T[], value: T, on: boolean): T[] {
+  return on
+    ? values.includes(value)
+      ? [...values]
+      : [...values, value]
+    : values.filter((v) => v !== value)
+}
+
+// ── Guard rails (contract §10.2) ─────────────────────────────────────────────
+
+export const SELF_CHANGE_COPY: Record<SelfChangeAction, string> = {
+  remove_own_admin: 'No puedes quitarte tu propio rol de Administración.',
+  deactivate_self: 'No puedes desactivar tu propia cuenta.',
+  reset_own_password: 'Pídele a otra persona de Administración que restablezca tu contraseña.',
+}
+
+export const LAST_ADMIN_HINT = 'Es la única persona activa con Administración.'
+
+export interface UserGuardState {
+  /** The Administración card cannot be unchecked; the text replaces its description. */
+  adminLocked: string | null
+  /** "Desactivar cuenta" disabled, with this hint. */
+  deactivateBlocked: string | null
+  /** "Restablecer contraseña" disabled, with this hint. */
+  resetBlocked: string | null
+}
+
+export function userGuardState(user: Pick<AdminUser, 'guards'>): UserGuardState {
+  if (user.guards.isSelf) {
+    return {
+      adminLocked: SELF_CHANGE_COPY.remove_own_admin,
+      deactivateBlocked: SELF_CHANGE_COPY.deactivate_self,
+      resetBlocked: SELF_CHANGE_COPY.reset_own_password,
+    }
+  }
+  if (user.guards.lastActiveAdmin) {
+    return { adminLocked: LAST_ADMIN_HINT, deactivateBlocked: LAST_ADMIN_HINT, resetBlocked: null }
+  }
+  return { adminLocked: null, deactivateBlocked: null, resetBlocked: null }
+}
+
+const openCasesPrefix = (count: number) =>
+  `Tiene ${pluralize(count, 'caso abierto', 'casos abiertos')}`
+
+export function removeAnalystBlockedCopy(count: number): string {
+  return `${openCasesPrefix(count)}: supervisión tiene que reasignarlos antes de quitarle el rol de Analista.`
+}
+
+export function removeLanguageBlockedCopy(count: number, language: Language): string {
+  return `${openCasesPrefix(count)} en ${LANGUAGE_IN_SENTENCE[language]}: supervisión tiene que reasignarlos antes de quitarle ese idioma.`
+}
+
+export function deactivateBlockedCopy(count: number): string {
+  return `${openCasesPrefix(count)}. Supervisión tiene que reasignarlos antes de desactivar la cuenta.`
+}
+
+/**
+ * Changes the open cases block (§3.6), checked at submit before any request:
+ * unchecking Analista while she holds open cases, or a language of one of them.
+ */
+export function openCaseBlocks(
+  user: Pick<AdminUser, 'roles' | 'languages' | 'openCases'>,
+  draft: Pick<UserDraft, 'roles' | 'languages'>,
+): UserDraftErrors {
+  const errors: UserDraftErrors = {}
+  if (user.roles.includes('analyst') && !draft.roles.includes('analyst')) {
+    if (user.openCases.total > 0) errors.roles = removeAnalystBlockedCopy(user.openCases.total)
+  }
+  const removed = LANGUAGES.find(
+    (language) =>
+      user.languages.includes(language) &&
+      !draft.languages.includes(language) &&
+      user.openCases[language] > 0,
+  )
+  if (removed) errors.languages = removeLanguageBlockedCopy(user.openCases[removed], removed)
+  return errors
+}
+
+// ── Failures (contract §10.4) ────────────────────────────────────────────────
+
+/** What the screen does after a failure, besides showing the message. */
+export type AdminFailureAction =
+  /** Nothing else. */
+  | 'none'
+  /** `current` replaces the cached record and the draft. */
+  | 'use_current'
+  /** Refetch the record (and the lists). */
+  | 'refetch'
+  /** Refetch the teams (one became inactive). */
+  | 'refetch_teams'
+
+export interface AdminFailure {
+  message: string
+  /** The form field the message belongs to (field error + focus). */
+  field?: UserDraftField
+  action: AdminFailureAction
+}
+
+export interface AdminFailureContext {
+  subject: 'user' | 'team'
+}
+
+export const GENERIC_SAVE_ERROR = 'No pudimos guardar los cambios. Inténtalo de nuevo.'
+
+function isUserField(value: string | null): value is UserDraftField {
+  return value !== null && (USER_DRAFT_FIELDS as readonly string[]).includes(value)
+}
+
+function isLanguage(value: string | null): value is Language {
+  return value === 'es' || value === 'pt'
+}
+
+export function teamNotEmptyCopy(memberCount: number): string {
+  return memberCount === 1
+    ? 'Para desactivarlo, primero mueve a su persona a otro equipo.'
+    : `Para desactivarlo, primero mueve a sus ${memberCount} personas a otro equipo.`
+}
+
+export function describeAdminFailure(error: unknown, context: AdminFailureContext): AdminFailure {
+  if (!isApiProblem(error)) return { message: GENERIC_SAVE_ERROR, action: 'none' }
+  switch (error.code) {
+    case 'version_conflict':
+      return {
+        message: `Alguien más cambió ${context.subject === 'user' ? 'a esta persona' : 'este equipo'} mientras editabas. Cargamos los datos actuales: revisa y vuelve a guardar.`,
+        action: 'use_current',
+      }
+    case 'email_taken':
+      return { message: 'Ya existe una cuenta con ese correo.', field: 'email', action: 'none' }
+    case 'team_name_taken':
+      return { message: 'Ya existe un equipo con ese nombre.', field: 'name', action: 'none' }
+    case 'self_change_forbidden': {
+      const action = error.stringExtension('action') as SelfChangeAction | null
+      const message = action && action in SELF_CHANGE_COPY ? SELF_CHANGE_COPY[action] : null
+      return {
+        message: message ?? GENERIC_SAVE_ERROR,
+        ...(action === 'remove_own_admin' ? { field: 'roles' as const } : {}),
+        action: 'none',
+      }
+    }
+    case 'last_admin':
+      return {
+        message: 'Debe quedar al menos una persona activa con Administración.',
+        action: 'refetch',
+      }
+    case 'staff_has_open_cases': {
+      const reason = error.stringExtension('blockReason') as OpenCasesBlock | null
+      const count = error.numberExtension('openCases') ?? 0
+      const language = error.stringExtension('caseLanguage')
+      if (reason === 'remove_analyst') {
+        return { message: removeAnalystBlockedCopy(count), field: 'roles', action: 'refetch' }
+      }
+      if (reason === 'remove_language' && isLanguage(language)) {
+        return {
+          message: removeLanguageBlockedCopy(count, language),
+          field: 'languages',
+          action: 'refetch',
+        }
+      }
+      return { message: deactivateBlockedCopy(count), action: 'refetch' }
+    }
+    case 'team_not_empty':
+      return {
+        message: teamNotEmptyCopy(error.numberExtension('memberCount') ?? 0),
+        action: 'refetch',
+      }
+    case 'team_inactive':
+      return {
+        message: 'Ese equipo está desactivado. Elige otro.',
+        field: 'teamId',
+        action: 'refetch_teams',
+      }
+    case 'staff_inactive':
+      return { message: 'Esta cuenta está desactivada. Reactívala primero.', action: 'refetch' }
+    case 'invalid_value': {
+      const field = error.stringExtension('field')
+      if (context.subject === 'team' && field === 'name') {
+        return { message: TEAM_NAME_ERROR, field: 'name', action: 'none' }
+      }
+      if (isUserField(field)) return { message: FIELD_ERROR[field], field, action: 'none' }
+      return { message: GENERIC_SAVE_ERROR, action: 'none' }
+    }
+    default:
+      return { message: GENERIC_SAVE_ERROR, action: 'none' }
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** `current` of a `version_conflict` as an `AdminUser`, or null when it is not one. */
+export function readAdminUser(value: unknown): AdminUser | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.name !== 'string' ||
+    typeof value.email !== 'string' ||
+    typeof value.version !== 'number' ||
+    !Array.isArray(value.roles) ||
+    !Array.isArray(value.languages) ||
+    !isRecord(value.team) ||
+    !isRecord(value.openCases) ||
+    !isRecord(value.guards) ||
+    typeof value.status !== 'string'
+  )
+    return null
+  return value as unknown as AdminUser
+}
+
+/** `current` of a `version_conflict` as an `AdminTeam`, or null when it is not one. */
+export function readAdminTeam(value: unknown): AdminTeam | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.name !== 'string' ||
+    typeof value.active !== 'boolean' ||
+    typeof value.version !== 'number' ||
+    typeof value.memberCount !== 'number'
+  )
+    return null
+  return value as unknown as AdminTeam
+}
+
+// ── Toasts and dialog copy (contract §10.3, §10.5) ───────────────────────────
+
+/** "Daniela" from "Daniela Ríos". */
+export function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name
+}
+
+const sessionsClosed = (revoked: number) => {
+  if (revoked <= 0) return ''
+  return revoked === 1 ? ' Se cerró su sesión.' : ` Se cerraron sus ${revoked} sesiones.`
+}
+
+export function deactivatedToast(name: string, revokedSessions: number) {
+  return {
+    title: 'Cuenta desactivada',
+    description: `${name} ya no puede ingresar.${sessionsClosed(revokedSessions)}`,
+  }
+}
+
+export function reactivatedToast(name: string) {
+  return {
+    title: 'Cuenta reactivada',
+    description: `${name} puede volver a ingresar con su contraseña. Empieza En pausa.`,
+  }
+}
+
+export function unlockedToast(name: string, changed: boolean) {
+  return changed
+    ? { title: 'Cuenta desbloqueada', description: `${name} ya puede volver a intentar ingresar.` }
+    : { title: 'La cuenta ya no estaba bloqueada.' }
+}
+
+/** Text of the temporary-password dialog. */
+export function temporaryPasswordCopy(name: string, kind: 'created' | 'reset') {
+  return {
+    title: kind === 'created' ? 'Cuenta creada' : 'Contraseña restablecida',
+    text: `${name} ya puede ingresar con su correo y esta contraseña temporal. Cópiala ahora: no la volveremos a mostrar.`,
+  }
+}
+
+export const REPLAYED_PASSWORD_COPY =
+  'La contraseña temporal se mostró al crear la cuenta. Si no la tienes, restablécela.'
+
+export const DEACTIVATE_CONSEQUENCES: readonly string[] = [
+  'No podrá ingresar.',
+  'Se cierran sus sesiones abiertas ahora.',
+  'Deja de recibir casos y queda En pausa.',
+  'Su historial y la auditoría se conservan.',
+]
+
+// ── Teams (contract §10.5) ───────────────────────────────────────────────────
+
+/** "Agregar persona" options: active people outside the team, "{nombre} · {equipo actual}". */
+export function addMemberCandidates(
+  users: readonly AdminUser[],
+  teamId: string,
+): { value: string; label: string; user: AdminUser }[] {
+  return users
+    .filter((user) => user.status !== 'inactive' && user.team.id !== teamId)
+    .slice()
+    .sort(byName)
+    .map((user) => ({ value: user.id, label: `${user.name} · ${user.team.name}`, user }))
+}
+
+/** Members: active first, then inactive; each by name. */
+export function sortMembers(members: readonly AdminTeamMember[]): AdminTeamMember[] {
+  return members.slice().sort((a, b) => {
+    const inactive = Number(a.status === 'inactive') - Number(b.status === 'inactive')
+    return inactive !== 0 ? inactive : byName(a, b)
+  })
+}
+
+/** Role filter keys of the pills ("Todas" + each role). */
+export type RolePill = 'all' | StaffRole

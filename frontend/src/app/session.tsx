@@ -30,7 +30,7 @@ export interface SessionUser extends Staff {
 
 export function toSessionUser(staff: Staff): SessionUser {
   const languages = staff.languages.map((code) => LANGUAGE_LABELS[code] ?? code).join(', ')
-  const summary = [staff.team, languages].filter(Boolean).join(' · ')
+  const summary = [staff.team.name, languages].filter(Boolean).join(' · ')
   return {
     ...staff,
     initials: getInitials(staff.name),

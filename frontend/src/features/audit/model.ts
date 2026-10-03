@@ -43,13 +43,14 @@ export interface FamilyOption {
   slug: string
 }
 
-/** "Tipo" options (the catalog families, §5.3). */
+/** "Tipo" options (the catalog families, slice 3 §5.3 + slice 4 §7.1). */
 export const AUDIT_FAMILIES: readonly FamilyOption[] = [
   { value: 'conversation', label: 'Conversación', slug: 'conversacion' },
   { value: 'assignment', label: 'Asignación', slug: 'asignacion' },
   { value: 'lifecycle', label: 'Ciclo del caso', slug: 'ciclo' },
   { value: 'availability', label: 'Disponibilidad', slug: 'disponibilidad' },
   { value: 'access', label: 'Accesos', slug: 'accesos' },
+  { value: 'administration', label: 'Administración', slug: 'administracion' },
   { value: 'other', label: 'Otros', slug: 'otros' },
 ]
 
@@ -69,7 +70,7 @@ export interface AuditUrlState {
   actorId: string | null
   /** `?caso=`. */
   caseId: string | null
-  /** `?tipo=conversacion|asignacion|ciclo|disponibilidad|accesos|otros`. */
+  /** `?tipo=conversacion|asignacion|ciclo|disponibilidad|accesos|administracion|otros`. */
   family: AuditFamily | null
   /** `?desde=YYYY-MM-DD` (viewer's zone). */
   fromDate: string | null
@@ -341,3 +342,10 @@ export function hidesMessageText(event: Pick<AuditEvent, 'redactedFields'>): boo
 
 export const REDACTED_TEXT_NOTE =
   'El texto del mensaje no se muestra aquí: está en la conversación.'
+
+// ── Persona filter ───────────────────────────────────────────────────────────
+
+/** "Persona" option: active and inactive staff, the inactive ones marked "(desactivada)". */
+export function personOptionLabel(person: { name: string; active: boolean }): string {
+  return person.active ? person.name : `${person.name} (desactivada)`
+}

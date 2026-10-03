@@ -10,6 +10,7 @@ import {
   formatTime,
   localDayKey,
   getInitials,
+  joinEs,
   maskLast4,
 } from './format'
 
@@ -74,5 +75,14 @@ describe('format', () => {
     expect(getInitials('Diego Romero Contreras')).toBe('DR')
     expect(getInitials('Samuel Óscar Campos Cruz')).toBe('SC')
     expect(getInitials('Ana Díaz')).toBe('AD')
+  })
+
+  it('joins lists in Spanish', () => {
+    expect(joinEs([])).toBe('')
+    expect(joinEs(['Analista'])).toBe('Analista')
+    expect(joinEs(['Analista', 'Supervisora'])).toBe('Analista y Supervisora')
+    expect(joinEs(['Analista', 'Supervisora', 'Administración'])).toBe(
+      'Analista, Supervisora y Administración',
+    )
   })
 })

@@ -40,7 +40,8 @@ def make_staff(**overrides: object) -> Staff:
         "email": "  Daniela.Rios@LatamBank.example ",
         "roles": frozenset({StaffRole.ANALYST}),
         "languages": frozenset({Language.SPANISH, Language.PORTUGUESE}),
-        "team": "Disputas · Equipo Andes",
+        "team_id": "TEAM-" + "0" * 25 + "1",
+        "created_at": NOW,
     }
     values.update(overrides)
     return Staff(**values)  # type: ignore[arg-type]
@@ -61,7 +62,8 @@ def test_staff_normalises_email_and_exposes_roles() -> None:
         {"languages": frozenset()},
         {"email": "not-an-email"},
         {"name": " "},
-        {"team": ""},
+        {"name": " D "},
+        {"team_id": "Disputas · Equipo Andes"},
         {"id": "CASE-" + "0" * 26},
     ],
 )
@@ -231,6 +233,23 @@ def test_challenge_completes_once() -> None:
         challenge.complete(now=NOW, method=MfaMethod.TOTP)
     with pytest.raises(MfaChallengeInvalidError):
         challenge.register_failure(now=NOW, actor=ACTOR)
+
+
+def test_cancelling_a_challenge_closes_it_once() -> None:
+    challenge = issue_challenge()
+    challenge.pull_events()
+    assert challenge.cancel(now=NOW)
+    assert challenge.status is MfaChallengeStatus.CANCELLED
+    assert not challenge.pull_events()  # the reset or deactivation is the audited fact
+    with pytest.raises(MfaChallengeInvalidError):
+        challenge.ensure_open(NOW)
+    assert not challenge.cancel(now=NOW)  # already closed: nothing to save
+    verified = issue_challenge()
+    verified.complete(now=NOW, method=MfaMethod.TOTP)
+    assert not verified.cancel(now=NOW)
+    assert verified.status is MfaChallengeStatus.VERIFIED
+    expired = issue_challenge(MfaPolicy(ttl=timedelta(minutes=5)))
+    assert not expired.cancel(now=NOW + timedelta(minutes=5))
 
 
 # ----------------------------------------------------------------------------- sessions

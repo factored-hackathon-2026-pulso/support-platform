@@ -1,6 +1,16 @@
 {
   "components": {
     "schemas": {
+      "AccountStatus": {
+        "description": "Derived, never stored (§1.1): ``inactive`` = ``Staff.active`` false; ``locked`` =\nactive and the login account is locked now; else ``active``.",
+        "enum": [
+          "active",
+          "locked",
+          "inactive"
+        ],
+        "title": "AccountStatus",
+        "type": "string"
+      },
       "ActivityCounts": {
         "properties": {
           "available": {
@@ -39,6 +49,349 @@
         ],
         "title": "ActorRole",
         "type": "string"
+      },
+      "AdminTeam": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "analystCount": {
+            "description": "Active analysts.",
+            "title": "Analystcount",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "inactiveMemberCount": {
+            "title": "Inactivemembercount",
+            "type": "integer"
+          },
+          "memberCount": {
+            "description": "Active people.",
+            "title": "Membercount",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "description": "Send it back as expectedVersion.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "active",
+          "memberCount",
+          "analystCount",
+          "inactiveMemberCount",
+          "createdAt",
+          "version"
+        ],
+        "title": "AdminTeam",
+        "type": "object"
+      },
+      "AdminTeamChange": {
+        "properties": {
+          "changed": {
+            "description": "false: nothing changed (no event, same version).",
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "team": {
+            "$ref": "#/components/schemas/AdminTeam"
+          }
+        },
+        "required": [
+          "changed",
+          "team"
+        ],
+        "title": "AdminTeamChange",
+        "type": "object"
+      },
+      "AdminTeamDetail": {
+        "properties": {
+          "members": {
+            "description": "Active first, then inactive; each by name.",
+            "items": {
+              "$ref": "#/components/schemas/AdminTeamMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "team": {
+            "$ref": "#/components/schemas/AdminTeam"
+          }
+        },
+        "required": [
+          "team",
+          "members"
+        ],
+        "title": "AdminTeamDetail",
+        "type": "object"
+      },
+      "AdminTeamList": {
+        "properties": {
+          "items": {
+            "description": "By name (accent-insensitive).",
+            "items": {
+              "$ref": "#/components/schemas/AdminTeam"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "statusCounts": {
+            "$ref": "#/components/schemas/TeamStatusCounts"
+          }
+        },
+        "required": [
+          "items",
+          "statusCounts"
+        ],
+        "title": "AdminTeamList",
+        "type": "object"
+      },
+      "AdminTeamMember": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/Language"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/StaffRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountStatus"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "roles",
+          "languages",
+          "status"
+        ],
+        "title": "AdminTeamMember",
+        "type": "object"
+      },
+      "AdminUser": {
+        "properties": {
+          "availability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AvailabilityStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Analysts only (no row = paused); null otherwise."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "failedAttempts": {
+            "description": "The current counter (0 after an expired lock).",
+            "title": "Failedattempts",
+            "type": "integer"
+          },
+          "guards": {
+            "$ref": "#/components/schemas/AdminUserGuards"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "languages": {
+            "description": "Sorted; may be [] only without analyst.",
+            "items": {
+              "$ref": "#/components/schemas/Language"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "lastLoginAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastloginat"
+          },
+          "lockedUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null unless locked now.",
+            "title": "Lockeduntil"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "openCases": {
+            "$ref": "#/components/schemas/OpenCaseCounts",
+            "description": "Her assigned | in_progress cases."
+          },
+          "roles": {
+            "description": "Canonical order: analyst, supervisor, admin.",
+            "items": {
+              "$ref": "#/components/schemas/StaffRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountStatus",
+            "description": "At serverTime (derived, never stored)."
+          },
+          "team": {
+            "$ref": "#/components/schemas/TeamRef"
+          },
+          "version": {
+            "description": "Send it back as expectedVersion.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "roles",
+          "languages",
+          "team",
+          "status",
+          "lockedUntil",
+          "failedAttempts",
+          "lastLoginAt",
+          "availability",
+          "openCases",
+          "createdAt",
+          "guards",
+          "version"
+        ],
+        "title": "AdminUser",
+        "type": "object"
+      },
+      "AdminUserChange": {
+        "properties": {
+          "changed": {
+            "description": "false: nothing changed (no event, same version).",
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "revokedSessions": {
+            "description": "> 0 only on a deactivation.",
+            "title": "Revokedsessions",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AdminUser"
+          }
+        },
+        "required": [
+          "changed",
+          "user",
+          "revokedSessions"
+        ],
+        "title": "AdminUserChange",
+        "type": "object"
+      },
+      "AdminUserGuards": {
+        "properties": {
+          "isSelf": {
+            "description": "She is the caller.",
+            "title": "Isself",
+            "type": "boolean"
+          },
+          "lastActiveAdmin": {
+            "description": "She is active, holds admin and is the only such person.",
+            "title": "Lastactiveadmin",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "isSelf",
+          "lastActiveAdmin"
+        ],
+        "title": "AdminUserGuards",
+        "type": "object"
+      },
+      "AdminUserList": {
+        "properties": {
+          "items": {
+            "description": "By name (accent-insensitive), then id; ≤ 500.",
+            "items": {
+              "$ref": "#/components/schemas/AdminUser"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "roleCounts": {
+            "$ref": "#/components/schemas/RoleCounts",
+            "description": "Over every filter except role."
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          },
+          "statusCounts": {
+            "$ref": "#/components/schemas/UserStatusCounts",
+            "description": "Over every filter except status."
+          }
+        },
+        "required": [
+          "items",
+          "roleCounts",
+          "statusCounts",
+          "serverTime"
+        ],
+        "title": "AdminUserList",
+        "type": "object"
       },
       "AnalystActivity": {
         "description": "What an analyst is doing now (\"Ahora\"), derived from availability, sessions and load.\n\n``busy`` \"Atendiendo\" · ``available`` \"Disponible\" · ``paused`` \"En pausa\" ·\n``offline`` \"Desconectada\" (paused and not signed in).",
@@ -317,7 +670,7 @@
             "type": "string"
           },
           "entity": {
-            "description": "case | turn | staff | staff_session | mfa_challenge | customer.",
+            "description": "case | turn | staff | staff_session | mfa_challenge | customer | team.",
             "title": "Entity",
             "type": "string"
           },
@@ -424,6 +777,7 @@
           "lifecycle",
           "availability",
           "access",
+          "administration",
           "other"
         ],
         "title": "AuditFamily",
@@ -1010,6 +1364,98 @@
           "customerId"
         ],
         "title": "CreateCustomerSessionRequest",
+        "type": "object"
+      },
+      "CreateTeamRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "2–80 characters after trimming.",
+            "maxLength": 160,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CreateTeamRequest",
+        "type": "object"
+      },
+      "CreateUserRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "At most 254 after normalising.",
+            "maxLength": 318,
+            "title": "Email",
+            "type": "string"
+          },
+          "languages": {
+            "description": "Unique; at least one with analyst (else invalid_value).",
+            "items": {
+              "$ref": "#/components/schemas/Language"
+            },
+            "maxItems": 2,
+            "title": "Languages",
+            "type": "array"
+          },
+          "name": {
+            "description": "2–120 characters after trimming.",
+            "maxLength": 240,
+            "title": "Name",
+            "type": "string"
+          },
+          "roles": {
+            "description": "Unique.",
+            "items": {
+              "$ref": "#/components/schemas/StaffRole"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Roles",
+            "type": "array"
+          },
+          "teamId": {
+            "description": "An active team (TEAM-…).",
+            "maxLength": 64,
+            "title": "Teamid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "roles",
+          "languages",
+          "teamId"
+        ],
+        "title": "CreateUserRequest",
+        "type": "object"
+      },
+      "CreatedUser": {
+        "properties": {
+          "temporaryPassword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown once (xxxx-xxxx-xxxx); null only on an idempotent replay.",
+            "title": "Temporarypassword"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AdminUser"
+          }
+        },
+        "required": [
+          "user",
+          "temporaryPassword"
+        ],
+        "title": "CreatedUser",
         "type": "object"
       },
       "CustomerConversation": {
@@ -1842,6 +2288,62 @@
         "title": "MfaRequest",
         "type": "object"
       },
+      "OpenCaseCounts": {
+        "properties": {
+          "es": {
+            "title": "Es",
+            "type": "integer"
+          },
+          "pt": {
+            "title": "Pt",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "es",
+          "pt"
+        ],
+        "title": "OpenCaseCounts",
+        "type": "object"
+      },
+      "OpenCasesBlock": {
+        "description": "Extension ``blockReason`` of ``staff_has_open_cases``.",
+        "enum": [
+          "deactivate",
+          "remove_analyst",
+          "remove_language"
+        ],
+        "title": "OpenCasesBlock",
+        "type": "string"
+      },
+      "PasswordResetResult": {
+        "properties": {
+          "revokedSessions": {
+            "title": "Revokedsessions",
+            "type": "integer"
+          },
+          "temporaryPassword": {
+            "description": "Shown once (xxxx-xxxx-xxxx).",
+            "title": "Temporarypassword",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AdminUser"
+          }
+        },
+        "required": [
+          "user",
+          "temporaryPassword",
+          "revokedSessions"
+        ],
+        "title": "PasswordResetResult",
+        "type": "object"
+      },
       "PostAnalystTurnRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1956,6 +2458,15 @@
           "language_mismatch",
           "analyst_paused",
           "assignment_changed",
+          "version_conflict",
+          "email_taken",
+          "team_name_taken",
+          "self_change_forbidden",
+          "last_admin",
+          "staff_has_open_cases",
+          "team_not_empty",
+          "team_inactive",
+          "staff_inactive",
           "invalid_value",
           "policy_violation",
           "validation_error",
@@ -1973,6 +2484,18 @@
         "additionalProperties": true,
         "description": "RFC 7807 problem. ``code`` is the stable machine identifier clients branch on.\n\nThe optional members below are the documented extensions; a domain error may add other\nstructured details (e.g. ``openCaseId`` on ``conflict``), hence\n``additionalProperties``.",
         "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelfChangeAction"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "self_change_forbidden: which change on her own account."
+          },
           "analystId": {
             "anyOf": [
               {
@@ -1986,6 +2509,34 @@
             "description": "analyst_not_eligible, language_mismatch, analyst_paused: the target.",
             "title": "Analystid"
           },
+          "blockReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpenCasesBlock"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "staff_has_open_cases: which change the open cases block."
+          },
+          "caseIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "staff_has_open_cases: those cases (at most 20).",
+            "title": "Caseids"
+          },
           "caseLanguage": {
             "anyOf": [
               {
@@ -1996,10 +2547,24 @@
               }
             ],
             "default": null,
-            "description": "language_mismatch: the language of the case."
+            "description": "language_mismatch: the language of the case; staff_has_open_cases (remove_language): the language of the blocking cases."
           },
           "code": {
             "$ref": "#/components/schemas/ProblemCode"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "version_conflict: the record as its GET returns it now (AdminUser or AdminTeam).",
+            "title": "Current"
           },
           "currentAnalystId": {
             "anyOf": [
@@ -2025,6 +2590,19 @@
             ],
             "default": null,
             "description": "invalid_transition, case_closed: the case status now."
+          },
+          "currentVersion": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "version_conflict: the record's version now.",
+            "title": "Currentversion"
           },
           "detail": {
             "anyOf": [
@@ -2054,6 +2632,19 @@
             "description": "validation_error: one entry per invalid field.",
             "title": "Errors"
           },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "invalid_value, email_taken, team_name_taken: the request field at fault (name, email, roles, languages, teamId).",
+            "title": "Field"
+          },
           "instance": {
             "anyOf": [
               {
@@ -2065,6 +2656,32 @@
             ],
             "default": null,
             "title": "Instance"
+          },
+          "memberCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "team_not_empty: the team's active members.",
+            "title": "Membercount"
+          },
+          "openCases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "staff_has_open_cases: how many open cases block it.",
+            "title": "Opencases"
           },
           "policyRuleId": {
             "anyOf": [
@@ -2123,6 +2740,19 @@
           "status": {
             "title": "Status",
             "type": "integer"
+          },
+          "teamId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "team_inactive: the team.",
+            "title": "Teamid"
           },
           "title": {
             "title": "Title",
@@ -2244,12 +2874,73 @@
         "title": "QueueOverview",
         "type": "object"
       },
+      "RenameTeamRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "description": "The version the admin saw.",
+            "minimum": 1.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "name": {
+            "description": "2–80 characters after trimming.",
+            "maxLength": 160,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "name"
+        ],
+        "title": "RenameTeamRequest",
+        "type": "object"
+      },
       "ReplyBlockedReason": {
         "enum": [
           "not_assignee",
           "closed"
         ],
         "title": "ReplyBlockedReason",
+        "type": "string"
+      },
+      "RoleCounts": {
+        "properties": {
+          "admin": {
+            "title": "Admin",
+            "type": "integer"
+          },
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "analyst": {
+            "title": "Analyst",
+            "type": "integer"
+          },
+          "supervisor": {
+            "title": "Supervisor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "analyst",
+          "supervisor",
+          "admin"
+        ],
+        "title": "RoleCounts",
+        "type": "object"
+      },
+      "SelfChangeAction": {
+        "description": "Extension ``action`` of ``self_change_forbidden``.",
+        "enum": [
+          "remove_own_admin",
+          "deactivate_self",
+          "reset_own_password"
+        ],
+        "title": "SelfChangeAction",
         "type": "string"
       },
       "SessionOut": {
@@ -2352,6 +3043,10 @@
       },
       "StaffOut": {
         "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
           "email": {
             "title": "Email",
             "type": "string"
@@ -2361,6 +3056,7 @@
             "type": "string"
           },
           "languages": {
+            "description": "Sorted; may be empty without analyst.",
             "items": {
               "$ref": "#/components/schemas/Language"
             },
@@ -2372,6 +3068,7 @@
             "type": "string"
           },
           "roles": {
+            "description": "Canonical order: analyst, supervisor, admin.",
             "items": {
               "$ref": "#/components/schemas/StaffRole"
             },
@@ -2379,8 +3076,7 @@
             "type": "array"
           },
           "team": {
-            "title": "Team",
-            "type": "string"
+            "$ref": "#/components/schemas/TeamRef"
           }
         },
         "required": [
@@ -2389,7 +3085,8 @@
           "email",
           "roles",
           "languages",
-          "team"
+          "team",
+          "active"
         ],
         "title": "StaffOut",
         "type": "object"
@@ -2535,22 +3232,58 @@
       },
       "TeamRef": {
         "properties": {
-          "key": {
-            "description": "Stable slug of the team name (opaque to clients).",
-            "title": "Key",
+          "id": {
+            "description": "TEAM-… id of the team.",
+            "examples": [
+              "TEAM-01J…"
+            ],
+            "title": "Id",
             "type": "string"
           },
           "name": {
+            "description": "The team's current name.",
             "title": "Name",
             "type": "string"
           }
         },
         "required": [
-          "key",
+          "id",
           "name"
         ],
         "title": "TeamRef",
         "type": "object"
+      },
+      "TeamStatusCounts": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "integer"
+          },
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "inactive": {
+            "title": "Inactive",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "inactive",
+          "all"
+        ],
+        "title": "TeamStatusCounts",
+        "type": "object"
+      },
+      "TeamStatusFilter": {
+        "enum": [
+          "active",
+          "inactive",
+          "all"
+        ],
+        "title": "TeamStatusFilter",
+        "type": "string"
       },
       "TeamSummary": {
         "properties": {
@@ -2567,8 +3300,9 @@
             "title": "Atriskcases",
             "type": "integer"
           },
-          "key": {
-            "title": "Key",
+          "id": {
+            "description": "TEAM-… id (the `?equipo=` filter).",
+            "title": "Id",
             "type": "string"
           },
           "name": {
@@ -2582,7 +3316,7 @@
           }
         },
         "required": [
-          "key",
+          "id",
           "name",
           "analystCount",
           "activity",
@@ -2755,6 +3489,129 @@
         "title": "UpdateAvailabilityRequest",
         "type": "object"
       },
+      "UpdateUserRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 318,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "expectedVersion": {
+            "description": "The version the admin saw.",
+            "minimum": 1.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Language"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Languages"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StaffRole"
+                },
+                "maxItems": 3,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roles"
+          },
+          "teamId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Teamid"
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ],
+        "title": "UpdateUserRequest",
+        "type": "object"
+      },
+      "UserStatusCounts": {
+        "properties": {
+          "active": {
+            "description": "Every active account, locked ones included.",
+            "title": "Active",
+            "type": "integer"
+          },
+          "all": {
+            "title": "All",
+            "type": "integer"
+          },
+          "inactive": {
+            "title": "Inactive",
+            "type": "integer"
+          },
+          "locked": {
+            "title": "Locked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "locked",
+          "inactive",
+          "all"
+        ],
+        "title": "UserStatusCounts",
+        "type": "object"
+      },
+      "UserStatusFilter": {
+        "description": "``active`` = every active account, locked ones included; ``locked`` = only those.",
+        "enum": [
+          "active",
+          "locked",
+          "inactive",
+          "all"
+        ],
+        "title": "UserStatusFilter",
+        "type": "string"
+      },
       "ValidationIssue": {
         "properties": {
           "loc": {
@@ -2780,6 +3637,22 @@
         ],
         "title": "ValidationIssue",
         "type": "object"
+      },
+      "VersionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "description": "The version the admin saw.",
+            "minimum": 1.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ],
+        "title": "VersionRequest",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2802,6 +3675,1365 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/teams": {
+      "get": {
+        "operationId": "admin_list_teams",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TeamStatusFilter",
+              "default": "active"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTeamList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Teams with their member counts",
+        "tags": [
+          "administration"
+        ]
+      },
+      "post": {
+        "description": "Names are unique among all teams, ignoring case and accents (409 `team_name_taken`).",
+        "operationId": "admin_create_team",
+        "parameters": [
+          {
+            "description": "Optional. A retry with the same key and the same email (user) or name (team) answers 200 with the existing record and `Idempotent-Replayed: true`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 8,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry with the same key and the same email (user) or name (team) answers 200 with the existing record and `Idempotent-Replayed: true`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTeam"
+                }
+              }
+            },
+            "description": "Idempotent replay of an existing team"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTeam"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Create a team",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/teams/{teamId}": {
+      "get": {
+        "operationId": "admin_get_team",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "teamId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "TEAM-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Teamid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTeamDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "One team and its members (active first, then inactive)",
+        "tags": [
+          "administration"
+        ]
+      },
+      "patch": {
+        "operationId": "admin_rename_team",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "teamId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "TEAM-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Teamid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameTeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTeamChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Rename a team",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/teams/{teamId}/deactivate": {
+      "post": {
+        "description": "With active members: 409 `team_not_empty` with `memberCount`.",
+        "operationId": "admin_deactivate_team",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "teamId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "TEAM-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Teamid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTeamChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Deactivate a team without active members",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/teams/{teamId}/reactivate": {
+      "post": {
+        "operationId": "admin_reactivate_team",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "teamId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "TEAM-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Teamid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTeamChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Reactivate a team",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "description": "Filters combine with AND. `q` is a case- and accent-insensitive contains on name, email or id. `status=active` (default) includes locked accounts. `roleCounts` cover every filter except `role`; `statusCounts` every filter except `status`. At most 500 rows, by name.",
+        "operationId": "admin_list_users",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StaffRole"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/UserStatusFilter",
+              "default": "active"
+            }
+          },
+          {
+            "in": "query",
+            "name": "teamId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Teamid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Language"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The directory: people with their roles, languages, team and account status",
+        "tags": [
+          "administration"
+        ]
+      },
+      "post": {
+        "description": "Checks in this order: the caller is an active admin (403) · `Idempotency-Key` replay (200, `temporaryPassword: null`; another email → `idempotency_conflict`) · name, email, roles, analyst ⇒ at least one language (422 `invalid_value` with `field`) · the email is free (409 `email_taken`) · the team exists (422 `invalid_value`, `field: teamId`) and is active (422 `team_inactive`). The new person starts En pausa.",
+        "operationId": "admin_create_user",
+        "parameters": [
+          {
+            "description": "Optional. A retry with the same key and the same email (user) or name (team) answers 200 with the existing record and `Idempotent-Replayed: true`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 8,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry with the same key and the same email (user) or name (team) answers 200 with the existing record and `Idempotent-Replayed: true`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedUser"
+                }
+              }
+            },
+            "description": "Idempotent replay of an existing account"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedUser"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Create an account; the temporary password is returned once",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{staffId}": {
+      "get": {
+        "operationId": "admin_get_user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "STF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Staffid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUser"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "One person of the directory (any status)",
+        "tags": [
+          "administration"
+        ]
+      },
+      "patch": {
+        "description": "Absent fields are unchanged (send at least one). Checks in this order: 403 · 404 · `version_conflict` (with `current`) · `invalid_value` · `email_taken` · the team (`invalid_value` / `team_inactive`) · `self_change_forbidden` (`remove_own_admin`) · `staff_has_open_cases` (removing analyst, or a language of one of her open cases) · `last_admin`. Removing analyst pauses her; a role change applies on her next request and closes her sockets (4409).",
+        "operationId": "admin_update_user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "STF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Staffid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Edit a person: name, email, roles, languages, team",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{staffId}/deactivate": {
+      "post": {
+        "description": "Checks: 403 · 404 · `version_conflict` · `self_change_forbidden` (`deactivate_self`) · already inactive (200, `changed: false`) · `staff_has_open_cases` (`deactivate`) · `last_admin`. She is paused and every session ends now (her sockets close with 4401).",
+        "operationId": "admin_deactivate_user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "STF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Staffid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Deactivate an account: she can no longer sign in and her sessions end",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{staffId}/password-reset": {
+      "post": {
+        "description": "Not idempotent: each call issues a new password, returned once.",
+        "operationId": "admin_reset_password",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "STF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Staffid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Issue a new temporary password; her sessions end and a lock is cleared",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{staffId}/reactivate": {
+      "post": {
+        "operationId": "admin_reactivate_user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "STF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Staffid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Reactivate an account (she starts En pausa; her old password works again)",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{staffId}/unlock": {
+      "post": {
+        "description": "`changed: false` when the counter was already clear.",
+        "operationId": "admin_unlock_user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "STF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Staffid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Unlock a locked account (resets the failed-attempt counter)",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/audit/events": {
       "get": {
         "description": "Filters combine with AND. `actorKind`: staff (any staff role), customer or system. `family` and `changesOnly` come from the backend catalog. `from` is inclusive and `to` exclusive (on the event time). `q` is a case-insensitive contains on ids only (event, entity, case, actor). `nextCursor` is opaque: pass it as `cursor`.",
@@ -4513,6 +6745,18 @@
               "description": "Only staff holding this role",
               "title": "Role"
             }
+          },
+          {
+            "description": "Also deactivated accounts",
+            "in": "query",
+            "name": "includeInactive",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also deactivated accounts",
+              "title": "Includeinactive",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -4562,7 +6806,7 @@
             "SessionToken": []
           }
         ],
-        "summary": "List active staff, optionally by role",
+        "summary": "List staff (active only unless includeInactive), optionally by role",
         "tags": [
           "people"
         ]

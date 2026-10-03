@@ -13,6 +13,7 @@ from pydantic import Field
 
 from cc_platform.api.schemas.cases import AssignmentOut, CaseSummary
 from cc_platform.api.schemas.common import ApiModel, RequestModel
+from cc_platform.api.schemas.people import TeamRef
 from cc_platform.application.cases.manual_assignment import AssignmentResultView
 from cc_platform.application.cases.supervision import (
     ActivityCountsView,
@@ -24,7 +25,6 @@ from cc_platform.application.cases.supervision import (
     QueueOverviewView,
     TeamAnalystView,
     TeamOverviewView,
-    TeamRefView,
     TeamSummaryView,
 )
 from cc_platform.domain.people.availability import AvailabilityStatus
@@ -32,15 +32,6 @@ from cc_platform.domain.people.staff import Language, StaffRole
 
 
 # ----------------------------------------------------------------------------- team
-class TeamRef(ApiModel):
-    key: str = Field(description="Stable slug of the team name (opaque to clients).")
-    name: str
-
-    @classmethod
-    def from_view(cls, view: TeamRefView) -> TeamRef:
-        return cls(key=view.key, name=view.name)
-
-
 class ActivityCounts(ApiModel):
     busy: int
     available: int
@@ -55,7 +46,7 @@ class ActivityCounts(ApiModel):
 
 
 class TeamSummary(ApiModel):
-    key: str
+    id: str = Field(description="TEAM-… id (the `?equipo=` filter).")
     name: str
     analyst_count: int
     activity: ActivityCounts = Field(description="The team's analysts by activity.")
@@ -65,7 +56,7 @@ class TeamSummary(ApiModel):
     @classmethod
     def from_view(cls, view: TeamSummaryView) -> TeamSummary:
         return cls(
-            key=view.key,
+            id=view.id,
             name=view.name,
             analyst_count=view.analyst_count,
             activity=ActivityCounts.from_view(view.activity),

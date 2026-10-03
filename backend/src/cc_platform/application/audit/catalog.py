@@ -18,6 +18,7 @@ from enum import StrEnum
 
 from cc_platform.application.cases import copy
 from cc_platform.application.events import StoredEvent
+from cc_platform.application.people.admin import copy as admin_copy
 from cc_platform.domain.cases.values import LANGUAGE_RULE_ID, AssignmentReason, CloseReason
 from cc_platform.domain.people.staff import Language
 from cc_platform.domain.shared.json import JsonObject
@@ -29,6 +30,7 @@ class AuditFamily(StrEnum):
     LIFECYCLE = "lifecycle"
     AVAILABILITY = "availability"
     ACCESS = "access"
+    ADMINISTRATION = "administration"
     OTHER = "other"
 
 
@@ -52,7 +54,26 @@ FAMILY: Mapping[str, AuditFamily] = {
     "auth.account_locked": AuditFamily.ACCESS,
     "auth.session_started": AuditFamily.ACCESS,
     "auth.session_ended": AuditFamily.ACCESS,
+    # administration (slice 4 §7.1)
+    "staff.created": AuditFamily.ADMINISTRATION,
+    "staff.profile_updated": AuditFamily.ADMINISTRATION,
+    "staff.roles_changed": AuditFamily.ADMINISTRATION,
+    "staff.languages_changed": AuditFamily.ADMINISTRATION,
+    "staff.team_changed": AuditFamily.ADMINISTRATION,
+    "staff.deactivated": AuditFamily.ADMINISTRATION,
+    "staff.reactivated": AuditFamily.ADMINISTRATION,
+    "staff.account_unlocked": AuditFamily.ADMINISTRATION,
+    "staff.password_reset": AuditFamily.ADMINISTRATION,
+    "team.created": AuditFamily.ADMINISTRATION,
+    "team.renamed": AuditFamily.ADMINISTRATION,
+    "team.deactivated": AuditFamily.ADMINISTRATION,
+    "team.reactivated": AuditFamily.ADMINISTRATION,
 }
+
+#: Every administration type changes something (slice 4 §7.1).
+ADMINISTRATION_TYPES: frozenset[str] = frozenset(
+    t for t, f in FAMILY.items() if f is AuditFamily.ADMINISTRATION
+)
 
 #: Types that change something ("CAMBIO"; "Solo acciones que cambian algo").
 CHANGES_STATE: frozenset[str] = frozenset(
@@ -64,6 +85,7 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "case.closed",
         "staff.availability_changed",
         "auth.account_locked",
+        *ADMINISTRATION_TYPES,
     }
 )
 
@@ -204,7 +226,12 @@ def _turn_created(event: StoredEvent, _names: AuditNames) -> str:
     return "Respondió al cliente"
 
 
-def _availability_changed(event: StoredEvent, _names: AuditNames) -> str:
+def _availability_changed(event: StoredEvent, names: AuditNames) -> str:
+    reason = _text(event.payload, "reason")
+    if reason == "deactivated":
+        return f"Dejó en pausa a {names.name(event.entity_id)} al desactivar su cuenta"
+    if reason == "role_removed":
+        return f"Dejó en pausa a {names.name(event.entity_id)} al quitarle el rol de Analista"
     to_status = _text(event.payload, "to_status")
     return "Pasó a Disponible" if to_status == "available" else "Pasó a En pausa"
 
@@ -235,8 +262,105 @@ def _account_locked(event: StoredEvent, _names: AuditNames) -> str:
     return f"La cuenta quedó bloqueada por {minutes} min tras {attempts} intentos"
 
 
-def _session_ended(event: StoredEvent, _names: AuditNames) -> str:
-    return "Su sesión se revocó" if _text(event.payload, "reason") == "revoked" else "Cerró sesión"
+def _session_ended(event: StoredEvent, names: AuditNames) -> str:
+    if _text(event.payload, "reason") != "revoked":
+        return "Cerró sesión"
+    owner = _text(event.payload, "staff_id")
+    if owner is not None and owner != event.actor_id:
+        return f"Cerró la sesión de {names.name(owner)}"  # administration ended it
+    return "Su sesión se revocó"
+
+
+# ----------------------------------------------------------------------------- administration
+def _strings(payload: JsonObject, key: str) -> list[str]:
+    value = payload.get(key)
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+def _sessions_suffix(event: StoredEvent) -> str:
+    revoked = _int(event.payload, "revoked_sessions") or 0
+    if revoked == 1:
+        return " y cerró su sesión"
+    if revoked > 1:
+        return f" y cerró sus {revoked} sesiones"
+    return ""
+
+
+def _staff_created(event: StoredEvent, names: AuditNames) -> str:
+    person = names.people.get(event.entity_id) or _text(event.payload, "name") or "alguien"
+    parts = [f"Creó la cuenta de {person}"]
+    roles = admin_copy.join_es(admin_copy.role_labels(_strings(event.payload, "roles")))
+    if roles:
+        parts.append(roles)
+    team = _text(event.payload, "team_name")
+    if team:
+        parts.append(team)
+    return " · ".join(parts)
+
+
+def _profile_updated(event: StoredEvent, names: AuditNames) -> str:
+    fields = set(_strings(event.payload, "changed_fields"))
+    before = _text(event.payload, "from_name") or names.name(event.entity_id)
+    after = _text(event.payload, "to_name") or names.name(event.entity_id)
+    if fields == {"name"}:
+        return f"Cambió el nombre de {before} a {after}"
+    if fields == {"email"}:
+        return f"Cambió el correo de {after}"
+    return f"Cambió el nombre y el correo de {after} (antes {before})"
+
+
+def _roles_changed(event: StoredEvent, names: AuditNames) -> str:
+    person = names.name(event.entity_id)
+    added = admin_copy.join_es(admin_copy.role_labels(_strings(event.payload, "added")))
+    removed = admin_copy.join_es(admin_copy.role_labels(_strings(event.payload, "removed")))
+    if added and removed:
+        return f"Cambió los roles de {person}: le dio {added} y le quitó {removed}"
+    if removed:
+        return f"Le quitó a {person} el rol de {removed}"
+    return f"Le dio a {person} el rol de {added}"
+
+
+def _languages_changed(event: StoredEvent, names: AuditNames) -> str:
+    person = names.name(event.entity_id)
+    spoken = admin_copy.join_es(admin_copy.language_names(_strings(event.payload, "to_languages")))
+    if not spoken:
+        return f"Cambió los idiomas de {person}: ya no tiene idiomas"
+    return f"Cambió los idiomas de {person}: ahora habla {spoken}"
+
+
+def _team_changed(event: StoredEvent, names: AuditNames) -> str:
+    before = _text(event.payload, "from_team_name") or "otro equipo"
+    after = _text(event.payload, "to_team_name") or "otro equipo"
+    return f"Pasó a {names.name(event.entity_id)} de {before} a {after}"
+
+
+def _staff_deactivated(event: StoredEvent, names: AuditNames) -> str:
+    return f"Desactivó la cuenta de {names.name(event.entity_id)}{_sessions_suffix(event)}"
+
+
+def _staff_reactivated(event: StoredEvent, names: AuditNames) -> str:
+    return f"Reactivó la cuenta de {names.name(event.entity_id)}"
+
+
+def _account_unlocked(event: StoredEvent, names: AuditNames) -> str:
+    person = names.name(event.entity_id)
+    if event.payload.get("was_locked") is True:
+        return f"Desbloqueó la cuenta de {person}"
+    return f"Reinició los intentos de ingreso de {person}"
+
+
+def _password_reset(event: StoredEvent, names: AuditNames) -> str:
+    return f"Restableció la contraseña de {names.name(event.entity_id)}{_sessions_suffix(event)}"
+
+
+def _team_name(event: StoredEvent) -> str:
+    return _text(event.payload, "name") or event.entity_id
+
+
+def _team_renamed(event: StoredEvent, _names: AuditNames) -> str:
+    before = _text(event.payload, "from_name") or event.entity_id
+    after = _text(event.payload, "to_name") or event.entity_id
+    return f"Le cambió el nombre al equipo {before}: ahora es {after}"
 
 
 def _fixed(text: str) -> Callable[[StoredEvent, AuditNames], str]:
@@ -262,6 +386,19 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "auth.account_locked": _account_locked,
     "auth.session_started": _fixed("Inició sesión"),
     "auth.session_ended": _session_ended,
+    "staff.created": _staff_created,
+    "staff.profile_updated": _profile_updated,
+    "staff.roles_changed": _roles_changed,
+    "staff.languages_changed": _languages_changed,
+    "staff.team_changed": _team_changed,
+    "staff.deactivated": _staff_deactivated,
+    "staff.reactivated": _staff_reactivated,
+    "staff.account_unlocked": _account_unlocked,
+    "staff.password_reset": _password_reset,
+    "team.created": lambda event, _names: f"Creó el equipo {_team_name(event)}",
+    "team.renamed": _team_renamed,
+    "team.deactivated": lambda event, _names: f"Desactivó el equipo {_team_name(event)}",
+    "team.reactivated": lambda event, _names: f"Reactivó el equipo {_team_name(event)}",
 }
 
 

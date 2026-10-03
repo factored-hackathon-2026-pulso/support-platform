@@ -137,6 +137,46 @@ describe('RealtimeClient', () => {
     expect(sockets.sockets).toHaveLength(1)
   })
 
+  it('reconnects at once after 4409 (roles changed), tells the listeners and replays the topics', () => {
+    const { client, sockets, statuses, onAuthError } = setup()
+    const onAccessChanged = vi.fn<() => void>()
+    const off = client.onAccessChanged(onAccessChanged)
+    client.connect()
+    sockets.last()?.open()
+    client.subscribe('staff:STF-1')
+    statuses.length = 0
+
+    sockets.last()?.serverClose(4409)
+    // No backoff delay: the new socket exists right away.
+    expect(sockets.sockets).toHaveLength(2)
+    expect(onAccessChanged).toHaveBeenCalledTimes(1)
+    expect(onAuthError).not.toHaveBeenCalled()
+    expect(client.getStatus()).toBe('reconnecting')
+    sockets.last()?.open()
+    expect(statuses).toEqual(['reconnecting', 'open'])
+    expect(sockets.last()?.messages()).toEqual([{ action: 'subscribe', topic: 'staff:STF-1' }])
+
+    off()
+    sockets.last()?.serverClose(4409)
+    expect(onAccessChanged).toHaveBeenCalledTimes(1)
+    expect(sockets.sockets).toHaveLength(3)
+  })
+
+  it('still ends the session on 4401 after an access change', () => {
+    const { client, sockets, onAuthError } = setup()
+    const onAccessChanged = vi.fn<() => void>()
+    client.onAccessChanged(onAccessChanged)
+    client.connect()
+    sockets.last()?.open()
+    sockets.last()?.serverClose(4409)
+    sockets.last()?.open()
+    sockets.last()?.serverClose(4401)
+    expect(onAuthError).toHaveBeenCalledTimes(1)
+    expect(client.getStatus()).toBe('closed')
+    vi.advanceTimersByTime(60_000)
+    expect(sockets.sockets).toHaveLength(2)
+  })
+
   it('stays idle on reconnect when the token is gone', () => {
     const { client, sockets, setToken } = setup()
     client.connect()

@@ -1,5 +1,6 @@
 import type { QueueOverview, TeamAnalyst, TeamOverview, TeamSummary } from '@/features/supervision'
 import { NOW, makeCaseSummary, minutesFrom, seededInbox } from './case-fixtures'
+import { TEAM_ANDES, TEAM_PACIFICO } from './fixtures'
 
 /**
  * Invented team and queues for tests ("Datos de ejemplo"): people, ids and texts
@@ -13,8 +14,8 @@ export const SEBASTIAN_ID = 'STF-ANA0000004'
 export const TOMAS_ID = 'STF-ANA0000005'
 export const FELIPE_ID = 'STF-SUP0000009'
 
-export const ANDES = { key: 'disputas-equipo-andes', name: 'Disputas · Equipo Andes' }
-export const PACIFICO = { key: 'disputas-equipo-pacifico', name: 'Disputas · Equipo Pacífico' }
+export const ANDES = TEAM_ANDES
+export const PACIFICO = TEAM_PACIFICO
 
 /** Rosa's queued case (111): Spanish, SLA at risk (2 min left). */
 export const queuedRosa = makeCaseSummary({

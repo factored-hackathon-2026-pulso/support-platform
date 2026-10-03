@@ -22,6 +22,13 @@ class AvailabilityStatus(StrEnum):
     PAUSED = "paused"
 
 
+class AvailabilityChangeReason(StrEnum):
+    """Why administration paused an analyst (``staff.availability_changed.reason``)."""
+
+    DEACTIVATED = "deactivated"
+    ROLE_REMOVED = "role_removed"
+
+
 @dataclass(eq=False)
 class AnalystAvailability(AggregateRoot):
     staff_id: str
@@ -39,8 +46,18 @@ class AnalystAvailability(AggregateRoot):
     def is_available(self) -> bool:
         return self.status is AvailabilityStatus.AVAILABLE
 
-    def change(self, status: AvailabilityStatus, *, now: datetime, actor: ActorRef) -> bool:
-        """Switch status; returns False (and records nothing) when it is already ``status``."""
+    def change(
+        self,
+        status: AvailabilityStatus,
+        *,
+        now: datetime,
+        actor: ActorRef,
+        reason: AvailabilityChangeReason | None = None,
+    ) -> bool:
+        """Switch status; returns False (and records nothing) when it is already ``status``.
+
+        ``reason`` says why administration changed it on her behalf (slice 4 §3.2/§3.3);
+        ``None`` when she changed it herself."""
         if status is self.status:
             return False
         previous = self.status
@@ -53,6 +70,7 @@ class AnalystAvailability(AggregateRoot):
                 entity_id=self.staff_id,
                 from_status=previous.value,
                 to_status=status.value,
+                reason=reason.value if reason is not None else None,
             )
         )
         return True

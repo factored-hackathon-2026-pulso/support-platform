@@ -6,6 +6,7 @@ import { queryClient as defaultQueryClient } from './query-client'
 import { realtimeClient as defaultRealtimeClient } from './realtime'
 import { createAppEnvelopeHandlers } from './realtime-handlers'
 import { SessionProvider, useSession, useSessionToken } from './session'
+import { SessionLiveSync } from './session-live'
 
 export interface AppProvidersProps {
   children: ReactNode
@@ -53,7 +54,10 @@ export function AppProviders({
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
         <SessionRealtime client={realtimeClient} handlers={handlers}>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <SessionLiveSync />
+            {children}
+          </ToastProvider>
         </SessionRealtime>
       </SessionProvider>
     </QueryClientProvider>

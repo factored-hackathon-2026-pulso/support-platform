@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 from cc_platform.api.problems import ProblemCode
+from cc_platform.application.people.admin.dto import OpenCasesBlock, SelfChangeAction
 from cc_platform.domain.cases.values import CaseStatus
 from cc_platform.domain.people.staff import Language, StaffRole
 
@@ -80,12 +81,48 @@ class ProblemDetails(ApiModel):
         default=None, description='language_mismatch: the rule behind it ("H1", rule 3).'
     )
     case_language: Language | None = Field(
-        default=None, description="language_mismatch: the language of the case."
+        default=None,
+        description=(
+            "language_mismatch: the language of the case; staff_has_open_cases "
+            "(remove_language): the language of the blocking cases."
+        ),
     )
     current_analyst_id: str | None = Field(
         default=None,
         description="assignment_changed: who holds the case now (null = it is queued).",
     )
+    field: str | None = Field(
+        default=None,
+        description=(
+            "invalid_value, email_taken, team_name_taken: the request field at fault "
+            "(name, email, roles, languages, teamId)."
+        ),
+    )
+    current_version: int | None = Field(
+        default=None, description="version_conflict: the record's version now."
+    )
+    current: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "version_conflict: the record as its GET returns it now (AdminUser or AdminTeam)."
+        ),
+    )
+    action: SelfChangeAction | None = Field(
+        default=None, description="self_change_forbidden: which change on her own account."
+    )
+    block_reason: OpenCasesBlock | None = Field(
+        default=None, description="staff_has_open_cases: which change the open cases block."
+    )
+    open_cases: int | None = Field(
+        default=None, description="staff_has_open_cases: how many open cases block it."
+    )
+    case_ids: list[str] | None = Field(
+        default=None, description="staff_has_open_cases: those cases (at most 20)."
+    )
+    member_count: int | None = Field(
+        default=None, description="team_not_empty: the team's active members."
+    )
+    team_id: str | None = Field(default=None, description="team_inactive: the team.")
 
 
 def problem_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:

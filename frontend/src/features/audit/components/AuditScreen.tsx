@@ -21,6 +21,12 @@ const DAY_TICK_MS = 60_000
 export interface AuditScreenProps {
   state: AuditUrlState
   onStateChange(patch: Partial<AuditUrlState>, options?: AuditStateChangeOptions): void
+  /**
+   * The viewer may open the supervisor case view (default true). The admin entry
+   * point passes `hasRole('supervisor')`: without it "Ver la conversación" is
+   * hidden (slice 4 §7.2).
+   */
+  canOpenCases?: boolean
 }
 
 /**
@@ -31,7 +37,7 @@ export interface AuditScreenProps {
  * notice of the supervision screens is mounted by the route (features/audit
  * does not import features/supervision).
  */
-export function AuditScreen({ state, onStateChange }: AuditScreenProps) {
+export function AuditScreen({ state, onStateChange, canOpenCases = true }: AuditScreenProps) {
   const now = useNow(DAY_TICK_MS)
   const query = useMemo(() => auditFiltersOf(state), [state])
   const blocked = dateRangeError(state) !== null
@@ -90,6 +96,7 @@ export function AuditScreen({ state, onStateChange }: AuditScreenProps) {
           error={loaded ? null : byId.error}
           onRetry={() => void byId.refetch()}
           onFilterByCase={(caseId) => replace({ caseId })}
+          canOpenCases={canOpenCases}
         />
       </PageBody>
     </Page>

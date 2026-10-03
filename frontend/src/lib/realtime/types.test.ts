@@ -45,4 +45,9 @@ describe('topics', () => {
     expect(topics.supervisionQueues()).toBe('supervision:queues')
     expect(topics.supervisionTeam()).toBe('supervision:team')
   })
+
+  it('names the administration and personal topics', () => {
+    expect(topics.adminDirectory()).toBe('admin:directory')
+    expect(topics.staff('STF-1')).toBe('staff:STF-1')
+  })
 })

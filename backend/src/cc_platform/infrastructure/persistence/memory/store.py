@@ -10,16 +10,20 @@ from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.customers.customer import Customer
+from cc_platform.domain.people.admin_roster import AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff
+from cc_platform.domain.people.team import Team
 
 
 @dataclass
 class InMemoryStore:
     staff: dict[str, Staff] = field(default_factory=dict)
+    teams: dict[str, Team] = field(default_factory=dict)
+    admin_roster: dict[str, AdminRoster] = field(default_factory=dict)
     login_accounts: dict[str, LoginAccount] = field(default_factory=dict)
     mfa_challenges: dict[str, MfaChallenge] = field(default_factory=dict)
     sessions: dict[str, StaffSession] = field(default_factory=dict)

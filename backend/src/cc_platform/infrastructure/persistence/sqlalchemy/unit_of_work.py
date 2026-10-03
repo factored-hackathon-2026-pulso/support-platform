@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from types import TracebackType
+
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.ids import IdGenerator
+from cc_platform.domain.shared.errors import ConcurrentUpdateError
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import (
     SqlAssignmentRepository,
     SqlCaseRepository,
@@ -18,17 +22,31 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.event_log im
     SqlEventLogRepository,
 )
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.people import (
+    SqlAdminRosterRepository,
     SqlAnalystAvailabilityRepository,
     SqlLoginAccountRepository,
     SqlMfaChallengeRepository,
     SqlStaffRepository,
     SqlStaffSessionRepository,
+    SqlTeamRepository,
 )
 from cc_platform.infrastructure.persistence.unit_of_work_base import BaseUnitOfWork
+
+#: SQLite's busy answers: another connection holds the write lock past the busy timeout.
+_LOCK_CONTENTION = ("database is locked", "database table is locked")
+
+
+def is_lock_contention(error: BaseException) -> bool:
+    """Whether a driver error means "another writer holds the lock" (nothing was written)."""
+    return isinstance(error, OperationalError) and any(
+        marker in str(error.orig) for marker in _LOCK_CONTENTION
+    )
 
 
 class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     staff: SqlStaffRepository
+    teams: SqlTeamRepository
+    admin_roster: SqlAdminRosterRepository
     login_accounts: SqlLoginAccountRepository
     mfa_challenges: SqlMfaChallengeRepository
     sessions: SqlStaffSessionRepository
@@ -56,6 +74,8 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         session = self._session_factory()
         self._session = session
         self.staff = SqlStaffRepository(session, self.track)
+        self.teams = SqlTeamRepository(session, self.track)
+        self.admin_roster = SqlAdminRosterRepository(session, self.track)
         self.login_accounts = SqlLoginAccountRepository(session, self.track)
         self.mfa_challenges = SqlMfaChallengeRepository(session, self.track)
         self.sessions = SqlStaffSessionRepository(session, self.track)
@@ -66,6 +86,18 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.assignments = SqlAssignmentRepository(session)
         self.case_slots = SqlCustomerCaseSlotRepository(session, self.track)
         self.event_log = SqlEventLogRepository(session)
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        """Lock contention is a concurrent update: the transaction is rolled back, so a
+        command in ``retry_on_conflict`` re-runs on fresh state instead of answering 500."""
+        await super().__aexit__(exc_type, exc, tb)
+        if exc is not None and is_lock_contention(exc):
+            raise ConcurrentUpdateError() from exc
 
     async def _commit(self) -> None:
         await self._require_session().commit()

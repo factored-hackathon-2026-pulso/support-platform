@@ -12,6 +12,11 @@
  * - Close code 4401 (token rejected, session ended or expired), 4403 and 1008
  *   stop reconnecting and call `onAuthError` (the session then ends and the user
  *   goes to /login). 1013 ("try again later") and network drops reconnect.
+ * - Close code 4409 (`access_changed`: an admin changed this person's roles) is
+ *   not an auth error: the token is still valid, so the client reconnects at
+ *   once (no backoff) and tells the `onAccessChanged` listeners, which reload
+ *   the session (/auth/me); the replayed subscriptions are re-checked with the
+ *   new roles by the server.
  * - Framework-free: React glue lives in `react.tsx`.
  */
 import { computeBackoff, type BackoffOptions } from './backoff'
@@ -27,6 +32,9 @@ import {
 
 /** Close codes that mean "do not retry with this token". */
 export const AUTH_CLOSE_CODES: ReadonlySet<number> = new Set([1008, 4401, 4403])
+
+/** The person's roles changed (slice-4-administration.md §9.3): reconnect now, reload the session. */
+export const ACCESS_CHANGED_CLOSE_CODE = 4409
 
 /** Minimal WebSocket surface the client needs (the browser one, or a fake in tests). */
 export interface WebSocketLike {
@@ -60,6 +68,7 @@ export interface RealtimeClientOptions {
 
 type EnvelopeListener = (envelope: RealtimeEnvelope) => void
 type StatusListener = (status: ConnectionStatus) => void
+type AccessChangedListener = () => void
 
 export class RealtimeClient {
   private readonly options: RealtimeClientOptions
@@ -72,6 +81,7 @@ export class RealtimeClient {
   private readonly topicRefs = new Map<RealtimeTopic, number>()
   private readonly envelopeListeners = new Set<EnvelopeListener>()
   private readonly statusListeners = new Set<StatusListener>()
+  private readonly accessChangedListeners = new Set<AccessChangedListener>()
   private readonly seen: RecentKeys
 
   constructor(options: RealtimeClientOptions) {
@@ -142,9 +152,15 @@ export class RealtimeClient {
     return () => this.statusListeners.delete(listener)
   }
 
+  /** Called when the server closes with 4409 (the person's roles changed). */
+  onAccessChanged(listener: AccessChangedListener): () => void {
+    this.accessChangedListeners.add(listener)
+    return () => this.accessChangedListeners.delete(listener)
+  }
+
   // ── internals ────────────────────────────────────────────────────────────
 
-  private open(): void {
+  private open(reconnecting = this.attempt > 0): void {
     const token = this.options.getToken()
     if (!token) {
       this.setStatus('idle')
@@ -152,7 +168,7 @@ export class RealtimeClient {
     }
     const create =
       this.options.createSocket ?? ((url: string) => new WebSocket(url) as WebSocketLike)
-    this.setStatus(this.attempt === 0 ? 'connecting' : 'reconnecting')
+    this.setStatus(reconnecting ? 'reconnecting' : 'connecting')
 
     let socket: WebSocketLike
     try {
@@ -189,6 +205,14 @@ export class RealtimeClient {
         this.stopped = true
         this.setStatus('closed')
         this.options.onAuthError?.()
+        return
+      }
+      if (event.code === ACCESS_CHANGED_CLOSE_CODE) {
+        // Same token, new roles: reconnect right away (a `reconnecting` → `open`
+        // edge, so screens refetch what they missed) and reload the session.
+        this.attempt = 0
+        this.open(true)
+        for (const listener of this.accessChangedListeners) listener()
         return
       }
       this.scheduleReconnect()

@@ -96,7 +96,14 @@ def test_access_policy() -> None:
     assert not policy.can_subscribe(analyst, other_inbox)
     assert policy.can_subscribe(supervisor, other_inbox)
     assert not policy.can_subscribe(supervisor, Topic.customer(CUSTOMER_ID))
-    assert [kind.value for kind in TopicKind] == ["case", "inbox", "customer", "supervision"]
+    assert [kind.value for kind in TopicKind] == [
+        "case",
+        "inbox",
+        "customer",
+        "supervision",
+        "admin",
+        "staff",
+    ]
     for topic in (Topic.supervision_queues(), Topic.supervision_team()):
         assert policy.can_subscribe(supervisor, topic)
         assert not policy.can_subscribe(analyst, topic)

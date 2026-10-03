@@ -21,7 +21,13 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 
 from cc_platform.domain.people.errors import AccountLockedError
-from cc_platform.domain.people.events import AccountLocked, LoginFailed, PasswordAccepted
+from cc_platform.domain.people.events import (
+    AccountLocked,
+    LoginFailed,
+    PasswordAccepted,
+    StaffAccountUnlocked,
+    StaffPasswordReset,
+)
 from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.aggregate import AggregateRoot
 from cc_platform.domain.shared.errors import InvalidValueError
@@ -185,6 +191,45 @@ class LoginAccount(AggregateRoot):
         self.ensure_can_attempt(now)
         self._apply(FailedAttemptCounter())
         self.last_login_at = now
+
+    def unlock(self, *, now: datetime, actor: ActorRef) -> bool:
+        """Administration clears the failure counter (and a lock, if any).
+
+        ``False`` (nothing recorded) when the counter is already clear: no failures, no
+        lock, or a lock that has already expired (it would reset on its own).
+        """
+        current = self.attempts.current(now)
+        if current.is_clear:
+            return False
+        was_locked = current.is_locked(now)
+        self._apply(FailedAttemptCounter())
+        self._record(
+            StaffAccountUnlocked(
+                occurred_at=now,
+                actor=actor,
+                entity_id=self.staff_id,
+                was_locked=was_locked,
+                failed_attempts=current.failed_attempts,
+            )
+        )
+        return True
+
+    def reset_password(
+        self, new_hash: str, *, now: datetime, actor: ActorRef, revoked_sessions: int
+    ) -> None:
+        """A new (temporary) password: replaces the hash and clears the counter and lock."""
+        cleared_lock = self.is_locked(now)
+        self.change_password_hash(new_hash)
+        self._apply(FailedAttemptCounter())
+        self._record(
+            StaffPasswordReset(
+                occurred_at=now,
+                actor=actor,
+                entity_id=self.staff_id,
+                revoked_sessions=revoked_sessions,
+                cleared_lock=cleared_lock,
+            )
+        )
 
     def change_password_hash(self, new_hash: str) -> None:
         if not new_hash:

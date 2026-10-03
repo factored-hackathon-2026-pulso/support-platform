@@ -1,10 +1,13 @@
 import { act, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Rail } from '@/components/layout/Rail'
+import type * as AdminApi from '@/features/admin/api'
+import { fetchAdminUsers } from '@/features/admin/api'
 import type * as SupervisionApi from '@/features/supervision/api'
 import { fetchQueueOverview } from '@/features/supervision/api'
 import { NOW } from '@/test/case-fixtures'
-import { supervisorStaff } from '@/test/fixtures'
+import { makeUserList } from '@/test/admin-fixtures'
+import { adminStaff, supervisorStaff } from '@/test/fixtures'
 import { renderWithProviders } from '@/test/render'
 import { makeQueueOverview } from '@/test/supervision-fixtures'
 import { useRailIndicators } from './rail-indicators'
@@ -19,8 +22,14 @@ function RailFor({ roleId }: { roleId: RoleId }) {
   return <Rail role={ROLES[roleId]} indicators={useRailIndicators(roleId)} />
 }
 
+vi.mock('@/features/admin/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof AdminApi>()
+  return { ...actual, fetchAdminUsers: vi.fn<typeof actual.fetchAdminUsers>() }
+})
+
 beforeEach(() => {
   vi.mocked(fetchQueueOverview).mockResolvedValue(makeQueueOverview())
+  vi.mocked(fetchAdminUsers).mockResolvedValue(makeUserList())
 })
 
 describe('useRailIndicators', () => {
@@ -82,5 +91,51 @@ describe('useRailIndicators', () => {
     })
     await vi.waitFor(() => expect(fetchQueueOverview).toHaveBeenCalled())
     expect(screen.getByRole('link', { name: 'Equipo y colas' })).toBeInTheDocument()
+  })
+
+  it('shows the locked accounts on "Usuarios y roles" in the Administración role, live', async () => {
+    const { sockets } = renderWithProviders(<RailFor roleId="admin" />, {
+      staff: adminStaff,
+      route: '/administracion/equipos',
+    })
+    expect(
+      await screen.findByRole('link', { name: 'Usuarios y roles, 1 pendiente' }),
+    ).toBeInTheDocument()
+    expect(fetchAdminUsers).toHaveBeenCalledWith({}, expect.anything())
+    expect(fetchQueueOverview).not.toHaveBeenCalled()
+
+    act(() => sockets.last()?.open())
+    expect(sockets.last()?.messages()).toContainEqual({
+      action: 'subscribe',
+      topic: 'admin:directory',
+    })
+    // Someone unlocked Mariana: the directory refetches and the badge goes.
+    vi.mocked(fetchAdminUsers).mockResolvedValue(
+      makeUserList(undefined, { statusCounts: { active: 12, locked: 0, inactive: 1, all: 13 } }),
+    )
+    act(() =>
+      sockets.last()?.receive({
+        type: 'directory.updated',
+        id: 'EVT-DIR-9',
+        occurredAt: NOW.toISOString(),
+        data: {
+          entity: 'staff',
+          entityId: 'STF-1',
+          caseId: null,
+          actor: { role: 'admin', id: 'STF-2' },
+          payload: { staffIds: ['STF-1'], teamIds: [] },
+        },
+      }),
+    )
+    expect(await screen.findByRole('link', { name: 'Usuarios y roles' })).toBeInTheDocument()
+  })
+
+  it('does not ask for the directory outside the Administración role', async () => {
+    renderWithProviders(<RailFor roleId="supervisor" />, {
+      staff: supervisorStaff,
+      route: '/supervision/equipo',
+    })
+    await screen.findByRole('link', { name: 'Equipo y colas, 3 pendientes' })
+    expect(fetchAdminUsers).not.toHaveBeenCalled()
   })
 })

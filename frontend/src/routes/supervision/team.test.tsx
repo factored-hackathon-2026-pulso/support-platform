@@ -10,6 +10,7 @@ import { renderRoute } from '@/test/render'
 import {
   DANIELA_ID,
   JULIAN_ID,
+  PACIFICO,
   SEBASTIAN_ID,
   emptyQueues,
   julianCamila,
@@ -129,7 +130,7 @@ describe('Equipo y colas', () => {
     expect(screen.getByText('Disputas · Equipo Pacífico · 3 analistas')).toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: 'En pausa 0' }))
     expect(screen.getByText('Nadie en este estado ahora.')).toBeInTheDocument()
-    expect(router.state.location.search).toBe('?equipo=disputas-equipo-pacifico&estado=en-pausa')
+    expect(router.state.location.search).toBe(`?equipo=${PACIFICO.id}&estado=en-pausa`)
   })
 
   it('opens the analyst sheet with her open cases', async () => {

@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from cc_platform.domain.people.staff import StaffRole
-from cc_platform.infrastructure.seed.people import DEMO_STAFF, seed_demo_staff
-from tests.support import PlainHasher, build_auth_kit
+from cc_platform.infrastructure.seed.people import (
+    DEMO_STAFF,
+    seed_demo_staff,
+    seed_staff_id,
+    seed_team_id,
+)
+from tests.support import PlainHasher, build_auth_kit, memory_container
 
 A, S, AD = StaffRole.ANALYST, StaffRole.SUPERVISOR, StaffRole.ADMIN
 
@@ -23,8 +30,11 @@ def test_seed_staff_roles_follow_the_contract() -> None:
         "Carolina": {AD},
         "Renata": {S},
         "Felipe": {A, S},  # team lead: Casos ↔ Equipo y colas
+        "Mariana": {S},  # slice 4: locked by the admin story
+        "Andrés": {A},  # slice 4: inactive
     }
-    assert {seed.team for seed in DEMO_STAFF} == {
+    assert [seed.name for seed in DEMO_STAFF if not seed.active] == ["Andrés Villamil"]
+    assert {seed.team.name for seed in DEMO_STAFF} == {
         "Disputas · Equipo Andes",
         "Disputas · Equipo Pacífico",
         "Administración de la plataforma",
@@ -40,3 +50,50 @@ async def test_seeding_is_idempotent() -> None:
     kit = build_auth_kit()
     assert await seed_demo_staff(kit.uow, PlainHasher()) == len(DEMO_STAFF)
     assert await seed_demo_staff(kit.uow, PlainHasher()) == 0
+
+
+async def test_admin_story_and_directory_of_a_fresh_start() -> None:
+    """Slice 4 §11: teams, Mariana locked, Andrés inactive, the roster and four admin events;
+    the slice 3 numbers do not move (see ``test_supervision_read_models``)."""
+    container = await memory_container()
+    now = container.clock.now()
+    async with container.uow() as uow:
+        teams = {team.name: team for team in await uow.teams.list()}
+        roster = await uow.admin_roster.get()
+        mariana = await uow.login_accounts.get(seed_staff_id(12))
+        andres = await uow.staff.get(seed_staff_id(13))
+        andres_availability = await uow.availability.get(seed_staff_id(13))
+        events = (await uow.event_log.page(limit=1000)).items
+    assert {name: (team.id, team.active) for name, team in teams.items()} == {
+        "Disputas · Equipo Andes": (seed_team_id(1), True),
+        "Disputas · Equipo Pacífico": (seed_team_id(2), True),
+        "Administración de la plataforma": (seed_team_id(3), True),
+        "Disputas · Equipo Caribe": (seed_team_id(4), False),
+    }
+    assert teams["Disputas · Equipo Andes"].created_at == now - timedelta(days=30)
+    assert teams["Disputas · Equipo Caribe"].created_at == now - timedelta(days=3)
+    assert roster is not None
+    assert roster.admin_ids == {seed_staff_id(7), seed_staff_id(9)}
+    assert mariana is not None
+    assert (mariana.failed_attempts, mariana.locked_until) == (5, now + timedelta(minutes=13))
+    assert andres is not None
+    assert (andres.active, andres_availability) == (False, None)
+    admin = [
+        (e.event_type, e.event_time, e.actor_id)
+        for e in events
+        if e.event_type.startswith(("staff.", "team.")) and e.actor_role == "admin"
+    ]
+    assert admin == [
+        ("staff.roles_changed", now - timedelta(days=5), seed_staff_id(7)),
+        ("team.created", now - timedelta(days=3), seed_staff_id(7)),
+        ("staff.deactivated", now - timedelta(days=2), seed_staff_id(9)),
+        ("team.deactivated", now - timedelta(days=1), seed_staff_id(7)),
+    ]
+    times = [e.event_time for e in events]
+    assert times == sorted(times)  # the story is logged in story-time order
+    locks = [e for e in events if e.entity_id == seed_staff_id(12)]
+    assert [e.event_type for e in locks] == ["auth.login_failed"] * 5 + ["auth.account_locked"]
+    # Running the seed again changes nothing.
+    await container.seed_demo_data()
+    async with container.uow() as uow:
+        assert len((await uow.event_log.page(limit=1000)).items) == len(events)

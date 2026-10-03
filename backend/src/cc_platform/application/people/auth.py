@@ -38,10 +38,10 @@ from cc_platform.application.people.dto import (
     LoginCommand,
     LoginResult,
     SessionGrant,
-    StaffView,
     VerifyMfaCommand,
 )
 from cc_platform.application.people.ports import UnknownLoginAttempts
+from cc_platform.application.people.queries import staff_view
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.security import (
@@ -239,6 +239,7 @@ class VerifyMfa:
             await uow.mfa_challenges.save(challenge)
             await uow.login_accounts.save(account)
             await uow.sessions.add(session)
+            view = await staff_view(uow, staff)
             await uow.commit()
 
         token = self.tokens.issue(
@@ -254,7 +255,7 @@ class VerifyMfa:
             token=token,
             session_id=session.id,
             expires_at=session.expires_at,
-            staff=StaffView.from_staff(staff),
+            staff=view,
         )
 
 

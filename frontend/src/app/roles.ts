@@ -1,5 +1,6 @@
-import { MessageSquare, Shield, UserPlus, Users, type LucideIcon } from 'lucide-react'
+import { MessageSquare, Shield, UserPlus, Users, UsersRound, type LucideIcon } from 'lucide-react'
 import type { AvatarTone } from '@/components/ui'
+import { joinEs } from '@/lib/format'
 
 /** Same values as the API `StaffRole` enum. */
 export type RoleId = 'analyst' | 'supervisor' | 'admin'
@@ -10,7 +11,9 @@ export type RoleId = 'analyst' | 'supervisor' | 'admin'
  */
 export type RailIndicatorKey =
   /** Cases waiting in a language queue (fed by `useQueuedCasesCount`, supervision). */
-  'queuedCases'
+  | 'queuedCases'
+  /** Accounts locked now (fed by `useLockedAccountsCount`, admin). */
+  | 'lockedAccounts'
 
 /** Value of one indicator: a count (orange badge) and/or a dot (something new). */
 export interface RailIndicator {
@@ -83,13 +86,42 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
     basePath: '/administracion',
     home: '/administracion/usuarios',
     avatarTone: 'success',
-    nav: [{ to: '/administracion/usuarios', label: 'Usuarios y roles', icon: UserPlus }],
+    nav: [
+      {
+        to: '/administracion/usuarios',
+        label: 'Usuarios y roles',
+        icon: UserPlus,
+        indicator: 'lockedAccounts',
+      },
+      { to: '/administracion/equipos', label: 'Equipos', icon: UsersRound },
+      { to: '/administracion/auditoria', label: 'Auditoría', icon: Shield },
+    ],
   },
 }
 
 /** Supervisor read-only view of one case (slice 3 §8.1). */
 export function supervisionCasePath(caseId: string): string {
   return `/supervision/casos/${caseId}`
+}
+
+/** "Equipo y colas" with one analyst's sheet open (slice 3 §8.9). */
+export function supervisionAnalystPath(staffId: string): string {
+  return `/supervision/equipo?${new URLSearchParams({ analista: staffId }).toString()}`
+}
+
+/** "Usuarios y roles" with one person selected (slice 4 §10.1). */
+export function adminUserPath(staffId: string): string {
+  return `/administracion/usuarios?${new URLSearchParams({ persona: staffId }).toString()}`
+}
+
+/** "Equipos" with one team selected (slice 4 §10.1). */
+export function adminTeamPath(teamId: string): string {
+  return `/administracion/equipos?${new URLSearchParams({ equipo: teamId }).toString()}`
+}
+
+/** The admin audit entry searching an id: what she did and what was done to her (slice 4 §7.2). */
+export function adminAuditPath(q: string): string {
+  return `/administracion/auditoria?${new URLSearchParams({ q }).toString()}`
 }
 
 /** Display order in the role switcher and priority for "first role home". */
@@ -107,6 +139,26 @@ export function roleFromPath(pathname: string): RoleId | null {
 /** The user's roles in canonical order (unknown values dropped). */
 export function sortRoles(roles: readonly string[]): RoleId[] {
   return ROLE_ORDER.filter((id) => roles.includes(id))
+}
+
+/**
+ * Role names in sentences, chips and toasts ("Analista", not the switcher's
+ * "Analista de casos"). Pinned by a test to the backend `copy.ROLE_LABEL`.
+ */
+export const ROLE_LABEL: Record<RoleId, string> = {
+  analyst: 'Analista',
+  supervisor: 'Supervisora',
+  admin: 'Administración',
+}
+
+/** "Analista y Supervisora": the user's roles in canonical order. */
+export function rolesLabel(roles: readonly string[]): string {
+  return joinEs(sortRoles(roles).map((role) => ROLE_LABEL[role]))
+}
+
+/** Description of the "Cambiaron tus roles" toast (app/session-live.tsx, slice 4 §10.7). */
+export function rolesNowCopy(roles: readonly string[]): string {
+  return `Ahora tienes: ${rolesLabel(roles)}.`
 }
 
 /** Landing page after login: the home of the first role the user holds. */

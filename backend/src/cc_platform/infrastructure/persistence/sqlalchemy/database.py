@@ -27,7 +27,9 @@ class Database:
         if is_sqlite and not in_memory and parsed.database:
             Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
 
-        engine_kwargs: dict[str, object] = {"echo": echo}
+        # ``hide_parameters``: a DB error's text (logged with the traceback of a 500) must
+        # never carry bind values: password hashes, temporary-password hashes, emails.
+        engine_kwargs: dict[str, object] = {"echo": echo, "hide_parameters": True}
         if in_memory:
             # One shared connection, otherwise every session would see an empty database.
             engine_kwargs |= {"poolclass": StaticPool, "connect_args": {"check_same_thread": False}}
@@ -41,8 +43,8 @@ class Database:
 
     async def create_schema(self) -> None:
         async with self.engine.begin() as connection:
-            await connection.run_sync(metadata.create_all)
             await connection.run_sync(_ensure_schema_is_current)
+            await connection.run_sync(metadata.create_all)
 
     async def ping(self) -> bool:
         try:
@@ -63,20 +65,32 @@ class OutdatedSchemaError(RuntimeError):
 def _ensure_schema_is_current(connection: Connection) -> None:
     """``create_all`` never alters existing tables; fail loudly instead of at the first query.
 
-    Stand-in until Alembic exists (known gap): a local dev database created by an older
-    build must be deleted and is re-created and re-seeded on the next start.
+    Runs before ``create_all``. An empty database is created from scratch; a database that
+    already has some of the tables must have all of them, with every column. Stand-in until
+    Alembic exists (known gap): a local dev database created by an older build must be
+    deleted and is re-created and re-seeded on the next start.
     """
     inspector = inspect(connection)
-    missing = [
+    existing = set(inspector.get_table_names())
+    if not existing & {table.name for table in metadata.sorted_tables}:
+        return  # a new database
+    missing_tables = [t.name for t in metadata.sorted_tables if t.name not in existing]
+    missing_columns = [
         f"{table.name}.{column.name}"
         for table in metadata.sorted_tables
+        if table.name in existing
         for column in table.columns
         if column.name not in {c["name"] for c in inspector.get_columns(table.name)}
     ]
-    if missing:
+    if missing_tables or missing_columns:
+        parts = []
+        if missing_tables:
+            parts.append("missing tables: " + ", ".join(missing_tables))
+        if missing_columns:
+            parts.append("missing columns: " + ", ".join(missing_columns))
         raise OutdatedSchemaError(
-            "The database schema is older than the code (missing: "
-            + ", ".join(missing)
+            "The database schema is older than the code ("
+            + "; ".join(parts)
             + "). Delete the local database (e.g. backend/cc_platform.db) and restart; "
             "there are no migrations yet."
         )

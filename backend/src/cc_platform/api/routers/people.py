@@ -20,13 +20,18 @@ SupervisorOrAdmin = Annotated[Actor, Depends(require_roles(StaffRole.SUPERVISOR,
 @router.get(
     "",
     response_model=StaffListResponse,
-    summary="List active staff, optionally by role",
+    summary="List staff (active only unless includeInactive), optionally by role",
     responses=problem_responses(401, 403),
 )
 async def list_staff(
     _actor: SupervisorOrAdmin,
     api: ApiContextDep,
     role: Annotated[StaffRole | None, Query(description="Only staff holding this role")] = None,
+    include_inactive: Annotated[
+        bool, Query(alias="includeInactive", description="Also deactivated accounts")
+    ] = False,
 ) -> StaffListResponse:
-    views = await api.use_cases.people.list_staff.execute(role=role)
+    views = await api.use_cases.people.list_staff.execute(
+        role=role, include_inactive=include_inactive
+    )
     return StaffListResponse(items=[StaffOut.from_view(view) for view in views])

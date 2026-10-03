@@ -7,7 +7,7 @@
  * `version` is newer, so a repeated or late envelope is a no-op.
  */
 import type { QueryClient } from '@tanstack/react-query'
-import { readCaseSummary } from '@/features/cases'
+import { readCaseSummary } from '@/features/cases/core'
 import { envelopePayload, type RealtimeEnvelope, type RealtimeRegistration } from '@/lib/realtime'
 import { conversationKeys } from './api'
 import { applySummary, hasSequenceGap, mergeTurns, needsDetailRefetch } from './model'

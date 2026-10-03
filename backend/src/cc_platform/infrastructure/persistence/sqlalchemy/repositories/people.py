@@ -5,21 +5,33 @@ Writes use optimistic locking (``VersionedRepository`` in ``base.py``).
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Column, select
+from sqlalchemy.exc import IntegrityError
 
+from cc_platform.domain.people.admin_roster import ROSTER_ID, AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
+from cc_platform.domain.people.errors import EmailTakenError, TeamNameTakenError
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge, MfaChallengeStatus, MfaMethod
 from cc_platform.domain.people.session import SessionEndReason, StaffSession
 from cc_platform.domain.people.staff import Language, Staff, StaffRole
+from cc_platform.domain.people.team import Team
+from cc_platform.domain.shared.errors import ConcurrentUpdateError, DomainError
 from cc_platform.infrastructure.persistence.sqlalchemy import tables
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.base import (
     Row,
     VersionedRepository,
 )
+
+
+def _violates(exc: IntegrityError, column: str) -> bool:
+    """Whether a unique violation names ``column`` (SQLite: ``staff.email``; Postgres: the
+    constraint ``uq_staff_email``; both mention the column)."""
+    return column in str(exc.orig)
 
 
 # ----------------------------------------------------------------------------- staff
@@ -36,8 +48,10 @@ class SqlStaffRepository(VersionedRepository[Staff]):
             "email": aggregate.email,
             "roles": sorted(role.value for role in aggregate.roles),
             "languages": sorted(language.value for language in aggregate.languages),
-            "team": aggregate.team,
+            "team_id": aggregate.team_id,
             "active": aggregate.active,
+            "created_at": aggregate.created_at,
+            "creation_key": aggregate.creation_key,
         }
 
     def _from_row(self, row: Row) -> Staff:
@@ -47,12 +61,24 @@ class SqlStaffRepository(VersionedRepository[Staff]):
             email=row["email"],
             roles=frozenset(StaffRole(value) for value in row["roles"]),
             languages=frozenset(Language(value) for value in row["languages"]),
-            team=row["team"],
+            team_id=row["team_id"],
+            created_at=row["created_at"],
             active=row["active"],
+            creation_key=row["creation_key"],
         )
+
+    def _integrity_error(self, exc: IntegrityError, *, insert: bool) -> DomainError:
+        if _violates(exc, "creation_key"):
+            return ConcurrentUpdateError(entity=self.table.name)  # a concurrent replay
+        if _violates(exc, "email"):
+            return EmailTakenError()
+        return super()._integrity_error(exc, insert=insert)
 
     async def get_by_email(self, email: str) -> Staff | None:
         return await self._get_where(tables.staff.c.email == email)
+
+    async def get_by_creation_key(self, key: str) -> Staff | None:
+        return await self._get_where(tables.staff.c.creation_key == key)
 
     async def list(self, *, role: StaffRole | None = None) -> list[Staff]:
         result = await self._session.execute(
@@ -61,6 +87,74 @@ class SqlStaffRepository(VersionedRepository[Staff]):
         people = [self._materialize(row) for row in result.mappings()]
         # Roles are a JSON list; filtering in Python keeps the SQL portable (table is small).
         return [person for person in people if role is None or person.has_role(role)]
+
+
+# ----------------------------------------------------------------------------- teams
+class SqlTeamRepository(VersionedRepository[Team]):
+    table = tables.teams
+
+    def _key(self, aggregate: Team) -> str:
+        return aggregate.id
+
+    def _to_row(self, aggregate: Team) -> dict[str, Any]:
+        return {
+            "id": aggregate.id,
+            "name": aggregate.name,
+            "name_key": aggregate.name_key,
+            "active": aggregate.active,
+            "created_at": aggregate.created_at,
+            "creation_key": aggregate.creation_key,
+        }
+
+    def _from_row(self, row: Row) -> Team:
+        return Team(
+            id=row["id"],
+            name=row["name"],
+            active=row["active"],
+            created_at=row["created_at"],
+            creation_key=row["creation_key"],
+        )
+
+    def _integrity_error(self, exc: IntegrityError, *, insert: bool) -> DomainError:
+        if _violates(exc, "creation_key"):
+            return ConcurrentUpdateError(entity=self.table.name)
+        if _violates(exc, "name_key"):
+            return TeamNameTakenError()
+        return super()._integrity_error(exc, insert=insert)
+
+    async def get_many(self, team_ids: Collection[str]) -> dict[str, Team]:
+        if not team_ids:
+            return {}
+        result = await self._session.execute(
+            select(tables.teams).where(tables.teams.c.id.in_(list(team_ids)))
+        )
+        return {row["id"]: self._materialize(row) for row in result.mappings()}
+
+    async def get_by_creation_key(self, key: str) -> Team | None:
+        return await self._get_where(tables.teams.c.creation_key == key)
+
+    async def list(self) -> list[Team]:
+        c = tables.teams.c
+        result = await self._session.execute(select(tables.teams).order_by(c.name_key, c.id))
+        return [self._materialize(row) for row in result.mappings()]
+
+
+# ----------------------------------------------------------------------------- admin roster
+class SqlAdminRosterRepository(VersionedRepository[AdminRoster]):
+    table = tables.admin_roster
+    insert_race_is_retryable = True
+
+    def _key(self, aggregate: AdminRoster) -> str:
+        return aggregate.id
+
+    def _to_row(self, aggregate: AdminRoster) -> dict[str, Any]:
+        return {"id": aggregate.id, "admin_ids": sorted(aggregate.admin_ids)}
+
+    def _from_row(self, row: Row) -> AdminRoster:
+        return AdminRoster(id=row["id"], admin_ids=frozenset(row["admin_ids"]))
+
+    async def get(self, key: str = ROSTER_ID) -> AdminRoster | None:
+        return await super().get(key)
 
 
 # ----------------------------------------------------------------------------- login accounts
@@ -91,6 +185,11 @@ class SqlLoginAccountRepository(VersionedRepository[LoginAccount]):
             locked_until=row["locked_until"],
             last_login_at=row["last_login_at"],
         )
+
+    async def list(self) -> list[LoginAccount]:
+        table = tables.login_accounts
+        result = await self._session.execute(select(table).order_by(table.c.staff_id))
+        return [self._materialize(row) for row in result.mappings()]
 
 
 # ----------------------------------------------------------------------------- mfa challenges
@@ -125,6 +224,24 @@ class SqlMfaChallengeRepository(VersionedRepository[MfaChallenge]):
             verified_at=row["verified_at"],
             method=MfaMethod(row["method"]) if row["method"] else None,
         )
+
+    async def list_pending_for(self, staff_id: str, now: datetime) -> list[MfaChallenge]:
+        c = tables.mfa_challenges.c
+        result = await self._session.execute(
+            select(tables.mfa_challenges)
+            .where(
+                c.staff_id == staff_id,
+                c.status == MfaChallengeStatus.PENDING.value,
+                c.expires_at > now,
+            )
+            .order_by(c.issued_at, c.id)
+        )
+        challenges: list[MfaChallenge] = []
+        for row in result.mappings():
+            challenge = self._load(row)
+            if challenge is not None:
+                challenges.append(challenge)
+        return challenges
 
 
 # ----------------------------------------------------------------------------- sessions
@@ -162,6 +279,20 @@ class SqlStaffSessionRepository(VersionedRepository[StaffSession]):
             select(c.staff_id).where(c.ended_at.is_(None), c.expires_at > now).distinct()
         )
         return {staff_id for (staff_id,) in result}
+
+    async def list_active_for(self, staff_id: str, now: datetime) -> list[StaffSession]:
+        c = tables.staff_sessions.c
+        result = await self._session.execute(
+            select(tables.staff_sessions)
+            .where(c.staff_id == staff_id, c.ended_at.is_(None), c.expires_at > now)
+            .order_by(c.issued_at, c.id)
+        )
+        sessions: list[StaffSession] = []
+        for row in result.mappings():
+            session = self._load(row)
+            if session is not None:
+                sessions.append(session)
+        return sessions
 
 
 # ----------------------------------------------------------------------------- availability

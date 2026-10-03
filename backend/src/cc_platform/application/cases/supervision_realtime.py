@@ -16,6 +16,16 @@ from a presenter that renders the REST schemas). Sockets only *signal*: clients 
   status change, a first response, a close, an availability change, an analyst's session
   starting or ending.
 
+Slice 4 (administration) adds signals, no new envelope:
+
+- ``team.updated`` after every administration event about an analyst (``staff.*``; an
+  analyst before or after a roles change) and after ``team.renamed``/``team.deactivated``/
+  ``team.reactivated`` (the team's active analysts; ``staffIds`` may be empty: clients
+  refetch anyway);
+- ``queue.updated`` after ``staff.roles_changed``, ``staff.languages_changed``,
+  ``staff.deactivated`` and ``staff.reactivated`` (who could take a queued case changed:
+  ``speakers``/``availableSpeakers``).
+
 ``case.viewed`` never reaches a socket, and ``auth.*`` events are never forwarded raw: they
 only turn into ``team.updated`` ids.
 """
@@ -46,13 +56,32 @@ from cc_platform.domain.cases.events import (
 )
 from cc_platform.domain.cases.values import AssignmentReason, CaseStatus, TurnKind
 from cc_platform.domain.people.events import (
+    STAFF_ADMIN_EVENTS,
     SessionEnded,
     SessionStarted,
     StaffAvailabilityChanged,
+    StaffDeactivated,
+    StaffLanguagesChanged,
+    StaffReactivated,
+    StaffRolesChanged,
+    TeamDeactivated,
+    TeamReactivated,
+    TeamRenamed,
 )
 from cc_platform.domain.people.staff import StaffRole
 from cc_platform.domain.shared.events import DomainEvent
 from cc_platform.domain.shared.json import JsonObject
+
+#: Team events that change "Equipo y colas" (the team pills and names).
+_TEAM_ROW_EVENTS: tuple[type[DomainEvent], ...] = (TeamRenamed, TeamDeactivated, TeamReactivated)
+
+#: Administration events that change who could take a queued case.
+_SPEAKER_EVENTS: tuple[type[DomainEvent], ...] = (
+    StaffRolesChanged,
+    StaffLanguagesChanged,
+    StaffDeactivated,
+    StaffReactivated,
+)
 
 #: Events this projection listens to.
 SUPERVISION_EVENTS: tuple[type[DomainEvent], ...] = (
@@ -60,6 +89,8 @@ SUPERVISION_EVENTS: tuple[type[DomainEvent], ...] = (
     StaffAvailabilityChanged,
     SessionStarted,
     SessionEnded,
+    *STAFF_ADMIN_EVENTS,
+    *_TEAM_ROW_EVENTS,
 )
 
 _ASSIGNEE_ROW_EVENTS = (CaseStatusChanged, CaseFirstResponded, CaseClosed)
@@ -128,6 +159,12 @@ class SupervisionRealtimeProjector:
         if isinstance(event, SessionStarted | SessionEnded):
             await self._session(record, event.staff_id)
             return
+        if isinstance(event, STAFF_ADMIN_EVENTS):
+            await self._administration(record, event)
+            return
+        if isinstance(event, _TEAM_ROW_EVENTS):
+            await self._team_record(record, event.entity_id)
+            return
         if event.case_id is None or not isinstance(event, CASE_EVENTS):
             return
         async with self._uow() as uow:
@@ -149,12 +186,39 @@ class SupervisionRealtimeProjector:
         if staff is not None and staff.active and staff.has_role(StaffRole.ANALYST):
             await self._team(record, [staff_id])
 
+    async def _administration(self, record: EventRecord, event: DomainEvent) -> None:
+        """A person changed (slice 4): her row if she is (or was) an analyst, and the queue
+        speakers when roles, languages or her active state changed."""
+        async with self._uow() as uow:
+            staff = await uow.staff.get(event.entity_id)
+            was_analyst = isinstance(event, StaffRolesChanged) and (
+                StaffRole.ANALYST.value in (*event.from_roles, *event.to_roles)
+            )
+            if was_analyst or (staff is not None and staff.has_role(StaffRole.ANALYST)):
+                await self._team(record, [event.entity_id], always=True)
+            if isinstance(event, _SPEAKER_EVENTS):
+                counts = await queue_counts(uow, self._clock.now())
+                await self._queues(record, "queue.updated", self._present.queue_counts(counts))
+
+    async def _team_record(self, record: EventRecord, team_id: str) -> None:
+        """A team was renamed, deactivated or reactivated: its active analysts' rows."""
+        async with self._uow() as uow:
+            members = [
+                person.id
+                for person in await uow.staff.list(role=StaffRole.ANALYST)
+                if person.active and person.team_id == team_id
+            ]
+        await self._team(record, members, always=True)
+
     async def _queues(self, record: EventRecord, kind: str, payload: JsonObject) -> None:
         envelope = derived_envelope(record, kind, payload, actor_id=record.actor_id)
         await self._hub.publish(str(Topic.supervision_queues()), envelope)
 
-    async def _team(self, record: EventRecord, staff_ids: list[str]) -> None:
-        if not staff_ids:
+    async def _team(
+        self, record: EventRecord, staff_ids: list[str], *, always: bool = False
+    ) -> None:
+        """``always``: send even without ids (a team-level change: clients refetch)."""
+        if not staff_ids and not always:
             return
         payload: JsonObject = {"staffIds": list(staff_ids)}
         envelope = derived_envelope(record, "team.updated", payload, actor_id=record.actor_id)

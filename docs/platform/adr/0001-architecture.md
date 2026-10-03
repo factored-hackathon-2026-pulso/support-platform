@@ -105,6 +105,7 @@ injectable `Clock`. Every route declares its roles with `require_roles(...)`.
 | Strategy | `AssignmentStrategy` (language + least loaded), `SlaPolicy`, `PasswordHasher`, `MfaVerifier` |
 | Process manager | `QueueDrainer` (an analyst becomes available → drain the queue) |
 | State machine | `MfaChallenge`, `StaffSession`, `Case` |
+| Singleton aggregate as a CAS guard | `AdminRoster` (slice 4): every change to the set of active admins saves it, so two concurrent demotions serialise and "at least one admin" holds |
 | Composition root | `bootstrap/container.py` |
 
 Removed on 2026-10-03 (slice 2): Chain of Responsibility (`Responder` judge → tree → ai_agent),

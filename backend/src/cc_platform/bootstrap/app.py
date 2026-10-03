@@ -71,7 +71,7 @@ def create_app(settings: Settings | None = None, *, container: Container | None 
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=[REQUEST_ID_HEADER, CORRELATION_ID_HEADER],
+        expose_headers=[REQUEST_ID_HEADER, CORRELATION_ID_HEADER, "Idempotent-Replayed"],
     )
     # Added last → outermost: CORS and error responses also carry the request id.
     app.add_middleware(RequestContextMiddleware)

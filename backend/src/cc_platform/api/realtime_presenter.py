@@ -1,5 +1,5 @@
-"""``CaseRealtimePresenter`` / ``SupervisionRealtimePresenter`` adapter: socket payloads
-rendered by the REST schemas.
+"""``CaseRealtimePresenter`` / ``SupervisionRealtimePresenter`` /
+``AdministrationRealtimePresenter`` adapter: socket payloads rendered by the REST schemas.
 
 The realtime projection (application layer) builds views; this module turns them into the
 exact camelCase JSON the REST endpoints return, so the frontend parses one shape.
@@ -13,6 +13,7 @@ from cc_platform.api.schemas.availability import Availability
 from cc_platform.api.schemas.cases import CaseSummary, InboxCounts, Turn
 from cc_platform.api.schemas.common import ApiModel
 from cc_platform.api.schemas.customer import CustomerConversation, CustomerTurn
+from cc_platform.api.schemas.people import StaffOut
 from cc_platform.api.schemas.supervision import QueueCounts
 from cc_platform.application.cases.dto import (
     CaseSummaryView,
@@ -23,6 +24,7 @@ from cc_platform.application.cases.dto import (
 )
 from cc_platform.application.cases.supervision import QueueCountsView
 from cc_platform.application.people.availability import AvailabilityView
+from cc_platform.application.people.dto import StaffView
 from cc_platform.domain.shared.json import JsonObject
 
 
@@ -51,3 +53,6 @@ class SchemaRealtimePresenter:
 
     def queue_counts(self, view: QueueCountsView) -> JsonObject:
         return _json(QueueCounts.from_view(view))
+
+    def staff(self, view: StaffView) -> JsonObject:
+        return _json(StaffOut.from_view(view))

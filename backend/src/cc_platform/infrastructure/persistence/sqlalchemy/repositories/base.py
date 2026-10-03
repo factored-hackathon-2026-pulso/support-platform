@@ -17,7 +17,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cc_platform.domain.shared.aggregate import AggregateRoot
-from cc_platform.domain.shared.errors import ConcurrentUpdateError, ConflictError, NotFoundError
+from cc_platform.domain.shared.errors import (
+    ConcurrentUpdateError,
+    ConflictError,
+    DomainError,
+    NotFoundError,
+)
 from cc_platform.infrastructure.persistence.sqlalchemy import tables
 
 type Tracker = Callable[[AggregateRoot], None]
@@ -53,6 +58,13 @@ class VersionedRepository[A: AggregateRoot](ABC):
     @abstractmethod
     def _from_row(self, row: Row) -> A: ...
 
+    def _integrity_error(self, exc: IntegrityError, *, insert: bool) -> DomainError:
+        """The error a unique/foreign-key violation becomes. Override to tell secondary
+        unique keys apart (``email_taken``, ``team_name_taken``…)."""
+        if insert and self.insert_race_is_retryable:
+            return ConcurrentUpdateError(entity=self.table.name)
+        return ConflictError("Ya existe un registro con esos datos.")
+
     # ----------------------------------------------------------------- operations
     async def _get_where(self, *criteria: Any) -> A | None:
         result = await self._session.execute(select(self.table).where(*criteria))
@@ -69,9 +81,7 @@ class VersionedRepository[A: AggregateRoot](ABC):
         try:
             await self._session.execute(statement)
         except IntegrityError as exc:
-            if self.insert_race_is_retryable:
-                raise ConcurrentUpdateError(entity=self.table.name) from exc
-            raise ConflictError("Ya existe un registro con esos datos.") from exc
+            raise self._integrity_error(exc, insert=True) from exc
         aggregate.mark_persisted(1)
         self._track(aggregate)
 
@@ -86,7 +96,10 @@ class VersionedRepository[A: AggregateRoot](ABC):
             .where(self._key_column == key, version == expected)
             .values(**self._to_row(aggregate), **{tables.VERSION_COLUMN: expected + 1})
         )
-        result = cast("CursorResult[Any]", await self._session.execute(statement))
+        try:
+            result = cast("CursorResult[Any]", await self._session.execute(statement))
+        except IntegrityError as exc:
+            raise self._integrity_error(exc, insert=False) from exc
         if result.rowcount != 1:
             raise ConcurrentUpdateError(entity=self.table.name, id=key)
         aggregate.mark_persisted(expected + 1)

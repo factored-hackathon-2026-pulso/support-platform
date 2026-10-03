@@ -35,11 +35,13 @@ if TYPE_CHECKING:
     )
     from cc_platform.application.customers.ports import CustomerRepository
     from cc_platform.application.people.ports import (
+        AdminRosterRepository,
         AnalystAvailabilityRepository,
         LoginAccountRepository,
         MfaChallengeRepository,
         StaffRepository,
         StaffSessionRepository,
+        TeamRepository,
     )
     from cc_platform.application.ports.event_log import EventLogRepository
 
@@ -48,6 +50,12 @@ class UnitOfWork(Protocol):
     # Read-only members so adapters may expose their concrete repository types.
     @property
     def staff(self) -> StaffRepository: ...
+
+    @property
+    def teams(self) -> TeamRepository: ...
+
+    @property
+    def admin_roster(self) -> AdminRosterRepository: ...
 
     @property
     def login_accounts(self) -> LoginAccountRepository: ...

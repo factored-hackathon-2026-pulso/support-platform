@@ -19,7 +19,6 @@ export default function MfaRoute() {
     <MfaScreen
       challengeId={challenge.challengeId}
       email={challenge.email}
-      methods={challenge.methods}
       showDevHint={import.meta.env.DEV}
       onSignedIn={({ token, staff }) => signIn(token, staff)}
       onLocked={({ email, unlockAt }) => {

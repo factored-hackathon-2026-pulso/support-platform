@@ -295,7 +295,7 @@ async def test_writing_after_a_close_opens_a_new_linked_case(container: Containe
     turns = (await container.use_cases.cases.turns.execute(DANIELA, new_id)).items
     banners = [t.text for t in turns if t.kind is TurnKind.ROUTING]
     assert banners[0].startswith("Marcela volvió a escribir. Su caso anterior se cerró el ")
-    assert banners[0].endswith("(resuelto).")
+    assert banners[0].endswith(" hora Bogotá (resuelto).")  # the server-written time names its zone
     assert banners[1].startswith("Asignado a Daniela Ríos porque está disponible")
     old = await container.use_cases.cases.detail.execute(DANIELA, MARCELA)
     assert old.case.status is CaseStatus.CLOSED  # untouched

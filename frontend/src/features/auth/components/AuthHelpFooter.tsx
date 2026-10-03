@@ -1,11 +1,12 @@
 import { useToast } from '@/components/ui'
+import { SIGN_IN_HELP } from '../model'
 
 export interface AuthHelpFooterProps {
   /** Link text at the left. Default "¿Problemas para entrar?". */
   label?: string
 }
 
-/** Footer row of the login steps: help action + help desk. */
+/** Footer row of the login steps: who helps (Administración, in "Usuarios y roles"). */
 export function AuthHelpFooter({ label = '¿Problemas para entrar?' }: AuthHelpFooterProps) {
   const { toast } = useToast()
   return (
@@ -13,17 +14,11 @@ export function AuthHelpFooter({ label = '¿Problemas para entrar?' }: AuthHelpF
       <button
         type="button"
         className="cursor-pointer text-link"
-        onClick={() =>
-          toast({
-            title: 'Escribe a la mesa de ayuda',
-            description:
-              'Ellos restablecen tu contraseña o tu segundo factor después de verificar tu identidad.',
-          })
-        }
+        onClick={() => toast({ title: 'Pide ayuda a Administración', description: SIGN_IN_HELP })}
       >
         {label}
       </button>
-      <span className="text-muted">Mesa de ayuda del contact center</span>
+      <span className="text-muted">Te ayuda Administración</span>
     </div>
   )
 }

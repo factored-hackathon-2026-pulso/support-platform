@@ -276,7 +276,7 @@ No startup recovery. The `routing` status no longer exists, and the queue drains
 - Assigned on arrival: "Asignado a {Nombre Apellido} porque está disponible y habla {español|portugués}." A `pt` case ends with " (regla 3)." before the final period, as in slice 1.
 - Queued: "No hay personas disponibles que hablen {español|portugués}: el caso espera en la {cola}."
 - Assigned from the queue: "Asignado a {Nombre Apellido} después de {n} min en la {cola}." Minutes are rounded up, minimum 1.
-- New case after a close, before the assignment banner: "{Primer nombre} volvió a escribir. Su caso anterior se cerró el {d mmm, HH:mm} ({motivo})." The date is in the platform's display zone `America/Bogota` (team-generated). The reason uses the labels of §4.4, lower-cased.
+- New case after a close, before the assignment banner: "{Primer nombre} volvió a escribir. Su caso anterior se cerró el {d mmm, HH:mm} hora Bogotá ({motivo})." The banner is stored text, so its time cannot follow the viewer's zone like every other time in the UI (brief §5.3); it is written in the display zone `America/Bogota` (team-generated) and always names it ("hora Bogotá"), so an analyst in Buenos Aires or Ciudad de México never reads it as her own clock. The reason uses the labels of §4.4, lower-cased.
 
 **Customer-visible `notice` turns** (author `system`, audience `everyone`, case language):
 

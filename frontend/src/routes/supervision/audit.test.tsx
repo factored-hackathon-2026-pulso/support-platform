@@ -127,7 +127,10 @@ describe('Auditoría', () => {
     ).toBeInTheDocument()
 
     await user.click(within(aside()).getByRole('link', { name: 'Ver la conversación' }))
-    expect(router.state.location.pathname).toBe(`/supervision/casos/${ESTEBAN_CASE}`)
+    // Another (lazy) route: the navigation commits once its module has loaded.
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/supervision/casos/${ESTEBAN_CASE}`),
+    )
     expect(router.state.location.state).toEqual({
       from: expect.stringMatching(/^\/supervision\/auditoria\?caso=/),
     })

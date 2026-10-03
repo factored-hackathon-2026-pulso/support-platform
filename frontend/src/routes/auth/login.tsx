@@ -22,7 +22,6 @@ export default function LoginRoute() {
         const state: MfaRouteState = {
           challengeId: challenge.challengeId,
           email,
-          methods: challenge.methods,
           ...(from ? { from } : {}),
         }
         navigate('/login/verificacion', { state })

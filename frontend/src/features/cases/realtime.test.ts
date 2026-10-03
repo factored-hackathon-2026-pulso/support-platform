@@ -157,6 +157,39 @@ describe('registerCasesRealtime', () => {
     expect(queryClient.getQueryData<InboxResponse>(todos)?.counts.all).toBe(7)
   })
 
+  it('an inbox off screen keeps its pending refetch through later counts and card patches', () => {
+    // The analyst looks at "Cerrados" (Todos is cached but inactive) when a new
+    // case is assigned to her: Todos must refetch once she shows it again, even
+    // though the counts and other cards of it are patched in the meantime.
+    const { registry, queryClient, todos } = setup()
+    const fresh = makeCaseSummary({ id: 'CASE-NEW', status: 'assigned', inboxStatus: 'new' })
+    registry.dispatch(envelope('case.assigned', fresh, 'EVT-1'), queryClient)
+    expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
+
+    const later = new Date(NOW.getTime() + 1000).toISOString()
+    registry.dispatch(
+      envelope('inbox.counts', makeCounts({ all: 4, new: 3, computedAt: later }), 'EVT-2'),
+      queryClient,
+    )
+    expect(queryClient.getQueryData<InboxResponse>(todos)?.counts.all).toBe(4)
+    expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
+
+    const wrote = makeCaseSummary({ version: 4, preview: '¿Hola?', unreadCount: 2 })
+    registry.dispatch(envelope('case.updated', wrote, 'EVT-3'), queryClient)
+    expect(cardOf(queryClient, todos)).toEqual(wrote)
+    expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
+  })
+
+  it('a counts patch does not mark a settled inbox for refetch', () => {
+    const { registry, queryClient, todos } = setup()
+    const later = new Date(NOW.getTime() + 1000).toISOString()
+    registry.dispatch(
+      envelope('inbox.counts', makeCounts({ all: 2, computedAt: later })),
+      queryClient,
+    )
+    expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(false)
+  })
+
   it('availability.updated replaces the cached availability', () => {
     const { registry, queryClient } = setup()
     queryClient.setQueryData(availabilityKeys.me(), available)

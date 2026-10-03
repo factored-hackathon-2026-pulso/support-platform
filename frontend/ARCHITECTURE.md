@@ -446,13 +446,18 @@ Extend primitives instead of forking them; add new ones here with a test.
 
 ## 10. Testing
 
-- Vitest + Testing Library (jsdom). `pnpm test`.
+- Vitest + Testing Library (jsdom). `pnpm test`. Browser e2e: `pnpm e2e` (below).
 - `src/test/render.tsx`: `renderRoute(entry, { staff, token })` renders the real route
   table with fresh providers, a signed-in staff member (or none, or only a stored
   `token` restored through a stubbed `fetch`), a fake realtime socket and a fresh
   envelope handler registry;
   `renderWithProviders(ui, { route, path, staff })` for isolated components (`path`
   is the route pattern, so `useParams` works).
+- Route modules are lazy, so the first render of a screen and every navigation to
+  another route are asynchronous: wait with `findBy*` / `waitFor` (never a bare
+  `expect(router.state.location.pathname)` right after a click). `src/test/setup.ts`
+  sets the async-util timeout to 5 s (a cold lazy import under CPU load takes more
+  than the 1 s default); `vite.config.ts` keeps the test timeout above it.
 - Mock at the feature `api.ts` boundary (`vi.mock('@/features/x/api')`), never fetch.
   `lib/api/client.test.ts` covers the HTTP boundary with a fake `fetch`.
 - Every `model.ts` has unit tests; every screen has a render test of its main
@@ -460,6 +465,51 @@ Extend primitives instead of forking them; add new ones here with a test.
 - Fixtures use invented people (`src/test/fixtures.ts`), never dataset records.
 - Query by role and accessible name (that is also the a11y check).
 - `src/test/architecture.test.ts` checks the import boundaries of §3.
+
+### Browser e2e (Playwright, slice 5)
+
+`pnpm e2e` runs `e2e/*.spec.ts` in Chromium against the real stack; `pnpm e2e:install`
+downloads the browser once. Nothing to start by hand: `playwright.config.ts` picks two
+free ports and starts, as `webServer` entries, the backend (`uv run uvicorn …` in
+`../backend`) on a **fresh temporary SQLite database** (`CC_DATABASE_URL` under the OS
+temp dir, seeded, deleted by `e2e/support/global-teardown.ts`; `backend/cc_platform.db`
+is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
+(`CC_CORS_ORIGINS` allows its origin). Traces and screenshots are kept on failure
+(`test-results/`; the CI HTML report goes to `playwright-report/`; both git-ignored).
+`pnpm e2e --ui`, `--headed` and `-g "<title>"` work as usual.
+
+- **Scenarios** (brief §8 S5): `chat.spec.ts` (two-window chat, live both ways, order
+  after a reload; close with a reason → the customer notice, a new linked case,
+  "Casos anteriores" in both windows), `supervision.spec.ts` (queue and drain under
+  rule 3; a supervisor assigns a queued case and reassigns it while the analyst watches
+  it leave her list, rule 3 in the dialog), `admin.spec.ts` (an admin creates an analyst
+  who signs in with the temporary password and gets a case; a role change reaches the
+  role switcher live and back; deactivation signs the other window out),
+  `auth.spec.ts` (5 wrong passwords → lockout; an admin unlocks).
+- **Support** (`e2e/support/`): page objects per screen (`pages/`: login + MFA,
+  Workspace, customer simulator, Equipo y colas + assign dialog, supervisor case view,
+  Usuarios y roles, the shell and role switcher), `api.ts` (REST helpers for setup and
+  cleanup only: sign-in, create people, release a customer), `data.ts` (the seeded
+  accounts and simulator customers it relies on, invented names, unique texts) and
+  `fixtures.ts`:
+  - `actors`: one browser **context** per person (own `sessionStorage`, so own session):
+    `open`, `signedIn` (UI password + MFA), `customer` (the simulator as a seeded
+    customer). Any uncaught page error in any window fails the test.
+  - `people`: analysts created through the admin API for this test only (unique names,
+    rotating first names); paused again in teardown so they never take the next test's
+    cases. `adopt` registers one created through the UI.
+  - `customers.release`: hands the test a customer with no open conversation (one left
+    open, by the seed or a previous attempt, is moved by supervision to a paused
+    "janitor" analyst and closed), so every test also passes on a retry or with
+    `--repeat-each` on the same database.
+- **Rules:** one worker (the backend is shared and assignment depends on who is
+  available); each test creates the people it needs and leaves nobody available; seeded
+  staff are only used as the supervisor (Lucía) and the admin (Valeria) and are never
+  changed. Locators are roles and accessible names (no CSS or test ids), assertions are
+  web-first (`expect(locator)…`, no sleeps, no `waitForTimeout`), and every message
+  text is unique (`uniqueText`) so an assertion never matches an older turn.
+- A scenario that exposes a product bug gets the fix and a unit test in the app, never
+  a weaker assertion (slice 5: `features/cases/realtime.ts` `writeInbox`).
 
 ## 11. Accessibility conventions
 
@@ -506,4 +556,5 @@ Extend primitives instead of forking them; add new ones here with a test.
 ## 12. Environment
 
 `VITE_API_URL` (default `http://localhost:8000`, see `.env.example`). Scripts:
-`dev`, `build`, `typecheck`, `lint`, `test`, `format`, `format:check`, `gen:api`, `check:api`.
+`dev`, `build`, `typecheck`, `lint`, `test`, `e2e`, `e2e:install`, `format`, `format:check`,
+`gen:api`, `check:api`. The e2e runner sets its own `VITE_API_URL` (§10).

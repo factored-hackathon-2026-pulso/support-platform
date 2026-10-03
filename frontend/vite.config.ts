@@ -17,6 +17,9 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
     restoreMocks: true,
+    // Above the 5 s async-util timeout (src/test/setup.ts), so a failing findBy
+    // reports its own error instead of a bare test timeout.
+    testTimeout: 15_000,
     // Dates are shown in the viewer's zone (lib/format). Pin the process zone so
     // assertions on rendered times do not depend on the machine running them; a
     // non-UTC zone also catches code that confuses UTC and local getters.

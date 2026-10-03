@@ -64,9 +64,24 @@ export function applyCaseSummaryToInboxes(queryClient: QueryClient, summary: Cas
     const patch = inbox
       ? patchInbox(inbox, inboxFilterOf(queryKey), summary)
       : { inbox, refetch: true }
-    if (patch.inbox !== inbox) queryClient.setQueryData(queryKey, patch.inbox)
+    if (patch.inbox && patch.inbox !== inbox) writeInbox(queryClient, queryKey, patch.inbox)
     if (patch.refetch) void queryClient.invalidateQueries({ queryKey, exact: true })
   }
+}
+
+/**
+ * Writes a patched inbox into the cache without losing a pending refetch.
+ * `setQueryData` marks a query fresh and clears `isInvalidated` (TanStack v5),
+ * so an inbox invalidated while its filter was off screen (a new case must
+ * enter "Todos" while the analyst looks at "Cerrados") would come back from the
+ * next `inbox.counts` or card patch with the new counters but without the case,
+ * and stay that way for `staleTime`. Re-mark it: no request now (an active
+ * query is already refetching), the refetch runs when the filter is shown.
+ */
+function writeInbox(queryClient: QueryClient, queryKey: QueryKey, inbox: InboxResponse): void {
+  const pending = queryClient.getQueryState(queryKey)?.isInvalidated ?? false
+  queryClient.setQueryData(queryKey, inbox)
+  if (pending) void queryClient.invalidateQueries({ queryKey, exact: true, refetchType: 'none' })
 }
 
 /**
@@ -84,9 +99,11 @@ function applyCaseSummary(envelope: RealtimeEnvelope, queryClient: QueryClient):
 function applyCounts(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
   const counts = readCounts(envelope)
   if (!counts) return
-  queryClient.setQueriesData<InboxResponse>({ queryKey: caseKeys.inboxes() }, (inbox) =>
-    inbox && isNewerCounts(counts, inbox.counts) ? { ...inbox, counts } : inbox,
-  )
+  const cached = queryClient.getQueriesData<InboxResponse>({ queryKey: caseKeys.inboxes() })
+  for (const [queryKey, inbox] of cached) {
+    if (inbox && isNewerCounts(counts, inbox.counts))
+      writeInbox(queryClient, queryKey, { ...inbox, counts })
+  }
 }
 
 /** `availability.updated` (e.g. changed from another tab). */

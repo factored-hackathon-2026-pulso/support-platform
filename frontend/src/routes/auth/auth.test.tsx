@@ -31,8 +31,28 @@ describe('login (BoLogin)', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Entrar' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Correo' })).toBeInTheDocument()
     expect(screen.getByLabelText('Contraseña')).toHaveAttribute('type', 'password')
-    expect(screen.getByRole('button', { name: 'Continuar con Microsoft' })).toBeDisabled()
     expect(within(loginForm()).queryByRole('alert')).not.toBeInTheDocument()
+    // No corporate SSO in this product: only email + password.
+    expect(screen.queryByRole('button', { name: /Microsoft/ })).not.toBeInTheDocument()
+  })
+
+  it('sends a forgotten password to Administración (no reset link exists)', async () => {
+    const { user } = renderRoute('/login')
+    await user.click(await screen.findByRole('button', { name: '¿La olvidaste?' }))
+    const toasts = screen.getByRole('region', { name: 'Notificaciones' })
+    expect(
+      within(toasts).getByText(
+        'Pide a Administración que la restablezca en Usuarios y roles: te dará una contraseña temporal.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(toasts).queryByText(/enlace|mesa de ayuda/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '¿Problemas para entrar?' }))
+    expect(
+      within(toasts).getByText(
+        'Administración desbloquea tu cuenta o restablece tu contraseña en Usuarios y roles.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('validates empty fields without calling the API', async () => {
@@ -93,7 +113,7 @@ describe('login (BoLogin)', () => {
       mfaRequired: true,
       challengeId: 'CH-9',
       expiresAt: '2026-10-02T15:37:00Z',
-      methods: ['totp', 'sms'],
+      methods: ['totp', 'sms', 'backup_code'],
     })
     const { user, router } = renderRoute({
       pathname: '/login',
@@ -112,12 +132,8 @@ describe('login (BoLogin)', () => {
     expect(router.state.location.state).toEqual({
       challengeId: 'CH-9',
       email: 'laura.mendez@example.com',
-      methods: ['totp', 'sms'],
       from: '/supervision/auditoria',
     })
-    // Only the methods the API allows are offered.
-    expect(screen.getByRole('radio', { name: 'SMS' })).toBeInTheDocument()
-    expect(screen.queryByRole('radio', { name: 'Código de respaldo' })).not.toBeInTheDocument()
   })
 
   it('goes to the locked screen when the account is locked', async () => {
@@ -151,8 +167,8 @@ describe('MFA (BoMfa)', () => {
     expect(router.state.location.pathname).toBe('/login')
   })
 
-  it('renders the normal state with the email and the method switch', async () => {
-    const { user } = renderRoute(mfaEntry)
+  it('renders the normal state: the email and the authenticator app code only', async () => {
+    renderRoute(mfaEntry)
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Confirma que eres tú' }),
     ).toBeInTheDocument()
@@ -161,9 +177,10 @@ describe('MFA (BoMfa)', () => {
     expect(
       screen.getByText('Escribe el código de 6 dígitos de tu aplicación de autenticación.'),
     ).toBeInTheDocument()
-
-    await user.click(screen.getByRole('radio', { name: 'Código de respaldo' }))
-    expect(screen.getByText(/códigos de respaldo que guardaste/)).toBeInTheDocument()
+    expect(screen.getByText('El código cambia cada 30 segundos.')).toBeInTheDocument()
+    // Nothing sends an SMS or issues backup codes: no "Otro método" chips.
+    expect(screen.queryByRole('radiogroup', { name: 'Otro método' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/SMS|respaldo/)).not.toBeInTheDocument()
   })
 
   it('asks for the six digits before calling the API', async () => {
@@ -189,6 +206,7 @@ describe('MFA (BoMfa)', () => {
     )
     expect(alert).toHaveTextContent('El código no es válido o ya venció.')
     expect(alert).toHaveTextContent('Te quedan 2 intentos.')
+    expect(alert).not.toHaveTextContent('otro método')
     // The code is cleared and the first box gets the focus back.
     expect(screen.getByRole('textbox', { name: 'Dígito 1' })).toHaveValue('')
     expect(screen.getByRole('textbox', { name: 'Dígito 1' })).toHaveFocus()
@@ -273,6 +291,22 @@ describe('locked (BoLocked)', () => {
       screen.getByText(/Hubo 5 intentos fallidos para laura\.mendez@example\.com/),
     ).toBeInTheDocument()
     expect(screen.getByRole('timer')).toHaveTextContent('14:32')
+    // No self-service reset: Administración unlocks it, and then she can sign in at once.
+    expect(
+      screen.getByText(
+        /Pide a Administración que desbloquee tu cuenta o restablezca tu contraseña\./,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Volver al ingreso' })).toHaveAttribute(
+      'href',
+      '/login',
+    )
+    expect(screen.queryByRole('button', { name: /Restablecer|Microsoft/ })).not.toBeInTheDocument()
+    // Only what the audit records: no device or location claims.
+    expect(
+      screen.getByText('Los intentos quedaron registrados en la auditoría.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/dispositivo|ubicación/)).not.toBeInTheDocument()
     await untilCountdownIsTicking()
 
     act(() => {
@@ -288,6 +322,7 @@ describe('locked (BoLocked)', () => {
       screen.getByRole('heading', { level: 1, name: 'Ya puedes volver a intentar' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Volver a entrar' })).toHaveAttribute('href', '/login')
+    expect(screen.queryByRole('link', { name: 'Volver al ingreso' })).not.toBeInTheDocument()
   })
 
   it('renders without countdown when the unlock time is unknown', async () => {

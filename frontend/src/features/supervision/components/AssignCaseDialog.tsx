@@ -39,16 +39,27 @@ export interface AssignCaseDialogProps {
  * will see. Mounted only while open (`?asignar=`), so every opening starts clean.
  */
 export function AssignCaseDialog({
-  summary,
+  summary: liveSummary,
   analysts,
   holderName,
   now,
   onClose,
   onAssigned,
 }: AssignCaseDialogProps) {
-  const assign = useSetAssignee(summary.id)
-  const refetch = useRefetchAssignmentData(summary.id)
+  const assign = useSetAssignee(liveSummary.id)
+  const refetch = useRefetchAssignmentData(liveSummary.id)
   const { toast } = useToast()
+  /**
+   * The case as it was when "Asignar" was pressed, until the answer arrives. The
+   * realtime refetch can show the new holder before the PUT returns; without this
+   * the dialog would flip to "Reasignar caso · Lo atiende …" for that instant.
+   */
+  const [submitted, setSubmitted] = useState<{
+    summary: CaseSummary
+    holder: string | null
+  } | null>(null)
+  const summary = submitted?.summary ?? liveSummary
+  const holder = submitted ? submitted.holder : holderName
   const [analystId, setAnalystId] = useState<string | null>(null)
   const [confirmPaused, setConfirmPaused] = useState(false)
   /** The server said "paused" although our row did not: ask for the confirmation anyway. */
@@ -83,6 +94,7 @@ export function AssignCaseDialog({
       return
     }
     setFailure(null)
+    setSubmitted({ summary, holder })
     assign.mutate(
       {
         analystId: chosen.id,
@@ -99,6 +111,8 @@ export function AssignCaseDialog({
           onClose()
         },
         onError: (error) => {
+          // Back to the live case: a race may have moved it (`assignment_changed`).
+          setSubmitted(null)
           const described = describeAssignFailure(error, {
             caseLanguage: summary.language,
             analystName: chosen.name,
@@ -136,7 +150,7 @@ export function AssignCaseDialog({
         if (!open) onClose()
       }}
       title={assignDialogTitle(summary)}
-      description={assignDialogSubtitle(summary, holderName, now)}
+      description={assignDialogSubtitle(summary, holder, now)}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>

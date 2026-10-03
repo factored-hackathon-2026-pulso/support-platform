@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
 import {
-  availableMfaMethods,
   describeLoginFailure,
   describeMfaFailure,
   formatCountdown,
@@ -72,10 +71,12 @@ describe('auth model', () => {
     })
   })
 
-  it('offers only the MFA methods the challenge allows', () => {
-    expect(availableMfaMethods(['totp']).map((m) => m.id)).toEqual(['totp'])
-    expect(availableMfaMethods(undefined).map((m) => m.id)).toEqual(['totp', 'sms', 'backup_code'])
-    expect(availableMfaMethods([]).length).toBe(3)
+  it('never points to another MFA method the product does not offer', () => {
+    const outcome = describeMfaFailure(problem(401, { code: 'mfa_invalid' }))
+    expect(outcome).toEqual({
+      kind: 'message',
+      message: 'El código no es válido o ya venció. Escribe el código que muestra ahora tu app.',
+    })
   })
 
   it('checks the 6-digit code', () => {
@@ -89,10 +90,10 @@ describe('auth model', () => {
       readMfaState({
         challengeId: 'CH-1',
         email: 'a@b.co',
-        methods: ['sms', 'fax'],
+        methods: ['totp', 'sms'],
         from: '/analista',
       }),
-    ).toEqual({ challengeId: 'CH-1', email: 'a@b.co', methods: ['sms'], from: '/analista' })
+    ).toEqual({ challengeId: 'CH-1', email: 'a@b.co', from: '/analista' })
     expect(readMfaState({ email: 'a@b.co' })).toBeNull()
     expect(readMfaState(null)).toBeNull()
     expect(readLockedState({ email: 'a@b.co', unlockAt: 'not a date' })).toEqual({

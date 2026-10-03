@@ -4,6 +4,7 @@ import type { LoginResponse } from '../api'
 import { useLoginMutation } from '../hooks/use-auth-mutations'
 import {
   describeLoginFailure,
+  FORGOT_PASSWORD_HELP,
   LOCKOUT_MINUTES,
   MAX_FAILED_ATTEMPTS,
   validateLogin,
@@ -13,7 +14,6 @@ import {
 import { AuthHeading } from './AuthHeading'
 import { AuthHelpFooter } from './AuthHelpFooter'
 import { AuthNote } from './AuthNote'
-import { MicrosoftSignIn } from './MicrosoftSignIn'
 
 export interface LoginScreenProps {
   /** Password accepted: continue to the MFA step. */
@@ -87,14 +87,6 @@ export function LoginScreen({
         subtitle="Tu rol (analista, supervisora o administración) se asigna a tu cuenta."
       />
 
-      <MicrosoftSignIn />
-
-      <div aria-hidden="true" className="flex items-center gap-3 text-13 text-muted">
-        <span className="h-px grow bg-border" />
-        <span>o con tu correo</span>
-        <span className="h-px grow bg-border" />
-      </div>
-
       <form
         noValidate
         onSubmit={handleSubmit}
@@ -128,11 +120,7 @@ export function LoginScreen({
               type="button"
               className="cursor-pointer text-14 text-link"
               onClick={() =>
-                toast({
-                  title: 'Restablecer contraseña',
-                  description:
-                    'Pide el cambio a la mesa de ayuda: verifican tu identidad y te envían un enlace.',
-                })
+                toast({ title: '¿Olvidaste tu contraseña?', description: FORGOT_PASSWORD_HELP })
               }
             >
               ¿La olvidaste?
@@ -155,7 +143,7 @@ export function LoginScreen({
       </form>
 
       <AuthNote>
-        <span>Con correo y contraseña siempre pedimos un segundo factor.</span>
+        <span>Después de la contraseña siempre pedimos el código de tu app de autenticación.</span>
         <span>
           Después de {MAX_FAILED_ATTEMPTS} intentos fallidos la cuenta se bloquea {LOCKOUT_MINUTES}{' '}
           minutos. Cada ingreso queda registrado.

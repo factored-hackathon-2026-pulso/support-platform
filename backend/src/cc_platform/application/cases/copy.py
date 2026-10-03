@@ -14,8 +14,11 @@ from zoneinfo import ZoneInfo
 from cc_platform.domain.cases.values import CloseReason
 from cc_platform.domain.people.staff import Language
 
-#: Platform display zone for dates written into banners (team-generated choice).
+#: Display zone for dates baked into stored banner text (team-generated choice). Every
+#: other time in the UI is formatted by the client in the viewer's own zone, so a banner
+#: that carries a server-written time must name this zone (``DISPLAY_ZONE_LABEL``).
 DISPLAY_ZONE = ZoneInfo("America/Bogota")
+DISPLAY_ZONE_LABEL = "hora Bogotá"
 
 LANGUAGE_NAME: dict[Language, str] = {Language.SPANISH: "español", Language.PORTUGUESE: "portugués"}
 
@@ -65,9 +68,9 @@ def in_sentence(label: str) -> str:
 
 
 def display_datetime(at: datetime) -> str:
-    """ "1 oct, 09:05" in the platform display zone."""
+    """ "1 oct, 09:05 hora Bogotá": the display zone, always named next to the time."""
     local = at.astimezone(DISPLAY_ZONE)
-    return f"{local.day} {_MONTHS[local.month - 1]}, {local:%H:%M}"
+    return f"{local.day} {_MONTHS[local.month - 1]}, {local:%H:%M} {DISPLAY_ZONE_LABEL}"
 
 
 def queue_wait_minutes(seconds: float) -> int:

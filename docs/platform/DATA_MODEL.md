@@ -2,7 +2,7 @@
 
 Versión: slices 0 a 4. Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
 
-La plataforma es solo para personas: clientes y equipo de soporte conversan por chat. No guarda herramientas, verificaciones de identidad, consultas al copiloto ni pasos de enrutamiento automático (ver la [última sección](#diferencias-con-contractsplatform_historyjson)).
+La plataforma es solo para personas: clientes y equipo de soporte conversan por chat. Guarda las conversaciones, quién atiende cada caso, las cuentas del equipo y el registro de eventos; nada más (la [última sección](#diferencias-con-contractsplatform_historyjson) compara este modelo con la muestra sintética).
 
 ## Cómo se guarda
 

@@ -1,22 +1,21 @@
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
-import { Button, Callout, CodeInput, SegmentedControl, type CodeInputHandle } from '@/components/ui'
+import { Button, Callout, CodeInput, type CodeInputHandle } from '@/components/ui'
 import type { SessionResponse } from '../api'
 import { useVerifyMfaMutation } from '../hooks/use-auth-mutations'
 import {
-  availableMfaMethods,
   describeMfaFailure,
   isCompleteCode,
   MFA_CODE_LENGTH,
-  type MfaMethodId,
+  MFA_HINT,
+  MFA_INSTRUCTIONS,
+  MFA_METHOD,
 } from '../model'
 import { AuthHeading } from './AuthHeading'
 
 export interface MfaScreenProps {
   challengeId: string
   email: string
-  /** Methods allowed for this challenge (from the login response). Default: all. */
-  methods?: readonly MfaMethodId[]
   /** Code accepted: store the session (the guards then redirect). */
   onSignedIn: (session: SessionResponse) => void
   onLocked: (lock: { email: string; unlockAt: string | null }) => void
@@ -26,25 +25,25 @@ export interface MfaScreenProps {
   showDevHint?: boolean
 }
 
-/** "Confirma que eres tú" (canvas BoMfa / BoMfaError): 6-digit second factor. */
+/**
+ * "Confirma que eres tú" (canvas BoMfa / BoMfaError): the 6-digit code of the
+ * authenticator app. The canvas "Otro método" chips (SMS, backup code) are left
+ * out: nothing sends an SMS or issues backup codes in this product.
+ */
 export function MfaScreen({
   challengeId,
   email,
-  methods,
   onSignedIn,
   onLocked,
   onRestart,
   showDevHint = false,
 }: MfaScreenProps) {
   const [code, setCode] = useState('')
-  const options = availableMfaMethods(methods)
-  const [method, setMethod] = useState<MfaMethodId>(() => options[0]?.id ?? 'totp')
   const [failure, setFailure] = useState<string | null>(null)
   const [incomplete, setIncomplete] = useState(false)
   const verifyMutation = useVerifyMfaMutation()
   const hintId = useId()
   const codeRef = useRef<CodeInputHandle>(null)
-  const current = options.find((item) => item.id === method) ?? options[0]
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -55,7 +54,7 @@ export function MfaScreen({
     }
     setFailure(null)
     verifyMutation.mutate(
-      { challengeId, code, method },
+      { challengeId, code, method: MFA_METHOD },
       {
         onSuccess: onSignedIn,
         onError: (error) => {
@@ -73,9 +72,7 @@ export function MfaScreen({
   }
 
   const hint =
-    incomplete && !isCompleteCode(code)
-      ? `Escribe los ${MFA_CODE_LENGTH} dígitos.`
-      : (current?.hint ?? '')
+    incomplete && !isCompleteCode(code) ? `Escribe los ${MFA_CODE_LENGTH} dígitos.` : MFA_HINT
 
   return (
     <>
@@ -89,7 +86,7 @@ export function MfaScreen({
           </span>
         }
         title="Confirma que eres tú"
-        subtitle={current?.instructions}
+        subtitle={MFA_INSTRUCTIONS}
       />
 
       <form
@@ -126,25 +123,6 @@ export function MfaScreen({
           Entrar
         </Button>
       </form>
-
-      {options.length > 1 ? (
-        <div className="flex flex-col gap-2 border-t border-border pt-3.5">
-          <span aria-hidden="true" className="text-13 font-semibold text-ink-2">
-            Otro método
-          </span>
-          <SegmentedControl
-            label="Otro método"
-            variant="pills"
-            options={options.map((item) => ({ value: item.id, label: item.label }))}
-            value={method}
-            onValueChange={(next) => {
-              setMethod(next)
-              setCode('')
-              setFailure(null)
-            }}
-          />
-        </div>
-      ) : null}
     </>
   )
 }

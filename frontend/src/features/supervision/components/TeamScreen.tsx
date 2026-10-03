@@ -13,7 +13,13 @@ import {
   type UrlStateChangeOptions,
 } from '../model'
 import { useNow } from '@/lib/hooks'
-import { useQueueNotices, useQueueOverview, useSupervisionLive, useTeamOverview } from '../hooks'
+import {
+  useIsAssigning,
+  useQueueNotices,
+  useQueueOverview,
+  useSupervisionLive,
+  useTeamOverview,
+} from '../hooks'
 import type { AssignmentResult, CaseSummary, TeamAnalyst } from '../types'
 import { AnalystSheet } from './AnalystSheet'
 import { AnalystsPanel } from './AnalystsPanel'
@@ -65,16 +71,29 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
     if (unknownAnalyst) onStateChange({ analystId: null }, { replace: true })
   }, [unknownAnalyst, onStateChange])
 
-  // ?asignar= of a case that is neither queued nor open any more: drop it.
-  const assignSummary = state.assignCaseId
+  // ?asignar=: the case as the overviews show it now. Team and queues refetch
+  // separately (the team's is throttled), so right after an assignment the queues
+  // can drop the case before the team lists it under the analyst. Keep the summary
+  // the dialog last showed for that window: unmounting it would lose the `mutate`
+  // callbacks (the result strip, clearing `?asignar=`), and the team refetch would
+  // then reopen it as "Reasignar caso".
+  const liveSummary = state.assignCaseId
     ? findCaseSummary(state.assignCaseId, team.data, queues.data)
     : null
+  const [keptSummary, setKeptSummary] = useState<CaseSummary | null>(null)
+  if (liveSummary && liveSummary !== keptSummary) setKeptSummary(liveSummary)
+  const assignSummary =
+    liveSummary ?? (keptSummary && keptSummary.id === state.assignCaseId ? keptSummary : null)
+
+  // A case that is neither queued nor open any more (both overviews settled, no
+  // assignment of it in flight): drop ?asignar=.
+  const assigning = useIsAssigning(state.assignCaseId)
   const settled =
     team.status === 'success' &&
     queues.status === 'success' &&
     !team.isFetching &&
     !queues.isFetching
-  const unknownCase = state.assignCaseId !== null && settled && !assignSummary
+  const unknownCase = state.assignCaseId !== null && settled && !liveSummary && !assigning
   useEffect(() => {
     if (unknownCase) onStateChange({ assignCaseId: null }, { replace: true })
   }, [unknownCase, onStateChange])

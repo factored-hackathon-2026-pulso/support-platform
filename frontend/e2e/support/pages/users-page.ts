@@ -1,0 +1,98 @@
+import { expect, type Locator, type Page } from '@playwright/test'
+import type { Language } from '../data'
+import type { RoleLabel } from './app-shell'
+
+const LANGUAGE_LABEL: Record<Language, string> = { es: 'Español', pt: 'Portugués' }
+
+/** "Usuarios y roles" (`/administracion/usuarios`): table + the "Persona seleccionada" aside. */
+export class UsersPage {
+  readonly table: Locator
+  readonly aside: Locator
+
+  readonly page: Page
+
+  constructor(page: Page) {
+    this.page = page
+    this.table = page.getByRole('table', { name: 'Personas' })
+    this.aside = page.getByRole('complementary', { name: 'Persona seleccionada' })
+  }
+
+  async goto(): Promise<void> {
+    await this.page.goto('/administracion/usuarios')
+    await expect(
+      this.page.getByRole('heading', { level: 1, name: 'Usuarios y roles' }),
+    ).toBeVisible()
+  }
+
+  /** The row of this person (the "Cuenta" filter must include her status). */
+  row(name: string): Locator {
+    return this.table.getByRole('row').filter({
+      has: this.page.getByRole('button', { name, exact: true }),
+    })
+  }
+
+  async search(text: string): Promise<void> {
+    await this.page.getByRole('searchbox', { name: 'Buscar persona' }).fill(text)
+  }
+
+  /** Selects the person: her account form opens in the aside. */
+  async select(name: string): Promise<Locator> {
+    await this.search(name)
+    await this.row(name).getByRole('button', { name, exact: true }).click()
+    const form = this.accountForm(name)
+    await expect(form).toBeVisible()
+    return form
+  }
+
+  accountForm(name: string): Locator {
+    return this.aside.getByRole('form', { name: `Cuenta de ${name}` })
+  }
+
+  roleCheckbox(name: string, role: RoleLabel): Locator {
+    return this.accountForm(name)
+      .getByRole('group', { name: 'Roles' })
+      .getByRole('checkbox', { name: new RegExp(`^${role}\\b`) })
+  }
+
+  /** "Nueva persona" → fill the form → "Crear cuenta" → the temporary password shown once. */
+  async createPerson(input: {
+    name: string
+    email: string
+    roles: RoleLabel[]
+    languages: Language[]
+    team: string
+  }): Promise<string> {
+    await this.page.getByRole('button', { name: 'Nueva persona' }).click()
+    const dialog = this.page.getByRole('dialog', { name: 'Nueva persona' })
+    await expect(dialog).toBeVisible()
+    const form = dialog.getByRole('form', { name: 'Nueva persona' })
+    await form.getByRole('textbox', { name: 'Nombre completo' }).fill(input.name)
+    await form.getByRole('textbox', { name: 'Correo' }).fill(input.email)
+    for (const role of input.roles) {
+      await form
+        .getByRole('group', { name: 'Roles' })
+        .getByRole('checkbox', { name: new RegExp(`^${role}\\b`) })
+        .check()
+    }
+    for (const language of input.languages) {
+      await form
+        .getByRole('group', { name: 'Idiomas' })
+        .getByRole('checkbox', { name: LANGUAGE_LABEL[language], exact: true })
+        .check()
+    }
+    await form.getByRole('combobox', { name: 'Equipo' }).selectOption({ label: input.team })
+    await dialog.getByRole('button', { name: 'Crear cuenta' }).click()
+
+    const created = this.page.getByRole('dialog', { name: 'Cuenta creada' })
+    await expect(created).toBeVisible()
+    // "Contraseña temporal: " is the visually hidden prefix of the shown password.
+    const secret = created.getByText(/^Contraseña temporal:\s*\S+$/)
+    await expect(secret).toBeVisible()
+    const password = ((await secret.textContent()) ?? '')
+      .replace(/^Contraseña temporal:\s*/, '')
+      .trim()
+    await created.getByRole('button', { name: 'Listo' }).click()
+    await expect(created).toBeHidden()
+    return password
+  }
+}

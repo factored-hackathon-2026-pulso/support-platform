@@ -7,7 +7,7 @@
   "env": {
     "browser": true
   },
-  "ignorePatterns": ["dist", "node_modules"],
+  "ignorePatterns": ["dist", "node_modules", "playwright-report", "test-results"],
   "rules": {
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",
@@ -98,6 +98,16 @@
       "files": ["src/app/session.tsx"],
       "rules": {
         "react/only-export-components": "off"
+      }
+    },
+    {
+      "files": ["e2e/**", "playwright.config.ts"],
+      "env": {
+        "node": true,
+        "browser": false
+      },
+      "rules": {
+        "react/rules-of-hooks": "off"
       }
     }
   ]

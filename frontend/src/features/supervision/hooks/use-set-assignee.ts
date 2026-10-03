@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query'
 import { conversationKeys } from '@/features/conversation'
 import type { ApiProblem } from '@/lib/api'
 import { setCaseAssignee, supervisionKeys, supervisionMutationKeys } from '../api'
@@ -23,6 +23,20 @@ export function useSetAssignee(caseId: string) {
       void queryClient.invalidateQueries({ queryKey: supervisionKeys.queues() })
     },
   })
+}
+
+/**
+ * Whether a PUT …/assignee of this case is in flight (from any dialog). While it
+ * is, the screen keeps the dialog open even if the overviews briefly lose the
+ * case (the queues refetch lands before the team's): closing it then would drop
+ * the `mutate` callbacks that report the result and clear `?asignar=`.
+ */
+export function useIsAssigning(caseId: string | null): boolean {
+  const count = useIsMutating({
+    mutationKey: supervisionMutationKeys.assign(caseId ?? ''),
+    exact: true,
+  })
+  return caseId !== null && count > 0
 }
 
 /** After a failure that may mean stale data (`assignment_changed`, `case_closed`…). */

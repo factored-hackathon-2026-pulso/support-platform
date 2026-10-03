@@ -1,7 +1,13 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SupervisionApi from '@/features/supervision/api'
-import { fetchQueueOverview, fetchTeamOverview, setCaseAssignee } from '@/features/supervision/api'
+import type { AssignmentResult, TeamOverview } from '@/features/supervision'
+import {
+  fetchQueueOverview,
+  fetchTeamOverview,
+  setCaseAssignee,
+  supervisionKeys,
+} from '@/features/supervision/api'
 import { ApiProblem } from '@/lib/api'
 import { NOW, makeCaseSummary } from '@/test/case-fixtures'
 import { makeCaseDetail } from '@/test/conversation-fixtures'
@@ -12,11 +18,13 @@ import {
   JULIAN_ID,
   PACIFICO,
   SEBASTIAN_ID,
+  daniela,
   emptyQueues,
   julianCamila,
   makeQueueOverview,
   makeTeamOverview,
   queuedGabriela,
+  seededAnalysts,
 } from '@/test/supervision-fixtures'
 
 vi.mock('@/features/supervision/api', async (importOriginal) => {
@@ -149,7 +157,10 @@ describe('Equipo y colas', () => {
     await user.click(
       within(sheet).getByRole('link', { name: 'Ver conversación de Camila Torres Benavides' }),
     )
-    expect(router.state.location.pathname).toBe(`/supervision/casos/${julianCamila.id}`)
+    // Another (lazy) route: the navigation commits once its module has loaded.
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/supervision/casos/${julianCamila.id}`),
+    )
     expect(router.state.location.state).toEqual({
       from: `/supervision/equipo?estado=en-pausa&analista=${JULIAN_ID}`,
     })
@@ -327,6 +338,128 @@ describe('assign dialog', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Daniela' }))
     expect(await screen.findByText('Daniela ya tenía este caso.')).toBeInTheDocument()
     expect(screen.queryByText(/Listo ·/)).not.toBeInTheDocument()
+  })
+
+  describe('while the assignment is on its way (realtime refetches race the answer)', () => {
+    const gabrielaWithDaniela = makeCaseSummary({
+      ...queuedGabriela,
+      status: 'assigned',
+      inboxStatus: 'new',
+      assignedAnalystId: DANIELA_ID,
+    })
+    const assignedToDaniela: AssignmentResult = {
+      changed: true,
+      case: gabrielaWithDaniela,
+      assignment: { ...makeCaseDetail().assignment!, analystId: DANIELA_ID, reason: 'manual' },
+    }
+    /** The team after the assignment: Gabriela is one of Daniela's open cases. */
+    const teamAfter = makeTeamOverview({
+      analysts: seededAnalysts.map((analyst) =>
+        analyst.id === DANIELA_ID
+          ? { ...daniela, openCases: [...daniela.openCases, gabrielaWithDaniela] }
+          : analyst,
+      ),
+    })
+    const queuesAfter = makeQueueOverview({
+      queues: makeQueueOverview().queues.map((q) =>
+        q.language === 'pt' ? { ...q, waiting: 0, oldestQueuedAt: null, cases: [] } : q,
+      ),
+    })
+
+    function deferred<T>() {
+      let resolve!: (value: T) => void
+      const promise = new Promise<T>((r) => {
+        resolve = r
+      })
+      return { promise, resolve }
+    }
+
+    async function submitToDaniela() {
+      const answer = deferred<AssignmentResult>()
+      vi.mocked(setCaseAssignee).mockReturnValue(answer.promise)
+      const rendered = renderTeam(`/supervision/equipo?asignar=${queuedGabriela.id}`)
+      const dialog = await screen.findByRole('dialog', { name: 'Asignar caso' })
+      await rendered.user.click(within(dialog).getByRole('radio', { name: 'Daniela Ríos' }))
+      await rendered.user.click(within(dialog).getByRole('button', { name: 'Asignar a Daniela' }))
+      expect(setCaseAssignee).toHaveBeenCalledTimes(1)
+      return { ...rendered, answer }
+    }
+
+    it('keeps the dialog when the queues update lands before the team update, and never reopens it', async () => {
+      const { router, queryClient, answer } = await submitToDaniela()
+
+      // Realtime: the queues refetch lands (Gabriela left the queue) while the
+      // team's is still on its way, so for a moment the case is in neither list.
+      const team = deferred<TeamOverview>()
+      vi.mocked(fetchTeamOverview).mockReturnValue(team.promise)
+      vi.mocked(fetchQueueOverview).mockResolvedValue(queuesAfter)
+      act(() => {
+        void queryClient.invalidateQueries({ queryKey: supervisionKeys.all })
+      })
+      expect(
+        await within(queue('Cola en portugués')).findByText('Sin casos en espera.'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('dialog', { name: 'Asignar caso' })).toBeInTheDocument()
+      expect(router.state.location.search).toBe(`?asignar=${queuedGabriela.id}`)
+
+      // The answer arrives: the dialog closes, ?asignar= goes, the strip reports it.
+      await act(async () => answer.resolve(assignedToDaniela))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(router.state.location.search).toBe('')
+      expect(
+        screen.getByText(
+          'El caso de Gabriela Duarte Melo pasó a Daniela Ríos. La cola en portugués quedó en 0.',
+        ),
+      ).toBeInTheDocument()
+
+      // The team update lands with Gabriela under Daniela: nothing reopens.
+      await act(async () => team.resolve(teamAfter))
+      await waitFor(() =>
+        expect(queryClient.getQueryData(supervisionKeys.team())).toEqual(teamAfter),
+      )
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('keeps ?asignar= while the team refetch is still throttled (only the queues moved)', async () => {
+      const { router, queryClient, answer } = await submitToDaniela()
+
+      vi.mocked(fetchQueueOverview).mockResolvedValue(queuesAfter)
+      act(() => {
+        void queryClient.invalidateQueries({ queryKey: supervisionKeys.queues() })
+      })
+      expect(
+        await within(queue('Cola en portugués')).findByText('Sin casos en espera.'),
+      ).toBeInTheDocument()
+      // Both overviews are settled and neither lists the case, but its assignment is
+      // in flight: the case is not "gone", the dialog stays.
+      expect(screen.getByRole('dialog', { name: 'Asignar caso' })).toBeInTheDocument()
+      expect(router.state.location.search).toBe(`?asignar=${queuedGabriela.id}`)
+
+      await act(async () => answer.resolve(assignedToDaniela))
+      await waitFor(() => expect(router.state.location.search).toBe(''))
+      expect(screen.getByText(/pasó a Daniela Ríos/)).toBeInTheDocument()
+    })
+
+    it('keeps "Asignar caso" when the team shows the new holder before the answer', async () => {
+      const { queryClient, answer } = await submitToDaniela()
+
+      vi.mocked(fetchTeamOverview).mockResolvedValue(teamAfter)
+      vi.mocked(fetchQueueOverview).mockResolvedValue(queuesAfter)
+      act(() => {
+        void queryClient.invalidateQueries({ queryKey: supervisionKeys.all })
+      })
+      await waitFor(() =>
+        expect(queryClient.getQueryData(supervisionKeys.team())).toEqual(teamAfter),
+      )
+      const dialog = screen.getByRole('dialog', { name: 'Asignar caso' })
+      expect(dialog).toHaveAccessibleDescription(/Espera 6 min en la cola/)
+      expect(within(dialog).getByRole('radio', { name: 'Daniela Ríos' })).toBeChecked()
+      expect(screen.queryByRole('dialog', { name: 'Reasignar caso' })).not.toBeInTheDocument()
+
+      await act(async () => answer.resolve(assignedToDaniela))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(screen.getByText(/pasó a Daniela Ríos/)).toBeInTheDocument()
+    })
   })
 
   it('drops ?asignar= for a case that is neither queued nor open', async () => {

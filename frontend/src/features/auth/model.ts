@@ -18,8 +18,6 @@ export type MfaMethodId = Schemas['MfaMethod']
 export interface MfaRouteState {
   challengeId: string
   email: string
-  /** Methods the account can use (from POST /auth/login). */
-  methods?: MfaMethodId[]
   /** Page the user originally asked for (kept for the post-login redirect). */
   from?: string
 }
@@ -34,23 +32,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-const MFA_METHOD_IDS: readonly MfaMethodId[] = ['totp', 'sms', 'backup_code']
-
-function isMfaMethod(value: unknown): value is MfaMethodId {
-  return typeof value === 'string' && (MFA_METHOD_IDS as readonly string[]).includes(value)
-}
-
 export function readMfaState(state: unknown): MfaRouteState | null {
   if (!isRecord(state)) return null
-  const { challengeId, email, methods, from } = state
+  const { challengeId, email, from } = state
   if (typeof challengeId !== 'string' || !challengeId || typeof email !== 'string') return null
-  const validMethods = Array.isArray(methods) ? methods.filter(isMfaMethod) : []
-  return {
-    challengeId,
-    email,
-    ...(validMethods.length > 0 ? { methods: validMethods } : {}),
-    ...(typeof from === 'string' ? { from } : {}),
-  }
+  return { challengeId, email, ...(typeof from === 'string' ? { from } : {}) }
 }
 
 export function readLockedState(state: unknown): LockedRouteState {
@@ -135,7 +121,7 @@ export function describeMfaFailure(error: unknown): AuthFailure {
     case 'mfa_invalid':
       return {
         kind: 'message',
-        message: `El código no es válido o ya venció. Escribe el código que muestra ahora tu app, o elige otro método abajo.${attemptsSentence(problem.numberExtension('remainingAttempts'))}`,
+        message: `El código no es válido o ya venció. Escribe el código que muestra ahora tu app.${attemptsSentence(problem.numberExtension('remainingAttempts'))}`,
       }
     case 'mfa_challenge_invalid':
       return {
@@ -155,44 +141,26 @@ export function isCompleteCode(code: string): boolean {
   return new RegExp(`^\\d{${MFA_CODE_LENGTH}}$`).test(code)
 }
 
-export interface MfaMethod {
-  id: MfaMethodId
-  label: string
-  instructions: string
-  hint: string
-}
+/**
+ * The one second factor the product offers: the authenticator app. The API also
+ * names `sms` and `backup_code`, but nothing sends an SMS or issues backup codes,
+ * so the screen never offers them (no false "we sent you a code").
+ */
+export const MFA_METHOD: MfaMethodId = 'totp'
+export const MFA_INSTRUCTIONS = 'Escribe el código de 6 dígitos de tu aplicación de autenticación.'
+export const MFA_HINT = 'El código cambia cada 30 segundos.'
 
-/** Copy from the canvas (BoMfa); `id` is the API `MfaMethod` sent with the code. */
-export const MFA_METHODS: readonly MfaMethod[] = [
-  {
-    id: 'totp',
-    label: 'App de autenticación',
-    instructions: 'Escribe el código de 6 dígitos de tu aplicación de autenticación.',
-    hint: 'El código cambia cada 30 segundos.',
-  },
-  {
-    id: 'sms',
-    label: 'SMS',
-    instructions: 'Te enviamos un código por SMS a tu celular registrado.',
-    hint: 'Si no llega en un minuto, elige otro método.',
-  },
-  {
-    id: 'backup_code',
-    label: 'Código de respaldo',
-    instructions:
-      'Escribe uno de los códigos de respaldo que guardaste al activar el segundo factor.',
-    hint: 'Cada código de respaldo sirve una sola vez.',
-  },
-]
+// ── Who helps: Administración unlocks and resets in "Usuarios y roles" (slice 4) ──
 
-/** The methods to offer: the ones the API allows for this challenge, in canvas order. */
-export function availableMfaMethods(
-  allowed: readonly MfaMethodId[] | undefined,
-): readonly MfaMethod[] {
-  if (!allowed || allowed.length === 0) return MFA_METHODS
-  const filtered = MFA_METHODS.filter((method) => allowed.includes(method.id))
-  return filtered.length > 0 ? filtered : MFA_METHODS
-}
+/** Locked account: the only way out before the countdown ends. */
+export const LOCKED_HELP =
+  'Pide a Administración que desbloquee tu cuenta o restablezca tu contraseña.'
+/** "¿La olvidaste?": there is no self-service reset link. */
+export const FORGOT_PASSWORD_HELP =
+  'Pide a Administración que la restablezca en Usuarios y roles: te dará una contraseña temporal.'
+/** "¿Problemas para entrar?" footer. */
+export const SIGN_IN_HELP =
+  'Administración desbloquea tu cuenta o restablece tu contraseña en Usuarios y roles.'
 
 // ── Lockout countdown ──
 

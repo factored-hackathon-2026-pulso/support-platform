@@ -47,14 +47,17 @@ async def builder_world(
     if persistence == "sqlalchemy":
         overrides["database_url"] = f"sqlite+aiosqlite:///{tmp_path / 'builder.db'}"
     clock = FixedClock()
-    registry = InMemoryAgentRegistry(clock=clock)
-    runtime = InMemoryAgentRuntime()
+    keys = AgentSigningKeys.generate(suffix="b")
+    # like agent-core: the registry verifies against the staff keys, the runtime against the
+    # identity keys
+    registry = InMemoryAgentRegistry(clock=clock, staff_kid=keys.staff.kid)
+    runtime = InMemoryAgentRuntime(principal_kid=keys.principal.kid)
     container = build_container(
         make_settings(**overrides),
         clock=clock,
         ids=SequentialIdGenerator(),
         agent_core=AgentCoreServices(
-            issuer=Ed25519AgentCredentialIssuer(AgentSigningKeys.generate(suffix="b"), clock),
+            issuer=Ed25519AgentCredentialIssuer(keys, clock),
             runtime=runtime,
             registry=registry if with_registry else None,
         ),

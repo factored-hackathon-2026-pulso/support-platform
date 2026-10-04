@@ -19,6 +19,7 @@ from cc_platform.application.ai.errors import (
 from cc_platform.application.ai.use_cases import BuilderUseCases
 from cc_platform.application.errors import ForbiddenError
 from cc_platform.domain.cases.errors import IdempotencyConflictError
+from cc_platform.infrastructure.ai.keys import read_jws
 from cc_platform.infrastructure.seed.people import seed_staff_id
 from tests.assistant_support import decode, turn
 from tests.builder_support import AGENT, BuilderWorld, builder_events, builder_world
@@ -68,6 +69,8 @@ async def test_the_builder_answers_as_the_supervisor_and_only_proposes(world: Bu
     assert start.arguments["agent"] == "constructor-chat@prod"
     assert start.credentials is not None
     assert start.credentials.on_behalf_of is None  # no delegation: nothing about a customer
+    # the runtime verifies principals against the identity keys (the double refuses another key)
+    assert read_jws(start.credentials.authorization)[0]["kid"] == world.runtime.principal_kid
     principal = decode(start.credentials.authorization)
     assert (principal["type"], principal["id"]) == ("builder", LUCIA)
     assert sorted(principal["roles"]) == ["aprobador", "constructor"]

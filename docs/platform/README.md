@@ -17,7 +17,7 @@ Roles combine (one person can hold several and switch between them):
 | Every role | The bell in the rail: her notifications ("Nuevas" / "Anteriores"), live toasts with "Más tarde" (slice 10) |
 | Administración | "Usuarios y roles", "Equipos", "Auditoría" |
 
-AI returns through `agent-core` (ADR 0003, 2026-10-04): an agent-handled customer chat that escalates to an analyst, an analyst copilot and agent building for supervisors. It is planned, not built yet.
+AI returns through `agent-core` (ADR 0003, 2026-10-04): an agent-handled customer chat that escalates to an analyst, an analyst copilot and agent building for supervisors. The backend of the first three is built (slices 14, 15 and 16: the builder is a client of agent-core's registry, with a fresh authenticator code for approving and publishing); the screens are the frontend team's, from the hand-overs below.
 
 Out of scope and not built anywhere: AI other than through `agent-core`, an analyst-facing action catalog or actions on bank systems,
 customer or bank data, identity checks, approvals, automation, calls, email, analyst-to-analyst
@@ -37,6 +37,7 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | English | **Superseded (2026-10-03).** Kept only as a record; do not implement it. |
 | [adr/0003-agent-core-integration.md](./adr/0003-agent-core-integration.md) | English | AI returns through `agent-core`: agent-handled chat and escalation, analyst copilot, agent builder, identity issuer, tools over HTTP, slice plan S13–S17. |
 | [api/slice-14-assistant.md](./api/slice-14-assistant.md) | English | **Hand-over for the frontend.** Slice 14 (ADR 0003): the assistant (agent-core) handles chats first: the `with_assistant` case state, confirmation and step-up endpoints, ask-for-a-person, the analyst's handoff packet and its label, supervision release, realtime, the contract changes to regenerate types from, error codes, configuration. |
+| [api/slice-16-agent-builder.md](./api/slice-16-agent-builder.md) | English | **Hand-over for the frontend.** Slice 16 (ADR 0003 §7): the agent builder for Supervisión and Administración: proposals through agent-core's registry (`/builder/*`), the fresh authenticator code (`stepUpCode`) behind approve, reject, publish, promote and revoke, the builder chat (`constructor-chat`), errors, what to build, known gaps (no `eval_suite` yet). |
 | [api/slice-15-copilot.md](./api/slice-15-copilot.md) | English | **Hand-over for the frontend.** Slice 15 (ADR 0003): the analyst's copilot (`copiloto-asesor`): a thread per (case, analyst), `GET` and `POST` endpoints, idempotent questions stored before the call, what to build, known gaps. |
 | [api/slice-1-cases.md](./api/slice-1-cases.md) | English | Slice 1 contract (live chat, inbox, simulator). **Partly superseded** by slice 2; kept as the record. |
 | [api/slice-2-case-lifecycle.md](./api/slice-2-case-lifecycle.md) | English | Slice 2: the scope-cut removal list and the case life cycle (statuses, close with a reason, linked case after a close, case history, first-response SLA, `AssignCase`), seed. |

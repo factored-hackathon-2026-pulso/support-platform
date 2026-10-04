@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from cc_platform.application.ai.builder import AgentBuilder
+from cc_platform.application.ai.builder import AgentBuilder, identity_of
 from cc_platform.application.ai.errors import (
     AgentCoreUnavailableError,
     BuilderStepUpInvalidError,
@@ -24,6 +24,7 @@ from cc_platform.application.ai.errors import (
     RegistryValidationFailedError,
 )
 from cc_platform.application.ai.registry import (
+    AgentRegistryError,
     ProposalState,
     Violation,
     YardstickChange,
@@ -89,6 +90,24 @@ async def test_administration_adds_the_admin_role(world: BuilderWorld) -> None:
     assert principal["id"] == VALERIA
     assert sorted(principal["roles"]) == ["admin", "aprobador", "constructor"]
     assert principal["attrs"] == {"actor": "human"}
+
+
+async def test_the_registry_only_trusts_the_staff_key(world: BuilderWorld) -> None:
+    """agent-core verifies the registry's principals against ``--staff-keys``: the credential the
+    platform signs for the *runtime* (identity key) is refused there, like a forged one."""
+    assert world.container.agent_core is not None
+    issuer = world.container.agent_core.issuer
+    identity = identity_of(actor_for(SUPERVISOR))
+
+    with pytest.raises(AgentRegistryError) as refused:
+        await world.registry.create_proposal(
+            issuer.builder_run(identity), agent_id=AGENT, title="Cambio"
+        )
+    assert refused.value.code == "credentials_invalid"
+    created = await world.registry.create_proposal(
+        issuer.builder(identity), agent_id=AGENT, title="Cambio"
+    )
+    assert created.created_by == LUCIA
 
 
 async def test_an_analyst_has_no_agent_builder(world: BuilderWorld) -> None:

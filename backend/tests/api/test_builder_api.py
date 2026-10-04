@@ -38,13 +38,20 @@ DRAFT = {
 
 
 @pytest.fixture
-def registry(clock: FixedClock) -> InMemoryAgentRegistry:
-    return InMemoryAgentRegistry(clock=clock)
+def keys() -> AgentSigningKeys:
+    return AgentSigningKeys.generate(suffix="t")
 
 
 @pytest.fixture
-def runtime() -> InMemoryAgentRuntime:
-    return InMemoryAgentRuntime()
+def registry(clock: FixedClock, keys: AgentSigningKeys) -> InMemoryAgentRegistry:
+    # like agent-core: the registry verifies against the staff keys, the runtime against the
+    # identity keys
+    return InMemoryAgentRegistry(clock=clock, staff_kid=keys.staff.kid)
+
+
+@pytest.fixture
+def runtime(keys: AgentSigningKeys) -> InMemoryAgentRuntime:
+    return InMemoryAgentRuntime(principal_kid=keys.principal.kid)
 
 
 @pytest.fixture
@@ -53,13 +60,14 @@ def container(
     tmp_path: Path,
     registry: InMemoryAgentRegistry,
     runtime: InMemoryAgentRuntime,
+    keys: AgentSigningKeys,
 ) -> Container:
     return build_container(
         make_settings(database_url=f"sqlite+aiosqlite:///{tmp_path / 'builder-api.db'}"),
         clock=clock,
         ids=SequentialIdGenerator(),
         agent_core=AgentCoreServices(
-            issuer=Ed25519AgentCredentialIssuer(AgentSigningKeys.generate(suffix="t"), clock),
+            issuer=Ed25519AgentCredentialIssuer(keys, clock),
             runtime=runtime,
             registry=registry,
         ),

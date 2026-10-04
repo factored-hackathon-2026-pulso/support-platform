@@ -145,6 +145,43 @@ def test_builder_roles_and_level_come_from_the_identity(
     assert payload["auth"]["level"] == level  # type: ignore[index]
 
 
+def test_a_step_up_credential_is_short_lived_and_the_ordinary_one_is_not(
+    issuer: Ed25519AgentCredentialIssuer,
+) -> None:
+    _, ordinary, _, _ = split(issuer.builder(BuilderIdentity("STF-1", approver=True)).authorization)
+    _, fresh, _, _ = split(
+        issuer.builder(BuilderIdentity("STF-1", approver=True, step_up=True)).authorization
+    )
+
+    assert ordinary["exp"] == "2026-10-04T15:05:00Z"  # the issuer's ttl (5 minutes in this test)
+    assert fresh["exp"] == "2026-10-04T15:02:00Z"  # a second factor is fresh for two minutes
+
+
+def test_the_registry_and_the_runtime_get_the_same_person_signed_by_different_keys(
+    issuer: Ed25519AgentCredentialIssuer, keys: AgentSigningKeys
+) -> None:
+    """agent-core verifies the registry's principals against ``--staff-keys`` and the runtime's
+    (``POST /v1/runs``: the builder chat) against ``--identity-keys``: found against a real
+    agent-core, where a staff-signed credential answered ``credentials_invalid`` on a run."""
+    identity = BuilderIdentity("STF-1", approver=True, admin=True, step_up=True)
+
+    registry = issuer.builder(identity).authorization
+    run = issuer.builder_run(identity).authorization
+
+    verify(registry, keys.staff.public_b64url())
+    verify(run, keys.principal.public_b64url())
+    with pytest.raises(InvalidSignature):
+        verify(run, keys.staff.public_b64url())
+    with pytest.raises(InvalidSignature):
+        verify(registry, keys.principal.public_b64url())
+    header, payload, _, _ = split(run)
+    assert header == {"alg": "EdDSA", "kid": keys.principal.kid, "typ": PRINCIPAL_TYP}
+    assert (payload["type"], payload["id"]) == ("builder", "STF-1")
+    assert payload["roles"] == ["constructor", "aprobador", "admin"]
+    assert payload["attrs"] == {"actor": "human"}
+    assert payload["auth"]["level"] == "session"  # type: ignore[index]  # the chat never has step-up
+
+
 def test_credentials_never_show_in_repr(issuer: Ed25519AgentCredentialIssuer) -> None:
     credentials = issuer.customer(bank_customer_id="C-1", session_id="s")
 

@@ -10,6 +10,7 @@ checked by agent-core with its own clock; credentials are minted per call and sh
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -89,6 +90,14 @@ class Ed25519AgentCredentialIssuer:
         )
 
     def builder(self, identity: BuilderIdentity) -> AgentCredentials:
+        principal = self._builder_principal(identity)
+        return AgentCredentials(_sign(self._keys.staff, PRINCIPAL_TYP, principal))
+
+    def builder_run(self, identity: BuilderIdentity) -> AgentCredentials:
+        principal = self._builder_principal(replace(identity, step_up=False))
+        return AgentCredentials(_sign(self._keys.principal, PRINCIPAL_TYP, principal))
+
+    def _builder_principal(self, identity: BuilderIdentity) -> dict[str, Any]:
         now = self._clock.now()
         roles = [
             role
@@ -99,7 +108,7 @@ class Ed25519AgentCredentialIssuer:
             )
             if held
         ]
-        principal = self._principal(
+        return self._principal(
             now,
             kind="builder",
             subject_id=identity.staff_id,
@@ -109,7 +118,6 @@ class Ed25519AgentCredentialIssuer:
             # a second factor is fresh for the one call it was asked for, not for ten minutes
             ttl=STEP_UP_TTL if identity.step_up else None,
         )
-        return AgentCredentials(_sign(self._keys.staff, PRINCIPAL_TYP, principal))
 
     def _principal(
         self,

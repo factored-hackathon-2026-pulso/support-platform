@@ -15,7 +15,6 @@ yardstick) and ``unavailable`` (an outage). Every call is recorded without crede
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 from collections.abc import Sequence
@@ -51,6 +50,7 @@ from cc_platform.application.ai.registry import (
 )
 from cc_platform.application.ai.runtime import AgentRuntimeUnavailableError
 from cc_platform.application.ports.clock import Clock
+from cc_platform.infrastructure.ai.keys import read_jws
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,12 +59,6 @@ class RecordedRegistryCall:
     arguments: dict[str, object]
     principal: dict[str, Any]
     """The principal the platform signed (type, id, roles, attrs, auth), as the registry read it."""
-
-
-def _principal(credentials: AgentCredentials) -> dict[str, Any]:
-    body = credentials.authorization.split(".")[1]
-    decoded = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
-    return decoded if isinstance(decoded, dict) else {}
 
 
 def _deny(code: str, detail: str, status: int = 403) -> AgentRegistryError:
@@ -76,6 +70,9 @@ class InMemoryAgentRegistry:
     clock: Clock
     calls: list[RecordedRegistryCall] = field(default_factory=list)
     unavailable: bool = False
+    staff_kid: str | None = None
+    """When set, the credential must be signed with this key id: the registry verifies
+    principals against the **staff** keys, so another key is ``credentials_invalid``."""
     violations: list[Violation] = field(default_factory=list)
     verdicts: list[str] = field(default_factory=list)
     loosened: list[YardstickChange] = field(default_factory=list)
@@ -93,7 +90,12 @@ class InMemoryAgentRegistry:
     def _enter(
         self, operation: str, credentials: AgentCredentials, **arguments: object
     ) -> dict[str, Any]:
-        principal = _principal(credentials)
+        header, principal = read_jws(credentials.authorization)
+        if self.staff_kid is not None and header.get("kid") != self.staff_kid:
+            self.calls.append(RecordedRegistryCall(operation, arguments, {}))
+            raise AgentRegistryError(
+                status=401, code="credentials_invalid", detail="firma de otro emisor"
+            )
         self.calls.append(RecordedRegistryCall(operation, arguments, principal))
         if self.unavailable:
             raise AgentRuntimeUnavailableError("scripted outage")

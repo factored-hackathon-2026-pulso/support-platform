@@ -132,7 +132,10 @@ class AskBuilder:
         self, actor: Actor, *, text: str, client_message_id: str
     ) -> BuilderExchangeView:
         ensure_any_role(actor, BUILDER_ROLES)
-        credentials = self.issuer.builder(identity_of(actor))
+        # the runtime verifies principals against the identity keys, the registry against the
+        # staff keys: the chat's run credential and the registry's are signed differently
+        run_credentials = self.issuer.builder_run(identity_of(actor))
+        registry_credentials = self.issuer.builder(identity_of(actor))
         stored = await retry_on_conflict(
             partial(self._store_message, actor, text, client_message_id)
         )
@@ -143,11 +146,13 @@ class AskBuilder:
                 proposals=(),
                 replayed=True,
             )
-        turn, session_id, run_started = await self._ask_agent(credentials, stored)
+        turn, session_id, run_started = await self._ask_agent(run_credentials, stored)
         answers = await retry_on_conflict(
             partial(self._store_answer, actor, stored, turn, session_id, run_started)
         )
-        tracked = await self._track_proposals(actor, credentials, [m.text for m in answers])
+        tracked = await self._track_proposals(
+            actor, registry_credentials, [m.text for m in answers]
+        )
         return BuilderExchangeView(
             message=_view(stored.message),
             answers=tuple(_view(m) for m in answers),

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from cc_platform.application.ai.builder_step_up import BUILDER_ROLES, BuilderStepUp
@@ -299,16 +299,16 @@ class AgentBuilder:
             if isinstance(f, ProposalDetail)
         }
         await self._refresh(fresh)
-        async with (
-            self.uow() as uow
-        ):  # what was stored, newest first (a state filter may drop rows)
-            stored = {
-                e.id: e
-                for e in await uow.builder_proposals.search(
-                    agent_id=agent_id, state=state, limit=size
-                )
-            }
-        return [summary_of(e, live=e.id in fresh) for e in stored.values()]
+        # what is stored now, newest first (a refreshed state may leave the ``state`` filter)
+        async with self.uow() as uow:
+            stored = await uow.builder_proposals.search(agent_id=agent_id, state=state, limit=size)
+        now = self.clock.now()
+        return [
+            replace(summary_of(e, live=True), refreshed_at=now)
+            if e.id in fresh
+            else summary_of(e, live=False)
+            for e in stored
+        ]
 
     async def _refresh(self, fresh: dict[str, Proposal]) -> None:
         if not fresh:
@@ -558,12 +558,13 @@ class AgentBuilder:
         too (verdict ``fail``: the proposal went back to draft) before the 409 reaches her."""
         self._ensure(actor)
         credentials = self._credentials(actor)
-        ref, now = self._ref(actor), self.clock.now()
+        ref = self._ref(actor)
 
         def evaluated(report: EvalReport) -> Callable[[str], list[DomainEvent]]:
+            # the time the verdict arrived: an evaluation takes as long as the agent's scenarios
             return lambda agent: [
                 BuilderProposalEvaluated(
-                    occurred_at=now,
+                    occurred_at=self.clock.now(),
                     actor=ref,
                     entity_id=proposal_id,
                     agent_id=agent,

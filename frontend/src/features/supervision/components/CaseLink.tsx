@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { Link } from 'react-router'
-import { supervisionCasePath } from '@/app/roles'
+import { supervisionCasePath } from '@/app/paths'
 import { buttonClasses } from '@/components/ui'
 import { cn } from '@/lib/cn'
 

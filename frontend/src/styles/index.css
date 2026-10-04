@@ -86,7 +86,7 @@
   --color-peach: #f7e6da;
 
   /*
-   * Customer mobile app (AppSupportChat.dc.html), used only by the /cliente
+   * Customer mobile app (AppSupportChat.dc.html), used only by the /customer
    * simulator so it reads as the customer's app, not the staff platform.
    * app-brand on white is 5.3:1; app-muted on app-canvas is 5.4:1.
    */

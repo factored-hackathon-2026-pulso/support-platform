@@ -34,6 +34,7 @@ import {
   Users,
   type LucideProps,
 } from 'lucide-react'
+import { languagesName, type LanguageCode } from './language'
 import { PriorityIcon } from './PriorityIcon'
 import type { PriorityLevel } from './priority-levels'
 
@@ -125,4 +126,23 @@ export interface FactItem {
   iconOnly?: boolean
   /** A tooltip with more context than the visible text (e.g. "Última actividad" on a time). */
   tooltip?: string
+  /**
+   * Languages as one mark (globe + codes) after the text ("Hablas [globe] PT"). With
+   * an empty text the mark stands in for the icon ("Idiomas: [globe] ES PT").
+   */
+  languages?: readonly LanguageCode[]
+  /**
+   * The text is this language's own name ("Português"): the globe stands in for the
+   * icon, as in an "Idioma" row ("[globe] Português"), with no code.
+   */
+  language?: LanguageCode
+}
+
+/**
+ * What a fact says to a screen reader, for a control that names itself from its facts:
+ * "Canal: App", "Por idioma: Português", "Hablas Português".
+ */
+export function spokenFact(fact: Pick<FactItem, 'label' | 'text' | 'languages'>): string {
+  const words = [fact.text, languagesName(fact.languages ?? [])].filter(Boolean).join(' ')
+  return fact.label ? `${fact.label}: ${words}` : words
 }

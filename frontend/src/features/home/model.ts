@@ -11,15 +11,14 @@
  * Each fact is its own short item (`FactItem`: icon + 1–3 words), the status a
  * glyph + word (`caseStatus`, the cases map), the time its own element with a clock.
  */
-import { workspacePath } from '@/app/roles'
-import type { FactItem, StatusAppearance, Tone } from '@/components/ui'
+import { workspacePath } from '@/app/paths'
+import { spokenFact, type FactItem, type StatusAppearance, type Tone } from '@/components/ui'
 import {
   ESCALATED_MARKER,
   INBOX_FILTERS,
   caseCardFacts,
   caseStatus,
   slaFact,
-  slugFromInboxStatus,
   sortByUrgency,
   type AvailabilityStatus,
   type CaseSummary,
@@ -27,7 +26,7 @@ import {
   type InboxCounts,
   type InboxStatus,
 } from '@/features/cases/core'
-import { LANGUAGE_NAMES, type Language } from '@/features/conversation/core'
+import type { Language } from '@/features/conversation/core'
 import {
   formatDate,
   formatLongDate,
@@ -130,7 +129,7 @@ export function statusTiles(counts: InboxCounts | undefined): StatusTile[] {
             tone: filter.tone,
             shape: caseStatus(filter.status).shape,
             count: counts ? counts[COUNT_OF[filter.status]] : null,
-            href: workspacePath({ filterSlug: slugFromInboxStatus(filter.status) }),
+            href: workspacePath({ status: filter.status }),
           },
         ]
       : [],
@@ -163,7 +162,7 @@ export interface FirstCaseRow {
 
 /** Workspace link of a case: open, with its status filter (its card is then on screen). */
 export function caseHref(caseId: string, inboxStatus: InboxStatus | null): string {
-  return workspacePath({ caseId, filterSlug: slugFromInboxStatus(inboxStatus) })
+  return workspacePath({ caseId, status: inboxStatus })
 }
 
 /**
@@ -243,14 +242,14 @@ function waitMinutes(seconds: number): number {
   return Math.max(1, Math.round(seconds / 60))
 }
 
-/** Rule 3 applied: the language as text, and the "Regla 3" tag only for Portuguese. */
+/** Rule 3 applied: the language mark, and the "Regla 3" tag only for Portuguese. */
 export function languageFact(language: Language): FactItem {
-  const name = LANGUAGE_NAMES[language]
   return {
     key: 'language',
     icon: 'languages',
-    text: name.charAt(0).toUpperCase() + name.slice(1),
+    text: '',
     label: 'Por idioma',
+    languages: [language],
     ...(language === 'pt' ? { tag: 'Regla 3' } : {}),
   }
 }
@@ -377,7 +376,7 @@ export function activityRow(item: HomeActivityItem, now: DateInput): ActivityRow
 
 /** Accessible name of a row link: who, what, the facts and the time, then where it goes. */
 export function activityLinkLabel(row: ActivityRow, reasonLabel?: string): string {
-  const facts = row.facts.map((fact) => (fact.label ? `${fact.label}: ${fact.text}` : fact.text))
+  const facts = row.facts.map(spokenFact)
   const parts = [
     row.status?.label,
     ...facts,
@@ -435,6 +434,8 @@ export const EMPTY_FEED_COPY = 'Nada nuevo desde tu última sesión'
 export interface TeamRow {
   key: string
   icon: FactItem['icon']
+  /** A queue row: its language mark stands in for the icon. */
+  language?: Language
   label: string
   value: string
   /** "Tú": she is one of the available ones. */
@@ -475,7 +476,8 @@ export function teamRows(team: HomeTeam, meAvailable: boolean, now: DateInput): 
     ...team.queues.map((queue) => ({
       key: `queue-${queue.language}`,
       icon: 'inbox' as const,
-      label: `Cola en ${LANGUAGE_NAMES[queue.language]}`,
+      language: queue.language,
+      label: 'Esperan en la cola',
       value: String(queue.waiting),
       tag: null,
       wait: queueWait(queue, now),

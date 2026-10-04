@@ -60,7 +60,6 @@ import {
   customerFileTriggerLabel,
   customerRows,
   firstResponseFacts,
-  languageName,
   previousCasesSectionTitle,
   ratingComment,
   ratingRow,
@@ -341,14 +340,15 @@ describe('header', () => {
     })
   })
 
-  it('adds "Portugués" for a Portuguese case (rule 3)', () => {
+  it('adds the PT language mark for a Portuguese case (rule 3)', () => {
     const pt = makeCaseDetail()
     pt.case = { ...pt.case, language: 'pt' }
     expect(caseHeaderFacts(pt).at(-1)).toEqual({
       key: 'language',
       icon: 'languages',
-      text: 'Portugués',
+      text: '',
       label: 'Idioma',
+      languages: ['pt'],
     })
   })
 
@@ -370,7 +370,7 @@ describe('arrival facts ("Cómo llegó a ti" / "Quién lo atiende")', () => {
       time: '5 mar, 10:46',
       facts: [
         { key: 'available', icon: 'check', text: 'Estabas disponible', tone: 'success' },
-        { key: 'language', icon: 'languages', text: 'Hablas español' },
+        { key: 'language', icon: 'languages', text: 'Hablas', languages: ['es'] },
       ],
     })
     const pt = makeCaseDetail()
@@ -378,7 +378,8 @@ describe('arrival facts ("Cómo llegó a ti" / "Quién lo atiende")', () => {
     expect(arrivalFacts(pt, ME)?.facts[1]).toEqual({
       key: 'language',
       icon: 'languages',
-      text: 'Hablas portugués',
+      text: 'Hablas',
+      languages: ['pt'],
       tag: 'Regla 3',
     })
   })
@@ -802,19 +803,17 @@ describe('close dialog', () => {
 describe('"Ficha del cliente" rows (slice 6 §5)', () => {
   const now = new Date('2026-03-05T16:00:00Z')
 
-  it('names the trigger and the language', () => {
+  it('names the trigger', () => {
     expect(customerFileTriggerLabel('Marcela Quintana Pardo')).toBe(
       'Ver ficha de Marcela Quintana Pardo',
     )
-    expect(languageName('pt')).toBe('Portugués')
-    expect(languageName('es')).toBe('Español')
   })
 
   it('lists who the customer is, one icon row each', () => {
     expect(customerRows(makeCaseDetail())).toEqual([
       { key: 'name', icon: 'user', label: 'Nombre', text: 'Marcela Quintana Pardo' },
       { key: 'place', icon: 'map-pin', label: 'Ciudad', text: 'Barranquilla, Colombia' },
-      { key: 'language', icon: 'languages', label: 'Idioma', text: 'Español' },
+      { key: 'language', icon: 'languages', label: 'Idioma', language: 'es' },
       {
         key: 'id',
         icon: 'id',

@@ -7,6 +7,7 @@ import {
   Fact,
   FACT_ICONS,
   FactList,
+  LanguageName,
   Skeleton,
   Status,
   type FactIcon,
@@ -20,6 +21,7 @@ import {
   customerRows,
   describeCaseLoadFailure,
   previousCasesSectionTitle,
+  PREVIOUS_CASES_LIST,
   type FileRow,
 } from '../model'
 import type { CaseDetail } from '../types'
@@ -29,7 +31,7 @@ import { CasePriorityControl } from './CasePriorityControl'
 export interface CustomerFileProps {
   /** The case open in the Workspace. */
   caseId: string
-  /** "Casos anteriores": `'lista'` (default) or a past case id (`?historial=`). */
+  /** "Casos anteriores": the list (default) or a past case id (`?previous=`). */
   history: string | null
   onHistoryChange(history: string): void
 }
@@ -102,7 +104,7 @@ export function CustomerFile({ caseId, history, onHistoryChange }: CustomerFileP
       <SidePanelSection title={previousCasesSectionTitle(detail.data.previousCaseCount)}>
         <CaseHistoryBrowser
           caseId={caseId}
-          selected={history ?? 'lista'}
+          selected={history ?? PREVIOUS_CASES_LIST}
           onSelect={onHistoryChange}
           headingLevel="h4"
         />
@@ -119,7 +121,7 @@ function pillIcon(icon: FactIcon | undefined) {
 
 /**
  * Label column (icon + label) and value column: text, the status, a rating pill, short
- * facts, or (slice 8) the priority menu of `detail`.
+ * facts, a language (globe + own name), or (slice 8) the priority menu of `detail`.
  */
 function FileRows({
   rows,
@@ -152,6 +154,8 @@ function FileRows({
                 </Badge>
               ) : row.facts ? (
                 <FactList items={row.facts} size="md" />
+              ) : row.language ? (
+                <LanguageName language={row.language} />
               ) : (
                 row.text
               )}

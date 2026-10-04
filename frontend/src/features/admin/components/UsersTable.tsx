@@ -2,6 +2,7 @@ import { SearchX } from 'lucide-react'
 import {
   Button,
   EmptyState,
+  LanguageMarks,
   QueryState,
   Skeleton,
   SourceNote,
@@ -14,7 +15,6 @@ import {
   Table,
   type QueryLike,
 } from '@/components/ui'
-import { languagesLabel } from '../model'
 import type { AdminUser, AdminUserList } from '../types'
 import { AccountStatusText } from './AccountStatusText'
 import { RoleChips } from './RoleChips'
@@ -32,7 +32,7 @@ export interface UsersTableProps {
 /**
  * "Personas" (Admin `usuarios`, contract §10.2): one row per person with her
  * roles, languages, team and account status. Selecting a row opens her aside
- * (`?persona=`).
+ * (`?person=`).
  */
 export function UsersTable({
   query,
@@ -118,7 +118,13 @@ function UserRow({ user, selected, now, onSelect }: UserRowProps) {
       <TCell>
         <RoleChips roles={user.roles} />
       </TCell>
-      <TCell muted>{languagesLabel(user.languages)}</TCell>
+      <TCell muted>
+        {user.languages.length > 0 ? (
+          <LanguageMarks languages={user.languages} />
+        ) : (
+          <span title="Sin idiomas">—</span>
+        )}
+      </TCell>
       <TCell muted className="max-w-[200px] truncate" title={user.team.name}>
         {user.team.name}
       </TCell>

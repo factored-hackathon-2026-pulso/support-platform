@@ -631,6 +631,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/cases/{caseId}/handoff': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The packet the assistant built when it escalated this case (assignee only)
+     * @description ADR 0003. Only the case's assignee analyst (403 `case_not_assigned` otherwise), and only for a case that came from an assistant escalation (404 `handoff_unavailable`). The platform asks agent-core with the analyst's own delegation on this customer, so what she sees in clear is decided there. 404 `assistant_disabled` while agent-core is not configured; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer or refuses.
+     */
+    get: operations['cases_get_handoff']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/cases/{caseId}/history': {
     parameters: {
       query?: never
@@ -851,6 +871,66 @@ export interface paths {
     get: operations['customer_get_conversation']
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/conversation/confirmation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Answer the assistant's confirmation (yes or no)
+     * @description ADR 0003. While `conversation.assistant.confirmation` is set, the assistant waits for a yes or no with its `token`. The answer is queued and the assistant's reply arrives as a turn over the socket (`turn.created` on `customer:<id>`); this call answers right away with the conversation. 409 `confirmation_not_pending` (wrong or already-answered token), `confirmation_expired`, `assistant_not_active` (people have the case now) or `assistant_busy`. 404 `assistant_disabled` while agent-core is not configured.
+     */
+    post: operations['customer_answer_confirmation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/conversation/human': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Ask to talk to a person instead of the assistant
+     * @description ADR 0003. The case leaves the assistant, goes to its language queue and is placed like any new arrival (rule 3): `status` becomes `waiting_agent`, then `with_agent`. 409 `assistant_not_active` when people already have it.
+     */
+    post: operations['customer_request_person']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/conversation/step-up': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Pass the second factor the assistant asked for
+     * @description ADR 0003. While `conversation.assistant.stepUp` is set. The second factor is simulated for now (`stepUp.simulated`): the development code is `CC_ASSISTANT_STEP_UP_CODE`. A wrong code is 422 `invalid_step_up_code` with `remainingAttempts`; the third wrong code hands the case to people. After a right one the assistant carries on by itself (its reply arrives over the socket). 409 `step_up_not_pending` / `assistant_not_active`.
+     */
+    post: operations['customer_verify_step_up']
     delete?: never
     options?: never
     head?: never
@@ -1269,6 +1349,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/supervision/cases/{caseId}/assistant/release': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Take a case from the assistant: it goes to the language queue
+     * @description ADR 0003. For a case in `with_assistant`: the assistant stops, the case becomes `queued` and `AssignCase` places it like any arrival (rule 3), with a staff banner. 409 `assistant_not_active` when the assistant does not hold it. 404 `assistant_disabled` while agent-core is not configured.
+     */
+    post: operations['supervision_release_assistant_case']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/supervision/escalations': {
     parameters: {
       query?: never
@@ -1431,7 +1531,7 @@ export interface components {
      * ActorRole
      * @enum {string}
      */
-    ActorRole: 'analyst' | 'supervisor' | 'admin' | 'customer' | 'system'
+    ActorRole: 'analyst' | 'supervisor' | 'admin' | 'customer' | 'system' | 'assistant'
     /**
      * AdminInvitation
      * @description Her invitation (part 4): present only while she is ``invited``. Never the token.
@@ -1670,6 +1770,19 @@ export interface components {
       sinceSource: components['schemas']['SinceSource']
       teamNow: components['schemas']['HomeTeam']
     }
+    /** AnswerConfirmationRequest */
+    AnswerConfirmationRequest: {
+      /**
+       * Answer
+       * @enum {string}
+       */
+      answer: 'yes' | 'no'
+      /**
+       * Token
+       * @description The `token` of the pending confirmation.
+       */
+      token: string
+    }
     /** AssignmentOut */
     AssignmentOut: {
       /** Analystid */
@@ -1718,7 +1831,8 @@ export interface components {
      *     ``outbound_call`` (she opened it to call the customer, slice 12).
      * @enum {string}
      */
-    AssignmentReason: 'language_least_loaded' | 'queue_drained' | 'manual' | 'outbound_call'
+    AssignmentReason:
+      'language_least_loaded' | 'queue_drained' | 'manual' | 'outbound_call' | 'assistant_handoff'
     /** AssignmentResult */
     AssignmentResult: {
       assignment: components['schemas']['AssignmentOut']
@@ -1728,6 +1842,49 @@ export interface components {
        * @description false: the analyst already held it (no-op).
        */
       changed: boolean
+    }
+    /** AssistantConfirmation */
+    AssistantConfirmation: {
+      /**
+       * Expiresat
+       * Format: date-time
+       */
+      expiresAt: string
+      /**
+       * Summary
+       * @description What the assistant is about to do, in the case language.
+       */
+      summary: string
+      /**
+       * Token
+       * @description Goes back in `POST /customer/conversation/confirmation`.
+       */
+      token: string
+    }
+    /**
+     * AssistantState
+     * @description ADR 0003: what the customer's app needs while the assistant handles the conversation.
+     */
+    AssistantState: {
+      /** @description The assistant waits for a yes or no (at most one of confirmation/stepUp). */
+      confirmation: components['schemas']['AssistantConfirmation'] | null
+      /** @description The assistant needs the second factor first. */
+      stepUp: components['schemas']['AssistantStepUp'] | null
+      /**
+       * Working
+       * @description An answer is on its way (show "escribiendo…").
+       */
+      working: boolean
+    }
+    /** AssistantStepUp */
+    AssistantStepUp: {
+      /** Reason */
+      reason: string
+      /**
+       * Simulated
+       * @description True while the second factor is a development stand-in.
+       */
+      simulated: boolean
     }
     /** AuditActor */
     AuditActor: {
@@ -2061,6 +2218,19 @@ export interface components {
        */
       previousCaseCount: number
     }
+    /**
+     * CaseHandoff
+     * @description The packet the assistant built when it escalated the case.
+     */
+    CaseHandoff: {
+      /**
+       * Packet
+       * @description agent-core's `HandoffPacket` as it publishes it (snake_case keys), rendered for the caller's permissions: request summary, verified facts, claimed-but-unverified slots, actions taken, open questions, evidence references and the transcript reference.
+       */
+      packet: {
+        [key: string]: unknown
+      }
+    }
     /** CaseHistory */
     CaseHistory: {
       /**
@@ -2147,7 +2317,7 @@ export interface components {
      * @description Stored state machine of a case (see ``Case``).
      * @enum {string}
      */
-    CaseStatus: 'queued' | 'assigned' | 'in_progress' | 'closed'
+    CaseStatus: 'queued' | 'assigned' | 'in_progress' | 'closed' | 'with_assistant'
     /** CaseSummary */
     CaseSummary: {
       /**
@@ -2227,6 +2397,11 @@ export interface components {
     }
     /** CloseCaseRequest */
     CloseCaseRequest: {
+      /**
+       * Handoffquality
+       * @description ADR 0003: only for a case that came from the assistant. How useful its handoff was (`useful`, `incomplete`, `unnecessary`); sent to agent-core as the label of that handoff. Left out, nothing is sent.
+       */
+      handoffQuality?: ('useful' | 'incomplete' | 'unnecessary') | null
       /** Note */
       note: string | null
       reason: components['schemas']['CloseReason']
@@ -2340,9 +2515,11 @@ export interface components {
     CustomerConversation: {
       /**
        * Agentname
-       * @description Assignee first name while with_agent; on a closed case, who attended it.
+       * @description Assignee first name while with_agent; 'Asistente virtual' while with_assistant; on a closed case, who attended it.
        */
       agentName: string | null
+      /** @description ADR 0003: set only while `status` is `with_assistant`, else null. */
+      assistant: components['schemas']['AssistantState'] | null
       /** Caseid */
       caseId: string
       channel: components['schemas']['CaseChannel']
@@ -2401,7 +2578,7 @@ export interface components {
      * @description Customer-facing projection of ``CaseStatus``.
      * @enum {string}
      */
-    CustomerConversationStatus: 'waiting_agent' | 'with_agent' | 'closed'
+    CustomerConversationStatus: 'waiting_agent' | 'with_agent' | 'with_assistant' | 'closed'
     /** CustomerConversationSummary */
     CustomerConversationSummary: {
       /**
@@ -2537,7 +2714,7 @@ export interface components {
      * @description Customer-facing author of a turn.
      * @enum {string}
      */
-    CustomerTurnAuthor: 'customer' | 'analyst' | 'system'
+    CustomerTurnAuthor: 'customer' | 'analyst' | 'system' | 'assistant'
     /** DemoConversation */
     DemoConversation: {
       /** Caseid */
@@ -3465,6 +3642,17 @@ export interface components {
       | 'escalation_not_open'
       | 'call_in_progress'
       | 'call_not_active'
+      | 'assistant_disabled'
+      | 'assistant_not_active'
+      | 'assistant_active'
+      | 'assistant_busy'
+      | 'confirmation_not_pending'
+      | 'confirmation_expired'
+      | 'step_up_not_pending'
+      | 'invalid_step_up_code'
+      | 'handoff_unavailable'
+      | 'agent_core_unavailable'
+      | 'agent_core_rejected'
       | 'analyst_not_eligible'
       | 'language_mismatch'
       | 'analyst_paused'
@@ -3506,6 +3694,18 @@ export interface components {
        * @default null
        */
       action: components['schemas']['SelfChangeAction'] | null
+      /**
+       * Agentcorecode
+       * @description agent_core_rejected: the stable problem code agent-core answered with.
+       * @default null
+       */
+      agentCoreCode: string | null
+      /**
+       * Agentcorestatus
+       * @description agent_core_rejected: the HTTP status agent-core answered with.
+       * @default null
+       */
+      agentCoreStatus: number | null
       /**
        * Analystid
        * @description analyst_not_eligible, language_mismatch, analyst_paused: the target.
@@ -3971,7 +4171,7 @@ export interface components {
       atRiskCases: number
       /**
        * Id
-       * @description TEAM-… id (the `?equipo=` filter).
+       * @description TEAM-… id (the `?team=` filter).
        */
       id: string
       /** Name */
@@ -4051,7 +4251,7 @@ export interface components {
      * @description Who wrote a turn: the customer, an analyst or the platform (notices, banners).
      * @enum {string}
      */
-    TurnAuthorRole: 'customer' | 'analyst' | 'system'
+    TurnAuthorRole: 'customer' | 'analyst' | 'system' | 'assistant'
     /**
      * TurnKind
      * @description ``message`` = chat conversation; ``routing`` = staff-only assignment banner (how the
@@ -4134,6 +4334,14 @@ export interface components {
       msg: string
       /** Type */
       type: string
+    }
+    /** VerifyStepUpRequest */
+    VerifyStepUpRequest: {
+      /**
+       * Code
+       * @description The second-factor code. Simulated while `stepUp.simulated` is true.
+       */
+      code: string
     }
     /** VersionRequest */
     VersionRequest: {
@@ -6583,6 +6791,82 @@ export interface operations {
       }
     }
   }
+  cases_get_handoff: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CaseHandoff']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   cases_get_case_history: {
     parameters: {
       query?: never
@@ -7360,6 +7644,173 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_answer_confirmation: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnswerConfirmationRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerConversation']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_request_person: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerConversation']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_verify_step_up: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VerifyStepUpRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerConversation']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
         headers: {
           [name: string]: unknown
         }
@@ -8477,6 +8928,73 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  supervision_release_assistant_case: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CaseSummary']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
       422: {
         headers: {
           [name: string]: unknown

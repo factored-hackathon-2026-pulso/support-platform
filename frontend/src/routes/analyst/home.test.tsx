@@ -42,9 +42,9 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const renderHome = (entry = '/analista/inicio') => renderRoute(entry, { staff: analystStaff })
+const renderHome = (entry = '/analyst/home') => renderRoute(entry, { staff: analystStaff })
 
-describe('/analista/inicio (Inicio)', () => {
+describe('/analyst/home (Inicio)', () => {
   it('greets her and names the day and her team', async () => {
     renderHome()
     // NOW is 11:00 in Bogotá (the tests' zone).
@@ -68,7 +68,7 @@ describe('/analista/inicio (Inicio)', () => {
     expect(await within(block).findByText('5 casos abiertos')).toBeInTheDocument()
     expect(within(block).getByRole('link', { name: 'Ir a Casos' })).toHaveAttribute(
       'href',
-      '/analista',
+      '/analyst/cases',
     )
     await user.click(within(block).getByRole('button', { name: 'Empezar a atender' }))
     expect(updateAvailability).toHaveBeenCalledWith('available')
@@ -87,15 +87,15 @@ describe('/analista/inicio (Inicio)', () => {
         .getAllByRole('link')
         .map((link) => [link.getAttribute('aria-label'), link.getAttribute('href')]),
     ).toEqual([
-      ['2 Por responder. Ver en Casos', '/analista?estado=por-responder'],
-      ['2 Nuevos. Ver en Casos', '/analista?estado=nuevos'],
-      ['1 Esperando al cliente. Ver en Casos', '/analista?estado=esperando'],
-      ['3 Cerrados, últimos 7 días. Ver en Casos', '/analista?estado=cerrados'],
+      ['2 Por responder. Ver en Casos', '/analyst/cases?status=to_reply'],
+      ['2 Nuevos. Ver en Casos', '/analyst/cases?status=new'],
+      ['1 Esperando al cliente. Ver en Casos', '/analyst/cases?status=waiting'],
+      ['3 Cerrados, últimos 7 días. Ver en Casos', '/analyst/cases?status=closed'],
     ])
     expect(within(tiles).getByRole('link', { name: /Por responder/ })).toHaveClass('border-l-warn')
     await user.click(within(tiles).getByRole('link', { name: /Cerrados/ }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/analista'))
-    expect(router.state.location.search).toBe('?estado=cerrados')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/analyst/cases'))
+    expect(router.state.location.search).toBe('?status=closed')
     expect(
       await screen.findByRole('button', { name: 'Quitar filtro Cerrados' }),
     ).toBeInTheDocument()
@@ -128,7 +128,7 @@ describe('/analista/inicio (Inicio)', () => {
     ).not.toContain('·')
     expect(
       within(list).getByRole('link', { name: 'Abrir el caso de Beatriz Salcedo Prieto' }),
-    ).toHaveAttribute('href', '/analista?caso=CASE-00000000000000000000000102&estado=por-responder')
+    ).toHaveAttribute('href', '/analyst/cases?case=CASE-00000000000000000000000102&status=to_reply')
   })
 
   it('marks an escalated case in "Lo primero" with "Escalado" (glyph + word)', async () => {
@@ -154,14 +154,16 @@ describe('/analista/inicio (Inicio)', () => {
     const list = within(feed).getByRole('list', { name: 'Mientras no estabas' })
     expect(within(list).getAllByRole('link')).toHaveLength(4)
     const away = within(list).getByRole('link', { name: /^Marcela Quintana Pardo: Ya no es tuyo/ })
-    expect(away).toHaveAttribute('href', '/analista?caso=CASE-00000000000000000000000101')
+    expect(away).toHaveAttribute('href', '/analyst/cases?case=CASE-00000000000000000000000101')
     expect(away).toHaveAccessibleName(
       'Marcela Quintana Pardo: Ya no es tuyo. Lo reasignó: Lucía Herrera, Ahora lo atiende: Sebastián Cárdenas, Solo lectura, hace 6 min. Abrir en solo lectura',
     )
     expect(within(list).getByText('Larissa Monteiro Alves').tagName).toBe('STRONG')
-    // Rule 3 applied: the language and the "Regla 3" tag as their own fact.
+    // Rule 3 applied: the language mark and the "Regla 3" tag as their own fact.
     const arrival = within(list).getByRole('link', { name: /^Larissa Monteiro Alves: Te llegó/ })
-    expect(arrival).toHaveTextContent('Por idioma: PortuguésRegla 3')
+    expect(arrival).toHaveAccessibleName(/Por idioma: Português/)
+    expect(arrival).toHaveTextContent(/Por idioma: PortuguêsPT.*Regla 3/)
+    expect(arrival.querySelector('[data-languages="pt"] svg.lucide-globe')).not.toBeNull()
     expect(list.textContent).not.toContain('·')
 
     const more = within(feed).getByRole('button', { name: 'Ver todo (5)' })
@@ -191,8 +193,13 @@ describe('/analista/inicio (Inicio)', () => {
     const team = await screen.findByRole('region', { name: 'Tu equipo ahora' })
     await within(team).findByText('Disponibles')
     expect(team).toHaveTextContent('Disponibles0 de 4')
-    expect(team).toHaveTextContent('Cola en español2El más antiguo: hace 17 min')
-    expect(team).toHaveTextContent('Cola en portugués1El más antiguo: hace 6 min')
+    // Each queue starts with its language mark (named for screen readers).
+    const [, spanish, portuguese] = Array.from(team.querySelectorAll('dl > div'))
+    expect(spanish).toHaveTextContent(/^EspañolES.*Esperan en la cola2El más antiguo: hace 17 min/)
+    expect(spanish!.querySelector('[data-languages="es"] svg.lucide-globe')).not.toBeNull()
+    expect(portuguese).toHaveTextContent(
+      /^PortuguêsPT.*Esperan en la cola1El más antiguo: hace 6 min/,
+    )
     expect(team).toHaveTextContent('Al empezar, la cola de tus idiomas se reparte primero contigo.')
     expect(team.querySelector('dl')?.textContent).not.toContain('·')
   })
@@ -294,6 +301,6 @@ describe('/analista/inicio (Inicio)', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Buenos días, Daniela' }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/analista/inicio')
+    expect(router.state.location.pathname).toBe('/analyst/home')
   })
 })

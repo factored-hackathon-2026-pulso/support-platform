@@ -3,7 +3,7 @@ import { escapeRegExp } from '../data'
 
 export type StatusTileLabel = 'Por responder' | 'Nuevos' | 'Esperando al cliente' | 'Cerrados'
 
-/** The analyst home "Inicio" (`/analista/inicio`, slice 6): where an analyst lands. */
+/** The analyst home "Inicio" (`/analyst/home`, slice 6): where an analyst lands. */
 export class HomePage {
   readonly main: Locator
   readonly availability: Locator
@@ -33,7 +33,7 @@ export class HomePage {
   }
 
   async goto(): Promise<void> {
-    await this.page.goto('/analista/inicio')
+    await this.page.goto('/analyst/home')
     await expect(this.availability).toBeVisible()
   }
 

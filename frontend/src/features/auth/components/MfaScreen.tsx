@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
+import { PATHS } from '@/app/paths'
 import { Button, Callout, CodeInput, type CodeInputHandle } from '@/components/ui'
 import type { SessionResponse } from '../api'
 import { useVerifyMfaMutation } from '../hooks/use-auth-mutations'
@@ -81,7 +82,7 @@ export function MfaScreen({
         eyebrow={
           <span className="inline-flex flex-wrap items-center gap-x-3 text-14 text-ink-2">
             <span>{email}</span>
-            <Link to="/login" replace className="text-link">
+            <Link to={PATHS.login} replace className="text-link">
               No soy yo
             </Link>
           </span>

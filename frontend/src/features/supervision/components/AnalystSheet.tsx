@@ -1,12 +1,11 @@
 import { Button, Fact, Sheet, Stat, Status, toneBorderLeft } from '@/components/ui'
 import { caseStatus } from '@/features/cases'
 import { cn } from '@/lib/cn'
-import { formatRelativeTime, joinEs } from '@/lib/format'
+import { formatRelativeTime } from '@/lib/format'
 import {
   ACTIVITY_META,
   RECENT_RATING_HEADER,
   firstResponseFact,
-  languageWord,
   withoutKey,
   caseRowFacts,
 } from '../model'
@@ -24,7 +23,7 @@ export interface AnalystSheetProps {
 }
 
 /**
- * One analyst (`?analista=`): what she is doing now, her languages and team as facts,
+ * One analyst (`?analyst=`): what she is doing now, her languages and team as facts,
  * her figures, and each open case with "Ver conversación" (the read-only case view)
  * and "Reasignar" (the exception: assignment is automatic).
  */
@@ -39,12 +38,7 @@ export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: 
       description={
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Status {...ACTIVITY_META[analyst.activity]} />
-          <Fact
-            icon="languages"
-            text={joinEs(analyst.languages.map(languageWord))}
-            label="Idiomas"
-            size="md"
-          />
+          <Fact icon="languages" text="" languages={analyst.languages} label="Idiomas" size="md" />
           <Fact icon="users" text={analyst.team.name} label="Equipo" size="md" />
         </span>
       }

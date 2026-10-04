@@ -39,7 +39,7 @@ describe('notificationCopy: one fixed template per kind (canvas boards)', () => 
       title: 'Te llegó un caso nuevo',
       detail: 'Larissa Monteiro Alves',
       action: 'Abrir caso',
-      href: `/analista?caso=${CASE}`,
+      href: `/analyst/cases?case=${CASE}`,
       icon: 'inbox',
       tone: 'accent',
     })
@@ -89,7 +89,7 @@ describe('notificationCopy: one fixed template per kind (canvas boards)', () => 
     })
     expect(copyOf({ kind: 'case_rated', score: 4 })).toMatchObject({
       title: 'El cliente calificó tu atención: Excelente',
-      href: `/analista?caso=${CASE}&estado=cerrados`,
+      href: `/analyst/cases?case=${CASE}&status=closed`,
       icon: 'smile',
     })
     expect(copyOf({ kind: 'case_rated', score: 1 }).title).toBe(
@@ -110,18 +110,18 @@ describe('notificationCopy: one fixed template per kind (canvas boards)', () => 
       title: 'Daniela Ríos escaló un caso',
       detail: 'Marcela Quintana Pardo',
       action: 'Revisar',
-      href: '/supervision/escalados?escalamiento=ESC-1',
+      href: '/supervision/escalations?escalation=ESC-1',
       icon: 'up',
     })
     expect(copyOf({ kind: 'case_queued', role: 'supervisor', language: 'pt' })).toMatchObject({
       title: 'Un caso espera en la cola en portugués',
       action: 'Ver en la cola',
-      href: '/supervision/colas?idioma=pt',
+      href: '/supervision/queues?language=pt',
       icon: 'clock',
       tone: 'warn',
     })
     expect(copyOf({ kind: 'case_queued', role: 'supervisor', language: 'es' }).href).toBe(
-      '/supervision/colas',
+      '/supervision/queues',
     )
     expect(
       copyOf({ kind: 'sla_at_risk', role: 'supervisor', slaDueAt: minutesFrom(1) }),
@@ -148,7 +148,7 @@ describe('notificationCopy: one fixed template per kind (canvas boards)', () => 
       title: 'Cuenta bloqueada: Mariana Duque',
       detail: '5 intentos fallidos al entrar',
       action: 'Revisar',
-      href: '/administracion/usuarios?persona=STF-12',
+      href: '/admin/users?person=STF-12',
       icon: 'lock',
     })
     expect(
@@ -247,30 +247,30 @@ describe('toasts', () => {
   const at = (pathname: string, search = '') => ({ pathname, search })
 
   it('toasts only on the screens of its role', () => {
-    expect(shouldToast(analyst, 'analyst', at('/analista/inicio'))).toBe(true)
-    expect(shouldToast(analyst, 'supervisor', at('/supervision/colas'))).toBe(false)
-    expect(shouldToast(escalated, 'supervisor', at('/supervision/colas'))).toBe(true)
-    expect(shouldToast(escalated, 'analyst', at('/analista'))).toBe(false)
-    expect(shouldToast(locked, 'admin', at('/administracion/equipos'))).toBe(true)
+    expect(shouldToast(analyst, 'analyst', at('/analyst/home'))).toBe(true)
+    expect(shouldToast(analyst, 'supervisor', at('/supervision/queues'))).toBe(false)
+    expect(shouldToast(escalated, 'supervisor', at('/supervision/queues'))).toBe(true)
+    expect(shouldToast(escalated, 'analyst', at('/analyst/cases'))).toBe(false)
+    expect(shouldToast(locked, 'admin', at('/admin/teams'))).toBe(true)
     expect(shouldToast(locked, null, at('/no-existe'))).toBe(false)
-    expect(shouldToast({ ...analyst, readAt: minutesFrom(0) }, 'analyst', at('/analista'))).toBe(
-      false,
-    )
+    expect(
+      shouldToast({ ...analyst, readAt: minutesFrom(0) }, 'analyst', at('/analyst/cases')),
+    ).toBe(false)
   })
 
   it('stays quiet when the screen already shows it', () => {
-    expect(isOnScreen(analyst, at('/analista', `?caso=${CASE}`))).toBe(true)
-    expect(isOnScreen(analyst, at('/analista', '?caso=CASE-OTRO'))).toBe(false)
-    expect(isOnScreen(analyst, at('/analista/inicio'))).toBe(false)
+    expect(isOnScreen(analyst, at('/analyst/cases', `?case=${CASE}`))).toBe(true)
+    expect(isOnScreen(analyst, at('/analyst/cases', '?case=CASE-OTRO'))).toBe(false)
+    expect(isOnScreen(analyst, at('/analyst/home'))).toBe(false)
     // A case that leaves her still toasts: the screen turns read-only under her.
     const away = { ...analyst, kind: 'reassigned_away' as const }
-    expect(isOnScreen(away, at('/analista', `?caso=${CASE}`))).toBe(false)
-    expect(isOnScreen(escalated, at('/supervision/escalados'))).toBe(true)
+    expect(isOnScreen(away, at('/analyst/cases', `?case=${CASE}`))).toBe(false)
+    expect(isOnScreen(escalated, at('/supervision/escalations'))).toBe(true)
     const queued = { ...escalated, kind: 'case_queued' as const }
-    expect(isOnScreen(queued, at('/supervision/escalados'))).toBe(false)
-    expect(isOnScreen(queued, at(`/supervision/casos/${CASE}`))).toBe(true)
-    expect(isOnScreen(locked, at('/administracion/usuarios', '?persona=STF-12'))).toBe(true)
-    expect(isOnScreen(locked, at('/administracion/usuarios'))).toBe(false)
+    expect(isOnScreen(queued, at('/supervision/escalations'))).toBe(false)
+    expect(isOnScreen(queued, at(`/supervision/cases/${CASE}`))).toBe(true)
+    expect(isOnScreen(locked, at('/admin/users', '?person=STF-12'))).toBe(true)
+    expect(isOnScreen(locked, at('/admin/users'))).toBe(false)
   })
 })
 

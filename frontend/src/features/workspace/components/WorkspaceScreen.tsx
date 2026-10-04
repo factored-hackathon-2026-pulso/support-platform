@@ -19,14 +19,12 @@ import {
 } from '@/features/conversation'
 import { useNow } from '@/lib/hooks'
 import { topics, useRealtimeSubscription } from '@/lib/realtime'
+import { emptyWorkspaceCopy, firstSelectableCase, nextCaseAfterClose } from '../model'
 import {
-  emptyWorkspaceCopy,
   isCustomerFileOpen,
-  firstSelectableCase,
-  nextCaseAfterClose,
   type WorkspaceStateChangeOptions,
   type WorkspaceUrlState,
-} from '../model'
+} from '../url'
 
 /** Same tick as the list, so the order the screen follows is the one on screen. */
 const ORDER_TICK_MS = 30_000
@@ -42,7 +40,7 @@ export interface WorkspaceScreenProps {
  * Analyst Workspace (Workspace.dc.html, contract §9.2): the "Casos" list
  * (collapsible to a rail), the conversation, and, on demand, the right panel
  * "Ficha del cliente" (slice 6 §5: the customer, this case and "Casos
- * anteriores"; `?ficha=1`, opened from the customer's name). All shareable state
+ * anteriores"; `?panel=customer`, opened from the customer's name). All shareable state
  * lives in the URL (`state`); the screen reports changes through
  * `onStateChange` and the route writes them back.
  *

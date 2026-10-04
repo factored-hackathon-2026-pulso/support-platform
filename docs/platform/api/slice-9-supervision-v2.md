@@ -8,7 +8,7 @@ SuCaso and SuAudit, and the analyst side of escalations (Workspace views escalar
 respondido):
 
 1. **Navigation.** Rail items Colas (badge: cases nobody holds), Equipo, Escalados (badge: open
-   escalations), Auditoría. `/supervision` lands on `/supervision/colas`. No team tabs anywhere:
+   escalations), Auditoría. `/supervision` lands on `/supervision/queues`. No team tabs anywhere:
    the team is a filter option.
 2. **Colas.** The language queues with their figures; the selected one lists **every** open case
    of that language (who holds it, status, how long it has been open, the first response). No
@@ -171,16 +171,15 @@ existing "Supervisión reasignó un caso").
   `EscalationsScreen` + `EscalationPanel` (Responder / Tomar el caso / Reasignar), the case view
   without "Asignar" and with the "Escalado" marker, `useSupervisionNotices`. The old queue column,
   the team pills and `AssignCaseDialog` are gone.
-- **audit:** "Tipo" gains "Escalamientos" (`?tipo=escalamientos`); redaction notes for the motive
+- **audit:** "Tipo" gains "Escalamientos" (`?type=escalation`); redaction notes for the motive
   and the answer; role badge "Supervisión".
 - **admin:** search + "Filtros" (Rol, Estado, Equipo, Idioma with faceted counts) + chips,
-  multi-value URL (`?rol=&estado=&equipo=&idioma=`, comma-separated), "Nuevo usuario" with the
+  multi-value URL (`?role=&status=&team=&language=`, comma-separated), "Nuevo usuario" with the
   user-plus icon, language pill toggles.
 
-Routes: `/supervision/colas?idioma=&estado=&prioridad=&analista=` (landing),
-`/supervision/equipo?estado=&idioma=&equipo=&analista=&reasignar=`,
-`/supervision/escalados?escalamiento=&reasignar=`, `/supervision/casos/:caseId?historial=&reasignar=`
-(`?asignar=` of slice 3 still opens the dialog), `/supervision/auditoria`.
+Routes: `/supervision/queues?language=&status=&priority=&analyst=` (landing),
+`/supervision/team?status=&language=&team=&analyst=&reassign=`,
+`/supervision/escalations?escalation=&reassign=`, `/supervision/cases/:caseId?previous=&reassign=`, `/supervision/audit`.
 
 ## 7. Seed
 

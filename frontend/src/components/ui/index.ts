@@ -34,7 +34,7 @@ export { useFieldControl } from './field-context'
 export type { FieldProps } from './Field'
 export { Fact, FactList } from './Fact'
 export type { FactListProps, FactProps } from './Fact'
-export { FACT_ICONS } from './fact-icons'
+export { FACT_ICONS, spokenFact } from './fact-icons'
 export type { FactIcon, FactItem, FactTone } from './fact-icons'
 export { FilterChips, FilterMenu } from './FilterMenu'
 export type { FilterChipsProps, FilterMenuProps } from './FilterMenu'
@@ -55,6 +55,21 @@ export { KeyValueList } from './KeyValueList'
 export type { KeyValueItem, KeyValueListProps } from './KeyValueList'
 export { Kicker } from './Kicker'
 export type { KickerProps, KickerTone } from './Kicker'
+export { LanguageMark, LanguageMarks, LanguageName } from './LanguageMark'
+export type {
+  LanguageMarkProps,
+  LanguageMarkSize,
+  LanguageMarksProps,
+  LanguageNameProps,
+} from './LanguageMark'
+export {
+  LANGUAGE_CODES,
+  LANGUAGE_MARK_CODE,
+  LANGUAGE_NATIVE_NAME,
+  languagesName,
+  sortLanguages,
+} from './language'
+export type { LanguageCode } from './language'
 export { ListItemButton } from './ListItemButton'
 export type { ListItemButtonProps } from './ListItemButton'
 export { PageHeader } from './PageHeader'

@@ -133,11 +133,11 @@ No pre-rendered Spanish: the frontend owns every word (§4.5).
 
 ### 4.1 Routes, rail and landing
 
-- `/analista/inicio` (`routes/analyst/home.tsx` → `features/home`), inside the analyst section
-  (plus the section's not-found page for other `/analista/*` paths).
-- `ROLES.analyst.home = '/analista/inicio'`: after the MFA step and at `/` an analyst lands on
-  Inicio (the role switcher too). A remembered `state.from` (e.g. `/analista?caso=…`) still wins.
-- Rail: **Inicio** (house) first, then **Casos** (`end: true`, so only `/analista` marks it), with
+- `/analyst/home` (`routes/analyst/home.tsx` → `features/home`), inside the analyst section
+  (plus the section's not-found page for other `/analyst/*` paths).
+- `ROLES.analyst.home = '/analyst/home'`: after the MFA step and at `/` an analyst lands on
+  Inicio (the role switcher too). A remembered `state.from` (e.g. `/analyst/cases?case=…`) still wins.
+- Rail: **Inicio** (house) first, then **Casos** (`/analyst/cases`; `/analyst` itself redirects to Inicio), with
   the indicator `toReplyCases` ("Casos, 2 pendientes"). The analyst's avatar shows a presence dot
   (orange "Estado: En pausa", green "Estado: Disponible") on every analyst screen.
 - `app/rail-indicators.ts`: `useToReplyCount` (cases core) also keeps her `inbox:<id>` topic
@@ -159,11 +159,11 @@ used by Inicio, the Casos list, auto-selection and "next case after closing"):
 Ties by id. Each row: status stripe and pill, the channel, the high-priority flag and "Volvió a
 escribir" as icons with a tooltip (no language: it shows only in the customer file), the last
 message ("Tú: …" for hers), the SLA level (§4.6) or the time, and "Abrir" →
-`/analista?caso=<id>&estado=<slug>` (Casos with the case open, its filter chip, its card marked).
+`/analyst/cases?case=<id>&status=<status>` (Casos with the case open, its filter chip, its card marked).
 
 ### 4.3 Casos list (changed)
 
-- No status tiles. The tiles live on Inicio and link to `/analista?estado=<slug>`; with a filter,
+- No status tiles. The tiles live on Inicio and link to `/analyst/cases?status=<status>`; with a filter,
   the list shows a removable chip ("Quitar filtro Cerrados"); removing it returns to every open
   case. Cerrados is reachable only this way (or by URL).
 - One flat list, urgency order (§4.2); Cerrados keeps the most recent close first.
@@ -204,7 +204,7 @@ fallback: [clock] "Últimas 8 horas". Empty: "Nada nuevo desde tu última sesió
 "Ver todo (n)" expands in place (`aria-expanded`); "Se muestran las 10 más recientes de n." when
 the server capped it.
 
-**Read-only rows.** A `readOnly` row links to `/analista?caso=<id>` (no filter): the Workspace
+**Read-only rows.** A `readOnly` row links to `/analyst/cases?case=<id>` (no filter): the Workspace
 already reads a case she held through history access (slice 3 §3.7) and shows the read-only
 footer ([lock] Solo lectura · [user] Lo atiende …), no composer, no read cursor (403s are
 silent), no `case:` subscription error surfaced.
@@ -241,7 +241,7 @@ The word "SLA" is in the accessible label ("SLA de primera respuesta") and the t
   sections, not modal (the conversation keeps working), close button and Escape (inside the
   panel), focus to the panel heading on open (not when restored from the URL) and back to the
   name on close.
-- URL: `?ficha=1` (kept across case switches); `?historial=lista|CASE-…` opens the panel on
+- URL: `?panel=customer` (kept across case switches); `?previous=list|CASE-…` opens the panel on
   "Casos anteriores" (old deep links keep working).
 - Sections (only data the platform has): **Cliente** ([user] Nombre, [map-pin] Ciudad
   "Barranquilla, Colombia", [languages] Idioma "Español"/"Portugués", [id] Id de cliente) ·

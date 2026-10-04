@@ -1,7 +1,7 @@
 /**
  * Pure rules and copy of the audit screen (SuAudit.dc.html, contract
- * docs/platform/api/slice-3-supervision.md §5, §8.8–§8.9): the filters and
- * their URL state, the API query they become (dates in the viewer's zone →
+ * docs/platform/api/slice-3-supervision.md §5, §8.8–§8.9): the filters (their URL
+ * state is in url.ts), the API query they become (dates in the viewer's zone →
  * UTC instants), how each event row reads (who, kind badge, day separators,
  * times) and the detail aside. No React, no I/O: unit-tested in model.test.ts.
  */
@@ -15,6 +15,7 @@ import type {
   AuditFamily,
   AuditQuery,
 } from './types'
+import type { AuditUrlState } from './url'
 
 type DateInput = Date | string | number
 
@@ -24,36 +25,32 @@ export interface KindFilterOption {
   /** `null` = Todos. */
   value: AuditActorKind | null
   label: string
-  /** `?quien=` slug; null for Todos. */
-  slug: string | null
 }
 
 /** "Quién" pills: Todos · Equipo · Clientes · Plataforma. */
 export const AUDIT_KIND_FILTERS: readonly KindFilterOption[] = [
-  { value: null, label: 'Todos', slug: null },
-  { value: 'staff', label: 'Equipo', slug: 'equipo' },
-  { value: 'customer', label: 'Clientes', slug: 'clientes' },
-  { value: 'system', label: 'Plataforma', slug: 'plataforma' },
+  { value: null, label: 'Todos' },
+  { value: 'staff', label: 'Equipo' },
+  { value: 'customer', label: 'Clientes' },
+  { value: 'system', label: 'Plataforma' },
 ]
 
 export interface FamilyOption {
   value: AuditFamily
   label: string
-  /** `?tipo=` slug. */
-  slug: string
 }
 
 /** "Tipo" options (the catalog families, slice 3 §5.3 + slice 4 §7.1). */
 export const AUDIT_FAMILIES: readonly FamilyOption[] = [
-  { value: 'conversation', label: 'Conversación', slug: 'conversacion' },
-  { value: 'assignment', label: 'Asignación', slug: 'asignacion' },
-  { value: 'lifecycle', label: 'Ciclo del caso', slug: 'ciclo' },
-  { value: 'availability', label: 'Disponibilidad', slug: 'disponibilidad' },
-  { value: 'access', label: 'Accesos', slug: 'accesos' },
-  { value: 'administration', label: 'Administración', slug: 'administracion' },
+  { value: 'conversation', label: 'Conversación' },
+  { value: 'assignment', label: 'Asignación' },
+  { value: 'lifecycle', label: 'Ciclo del caso' },
+  { value: 'availability', label: 'Disponibilidad' },
+  { value: 'access', label: 'Accesos' },
+  { value: 'administration', label: 'Administración' },
   // Slice 9: escalations to supervision (motive and answer redacted).
-  { value: 'escalation', label: 'Escalamientos', slug: 'escalamientos' },
-  { value: 'other', label: 'Otros', slug: 'otros' },
+  { value: 'escalation', label: 'Escalamientos' },
+  { value: 'other', label: 'Otros' },
 ]
 
 export function familyLabel(family: AuditFamily): string {
@@ -63,33 +60,7 @@ export function familyLabel(family: AuditFamily): string {
 /** Max length of `q` (the API accepts 1–80). */
 export const AUDIT_SEARCH_MAX_LENGTH = 80
 
-// ── URL state (frozen, contract §8.9) ────────────────────────────────────────
-
-export interface AuditUrlState {
-  /** `?quien=equipo|clientes|plataforma`. */
-  actorKind: AuditActorKind | null
-  /** `?persona=`. */
-  actorId: string | null
-  /** `?caso=`. */
-  caseId: string | null
-  /** `?tipo=conversacion|asignacion|ciclo|disponibilidad|accesos|administracion|otros`. */
-  family: AuditFamily | null
-  /** `?desde=YYYY-MM-DD` (viewer's zone). */
-  fromDate: string | null
-  /** `?hasta=YYYY-MM-DD` (inclusive day). */
-  toDate: string | null
-  /** `?q=`. */
-  query: string
-  /** `?cambios=1`. */
-  changesOnly: boolean
-  /** `?evento=EVT-…`: the detail aside. */
-  eventId: string | null
-}
-
-export interface AuditStateChangeOptions {
-  /** Replace the history entry (filters) instead of pushing one (selecting an event). */
-  replace?: boolean
-}
+// ── URL state (parse + serialize in url.ts) ──────────────────────────────────
 
 export const EMPTY_AUDIT_STATE: AuditUrlState = {
   actorKind: null,
@@ -112,43 +83,6 @@ export function isDateKey(value: string | null | undefined): value is string {
   const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])]
   const date = new Date(year, month - 1, day)
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
-}
-
-const trimmed = (value: string | null) => value?.trim() || null
-
-export function parseAuditSearch(params: URLSearchParams): AuditUrlState {
-  const kindSlug = params.get('quien')
-  const familySlug = params.get('tipo')
-  const from = params.get('desde')
-  const to = params.get('hasta')
-  return {
-    actorKind:
-      AUDIT_KIND_FILTERS.find((o) => o.slug !== null && o.slug === kindSlug)?.value ?? null,
-    actorId: trimmed(params.get('persona')),
-    caseId: trimmed(params.get('caso')),
-    family: AUDIT_FAMILIES.find((o) => o.slug === familySlug)?.value ?? null,
-    fromDate: isDateKey(from) ? from : null,
-    toDate: isDateKey(to) ? to : null,
-    query: (params.get('q') ?? '').slice(0, AUDIT_SEARCH_MAX_LENGTH),
-    changesOnly: params.get('cambios') === '1',
-    eventId: trimmed(params.get('evento')),
-  }
-}
-
-export function toAuditSearch(state: AuditUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  const kind = AUDIT_KIND_FILTERS.find((o) => o.value === state.actorKind)?.slug
-  if (kind) params.set('quien', kind)
-  if (state.actorId) params.set('persona', state.actorId)
-  if (state.caseId) params.set('caso', state.caseId)
-  const family = AUDIT_FAMILIES.find((o) => o.value === state.family)?.slug
-  if (family) params.set('tipo', family)
-  if (state.fromDate) params.set('desde', state.fromDate)
-  if (state.toDate) params.set('hasta', state.toDate)
-  if (state.query) params.set('q', state.query)
-  if (state.changesOnly) params.set('cambios', '1')
-  if (state.eventId) params.set('evento', state.eventId)
-  return params
 }
 
 /** Any filter set (the selected event is not a filter). */
@@ -225,6 +159,7 @@ const ROLE_LABELS: Record<ActorRole, string> = {
   admin: 'Administración',
   customer: 'Cliente',
   system: 'Plataforma',
+  assistant: 'Asistente',
 }
 
 /** Kind badge of the "Quién" column. */
@@ -232,10 +167,10 @@ export function actorRoleLabel(role: ActorRole): string {
   return ROLE_LABELS[role] ?? role
 }
 
-/** Staff in the warm tone of the canvas "Persona" chip, customers in accent, the platform neutral. */
+/** Staff in the warm tone of the canvas "Persona" chip, customers in accent, the platform and the assistant neutral. */
 export function actorTone(role: ActorRole): Tone {
   if (role === 'customer') return 'accent'
-  if (role === 'system') return 'neutral'
+  if (role === 'system' || role === 'assistant') return 'neutral'
   return 'warn'
 }
 

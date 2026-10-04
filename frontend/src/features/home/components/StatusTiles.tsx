@@ -7,7 +7,7 @@ import { CLOSED_TILE_HINT, statusTiles } from '../model'
 /**
  * The four status counters (canvas `tiles`): Por responder · Nuevos · Esperando
  * al cliente · Cerrados (last 7 days), each a link to Casos with that filter
- * (`/analista?estado=…`). The Casos list itself has no tiles (slice 6 §4.3).
+ * (`/analyst/cases?status=…`). The Casos list itself has no tiles (slice 6 §4.3).
  */
 export function StatusTiles({ counts }: { counts: InboxCounts | undefined }) {
   return (

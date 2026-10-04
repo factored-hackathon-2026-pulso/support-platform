@@ -9,7 +9,7 @@
 
 Status: **implemented and integrated** (backend agent + FE agent `inbox` + FE agent `conversation`, in parallel;
 integration notes in §11).
-Scope: the analyst ↔ customer chat works for real with **no AI**: a customer opens `/cliente`, picks a seeded
+Scope: the analyst ↔ customer chat works for real with **no AI**: a customer opens `/customer`, picks a seeded
 customer and writes; a case is created, routed through judge → tree → ai_agent (null responders that abstain) →
 human, assigned to an available analyst who speaks the language (rule 3, policy id `H1`), shows up live in that
 analyst's **Casos** list; the analyst opens it and replies; the customer sees the reply live. Reloads restore
@@ -632,7 +632,7 @@ Owns: `src/features/cases/**`, `src/features/workspace/**`, `src/routes/analyst/
   "{Prioridad media} · {App|Web|Teléfono|Correo} · {topic label}" and relative last interaction.
 - `features/workspace`: `WorkspaceScreen` (three-column layout, empty state "No tienes contactos abiertos" /
   "Estás disponible. Cuando un agente escale un contacto que te corresponde, aparece aquí."; paused variant),
-  auto-selects the first case of the current filter when `caso` is missing (URL `replace`), and the **support panel
+  auto-selects the first case of the current filter when `case` is missing (URL `replace`), and the **support panel
   shell**: tabs Copiloto · Herramientas · Cliente (`Tabs`), collapse to an icon rail (`aria-label` "Panel de apoyo,
   contraído", buttons "Mostrar el panel", "Copiloto", "Herramientas", "Cliente"). Content = designed placeholders:
   Copiloto (canvas intro "Pregúntale lo que necesites sobre este cliente…" + disabled "Pregúntale al copiloto" input,
@@ -640,8 +640,8 @@ Owns: `src/features/cases/**`, `src/features/workspace/**`, `src/routes/analyst/
   Cliente (header from `useCaseDetail`: initials, name, "{segment} · cliente desde {mes año} · {city}, {country}",
   mono `{id} · {documentType}`; then `<RoutingSummary caseId />`; then collapsed accordion placeholders Productos ·
   Reclamos · Contactos recientes · Contacto · Quién vio qué).
-- URL state (`?caso=&estado=&q=&panel=&lista=&apoyo=`): `estado` slugs `por-responder|en-curso|nuevos|por-llamar|en-espera`
-  (absent = Todos), `panel` `copiloto|herramientas|cliente` (default `copiloto`), `lista=contraida`,
+- URL state (`?case=&status=&q=&panel=&list=&apoyo=`; English since the 2026-10-04 housekeeping): `status` values `to_reply|in_progress|new|to_call|on_hold`
+  (absent = Todos), `panel` `copiloto|herramientas|cliente` (default `copiloto`), `list=collapsed`,
   `apoyo=contraido`.
 
 ```ts
@@ -737,7 +737,7 @@ and `export const customerSessionToken = createSessionTokenStore('cc.customer.to
   Seguimiento Mañana/En 2 días/Sin seguimiento, Qué se hizo with the 5 canvas phrases → `ResolutionCode`, checkbox
   "Enviarle la encuesta de satisfacción al cerrar", footer "Se guarda en el histórico de la plataforma"; no copilot
   suggestion yet), "Cómo llegó a ti".
-- `features/customer-chat`: `/cliente` simulator. Picker ("Elige un cliente de ejemplo", cards with name, locale
+- `features/customer-chat`: `/customer` simulator. Picker ("Elige un cliente de ejemplo", cards with name, locale
   label, city, segment, badge "Conversación abierta"; "Datos de ejemplo"); chat in the `AppSupportChat` frame
   (header "Soporte" + state line: `waiting_agent` "Buscando a una persona del equipo…", `with_agent`
   "Te atiende {agentName} · LATAM Bank", `closed` "Conversación terminada"; suggestion chips prefill the input;
@@ -892,7 +892,7 @@ contract left a detail open, this is what `backend/openapi.json` and the server 
   call timer imports it instead of keeping a copy.
 - **Sockets that close right after the handshake:** `RealtimeClient.disconnect()` closes a socket
   that is still connecting once it opens, instead of mid-handshake (React StrictMode remounts the
-  `/cliente` provider in dev, which made browsers log "WebSocket is closed before the connection is
+  `/customer` provider in dev, which made browsers log "WebSocket is closed before the connection is
   established"). The server treats a client that leaves before or during the `welcome` as a normal
   end and always releases its hub connection (before, it raised an ASGI error and the connection
   stayed registered).
@@ -907,4 +907,4 @@ contract left a detail open, this is what `backend/openapi.json` and the server 
   `idempotency_conflict`, gap-free ordered reloads, close → customer notice, rule 3 (a `pt` case with
   only a Spanish-speaking analyst available is queued, then drained to Daniela when she is
   available), least-loaded balancing, and the 403 / forbidden-topic checks. A headless-browser pass
-  over `/analista` and `/cliente` (two windows, live reply, reloads) showed no console errors.
+  over `/analyst/cases` and `/customer` (two windows, live reply, reloads) showed no console errors.

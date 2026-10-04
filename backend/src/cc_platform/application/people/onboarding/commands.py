@@ -13,14 +13,14 @@ No session: the link's token is the only credential. Every use case
 
 The flows:
 
-- **Invitation** (``/activar?token=…``): ``CheckInvitation`` (who she is, for the welcome
+- **Invitation** (``/activate?token=…``): ``CheckInvitation`` (who she is, for the welcome
   line) → ``SetInvitationPassword`` (the password policy, checked here; Argon2id hash; a new
   TOTP secret, sealed; returns the ``otpauth://`` URI and the manual key, shown once) →
   ``ActivateInvitation`` (the 6-digit code of her app: the login account is created, she is
   active, the invitation is used up; ``staff.mfa_enrolled`` then
   ``staff.invitation_accepted``). Wrong codes count on the invitation (5 → 15 minutes,
   ``account_locked`` with ``unlockAt``).
-- **Password reset** (``/restablecer?token=…``): ``CheckPasswordReset`` →
+- **Password reset** (``/reset-password?token=…``): ``CheckPasswordReset`` →
   ``CompletePasswordReset`` (policy, hash, ``staff.password_reset``; her sessions and pending
   MFA challenges end; her second factor does not change).
 """

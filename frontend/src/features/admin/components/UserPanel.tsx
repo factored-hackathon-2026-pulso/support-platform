@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { Copy, UserRound } from 'lucide-react'
+import { Copy, Mail, UserRound } from 'lucide-react'
 import { adminAuditPath } from '@/app/roles'
 import {
   Button,
@@ -16,13 +16,19 @@ import { isApiProblem } from '@/lib/api'
 import { RoleChips } from './RoleChips'
 import { formatDate, formatRelativeTime } from '@/lib/format'
 import {
+  cancelledInvitationToast,
   deactivatedToast,
   draftFromUser,
+  invitationExpired,
+  invitationFacts,
   firstInvalidField,
   isDraftDirty,
   openCaseBlocks,
   openCasesFact,
   reactivatedToast,
+  resentInvitationToast,
+  resetLinkSentToast,
+  secondFactorLabel,
   statusCallout,
   unlockedToast,
   userChanges,
@@ -38,10 +44,13 @@ import {
   useFailureHandler,
   useReactivateUser,
   useReadAdminUserNow,
+  useResendInvitation,
   useUnlockUser,
   useUpdateUser,
 } from '../hooks'
-import type { AdminTeam, AdminUser, AdminUserChange, PasswordResetResult } from '../types'
+import type { AdminTeam, AdminUser, AdminUserChange } from '../types'
+import { AccountStatusText } from './AccountStatusText'
+import { CancelInvitationDialog } from './CancelInvitationDialog'
 import { DeactivateUserDialog } from './DeactivateUserDialog'
 import { ResetPasswordDialog } from './ResetPasswordDialog'
 import { UserForm, type UserFormControls } from './UserForm'
@@ -52,21 +61,23 @@ export interface UserPanelProps {
   teams: readonly AdminTeam[]
   now: number
   canOpenSupervision: boolean
-  /** A new temporary password (reset): the screen shows it once. */
-  onPasswordReset(name: string, result: PasswordResetResult): void
+  /** Her invitation was cancelled: she leaves the directory (the screen deselects her). */
+  onInvitationCancelled(): void
 }
 
 /**
  * "Persona seleccionada" (Admin `usuarios` aside, contract §10.2): who she is,
  * her account status, the edit form with its guard rails, the facts and the
- * account actions. A person outside the loaded list is fetched by id.
+ * account actions. A person outside the loaded list is fetched by id. Part 4: an
+ * invited person shows her invitation (sent, expires) and "Reenviar invitación" /
+ * "Cancelar invitación"; an active one gets "Enviar enlace para restablecer".
  */
 export function UserPanel({
   staffId,
   teams,
   now,
   canOpenSupervision,
-  onPasswordReset,
+  onInvitationCancelled,
 }: UserPanelProps) {
   const query = useAdminUser(staffId)
   let body
@@ -88,7 +99,7 @@ export function UserPanel({
         teams={teams}
         now={now}
         canOpenSupervision={canOpenSupervision}
-        onPasswordReset={onPasswordReset}
+        onInvitationCancelled={onInvitationCancelled}
       />
     )
   } else if (query.isError) {
@@ -136,9 +147,16 @@ interface UserDetailProps extends Omit<UserPanelProps, 'staffId'> {
   user: AdminUser
 }
 
-function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: UserDetailProps) {
+function UserDetail({
+  user,
+  teams,
+  now,
+  canOpenSupervision,
+  onInvitationCancelled,
+}: UserDetailProps) {
   const { toast } = useToast()
   const update = useUpdateUser(user.id)
+  const resend = useResendInvitation(user.id)
   const unlock = useUnlockUser(user.id)
   const reactivate = useReactivateUser(user.id)
   const handleFailure = useFailureHandler()
@@ -150,7 +168,7 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
   const [errors, setErrors] = useState<UserDraftErrors>({})
   /** Form-level message (danger) or the conflict notice after a `version_conflict`. */
   const [message, setMessage] = useState<{ tone: 'danger' | 'warn'; text: string } | null>(null)
-  const [dialog, setDialog] = useState<'reset' | 'deactivate' | null>(null)
+  const [dialog, setDialog] = useState<'reset' | 'deactivate' | 'cancel-invitation' | null>(null)
   /** Re-reading her open cases before a save they would block. */
   const [rechecking, setRechecking] = useState(false)
 
@@ -161,6 +179,10 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
   const guards = userGuardState(user)
   const callout = statusCallout(user, now)
   const inactive = user.status === 'inactive'
+  const invited = user.status === 'invited'
+  const cancelled = user.status === 'cancelled'
+  const invitation = invited ? user.invitation : null
+  const secondFactor = secondFactorLabel(user.secondFactor)
 
   function focusField(field: UserDraftField | null) {
     if (field) controls.current[field]?.focus()
@@ -243,6 +265,18 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
     }
   }
 
+  function onResend() {
+    setMessage(null)
+    resend.mutate(undefined, {
+      onSuccess: () => toast(resentInvitationToast(user.email)),
+      onError: (problem) =>
+        setMessage({
+          tone: 'danger',
+          text: handleFailure(problem, { kind: 'user', id: user.id }).message,
+        }),
+    })
+  }
+
   function onDeactivated(change: AdminUserChange) {
     setDialog(null)
     setDraft(null)
@@ -263,6 +297,7 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <RoleChips roles={user.roles} />
           <FactList items={userSummaryFacts(user)} size="md" />
+          <AccountStatusText user={user} now={now} />
         </span>
         <span className="flex items-center gap-1 font-mono text-12 text-muted">
           {user.id}
@@ -316,6 +351,16 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
               {callout.text}
             </Callout>
           ) : null}
+          {invitation && invitationExpired(invitation, now) ? (
+            <Callout tone="warn" title="La invitación venció">
+              El enlace ya no funciona. Reenvíala para enviarle uno nuevo.
+            </Callout>
+          ) : null}
+          {cancelled ? (
+            <Callout tone="neutral" title="Invitación cancelada">
+              Para invitarle de nuevo, usa Nuevo usuario con el mismo correo.
+            </Callout>
+          ) : null}
           {stale ? (
             <Callout tone="info" icon>
               Alguien más acaba de cambiar a esta persona. Si guardas, revisaremos que no choquen
@@ -342,24 +387,31 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
           <KeyValueList
             className="border-t border-border-soft pt-3.5"
             labelWidth={120}
-            items={[
-              {
-                key: 'login',
-                label: 'Último ingreso',
-                value: user.lastLoginAt ? formatRelativeTime(user.lastLoginAt, now) : 'Nunca',
-              },
-              ...(user.availability
-                ? [
+            items={
+              invitation
+                ? invitationFacts(invitation, now)
+                : [
                     {
-                      key: 'now',
-                      label: 'Ahora',
-                      value: user.availability === 'available' ? 'Disponible' : 'En pausa',
+                      key: 'login',
+                      label: 'Último ingreso',
+                      value: user.lastLoginAt ? formatRelativeTime(user.lastLoginAt, now) : 'Nunca',
                     },
+                    ...(user.availability
+                      ? [
+                          {
+                            key: 'now',
+                            label: 'Ahora',
+                            value: user.availability === 'available' ? 'Disponible' : 'En pausa',
+                          },
+                        ]
+                      : []),
+                    { key: 'open', label: 'Casos abiertos', value: openCasesFact(user.openCases) },
+                    ...(secondFactor
+                      ? [{ key: 'mfa', label: 'Verificación en dos pasos', value: secondFactor }]
+                      : []),
+                    { key: 'created', label: 'Cuenta creada', value: formatDate(user.createdAt) },
                   ]
-                : []),
-              { key: 'open', label: 'Casos abiertos', value: openCasesFact(user.openCases) },
-              { key: 'created', label: 'Cuenta creada', value: formatDate(user.createdAt) },
-            ]}
+            }
           />
         </div>
 
@@ -373,15 +425,36 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
             >
               Guardar cambios
             </Button>
-            <Button
-              variant="ghost"
-              disabled={guards.resetBlocked !== null}
-              aria-describedby={guards.resetBlocked ? `${hintId}-reset` : undefined}
-              onClick={() => setDialog('reset')}
-            >
-              Restablecer contraseña
-            </Button>
-            {!inactive ? (
+            {invited ? (
+              <>
+                <Button
+                  variant="secondary"
+                  icon={<Mail size={15} aria-hidden="true" />}
+                  loading={resend.isPending}
+                  onClick={onResend}
+                >
+                  Reenviar invitación
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="text-danger hover:text-danger-strong"
+                  onClick={() => setDialog('cancel-invitation')}
+                >
+                  Cancelar invitación
+                </Button>
+              </>
+            ) : null}
+            {!invited && !cancelled && !inactive ? (
+              <Button
+                variant="ghost"
+                disabled={guards.resetBlocked !== null}
+                aria-describedby={guards.resetBlocked ? `${hintId}-reset` : undefined}
+                onClick={() => setDialog('reset')}
+              >
+                Enviar enlace para restablecer
+              </Button>
+            ) : null}
+            {!inactive && !invited && !cancelled ? (
               <Button
                 variant="ghost"
                 className="text-danger hover:text-danger-strong"
@@ -393,12 +466,12 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
               </Button>
             ) : null}
           </div>
-          {guards.resetBlocked ? (
+          {guards.resetBlocked && !invited && !cancelled && !inactive ? (
             <span id={`${hintId}-reset`} className="text-12 text-muted">
               {guards.resetBlocked}
             </span>
           ) : null}
-          {guards.deactivateBlocked && !inactive ? (
+          {guards.deactivateBlocked && !inactive && !invited && !cancelled ? (
             <span id={`${hintId}-deactivate`} className="text-12 text-muted">
               {guards.deactivateBlocked}
             </span>
@@ -416,9 +489,21 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
         <ResetPasswordDialog
           user={user}
           onClose={() => setDialog(null)}
-          onDone={(result) => {
+          onDone={() => {
             setDialog(null)
-            onPasswordReset(user.name, result)
+            toast(resetLinkSentToast(user.email))
+          }}
+        />
+      ) : null}
+      {dialog === 'cancel-invitation' ? (
+        <CancelInvitationDialog
+          user={user}
+          onClose={() => setDialog(null)}
+          onDone={() => {
+            setDialog(null)
+            setDraft(null)
+            toast(cancelledInvitationToast(user.name))
+            onInvitationCancelled()
           }}
         />
       ) : null}

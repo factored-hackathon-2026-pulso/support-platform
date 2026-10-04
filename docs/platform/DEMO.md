@@ -3,7 +3,8 @@
 Demo de 7 a 10 minutos para jurados. Muestra la plataforma de punta a punta con personas reales
 detrás de cada ventana: una clienta escribe, un analista la atiende en vivo, cierra el caso, la
 clienta vuelve, supervisión reparte el trabajo respetando el idioma, todo queda en auditoría, y
-administración da de alta a una persona nueva que recibe su primer caso.
+administración invita por correo a una persona nueva, que crea su propia contraseña, configura la
+verificación en dos pasos y recibe su primer caso. Nadie del equipo ve ni entrega contraseñas.
 
 Todo lo que se ve es "Datos de ejemplo": personas, clientes y casos inventados. Este guion se
 ensayó completo sobre una base recién creada; los textos entre comillas son los que muestra la
@@ -32,7 +33,10 @@ pantalla.
    | **B · Analista** | http://localhost:5173/login | Felipe Echeverri, `felipe.echeverri@latambank.example` | Entra (contraseña `demo1234`, código `000000`). Llega a **"Inicio"** ("Estás en pausa"). No lo pongas disponible todavía |
    | **C · Supervisión y administración** | http://localhost:5173/login | Lucía Herrera, `lucia.herrera@latambank.example` | Entra. Queda en **"Colas"** |
 
-   Durante la demo abrirás una cuarta pestaña para la persona nueva que crea administración.
+   Durante la demo abrirás una cuarta pestaña para la persona nueva que invita administración.
+   Ten a mano **un teléfono con una app de autenticación** (Google Authenticator, Microsoft
+   Authenticator…) para escanear el QR del paso 8, o una terminal lista para calcular el código:
+   `cd backend && uv run python -c "import pyotp; print(pyotp.TOTP('<clave>').now())"`.
 3. Comprueba en C que en **"Colas"**, Portugués, Gabriela Duarte Melo está **"Sin asignar"**, que
    en Español Rosa y Mauricio están "Sin asignar" y que el menú muestra **"Escalados"** con 2
    abiertos (Daniela con Marcela, Julián con Camila). Si no, reinicia la base (paso 1).
@@ -213,32 +217,45 @@ la respuesta no aparecen en la auditoría (solo su largo), como el texto de los 
 edita ni se borra. Aquí se ve quién hizo qué, en qué caso y cuándo. Hay filtros por persona,
 tipo y fechas, y el texto de los mensajes no aparece en la auditoría."
 
-### 8. Administración: una persona nueva recibe su primer caso (7:15 – 8:45)
+### 8. Administración: una persona nueva, invitada por correo, recibe su primer caso (7:15 – 9:00)
 
 **C:** pulsa el avatar **"Lucía Herrera, cambiar de rol"** → **"Cerrar sesión"**. Entra como
 **Valeria Quintero** (`valeria.quintero@latambank.example`). Llega a "Usuarios y roles". Si el
 menú indica "1 pendiente", es Mariana Duque: la semilla la deja bloqueada solo durante los primeros
-13 minutos después del reinicio. No hace falta tocarla.
+13 minutos después del reinicio. No hace falta tocarla. En la tabla, **Bruna Esteves** aparece con
+**"Invitación pendiente"** (la semilla la invitó hace 3 horas).
 
-1. Pulsa **"Nueva persona"**: nombre `Bruna Esteves`, correo `bruna.esteves@latambank.example`,
-   rol **Analista**, idioma **Portugués**, equipo **"Equipo Andes"**. Pulsa
-   **"Crear cuenta"**.
-2. Aparece "Cuenta creada" con la **contraseña temporal** (se muestra una sola vez). Pulsa
-   **"Copiar"** y luego **"Listo"**.
-3. Abre una **pestaña nueva** en http://localhost:5173/login y entra como Bruna con esa contraseña
-   y el código `000000`. Llega a **"Inicio"**, en pausa. Pulsa **"Empezar a atender"**.
-4. **A (cliente):** pulsa **"Cambiar de cliente"** y elige **Rafael Nogueira Costa** (Portugués de
+1. Pulsa **"Nuevo usuario"**: nombre `Ana Gil`, correo `ana.gil@latambank.example`, rol
+   **Analista**, idioma **Portugués**, equipo **"Equipo Andes"**. Pulsa **"Enviar invitación"**.
+2. Aparece **"Invitación enviada"**: "Invitación enviada a ana.gil@latambank.example. El enlace
+   vence en 48 horas." Pulsa **"Listo"**. Su ficha dice "Invitación pendiente", cuándo se envió y
+   cuándo vence, con **"Reenviar invitación"** y **"Cancelar invitación"**. No hay ninguna
+   contraseña a la vista.
+3. Abre una **pestaña nueva** en http://localhost:5173/dev/correos ("Correos de desarrollo", la
+   herramienta que reemplaza al servidor de correo en desarrollo). El correo más nuevo es "Te
+   invitaron a la Plataforma CC de LATAM Bank" para Ana: pulsa **"Abrir enlace"**.
+4. **"Activa tu cuenta"**: escribe una contraseña (por ejemplo `Lago-Verde-2027!`); los requisitos
+   se marcan en vivo ("Al menos 12 caracteres", "No incluye tu nombre ni tu correo", "No es una
+   contraseña común", "Las dos contraseñas coinciden"). Pulsa **"Continuar"**.
+5. **"Configura la verificación en dos pasos"**: escanea el QR con la app del teléfono (o copia la
+   clave y calcula el código en la terminal). Escribe el código de 6 dígitos y pulsa **"Activar
+   cuenta"** → **"Tu cuenta está lista"** → **"Entrar"**.
+6. Entra como Ana con su contraseña y el **código de la app** (el `000000` de desarrollo no le
+   sirve). Llega a **"Inicio"**, en pausa. Pulsa **"Empezar a atender"**.
+7. **A (cliente):** pulsa **"Cambiar de cliente"** y elige **Rafael Nogueira Costa** (Portugués de
    Brasil). El simulador habla en portugués. Pulsa la sugerencia
    **"Olá, não reconheço uma compra no meu cartão"** y **Enviar**.
 
-**Se ve:** en A, "Você está falando com Bruna · LATAM Bank". En la pestaña de Bruna, "Te llegó
-un caso nuevo"; al abrirlo, "Te llegó porque estás disponible y hablas portugués (regla 3)".
+**Se ve:** en C, la ficha de Ana pasa a "Activa" y la campana de Valeria trae "Invitación
+aceptada: Ana Gil". En A, "Você está falando com Ana · LATAM Bank". En la pestaña de Ana, "Te
+llegó un caso nuevo"; al abrirlo, "Te llegó porque estás disponible y hablas portugués (regla 3)".
 
-**Decir:** "Felipe está disponible, pero no habla portugués. El caso fue a la única persona
-disponible que sí lo habla: la que acabamos de crear, sin tocar ninguna configuración más. Entre
-varias personas elegibles, gana la menos cargada."
+**Decir:** "Administración nunca ve ni entrega una contraseña: invita por correo con un enlace de
+un solo uso, y la persona crea la suya y configura la verificación en dos pasos. Felipe está
+disponible, pero no habla portugués: el caso fue a la única persona disponible que sí lo habla, la
+que acabamos de invitar."
 
-### 9. Barandas de seguridad (8:45 – 9:45)
+### 9. Barandas de seguridad (9:00 – 9:45)
 
 En **C** (Valeria, "Usuarios y roles"):
 
@@ -264,10 +281,14 @@ En **C** (Valeria, "Usuarios y roles"):
    **Decir:** "Cinco intentos fallidos bloquean la cuenta 15 minutos. Administración ve el bloqueo
    al momento, lo levanta, y queda en auditoría."
 
-**Si sobra tiempo:** en la ficha de **Bruna Esteves**, marca también **Supervisión** y pulsa
-**"Guardar cambios"**. En la pestaña de Bruna aparece el aviso "Cambiaron tus roles" ("Ahora
-tienes: Analista y Supervisión.") y su selector de rol ya ofrece "Supervisión", sin volver a
-entrar.
+**Si sobra tiempo:**
+
+- En la ficha de **Ana Gil**, marca también **Supervisión** y pulsa **"Guardar cambios"**. En la
+  pestaña de Ana aparece el aviso "Cambiaron tus roles" ("Ahora tienes: Analista y Supervisión.")
+  y su selector de rol ya ofrece "Supervisión", sin volver a entrar.
+- En la ficha de **Martín Salazar**, pulsa **"Enviar enlace para restablecer"**: el diálogo explica
+  que le llega un correo con un enlace que vence en 1 hora y que sus sesiones se cierran ya. En
+  `/dev/correos` aparece "Crea una contraseña nueva para la Plataforma CC".
 
 ### 10. Cierre (9:45 – 10:00)
 
@@ -286,7 +307,9 @@ Todo pensado para el trabajo diario del equipo de soporte."
 | No aparece "Escalar a supervisión" | El caso no es de quien mira, está cerrado o ya está escalado (la tarjeta "Escalado a supervisión" está arriba). Retíralo con "Retirar escalamiento" para volver a escalarlo |
 | Martín ya estaba bloqueado antes del paso 9.3 (quedó de un ensayo) | Desbloquéalo igual desde su ficha y repite los 5 intentos, o reinicia la base |
 | Martín no queda bloqueado al quinto intento | Revisa que el correo sea exactamente `martin.salazar@latambank.example`: los intentos se cuentan por cuenta |
-| Se perdió la contraseña temporal de Bruna | Ficha de Bruna → "Restablecer contraseña": da una nueva, también una sola vez |
+| El enlace de Ana dice "El enlace venció o ya se usó" | Ya se usó o se reenvió. En su ficha pulsa "Reenviar invitación" y abre el correo más nuevo en `/dev/correos` |
+| El código de la app no sirve | Revisa la hora del teléfono; o calcula el código con la clave del paso 5 en la terminal (`pyotp`). Cinco códigos erróneos bloquean la activación 15 minutos: reenvía la invitación |
+| `/dev/correos` dice "No disponible" | El backend no corre con `CC_ENV=dev` (o `CC_DEV_MAILBOX=false`). Arráncalo con `uv run cc-api` sin cambiar `CC_ENV` |
 | Una ventana muestra a otra persona | Se duplicó una pestaña. Abre una ventana nueva y escribe la URL |
-| La pantalla se queda sin sesión de golpe | La sesión se cerró (cierre de sesión, desactivación, contraseña restablecida o base reiniciada). Vuelve a entrar |
+| La pantalla se queda sin sesión de golpe | La sesión se cerró (cierre de sesión, desactivación, enlace para restablecer enviado o base reiniciada). Vuelve a entrar |
 | Algo quedó en un estado raro | Reinicio completo en un minuto: detén el backend, `rm -f backend/cc_platform.db`, arráncalo, recarga las tres ventanas y vuelve a entrar |

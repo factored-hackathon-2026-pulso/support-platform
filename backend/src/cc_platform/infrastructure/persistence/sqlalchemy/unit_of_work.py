@@ -31,8 +31,10 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.notification
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.people import (
     SqlAdminRosterRepository,
     SqlAnalystAvailabilityRepository,
+    SqlInvitationRepository,
     SqlLoginAccountRepository,
     SqlMfaChallengeRepository,
+    SqlPasswordResetRepository,
     SqlStaffRepository,
     SqlStaffSessionRepository,
     SqlTeamRepository,
@@ -58,6 +60,8 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     mfa_challenges: SqlMfaChallengeRepository
     sessions: SqlStaffSessionRepository
     availability: SqlAnalystAvailabilityRepository
+    invitations: SqlInvitationRepository
+    password_resets: SqlPasswordResetRepository
     customers: SqlCustomerRepository
     cases: SqlCaseRepository
     turns: SqlTurnRepository
@@ -90,6 +94,8 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.mfa_challenges = SqlMfaChallengeRepository(session, self.track)
         self.sessions = SqlStaffSessionRepository(session, self.track)
         self.availability = SqlAnalystAvailabilityRepository(session, self.track)
+        self.invitations = SqlInvitationRepository(session, self.track)
+        self.password_resets = SqlPasswordResetRepository(session, self.track)
         self.customers = SqlCustomerRepository(session)
         self.cases = SqlCaseRepository(session, self.track)
         self.turns = SqlTurnRepository(session)

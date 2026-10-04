@@ -8,10 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cc_platform.application.people.admin.commands import (
+    CancelInvitation,
     CreateUser,
     DeactivateUser,
     ReactivateUser,
-    ResetPassword,
+    ResendInvitation,
+    SendPasswordResetLink,
     UnlockAccount,
     UpdateUser,
 )
@@ -33,7 +35,9 @@ class AdministrationUseCases:
     deactivate_user: DeactivateUser
     reactivate_user: ReactivateUser
     unlock_user: UnlockAccount
-    reset_password: ResetPassword
+    reset_password: SendPasswordResetLink
+    resend_invitation: ResendInvitation
+    cancel_invitation: CancelInvitation
     list_teams: ListTeams
     get_team: GetTeam
     create_team: CreateTeam

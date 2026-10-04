@@ -3,6 +3,14 @@
 **Status:** implemented (2026-10-03). Final check in `../ENGINEERING_BRIEF.md` §8.
 **Date:** 2026-10-03.
 
+> **Superseded in part by `slice-11-invitations.md` (part 4, 2026-10-04).** There are no
+> temporary passwords any more: `POST /admin/users` invites the person by email (`InvitedUser`,
+> no password), `POST /admin/users/{id}/password-reset` emails a reset link
+> (`PasswordResetLinkSent`), `TemporaryPasswordGenerator`, `CreatedUser`, `PasswordResetResult`,
+> `temporaryPassword` and `TemporaryPasswordDialog` are gone, and `staff.password_reset` is now
+> recorded by the person herself. Everything about temporary passwords below (§1.3, §3.1, §3.5,
+> §3.9, §5, §10.3, §12, §13) is historical; the rest of this contract still holds.
+
 **Scope.** Administration of a **people-only** chat support platform (brief §8, S4). Everything here is for the **Administración** role:
 
 1. **Users**: list with filters and search, create (name, unique email, roles, languages, team; a temporary password shown once), edit, deactivate and reactivate, unlock a locked account, reset the password.

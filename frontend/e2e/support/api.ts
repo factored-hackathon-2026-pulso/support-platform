@@ -3,6 +3,7 @@ import { expect, type APIRequestContext, type APIResponse } from '@playwright/te
 import type { components } from '../../src/lib/api/schema.gen'
 import { API_URL } from './env'
 import { DEMO_PASSWORD, DEV_MFA_CODE, SEEDED, TEAM_ANDES, type Language } from './data'
+import { totpCode } from './totp'
 
 type Schemas = components['schemas']
 export type StaffRole = Schemas['StaffRole']
@@ -10,14 +11,28 @@ export type AdminUser = Schemas['AdminUser']
 export type DemoCustomer = Schemas['DemoCustomer']
 export type CaseDetail = Schemas['CaseDetail']
 
-/** A person created by a scenario: her id, credentials and the name the UI shows. */
+/**
+ * A person created by a scenario: her id, credentials and the name the UI shows. Part 4:
+ * she was invited and activated the invitation, so she signs in with her own password
+ * and the code of her authenticator (`totpSecret`, the key the activation showed).
+ */
 export interface CreatedPerson {
   id: string
   name: string
   email: string
   password: string
+  totpSecret: string
   roles: StaffRole[]
   languages: Language[]
+}
+
+/**
+ * A password the policy accepts for anyone: 16 characters, digits and symbols only
+ * (so it never contains her name or email), never a common one.
+ */
+export function strongPassword(): string {
+  const group = () => String(1000 + Math.floor(Math.random() * 9000))
+  return `#${group()}-${group()}-${group()}!`
 }
 
 const API = `${API_URL}/api/v1`
@@ -47,8 +62,15 @@ export class PlatformApi {
     return { Authorization: `Bearer ${token}` }
   }
 
-  /** Password + dev MFA → a staff session token (cached per email). */
-  async signIn(email: string, password: string = DEMO_PASSWORD): Promise<string> {
+  /**
+   * Password + second factor → a staff session token (cached per email): her
+   * authenticator code when she has a `totpSecret`, the dev code for seeded accounts.
+   */
+  async signIn(
+    email: string,
+    password: string = DEMO_PASSWORD,
+    totpSecret?: string,
+  ): Promise<string> {
     const cached = this.tokens.get(email)
     if (cached) return cached
     const login = await json<Schemas['LoginResponse']>(
@@ -57,7 +79,10 @@ export class PlatformApi {
     )
     const session = await json<Schemas['SessionResponse']>(
       await this.request.post(`${API}/auth/mfa`, {
-        data: { challengeId: login.challengeId, code: DEV_MFA_CODE },
+        data: {
+          challengeId: login.challengeId,
+          code: totpSecret ? totpCode(totpSecret) : DEV_MFA_CODE,
+        },
       }),
       `mfa ${email}`,
     )
@@ -87,29 +112,68 @@ export class PlatformApi {
     return team.id
   }
 
-  /** Administration creates a person (starts "En pausa"); returns her temporary password. */
+  /**
+   * Part 4: administration invites a person, and she activates the invitation through
+   * the public API like the activation screen does: the link from the dev mailbox, her
+   * own password, then the first code of the authenticator key it returned. She starts
+   * "En pausa".
+   */
   async createPerson(input: {
     name: string
     email: string
     roles: StaffRole[]
     languages: Language[]
   }): Promise<CreatedPerson> {
-    const created = await json<Schemas['CreatedUser']>(
+    const invited = await json<Schemas['InvitedUser']>(
       await this.request.post(`${API}/admin/users`, {
         headers: { ...this.auth(await this.adminToken()), 'Idempotency-Key': randomUUID() },
         data: { ...input, teamId: await this.teamId() },
       }),
-      `create ${input.email}`,
+      `invite ${input.email}`,
     )
-    if (!created.temporaryPassword) throw new Error('no temporary password returned')
+    const token = await this.invitationToken(input.email)
+    const password = strongPassword()
+    const enrollment = await json<Schemas['TotpEnrollment']>(
+      await this.request.post(`${API}/onboarding/invitations/password`, {
+        data: { token, password },
+      }),
+      `password of ${input.email}`,
+    )
+    await json(
+      await this.request.post(`${API}/onboarding/invitations/activate`, {
+        data: { token, code: totpCode(enrollment.secret) },
+      }),
+      `activate ${input.email}`,
+    )
     return {
-      id: created.user.id,
-      name: created.user.name,
-      email: created.user.email,
-      password: created.temporaryPassword,
+      id: invited.user.id,
+      name: invited.user.name,
+      email: invited.user.email,
+      password,
+      totpSecret: enrollment.secret,
       roles: input.roles,
       languages: input.languages,
     }
+  }
+
+  /** The newest emails of the dev mailbox (the backend runs with `CC_DEV_MAILBOX`). */
+  async mailbox(): Promise<Schemas['DevEmail'][]> {
+    const box = await json<Schemas['DevMailbox']>(
+      await this.request.get(`${API}/dev/mailbox`, { params: { limit: 50 } }),
+      'dev mailbox',
+    )
+    return box.items
+  }
+
+  /** The token of the newest invitation email sent to `email`. */
+  async invitationToken(email: string): Promise<string> {
+    const message = (await this.mailbox()).find(
+      (item) => item.kind === 'invitation' && item.to === email,
+    )
+    if (!message) throw new Error(`no invitation email for ${email}`)
+    const token = new URL(message.link).searchParams.get('token')
+    if (!token) throw new Error(`the invitation of ${email} has no token`)
+    return token
   }
 
   async adminUser(staffId: string): Promise<AdminUser> {
@@ -136,7 +200,7 @@ export class PlatformApi {
   }
 
   async setAvailability(person: CreatedPerson, status: 'available' | 'paused'): Promise<void> {
-    const token = await this.signIn(person.email, person.password)
+    const token = await this.signIn(person.email, person.password, person.totpSecret)
     await json(
       await this.request.put(`${API}/me/availability`, {
         headers: this.auth(token),
@@ -204,7 +268,7 @@ export class PlatformApi {
     }
     await json(
       await this.request.post(`${API}/cases/${open.caseId}/close`, {
-        headers: this.auth(await this.signIn(janitor.email, janitor.password)),
+        headers: this.auth(await this.signIn(janitor.email, janitor.password, janitor.totpSecret)),
         data: { reason: 'other', note: 'e2e: conversación de un intento anterior' },
       }),
       `close ${open.caseId}`,

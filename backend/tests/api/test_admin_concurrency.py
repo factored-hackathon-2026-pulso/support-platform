@@ -102,7 +102,7 @@ async def test_two_admins_demoting_each_other(
 
 
 async def test_same_email_twice(setup: tuple[httpx.AsyncClient, Container]) -> None:
-    http, _ = setup
+    http, container = setup
     valeria = await headers_for(http, ADMIN_ONLY.email)
     body = {
         "name": "Ana Gil",
@@ -122,7 +122,11 @@ async def test_same_email_twice(setup: tuple[httpx.AsyncClient, Container]) -> N
     )
     assert sorted(r.status_code for r in replays) == [200, 200, 200, 201]
     assert len({r.json()["user"]["id"] for r in replays}) == 1
-    assert sum(r.json()["temporaryPassword"] is not None for r in replays) == 1
+    # Part 4: one invitation, one email (the replays send nothing).
+    assert container.dev_mailbox is not None
+    sent = [m.to for m in await container.dev_mailbox.latest(50)]
+    assert sent.count("bruno.paz@latambank.example") == 1
+    assert sent.count("ana.gil@latambank.example") == 1
 
 
 async def test_same_team_name_twice(setup: tuple[httpx.AsyncClient, Container]) -> None:
@@ -258,14 +262,13 @@ async def test_a_password_reset_racing_the_mfa_step_never_leaves_a_working_sessi
     setup: tuple[httpx.AsyncClient, Container],
 ) -> None:
     """A sign-in with the old password that is finishing its MFA step while an admin
-    resets the password: either the MFA step loses (its challenge was cancelled) or it won
-    first and the reset ended the session it got. Never a working token."""
+    sends a reset link (part 4): either the MFA step loses (its challenge was cancelled) or
+    it won first and the reset ended the session it got. Never a working token."""
     http, _ = setup
     valeria = await headers_for(http, ADMIN_ONLY.email)
-    password = PASSWORD
     for _ in range(4):
         login = await http.post(
-            "/api/v1/auth/login", json={"email": TOMAS.email, "password": password}
+            "/api/v1/auth/login", json={"email": TOMAS.email, "password": PASSWORD}
         )
         assert login.status_code == 200
         reset, mfa = await asyncio.gather(
@@ -282,4 +285,3 @@ async def test_a_password_reset_racing_the_mfa_step_never_leaves_a_working_sessi
             assert reset.json()["revokedSessions"] == 1
         else:
             assert (mfa.status_code, mfa.json()["code"]) == (401, "mfa_challenge_invalid")
-        password = reset.json()["temporaryPassword"]  # the next round signs in with it

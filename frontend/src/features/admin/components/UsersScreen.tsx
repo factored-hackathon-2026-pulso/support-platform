@@ -14,14 +14,13 @@ import {
   type UrlStateChangeOptions,
   type UsersUrlState,
 } from '../model'
-import { useAdminLive, useAdminTeams, useAdminUser, useAdminUsers } from '../hooks'
-import type { CreatedUser, PasswordResetResult } from '../types'
+import { useAdminLive, useAdminTeams, useAdminUsers } from '../hooks'
+import type { InvitedUser } from '../types'
 import { CreateUserDialog } from './CreateUserDialog'
-import { TemporaryPasswordDialog, type TemporaryPasswordResult } from './TemporaryPasswordDialog'
+import { InvitationSentDialog } from './InvitationSentDialog'
 import { UserPanel } from './UserPanel'
 import { UsersTable } from './UsersTable'
 import { UsersToolbar } from './UsersToolbar'
-import { ResetPasswordDialog } from './ResetPasswordDialog'
 
 /** Clock of the account statuses (a lock expires on its own) and "Último ingreso". */
 export const USERS_TICK_MS = 15_000
@@ -37,8 +36,9 @@ export interface UsersScreenProps {
  * Usuarios y roles (Admin.dc.html section `usuarios`, contract §10.2): the
  * directory with its filters and the selected person's aside, live through
  * `admin:directory`. The URL holds the filters, the selection and the create
- * dialog (`?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=`). Temporary
- * passwords live only in this component's state.
+ * dialog (`?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=`). Part 4: creating a
+ * person sends her an invitation by email ("Invitación enviada"); no password is
+ * ever shown to administration.
  */
 export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersScreenProps) {
   useAdminLive()
@@ -65,10 +65,8 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
     }),
     [users, shown],
   )
-  const [password, setPassword] = useState<(TemporaryPasswordResult & { staffId: string }) | null>(
-    null,
-  )
-  const [resetAfterReplay, setResetAfterReplay] = useState<string | null>(null)
+  /** The address of the invitation just sent (the "Invitación enviada" dialog). */
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null)
 
   const replace = useCallback(
     (patch: Partial<UsersUrlState>) => onStateChange(patch, { replace: true }),
@@ -80,27 +78,10 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
   const filteredTeam = onlyTeam ? teams.find((team) => team.id === onlyTeam) : undefined
   const initialTeamId = filteredTeam?.active ? filteredTeam.id : null
 
-  function onCreated(result: CreatedUser) {
+  function onCreated(result: InvitedUser) {
     onStateChange({ create: false, staffId: result.user.id })
-    setPassword({
-      kind: 'created',
-      name: result.user.name,
-      password: result.temporaryPassword,
-      staffId: result.user.id,
-    })
+    setInvitedEmail(result.user.email)
   }
-
-  function onPasswordReset(name: string, result: PasswordResetResult) {
-    setPassword({
-      kind: 'reset',
-      name,
-      password: result.temporaryPassword,
-      staffId: result.user.id,
-    })
-  }
-
-  const replayed = password && password.password === null ? password : null
-  const replayedUser = useAdminUser(resetAfterReplay).data
 
   return (
     <Page
@@ -143,7 +124,7 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
           teams={teams}
           now={now}
           canOpenSupervision={canOpenSupervision}
-          onPasswordReset={onPasswordReset}
+          onInvitationCancelled={() => onStateChange({ staffId: null }, { replace: true })}
         />
       </PageBody>
 
@@ -156,30 +137,8 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
         />
       ) : null}
 
-      {password ? (
-        <TemporaryPasswordDialog
-          result={password}
-          onClose={() => setPassword(null)}
-          onResetPassword={
-            replayed
-              ? () => {
-                  setPassword(null)
-                  setResetAfterReplay(replayed.staffId)
-                }
-              : undefined
-          }
-        />
-      ) : null}
-
-      {replayedUser ? (
-        <ResetPasswordDialog
-          user={replayedUser}
-          onClose={() => setResetAfterReplay(null)}
-          onDone={(result) => {
-            setResetAfterReplay(null)
-            onPasswordReset(replayedUser.name, result)
-          }}
-        />
+      {invitedEmail ? (
+        <InvitationSentDialog email={invitedEmail} onClose={() => setInvitedEmail(null)} />
       ) : null}
     </Page>
   )

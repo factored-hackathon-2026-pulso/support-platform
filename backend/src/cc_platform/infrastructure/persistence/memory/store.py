@@ -14,8 +14,10 @@ from cc_platform.domain.customers.customer import Customer
 from cc_platform.domain.notifications.notification import Notification
 from cc_platform.domain.people.admin_roster import AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability
+from cc_platform.domain.people.invitation import Invitation
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
+from cc_platform.domain.people.password_reset import PasswordReset
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff
 from cc_platform.domain.people.team import Team
@@ -30,6 +32,8 @@ class InMemoryStore:
     mfa_challenges: dict[str, MfaChallenge] = field(default_factory=dict)
     sessions: dict[str, StaffSession] = field(default_factory=dict)
     availability: dict[str, AnalystAvailability] = field(default_factory=dict)
+    invitations: dict[str, Invitation] = field(default_factory=dict)
+    password_resets: dict[str, PasswordReset] = field(default_factory=dict)
     customers: dict[str, Customer] = field(default_factory=dict)
     cases: dict[str, Case] = field(default_factory=dict)
     turns: dict[str, Turn] = field(default_factory=dict)

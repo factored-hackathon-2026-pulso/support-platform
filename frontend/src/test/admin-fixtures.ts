@@ -42,6 +42,8 @@ export function makeAdminUser(overrides: Partial<AdminUser> = {}): AdminUser {
     createdAt: T30,
     guards: { isSelf: false, lastActiveAdmin: false },
     version: 3,
+    invitation: null,
+    secondFactor: 'dev_code',
     ...overrides,
   }
 }
@@ -105,6 +107,28 @@ export const andres = makeAdminUser({
   lastLoginAt: null,
 })
 
+export const BRUNA_ID = 'STF-ANA0000015'
+
+/** Bruna Esteves: invited 3 h ago (part 4), the link expires in 45 h; no login account. */
+export const bruna = makeAdminUser({
+  id: BRUNA_ID,
+  name: 'Bruna Esteves',
+  email: 'bruna.esteves@latambank.example',
+  languages: ['pt'],
+  status: 'invited',
+  availability: 'paused',
+  lastLoginAt: null,
+  secondFactor: null,
+  invitation: {
+    id: 'INV-00000000000000000000000015',
+    status: 'pending',
+    createdAt: minutesFrom(-180),
+    sentAt: minutesFrom(-180),
+    expiresAt: minutesFrom(45 * 60),
+    resendCount: 0,
+  },
+})
+
 export function makeUserList(
   items: AdminUser[] = [carolina, daniela, mariana, selfAdmin],
   overrides: Partial<Schemas['AdminUserList']> = {},
@@ -112,7 +136,7 @@ export function makeUserList(
   return {
     items,
     roleCounts: { all: 12, analyst: 6, supervisor: 5, admin: 2 },
-    statusCounts: { active: 12, locked: 1, inactive: 1, all: 13 },
+    statusCounts: { active: 12, locked: 1, invited: 0, inactive: 1, all: 13 },
     serverTime: NOW.toISOString(),
     ...overrides,
   }

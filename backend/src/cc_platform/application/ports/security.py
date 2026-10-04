@@ -50,7 +50,60 @@ class MfaVerifier(Protocol):
         ...
 
 
-class TemporaryPasswordGenerator(Protocol):
-    """Temporary passwords for new accounts and resets (slice 4 §1.3), shown once."""
+@dataclass(frozen=True, slots=True)
+class IssuedToken:
+    """A one-time link token: ``token`` travels once (in the email link), only ``hash``
+    is stored."""
 
-    def generate(self) -> str: ...
+    token: str
+    hash: str
+
+
+class OneTimeTokens(Protocol):
+    """Single-use link tokens (part 4: invitations and password resets).
+
+    ``issue`` returns a high-entropy random token (at least 256 bits) and its hash; ``hash``
+    recomputes the hash of a presented token for the lookup. Tests use a predictable fake.
+    """
+
+    def issue(self) -> IssuedToken: ...
+
+    def hash(self, token: str) -> str: ...
+
+
+class TotpService(Protocol):
+    """Time-based one-time passwords (RFC 6238: 30-second steps, 6 digits, HMAC-SHA1 for
+    authenticator-app compatibility). Time comes from the caller (the ``Clock``)."""
+
+    @property
+    def issuer(self) -> str:
+        """The name the authenticator app shows above the codes."""
+        ...
+
+    @property
+    def digits(self) -> int: ...
+
+    @property
+    def period_seconds(self) -> int: ...
+
+    def new_secret(self) -> str:
+        """A fresh random base32 secret (160 bits)."""
+        ...
+
+    def provisioning_uri(self, secret: str, *, account_name: str) -> str:
+        """The ``otpauth://totp/…`` URI an authenticator app reads from the QR code."""
+        ...
+
+    def verify(self, secret: str, code: str, *, at: datetime) -> bool:
+        """Whether ``code`` is valid at ``at`` (one step of clock drift either way)."""
+        ...
+
+
+class SecretBox(Protocol):
+    """Seals secrets kept at rest (the TOTP secrets): authenticated encryption."""
+
+    def seal(self, plain: str) -> str: ...
+
+    def open(self, sealed: str) -> str:
+        """The plain secret; raises ``ValueError`` when the box cannot open it."""
+        ...

@@ -42,10 +42,6 @@ from cc_platform.domain.people.availability import (
 from cc_platform.domain.people.names import team_name_key
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.errors import InvalidValueError
-from cc_platform.infrastructure.security.temporary_passwords import (
-    ALPHABET,
-    SecretsTemporaryPasswordGenerator,
-)
 
 NOW = datetime(2026, 10, 3, 14, tzinfo=UTC)
 ADMIN = ActorRef(ActorRole.ADMIN, "STF-" + "0" * 25 + "7")
@@ -166,6 +162,8 @@ def test_create_records_the_canonical_payload() -> None:
         "key-0001",
         NOW,
     )
+    # Part 4: a new person starts invited (no password, cannot sign in).
+    assert (staff.active, staff.is_invited) == (False, True)
 
 
 def test_create_into_an_inactive_team_is_refused() -> None:
@@ -345,7 +343,8 @@ def test_unlock_resets_failures_without_a_lock_and_ignores_a_clear_counter() -> 
 
 def test_reset_password_replaces_the_hash_and_clears_the_lock() -> None:
     account = locked_account()
-    account.reset_password("new-hash", now=NOW, actor=ADMIN, revoked_sessions=1)
+    herself = ActorRef(ActorRole.ANALYST, STAFF_ID)
+    account.reset_password("new-hash", now=NOW, actor=herself)
     assert (account.password_hash, account.failed_attempts, account.locked_until) == (
         "new-hash",
         0,
@@ -353,17 +352,14 @@ def test_reset_password_replaces_the_hash_and_clears_the_lock() -> None:
     )
     (event,) = account.pull_events()
     assert isinstance(event, StaffPasswordReset)
-    assert event.payload() == {"revoked_sessions": 1, "cleared_lock": True}
+    assert event.payload() == {"cleared_lock": True}
+    assert event.actor == herself
     assert "new-hash" not in str(event.payload())
 
 
-def test_temporary_passwords_follow_the_format() -> None:
-    generator = SecretsTemporaryPasswordGenerator()
-    passwords = {generator.generate() for _ in range(50)}
-    assert len(passwords) == 50
-    for password in passwords:
-        assert len(password) == 14
-        groups = password.split("-")
-        assert [len(g) for g in groups] == [4, 4, 4]
-        assert set("".join(groups)) <= set(ALPHABET)
-    assert not set("01ilo") & set(ALPHABET)
+def test_clear_attempts_says_whether_a_lock_was_cleared() -> None:
+    account = locked_account()
+    assert account.clear_attempts(now=NOW)
+    assert (account.failed_attempts, account.locked_until) == (0, None)
+    assert not account.has_pending_events
+    assert not account.clear_attempts(now=NOW)

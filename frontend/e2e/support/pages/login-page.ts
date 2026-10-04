@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 import { DEMO_PASSWORD, DEV_MFA_CODE } from '../data'
+import { totpCode } from '../totp'
 
 /** `/login` → `/login/verificacion` (MFA) → the first role home; `/login/bloqueada`. */
 export class LoginPage {
@@ -41,11 +42,19 @@ export class LoginPage {
     await form.getByRole('button', { name: 'Entrar', exact: true }).click()
   }
 
-  /** Full sign-in with the dev MFA code; waits until the app leaves `/login`. */
-  async signIn(email: string, password: string = DEMO_PASSWORD): Promise<void> {
+  /**
+   * Full sign-in; waits until the app leaves `/login`. Part 4: a person who activated
+   * an invitation types the code of her authenticator (computed from `totpSecret`);
+   * a seeded account types the development code.
+   */
+  async signIn(
+    email: string,
+    password: string = DEMO_PASSWORD,
+    totpSecret?: string,
+  ): Promise<void> {
     await this.goto()
     await this.submitPassword(email, password)
-    await this.enterMfa()
+    await this.enterMfa(totpSecret ? totpCode(totpSecret) : DEV_MFA_CODE)
     await expect(this.page).not.toHaveURL(/\/login/)
   }
 }

@@ -69,4 +69,5 @@ def test_include_inactive_lists_deactivated_people_too(
     people = {person["name"]: person for person in response.json()["items"]}
     assert people["Andrés Villamil"]["active"] is False
     assert people["Andrés Villamil"]["team"]["name"] == "Equipo Andes"
-    assert len(people) == 13
+    assert len(people) == 14  # part 4: Tatiana (active); Bruna, only invited, is not listed
+    assert "Bruna Esteves" not in people

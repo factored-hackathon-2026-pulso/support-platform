@@ -17,9 +17,13 @@ role, or removing a language one of her open cases uses is refused with
 ``staff_has_open_cases`` until supervision reassigns them (``SetCaseAssignee``): one
 assignment path, with rule 3, the pause rule and the audit.
 
-Sessions: deactivation and password reset end every active session in the same Unit of
-Work (``SessionTerminator`` then closes her sockets with 4401) and cancel every pending MFA
-challenge, so a sign-in that already passed the password step cannot finish. A roles
+Part 4 (secure onboarding): administration never sees or hands out a password. Creating a
+person invites her (``Invitation``, a link by email that lasts 48 hours); a forgotten
+password is replaced through a reset link (one hour). Emails go out after the commit.
+
+Sessions: deactivation and sending a reset link end every active session in the same Unit
+of Work (``SessionTerminator`` then closes her sockets with 4401) and cancel every pending
+MFA challenge, so a sign-in that already passed the password step cannot finish. A roles
 change ends no session: roles are re-read on her next request, and ``AccessTerminator``
 closes her sockets (4409) so they reconnect with the new roles.
 
@@ -36,10 +40,10 @@ from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.people.admin.dto import (
     AdminUserChangeView,
     AdminUserView,
-    CreatedUserView,
     CreateUserCommand,
+    InvitedUserView,
     OpenCasesBlock,
-    PasswordResetView,
+    PasswordResetLinkView,
     SelfChangeAction,
     UpdateUserCommand,
 )
@@ -60,15 +64,17 @@ from cc_platform.application.people.admin.guards import (
     store_roster,
 )
 from cc_platform.application.people.admin.queries import not_found_person, user_view
+from cc_platform.application.people.onboarding.mailer import OnboardingMailer
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
-from cc_platform.application.ports.security import PasswordHasher, TemporaryPasswordGenerator
+from cc_platform.application.ports.security import IssuedToken, OneTimeTokens
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
 from cc_platform.domain.cases.errors import IdempotencyConflictError
 from cc_platform.domain.people.availability import AvailabilityChangeReason, AvailabilityStatus
-from cc_platform.domain.people.errors import EmailTakenError, TeamInactiveError
-from cc_platform.domain.people.login_account import LoginAccount
+from cc_platform.domain.people.errors import EmailTakenError, StaffInvitedError, TeamInactiveError
+from cc_platform.domain.people.invitation import Invitation
+from cc_platform.domain.people.password_reset import PasswordReset
 from cc_platform.domain.people.session import SessionEndReason
 from cc_platform.domain.people.staff import (
     Staff,
@@ -79,24 +85,31 @@ from cc_platform.domain.people.staff import (
 )
 from cc_platform.domain.people.team import Team
 from cc_platform.domain.shared.actor import ActorRef
-from cc_platform.domain.shared.errors import InvalidValueError
+from cc_platform.domain.shared.errors import InvalidTransitionError, InvalidValueError
 from cc_platform.domain.shared.ids import IdPrefix
 
 
 @dataclass(slots=True)
-class _TemporaryPassword:
-    """One temporary password per request, generated and hashed once (retries reuse it)."""
+class _LinkToken:
+    """One link token per request, issued once (retries reuse it; only its hash is
+    stored, the token itself goes into the email once)."""
 
-    generator: TemporaryPasswordGenerator
-    hasher: PasswordHasher
-    _plain: str | None = field(default=None, repr=False)  # never logged
-    _hash: str | None = field(default=None, repr=False)
+    tokens: OneTimeTokens
+    _issued: IssuedToken | None = field(default=None, repr=False)  # never logged
 
-    async def issue(self) -> tuple[str, str]:
-        if self._plain is None or self._hash is None:
-            self._plain = self.generator.generate()
-            self._hash = await self.hasher.hash(self._plain)
-        return self._plain, self._hash
+    def get(self) -> IssuedToken:
+        if self._issued is None:
+            self._issued = self.tokens.issue()
+        return self._issued
+
+
+@dataclass(frozen=True, slots=True)
+class _Outgoing:
+    """What a committed command still has to email (after the commit, never before)."""
+
+    staff: Staff
+    team_name: str
+    token: str
 
 
 async def _read_back(
@@ -148,23 +161,33 @@ async def _pause(
 # ----------------------------------------------------------------------------- create
 @dataclass(frozen=True, slots=True)
 class CreateUser:
-    """``POST /admin/users`` (§3.1). The temporary password is returned once."""
+    """``POST /admin/users`` (§3.1, part 4): the person starts ``invited`` (no password, no
+    login account) and gets an invitation link by email that lasts 48 hours.
+
+    An email that belongs to a person whose invitation was cancelled is not taken: she is
+    invited again (same record and id, her profile updated, a new link). An idempotent
+    replay answers the existing person and sends nothing.
+    """
 
     uow: UnitOfWorkFactory
     clock: Clock
     ids: IdGenerator
-    hasher: PasswordHasher
-    passwords: TemporaryPasswordGenerator
+    tokens: OneTimeTokens
+    mailer: OnboardingMailer
 
-    async def execute(self, actor: Actor, command: CreateUserCommand) -> CreatedUserView:
-        password = _TemporaryPassword(self.passwords, self.hasher)
-        staff_id, plain = await retry_on_conflict(lambda: self._attempt(actor, command, password))
+    async def execute(self, actor: Actor, command: CreateUserCommand) -> InvitedUserView:
+        token = _LinkToken(self.tokens)
+        staff_id, outgoing = await retry_on_conflict(lambda: self._attempt(actor, command, token))
+        if outgoing is not None:
+            await self.mailer.invitation(
+                outgoing.staff, team_name=outgoing.team_name, token=outgoing.token
+            )
         user = await _read_back(self.uow, staff_id, actor, self.clock.now())
-        return CreatedUserView(user=user, temporary_password=plain, replayed=plain is None)
+        return InvitedUserView(user=user, replayed=outgoing is None)
 
     async def _attempt(
-        self, actor: Actor, command: CreateUserCommand, password: _TemporaryPassword
-    ) -> tuple[str, str | None]:
+        self, actor: Actor, command: CreateUserCommand, token: _LinkToken
+    ) -> tuple[str, _Outgoing | None]:
         now = self.clock.now()
         async with self.uow() as uow:
             admin = await fresh_admin(uow, actor)
@@ -179,34 +202,79 @@ class CreateUser:
                 roles=command.roles,
                 languages=command.languages,
             )
-            if await uow.staff.get_by_email(profile.email) is not None:
+            known = await uow.staff.get_by_email(profile.email)
+            if known is not None and not known.is_withdrawn:
                 raise EmailTakenError()
             team = await destination_team(uow, command.team_id)
             if not team.active:
                 raise TeamInactiveError(team.id)
 
-            staff = Staff.create(
-                staff_id=self.ids.new_id(IdPrefix.STAFF),
-                name=profile.name,
-                email=profile.email,
-                roles=profile.roles,
-                languages=profile.languages,
-                team=team,
-                now=now,
-                actor=admin,
-                creation_key=command.idempotency_key,
-            )
-            plain, hashed = await password.issue()
-            await uow.staff.add(staff)
-            await uow.login_accounts.add(LoginAccount(staff_id=staff.id, password_hash=hashed))
-            if staff.has_role(StaffRole.ADMIN):
-                roster, new = await load_roster(uow)
-                roster.grant(staff.id)
-                await store_roster(uow, roster, new=new)
+            issued = token.get()
+            ttl = self.mailer.invitation_ttl
+            if known is None:
+                staff = Staff.create(
+                    staff_id=self.ids.new_id(IdPrefix.STAFF),
+                    name=profile.name,
+                    email=profile.email,
+                    roles=profile.roles,
+                    languages=profile.languages,
+                    team=team,
+                    now=now,
+                    actor=admin,
+                    creation_key=command.idempotency_key,
+                )
+                invitation = Invitation.send(
+                    invitation_id=self.ids.new_id(IdPrefix.INVITATION),
+                    staff_id=staff.id,
+                    token_hash=issued.hash,
+                    now=now,
+                    actor=admin,
+                    ttl=ttl,
+                )
+                await uow.staff.add(staff)
+                await uow.invitations.add(invitation)
+            else:
+                staff = known
+                await _reinvite(uow, staff, profile, team, command, now=now, actor=admin)
+                invitation_found = await uow.invitations.get_for_staff(staff.id)
+                if invitation_found is None:  # pragma: no cover - a withdrawn person had one
+                    raise EmailTakenError()
+                invitation_found.reissue(issued.hash, now=now, actor=admin, ttl=ttl)
+                await uow.staff.save(staff)
+                await uow.invitations.save(invitation_found)
             team.touch()  # serialises with a concurrent DeactivateTeam (§3.8)
             await uow.teams.save(team)
             await uow.commit()
-        return staff.id, plain
+        return staff.id, _Outgoing(staff=staff, team_name=team.name, token=issued.token)
+
+
+async def _reinvite(
+    uow: UnitOfWork,
+    staff: Staff,
+    profile: StaffProfile,
+    team: Team,
+    command: CreateUserCommand,
+    *,
+    now: datetime,
+    actor: ActorRef,
+) -> None:
+    """A withdrawn person invited again: her profile becomes the new one (recorded as
+    edits), then she is ``invited`` again."""
+    edit = staff.plan_edit(
+        name=profile.name, roles=profile.roles, languages=profile.languages, team_id=team.id
+    )
+    from_team_name: str | None = None
+    if edit.team_changed:
+        current = await uow.teams.get(staff.team_id)
+        from_team_name = current.name if current else staff.team_id
+    staff.apply_edit(
+        edit,
+        now=now,
+        actor=actor,
+        team=team if edit.team_changed else None,
+        from_team_name=from_team_name,
+    )
+    staff.reinvite(creation_key=command.idempotency_key)
 
 
 def _replay(existing: Staff, command: CreateUserCommand) -> str:
@@ -377,6 +445,8 @@ class ReactivateUser:
             await ensure_user_version(uow, target, expected_version, actor=actor, now=now)
             if target.active:
                 return False
+            if target.is_invited or target.is_withdrawn:
+                raise StaffInvitedError()
             team = await uow.teams.get(target.team_id)
             if team is None or not team.active:
                 raise TeamInactiveError(target.team_id)
@@ -419,38 +489,138 @@ class UnlockAccount:
 
 
 @dataclass(frozen=True, slots=True)
-class ResetPassword:
-    """``POST /admin/users/{staffId}/password-reset`` (§3.5). Not idempotent: each call
-    issues a new temporary password (generated and hashed once per request)."""
+class SendPasswordResetLink:
+    """``POST /admin/users/{staffId}/password-reset`` (part 4): a link to set a new password
+    by email (one hour); administration never sees a password. Her sessions end now, her
+    pending MFA challenges are cancelled and a lock is cleared. Her current password keeps
+    working until she sets the new one. Not idempotent: each call sends a new link (the
+    previous one stops working)."""
 
     uow: UnitOfWorkFactory
     clock: Clock
-    hasher: PasswordHasher
-    passwords: TemporaryPasswordGenerator
+    ids: IdGenerator
+    tokens: OneTimeTokens
+    mailer: OnboardingMailer
 
-    async def execute(self, actor: Actor, staff_id: str) -> PasswordResetView:
-        password = _TemporaryPassword(self.passwords, self.hasher)
-        plain, revoked = await retry_on_conflict(lambda: self._attempt(actor, staff_id, password))
+    async def execute(self, actor: Actor, staff_id: str) -> PasswordResetLinkView:
+        token = _LinkToken(self.tokens)
+        staff, revoked, expires_at = await retry_on_conflict(
+            lambda: self._attempt(actor, staff_id, token)
+        )
+        await self.mailer.password_reset(staff, token=token.get().token)
         user = await _read_back(self.uow, staff_id, actor, self.clock.now())
-        return PasswordResetView(user=user, temporary_password=plain, revoked_sessions=revoked)
+        return PasswordResetLinkView(user=user, revoked_sessions=revoked, expires_at=expires_at)
 
     async def _attempt(
-        self, actor: Actor, staff_id: str, password: _TemporaryPassword
-    ) -> tuple[str, int]:
+        self, actor: Actor, staff_id: str, token: _LinkToken
+    ) -> tuple[Staff, int, datetime]:
         now = self.clock.now()
         async with self.uow() as uow:
             admin = await fresh_admin(uow, actor)
             target = await load_target(uow, staff_id)
             ensure_not_self(actor, target.id, SelfChangeAction.RESET_OWN_PASSWORD)
+            if target.is_invited or target.is_withdrawn:
+                raise StaffInvitedError()
             if not target.active:
                 raise StaffInactiveError()
             account = await uow.login_accounts.get(target.id)
-            if account is None:  # pragma: no cover - every person has a login account
+            if account is None:  # pragma: no cover - every active person has a login account
                 raise not_found_person(target.id)
-            plain, hashed = await password.issue()
+            cleared_lock = account.clear_attempts(now=now)
             sessions = await uow.sessions.list_active_for(target.id, now)
-            account.reset_password(hashed, now=now, actor=admin, revoked_sessions=len(sessions))
-            await uow.login_accounts.save(account)
+            issued, ttl = token.get(), self.mailer.reset_ttl
+            reset = await uow.password_resets.get_for_staff(target.id)
+            if reset is None:
+                reset = PasswordReset.issue(
+                    reset_id=self.ids.new_id(IdPrefix.PASSWORD_RESET),
+                    staff_id=target.id,
+                    token_hash=issued.hash,
+                    now=now,
+                    actor=admin,
+                    revoked_sessions=len(sessions),
+                    cleared_lock=cleared_lock,
+                    ttl=ttl,
+                )
+                await uow.password_resets.add(reset)
+            else:
+                reset.reissue(
+                    issued.hash,
+                    now=now,
+                    actor=admin,
+                    revoked_sessions=len(sessions),
+                    cleared_lock=cleared_lock,
+                    ttl=ttl,
+                )
+                await uow.password_resets.save(reset)
             revoked = await _end_sessions(uow, target.id, now=now, actor=admin)
+            await uow.login_accounts.save(account)
             await uow.commit()
-        return plain, revoked
+        return target, revoked, reset.expires_at
+
+
+# ----------------------------------------------------------------------------- invitations
+async def _invited_target(uow: UnitOfWork, staff_id: str) -> tuple[Staff, Invitation]:
+    """The person addressed by an invitation command: she must still be invited."""
+    target = await load_target(uow, staff_id)
+    invitation = await uow.invitations.get_for_staff(target.id)
+    if not target.is_invited or invitation is None:
+        raise InvalidTransitionError("Esta persona no tiene una invitación pendiente.")
+    return target, invitation
+
+
+@dataclass(frozen=True, slots=True)
+class ResendInvitation:
+    """``POST /admin/users/{staffId}/invitation/resend`` (part 4): a new link (pending or
+    expired invitation); the previous one stops working and the 48 hours start again."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+    tokens: OneTimeTokens
+    mailer: OnboardingMailer
+
+    async def execute(self, actor: Actor, staff_id: str) -> AdminUserChangeView:
+        token = _LinkToken(self.tokens)
+        outgoing = await retry_on_conflict(lambda: self._attempt(actor, staff_id, token))
+        await self.mailer.invitation(
+            outgoing.staff, team_name=outgoing.team_name, token=outgoing.token
+        )
+        user = await _read_back(self.uow, staff_id, actor, self.clock.now())
+        return AdminUserChangeView(changed=True, user=user)
+
+    async def _attempt(self, actor: Actor, staff_id: str, token: _LinkToken) -> _Outgoing:
+        now = self.clock.now()
+        async with self.uow() as uow:
+            admin = await fresh_admin(uow, actor)
+            target, invitation = await _invited_target(uow, staff_id)
+            issued = token.get()
+            invitation.resend(issued.hash, now=now, actor=admin, ttl=self.mailer.invitation_ttl)
+            team = await uow.teams.get(target.team_id)
+            await uow.invitations.save(invitation)
+            await uow.commit()
+        return _Outgoing(staff=target, team_name=team.name if team else "", token=issued.token)
+
+
+@dataclass(frozen=True, slots=True)
+class CancelInvitation:
+    """``POST /admin/users/{staffId}/invitation/cancel`` (part 4): the link stops working and
+    the account is not created. She leaves the directory (``cancelled``); inviting her email
+    again ("Nuevo usuario") reuses her record."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+
+    async def execute(self, actor: Actor, staff_id: str) -> AdminUserChangeView:
+        await retry_on_conflict(lambda: self._attempt(actor, staff_id))
+        user = await _read_back(self.uow, staff_id, actor, self.clock.now())
+        return AdminUserChangeView(changed=True, user=user)
+
+    async def _attempt(self, actor: Actor, staff_id: str) -> None:
+        now = self.clock.now()
+        async with self.uow() as uow:
+            admin = await fresh_admin(uow, actor)
+            target, invitation = await _invited_target(uow, staff_id)
+            invitation.cancel(now=now, actor=admin)
+            target.withdraw()
+            await uow.invitations.save(invitation)
+            await uow.staff.save(target)
+            await uow.commit()

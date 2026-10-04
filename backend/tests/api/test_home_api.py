@@ -47,7 +47,7 @@ def test_first_sign_in_answers_the_fallback_and_the_team(
     team = body["teamNow"]
     assert set(team) == {"teamId", "teamName", "availableCount", "analystCount", "queues"}
     assert team["teamId"].startswith("TEAM-")
-    assert (team["availableCount"], team["analystCount"]) == (0, 3)
+    assert (team["availableCount"], team["analystCount"]) == (0, 4)  # part 4: Tatiana
     assert [(q["language"], q["waiting"]) for q in team["queues"]] == [("es", 2), ("pt", 1)]
     # The seeded story of the last hour (her arrivals and customers' messages) is news.
     activity = body["activity"]

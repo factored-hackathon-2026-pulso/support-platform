@@ -56,7 +56,9 @@ RESPONSE_SCHEMAS = (
     "ActivityCounts", "TeamAnalyst", "AnalystCaseCounts", "QueueOverview", "LanguageQueue",
     "QueueCounts", "QueueCount", "AssignmentResult", "AuditEventPage", "AuditEvent", "AuditActor",
     "AuditCaseRef", "AdminUser", "AdminUserGuards", "OpenCaseCounts", "AdminUserList",
-    "RoleCounts", "UserStatusCounts", "CreatedUser", "AdminUserChange", "PasswordResetResult",
+    "RoleCounts", "UserStatusCounts", "InvitedUser", "AdminUserChange", "PasswordResetLinkSent",
+    "AdminInvitation", "InvitationCheck", "TotpEnrollment", "ActivatedAccount",
+    "PasswordResetCheck", "PasswordResetDone", "PasswordRules", "DevMailbox", "DevEmail",
     "AdminTeam", "TeamStatusCounts", "AdminTeamList", "AdminTeamMember", "AdminTeamDetail",
     "AdminTeamChange", "StaffListResponse", "Escalation", "EscalationResult", "EscalationItem",
     "EscalationOverview", "LanguageOpenCases", "OpenCaseRow",
@@ -91,5 +93,10 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "self_change_forbidden", "last_admin", "staff_has_open_cases", "team_not_empty",
         "team_inactive", "staff_inactive", "case_not_closed", "already_rated",
         "escalation_open", "escalation_not_open",
+        # part 4 (secure onboarding)
+        "staff_invited", "link_invalid", "rate_limited", "password_rejected", "totp_invalid",
     }  # fmt: skip
+    for removed in ("CreatedUser", "PasswordResetResult"):  # part 4: no temporary passwords
+        assert removed not in schemas
+    assert "temporaryPassword" not in str(document)
     assert set(schemas["CloseCaseRequest"]["required"]) == {"reason", "note"}

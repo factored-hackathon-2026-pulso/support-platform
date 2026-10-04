@@ -46,6 +46,9 @@ class IdPrefix(StrEnum):
     TEAM = "TEAM"
     ESCALATION = "ESC"
     NOTIFICATION = "NTF"
+    INVITATION = "INV"
+    PASSWORD_RESET = "PWR"  # noqa: S105 - an id prefix, not a secret
+    EMAIL = "EML"
 
 
 def encode_body(timestamp_ms: int, randomness: int) -> str:

@@ -15,9 +15,11 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryCustomerRepository,
     InMemoryEscalationRepository,
     InMemoryEventLogRepository,
+    InMemoryInvitationRepository,
     InMemoryLoginAccountRepository,
     InMemoryMfaChallengeRepository,
     InMemoryNotificationRepository,
+    InMemoryPasswordResetRepository,
     InMemoryStaffRepository,
     InMemoryStaffSessionRepository,
     InMemoryTeamRepository,
@@ -35,6 +37,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     mfa_challenges: InMemoryMfaChallengeRepository
     sessions: InMemoryStaffSessionRepository
     availability: InMemoryAnalystAvailabilityRepository
+    invitations: InMemoryInvitationRepository
+    password_resets: InMemoryPasswordResetRepository
     customers: InMemoryCustomerRepository
     cases: InMemoryCaseRepository
     turns: InMemoryTurnRepository
@@ -60,6 +64,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.mfa_challenges = InMemoryMfaChallengeRepository(store.mfa_challenges, track)
         self.sessions = InMemoryStaffSessionRepository(store.sessions, track)
         self.availability = InMemoryAnalystAvailabilityRepository(store.availability, track)
+        self.invitations = InMemoryInvitationRepository(store.invitations, track)
+        self.password_resets = InMemoryPasswordResetRepository(store.password_resets, track)
         self.customers = InMemoryCustomerRepository(store.customers)
         self.cases = InMemoryCaseRepository(store.cases, track, store.assignments)
         self.turns = InMemoryTurnRepository(store.turns)
@@ -82,6 +88,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryMfaChallengeRepository
         | InMemoryStaffSessionRepository
         | InMemoryAnalystAvailabilityRepository
+        | InMemoryInvitationRepository
+        | InMemoryPasswordResetRepository
         | InMemoryCustomerRepository
         | InMemoryCaseRepository
         | InMemoryTurnRepository
@@ -101,6 +109,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.mfa_challenges,
             self.sessions,
             self.availability,
+            self.invitations,
+            self.password_resets,
             self.case_slots,
             self.cases,
             self.escalations,

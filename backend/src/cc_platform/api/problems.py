@@ -58,6 +58,12 @@ class ProblemCode(StrEnum):
     TEAM_NOT_EMPTY = "team_not_empty"
     TEAM_INACTIVE = "team_inactive"
     STAFF_INACTIVE = "staff_inactive"
+    # secure onboarding (part 4)
+    STAFF_INVITED = "staff_invited"
+    LINK_INVALID = "link_invalid"
+    RATE_LIMITED = "rate_limited"
+    PASSWORD_REJECTED = "password_rejected"  # noqa: S105 - a problem code, not a secret
+    TOTP_INVALID = "totp_invalid"
     # input and business rules
     INVALID_VALUE = "invalid_value"
     POLICY_VIOLATION = "policy_violation"
@@ -154,6 +160,25 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
     ),
     P.TEAM_INACTIVE: ProblemSpec(422, "Team inactive", "Ese equipo está desactivado."),
     P.STAFF_INACTIVE: ProblemSpec(409, "Account inactive", "Esta cuenta está desactivada."),
+    P.STAFF_INVITED: ProblemSpec(
+        409,
+        "Account not activated",
+        "Esta persona todavía no activó su cuenta. Reenvía la invitación.",
+    ),
+    P.LINK_INVALID: ProblemSpec(410, "Link no longer valid", "El enlace venció o ya se usó."),
+    P.RATE_LIMITED: ProblemSpec(
+        429,
+        "Too many attempts",
+        "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",
+    ),
+    P.PASSWORD_REJECTED: ProblemSpec(
+        422, "Password rejected", "La contraseña no cumple los requisitos."
+    ),
+    P.TOTP_INVALID: ProblemSpec(
+        422,
+        "Invalid authenticator code",
+        "El código no coincide. Escribe el código que muestra ahora tu app.",
+    ),
     P.INVALID_VALUE: ProblemSpec(422, "Invalid value"),
     P.POLICY_VIOLATION: ProblemSpec(422, "Policy violation"),
     P.VALIDATION_ERROR: ProblemSpec(

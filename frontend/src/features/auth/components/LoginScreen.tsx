@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { Button, Callout, Field, Input, useToast } from '@/components/ui'
 import type { LoginResponse } from '../api'
 import { useLoginMutation } from '../hooks/use-auth-mutations'
@@ -24,6 +25,11 @@ export interface LoginScreenProps {
   notice?: string | null
   /** Show the seeded dev accounts hint (never in production builds). */
   showDevHint?: boolean
+  /**
+   * Part 4: the backend runs the development mailbox (`/meta`): a footer link to
+   * "Correos de desarrollo" (`/dev/correos`), where the invitation links arrive.
+   */
+  showDevMailbox?: boolean
 }
 
 /** "Entrar" (canvas BoLogin / BoLoginError): email + password, then MFA. */
@@ -32,6 +38,7 @@ export function LoginScreen({
   onLocked,
   notice = null,
   showDevHint = false,
+  showDevMailbox = false,
 }: LoginScreenProps) {
   const [values, setValues] = useState<LoginValues>({ email: '', password: '' })
   const [errors, setErrors] = useState<LoginErrors>({})
@@ -151,6 +158,14 @@ export function LoginScreen({
       </AuthNote>
 
       <AuthHelpFooter />
+      {showDevMailbox ? (
+        <p className="m-0 text-13 text-muted">
+          Herramienta de desarrollo:{' '}
+          <Link to="/dev/correos" className="text-link font-semibold">
+            Correos de desarrollo
+          </Link>
+        </p>
+      ) : null}
     </>
   )
 }

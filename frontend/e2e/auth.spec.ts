@@ -31,7 +31,7 @@ test.describe('Ingreso', () => {
     // No self-service reset or SSO: the way out is Administración.
     await expect(
       page.getByText(
-        'Pide a Administración que desbloquee tu cuenta o restablezca tu contraseña.',
+        'Pide a Administración que desbloquee tu cuenta o te envíe un enlace para restablecer tu contraseña.',
         {
           exact: false,
         },
@@ -55,8 +55,8 @@ test.describe('Ingreso', () => {
     await expect(admin.shell.toast('Cuenta desbloqueada')).toBeVisible()
     await expect(users.row(person.name)).toContainText('Activa')
 
-    // She signs in with her password and the MFA code.
-    await login.signIn(person.email, person.password)
+    // She signs in with her password and the code of her authenticator.
+    await login.signIn(person.email, person.password, person.totpSecret)
     await expect(page).toHaveURL(/\/analista/)
   })
 })

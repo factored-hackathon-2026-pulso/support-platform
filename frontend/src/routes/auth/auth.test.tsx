@@ -36,21 +36,21 @@ describe('login (BoLogin)', () => {
     expect(screen.queryByRole('button', { name: /Microsoft/ })).not.toBeInTheDocument()
   })
 
-  it('sends a forgotten password to Administración (no reset link exists)', async () => {
+  it('sends a forgotten password to Administración (a reset link by email)', async () => {
     const { user } = renderRoute('/login')
     await user.click(await screen.findByRole('button', { name: '¿La olvidaste?' }))
     const toasts = screen.getByRole('region', { name: 'Avisos' })
     expect(
       within(toasts).getByText(
-        'Pide a Administración que la restablezca en Usuarios y roles: te dará una contraseña temporal.',
+        'Pide a Administración un enlace para restablecerla: te llega a tu correo y vence en 1 hora.',
       ),
     ).toBeInTheDocument()
-    expect(within(toasts).queryByText(/enlace|mesa de ayuda/)).not.toBeInTheDocument()
+    expect(within(toasts).queryByText(/temporal|mesa de ayuda/)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '¿Problemas para entrar?' }))
     expect(
       within(toasts).getByText(
-        'Administración desbloquea tu cuenta o restablece tu contraseña en Usuarios y roles.',
+        'Administración desbloquea tu cuenta o te envía por correo un enlace para restablecer la contraseña.',
       ),
     ).toBeInTheDocument()
   })
@@ -294,7 +294,7 @@ describe('locked (BoLocked)', () => {
     // No self-service reset: Administración unlocks it, and then she can sign in at once.
     expect(
       screen.getByText(
-        /Pide a Administración que desbloquee tu cuenta o restablezca tu contraseña\./,
+        /Pide a Administración que desbloquee tu cuenta o te envíe un enlace para restablecer tu contraseña\./,
       ),
     ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Volver al ingreso' })).toHaveAttribute(

@@ -8,8 +8,10 @@ from typing import Protocol
 
 from cc_platform.domain.people.admin_roster import AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability
+from cc_platform.domain.people.invitation import Invitation
 from cc_platform.domain.people.login_account import FailedAttemptCounter, LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
+from cc_platform.domain.people.password_reset import PasswordReset
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff, StaffRole
 from cc_platform.domain.people.team import Team
@@ -150,3 +152,36 @@ class AnalystAvailabilityRepository(Protocol):
         ...
 
     async def save(self, availability: AnalystAvailability) -> None: ...
+
+
+class InvitationRepository(Protocol):
+    """Part 4. One invitation per person (``staff_id`` unique)."""
+
+    async def get(self, invitation_id: str) -> Invitation | None: ...
+
+    async def get_for_staff(self, staff_id: str) -> Invitation | None: ...
+
+    async def get_by_token_hash(self, token_hash: str) -> Invitation | None: ...
+
+    async def list(self) -> list[Invitation]: ...
+
+    async def add(self, invitation: Invitation) -> None:
+        """Insert; a second invitation for the same person raises ``ConcurrentUpdateError``
+        (two concurrent creates: retry and find it)."""
+        ...
+
+    async def save(self, invitation: Invitation) -> None: ...
+
+
+class PasswordResetRepository(Protocol):
+    """Part 4. One reset link per person (``staff_id`` unique; a new link replaces it)."""
+
+    async def get_for_staff(self, staff_id: str) -> PasswordReset | None: ...
+
+    async def get_by_token_hash(self, token_hash: str) -> PasswordReset | None: ...
+
+    async def add(self, reset: PasswordReset) -> None:
+        """Insert; a concurrent insert for the same person raises ``ConcurrentUpdateError``."""
+        ...
+
+    async def save(self, reset: PasswordReset) -> None: ...

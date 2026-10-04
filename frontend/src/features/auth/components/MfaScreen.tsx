@@ -4,6 +4,7 @@ import { Button, Callout, CodeInput, type CodeInputHandle } from '@/components/u
 import type { SessionResponse } from '../api'
 import { useVerifyMfaMutation } from '../hooks/use-auth-mutations'
 import {
+  DEV_MFA_HINT,
   describeMfaFailure,
   isCompleteCode,
   MFA_CODE_LENGTH,
@@ -98,7 +99,7 @@ export function MfaScreen({
         {failure ? <Callout tone="danger">{failure}</Callout> : null}
         {showDevHint ? (
           <Callout tone="info" title="Entorno de desarrollo">
-            El código de prueba es 000000.
+            {DEV_MFA_HINT}
           </Callout>
         ) : null}
         <div className="flex flex-col gap-2">

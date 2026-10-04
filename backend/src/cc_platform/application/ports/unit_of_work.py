@@ -40,8 +40,10 @@ if TYPE_CHECKING:
     from cc_platform.application.people.ports import (
         AdminRosterRepository,
         AnalystAvailabilityRepository,
+        InvitationRepository,
         LoginAccountRepository,
         MfaChallengeRepository,
+        PasswordResetRepository,
         StaffRepository,
         StaffSessionRepository,
         TeamRepository,
@@ -71,6 +73,16 @@ class UnitOfWork(Protocol):
 
     @property
     def availability(self) -> AnalystAvailabilityRepository: ...
+
+    @property
+    def invitations(self) -> InvitationRepository:
+        """Part 4: one invitation per person (single-use link, only its hash stored)."""
+        ...
+
+    @property
+    def password_resets(self) -> PasswordResetRepository:
+        """Part 4: one password-reset link per person."""
+        ...
 
     @property
     def customers(self) -> CustomerRepository: ...

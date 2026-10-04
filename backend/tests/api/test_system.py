@@ -18,6 +18,7 @@ def test_meta_reports_version_and_build(client: TestClient) -> None:
         "build": "test-build",
         "environment": "test",
         "apiVersion": "v1",
+        "devMailbox": True,  # part 4: the tests turn the dev mailbox on
     }
 
 

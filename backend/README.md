@@ -8,7 +8,8 @@ Read first: `docs/platform/ENGINEERING_BRIEF.md` (scope, rules, conventions),
 `docs/platform/adr/0001-architecture.md`, and the slice contracts in `docs/platform/api/`
 (slice 2 case life cycle, slice 3 supervision, slice 4 administration, slice 6 analyst home,
 slice 7 customer rating, slice 8 case priority, slice 9 supervision v2: Colas and escalations,
-slice 10 notification center; a later slice wins).
+slice 10 notification center, slice 11 secure onboarding by email invitation; a later slice
+wins).
 Operating the app (accounts, reset, troubleshooting) is in `docs/platform/RUNBOOK.md`.
 
 ## Run
@@ -28,11 +29,18 @@ uv run cc-api    # http://127.0.0.1:8000 (reloads on code changes when CC_ENV=de
   reset, or run with `CC_PERSISTENCE=memory`.
 - Configuration: `CC_*` environment variables or `backend/.env` (template `.env.example`,
   source `src/cc_platform/bootstrap/settings.py`, table in the runbook §4).
-- Seeded staff all use the password `demo1234` and the MFA code `000000`, e.g.
+- Seeded staff all use the password `demo1234` and the development MFA code `000000`, e.g.
   `daniela.rios@latambank.example` (analyst), `lucia.herrera@latambank.example` (supervisor),
   `valeria.quintero@latambank.example` (admin), `felipe.echeverri@latambank.example` (analyst +
   supervisor). The full table, the seeded cases and the simulator customers are in the runbook §5.
   Nobody starts available: the seeded language queues hold cases nobody available could take.
+- **Part 4 (slice 11): nobody hands out passwords.** People are invited by email (single-use
+  link, 48 h) and set their own password and an authenticator app (TOTP); a forgotten password is
+  replaced through an emailed link (1 h). Accounts created that way sign in with their app's code:
+  the dev code `000000` works **only** for the seeded accounts without an authenticator. Seeded
+  Tatiana Rojas (`tatiana.rojas@`, `demo1234`) uses TOTP key `JBSWY3DPEHPK3PXP`; Bruna Esteves is a
+  pending invitation. With `CC_ENV=dev` the **dev mailbox** keeps every email:
+  `GET /api/v1/dev/mailbox` or the SPA page `/dev/correos` (runbook §5.1).
 
 Sign-in from the command line:
 
@@ -55,7 +63,9 @@ re-read on every request.
 | Context | Routes | Who |
 |---|---|---|
 | System | `GET /health`, `GET /meta` | anyone |
-| Auth | `POST /auth/login`, `POST /auth/mfa`, `POST /auth/logout`, `GET /auth/me` | staff |
+| Auth | `POST /auth/login`, `POST /auth/mfa` (TOTP for invited accounts; dev code for seeded ones), `POST /auth/logout`, `GET /auth/me` | staff |
+| Onboarding (slice 11) | `POST /onboarding/invitations/check\|password\|activate`, `POST /onboarding/password-resets/check\|complete` (token in the body; 410 `link_invalid` for any unusable link, 429 `rate_limited` per client) | public (the link's token) |
+| Dev mailbox (slice 11) | `GET /dev/mailbox?limit=` (404 unless `CC_DEV_MAILBOX`; never in prod) | public, development only |
 | Availability | `GET\|PUT /me/availability` (Disponible / En pausa) | analyst |
 | Home (slice 6) | `GET /me/home`: `since` (end of her previous session, else now − 8 h), activity rows from the event log (structured, no text), her team's availability and queues (counts) | analyst |
 | Cases | `GET /cases/inbox?status=&q=` (`closed` = last 7 days), `GET /cases/{id}`, `GET /cases/{id}/history`, `GET\|POST /cases/{id}/turns`, `POST /cases/{id}/read`, `POST /cases/{id}/close` (`{reason, note}`) | analyst; supervisors read any case (audited `case.viewed`) |
@@ -68,7 +78,7 @@ re-read on every request.
 | Notifications (slice 10) | `GET /me/notifications?cursor=&limit=` (hers, newest first, `unreadCount`), `POST /me/notifications/{id}/read`, `POST /me/notifications/read-all` | any staff role, **her own only** (another person's id is 404) |
 | Audit | `GET /audit/events` (filters `actorKind, actorId, caseId, family, changesOnly, from, to, q`, cursor), `GET /audit/events/{id}` | supervisor, admin |
 | People | `GET /staff?role=&includeInactive=` | supervisor, admin |
-| Administration | `GET\|POST /admin/users`, `GET\|PATCH /admin/users/{id}`, `POST /admin/users/{id}/deactivate\|reactivate\|unlock\|password-reset`, `GET\|POST /admin/teams`, `GET\|PATCH /admin/teams/{id}`, `POST /admin/teams/{id}/deactivate\|reactivate` | admin |
+| Administration | `GET\|POST /admin/users` (POST invites by email), `GET\|PATCH /admin/users/{id}`, `POST /admin/users/{id}/deactivate\|reactivate\|unlock\|password-reset` (password-reset emails a link), `POST /admin/users/{id}/invitation/resend\|cancel`, `GET\|POST /admin/teams`, `GET\|PATCH /admin/teams/{id}`, `POST /admin/teams/{id}/deactivate\|reactivate` | admin |
 
 Product rules enforced in the service layer (brief §4.3):
 
@@ -108,8 +118,13 @@ Product rules enforced in the service layer (brief §4.3):
 - Administration guard rails: nobody removes their own Administración, deactivates themself or
   resets their own password (`422 self_change_forbidden`); there is always an active admin
   (`409 last_admin`); administration never moves cases (`409 staff_has_open_cases` until
-  supervision reassigns them). Creating a person or resetting a password returns a temporary
-  password once (`Cache-Control: no-store`, only its hash is stored).
+  supervision reassigns them).
+- Slice 11 (secure onboarding): creating a person invites her (`staff.setup = invited`, an
+  `Invitation` with a single-use token whose SHA-256 is all that is stored; resend replaces it,
+  cancel withdraws her); the activation sets her password (policy: ≥ 12 characters, not her email
+  name nor her name, not a common one; Argon2id) and enrolls TOTP (`pyotp`, the secret sealed with
+  Fernet); "password-reset" emails a 1-hour link and ends her sessions now. Emails go through the
+  `EmailSender` port after the commit; the only adapter is the dev mailbox.
 - Lockout: 5 failed attempts (wrong passwords and wrong MFA codes) lock the account for 15
   minutes (`423 account_locked` with `unlockAt`); an admin can unlock it.
 
@@ -200,17 +215,19 @@ Regenerate after every API change, then run `pnpm gen:api` in `frontend/`.
 - **No migrations.** `metadata.create_all` runs at startup. A database created by an older
   build fails fast with `OutdatedSchemaError` (it names the missing tables or columns): delete
   `cc_platform.db` and restart.
-- Dev-only security: MFA code `000000`, HMAC session tokens; `CC_ENV=prod` refuses to start
-  until a real MFA provider exists. Temporary passwords travel in the response body; no forced
-  change at first sign-in and no password policy.
+- Dev-only parts: the MFA code `000000` for seeded accounts, HMAC session tokens, the dev
+  mailbox; `CC_ENV=prod` refuses to start until a real email adapter exists (and requires its own
+  `CC_TOTP_SECRET_KEY`). No self-service "forgot password", no administration reset of a lost
+  authenticator, no TOTP replay memory or backup codes (slice 11 §10).
 - Single process: the realtime hub, the event bus and the queue drain run in-process (one
   worker). If the process dies between commit and publish, sockets miss that signal (clients
   refetch on reconnect); a drain that never ran waits for the next availability change.
 - WebSocket auth uses the `?token=` query parameter (redacted in logs).
 - Customer tokens are stateless (8 h, no revocation); anyone can pick a seeded customer in the
   simulator, which is a dev/demo tool.
-- No per-IP throttling. Unknown emails get the same lockout answers as real accounts, but those
-  counters are process-local and reset on restart.
+- No per-IP throttling of the login. Unknown emails get the same lockout answers as real accounts,
+  and the onboarding links are rate-limited per client address, but those counters are
+  process-local and reset on restart.
 - No presence: availability persists across sign-ins, so an available analyst who closes the
   browser keeps receiving cases. "Signed in" in supervision means an active session. No
   capacity cap per analyst yet.

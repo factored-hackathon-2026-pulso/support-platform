@@ -92,6 +92,10 @@ export default defineConfig({
         CC_CORS_ORIGINS: JSON.stringify([webURL]),
         CC_LOG_LEVEL: 'WARNING',
         CC_LOG_FORMAT: 'console',
+        // Part 4: the dev mailbox holds the invitation emails the scenarios open, and
+        // their links point at this run's web server.
+        CC_DEV_MAILBOX: 'true',
+        CC_PUBLIC_APP_URL: webURL,
       },
     },
     {

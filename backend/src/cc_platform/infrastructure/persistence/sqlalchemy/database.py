@@ -28,7 +28,7 @@ class Database:
             Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
 
         # ``hide_parameters``: a DB error's text (logged with the traceback of a 500) must
-        # never carry bind values: password hashes, temporary-password hashes, emails.
+        # never carry bind values: password hashes, link-token hashes, sealed TOTP secrets, emails.
         engine_kwargs: dict[str, object] = {"echo": echo, "hide_parameters": True}
         if in_memory:
             # One shared connection, otherwise every session would see an empty database.

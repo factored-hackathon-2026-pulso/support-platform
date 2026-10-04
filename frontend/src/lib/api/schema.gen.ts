@@ -93,8 +93,8 @@ export interface paths {
     get: operations['admin_list_users']
     put?: never
     /**
-     * Create an account; the temporary password is returned once
-     * @description Checks in this order: the caller is an active admin (403) · `Idempotency-Key` replay (200, `temporaryPassword: null`; another email → `idempotency_conflict`) · name, email, roles, analyst ⇒ at least one language (422 `invalid_value` with `field`) · the email is free (409 `email_taken`) · the team exists (422 `invalid_value`, `field: teamId`) and is active (422 `team_inactive`). The new person starts En pausa.
+     * Invite a person: she gets an email with a link that lasts 48 hours
+     * @description Part 4: no password exists or is shown. The person starts `invited` (she cannot sign in) and sets her own password and authenticator with the link. Checks in this order: the caller is an active admin (403) · `Idempotency-Key` replay (200, no new email; another email → `idempotency_conflict`) · name, email, roles, analyst ⇒ at least one language (422 `invalid_value` with `field`) · the email is free (409 `email_taken`; the email of a cancelled invitation is invited again) · the team exists (422 `invalid_value`, `field: teamId`) and is active (422 `team_inactive`). Once active she starts En pausa.
      */
     post: operations['admin_create_user']
     delete?: never
@@ -144,6 +144,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/admin/users/{staffId}/invitation/cancel': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Cancel her invitation: the link stops working and the account is not created
+     * @description Part 4. Pending or expired invitations only (409 `invalid_transition` otherwise). She leaves the directory list (`status: cancelled`); inviting the same email again reuses her record.
+     */
+    post: operations['admin_cancel_invitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/users/{staffId}/invitation/resend': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Send her invitation again: a new link for 48 hours, the previous one stops working
+     * @description Part 4. Pending or expired invitations only (409 `invalid_transition` once she activated the account or the invitation was cancelled).
+     */
+    post: operations['admin_resend_invitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/admin/users/{staffId}/password-reset': {
     parameters: {
       query?: never
@@ -154,8 +194,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Issue a new temporary password; her sessions end and a lock is cleared
-     * @description Not idempotent: each call issues a new password, returned once.
+     * Email her a link to set a new password (one hour); her sessions end now
+     * @description Part 4: nobody but her sees the new password. Checks: 403 · 404 · `self_change_forbidden` (`reset_own_password`) · `staff_invited` (she never activated her account: resend the invitation) · `staff_inactive`. Her sessions and pending sign-ins end now (sockets 4401) and a lock is cleared; her current password works until she sets the new one. Not idempotent: each call sends a new link and the previous one stops working.
      */
     post: operations['admin_reset_password']
     delete?: never
@@ -644,6 +684,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/dev/mailbox': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Development only: the newest emails the platform 'sent' (with their links) */
+    get: operations['dev_dev_mailbox']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/health': {
     parameters: {
       query?: never
@@ -767,6 +824,97 @@ export interface paths {
     get: operations['system_meta']
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/onboarding/invitations/activate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Step 2: the first code of her app activates the account
+     * @description A wrong code is 422 `totp_invalid` with `remainingAttempts`; the fifth locks the invitation for 15 minutes (423 `account_locked` with `unlockAt`). Before step 1: 409 `invalid_transition`. Success uses the link up: she signs in with her email, her password and her app; she starts En pausa.
+     */
+    post: operations['onboarding_activate_invitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/onboarding/invitations/check': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Is this invitation link usable? Who does it invite? */
+    post: operations['onboarding_check_invitation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/onboarding/invitations/password': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Step 1: her password; returns her authenticator setup (shown once)
+     * @description The password policy is checked here (422 `password_rejected` with `reasons`). It is kept (hashed) until the code of step 2; sending it again starts over with a new key.
+     */
+    post: operations['onboarding_set_invitation_password']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/onboarding/password-resets/check': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Is this password-reset link usable? */
+    post: operations['onboarding_check_password_reset']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/onboarding/password-resets/complete': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Her new password (the link is used up; her sessions end) */
+    post: operations['onboarding_complete_password_reset']
     delete?: never
     options?: never
     head?: never
@@ -931,10 +1079,32 @@ export interface components {
     /**
      * AccountStatus
      * @description Derived, never stored (§1.1): ``inactive`` = ``Staff.active`` false; ``locked`` =
-     *     active and the login account is locked now; else ``active``.
+     *     active and the login account is locked now; else ``active``. Part 4: ``invited`` = her
+     *     invitation is pending or expired (she never activated the account); ``cancelled`` = her
+     *     invitation was cancelled before she activated it (the directory list hides her).
      * @enum {string}
      */
-    AccountStatus: 'active' | 'locked' | 'inactive'
+    AccountStatus: 'active' | 'locked' | 'invited' | 'inactive' | 'cancelled'
+    /** ActivateRequest */
+    ActivateRequest: {
+      /**
+       * Code
+       * @description The 6 digits her app shows.
+       */
+      code: string
+      /**
+       * Token
+       * @description The token of the link (?token=).
+       */
+      token: string
+    }
+    /** ActivatedAccount */
+    ActivatedAccount: {
+      /** Email */
+      email: string
+      /** Name */
+      name: string
+    }
     /** ActivityCounts */
     ActivityCounts: {
       /** Available */
@@ -951,6 +1121,36 @@ export interface components {
      * @enum {string}
      */
     ActorRole: 'analyst' | 'supervisor' | 'admin' | 'customer' | 'system'
+    /**
+     * AdminInvitation
+     * @description Her invitation (part 4): present only while she is ``invited``. Never the token.
+     */
+    AdminInvitation: {
+      /**
+       * Createdat
+       * Format: date-time
+       * @description The first invitation.
+       */
+      createdAt: string
+      /**
+       * Expiresat
+       * Format: date-time
+       * @description 48 hours after the last send.
+       */
+      expiresAt: string
+      /** Id */
+      id: string
+      /** Resendcount */
+      resendCount: number
+      /**
+       * Sentat
+       * Format: date-time
+       * @description The last (re)send.
+       */
+      sentAt: string
+      /** @description pending or expired while she is invited. */
+      status: components['schemas']['InvitationStatus']
+    }
     /** AdminTeam */
     AdminTeam: {
       /** Active */
@@ -1040,6 +1240,8 @@ export interface components {
       guards: components['schemas']['AdminUserGuards']
       /** Id */
       id: string
+      /** @description Part 4: her pending or expired invitation (status invited), else null. */
+      invitation: components['schemas']['AdminInvitation'] | null
       /**
        * Languages
        * @description Sorted; may be [] only without analyst.
@@ -1061,6 +1263,11 @@ export interface components {
        * @description Canonical order: analyst, supervisor, admin.
        */
       roles: components['schemas']['StaffRole'][]
+      /**
+       * Secondfactor
+       * @description Part 4: totp (an authenticator app) or dev_code (a seeded development account); null while she has no login account (invited).
+       */
+      secondFactor: ('totp' | 'dev_code') | null
       /** @description At serverTime (derived, never stored). */
       status: components['schemas']['AccountStatus']
       team: components['schemas']['TeamRef']
@@ -1630,15 +1837,6 @@ export interface components {
        */
       teamId: string
     }
-    /** CreatedUser */
-    CreatedUser: {
-      /**
-       * Temporarypassword
-       * @description Shown once (xxxx-xxxx-xxxx); null only on an idempotent replay.
-       */
-      temporaryPassword: string | null
-      user: components['schemas']['AdminUser']
-    }
     /** CustomerConversation */
     CustomerConversation: {
       /**
@@ -1835,6 +2033,38 @@ export interface components {
        */
       items: components['schemas']['DemoCustomer'][]
     }
+    /** DevEmail */
+    DevEmail: {
+      /** Id */
+      id: string
+      kind: components['schemas']['EmailKind']
+      /** Link */
+      link: string
+      /**
+       * Sentat
+       * Format: date-time
+       */
+      sentAt: string
+      /** Subject */
+      subject: string
+      /** Text */
+      text: string
+      /** To */
+      to: string
+    }
+    /** DevMailbox */
+    DevMailbox: {
+      /**
+       * Items
+       * @description Newest first (at most 50).
+       */
+      items: components['schemas']['DevEmail'][]
+    }
+    /**
+     * EmailKind
+     * @enum {string}
+     */
+    EmailKind: 'invitation' | 'password_reset'
     /** EscalateRequest */
     EscalateRequest: {
       /**
@@ -2120,6 +2350,40 @@ export interface components {
      */
     InboxStatus: 'new' | 'to_reply' | 'waiting' | 'closed'
     /**
+     * InvitationCheck
+     * @description A valid invitation link: who it invites (the token proves it is hers).
+     */
+    InvitationCheck: {
+      /** Email */
+      email: string
+      /**
+       * Expiresat
+       * Format: date-time
+       */
+      expiresAt: string
+      /** Name */
+      name: string
+      passwordRules: components['schemas']['PasswordRules']
+      /** Roles */
+      roles: components['schemas']['StaffRole'][]
+      /** Teamname */
+      teamName: string
+    }
+    /**
+     * InvitationStatus
+     * @description An invitation as administration sees it (part 4; ``expired`` is derived).
+     * @enum {string}
+     */
+    InvitationStatus: 'pending' | 'expired' | 'accepted' | 'cancelled'
+    /**
+     * InvitedUser
+     * @description Part 4: the new person (status ``invited``, with her ``invitation``). No password
+     *     exists: she sets her own with the link of the invitation email.
+     */
+    InvitedUser: {
+      user: components['schemas']['AdminUser']
+    }
+    /**
      * Language
      * @enum {string}
      */
@@ -2186,6 +2450,14 @@ export interface components {
       /** Waiting */
       waiting: number
     }
+    /** LinkTokenRequest */
+    LinkTokenRequest: {
+      /**
+       * Token
+       * @description The token of the link (?token=).
+       */
+      token: string
+    }
     /** LoginRequest */
     LoginRequest: {
       /**
@@ -2229,6 +2501,11 @@ export interface components {
       apiVersion: string
       /** Build */
       build: string
+      /**
+       * Devmailbox
+       * @description Part 4: the development mailbox is on (never in production).
+       */
+      devMailbox: boolean
       /** Environment */
       environment: string
       /** Name */
@@ -2252,6 +2529,19 @@ export interface components {
       code: string
       /** @default totp */
       method: components['schemas']['MfaMethod']
+    }
+    /** NewPasswordRequest */
+    NewPasswordRequest: {
+      /**
+       * Password
+       * @description Her new password: 12–128 characters, without her email name or her name, not a common password (else 422 password_rejected with reasons).
+       */
+      password: string
+      /**
+       * Token
+       * @description The token of the link (?token=).
+       */
+      token: string
     }
     /** Notification */
     Notification: {
@@ -2408,16 +2698,64 @@ export interface components {
      * @enum {string}
      */
     OpenCasesBlock: 'deactivate' | 'remove_analyst' | 'remove_language'
-    /** PasswordResetResult */
-    PasswordResetResult: {
+    /** PasswordResetCheck */
+    PasswordResetCheck: {
+      /** Email */
+      email: string
+      /**
+       * Expiresat
+       * Format: date-time
+       */
+      expiresAt: string
+      /** Name */
+      name: string
+      passwordRules: components['schemas']['PasswordRules']
+    }
+    /** PasswordResetDone */
+    PasswordResetDone: {
+      /** Email */
+      email: string
       /** Revokedsessions */
       revokedSessions: number
+    }
+    /**
+     * PasswordResetLinkSent
+     * @description Part 4: a reset link went to her email (never a password).
+     */
+    PasswordResetLinkSent: {
       /**
-       * Temporarypassword
-       * @description Shown once (xxxx-xxxx-xxxx).
+       * Expiresat
+       * Format: date-time
+       * @description The link lasts one hour.
        */
-      temporaryPassword: string
+      expiresAt: string
+      /**
+       * Revokedsessions
+       * @description Her sessions ended now.
+       */
+      revokedSessions: number
       user: components['schemas']['AdminUser']
+    }
+    /**
+     * PasswordRule
+     * @description The rule a password breaks (``password_rejected.reasons``).
+     * @enum {string}
+     */
+    PasswordRule: 'min_length' | 'max_length' | 'personal_info' | 'common'
+    /**
+     * PasswordRules
+     * @description The policy the SPA shows live (the server checks it again).
+     */
+    PasswordRules: {
+      /** Maxlength */
+      maxLength: number
+      /** Minlength */
+      minLength: number
+      /**
+       * Rules
+       * @description The rules the SPA lists, in order.
+       */
+      rules: components['schemas']['PasswordRule'][]
     }
     /** PostAnalystTurnRequest */
     PostAnalystTurnRequest: {
@@ -2490,6 +2828,11 @@ export interface components {
       | 'team_not_empty'
       | 'team_inactive'
       | 'staff_inactive'
+      | 'staff_invited'
+      | 'link_invalid'
+      | 'rate_limited'
+      | 'password_rejected'
+      | 'totp_invalid'
       | 'invalid_value'
       | 'policy_violation'
       | 'validation_error'
@@ -2613,8 +2956,14 @@ export interface components {
        */
       policyRuleId: string | null
       /**
+       * Reasons
+       * @description password_rejected: every rule the password breaks.
+       * @default null
+       */
+      reasons: components['schemas']['PasswordRule'][] | null
+      /**
        * Remainingattempts
-       * @description invalid_credentials, mfa_invalid: failed attempts left before the lock.
+       * @description invalid_credentials, mfa_invalid, totp_invalid: failed attempts left before the lock.
        * @default null
        */
       remainingAttempts: number | null
@@ -2646,7 +2995,7 @@ export interface components {
       type: string
       /**
        * Unlockat
-       * @description account_locked: when the lock ends.
+       * @description account_locked, rate_limited: when the lock ends.
        * @default null
        */
       unlockAt: string | null
@@ -2955,6 +3304,30 @@ export interface components {
        */
       openCases: number
     }
+    /**
+     * TotpEnrollment
+     * @description Step 2 of the activation, shown once: the QR code content and the manual key.
+     */
+    TotpEnrollment: {
+      /** Accountname */
+      accountName: string
+      /** Digits */
+      digits: number
+      /** Issuer */
+      issuer: string
+      /**
+       * Otpauthuri
+       * @description otpauth://totp/… (render it as a QR code).
+       */
+      otpauthUri: string
+      /** Periodseconds */
+      periodSeconds: number
+      /**
+       * Secret
+       * @description The base32 key to type by hand (RFC 6238).
+       */
+      secret: string
+    }
     /** Turn */
     Turn: {
       audience: components['schemas']['TurnAudience']
@@ -3044,19 +3417,29 @@ export interface components {
        * @description Every active account, locked ones included.
        */
       active: number
-      /** All */
+      /**
+       * All
+       * @description Everyone listed (never a cancelled invitation).
+       */
       all: number
       /** Inactive */
       inactive: number
+      /**
+       * Invited
+       * @description Pending or expired invitations (part 4).
+       */
+      invited: number
       /** Locked */
       locked: number
     }
     /**
      * UserStatusFilter
-     * @description ``active`` = every active account, locked ones included; ``locked`` = only those.
+     * @description ``active`` = every active account, locked ones included; ``locked`` = only those;
+     *     ``invited`` = pending (or expired) invitations; ``all`` = every listed person (never the
+     *     cancelled invitations).
      * @enum {string}
      */
-    UserStatusFilter: 'active' | 'locked' | 'inactive' | 'all'
+    UserStatusFilter: 'active' | 'locked' | 'invited' | 'inactive' | 'all'
     /** ValidationIssue */
     ValidationIssue: {
       /** Loc */
@@ -3544,13 +3927,13 @@ export interface operations {
       }
     }
     responses: {
-      /** @description Idempotent replay of an existing account */
+      /** @description Idempotent replay of an existing invitation */
       200: {
         headers: {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['CreatedUser']
+          'application/json': components['schemas']['InvitedUser']
         }
       }
       /** @description Successful Response */
@@ -3559,7 +3942,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['CreatedUser']
+          'application/json': components['schemas']['InvitedUser']
         }
       }
       /** @description Problem details (RFC 7807) */
@@ -3800,6 +4183,140 @@ export interface operations {
       }
     }
   }
+  admin_cancel_invitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        staffId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminUserChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  admin_resend_invitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        staffId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminUserChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   admin_reset_password: {
     parameters: {
       query?: never
@@ -3817,7 +4334,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['PasswordResetResult']
+          'application/json': components['schemas']['PasswordResetLinkSent']
         }
       }
       /** @description Problem details (RFC 7807) */
@@ -5323,6 +5840,46 @@ export interface operations {
       }
     }
   }
+  dev_dev_mailbox: {
+    parameters: {
+      query?: {
+        limit?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DevMailbox']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   system_health: {
     parameters: {
       query?: never
@@ -5614,6 +6171,288 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['MetaResponse']
+        }
+      }
+    }
+  }
+  onboarding_activate_invitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ActivateRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivatedAccount']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      410: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      423: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  onboarding_check_invitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LinkTokenRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['InvitationCheck']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      410: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  onboarding_set_invitation_password: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NewPasswordRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TotpEnrollment']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      410: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  onboarding_check_password_reset: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LinkTokenRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PasswordResetCheck']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      410: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  onboarding_complete_password_reset: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NewPasswordRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PasswordResetDone']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      410: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
         }
       }
     }

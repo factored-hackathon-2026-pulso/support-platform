@@ -169,7 +169,9 @@ describe('useRailIndicators', () => {
     })
     // Someone unlocked Mariana: the directory refetches and the badge goes.
     vi.mocked(fetchAdminUsers).mockResolvedValue(
-      makeUserList(undefined, { statusCounts: { active: 12, locked: 0, inactive: 1, all: 13 } }),
+      makeUserList(undefined, {
+        statusCounts: { active: 12, locked: 0, invited: 0, inactive: 1, all: 13 },
+      }),
     )
     act(() =>
       sockets.last()?.receive({

@@ -11,11 +11,14 @@ from cc_platform.domain.people.errors import (
     EmailTakenError,
     LastAdminError,
     MfaChallengeInvalidError,
+    PasswordRejectedError,
+    StaffInvitedError,
     TeamInactiveError,
     TeamNameTakenError,
     TeamNotEmptyError,
 )
 from cc_platform.domain.people.events import (
+    ONBOARDING_EVENTS,
     STAFF_ADMIN_EVENTS,
     TEAM_EVENTS,
     AccountLocked,
@@ -29,8 +32,14 @@ from cc_platform.domain.people.events import (
     StaffAvailabilityChanged,
     StaffCreated,
     StaffDeactivated,
+    StaffInvitationAccepted,
+    StaffInvitationCancelled,
+    StaffInvitationResent,
+    StaffInvitationSent,
     StaffLanguagesChanged,
+    StaffMfaEnrolled,
     StaffPasswordReset,
+    StaffPasswordResetLinkSent,
     StaffProfileUpdated,
     StaffReactivated,
     StaffRolesChanged,
@@ -40,7 +49,9 @@ from cc_platform.domain.people.events import (
     TeamReactivated,
     TeamRenamed,
 )
+from cc_platform.domain.people.invitation import INVITATION_TTL, Invitation, InvitationState
 from cc_platform.domain.people.login_account import (
+    TOTP_METHOD,
     AuthFactor,
     FailedAttemptCounter,
     FailedAttemptOutcome,
@@ -49,9 +60,16 @@ from cc_platform.domain.people.login_account import (
 )
 from cc_platform.domain.people.mfa import MfaChallenge, MfaChallengeStatus, MfaMethod, MfaPolicy
 from cc_platform.domain.people.names import fold, normalize_person_name, normalize_team_name
+from cc_platform.domain.people.password_policy import PasswordRule, password_violations
+from cc_platform.domain.people.password_reset import (
+    PASSWORD_RESET_TTL,
+    PasswordReset,
+    PasswordResetState,
+)
 from cc_platform.domain.people.session import SessionEndReason, StaffSession
 from cc_platform.domain.people.staff import (
     ROLE_PRECEDENCE,
+    AccountSetup,
     Language,
     Staff,
     StaffEdit,
@@ -63,12 +81,17 @@ from cc_platform.domain.people.staff import (
 from cc_platform.domain.people.team import Team
 
 __all__ = [
+    "INVITATION_TTL",
+    "ONBOARDING_EVENTS",
+    "PASSWORD_RESET_TTL",
     "ROLE_PRECEDENCE",
     "ROSTER_ID",
     "STAFF_ADMIN_EVENTS",
     "TEAM_EVENTS",
+    "TOTP_METHOD",
     "AccountLocked",
     "AccountLockedError",
+    "AccountSetup",
     "AdminRoster",
     "AnalystAvailability",
     "AuthFactor",
@@ -77,6 +100,8 @@ __all__ = [
     "EmailTakenError",
     "FailedAttemptCounter",
     "FailedAttemptOutcome",
+    "Invitation",
+    "InvitationState",
     "Language",
     "LastAdminError",
     "LockoutPolicy",
@@ -90,6 +115,10 @@ __all__ = [
     "MfaPolicy",
     "MfaVerificationFailed",
     "PasswordAccepted",
+    "PasswordRejectedError",
+    "PasswordReset",
+    "PasswordResetState",
+    "PasswordRule",
     "SessionEndReason",
     "SessionEnded",
     "SessionStarted",
@@ -99,8 +128,15 @@ __all__ = [
     "StaffCreated",
     "StaffDeactivated",
     "StaffEdit",
+    "StaffInvitationAccepted",
+    "StaffInvitationCancelled",
+    "StaffInvitationResent",
+    "StaffInvitationSent",
+    "StaffInvitedError",
     "StaffLanguagesChanged",
+    "StaffMfaEnrolled",
     "StaffPasswordReset",
+    "StaffPasswordResetLinkSent",
     "StaffProfileUpdated",
     "StaffReactivated",
     "StaffRole",
@@ -120,5 +156,6 @@ __all__ = [
     "normalize_email",
     "normalize_person_name",
     "normalize_team_name",
+    "password_violations",
     "sorted_languages",
 ]

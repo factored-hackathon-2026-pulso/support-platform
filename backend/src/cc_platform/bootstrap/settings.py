@@ -42,6 +42,20 @@ class Settings(BaseSettings):
     # Customer chat simulator sessions (stateless tokens, audience cc-customer)
     customer_session_ttl_minutes: int = Field(default=480, ge=1)
 
+    # Secure onboarding (part 4): invitation and password-reset links, TOTP enrollment.
+    #: Origin of the SPA: the emails link to ``{public_app_url}/activar?token=…``.
+    public_app_url: str = "http://localhost:5173"
+    invitation_ttl_hours: int = Field(default=48, ge=1)
+    password_reset_ttl_minutes: int = Field(default=60, ge=5)
+    #: The name authenticator apps show above the codes.
+    totp_issuer: str = "LATAM Bank CC"
+    #: Fernet key that seals the TOTP secrets at rest. Unset: derived from the session
+    #: secret (development and tests only; production must set it).
+    totp_secret_key: SecretStr | None = None
+    #: The development mailbox (``GET /api/v1/dev/mailbox``): unset = on only with
+    #: ``CC_ENV=dev``; the browser e2e turns it on with ``CC_ENV=test``. Refused in prod.
+    dev_mailbox: bool | None = None
+
     # HTTP
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     host: str = "127.0.0.1"
@@ -66,7 +80,25 @@ class Settings(BaseSettings):
                 raise ValueError("CC_SESSION_SECRET must be set in production")
             if self.seed_demo_data:
                 raise ValueError("CC_SEED_DEMO_DATA must be false in production")
+            if self.dev_mailbox:
+                raise ValueError("CC_DEV_MAILBOX is a development tool: never in production")
+            if self.totp_secret_key is None:
+                raise ValueError("CC_TOTP_SECRET_KEY must be set in production")
         return self
+
+    @property
+    def dev_mailbox_enabled(self) -> bool:
+        if self.env == "prod":
+            return False
+        return self.dev_mailbox if self.dev_mailbox is not None else self.env == "dev"
+
+    @property
+    def invitation_ttl(self) -> timedelta:
+        return timedelta(hours=self.invitation_ttl_hours)
+
+    @property
+    def password_reset_ttl(self) -> timedelta:
+        return timedelta(minutes=self.password_reset_ttl_minutes)
 
     @property
     def session_ttl(self) -> timedelta:

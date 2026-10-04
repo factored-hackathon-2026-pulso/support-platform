@@ -20,6 +20,7 @@ from cc_platform.application.people.admin.dto import (
     AdminTeamView,
     AdminUserView,
     CreateUserCommand,
+    InvitationStatus,
     OpenCasesBlock,
     SelfChangeAction,
     TeamStatusFilter,
@@ -33,6 +34,7 @@ from cc_platform.application.people.admin.errors import (
     StaffInactiveError,
 )
 from cc_platform.application.people.dto import LoginCommand, VerifyMfaCommand
+from cc_platform.application.people.onboarding.errors import LinkInvalidError
 from cc_platform.application.security import Actor
 from cc_platform.bootstrap.container import Container
 from cc_platform.domain.cases.errors import IdempotencyConflictError
@@ -42,6 +44,7 @@ from cc_platform.domain.people.errors import (
     EmailTakenError,
     LastAdminError,
     MfaChallengeInvalidError,
+    StaffInvitedError,
     TeamInactiveError,
     TeamNameTakenError,
     TeamNotEmptyError,
@@ -56,13 +59,16 @@ from tests.support import (
     ADMIN_ONLY,
     ANALYST,
     ANDRES,
+    INVITED_PASSWORD,
     MARIANA,
     PASSWORD,
     SUPERVISOR,
     TEAM_LEAD,
     TOMAS,
-    FixedPasswords,
+    FixedLinkTokens,
+    activate_invited,
     actor_for,
+    latest_link,
     make_available_quietly,
     memory_container,
 )
@@ -73,16 +79,17 @@ ANDES, PACIFICO, PLATFORM, CARIBE = (seed_team_id(n) for n in (1, 2, 3, 4))
 DANIELA_ID, JULIAN_ID, TOMAS_ID, FELIPE_ID = (seed_staff_id(n) for n in (1, 2, 8, 11))
 VALERIA_ID, CAROLINA_ID = seed_staff_id(7), seed_staff_id(9)
 MARIANA_ID, ANDRES_ID = seed_staff_id(12), seed_staff_id(13)
+TATIANA_ID, BRUNA_ID = seed_staff_id(14), seed_staff_id(15)
 
 
 @pytest.fixture
-async def setup() -> tuple[Container, FixedPasswords]:
-    passwords = FixedPasswords()
-    return await memory_container(passwords=passwords), passwords
+async def setup() -> tuple[Container, FixedLinkTokens]:
+    tokens = FixedLinkTokens()
+    return await memory_container(tokens=tokens), tokens
 
 
 @pytest.fixture
-def container(setup: tuple[Container, FixedPasswords]) -> Container:
+def container(setup: tuple[Container, FixedLinkTokens]) -> Container:
     return setup[0]
 
 
@@ -138,14 +145,26 @@ async def sign_in(container: Container, email: str, password: str = PASSWORD) ->
     return grant.token
 
 
+async def sign_in_totp(
+    container: Container, email: str, secret: str, password: str = INVITED_PASSWORD
+) -> str:
+    """An invited person signs in: her password and the code of her authenticator."""
+    people = container.use_cases.people
+    login = await people.login.execute(LoginCommand(email=email, password=password))
+    code = container.totp.code_at(secret, container.clock.now())
+    grant = await people.verify_mfa.execute(
+        VerifyMfaCommand(challenge_id=login.challenge_id, code=code)
+    )
+    return grant.token
+
+
 # ----------------------------------------------------------------------------- create
-async def test_create_user_returns_the_temporary_password_once(
-    setup: tuple[Container, FixedPasswords], valeria: Actor
+async def test_create_user_invites_her_without_any_password(
+    setup: tuple[Container, FixedLinkTokens], valeria: Actor
 ) -> None:
-    container, passwords = setup
+    container, tokens = setup
     before = await last_sequence(container)
     created = await container.use_cases.administration.create_user.execute(valeria, ana())
-    assert created.temporary_password == passwords.issued[0] == "abcd-efgh-0001"
     assert not created.replayed
     new = created.user
     assert (new.name, new.email, new.roles, new.languages) == (
@@ -157,17 +176,20 @@ async def test_create_user_returns_the_temporary_password_once(
     assert (new.team.id, new.team.name, new.status, new.version) == (
         PACIFICO,
         "Equipo Pacífico",
-        AccountStatus.ACTIVE,
+        AccountStatus.INVITED,
         1,
     )
-    assert new.availability is AvailabilityStatus.PAUSED  # no row: starts "En pausa"
-    assert (new.last_login_at, new.failed_attempts, new.created_at) == (
-        None,
+    now = container.clock.now()
+    assert new.invitation is not None
+    assert (new.invitation.status, new.invitation.sent_at, new.invitation.resend_count) == (
+        InvitationStatus.PENDING,
+        now,
         0,
-        container.clock.now(),
     )
-    assert await event_types(container, before) == ["staff.created"]
-    (payload,) = await payloads(container, "staff.created")
+    assert new.invitation.expires_at == now + timedelta(hours=48)
+    assert (new.last_login_at, new.failed_attempts, new.second_factor) == (None, 0, None)
+    assert await event_types(container, before) == ["staff.created", "staff.invitation_sent"]
+    payload = (await payloads(container, "staff.created"))[-1]
     assert payload == {
         "name": "Ana Gil",
         "roles": ["analyst"],
@@ -175,16 +197,32 @@ async def test_create_user_returns_the_temporary_password_once(
         "team_id": PACIFICO,
         "team_name": "Equipo Pacífico",
     }
+    # No login account, only the token's hash; the email carries the link.
     async with container.uow() as uow:
-        account = await uow.login_accounts.get(new.id)
+        assert await uow.login_accounts.get(new.id) is None
+        invitation = await uow.invitations.get_for_staff(new.id)
         page = await uow.event_log.page(limit=1000)
-    assert account is not None
-    assert account.password_hash != created.temporary_password
-    assert await container.password_hasher.verify(account.password_hash, "abcd-efgh-0001")
-    assert all("abcd-efgh" not in str(e.payload) for e in page.items)
+    assert invitation is not None
+    assert invitation.token_hash == tokens.hash(tokens.issued[-1])
+    assert invitation.token_hash != tokens.issued[-1]
+    assert all(tokens.issued[-1] not in str(e.payload) for e in page.items)
     assert all("ana.gil@" not in str(e.payload) for e in page.items)
-    # She signs in with it (MFA 000000).
-    token = await sign_in(container, "ana.gil@latambank.example", "abcd-efgh-0001")
+    assert await latest_link(container, "ana.gil@latambank.example") == tokens.issued[-1]
+    # She cannot sign in until she accepts it…
+    with pytest.raises(InvalidCredentialsError):
+        await container.use_cases.people.login.execute(
+            LoginCommand(email="ana.gil@latambank.example", password=PASSWORD)
+        )
+    # …then she signs in with her own password and her authenticator (never 000000).
+    secret = await activate_invited(container, "ana.gil@latambank.example")
+    activated = await user(container, new.id, valeria)
+    assert (activated.status, activated.invitation, activated.second_factor) == (
+        AccountStatus.ACTIVE,
+        None,
+        "totp",
+    )
+    assert activated.availability is AvailabilityStatus.PAUSED  # no row: starts "En pausa"
+    token = await sign_in_totp(container, "ana.gil@latambank.example", secret)
     actor = await container.use_cases.people.authenticate.execute(token)
     assert actor.roles == {A}
 
@@ -242,9 +280,9 @@ async def test_idempotent_create(container: Container, valeria: Actor) -> None:
         valeria, ana(idempotency_key="create-ana-0001", email=" ANA.GIL@latambank.example")
     )
     assert again.replayed
-    assert again.temporary_password is None
     assert again.user.id == first.user.id
     assert await event_types(container, before) == []
+    assert len(await container.dev_mailbox.latest(200)) == 2  # Bruna's (seed) and Ana's
     with pytest.raises(IdempotencyConflictError) as conflict:
         await create.execute(
             valeria, ana(idempotency_key="create-ana-0001", email="otra@latambank.example")
@@ -255,14 +293,22 @@ async def test_idempotent_create(container: Container, valeria: Actor) -> None:
         await create.execute(valeria, ana())
 
 
-async def test_creating_an_admin_grows_the_roster(container: Container, valeria: Actor) -> None:
+async def test_an_invited_admin_joins_the_roster_when_she_activates(
+    container: Container, valeria: Actor
+) -> None:
     created = await container.use_cases.administration.create_user.execute(
         valeria, ana(roles=(AD,), languages=())
     )
-    async with container.uow() as uow:
-        roster = await uow.admin_roster.get()
-    assert roster is not None
-    assert roster.admin_ids == {VALERIA_ID, CAROLINA_ID, created.user.id}
+
+    async def roster_ids() -> frozenset[str]:
+        async with container.uow() as uow:
+            roster = await uow.admin_roster.get()
+        assert roster is not None
+        return roster.admin_ids
+
+    assert await roster_ids() == {VALERIA_ID, CAROLINA_ID}  # invited: not an active admin yet
+    await activate_invited(container, "ana.gil@latambank.example")
+    assert await roster_ids() == {VALERIA_ID, CAROLINA_ID, created.user.id}
 
 
 # ----------------------------------------------------------------------------- update
@@ -568,7 +614,16 @@ async def test_reactivating_into_an_inactive_team_is_refused(
 ) -> None:
     admin = container.use_cases.administration
     created = await admin.create_team.execute(valeria, "Equipo Temporal")
-    person = (await admin.create_user.execute(valeria, ana(team_id=created.team.id))).user
+    invited = (await admin.create_user.execute(valeria, ana(team_id=created.team.id))).user
+    # An invited person is a member too: the team cannot be deactivated under her.
+    with pytest.raises(TeamNotEmptyError):
+        await admin.deactivate_team.execute(
+            valeria, created.team.id, (await team(container, created.team.id, valeria)).version
+        )
+    with pytest.raises(StaffInvitedError):  # nothing to reactivate before she activates
+        await admin.reactivate_user.execute(valeria, invited.id, invited.version)
+    await activate_invited(container, "ana.gil@latambank.example")
+    person = await user(container, invited.id, valeria)
     off = await admin.deactivate_user.execute(valeria, person.id, person.version)
     current = await team(container, created.team.id, valeria)
     await admin.deactivate_team.execute(valeria, created.team.id, current.version)
@@ -599,30 +654,40 @@ async def test_unlock_mariana(container: Container, valeria: Actor) -> None:
         await container.use_cases.administration.unlock_user.execute(valeria, "STF-x")
 
 
-async def test_reset_password(setup: tuple[Container, FixedPasswords], valeria: Actor) -> None:
-    container, passwords = setup
+async def test_send_password_reset_link(
+    setup: tuple[Container, FixedLinkTokens], valeria: Actor
+) -> None:
+    container, tokens = setup
     reset = container.use_cases.administration.reset_password
     with pytest.raises(SelfChangeForbiddenError) as self_change:
         await reset.execute(valeria, VALERIA_ID)
     assert self_change.value.details == {"action": "reset_own_password"}
     with pytest.raises(StaffInactiveError):
         await reset.execute(valeria, ANDRES_ID)
+    with pytest.raises(StaffInvitedError):  # Bruna never activated her account
+        await reset.execute(valeria, BRUNA_ID)
     result = await reset.execute(valeria, MARIANA_ID)
-    assert result.temporary_password == passwords.issued[-1]
+    now = container.clock.now()
     assert (result.revoked_sessions, result.user.status) == (0, AccountStatus.ACTIVE)
-    assert (await payloads(container, "staff.password_reset"))[-1] == {
-        "revoked_sessions": 0,
-        "cleared_lock": True,
-    }
-    with pytest.raises(InvalidCredentialsError):
-        await container.use_cases.people.login.execute(
-            LoginCommand(email=MARIANA.email, password=PASSWORD)
-        )
-    assert await sign_in(container, MARIANA.email, result.temporary_password)
-    # Each call issues a new password and ends her sessions.
+    assert result.expires_at == now + timedelta(hours=1)
+    (sent,) = await payloads(container, "staff.password_reset_link_sent")
+    assert sent["revoked_sessions"] == 0
+    assert sent["cleared_lock"] is True
+    assert set(sent) == {"reset_id", "expires_at", "revoked_sessions", "cleared_lock"}
+    # The link went to her email; her old password still works until she sets a new one.
+    token = await latest_link(container, MARIANA.email)
+    assert token == tokens.issued[-1]
+    assert await sign_in(container, MARIANA.email)
+    # Each call sends a new link (the previous one stops working) and ends her sessions.
     second = await reset.execute(valeria, MARIANA_ID)
-    assert second.temporary_password != result.temporary_password
     assert second.revoked_sessions == 1
+    newer = await latest_link(container, MARIANA.email)
+    assert newer != token
+    onboarding = container.use_cases.onboarding
+    with pytest.raises(LinkInvalidError):
+        await onboarding.check_password_reset.execute(token, client="test")
+    preview = await onboarding.check_password_reset.execute(newer, client="test")
+    assert (preview.name, preview.email) == (MARIANA.name, MARIANA.email)
 
 
 async def test_reset_password_events_and_sessions(container: Container, valeria: Actor) -> None:
@@ -630,7 +695,10 @@ async def test_reset_password_events_and_sessions(container: Container, valeria:
     before = await last_sequence(container)
     result = await container.use_cases.administration.reset_password.execute(valeria, TOMAS_ID)
     assert result.revoked_sessions == 1
-    assert await event_types(container, before) == ["staff.password_reset", "auth.session_ended"]
+    assert await event_types(container, before) == [
+        "staff.password_reset_link_sent",
+        "auth.session_ended",
+    ]
 
 
 async def finish_mfa(container: Container, challenge_id: str) -> str:
@@ -646,13 +714,13 @@ async def test_reset_password_cancels_a_sign_in_past_the_password_step(
     """The old (maybe leaked) password must not finish a sign-in after the reset."""
     login = container.use_cases.people.login
     pending = await login.execute(LoginCommand(email=TOMAS.email, password=PASSWORD))
-    result = await container.use_cases.administration.reset_password.execute(valeria, TOMAS_ID)
+    await container.use_cases.administration.reset_password.execute(valeria, TOMAS_ID)
     with pytest.raises(MfaChallengeInvalidError):
         await finish_mfa(container, pending.challenge_id)
     async with container.uow() as uow:
         assert await uow.sessions.list_active_for(TOMAS_ID, container.clock.now()) == []
-    # A sign-in with the new password still works.
-    fresh = await login.execute(LoginCommand(email=TOMAS.email, password=result.temporary_password))
+    # A new sign-in still works (the password changes only when he uses the link).
+    fresh = await login.execute(LoginCommand(email=TOMAS.email, password=PASSWORD))
     assert await finish_mfa(container, fresh.challenge_id)
 
 
@@ -719,7 +787,7 @@ async def test_team_commands(container: Container, valeria: Actor) -> None:
         await admin.deactivate_team.execute(
             valeria, ANDES, (await team(container, ANDES, valeria)).version
         )
-    assert not_empty.value.details == {"memberCount": 4}
+    assert not_empty.value.details == {"memberCount": 6}  # Tatiana, and Bruna (invited)
     off = await admin.deactivate_team.execute(valeria, created.team.id, 2)
     assert (off.changed, off.team.active) == (True, False)
     assert not (await admin.deactivate_team.execute(valeria, created.team.id, 3)).changed
@@ -748,11 +816,12 @@ async def listing(container: Container, viewer: Actor, **filters: Any) -> Any:
 
 async def test_directory_filters_and_counts(container: Container, valeria: Actor) -> None:
     every = await listing(container, valeria)
-    assert len(every.items) == 12
-    assert (every.role_counts.all, every.role_counts.analyst) == (12, 6)
+    assert len(every.items) == 13  # the 12 seeded active people and Tatiana
+    assert (every.role_counts.all, every.role_counts.analyst) == (13, 7)
     assert (every.role_counts.supervisor, every.role_counts.admin) == (5, 2)
-    assert (every.status_counts.active, every.status_counts.locked) == (12, 1)
-    assert (every.status_counts.inactive, every.status_counts.all) == (1, 13)
+    assert (every.status_counts.active, every.status_counts.locked) == (13, 1)
+    assert (every.status_counts.invited, every.status_counts.inactive) == (1, 1)
+    assert every.status_counts.all == 15
     names = [item.name for item in every.items]
     assert names == sorted(names, key=lambda n: n.replace("Á", "A"))
     assert "Mariana Duque" in names  # active includes locked
@@ -770,19 +839,22 @@ async def test_directory_filters_and_counts(container: Container, valeria: Actor
     assert [i.name for i in locked.items] == ["Mariana Duque"]
     inactive = await listing(container, valeria, status=UserStatusFilter.INACTIVE)
     assert [i.name for i in inactive.items] == ["Andrés Villamil"]
+    invited = await listing(container, valeria, status=UserStatusFilter.INVITED)
+    assert [(i.name, i.status) for i in invited.items] == [("Bruna Esteves", AccountStatus.INVITED)]
+    assert invited.items[0].invitation is not None
 
     supervisors = await listing(container, valeria, role=S)
     assert {i.name for i in supervisors.items} == {
         "Felipe Echeverri", "Lucía Herrera", "Mariana Duque", "Martín Salazar", "Renata Villalba"
     }  # fmt: skip
-    assert supervisors.role_counts.all == 12  # counts ignore the role filter
+    assert supervisors.role_counts.all == 13  # counts ignore the role filter
     assert supervisors.status_counts.all == 5  # …but not the others
 
     andes_pt = await listing(container, valeria, team_id=ANDES, language=PT)
     assert {i.name for i in andes_pt.items} == {"Daniela Ríos", "Lucía Herrera"}
     andes_all = await listing(container, valeria, team_id=ANDES, status=UserStatusFilter.ALL)
     assert andes_all.status_counts.inactive == 1
-    assert len(andes_all.items) == 5
+    assert len(andes_all.items) == 7
     assert await listing(container, valeria, team_id="TEAM-nope") is not None
 
 
@@ -823,7 +895,7 @@ async def test_teams_read_model(container: Container, valeria: Actor) -> None:
     ]
     assert rows == [
         ("Administración de la plataforma", 2, 0, 0),
-        ("Equipo Andes", 4, 3, 1),
+        ("Equipo Andes", 6, 5, 1),  # part 4: Tatiana, and Bruna (invited) counts too
         ("Equipo Pacífico", 6, 3, 0),
     ]  # fmt: skip
     counts = active.status_counts
@@ -832,10 +904,12 @@ async def test_teams_read_model(container: Container, valeria: Actor) -> None:
     assert [t.name for t in inactive.items] == ["Equipo Caribe"]
     detail = await admin.get_team.execute(valeria, ANDES)
     assert [(m.name, m.status) for m in detail.members] == [
+        ("Bruna Esteves", AccountStatus.INVITED),
         ("Daniela Ríos", AccountStatus.ACTIVE),
         ("Felipe Echeverri", AccountStatus.ACTIVE),
         ("Julián Ortega", AccountStatus.ACTIVE),
         ("Lucía Herrera", AccountStatus.ACTIVE),
+        ("Tatiana Rojas", AccountStatus.ACTIVE),
         ("Andrés Villamil", AccountStatus.INACTIVE),
     ]
     with pytest.raises(NotFoundError):
@@ -863,7 +937,11 @@ async def test_supervision_lists_only_active_analysts_and_their_teams(
     created = await admin.create_team.execute(valeria, "Equipo Solo Lectura")
     await admin.create_user.execute(valeria, ana(team_id=created.team.id))
     overview = await container.use_cases.cases.team_overview.execute()
+    assert created.team.id not in {t.id for t in overview.teams}  # she is only invited
+    await activate_invited(container, "ana.gil@latambank.example")
+    overview = await container.use_cases.cases.team_overview.execute()
     assert created.team.id in {t.id for t in overview.teams}
+    assert BRUNA_ID not in {a.id for a in overview.analysts}  # invited: not in supervision
     for number in (1, 2, 11):  # Andes keeps its analysts; Andrés (inactive) is not listed
         assert seed_staff_id(number) in {a.id for a in overview.analysts}
     assert ANDRES_ID not in {a.id for a in overview.analysts}

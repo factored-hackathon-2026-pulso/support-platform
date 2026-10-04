@@ -39,4 +39,5 @@ async def meta(api: ApiContextDep) -> MetaResponse:
         build=api.build_info.build,
         environment=api.build_info.environment,
         api_version=API_VERSION,
+        dev_mailbox=api.build_info.dev_mailbox,
     )

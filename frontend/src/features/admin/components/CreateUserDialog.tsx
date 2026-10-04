@@ -1,7 +1,9 @@
 import { useId, useRef, useState } from 'react'
+import { Mail, UserPlus } from 'lucide-react'
 import { Button, Callout, Dialog } from '@/components/ui'
 import {
   EMPTY_USER_DRAFT,
+  INVITATION_INFO,
   createUserBody,
   firstInvalidField,
   validateUserDraft,
@@ -10,7 +12,7 @@ import {
   type UserDraftField,
 } from '../model'
 import { useCreateUser, useFailureHandler } from '../hooks'
-import type { AdminTeam, CreatedUser } from '../types'
+import type { AdminTeam, InvitedUser } from '../types'
 import { UserForm, type UserFormControls } from './UserForm'
 
 export interface CreateUserDialogProps {
@@ -18,13 +20,14 @@ export interface CreateUserDialogProps {
   /** Preselected team (the list filters one active team). */
   initialTeamId: string | null
   onClose(): void
-  onCreated(result: CreatedUser): void
+  onCreated(result: InvitedUser): void
 }
 
 /**
- * "Nuevo usuario" (`?nueva=1`, contract §10.3): the person form, empty, and
- * "Crear cuenta". The create carries one `Idempotency-Key` per open dialog, so
- * a retry after a lost response never creates the person twice.
+ * "Nuevo usuario" (`?nueva=1`, Admin.dc.html `nuevo`, part 4): the person form,
+ * empty, the invitation note and "Enviar invitación". Nobody types or sees a
+ * password: she gets a link by email. The create carries one `Idempotency-Key` per
+ * open dialog, so a retry after a lost response never invites the person twice.
  */
 export function CreateUserDialog({
   teams,
@@ -80,14 +83,30 @@ export function CreateUserDialog({
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title="Nuevo usuario"
+      title={
+        <span className="flex items-center gap-2.5">
+          <span
+            aria-hidden="true"
+            className="flex size-9 shrink-0 items-center justify-center rounded-10 bg-accent-soft text-accent-strong"
+          >
+            <UserPlus size={18} />
+          </span>
+          Nuevo usuario
+        </span>
+      }
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" form={formId} variant="primary" loading={create.isPending}>
-            Crear cuenta
+          <Button
+            type="submit"
+            form={formId}
+            variant="primary"
+            icon={<Mail size={16} aria-hidden="true" />}
+            loading={create.isPending}
+          >
+            Enviar invitación
           </Button>
         </>
       }
@@ -113,6 +132,13 @@ export function CreateUserDialog({
           teams={teams}
           controls={controls}
         />
+        <div className="flex gap-2.5 rounded-10 bg-canvas px-3.5 py-3 text-13 leading-[1.45] text-ink-2">
+          <Mail size={16} aria-hidden="true" className="mt-px shrink-0" />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-14 font-semibold text-ink">{INVITATION_INFO.title}</span>
+            <span>{INVITATION_INFO.text}</span>
+          </span>
+        </div>
       </form>
     </Dialog>
   )

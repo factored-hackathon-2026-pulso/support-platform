@@ -36,6 +36,7 @@ from cc_platform.application.errors import InvalidCredentialsError
 from cc_platform.application.events import StoredEvent
 from cc_platform.application.people.admin.dto import CreateUserCommand, UpdateUserCommand
 from cc_platform.application.people.dto import LoginCommand, VerifyMfaCommand
+from cc_platform.application.people.onboarding.dto import SetPasswordCommand
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.bootstrap.container import Container
 from cc_platform.domain.cases import CloseReason
@@ -74,7 +75,9 @@ from tests.support import (
     SUPERVISOR,
     TEAM_LEAD,
     PlainHasher,
+    activate_invited,
     actor_for,
+    latest_link,
     make_available_quietly,
     memory_container,
 )
@@ -217,6 +220,10 @@ async def emit_administration(container: Container) -> None:
         ),
     )
     ana = created.user
+    # Part 4: a new link, then she activates her account (password + authenticator).
+    await admin.resend_invitation.execute(valeria, ana.id)
+    await activate_invited(container, "ana.gil@latambank.example")
+    ana = await admin.get_user.execute(valeria, ana.id)
     changed = await admin.update_user.execute(
         valeria,
         ana.id,
@@ -236,6 +243,14 @@ async def emit_administration(container: Container) -> None:
     await admin.reactivate_team.execute(valeria, team.team.id, deactivated.team.version)
     await admin.unlock_user.execute(valeria, seed_staff_id(3))  # Paula, locked above
     await admin.reset_password.execute(valeria, ana.id)
+    await container.use_cases.onboarding.complete_password_reset.execute(
+        SetPasswordCommand(
+            token=await latest_link(container, "ana.gil@latambank.example"),
+            password="Nueva-Clave-del-Lago-27",
+        ),
+        client="test",
+    )
+    await admin.cancel_invitation.execute(valeria, seed_staff_id(15))  # Bruna (seeded)
     off = await admin.deactivate_user.execute(valeria, ana.id, changed.user.version)
     await admin.reactivate_user.execute(valeria, ana.id, off.user.version)
 

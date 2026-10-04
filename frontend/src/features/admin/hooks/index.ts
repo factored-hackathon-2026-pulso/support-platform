@@ -18,7 +18,9 @@ export {
   useReactivateTeam,
   useReactivateUser,
   useRenameTeam,
-  useResetPassword,
+  useCancelInvitation,
+  useResendInvitation,
+  useSendPasswordResetLink,
   useUnlockUser,
   useUpdateUser,
 } from './use-admin-mutations'

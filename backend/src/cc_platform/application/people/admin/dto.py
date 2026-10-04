@@ -16,20 +16,36 @@ from cc_platform.domain.people.staff import Language, StaffRole
 
 class AccountStatus(StrEnum):
     """Derived, never stored (§1.1): ``inactive`` = ``Staff.active`` false; ``locked`` =
-    active and the login account is locked now; else ``active``."""
+    active and the login account is locked now; else ``active``. Part 4: ``invited`` = her
+    invitation is pending or expired (she never activated the account); ``cancelled`` = her
+    invitation was cancelled before she activated it (the directory list hides her)."""
 
     ACTIVE = "active"
     LOCKED = "locked"
+    INVITED = "invited"
     INACTIVE = "inactive"
+    CANCELLED = "cancelled"
 
 
 class UserStatusFilter(StrEnum):
-    """``active`` = every active account, locked ones included; ``locked`` = only those."""
+    """``active`` = every active account, locked ones included; ``locked`` = only those;
+    ``invited`` = pending (or expired) invitations; ``all`` = every listed person (never the
+    cancelled invitations)."""
 
     ACTIVE = "active"
     LOCKED = "locked"
+    INVITED = "invited"
     INACTIVE = "inactive"
     ALL = "all"
+
+
+class InvitationStatus(StrEnum):
+    """An invitation as administration sees it (part 4; ``expired`` is derived)."""
+
+    PENDING = "pending"
+    EXPIRED = "expired"
+    ACCEPTED = "accepted"
+    CANCELLED = "cancelled"
 
 
 class TeamStatusFilter(StrEnum):
@@ -69,6 +85,18 @@ class AdminUserGuardsView:
 
 
 @dataclass(frozen=True, slots=True)
+class AdminInvitationView:
+    """Her invitation (part 4): only while she is ``invited``. Never the token."""
+
+    id: str
+    status: InvitationStatus
+    created_at: datetime
+    sent_at: datetime
+    expires_at: datetime
+    resend_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class AdminUserView:
     id: str
     name: str
@@ -85,6 +113,10 @@ class AdminUserView:
     created_at: datetime
     guards: AdminUserGuardsView
     version: int
+    invitation: AdminInvitationView | None = None
+    #: Part 4: her second factor ("totp" = an authenticator app; "dev_code" = a seeded
+    #: development account); ``None`` while she has no login account.
+    second_factor: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +131,7 @@ class RoleCountsView:
 class UserStatusCountsView:
     active: int
     locked: int
+    invited: int
     inactive: int
     all: int
 
@@ -143,10 +176,10 @@ class UpdateUserCommand:
 
 
 @dataclass(frozen=True, slots=True)
-class CreatedUserView:
+class InvitedUserView:
+    """``POST /admin/users`` (part 4): the new person and her invitation (no password)."""
+
     user: AdminUserView
-    temporary_password: str | None
-    """``None`` only on an idempotent replay (the password was shown once)."""
     replayed: bool = False
 
 
@@ -158,10 +191,12 @@ class AdminUserChangeView:
 
 
 @dataclass(frozen=True, slots=True)
-class PasswordResetView:
+class PasswordResetLinkView:
+    """``POST /admin/users/{id}/password-reset`` (part 4): a link was sent, never a password."""
+
     user: AdminUserView
-    temporary_password: str
     revoked_sessions: int
+    expires_at: datetime
 
 
 # ----------------------------------------------------------------------------- teams

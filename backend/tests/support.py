@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from cc_platform.application.people.auth import (
     AuthenticateSession,
@@ -13,6 +15,8 @@ from cc_platform.application.people.auth import (
     Logout,
     VerifyMfa,
 )
+from cc_platform.application.people.onboarding.dto import ActivateCommand, SetPasswordCommand
+from cc_platform.application.ports.security import IssuedToken
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor, CustomerActor
 from cc_platform.bootstrap.container import Container, build_container
@@ -30,7 +34,9 @@ from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from cc_platform.infrastructure.security.login_attempts import InMemoryUnknownLoginAttempts
 from cc_platform.infrastructure.security.mfa import DevMfaVerifier
+from cc_platform.infrastructure.security.secret_box import FernetSecretBox, derive_key
 from cc_platform.infrastructure.security.tokens import HmacSessionTokenService
+from cc_platform.infrastructure.security.totp import PyotpTotpService
 from cc_platform.infrastructure.seed.customers import DEMO_CUSTOMERS
 from cc_platform.infrastructure.seed.people import (
     DEMO_PASSWORD,
@@ -41,6 +47,9 @@ from cc_platform.infrastructure.seed.people import (
 
 TEST_SECRET = "test-secret-that-is-long-enough-for-hs256-0123"
 DEV_MFA_CODE = "000000"
+#: Part 4 adapters for the unit kits (the containers build their own, from the settings).
+TOTP = PyotpTotpService(issuer="LATAM Bank CC")
+SECRET_BOX = FernetSecretBox(derive_key(TEST_SECRET))
 
 ANALYST = next(s for s in DEMO_STAFF if s.name == "Daniela Ríos")
 SUPERVISOR = next(s for s in DEMO_STAFF if s.name == "Lucía Herrera")
@@ -65,6 +74,8 @@ def make_settings(**overrides: Any) -> Settings:
         "build": "test-build",
         # Slice 10: no periodic SLA sweep (tests run ``sweep_sla_risk.execute`` themselves).
         "notification_sweep_seconds": 0,
+        # Part 4: the dev mailbox holds the invitation and reset links the tests follow.
+        "dev_mailbox": True,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # ignore a developer's backend/.env
@@ -176,6 +187,8 @@ def build_auth_kit(
             ids=ids,
             lockout=lockout,
             session_ttl=session_ttl,
+            totp=TOTP,
+            box=SECRET_BOX,
         ),
         authenticate=AuthenticateSession(uow=uow, tokens=tokens, clock=clock),
         logout=Logout(uow=uow, clock=clock),
@@ -219,33 +232,73 @@ def make_actor(*roles: StaffRole, staff_id: str = "STF-" + "0" * 25 + "7") -> Ac
 
 
 # ----------------------------------------------------------------------------- slice 1 helpers
-class FixedPasswords:
-    """``TemporaryPasswordGenerator`` for tests: predictable ``abcd-efgh-0001``, ``…-0002``."""
+class FixedLinkTokens:
+    """``OneTimeTokens`` for tests (part 4): predictable ``test-link-token-0001-…``; the hash
+    is the real SHA-256, so lookups behave like production."""
 
     def __init__(self) -> None:
         self.issued: list[str] = []
 
-    def generate(self) -> str:
-        password = f"abcd-efgh-{len(self.issued) + 1:04d}"
-        self.issued.append(password)
-        return password
+    def issue(self) -> IssuedToken:
+        token = f"test-link-token-{len(self.issued) + 1:04d}-abcdefghijklmnop"
+        self.issued.append(token)
+        return IssuedToken(token=token, hash=self.hash(token))
+
+    def hash(self, token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
 
 
 async def memory_container(
     *,
     seed: bool = True,
     clock: FixedClock | None = None,
-    passwords: FixedPasswords | None = None,
+    tokens: FixedLinkTokens | None = None,
 ) -> Container:
     """The real composition (use cases, projections, queue drainer) over the in-memory UoW."""
     container = build_container(
         make_settings(persistence="memory", seed_demo_data=seed),
         clock=clock or FixedClock(),
         ids=SequentialIdGenerator(),
-        temporary_passwords=passwords,
+        one_time_tokens=tokens,
     )
     await container.startup()
     return container
+
+
+#: A password every invited test person can use (12+ characters, no name pieces).
+INVITED_PASSWORD = "Verde-Lago-2026-Norte"
+
+
+def link_token(link: str) -> str:
+    """The ``token`` of an invitation or reset link."""
+    return parse_qs(urlparse(link).query)["token"][0]
+
+
+async def latest_link(container: Container, email: str) -> str:
+    """The token of the newest dev-mailbox email to ``email`` (part 4)."""
+    assert container.dev_mailbox is not None, "tests run with the dev mailbox on"
+    for message in await container.dev_mailbox.latest(200):
+        if message.to == email:
+            return link_token(message.link)
+    raise AssertionError(f"no email to {email}")
+
+
+async def activate_invited(
+    container: Container, email: str, *, password: str = INVITED_PASSWORD
+) -> str:
+    """Accept the newest invitation sent to ``email`` like the person would (password,
+    then the code of her new authenticator at the container's clock). Returns her TOTP
+    secret, so the test can sign her in."""
+    onboarding = container.use_cases.onboarding
+    token = await latest_link(container, email)
+    enrollment = await onboarding.set_invitation_password.execute(
+        SetPasswordCommand(token=token, password=password), client="test"
+    )
+    code = container.totp.code_at(enrollment.secret, container.clock.now())
+    await onboarding.activate_invitation.execute(
+        ActivateCommand(token=token, code=code), client="test"
+    )
+    return enrollment.secret
 
 
 def actor_for(seed: StaffSeed) -> Actor:

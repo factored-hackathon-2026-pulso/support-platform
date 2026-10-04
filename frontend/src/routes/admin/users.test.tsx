@@ -7,14 +7,17 @@ import {
   fetchAdminTeams,
   fetchAdminUser,
   fetchAdminUsers,
+  cancelInvitation,
   reactivateUser,
-  resetPassword,
+  resendInvitation,
+  sendPasswordResetLink,
   unlockUser,
   updateUser,
 } from '@/features/admin/api'
 import { ApiProblem } from '@/lib/api'
 import {
   andres,
+  bruna,
   carolina,
   daniela,
   makeTeamList,
@@ -38,7 +41,9 @@ vi.mock('@/features/admin/api', async (importOriginal) => {
     deactivateUser: vi.fn<typeof actual.deactivateUser>(),
     reactivateUser: vi.fn<typeof actual.reactivateUser>(),
     unlockUser: vi.fn<typeof actual.unlockUser>(),
-    resetPassword: vi.fn<typeof actual.resetPassword>(),
+    sendPasswordResetLink: vi.fn<typeof actual.sendPasswordResetLink>(),
+    resendInvitation: vi.fn<typeof actual.resendInvitation>(),
+    cancelInvitation: vi.fn<typeof actual.cancelInvitation>(),
   }
 })
 
@@ -249,10 +254,12 @@ describe('Usuarios y roles', () => {
     expect(
       within(panel).getByRole('button', { name: 'Desactivar cuenta' }),
     ).toHaveAccessibleDescription('No puedes desactivar tu propia cuenta.')
-    expect(within(panel).getByRole('button', { name: 'Restablecer contraseña' })).toBeDisabled()
+    expect(
+      within(panel).getByRole('button', { name: 'Enviar enlace para restablecer' }),
+    ).toBeDisabled()
     expect(
       within(panel).getByText(
-        'Pídele a otra persona de Administración que restablezca tu contraseña.',
+        'Pídele a otra persona de Administración que te envíe un enlace para restablecer tu contraseña.',
       ),
     ).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: 'Ver en auditoría' })).toHaveAttribute(
@@ -382,7 +389,7 @@ describe('Usuarios y roles', () => {
     expect(within(panel).getByRole('checkbox', { name: /^Supervisión/ })).toBeChecked()
   })
 
-  it('creates a person and shows the temporary password once', async () => {
+  it('invites a person by email: no password is ever shown', async () => {
     const ana = {
       ...daniela,
       id: 'STF-NEW0000001',
@@ -392,17 +399,27 @@ describe('Usuarios y roles', () => {
       team: TEAM_PACIFICO,
       version: 1,
       openCases: { total: 0, es: 0, pt: 0 },
+      status: 'invited' as const,
+      lastLoginAt: null,
+      secondFactor: null,
+      invitation: { ...bruna.invitation!, sentAt: NOW.toISOString() },
     }
-    vi.mocked(createUser).mockResolvedValue({ user: ana, temporaryPassword: 'abcd-efgh-jkmn' })
+    vi.mocked(createUser).mockResolvedValue({ user: ana })
     vi.mocked(fetchAdminUser).mockResolvedValue(ana)
     const { user, router } = renderUsers()
     await screen.findByRole('table', { name: 'Personas' })
     await user.click(screen.getByRole('button', { name: 'Nuevo usuario' }))
     expect(search(router).get('nueva')).toBe('1')
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo usuario' })
+    expect(within(dialog).getByText('Le llega una invitación por correo')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(
+        'Con el enlace crea su contraseña y configura la verificación en dos pasos. Nadie más ve su contraseña. El enlace vence en 48 horas.',
+      ),
+    ).toBeInTheDocument()
 
     // Empty form: client validation, first invalid control focused, no request.
-    await user.click(within(dialog).getByRole('button', { name: 'Crear cuenta' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar invitación' }))
     expect(within(dialog).getByRole('textbox', { name: 'Nombre completo' })).toHaveFocus()
     expect(within(dialog).getByText('Elige al menos un rol.')).toBeInTheDocument()
     expect(createUser).not.toHaveBeenCalled()
@@ -427,7 +444,7 @@ describe('Usuarios y roles', () => {
       TEAM_PACIFICO.id,
     )
     expect(within(dialog).queryByRole('option', { name: /Equipo Caribe/ })).not.toBeInTheDocument()
-    await user.click(within(dialog).getByRole('button', { name: 'Crear cuenta' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar invitación' }))
 
     expect(createUser).toHaveBeenCalledWith(
       {
@@ -439,52 +456,46 @@ describe('Usuarios y roles', () => {
       },
       expect.stringMatching(/^[A-Za-z0-9-]{8,64}$/),
     )
-    const shown = await screen.findByRole('dialog', { name: 'Cuenta creada' })
-    expect(
-      within(shown).getByText(
-        'Ana Gil ya puede ingresar con su correo y esta contraseña temporal. Cópiala ahora: no la volveremos a mostrar.',
-      ),
-    ).toBeInTheDocument()
-    expect(within(shown).getByText('abcd-efgh-jkmn')).toBeInTheDocument()
-    expect(
-      within(shown).getByText('En desarrollo, el código de verificación es 000000.'),
-    ).toBeInTheDocument()
-    await user.click(within(shown).getByRole('button', { name: 'Copiar' }))
-    expect(await within(shown).findByRole('button', { name: 'Copiada' })).toBeInTheDocument()
-    await expect(navigator.clipboard.readText()).resolves.toBe('abcd-efgh-jkmn')
+    const sent = await screen.findByRole('dialog', { name: 'Invitación enviada' })
+    expect(sent).toHaveTextContent(
+      'Invitación enviada a ana.gil@latambank.example. El enlace vence en 48 horas.',
+    )
+    for (const line of [
+      'Crea su propia contraseña',
+      'Configura la verificación en dos pasos',
+      'Su cuenta queda activa y empieza En pausa',
+      'Mientras tanto aparece como Invitación pendiente. Puedes reenviarla o cancelarla desde su ficha.',
+    ]) {
+      expect(within(sent).getByText(line)).toBeInTheDocument()
+    }
+    expect(within(sent).queryByText(/contraseña temporal|000000/)).not.toBeInTheDocument()
     expect(search(router).get('persona')).toBe(ana.id)
     expect(search(router).get('nueva')).toBeNull()
-    // Never in the URL.
-    expect(router.state.location.search).not.toContain('abcd')
-
-    await user.click(within(shown).getByRole('button', { name: 'Listo' }))
-    expect(screen.queryByText('abcd-efgh-jkmn')).not.toBeInTheDocument()
+    await user.click(within(sent).getByRole('button', { name: 'Listo' }))
+    expect(screen.queryByRole('dialog', { name: 'Invitación enviada' })).not.toBeInTheDocument()
+    // Her aside: "Invitación pendiente", the invitation facts and its actions.
+    const panel = aside()
+    expect(await within(panel).findByText('Invitación pendiente')).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'Reenviar invitación' })).toBeInTheDocument()
   })
 
-  it('says the password was already shown on an idempotent replay', async () => {
-    vi.mocked(createUser).mockResolvedValue({ user: daniela, temporaryPassword: null })
-    vi.mocked(fetchAdminUser).mockResolvedValue(daniela)
+  it('shows the same "Invitación enviada" on an idempotent replay', async () => {
+    vi.mocked(createUser).mockResolvedValue({ user: bruna })
+    vi.mocked(fetchAdminUser).mockResolvedValue(bruna)
     const { user } = renderUsers('/administracion/usuarios?nueva=1')
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo usuario' })
-    await user.type(within(dialog).getByRole('textbox', { name: 'Nombre completo' }), daniela.name)
-    await user.type(within(dialog).getByRole('textbox', { name: 'Correo' }), daniela.email)
+    await user.type(within(dialog).getByRole('textbox', { name: 'Nombre completo' }), bruna.name)
+    await user.type(within(dialog).getByRole('textbox', { name: 'Correo' }), bruna.email)
     await user.click(within(dialog).getByRole('checkbox', { name: /^Analista/ }))
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Español' }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Portugués' }))
     await waitFor(() => expect(within(dialog).getAllByRole('option').length).toBeGreaterThan(1))
     await user.selectOptions(
       within(dialog).getByRole('combobox', { name: 'Equipo' }),
-      daniela.team.id,
+      bruna.team.id,
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Crear cuenta' }))
-    const shown = await screen.findByRole('dialog', { name: 'Cuenta creada' })
-    expect(
-      within(shown).getByText(
-        'La contraseña temporal se mostró al crear la cuenta. Si no la tienes, restablécela.',
-      ),
-    ).toBeInTheDocument()
-    expect(
-      within(shown).getByRole('button', { name: 'Restablecer contraseña' }),
-    ).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar invitación' }))
+    const sent = await screen.findByRole('dialog', { name: 'Invitación enviada' })
+    expect(sent).toHaveTextContent(`Invitación enviada a ${bruna.email}.`)
   })
 
   it('shows email_taken on the Correo field', async () => {
@@ -501,32 +512,115 @@ describe('Usuarios y roles', () => {
       within(dialog).getByRole('combobox', { name: 'Equipo' }),
       TEAM_PACIFICO.id,
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Crear cuenta' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar invitación' }))
     const email = within(dialog).getByRole('textbox', { name: 'Correo' })
     await waitFor(() => expect(email).toHaveFocus())
     expect(email).toHaveAccessibleDescription('Ya existe una cuenta con ese correo.')
   })
 
-  it('resets a password and shows the new one', async () => {
-    vi.mocked(resetPassword).mockResolvedValue({
-      user: { ...mariana, status: 'active', lockedUntil: null, version: 4 },
-      temporaryPassword: 'pqrs-tuvw-xyz2',
-      revokedSessions: 1,
+  it('shows an invited person: the invitation facts, resend and cancel', async () => {
+    vi.mocked(fetchAdminUsers).mockResolvedValue(
+      makeUserList([carolina, daniela, bruna, selfAdmin]),
+    )
+    vi.mocked(resendInvitation).mockResolvedValue({
+      changed: true,
+      user: { ...bruna, version: 4 },
+      revokedSessions: 0,
     })
-    const { user } = renderUsers(`/administracion/usuarios?persona=${mariana.id}`)
-    const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
-    await user.click(await within(panel).findByRole('button', { name: 'Restablecer contraseña' }))
+    vi.mocked(cancelInvitation).mockResolvedValue({
+      changed: true,
+      user: { ...bruna, status: 'cancelled', invitation: null, version: 5 },
+      revokedSessions: 0,
+    })
+    const { user, router } = renderUsers(`/administracion/usuarios?persona=${bruna.id}`)
+    await screen.findByRole('table', { name: 'Personas' })
+    expect(row(/Bruna Esteves/)).toHaveTextContent('Invitación pendiente')
+    const panel = aside()
+    expect(await within(panel).findByText('Invitación enviada')).toBeInTheDocument()
+    expect(within(panel).getByText('hace 3 h')).toBeInTheDocument()
+    expect(within(panel).getByText('Vence')).toBeInTheDocument()
+    expect(within(panel).getByText('en 45 h')).toBeInTheDocument()
+    expect(within(panel).getByText('Nunca')).toBeInTheDocument()
+    // No password paths and no deactivation for someone who never activated.
+    expect(within(panel).queryByRole('button', { name: /restablecer/i })).not.toBeInTheDocument()
+    expect(within(panel).queryByRole('button', { name: 'Desactivar cuenta' })).toBeNull()
+
+    await user.click(within(panel).getByRole('button', { name: 'Reenviar invitación' }))
+    expect(resendInvitation).toHaveBeenCalledWith(bruna.id)
+    expect(await screen.findByText('Invitación reenviada')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        `Le enviamos un enlace nuevo a ${bruna.email}. Vence en 48 horas y el anterior ya no funciona.`,
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(within(panel).getByRole('button', { name: 'Cancelar invitación' }))
     const confirm = await screen.findByRole('dialog', {
-      name: '¿Restablecer la contraseña de Mariana Duque?',
+      name: '¿Cancelar la invitación de Bruna Esteves?',
     })
     expect(
       within(confirm).getByText(
-        'Se genera una contraseña temporal nueva, se cierran sus sesiones abiertas y se desbloquea la cuenta si estaba bloqueada.',
+        'El enlace que le enviamos deja de funcionar y la cuenta no se crea. Si hace falta, puedes invitarle de nuevo.',
       ),
     ).toBeInTheDocument()
-    await user.click(within(confirm).getByRole('button', { name: 'Restablecer' }))
-    const shown = await screen.findByRole('dialog', { name: 'Contraseña restablecida' })
-    expect(within(shown).getByText('pqrs-tuvw-xyz2')).toBeInTheDocument()
+    await user.click(within(confirm).getByRole('button', { name: 'Cancelar invitación' }))
+    expect(cancelInvitation).toHaveBeenCalledWith(bruna.id)
+    expect(await screen.findByText('Invitación cancelada')).toBeInTheDocument()
+    expect(
+      screen.getByText('El enlace que recibió Bruna Esteves ya no funciona.'),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(search(router).get('persona')).toBeNull())
+  })
+
+  it('says when an invitation expired', async () => {
+    const expired = {
+      ...bruna,
+      invitation: {
+        ...bruna.invitation!,
+        status: 'expired' as const,
+        sentAt: new Date(NOW.getTime() - 50 * 3_600_000).toISOString(),
+        expiresAt: new Date(NOW.getTime() - 2 * 3_600_000).toISOString(),
+      },
+    }
+    vi.mocked(fetchAdminUser).mockResolvedValue(expired)
+    renderUsers(`/administracion/usuarios?persona=${bruna.id}`)
+    const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
+    expect(await within(panel).findByText('La invitación venció')).toBeInTheDocument()
+    expect(within(panel).getByText('Venció')).toBeInTheDocument()
+    expect(within(panel).getByText('hace 2 h')).toBeInTheDocument()
+  })
+
+  it('sends a reset link: the sessions end, nobody sees a password', async () => {
+    vi.mocked(sendPasswordResetLink).mockResolvedValue({
+      user: { ...mariana, status: 'active', lockedUntil: null, version: 4 },
+      revokedSessions: 1,
+      expiresAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
+    })
+    const { user } = renderUsers(`/administracion/usuarios?persona=${mariana.id}`)
+    const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
+    await user.click(
+      await within(panel).findByRole('button', { name: 'Enviar enlace para restablecer' }),
+    )
+    const confirm = await screen.findByRole('dialog', {
+      name: '¿Enviar a Mariana Duque un enlace para restablecer su contraseña?',
+    })
+    for (const line of [
+      `Le llega un correo a ${mariana.email} con un enlace para crear una contraseña nueva. Vence en 1 hora.`,
+      'Se cierran sus sesiones abiertas ahora.',
+      'Si la cuenta estaba bloqueada, se desbloquea.',
+      'Nadie del equipo ve la contraseña nueva.',
+    ]) {
+      expect(within(confirm).getByText(line)).toBeInTheDocument()
+    }
+    await user.click(within(confirm).getByRole('button', { name: 'Enviar enlace' }))
+    expect(sendPasswordResetLink).toHaveBeenCalledWith(mariana.id)
+    expect(await screen.findByText('Enlace enviado')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        `Le enviamos a ${mariana.email} un enlace para crear una contraseña nueva. Sus sesiones abiertas se cerraron.`,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('blocks deactivating someone with open cases; only a supervisor-admin gets the link', async () => {

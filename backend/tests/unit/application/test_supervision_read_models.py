@@ -76,6 +76,7 @@ async def test_seeded_team_matches_the_contract() -> None:
         "Felipe Echeverri",
         "Paula Medina",
         "Sebastián Cárdenas",
+        "Tatiana Rojas",  # part 4: she accepted her invitation (Bruna is only invited)
         "Tomás Arango",
     ]
     daniela = row(team, 1)
@@ -120,9 +121,10 @@ async def test_seeded_team_matches_the_contract() -> None:
     assert (andes.id, andes.name, andes.analyst_count) == (
         seed_team_id(1),
         "Equipo Andes",
-        3,
+        4,  # part 4: Tatiana
     )
-    assert (andes.activity.busy, andes.activity.paused, andes.activity.offline) == (0, 1, 2)
+    # offline: Daniela, Felipe and Tatiana (part 4)
+    assert (andes.activity.busy, andes.activity.paused, andes.activity.offline) == (0, 1, 3)
     # 108, 102 and 103 (first response due within 5 min) and 113 (overdue).
     assert (andes.open_cases, andes.at_risk_cases) == (7, 4)
     assert (pacifico.id, pacifico.analyst_count, pacifico.activity.offline) == (
@@ -195,7 +197,8 @@ async def test_seeded_queues_match_the_contract() -> None:
     ]
     # Spanish: 111 (SLA in 4 min) at risk; 112 is due in 7 min (slice 8: a fixed 15-minute
     # target). Nobody available speaks either language: that is why they wait (rule 3).
-    assert queue(overview, "es") == (2, 1, 0, 6, [seed_case_id(111), seed_case_id(112)])
+    # Seven Spanish speakers since part 4 (Tatiana accepted her invitation).
+    assert queue(overview, "es") == (2, 1, 0, 7, [seed_case_id(111), seed_case_id(112)])
     assert queue(overview, "pt") == (1, 0, 0, 3, [seed_case_id(109)])
     spanish, portuguese = overview.queues
     assert spanish.oldest_queued_at == now - timedelta(minutes=11)

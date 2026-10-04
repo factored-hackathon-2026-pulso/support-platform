@@ -154,13 +154,19 @@ export const MFA_HINT = 'El código cambia cada 30 segundos.'
 
 /** Locked account: the only way out before the countdown ends. */
 export const LOCKED_HELP =
-  'Pide a Administración que desbloquee tu cuenta o restablezca tu contraseña.'
-/** "¿La olvidaste?": there is no self-service reset link. */
+  'Pide a Administración que desbloquee tu cuenta o te envíe un enlace para restablecer tu contraseña.'
+/**
+ * "¿La olvidaste?" (part 4): no self-service reset; Administración sends a link by
+ * email (BoLogin `forgot`). Nobody ever hands out a password.
+ */
 export const FORGOT_PASSWORD_HELP =
-  'Pide a Administración que la restablezca en Usuarios y roles: te dará una contraseña temporal.'
+  'Pide a Administración un enlace para restablecerla: te llega a tu correo y vence en 1 hora.'
 /** "¿Problemas para entrar?" footer. */
 export const SIGN_IN_HELP =
-  'Administración desbloquea tu cuenta o restablece tu contraseña en Usuarios y roles.'
+  'Administración desbloquea tu cuenta o te envía por correo un enlace para restablecer la contraseña.'
+/** The MFA step's development hint (part 4: only seeded accounts use the dev code). */
+export const DEV_MFA_HINT =
+  'Cuentas sembradas: el código de prueba es 000000. Si activaste tu cuenta con una invitación, usa el código de tu app.'
 
 // ── Lockout countdown ──
 

@@ -12,6 +12,7 @@ from cc_platform.api.problems import ProblemCode
 from cc_platform.application.people.admin.dto import OpenCasesBlock, SelfChangeAction
 from cc_platform.domain.cases.escalation import EscalationState
 from cc_platform.domain.cases.values import CaseStatus
+from cc_platform.domain.people.password_policy import PasswordRule
 from cc_platform.domain.people.staff import Language, StaffRole
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
@@ -60,10 +61,15 @@ class ProblemDetails(ApiModel):
     request_id: str | None = None
     remaining_attempts: int | None = Field(
         default=None,
-        description="invalid_credentials, mfa_invalid: failed attempts left before the lock.",
+        description=(
+            "invalid_credentials, mfa_invalid, totp_invalid: failed attempts left before the lock."
+        ),
     )
     unlock_at: datetime | None = Field(
-        default=None, description="account_locked: when the lock ends."
+        default=None, description="account_locked, rate_limited: when the lock ends."
+    )
+    reasons: list[PasswordRule] | None = Field(
+        default=None, description="password_rejected: every rule the password breaks."
     )
     required_roles: list[StaffRole] | None = Field(
         default=None, description="forbidden: roles that may perform the action."

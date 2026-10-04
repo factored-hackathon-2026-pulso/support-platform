@@ -54,14 +54,17 @@ export class UsersPage {
       .getByRole('checkbox', { name: new RegExp(`^${role}\\b`) })
   }
 
-  /** "Nuevo usuario" → fill the form → "Crear cuenta" → the temporary password shown once. */
-  async createPerson(input: {
+  /**
+   * "Nuevo usuario" → fill the form → "Enviar invitación" → the "Invitación enviada"
+   * dialog (part 4: nobody sees a password; she gets a link by email).
+   */
+  async invitePerson(input: {
     name: string
     email: string
     roles: RoleLabel[]
     languages: Language[]
     team: string
-  }): Promise<string> {
+  }): Promise<void> {
     await this.page.getByRole('button', { name: 'Nuevo usuario' }).click()
     const dialog = this.page.getByRole('dialog', { name: 'Nuevo usuario' })
     await expect(dialog).toBeVisible()
@@ -84,18 +87,14 @@ export class UsersPage {
       await expect(pill).toBeChecked()
     }
     await form.getByRole('combobox', { name: 'Equipo' }).selectOption({ label: input.team })
-    await dialog.getByRole('button', { name: 'Crear cuenta' }).click()
+    await dialog.getByRole('button', { name: 'Enviar invitación' }).click()
 
-    const created = this.page.getByRole('dialog', { name: 'Cuenta creada' })
-    await expect(created).toBeVisible()
-    // "Contraseña temporal: " is the visually hidden prefix of the shown password.
-    const secret = created.getByText(/^Contraseña temporal:\s*\S+$/)
-    await expect(secret).toBeVisible()
-    const password = ((await secret.textContent()) ?? '')
-      .replace(/^Contraseña temporal:\s*/, '')
-      .trim()
-    await created.getByRole('button', { name: 'Listo' }).click()
-    await expect(created).toBeHidden()
-    return password
+    const sent = this.page.getByRole('dialog', { name: 'Invitación enviada' })
+    await expect(sent).toBeVisible()
+    await expect(sent).toContainText(
+      `Invitación enviada a ${input.email}. El enlace vence en 48 horas.`,
+    )
+    await sent.getByRole('button', { name: 'Listo' }).click()
+    await expect(sent).toBeHidden()
   }
 }

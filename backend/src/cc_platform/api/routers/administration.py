@@ -7,7 +7,10 @@ is the record as its ``GET`` returns it now (rendered here, ``_with_current``).
 
 Administration never moves cases: a change that would leave an open case with someone who
 can no longer hold it is ``409 staff_has_open_cases`` until supervision reassigns it.
-Responses that carry a temporary password are ``Cache-Control: no-store``.
+
+Part 4 (secure onboarding): administration never sees or hands out a password. A new person
+gets an invitation by email (``invitation/resend``, ``invitation/cancel``) and a forgotten
+password is replaced through a reset link sent by email (``password-reset``).
 """
 
 from __future__ import annotations
@@ -26,10 +29,10 @@ from cc_platform.api.schemas.administration import (
     AdminUser,
     AdminUserChange,
     AdminUserList,
-    CreatedUser,
     CreateTeamRequest,
     CreateUserRequest,
-    PasswordResetResult,
+    InvitedUser,
+    PasswordResetLinkSent,
     RenameTeamRequest,
     UpdateUserRequest,
     VersionRequest,
@@ -68,8 +71,6 @@ CreationKey = Annotated[
         "(team) answers 200 with the existing record and `Idempotent-Replayed: true`.",
     ),
 ]
-
-NO_STORE = {"Cache-Control": "no-store"}
 
 
 async def _with_current[T](call: Awaitable[T]) -> T:
@@ -136,19 +137,21 @@ async def get_user(staff_id: StaffId, actor: Admin, api: ApiContextDep) -> Admin
 
 @router.post(
     "/users",
-    response_model=CreatedUser,
+    response_model=InvitedUser,
     status_code=status.HTTP_201_CREATED,
-    summary="Create an account; the temporary password is returned once",
+    summary="Invite a person: she gets an email with a link that lasts 48 hours",
     description=(
-        "Checks in this order: the caller is an active admin (403) · `Idempotency-Key` "
-        "replay (200, `temporaryPassword: null`; another email → `idempotency_conflict`) · "
-        "name, email, roles, analyst ⇒ at least one language (422 `invalid_value` with "
-        "`field`) · the email is free (409 `email_taken`) · the team exists (422 "
-        "`invalid_value`, `field: teamId`) and is active (422 `team_inactive`). The new "
-        "person starts En pausa."
+        "Part 4: no password exists or is shown. The person starts `invited` (she cannot "
+        "sign in) and sets her own password and authenticator with the link. Checks in this "
+        "order: the caller is an active admin (403) · `Idempotency-Key` replay (200, no new "
+        "email; another email → `idempotency_conflict`) · name, email, roles, analyst ⇒ at "
+        "least one language (422 `invalid_value` with `field`) · the email is free (409 "
+        "`email_taken`; the email of a cancelled invitation is invited again) · the team "
+        "exists (422 `invalid_value`, `field: teamId`) and is active (422 `team_inactive`). "
+        "Once active she starts En pausa."
     ),
     responses={
-        200: {"description": "Idempotent replay of an existing account", "model": CreatedUser},
+        200: {"description": "Idempotent replay of an existing invitation", "model": InvitedUser},
         **problem_responses(401, 403, 409, 422),
     },
 )
@@ -159,7 +162,7 @@ async def create_user(
     api: ApiContextDep,
     response: Response,
     idempotency_key: CreationKey = None,
-) -> CreatedUser:
+) -> InvitedUser:
     result = await api.use_cases.administration.create_user.execute(
         actor,
         CreateUserCommand(
@@ -172,8 +175,7 @@ async def create_user(
         ),
     )
     _replayed(response, result.replayed)
-    response.headers.update(NO_STORE)
-    return CreatedUser.from_view(result)
+    return InvitedUser.from_view(result)
 
 
 @router.patch(
@@ -256,17 +258,54 @@ async def unlock_user(staff_id: StaffId, actor: Admin, api: ApiContextDep) -> Ad
 
 @router.post(
     "/users/{staffId}/password-reset",
-    response_model=PasswordResetResult,
-    summary="Issue a new temporary password; her sessions end and a lock is cleared",
-    description="Not idempotent: each call issues a new password, returned once.",
+    response_model=PasswordResetLinkSent,
+    summary="Email her a link to set a new password (one hour); her sessions end now",
+    description=(
+        "Part 4: nobody but her sees the new password. Checks: 403 · 404 · "
+        "`self_change_forbidden` (`reset_own_password`) · `staff_invited` (she never "
+        "activated her account: resend the invitation) · `staff_inactive`. Her sessions and "
+        "pending sign-ins end now (sockets 4401) and a lock is cleared; her current password "
+        "works until she sets the new one. Not idempotent: each call sends a new link and the "
+        "previous one stops working."
+    ),
     responses=problem_responses(401, 403, 404, 409, 422),
 )
 async def reset_password(
-    staff_id: StaffId, actor: Admin, api: ApiContextDep, response: Response
-) -> PasswordResetResult:
+    staff_id: StaffId, actor: Admin, api: ApiContextDep
+) -> PasswordResetLinkSent:
     view = await api.use_cases.administration.reset_password.execute(actor, staff_id)
-    response.headers.update(NO_STORE)
-    return PasswordResetResult.from_view(view)
+    return PasswordResetLinkSent.from_view(view)
+
+
+@router.post(
+    "/users/{staffId}/invitation/resend",
+    response_model=AdminUserChange,
+    summary="Send her invitation again: a new link for 48 hours, the previous one stops working",
+    description=(
+        "Part 4. Pending or expired invitations only (409 `invalid_transition` once she "
+        "activated the account or the invitation was cancelled)."
+    ),
+    responses=problem_responses(401, 403, 404, 409),
+)
+async def resend_invitation(staff_id: StaffId, actor: Admin, api: ApiContextDep) -> AdminUserChange:
+    view = await api.use_cases.administration.resend_invitation.execute(actor, staff_id)
+    return AdminUserChange.from_view(view)
+
+
+@router.post(
+    "/users/{staffId}/invitation/cancel",
+    response_model=AdminUserChange,
+    summary="Cancel her invitation: the link stops working and the account is not created",
+    description=(
+        "Part 4. Pending or expired invitations only (409 `invalid_transition` otherwise). "
+        "She leaves the directory list (`status: cancelled`); inviting the same email again "
+        "reuses her record."
+    ),
+    responses=problem_responses(401, 403, 404, 409),
+)
+async def cancel_invitation(staff_id: StaffId, actor: Admin, api: ApiContextDep) -> AdminUserChange:
+    view = await api.use_cases.administration.cancel_invitation.execute(actor, staff_id)
+    return AdminUserChange.from_view(view)
 
 
 # ----------------------------------------------------------------------------- teams

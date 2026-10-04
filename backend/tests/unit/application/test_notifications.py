@@ -492,8 +492,13 @@ async def test_views_name_people_and_the_case_now(world: Container) -> None:
     escalated = next(i for i in lucia.items if i.kind is K.CASE_ESCALATED)
     assert escalated.actor_name is not None
     valeria = await world.use_cases.notifications.list_mine.execute(actor_for(ADMIN_ONLY))
-    (lock,) = valeria.items
+    lock, accepted = valeria.items  # newest first: Mariana's lock (T−2m), Tatiana (T−1h)
     assert (lock.target_name, lock.customer_name, lock.case_id) == ("Mariana Duque", None, None)
+    assert (accepted.kind, accepted.target_name, accepted.actor_name) == (
+        K.INVITATION_ACCEPTED,
+        "Tatiana Rojas",
+        "Tatiana Rojas",
+    )
 
 
 async def test_reading_one_and_all_of_her_own(world: Container) -> None:

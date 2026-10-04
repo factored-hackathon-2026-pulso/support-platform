@@ -64,7 +64,8 @@ pnpm dev
   - Simulador de cliente: http://localhost:5173/cliente
 
 Para entrar: cualquier cuenta de la [sección 5](#5-cuentas-sembradas), contraseña `demo1234`,
-código de verificación `000000`.
+código de verificación `000000` (solo las cuentas sembradas sin app de autenticación; ver la
+[sección 5.1](#51-invitaciones-correos-de-desarrollo-y-verificación-en-dos-pasos)).
 
 **Varias personas a la vez.** La sesión vive en el `sessionStorage` de cada pestaña, así que
 cada pestaña o ventana nueva (abierta escribiendo la URL) puede tener a otra persona del equipo
@@ -86,7 +87,7 @@ de verdad: `backend/src/cc_platform/bootstrap/settings.py`.
 
 | Variable | Por defecto | Qué hace |
 |---|---|---|
-| `CC_ENV` | `dev` | `dev` recarga el código; `test` no recarga; `prod` se niega a arrancar (falta un proveedor real de MFA, exige `CC_SESSION_SECRET` propio y `CC_SEED_DEMO_DATA=false`) |
+| `CC_ENV` | `dev` | `dev` recarga el código y enciende el buzón de desarrollo; `test` no recarga; `prod` se niega a arrancar (falta un adaptador real de correo; además exige `CC_SESSION_SECRET` y `CC_TOTP_SECRET_KEY` propios, `CC_SEED_DEMO_DATA=false` y nada de buzón de desarrollo) |
 | `CC_BUILD` | `dev` | Identificador de la build que muestra `GET /api/v1/meta` |
 | `CC_PERSISTENCE` | `sqlalchemy` | `memory` corre sin base de datos (todo se pierde al parar) |
 | `CC_DATABASE_URL` | `sqlite+aiosqlite:///<repo>/backend/cc_platform.db` | Otra base SQLite (ruta absoluta: `sqlite+aiosqlite:////tmp/demo.db`) |
@@ -99,7 +100,13 @@ de verdad: `backend/src/cc_platform/bootstrap/settings.py`.
 | `CC_LOCKOUT_MINUTES` | `15` | Duración del bloqueo |
 | `CC_MFA_TTL_SECONDS` | `300` | Vigencia del paso de verificación |
 | `CC_MFA_MAX_ATTEMPTS` | `3` | Códigos erróneos por verificación |
-| `CC_DEV_MFA_CODE` | `000000` | Código de verificación de desarrollo |
+| `CC_DEV_MFA_CODE` | `000000` | Código de verificación de desarrollo: **solo** para las cuentas sembradas que no tienen app de autenticación (parte 4) |
+| `CC_PUBLIC_APP_URL` | `http://localhost:5173` | Parte 4: origen de la SPA en los enlaces de los correos (`/activar?token=…`, `/restablecer?token=…`). Si la SPA corre en otro puerto, cámbialo |
+| `CC_INVITATION_TTL_HOURS` | `48` | Vigencia de un enlace de invitación (desde el último envío) |
+| `CC_PASSWORD_RESET_TTL_MINUTES` | `60` | Vigencia de un enlace para restablecer la contraseña |
+| `CC_DEV_MAILBOX` | sin definir (= encendido solo con `CC_ENV=dev`) | Buzón de desarrollo: guarda los correos que "envía" la plataforma y los muestra en `GET /api/v1/dev/mailbox` y en `/dev/correos`. La suite e2e lo enciende con `CC_ENV=test`. Prohibido en producción |
+| `CC_TOTP_ISSUER` | `LATAM Bank CC` | Nombre que muestra la app de autenticación |
+| `CC_TOTP_SECRET_KEY` | derivada de `CC_SESSION_SECRET` | Clave Fernet que sella las claves TOTP guardadas. En desarrollo se deriva del secreto de sesión (si cambias ese secreto, las cuentas con app ya no pueden entrar: reinicia la base); producción debe definirla |
 | `CC_ARGON2_TIME_COST`, `CC_ARGON2_MEMORY_COST`, `CC_ARGON2_PARALLELISM` | `3`, `65536`, `4` | Costo del hash de contraseñas |
 | `CC_CORS_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` | Orígenes de la SPA permitidos (lista JSON) |
 | `CC_HOST`, `CC_PORT` | `127.0.0.1`, `8000` | Dirección de `uv run cc-api` |
@@ -123,8 +130,9 @@ no estabas" cuenta desde el fin de su sesión anterior; en su primera sesión, d
 Pacífico" y "Equipo Caribe" desde el slice 6: una base creada antes conserva los nombres viejos
 ("Disputas · …"); reiníciala (sección 6) para verlos como en la demo.
 
-Todas usan la contraseña **`demo1234`** y el código de verificación **`000000`**. Correo:
-`nombre.apellido@latambank.example` (sin tildes).
+Todas usan la contraseña **`demo1234`**. Las cuentas sembradas usan el código de verificación de
+desarrollo **`000000`**, salvo Tatiana Rojas, que entró por invitación y usa su app de
+autenticación (ver abajo). Correo: `nombre.apellido@latambank.example` (sin tildes).
 
 | Persona | Correo | Roles | Idiomas | Equipo | Estado al arrancar |
 |---|---|---|---|---|---|
@@ -141,15 +149,50 @@ Todas usan la contraseña **`demo1234`** y el código de verificación **`000000
 | Valeria Quintero | `valeria.quintero@` | Administración | español | Administración de la plataforma | Activa |
 | Carolina Peña | `carolina.pena@` | Administración | español | Administración de la plataforma | Activa |
 | Andrés Villamil | `andres.villamil@` | Analista | español | Equipo Andes | **Desactivada** (Carolina la desactivó). No puede entrar |
+| Tatiana Rojas | `tatiana.rojas@` | Analista | español | Equipo Andes | Parte 4: **aceptó su invitación** una hora antes del primer arranque. Contraseña `demo1234` y **código de su app** (clave `JBSWY3DPEHPK3PXP`); el código `000000` no le sirve. En pausa, sin casos |
+| Bruna Esteves | `bruna.esteves@` | Analista | portugués | Equipo Andes | Parte 4: **invitación pendiente** (Valeria la invitó 3 h antes del primer arranque; vence 45 h después). No puede entrar hasta activar su cuenta con el enlace del correo (en `/dev/correos`) |
 
 Además existe el equipo inactivo "Equipo Caribe", sin miembros.
+
+### 5.1 Invitaciones, correos de desarrollo y verificación en dos pasos
+
+Parte 4 (`api/slice-11-invitations.md`): Administración **nunca ve ni entrega una contraseña**.
+
+- **Dar de alta a alguien.** "Usuarios y roles" → "Nuevo usuario" → "Enviar invitación". La
+  persona queda en "Invitación pendiente" y le llega un correo con un enlace de un solo uso que
+  vence en 48 horas. Desde su ficha: "Reenviar invitación" (enlace nuevo; el anterior deja de
+  servir) o "Cancelar invitación" (desaparece del directorio; invitar el mismo correo otra vez
+  reutiliza su registro).
+- **Ver los correos en desarrollo.** No hay servidor de correo: el **buzón de desarrollo** guarda
+  lo que la plataforma "envía". Ábrelo en http://localhost:5173/dev/correos (enlace "Correos de
+  desarrollo" al pie del ingreso, solo si está encendido) o por API:
+  `curl -s localhost:8000/api/v1/dev/mailbox | python -m json.tool`. "Abrir enlace" lleva a
+  `/activar?token=…` o `/restablecer?token=…`. Con `CC_ENV=dev` está encendido; nunca existe en
+  producción.
+- **Activar la cuenta** (`/activar`): 1) crear la contraseña (al menos 12 caracteres, sin el
+  nombre ni el correo, no una contraseña común; las reglas se marcan en vivo), 2) configurar la
+  verificación en dos pasos: escanear el QR con una app de autenticación (Google Authenticator,
+  Microsoft Authenticator, 1Password…) o escribir la clave manual, y escribir el código de 6
+  dígitos. Queda activa y En pausa. Desde entonces entra con correo, contraseña y el código de su
+  app.
+- **Sin teléfono a mano** (demo o pruebas), el código sale de la clave:
+  ```bash
+  cd backend && uv run python -c "import pyotp; print(pyotp.TOTP('JBSWY3DPEHPK3PXP').now())"
+  # o: oathtool --totp -b JBSWY3DPEHPK3PXP
+  ```
+  (cambia la clave por la que mostró el paso 2; la de arriba es la de Tatiana Rojas).
+- **Olvidó la contraseña.** Administración pulsa "Enviar enlace para restablecer" en su ficha: le
+  llega un enlace que vence en 1 hora, sus sesiones se cierran en ese momento y la cuenta se
+  desbloquea si estaba bloqueada. Con el enlace (`/restablecer`) crea la contraseña nueva; su
+  verificación en dos pasos no cambia. Nadie puede restablecer su propia contraseña desde
+  "Usuarios y roles"; tampoco hay "Olvidé mi contraseña" de autoservicio.
 
 **Notificaciones sembradas (slice 10).** La historia de la semilla ya notificó a la gente: la
 campana de Daniela trae casos que le llegaron, "El cliente volvió a escribir", "Supervisión
 respondió tu escalamiento" (107) y calificaciones; la de cada persona de Supervisión, los
 escalamientos (101, 113 y los atendidos), "Un caso espera en la cola" (español y portugués) y
 "Caso por vencer sin respuesta" (al arrancar se revisan los casos a 5 minutos o menos de vencer);
-la de Valeria y Carolina, "Cuenta bloqueada: Mariana Duque". Lo que pasó hace más de 30 minutos
+la de Valeria y Carolina, "Cuenta bloqueada: Mariana Duque" y, ya leída, "Invitación aceptada: Tatiana Rojas" (parte 4). Lo que pasó hace más de 30 minutos
 empieza leído ("Anteriores"); lo más reciente, sin leer ("Nuevas").
 
 **Nadie empieza disponible.** Las colas sembradas tienen casos que nadie disponible podía tomar
@@ -337,6 +380,26 @@ pantalla muestra "Tu cuenta está bloqueada por 15 minutos". Opciones:
 - Esperar los 15 minutos.
 - Reiniciar la base (sección 6). Mariana Duque empieza bloqueada a propósito.
 
+### "El enlace venció o ya se usó"
+
+La pantalla de `/activar` o `/restablecer` dice eso para cualquier enlace que no sirve: vencido
+(48 h la invitación, 1 h el de restablecer), ya usado, reemplazado por uno más nuevo (reenviar
+invalida el anterior) o cancelado. Abre el correo más reciente en `/dev/correos` o pide a
+administración que lo reenvíe. Si dice "Demasiados intentos", este navegador abrió 10 enlaces
+inválidos seguidos: espera 15 minutos (o reinicia el backend en desarrollo: el contador vive en
+memoria).
+
+### El código de la app no sirve
+
+- Cuentas que entraron por invitación (y Tatiana Rojas): el código `000000` **no** sirve; usa el
+  de la app (o calcúlalo con `pyotp`, sección 5.1).
+- El código cambia cada 30 segundos y se acepta un paso de desfase: si la hora del teléfono o de
+  la máquina está muy corrida, sincronízala.
+- Cinco códigos erróneos bloquean la cuenta (al entrar) o la activación (en `/activar`) 15
+  minutos.
+- Si cambiaste `CC_SESSION_SECRET` sin definir `CC_TOTP_SECRET_KEY`, las claves guardadas ya no
+  se pueden abrir: reinicia la base (sección 6).
+
 ### El chat no se actualiza en vivo (WebSocket)
 
 Los cambios llegan por un único WebSocket por pestaña, `ws://<API>/api/v1/ws?token=…`. Si los
@@ -344,8 +407,8 @@ mensajes solo aparecen al recargar:
 
 1. En las herramientas del navegador, pestaña Red, filtra por `ws` y mira el estado y el código
    de cierre de la conexión.
-2. `4401`: el token ya no vale (cerraste sesión, venció, la cuenta se desactivó, se restableció
-   la contraseña o se reinició la base). La SPA vuelve al ingreso; entra de nuevo.
+2. `4401`: el token ya no vale (cerraste sesión, venció, la cuenta se desactivó, administración
+   envió un enlace para restablecer la contraseña o se reinició la base). La SPA vuelve al ingreso; entra de nuevo.
 3. `4409`: una administradora cambió los roles de esa persona. El cliente se reconecta solo y
    recarga el menú; no hace falta nada.
 4. Sin conexión o reintentos continuos: el backend no está corriendo, `VITE_API_URL` apunta a

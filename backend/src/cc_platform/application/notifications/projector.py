@@ -24,8 +24,8 @@ Rules (event → kind → recipients):
   waits and no older case of its language waits (one per language until the queue empties);
 - ``auth.account_locked`` → ``account_locked`` → every active Administración (not the
   locked person);
-- ``staff.invitation_accepted`` (recorded by part 4) → ``invitation_accepted`` → every
-  active Administración (not the new person).
+- ``staff.invitation_accepted`` (part 4) → ``invitation_accepted`` → every active
+  Administración (not the new person).
 
 ``sla_at_risk`` has no source event: ``SweepSlaRisk`` (``sweep.py``) writes it.
 """
@@ -57,12 +57,11 @@ from cc_platform.domain.cases.events import (
 )
 from cc_platform.domain.cases.values import AssignmentReason, CaseStatus
 from cc_platform.domain.notifications.notification import NotificationKind
-from cc_platform.domain.people.events import AccountLocked
+from cc_platform.domain.people.events import AccountLocked, StaffInvitationAccepted
 from cc_platform.domain.people.staff import StaffRole
 
-#: Recorded by part 4 (invitations) when an invited person activates her account;
-#: ``entity_id`` is her staff id.
-INVITATION_ACCEPTED_EVENT = "staff.invitation_accepted"
+#: Part 4: an invited person activated her account; ``entity_id`` is her staff id.
+INVITATION_ACCEPTED_EVENT = StaffInvitationAccepted.event_type
 
 type Rule = Callable[[UnitOfWork, EventRecord], Awaitable[list[NotificationDraft]]]
 

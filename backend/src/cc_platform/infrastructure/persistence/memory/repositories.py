@@ -31,8 +31,10 @@ from cc_platform.domain.notifications.notification import Notification
 from cc_platform.domain.people.admin_roster import ROSTER_ID, AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability
 from cc_platform.domain.people.errors import EmailTakenError, TeamNameTakenError
+from cc_platform.domain.people.invitation import Invitation
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
+from cc_platform.domain.people.password_reset import PasswordReset
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Language, Staff, StaffRole
 from cc_platform.domain.people.team import Team
@@ -237,6 +239,64 @@ class InMemoryLoginAccountRepository(_StagedRepository[LoginAccount]):
 
     async def list(self) -> list[LoginAccount]:
         return sorted(self._all(), key=lambda account: account.staff_id)
+
+
+class InMemoryInvitationRepository(_StagedRepository[Invitation]):
+    """Part 4. Same answers as ``SqlInvitationRepository`` (unique person and token)."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, Invitation], track: Tracker) -> None:
+        super().__init__(committed, lambda invitation: invitation.id, track)
+
+    def _unique_violation(self, aggregate: Invitation, other: Invitation) -> DomainError | None:
+        if aggregate.staff_id == other.staff_id or aggregate.token_hash == other.token_hash:
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    def _first(self, found: list[Invitation]) -> Invitation | None:
+        if not found:
+            return None
+        self._track(found[0])
+        return found[0]
+
+    async def get(self, invitation_id: str) -> Invitation | None:
+        return await self._get(invitation_id)
+
+    async def get_for_staff(self, staff_id: str) -> Invitation | None:
+        return self._first([i for i in self._all() if i.staff_id == staff_id])
+
+    async def get_by_token_hash(self, token_hash: str) -> Invitation | None:
+        return self._first([i for i in self._all() if i.token_hash == token_hash])
+
+    async def list(self) -> list[Invitation]:
+        return sorted(self._all(), key=lambda invitation: invitation.staff_id)
+
+
+class InMemoryPasswordResetRepository(_StagedRepository[PasswordReset]):
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, PasswordReset], track: Tracker) -> None:
+        super().__init__(committed, lambda reset: reset.id, track)
+
+    def _unique_violation(
+        self, aggregate: PasswordReset, other: PasswordReset
+    ) -> DomainError | None:
+        if aggregate.staff_id == other.staff_id or aggregate.token_hash == other.token_hash:
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    def _first(self, found: list[PasswordReset]) -> PasswordReset | None:
+        if not found:
+            return None
+        self._track(found[0])
+        return found[0]
+
+    async def get_for_staff(self, staff_id: str) -> PasswordReset | None:
+        return self._first([r for r in self._all() if r.staff_id == staff_id])
+
+    async def get_by_token_hash(self, token_hash: str) -> PasswordReset | None:
+        return self._first([r for r in self._all() if r.token_hash == token_hash])
 
 
 class InMemoryMfaChallengeRepository(_StagedRepository[MfaChallenge]):

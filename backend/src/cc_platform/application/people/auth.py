@@ -11,6 +11,10 @@ Flow (canvas ``BoLogin`` → ``BoMfa`` → app, ``BoLocked`` on lockout):
    challenge) **and** on the account lockout, so new logins cannot buy unlimited guesses;
    a locked account cannot finish signing in. Success starts a ``StaffSession``, resets the
    counter and returns a signed session token carrying the session id, staff id and roles.
+   Part 4: an account with an authenticator (every account created through an invitation)
+   is checked with its own TOTP secret (RFC 6238, ``TotpService``); the development code
+   (``000000``, ``MfaVerifier``) only works for the seeded accounts that have none, and
+   only while a development verifier is configured (never in production).
 3. ``AuthenticateSession``: resolves a token to an ``Actor`` on every request (signature,
    expiry via ``Clock``, revocation, staff still active, current roles).
 4. ``Logout``: ends the session; the realtime hub closes its sockets on ``auth.session_ended``.
@@ -24,7 +28,7 @@ exactly once. The password hash / MFA check is computed once and reused across r
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import NoReturn
 
 from cc_platform.application.concurrency import retry_on_conflict
@@ -47,8 +51,10 @@ from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.security import (
     MfaVerifier,
     PasswordHasher,
+    SecretBox,
     SessionClaims,
     SessionTokenService,
+    TotpService,
 )
 from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
 from cc_platform.application.security import Actor
@@ -58,6 +64,7 @@ from cc_platform.domain.people.login_account import (
     FailedAttemptCounter,
     FailedAttemptOutcome,
     LockoutPolicy,
+    LoginAccount,
 )
 from cc_platform.domain.people.mfa import MfaChallenge, MfaMethod, MfaPolicy
 from cc_platform.domain.people.session import SessionEndReason, StaffSession
@@ -92,19 +99,33 @@ class _PasswordCheck:
 
 @dataclass(slots=True)
 class _MfaCodeCheck:
-    """One submitted MFA code, sent to the verifier at most once per staff member."""
+    """One submitted MFA code, checked at most once per staff member (retries reuse it).
 
-    verifier: MfaVerifier
+    Her authenticator (TOTP secret, opened from the ``SecretBox``) when she has one; else the
+    development verifier (seeded accounts), and no verifier means no second factor at all.
+    """
+
+    totp: TotpService
+    box: SecretBox
+    dev_verifier: MfaVerifier | None
     method: MfaMethod
     code: str
     _verdicts: dict[str, bool] = field(default_factory=dict)
 
-    async def passes(self, staff_id: str) -> bool:
+    async def passes(self, account: LoginAccount, *, at: datetime) -> bool:
+        staff_id = account.staff_id
         if staff_id not in self._verdicts:
-            self._verdicts[staff_id] = await self.verifier.verify(
-                staff_id=staff_id, method=self.method, code=self.code
-            )
+            self._verdicts[staff_id] = await self._check(account, at=at)
         return self._verdicts[staff_id]
+
+    async def _check(self, account: LoginAccount, *, at: datetime) -> bool:
+        if account.totp_secret is not None:
+            return self.totp.verify(self.box.open(account.totp_secret), self.code, at=at)
+        if self.dev_verifier is None:
+            return False
+        return await self.dev_verifier.verify(
+            staff_id=account.staff_id, method=self.method, code=self.code
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,15 +205,21 @@ class LoginWithPassword:
 @dataclass(frozen=True, slots=True)
 class VerifyMfa:
     uow: UnitOfWorkFactory
-    verifier: MfaVerifier
+    #: The development code verifier for seeded accounts without an authenticator; ``None``
+    #: (production) means only authenticator codes are accepted.
+    verifier: MfaVerifier | None
     tokens: SessionTokenService
     clock: Clock
     ids: IdGenerator
     lockout: LockoutPolicy
     session_ttl: timedelta
+    totp: TotpService
+    box: SecretBox
 
     async def execute(self, command: VerifyMfaCommand) -> SessionGrant:
-        check = _MfaCodeCheck(self.verifier, command.method, command.code.strip())
+        check = _MfaCodeCheck(
+            self.totp, self.box, self.verifier, command.method, command.code.strip()
+        )
         return await retry_on_conflict(lambda: self._attempt(command, check))
 
     async def _attempt(self, command: VerifyMfaCommand, check: _MfaCodeCheck) -> SessionGrant:
@@ -211,7 +238,7 @@ class VerifyMfa:
             # A lock reached after the password step also blocks finishing the sign-in.
             account.ensure_can_attempt(now)
 
-            if not await check.passes(staff.id):
+            if not await check.passes(account, at=now):
                 challenge_left = challenge.register_failure(now=now, actor=actor)
                 outcome = account.register_failed_attempt(
                     now=now, policy=self.lockout, actor=actor, factor=AuthFactor.MFA

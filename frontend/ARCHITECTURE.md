@@ -73,7 +73,7 @@ transitively (anything it loads imports other features through their `core.ts`).
 route table, and `main.tsx`) imports features only through `core.ts`: an import of
 an `index.ts` there would put every screen of that feature in the entry chunk, since
 the barrel statically depends on them (lazy routes would then be empty shells).
-Today `cases`, `conversation`, `supervision`, `admin`, `home` and `notifications` have one. The vocabulary the
+Today `cases`, `conversation`, `supervision`, `admin`, `home`, `notifications` and `onboarding` have one. The vocabulary the
 shell itself shows (role names, "Ahora tienes: …") lives in `app/roles.ts`.
 
 Rules:
@@ -328,6 +328,36 @@ mode="supervision"` + "Asignar"/"Reasignar" + "Casos anteriores"), the assign
   `?asignar=` changes and names the link "Volver a Auditoría" or "Volver a Equipo y
   colas".
 
+### Onboarding (part 4: invitations and reset links)
+
+Contract: `docs/platform/api/slice-11-invitations.md`. New feature `onboarding`, which imports no
+other feature (only `@/app/roles` for role labels, `@/components/*`, `@/lib/*`).
+
+- **Public routes** under `AuthLayout` but outside `GuestOnly` (a signed-in person opening a link
+  still sees it): `/activar?token=` (`ActivationScreen`) and `/restablecer?token=`
+  (`PasswordResetScreen`). The token lives in the URL and component state only; the API receives
+  it in JSON bodies. A missing or unusable token (410 `link_invalid`, one answer for unknown,
+  expired, used or cancelled) shows `LinkInvalid` ("El enlace venció o ya se usó").
+- **Activation** (BoActivar): `StepIndicator` (`ol` "Pasos para activar tu cuenta",
+  `aria-current="step"`); step 1 `PasswordFields` (Mostrar / Ocultar with `aria-pressed`, the live
+  requirements list "Requisitos de la contraseña" with ": cumple / no cumple / pendiente" for
+  screen readers, "Repite la contraseña"; "Continuar" is `aria-disabled` until every rule passes
+  and a submit focuses the first broken field); step 2 the QR (`QrCode`: an `img` from
+  `qrcode-generator`, pinned exact version, error correction M, black on white), the manual key in
+  mono grouped by 4 with "Copiar", `CodeInput` and "Activar cuenta"; step 3 "Tu cuenta está
+  lista" → "Entrar". The enrollment (QR, key) lives in the mutation result only.
+- **Rules** (`model.ts`, tested): the password policy mirrors the backend's
+  `password_policy.py` (≥ 12 characters, not her email name or its pieces or her name's words,
+  not a common password; the thresholds and the block list are pinned by tests),
+  `describeOnboardingFailure` (link_invalid → invalid screen, rate_limited → "Vuelve a intentarlo a
+  las {hora}", password_rejected → the password field, totp_invalid / account_locked → the code,
+  invalid_transition → back to step 1), `groupKey`, `activationSteps`, `inAppPath`.
+- **Dev mailbox** (`/dev/correos`, `DevMailboxScreen`): only when `GET /meta` says `devMailbox`
+  (else "No disponible"); a development tool (warn Callout) listing the newest emails with "Abrir
+  enlace" (navigates inside the SPA). The login route shows a "Correos de desarrollo" link
+  through `LoginScreen showDevMailbox`, fed by `useDevMailboxEnabled` from `onboarding/core.ts`
+  (so the login chunk does not load the onboarding screens).
+
 ### Administration (slice 4)
 
 Contract: `docs/platform/api/slice-4-administration.md` §10. `features/admin` imports
@@ -352,10 +382,16 @@ route composes `@/features/audit`, and `app/` composes the badge and the session
   keeps it and, when the cached `version` moves past the draft's base, says so ("Alguien
   más acaba de cambiar a esta persona…"). "Guardar cambios" is enabled while the draft
   differs; validation runs on submit and focuses the first invalid control.
-- **Temporary passwords** (create, reset) live only in `UsersScreen` component state
-  and `TemporaryPasswordDialog`: never in the URL, the query cache or storage. Creates
-  send one `Idempotency-Key` per open dialog; a replay (`temporaryPassword: null`)
-  offers "Restablecer contraseña".
+- **No passwords in administration** (part 4, secure onboarding): "Nuevo usuario" sends an
+  invitation ("Enviar invitación" → `InvitationSentDialog`: "Invitación enviada a {correo}. El
+  enlace vence en 48 horas."); creates send one `Idempotency-Key` per open dialog and a replay
+  shows the same dialog. An invited person reads "Invitación pendiente" (`ACCOUNT_STATUS.invited`,
+  dashed accent ring), her aside shows the invitation facts (`invitationFacts`: "Invitación
+  enviada", "Vence" / "Venció", "Último ingreso: Nunca") and "Reenviar invitación" /
+  "Cancelar invitación" (`CancelInvitationDialog`; a cancelled person leaves the directory and
+  the selection is cleared). An active person gets "Enviar enlace para restablecer"
+  (`ResetPasswordDialog`: a link by email, 1 hour, her sessions end now). No password is ever
+  displayed, copied or stored by the SPA.
 - **Realtime** (`core.ts`: `registerAdminRealtime`, `useLockedAccountsCount`, keys,
   types): `registerAdminRealtime` (`directory.updated` → invalidate the user and
   team lists, the named people and teams, every team detail when people moved);
@@ -378,6 +414,8 @@ route composes `@/features/audit`, and `app/` composes the badge and the session
 | -------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------- |
 | `/`                                                                                    | redirect to the first role home (or `/login`)      | —          |
 | `/login`, `/login/verificacion`, `/login/bloqueada`                                    | login, MFA, lockout                                | GuestOnly  |
+| `/activar?token=`, `/restablecer?token=`                                               | invitation and password-reset links (part 4)       | —          |
+| `/dev/correos`                                                                         | dev mailbox (only with the backend's dev mailbox)  | —          |
 | `/analista/inicio`                                                                     | Inicio (the analyst's landing, slice 6)            | analyst    |
 | `/analista?caso=&estado=&q=&lista=&ficha=&historial=`                                  | Workspace ("Casos")                                | analyst    |
 | `/supervision/colas?idioma=&estado=&prioridad=&analista=`                              | Colas (the landing of Supervisión, slice 9)        | supervisor |
@@ -645,7 +683,8 @@ Extend primitives instead of forking them; add new ones here with a test.
 `pnpm e2e` runs `e2e/*.spec.ts` in Chromium against the real stack; `pnpm e2e:install`
 downloads the browser once. Nothing to start by hand: `playwright.config.ts` picks two
 free ports and starts, as `webServer` entries, the backend (`uv run uvicorn …` in
-`../backend`) on a **fresh temporary SQLite database** (`CC_DATABASE_URL` under the OS
+`../backend`, with `CC_DEV_MAILBOX=true` and `CC_PUBLIC_APP_URL` set to the web server) on a
+**fresh temporary SQLite database** (`CC_DATABASE_URL` under the OS
 temp dir, seeded, deleted by `e2e/support/global-teardown.ts`; `backend/cc_platform.db`
 is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
 (`CC_CORS_ORIGINS` allows its origin). Traces and screenshots are kept on failure
@@ -658,9 +697,11 @@ is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
   after a reload; close with a reason → the customer notice, a new linked case,
   "Casos anteriores" in both windows), `supervision.spec.ts` (queue and drain under
   rule 3; a supervisor assigns a queued case and reassigns it while the analyst watches
-  it leave her list, rule 3 in the dialog), `admin.spec.ts` (an admin creates an analyst
-  who signs in with the temporary password and gets a case; a role change reaches the
-  role switcher live and back; deactivation signs the other window out),
+  it leave her list, rule 3 in the dialog), `admin.spec.ts` (part 4: an admin invites an
+  analyst, who opens the link from `/dev/correos`, sets her password, enrolls her
+  authenticator (the test computes the TOTP code from the key on screen, `support/totp.ts`),
+  signs in with password + code and gets a case; a role change reaches the role switcher live
+  and back; deactivation signs the other window out),
   `auth.spec.ts` (5 wrong passwords → lockout; an admin unlocks). Slice 10: `supervision.spec.ts`
   › "the bell: …" (supervision's count goes up live, "Revisar" in the panel lands on Escalados
   with it open, the answer reaches the analyst's bell); the shell page object has `bell`,
@@ -668,8 +709,10 @@ is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
   "Avisos" region.
 - **Support** (`e2e/support/`): page objects per screen (`pages/`: login + MFA,
   Workspace, customer simulator, Equipo y colas + assign dialog, supervisor case view,
-  Usuarios y roles, the shell and role switcher), `api.ts` (REST helpers for setup and
-  cleanup only: sign-in, create people, release a customer), `data.ts` (the seeded
+  Usuarios y roles, the dev mailbox and the activation, the shell and role switcher), `api.ts`
+  (REST helpers for setup and cleanup only: sign-in, create people (invite + activate through
+  the public API with the token from the dev mailbox; each keeps her `totpSecret`), release a
+  customer), `totp.ts` (RFC 6238, checked against the RFC vector), `data.ts` (the seeded
   accounts and simulator customers it relies on, invented names, unique texts) and
   `fixtures.ts`:
   - `actors`: one browser **context** per person (own `sessionStorage`, so own session):

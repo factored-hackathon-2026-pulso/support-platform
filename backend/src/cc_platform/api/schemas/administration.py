@@ -7,7 +7,7 @@ unknown fields (``RequestModel``).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self, cast
 
 from pydantic import Field, model_validator
 
@@ -15,6 +15,7 @@ from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.api.schemas.people import TeamRef
 from cc_platform.application.people.admin.dto import (
     AccountStatus,
+    AdminInvitationView,
     AdminTeamChangeView,
     AdminTeamDetailView,
     AdminTeamListView,
@@ -24,9 +25,10 @@ from cc_platform.application.people.admin.dto import (
     AdminUserGuardsView,
     AdminUserListView,
     AdminUserView,
-    CreatedUserView,
+    InvitationStatus,
+    InvitedUserView,
     OpenCaseCountsView,
-    PasswordResetView,
+    PasswordResetLinkView,
     RoleCountsView,
     TeamStatusCountsView,
     UserStatusCountsView,
@@ -65,6 +67,31 @@ class AdminUserGuards(ApiModel):
         return cls(is_self=view.is_self, last_active_admin=view.last_active_admin)
 
 
+class AdminInvitation(ApiModel):
+    """Her invitation (part 4): present only while she is ``invited``. Never the token."""
+
+    id: str
+    status: InvitationStatus = Field(description="pending or expired while she is invited.")
+    created_at: datetime = Field(description="The first invitation.")
+    sent_at: datetime = Field(description="The last (re)send.")
+    expires_at: datetime = Field(description="48 hours after the last send.")
+    resend_count: int
+
+    @classmethod
+    def from_view(cls, view: AdminInvitationView) -> AdminInvitation:
+        return cls(
+            id=view.id,
+            status=view.status,
+            created_at=view.created_at,
+            sent_at=view.sent_at,
+            expires_at=view.expires_at,
+            resend_count=view.resend_count,
+        )
+
+
+SecondFactor = Literal["totp", "dev_code"]
+
+
 class AdminUser(ApiModel):
     id: str
     name: str
@@ -83,6 +110,15 @@ class AdminUser(ApiModel):
     created_at: datetime
     guards: AdminUserGuards
     version: int = Field(description="Send it back as expectedVersion.")
+    invitation: AdminInvitation | None = Field(
+        description="Part 4: her pending or expired invitation (status invited), else null."
+    )
+    second_factor: SecondFactor | None = Field(
+        description=(
+            "Part 4: totp (an authenticator app) or dev_code (a seeded development account); "
+            "null while she has no login account (invited)."
+        )
+    )
 
     @classmethod
     def from_view(cls, view: AdminUserView) -> AdminUser:
@@ -102,6 +138,8 @@ class AdminUser(ApiModel):
             created_at=view.created_at,
             guards=AdminUserGuards.from_view(view.guards),
             version=view.version,
+            invitation=AdminInvitation.from_view(view.invitation) if view.invitation else None,
+            second_factor=cast("SecondFactor | None", view.second_factor),
         )
 
 
@@ -119,12 +157,19 @@ class RoleCounts(ApiModel):
 class UserStatusCounts(ApiModel):
     active: int = Field(description="Every active account, locked ones included.")
     locked: int
+    invited: int = Field(description="Pending or expired invitations (part 4).")
     inactive: int
-    all: int
+    all: int = Field(description="Everyone listed (never a cancelled invitation).")
 
     @classmethod
     def from_view(cls, view: UserStatusCountsView) -> UserStatusCounts:
-        return cls(active=view.active, locked=view.locked, inactive=view.inactive, all=view.all)
+        return cls(
+            active=view.active,
+            locked=view.locked,
+            invited=view.invited,
+            inactive=view.inactive,
+            all=view.all,
+        )
 
 
 class AdminUserList(ApiModel):
@@ -159,15 +204,15 @@ class CreateUserRequest(RequestModel):
         return self
 
 
-class CreatedUser(ApiModel):
+class InvitedUser(ApiModel):
+    """Part 4: the new person (status ``invited``, with her ``invitation``). No password
+    exists: she sets her own with the link of the invitation email."""
+
     user: AdminUser
-    temporary_password: str | None = Field(
-        description="Shown once (xxxx-xxxx-xxxx); null only on an idempotent replay."
-    )
 
     @classmethod
-    def from_view(cls, view: CreatedUserView) -> CreatedUser:
-        return cls(user=AdminUser.from_view(view.user), temporary_password=view.temporary_password)
+    def from_view(cls, view: InvitedUserView) -> InvitedUser:
+        return cls(user=AdminUser.from_view(view.user))
 
 
 class UpdateUserRequest(RequestModel):
@@ -208,17 +253,19 @@ class AdminUserChange(ApiModel):
         )
 
 
-class PasswordResetResult(ApiModel):
+class PasswordResetLinkSent(ApiModel):
+    """Part 4: a reset link went to her email (never a password)."""
+
     user: AdminUser
-    temporary_password: str = Field(description="Shown once (xxxx-xxxx-xxxx).")
-    revoked_sessions: int
+    revoked_sessions: int = Field(description="Her sessions ended now.")
+    expires_at: datetime = Field(description="The link lasts one hour.")
 
     @classmethod
-    def from_view(cls, view: PasswordResetView) -> PasswordResetResult:
+    def from_view(cls, view: PasswordResetLinkView) -> PasswordResetLinkSent:
         return cls(
             user=AdminUser.from_view(view.user),
-            temporary_password=view.temporary_password,
             revoked_sessions=view.revoked_sessions,
+            expires_at=view.expires_at,
         )
 
 

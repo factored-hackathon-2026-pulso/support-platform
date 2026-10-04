@@ -2,14 +2,59 @@
   "components": {
     "schemas": {
       "AccountStatus": {
-        "description": "Derived, never stored (§1.1): ``inactive`` = ``Staff.active`` false; ``locked`` =\nactive and the login account is locked now; else ``active``.",
+        "description": "Derived, never stored (§1.1): ``inactive`` = ``Staff.active`` false; ``locked`` =\nactive and the login account is locked now; else ``active``. Part 4: ``invited`` = her\ninvitation is pending or expired (she never activated the account); ``cancelled`` = her\ninvitation was cancelled before she activated it (the directory list hides her).",
         "enum": [
           "active",
           "locked",
-          "inactive"
+          "invited",
+          "inactive",
+          "cancelled"
         ],
         "title": "AccountStatus",
         "type": "string"
+      },
+      "ActivateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The 6 digits her app shows.",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "token": {
+            "description": "The token of the link (?token=).",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "code"
+        ],
+        "title": "ActivateRequest",
+        "type": "object"
+      },
+      "ActivatedAccount": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ],
+        "title": "ActivatedAccount",
+        "type": "object"
       },
       "ActivityCounts": {
         "properties": {
@@ -49,6 +94,51 @@
         ],
         "title": "ActorRole",
         "type": "string"
+      },
+      "AdminInvitation": {
+        "description": "Her invitation (part 4): present only while she is ``invited``. Never the token.",
+        "properties": {
+          "createdAt": {
+            "description": "The first invitation.",
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "expiresAt": {
+            "description": "48 hours after the last send.",
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "resendCount": {
+            "title": "Resendcount",
+            "type": "integer"
+          },
+          "sentAt": {
+            "description": "The last (re)send.",
+            "format": "date-time",
+            "title": "Sentat",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InvitationStatus",
+            "description": "pending or expired while she is invited."
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "createdAt",
+          "sentAt",
+          "expiresAt",
+          "resendCount"
+        ],
+        "title": "AdminInvitation",
+        "type": "object"
       },
       "AdminTeam": {
         "properties": {
@@ -234,6 +324,17 @@
             "title": "Id",
             "type": "string"
           },
+          "invitation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdminInvitation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Part 4: her pending or expired invitation (status invited), else null."
+          },
           "languages": {
             "description": "Sorted; may be [] only without analyst.",
             "items": {
@@ -283,6 +384,22 @@
             "title": "Roles",
             "type": "array"
           },
+          "secondFactor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "totp",
+                  "dev_code"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Part 4: totp (an authenticator app) or dev_code (a seeded development account); null while she has no login account (invited).",
+            "title": "Secondfactor"
+          },
           "status": {
             "$ref": "#/components/schemas/AccountStatus",
             "description": "At serverTime (derived, never stored)."
@@ -311,7 +428,9 @@
           "openCases",
           "createdAt",
           "guards",
-          "version"
+          "version",
+          "invitation",
+          "secondFactor"
         ],
         "title": "AdminUser",
         "type": "object"
@@ -1599,31 +1718,6 @@
         "title": "CreateUserRequest",
         "type": "object"
       },
-      "CreatedUser": {
-        "properties": {
-          "temporaryPassword": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Shown once (xxxx-xxxx-xxxx); null only on an idempotent replay.",
-            "title": "Temporarypassword"
-          },
-          "user": {
-            "$ref": "#/components/schemas/AdminUser"
-          }
-        },
-        "required": [
-          "user",
-          "temporaryPassword"
-        ],
-        "title": "CreatedUser",
-        "type": "object"
-      },
       "CustomerConversation": {
         "properties": {
           "agentName": {
@@ -2120,6 +2214,74 @@
         ],
         "title": "DemoCustomerList",
         "type": "object"
+      },
+      "DevEmail": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EmailKind"
+          },
+          "link": {
+            "title": "Link",
+            "type": "string"
+          },
+          "sentAt": {
+            "format": "date-time",
+            "title": "Sentat",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "to",
+          "subject",
+          "text",
+          "link",
+          "sentAt"
+        ],
+        "title": "DevEmail",
+        "type": "object"
+      },
+      "DevMailbox": {
+        "properties": {
+          "items": {
+            "description": "Newest first (at most 50).",
+            "items": {
+              "$ref": "#/components/schemas/DevEmail"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "DevMailbox",
+        "type": "object"
+      },
+      "EmailKind": {
+        "enum": [
+          "invitation",
+          "password_reset"
+        ],
+        "title": "EmailKind",
+        "type": "string"
       },
       "EscalateRequest": {
         "additionalProperties": false,
@@ -2756,6 +2918,72 @@
         "title": "InboxStatus",
         "type": "string"
       },
+      "InvitationCheck": {
+        "description": "A valid invitation link: who it invites (the token proves it is hers).",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "passwordRules": {
+            "$ref": "#/components/schemas/PasswordRules"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/StaffRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "teamName": {
+            "title": "Teamname",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "roles",
+          "teamName",
+          "expiresAt",
+          "passwordRules"
+        ],
+        "title": "InvitationCheck",
+        "type": "object"
+      },
+      "InvitationStatus": {
+        "description": "An invitation as administration sees it (part 4; ``expired`` is derived).",
+        "enum": [
+          "pending",
+          "expired",
+          "accepted",
+          "cancelled"
+        ],
+        "title": "InvitationStatus",
+        "type": "string"
+      },
+      "InvitedUser": {
+        "description": "Part 4: the new person (status ``invited``, with her ``invitation``). No password\nexists: she sets her own with the link of the invitation email.",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/AdminUser"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "title": "InvitedUser",
+        "type": "object"
+      },
       "Language": {
         "enum": [
           "es",
@@ -2876,6 +3104,23 @@
         "title": "LanguageQueue",
         "type": "object"
       },
+      "LinkTokenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "description": "The token of the link (?token=).",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "LinkTokenRequest",
+        "type": "object"
+      },
       "LoginRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2978,6 +3223,11 @@
             "title": "Build",
             "type": "string"
           },
+          "devMailbox": {
+            "description": "Part 4: the development mailbox is on (never in production).",
+            "title": "Devmailbox",
+            "type": "boolean"
+          },
           "environment": {
             "title": "Environment",
             "type": "string"
@@ -2996,7 +3246,8 @@
           "version",
           "build",
           "environment",
-          "apiVersion"
+          "apiVersion",
+          "devMailbox"
         ],
         "title": "MetaResponse",
         "type": "object"
@@ -3038,6 +3289,31 @@
           "code"
         ],
         "title": "MfaRequest",
+        "type": "object"
+      },
+      "NewPasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "description": "Her new password: 12–128 characters, without her email name or her name, not a common password (else 422 password_rejected with reasons).",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "description": "The token of the link (?token=).",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "title": "NewPasswordRequest",
         "type": "object"
       },
       "Notification": {
@@ -3400,16 +3676,65 @@
         "title": "OpenCasesBlock",
         "type": "string"
       },
-      "PasswordResetResult": {
+      "PasswordResetCheck": {
         "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "passwordRules": {
+            "$ref": "#/components/schemas/PasswordRules"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "expiresAt",
+          "passwordRules"
+        ],
+        "title": "PasswordResetCheck",
+        "type": "object"
+      },
+      "PasswordResetDone": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
           "revokedSessions": {
             "title": "Revokedsessions",
             "type": "integer"
-          },
-          "temporaryPassword": {
-            "description": "Shown once (xxxx-xxxx-xxxx).",
-            "title": "Temporarypassword",
+          }
+        },
+        "required": [
+          "email",
+          "revokedSessions"
+        ],
+        "title": "PasswordResetDone",
+        "type": "object"
+      },
+      "PasswordResetLinkSent": {
+        "description": "Part 4: a reset link went to her email (never a password).",
+        "properties": {
+          "expiresAt": {
+            "description": "The link lasts one hour.",
+            "format": "date-time",
+            "title": "Expiresat",
             "type": "string"
+          },
+          "revokedSessions": {
+            "description": "Her sessions ended now.",
+            "title": "Revokedsessions",
+            "type": "integer"
           },
           "user": {
             "$ref": "#/components/schemas/AdminUser"
@@ -3417,10 +3742,49 @@
         },
         "required": [
           "user",
-          "temporaryPassword",
-          "revokedSessions"
+          "revokedSessions",
+          "expiresAt"
         ],
-        "title": "PasswordResetResult",
+        "title": "PasswordResetLinkSent",
+        "type": "object"
+      },
+      "PasswordRule": {
+        "description": "The rule a password breaks (``password_rejected.reasons``).",
+        "enum": [
+          "min_length",
+          "max_length",
+          "personal_info",
+          "common"
+        ],
+        "title": "PasswordRule",
+        "type": "string"
+      },
+      "PasswordRules": {
+        "description": "The policy the SPA shows live (the server checks it again).",
+        "properties": {
+          "maxLength": {
+            "title": "Maxlength",
+            "type": "integer"
+          },
+          "minLength": {
+            "title": "Minlength",
+            "type": "integer"
+          },
+          "rules": {
+            "description": "The rules the SPA lists, in order.",
+            "items": {
+              "$ref": "#/components/schemas/PasswordRule"
+            },
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "minLength",
+          "maxLength",
+          "rules"
+        ],
+        "title": "PasswordRules",
         "type": "object"
       },
       "PostAnalystTurnRequest": {
@@ -3550,6 +3914,11 @@
           "team_not_empty",
           "team_inactive",
           "staff_inactive",
+          "staff_invited",
+          "link_invalid",
+          "rate_limited",
+          "password_rejected",
+          "totp_invalid",
           "invalid_value",
           "policy_violation",
           "validation_error",
@@ -3804,6 +4173,22 @@
             "description": "language_mismatch: the rule behind it (\"H1\", rule 3).",
             "title": "Policyruleid"
           },
+          "reasons": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PasswordRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "password_rejected: every rule the password breaks.",
+            "title": "Reasons"
+          },
           "remainingAttempts": {
             "anyOf": [
               {
@@ -3814,7 +4199,7 @@
               }
             ],
             "default": null,
-            "description": "invalid_credentials, mfa_invalid: failed attempts left before the lock.",
+            "description": "invalid_credentials, mfa_invalid, totp_invalid: failed attempts left before the lock.",
             "title": "Remainingattempts"
           },
           "requestId": {
@@ -3884,7 +4269,7 @@
               }
             ],
             "default": null,
-            "description": "account_locked: when the lock ends.",
+            "description": "account_locked, rate_limited: when the lock ends.",
             "title": "Unlockat"
           }
         },
@@ -4523,6 +4908,47 @@
         "title": "TeamSummary",
         "type": "object"
       },
+      "TotpEnrollment": {
+        "description": "Step 2 of the activation, shown once: the QR code content and the manual key.",
+        "properties": {
+          "accountName": {
+            "title": "Accountname",
+            "type": "string"
+          },
+          "digits": {
+            "title": "Digits",
+            "type": "integer"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "otpauthUri": {
+            "description": "otpauth://totp/… (render it as a QR code).",
+            "title": "Otpauthuri",
+            "type": "string"
+          },
+          "periodSeconds": {
+            "title": "Periodseconds",
+            "type": "integer"
+          },
+          "secret": {
+            "description": "The base32 key to type by hand (RFC 6238).",
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "otpauthUri",
+          "secret",
+          "accountName",
+          "issuer",
+          "digits",
+          "periodSeconds"
+        ],
+        "title": "TotpEnrollment",
+        "type": "object"
+      },
       "Turn": {
         "properties": {
           "audience": {
@@ -4777,11 +5203,17 @@
             "type": "integer"
           },
           "all": {
+            "description": "Everyone listed (never a cancelled invitation).",
             "title": "All",
             "type": "integer"
           },
           "inactive": {
             "title": "Inactive",
+            "type": "integer"
+          },
+          "invited": {
+            "description": "Pending or expired invitations (part 4).",
+            "title": "Invited",
             "type": "integer"
           },
           "locked": {
@@ -4792,6 +5224,7 @@
         "required": [
           "active",
           "locked",
+          "invited",
           "inactive",
           "all"
         ],
@@ -4799,10 +5232,11 @@
         "type": "object"
       },
       "UserStatusFilter": {
-        "description": "``active`` = every active account, locked ones included; ``locked`` = only those.",
+        "description": "``active`` = every active account, locked ones included; ``locked`` = only those;\n``invited`` = pending (or expired) invitations; ``all`` = every listed person (never the\ncancelled invitations).",
         "enum": [
           "active",
           "locked",
+          "invited",
           "inactive",
           "all"
         ],
@@ -5565,7 +5999,7 @@
         ]
       },
       "post": {
-        "description": "Checks in this order: the caller is an active admin (403) · `Idempotency-Key` replay (200, `temporaryPassword: null`; another email → `idempotency_conflict`) · name, email, roles, analyst ⇒ at least one language (422 `invalid_value` with `field`) · the email is free (409 `email_taken`) · the team exists (422 `invalid_value`, `field: teamId`) and is active (422 `team_inactive`). The new person starts En pausa.",
+        "description": "Part 4: no password exists or is shown. The person starts `invited` (she cannot sign in) and sets her own password and authenticator with the link. Checks in this order: the caller is an active admin (403) · `Idempotency-Key` replay (200, no new email; another email → `idempotency_conflict`) · name, email, roles, analyst ⇒ at least one language (422 `invalid_value` with `field`) · the email is free (409 `email_taken`; the email of a cancelled invitation is invited again) · the team exists (422 `invalid_value`, `field: teamId`) and is active (422 `team_inactive`). Once active she starts En pausa.",
         "operationId": "admin_create_user",
         "parameters": [
           {
@@ -5605,17 +6039,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatedUser"
+                  "$ref": "#/components/schemas/InvitedUser"
                 }
               }
             },
-            "description": "Idempotent replay of an existing account"
+            "description": "Idempotent replay of an existing invitation"
           },
           "201": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatedUser"
+                  "$ref": "#/components/schemas/InvitedUser"
                 }
               }
             },
@@ -5667,7 +6101,7 @@
             "SessionToken": []
           }
         ],
-        "summary": "Create an account; the temporary password is returned once",
+        "summary": "Invite a person: she gets an email with a link that lasts 48 hours",
         "tags": [
           "administration"
         ]
@@ -5956,9 +6390,193 @@
         ]
       }
     },
+    "/api/v1/admin/users/{staffId}/invitation/cancel": {
+      "post": {
+        "description": "Part 4. Pending or expired invitations only (409 `invalid_transition` otherwise). She leaves the directory list (`status: cancelled`); inviting the same email again reuses her record.",
+        "operationId": "admin_cancel_invitation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "STF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Staffid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Cancel her invitation: the link stops working and the account is not created",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{staffId}/invitation/resend": {
+      "post": {
+        "description": "Part 4. Pending or expired invitations only (409 `invalid_transition` once she activated the account or the invitation was cancelled).",
+        "operationId": "admin_resend_invitation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "STF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Staffid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Send her invitation again: a new link for 48 hours, the previous one stops working",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/admin/users/{staffId}/password-reset": {
       "post": {
-        "description": "Not idempotent: each call issues a new password, returned once.",
+        "description": "Part 4: nobody but her sees the new password. Checks: 403 · 404 · `self_change_forbidden` (`reset_own_password`) · `staff_invited` (she never activated her account: resend the invitation) · `staff_inactive`. Her sessions and pending sign-ins end now (sockets 4401) and a lock is cleared; her current password works until she sets the new one. Not idempotent: each call sends a new link and the previous one stops working.",
         "operationId": "admin_reset_password",
         "parameters": [
           {
@@ -5980,7 +6598,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PasswordResetResult"
+                  "$ref": "#/components/schemas/PasswordResetLinkSent"
                 }
               }
             },
@@ -6042,7 +6660,7 @@
             "SessionToken": []
           }
         ],
-        "summary": "Issue a new temporary password; her sessions end and a lock is cleared",
+        "summary": "Email her a link to set a new password (one hour); her sessions end now",
         "tags": [
           "administration"
         ]
@@ -8309,6 +8927,61 @@
         ]
       }
     },
+    "/api/v1/dev/mailbox": {
+      "get": {
+        "operationId": "dev_dev_mailbox",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevMailbox"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "summary": "Development only: the newest emails the platform 'sent' (with their links)",
+        "tags": [
+          "dev"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "system_health",
@@ -8701,6 +9374,343 @@
         "summary": "API version and build",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/v1/onboarding/invitations/activate": {
+      "post": {
+        "description": "A wrong code is 422 `totp_invalid` with `remainingAttempts`; the fifth locks the invitation for 15 minutes (423 `account_locked` with `unlockAt`). Before step 1: 409 `invalid_transition`. Success uses the link up: she signs in with her email, her password and her app; she starts En pausa.",
+        "operationId": "onboarding_activate_invitation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivatedAccount"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "423": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "summary": "Step 2: the first code of her app activates the account",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/invitations/check": {
+      "post": {
+        "operationId": "onboarding_check_invitation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "summary": "Is this invitation link usable? Who does it invite?",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/invitations/password": {
+      "post": {
+        "description": "The password policy is checked here (422 `password_rejected` with `reasons`). It is kept (hashed) until the code of step 2; sending it again starts over with a new key.",
+        "operationId": "onboarding_set_invitation_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpEnrollment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "summary": "Step 1: her password; returns her authenticator setup (shown once)",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/password-resets/check": {
+      "post": {
+        "operationId": "onboarding_check_password_reset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "summary": "Is this password-reset link usable?",
+        "tags": [
+          "onboarding"
+        ]
+      }
+    },
+    "/api/v1/onboarding/password-resets/complete": {
+      "post": {
+        "operationId": "onboarding_complete_password_reset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetDone"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "summary": "Her new password (the link is used up; her sessions end)",
+        "tags": [
+          "onboarding"
         ]
       }
     },

@@ -79,11 +79,19 @@ FAMILY: Mapping[str, AuditFamily] = {
     "staff.deactivated": AuditFamily.ADMINISTRATION,
     "staff.reactivated": AuditFamily.ADMINISTRATION,
     "staff.account_unlocked": AuditFamily.ADMINISTRATION,
-    "staff.password_reset": AuditFamily.ADMINISTRATION,
     "team.created": AuditFamily.ADMINISTRATION,
     "team.renamed": AuditFamily.ADMINISTRATION,
     "team.deactivated": AuditFamily.ADMINISTRATION,
     "team.reactivated": AuditFamily.ADMINISTRATION,
+    # secure onboarding (part 4): what administration sends…
+    "staff.invitation_sent": AuditFamily.ADMINISTRATION,
+    "staff.invitation_resent": AuditFamily.ADMINISTRATION,
+    "staff.invitation_cancelled": AuditFamily.ADMINISTRATION,
+    "staff.password_reset_link_sent": AuditFamily.ADMINISTRATION,
+    # …and what the person does with the link (her own access)
+    "staff.invitation_accepted": AuditFamily.ACCESS,
+    "staff.mfa_enrolled": AuditFamily.ACCESS,
+    "staff.password_reset": AuditFamily.ACCESS,
 }
 
 #: Every administration type changes something (slice 4 §7.1).
@@ -109,6 +117,9 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "escalation.closed",
         "staff.availability_changed",
         "auth.account_locked",
+        "staff.invitation_accepted",
+        "staff.mfa_enrolled",
+        "staff.password_reset",
         *ADMINISTRATION_TYPES,
     }
 )
@@ -415,8 +426,11 @@ def _account_unlocked(event: StoredEvent, names: AuditNames) -> str:
     return f"Reinició los intentos de ingreso de {person}"
 
 
-def _password_reset(event: StoredEvent, names: AuditNames) -> str:
-    return f"Restableció la contraseña de {names.name(event.entity_id)}{_sessions_suffix(event)}"
+def _reset_link_sent(event: StoredEvent, names: AuditNames) -> str:
+    """Part 4: next to the admin: "Le envió a Tomás Arango un enlace para restablecer la
+    contraseña y cerró su sesión"."""
+    person = names.name(event.entity_id)
+    return f"Le envió a {person} un enlace para restablecer la contraseña{_sessions_suffix(event)}"
 
 
 def _team_name(event: StoredEvent) -> str:
@@ -471,7 +485,20 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "staff.deactivated": _staff_deactivated,
     "staff.reactivated": _staff_reactivated,
     "staff.account_unlocked": _account_unlocked,
-    "staff.password_reset": _password_reset,
+    # part 4 (secure onboarding): the person's own steps are written next to her name
+    "staff.invitation_sent": lambda event, names: (
+        f"Invitó a {names.name(event.entity_id)} por correo"
+    ),
+    "staff.invitation_resent": lambda event, names: (
+        f"Reenvió la invitación a {names.name(event.entity_id)}"
+    ),
+    "staff.invitation_cancelled": lambda event, names: (
+        f"Canceló la invitación de {names.name(event.entity_id)}"
+    ),
+    "staff.password_reset_link_sent": _reset_link_sent,
+    "staff.invitation_accepted": _fixed("Aceptó la invitación y activó su cuenta"),
+    "staff.mfa_enrolled": _fixed("Configuró la verificación en dos pasos"),
+    "staff.password_reset": _fixed("Creó una contraseña nueva con el enlace de restablecimiento"),
     "team.created": lambda event, _names: f"Creó el equipo {_team_name(event)}",
     "team.renamed": _team_renamed,
     "team.deactivated": lambda event, _names: f"Desactivó el equipo {_team_name(event)}",

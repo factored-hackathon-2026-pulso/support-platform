@@ -43,11 +43,14 @@ class ListStaff:
     async def execute(
         self, *, role: StaffRole | None = None, include_inactive: bool = False
     ) -> list[StaffView]:
+        # Part 4: people who never activated their account (invited, or whose invitation was
+        # cancelled) never acted on the platform: the people pickers do not list them.
         async with self.uow() as uow:
             people = [
                 person
                 for person in await uow.staff.list(role=role)
-                if include_inactive or person.active
+                if (include_inactive or person.active)
+                and not (person.is_invited or person.is_withdrawn)
             ]
             teams = await uow.teams.get_many({person.team_id for person in people})
         return [

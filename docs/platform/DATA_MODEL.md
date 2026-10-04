@@ -1,6 +1,6 @@
 # Modelo de datos de la plataforma
 
-Versión: slices 0 a 10 (slice 7: calificación del cliente; slice 8: prioridad del caso; slice 9: escalamientos a supervisión; slice 10: notificaciones). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
+Versión: slices 0 a 11 (slice 7: calificación del cliente; slice 8: prioridad del caso; slice 9: escalamientos a supervisión; slice 10: notificaciones; slice 11: altas seguras por invitación, parte 4). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
 
 La plataforma es solo para personas: clientes y equipo de soporte conversan por chat. Guarda las conversaciones, quién atiende cada caso, las cuentas del equipo y el registro de eventos; nada más (la [última sección](#diferencias-con-contractsplatform_historyjson) compara este modelo con la muestra sintética).
 
@@ -8,7 +8,7 @@ La plataforma es solo para personas: clientes y equipo de soporte conversan por 
 
 - Base de datos SQLite por defecto, escrita con SQL portable para pasar a Postgres sin cambios.
 - **No hay migraciones todavía**: el esquema se crea al arrancar. Si cambia, se borra `backend/cc_platform.db` y se vuelve a crear con los datos de ejemplo.
-- Ids de texto con prefijo: `CASE-…`, `TRN-…` (mensaje), `ASG-…` (asignación), `CUS-…` (cliente), `STF-…` (persona del equipo), `SES-…` (sesión), `MFA-…`, `TEAM-…` (equipo), `EVT-…` (evento), `CSN-…` (sesión de cliente), `ESC-…` (escalamiento), `NTF-…` (notificación).
+- Ids de texto con prefijo: `CASE-…`, `TRN-…` (mensaje), `ASG-…` (asignación), `CUS-…` (cliente), `STF-…` (persona del equipo), `SES-…` (sesión), `MFA-…`, `TEAM-…` (equipo), `EVT-…` (evento), `CSN-…` (sesión de cliente), `ESC-…` (escalamiento), `NTF-…` (notificación), `INV-…` (invitación), `PWR-…` (enlace para restablecer la contraseña), `EML-…` (correo del buzón de desarrollo).
 - Fechas en UTC (ISO-8601).
 - Las tablas con columna `version` usan control de concurrencia optimista: si dos personas cambian lo mismo a la vez, la segunda escritura se rechaza y se reintenta sobre datos frescos.
 - `turns` y `event_log` son de solo agregar: nunca se editan ni se borran filas.
@@ -33,6 +33,8 @@ erDiagram
     cases ||--o{ escalations : "escalamientos (uno abierto a la vez)"
     staff ||--o{ escalations : "escalated_by_id"
     staff ||--o{ notifications : "recipient_id (las últimas 200)"
+    staff ||--o| invitations : "una invitación por persona"
+    staff ||--o| password_resets : "un enlace para restablecer por persona"
 
     customers {
         string id PK "CUS-…"
@@ -122,6 +124,7 @@ erDiagram
         json languages "es pt"
         string team_id FK
         bool active
+        string setup "invited withdrawn complete (parte 4)"
         datetime created_at
         int version
     }
@@ -143,6 +146,25 @@ erDiagram
         int failed_attempts
         datetime locked_until
         datetime last_login_at
+        string totp_secret "sellado (Fernet); nulo solo en cuentas sembradas"
+    }
+    invitations {
+        string id PK "INV-…"
+        string staff_id FK "único"
+        string token_hash "SHA-256, único"
+        string state "pending accepted cancelled"
+        datetime sent_at
+        datetime expires_at "48 h"
+        int resend_count
+        int version
+    }
+    password_resets {
+        string id PK "PWR-…"
+        string staff_id FK "único"
+        string token_hash "SHA-256, único"
+        string state "pending used"
+        datetime expires_at "1 h"
+        int version
     }
     mfa_challenges {
         string id PK "MFA-…"
@@ -418,13 +440,21 @@ duplicaría la auditoría. Ver `api/slice-10-notifications.md`.
 
 | Tabla | Para qué | Columnas principales |
 |---|---|---|
-| `staff` | personas del equipo | `id` (`STF-…`), `name`, `email` (único), `roles` (JSON: `analyst`, `supervisor`, `admin`, combinables, al menos uno), `languages` (JSON: `es`, `pt`), `team_id` (FK → teams), `active`, `created_at`, `creation_key`, `version` |
+| `staff` | personas del equipo | `id` (`STF-…`), `name`, `email` (único), `roles` (JSON: `analyst`, `supervisor`, `admin`, combinables, al menos uno), `languages` (JSON: `es`, `pt`), `team_id` (FK → teams), `active`, `created_at`, `creation_key`, `setup` (parte 4: `invited` = invitación pendiente, sin contraseña, no puede entrar; `withdrawn` = invitación cancelada antes de activarla, no aparece en el directorio; `complete` = activada o sembrada. Solo una cuenta `complete` puede estar `active`), `version` |
 | `teams` | equipos | `id` (`TEAM-…`), `name`, `name_key` (nombre sin mayúsculas ni tildes, único), `active` (solo se desactiva sin miembros activos), `created_at`, `creation_key`, `version` |
 | `admin_roster` | garantiza que siempre quede al menos un administrador activo | una sola fila (`id = default`), `admin_ids` (JSON), `version` |
-| `login_accounts` | credenciales y bloqueo | `staff_id`, `password_hash` (Argon2id), `failed_attempts`, `locked_until` (5 intentos fallidos → 15 min), `last_login_at` |
+| `login_accounts` | credenciales y bloqueo | `staff_id`, `password_hash` (Argon2id), `failed_attempts`, `locked_until` (5 intentos fallidos → 15 min), `last_login_at`, `totp_secret` (parte 4: la clave de su app de autenticación, RFC 6238, **sellada** con Fernet; nunca se vuelve a mostrar; nula solo en las cuentas sembradas de desarrollo, que usan el código `000000`). Una persona invitada no tiene fila hasta que activa su cuenta |
+| `invitations` | invitaciones por correo (parte 4) | `id` (`INV-…`), `staff_id` (único: una por persona), `token_hash` (SHA-256 del enlace de un solo uso; el enlace nunca se guarda), `state` (`pending`, `accepted`, `cancelled`; "vencida" se calcula: pendiente después de `expires_at`), `created_at`, `sent_at` (último envío), `expires_at` (48 h después del último envío), `created_by`, `resend_count`, `accepted_at`, `cancelled_at`, `password_hash` y `totp_secret` (sellado) mientras la persona está entre el paso 1 y el 2, `failed_codes` / `locked_until` (5 códigos erróneos → 15 min), `version`. Reenviar reemplaza el enlace (el anterior deja de servir) |
+| `password_resets` | enlaces para restablecer la contraseña (parte 4) | `id` (`PWR-…`), `staff_id` (único: un enlace vigente por persona; uno nuevo reemplaza al anterior), `token_hash` (SHA-256), `state` (`pending`, `used`; vencido se calcula), `sent_at`, `expires_at` (1 h), `created_by`, `used_at`, `version` |
+| `dev_mailbox` | solo desarrollo: lo que "envió" el buzón de desarrollo (parte 4) | `id` (`EML-…`), `kind` (`invitation`, `password_reset`), `to_address`, `subject`, `text`, `link`, `sent_at`; se guardan los 200 más recientes. Nunca se escribe en producción (`CC_DEV_MAILBOX` lo prohíbe) |
 | `mfa_challenges` | código de verificación | `id`, `staff_id`, `issued_at`, `expires_at`, `max_attempts`, `attempts`, `status` (se cancela si restablecen la contraseña o desactivan a la persona), `verified_at`, `method` |
 | `staff_sessions` | sesiones iniciadas | `id`, `staff_id`, `issued_at`, `expires_at`, `mfa_method`, `ended_at`, `end_reason` |
 | `analyst_availability` | disponible o en pausa | `staff_id`, `status` (`available`, `paused`), `since` |
+
+**Altas seguras (parte 4).** Ninguna tabla guarda una contraseña en claro, un enlace o una clave
+de verificación legible: solo hashes (Argon2id para contraseñas, SHA-256 para los enlaces de un
+solo uso) y la clave TOTP sellada. Los eventos nunca llevan correos, enlaces, contraseñas ni
+claves. Ver `api/slice-11-invitations.md`.
 
 ### Registro de eventos
 
@@ -450,8 +480,8 @@ Tipos de evento:
 | Escalamientos (slice 9) | `escalation.opened` (`motive`, `analyst_id`; auditoría: "Escaló el caso a supervisión", solo el largo del motivo), `escalation.withdrawn`, `escalation.answered` (`note`; solo su largo), `escalation.taken`, `escalation.reassigned` (`previous_analyst_id`, `analyst_id`), `escalation.closed`, `escalation.acknowledged` |
 | Mensajes | `turn.created` |
 | Equipo | `staff.availability_changed` |
-| Administración | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `staff.password_reset`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated` |
-| Acceso | `auth.login_failed`, `auth.password_accepted`, `auth.mfa_challenge_issued`, `auth.mfa_failed`, `auth.account_locked`, `auth.session_started`, `auth.session_ended`, `customer.session_started` |
+| Administración | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated`; parte 4: `staff.invitation_sent` (`invitation_id`, `expires_at`), `staff.invitation_resent` (+ `resend_count`), `staff.invitation_cancelled`, `staff.password_reset_link_sent` (`reset_id`, `expires_at`, `revoked_sessions`, `cleared_lock`) |
+| Acceso | `auth.login_failed`, `auth.password_accepted`, `auth.mfa_challenge_issued`, `auth.mfa_failed`, `auth.account_locked`, `auth.session_started`, `auth.session_ended`, `customer.session_started`; parte 4 (la persona misma): `staff.invitation_accepted` (`invitation_id`), `staff.mfa_enrolled` (`method: totp`), `staff.password_reset` (`cleared_lock`: creó su contraseña nueva con el enlace) |
 
 ## Lo que todavía puede cambiar
 
@@ -463,6 +493,9 @@ Tipos de evento:
 - Slice 9 agrega la tabla `escalations` y la columna `cases.open_escalation_id`: una base anterior
   falla al arrancar (`OutdatedSchemaError`) hasta borrarla.
 - Slice 10 agrega la tabla `notifications`: una base anterior falla al arrancar
+  (`OutdatedSchemaError`) hasta borrarla.
+- Slice 11 (parte 4) agrega las tablas `invitations`, `password_resets` y `dev_mailbox` y las
+  columnas `staff.setup` y `login_accounts.totp_secret`: una base anterior falla al arrancar
   (`OutdatedSchemaError`) hasta borrarla.
 - Pendiente conocido: no hay migraciones. Cualquier cambio futuro de esquema exige borrar `backend/cc_platform.db` hasta que se agreguen.
 

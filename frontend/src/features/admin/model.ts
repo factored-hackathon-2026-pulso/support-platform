@@ -9,9 +9,10 @@
 import { ROLE_LABEL, sortRoles, type RoleId } from '@/app/roles'
 import type { FactItem, FilterGroup, FilterSelection, StatusAppearance } from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
-import { formatTime, joinEs, pluralize } from '@/lib/format'
+import { formatRelativeTime, formatTime, joinEs, pluralize } from '@/lib/format'
 import type {
   AccountStatus,
+  AdminInvitation,
   AdminTeam,
   AdminTeamMember,
   AdminUser,
@@ -38,7 +39,7 @@ export const ROLE_DESCRIPTION: Record<RoleId, string> = {
   analyst: 'Atiende casos por chat con los clientes.',
   supervisor:
     'Ve las colas y el equipo, atiende escalamientos, reasigna casos y revisa la auditoría.',
-  admin: 'Crea y edita cuentas, roles, idiomas y equipos.',
+  admin: 'Invita y edita cuentas, roles, idiomas y equipos.',
 }
 
 export const LANGUAGES: readonly Language[] = ['es', 'pt']
@@ -49,19 +50,24 @@ export const LANGUAGE_IN_SENTENCE: Record<Language, string> = { es: 'español', 
 
 /**
  * The one account-status map (glyph + word; the words qualify "cuenta"): check =
- * can sign in, lock = locked for a while (it asks for action), x = deactivated.
+ * can sign in, lock = locked for a while (it asks for action), dashed accent ring =
+ * invited, not activated yet (part 4), x = deactivated (or an invitation cancelled).
  */
 export const ACCOUNT_STATUS: Readonly<Record<AccountStatus, StatusAppearance>> = {
   active: { shape: 'check', tone: 'success', label: 'Activa' },
   locked: { shape: 'lock', tone: 'warn', label: 'Bloqueada', strong: true },
+  invited: { shape: 'dashed', tone: 'accent', label: 'Invitación pendiente' },
   inactive: { shape: 'cross', tone: 'closed', label: 'Desactivada' },
+  cancelled: { shape: 'cross', tone: 'closed', label: 'Invitación cancelada' },
 }
 
 /** Account status words (selects, sentences). */
 export const ACCOUNT_STATUS_LABEL: Readonly<Record<AccountStatus, string>> = {
   active: ACCOUNT_STATUS.active.label,
   locked: ACCOUNT_STATUS.locked.label,
+  invited: ACCOUNT_STATUS.invited.label,
   inactive: ACCOUNT_STATUS.inactive.label,
+  cancelled: ACCOUNT_STATUS.cancelled.label,
 }
 
 /** The one team-status map: the same glyphs as an account ("Activo" / "Inactivo"). */
@@ -103,7 +109,9 @@ export function accountStatusAt(
   user: Pick<AdminUser, 'status' | 'lockedUntil'>,
   now: DateInput,
 ): AccountStatus {
-  if (user.status === 'inactive') return 'inactive'
+  if (user.status === 'inactive' || user.status === 'invited' || user.status === 'cancelled') {
+    return user.status
+  }
   if (user.lockedUntil && toMs(user.lockedUntil) > toMs(now)) return 'locked'
   return 'active'
 }
@@ -182,7 +190,7 @@ export function userSummaryFacts(user: Pick<AdminUser, 'languages' | 'team'>): F
 export interface UsersUrlState {
   /** `?rol=analistas,supervision,administracion`. */
   roles: RoleId[]
-  /** `?estado=activas,bloqueadas,desactivadas` (the status at the screen's clock). */
+  /** `?estado=activas,bloqueadas,pendientes,desactivadas` (the status at the screen's clock). */
   statuses: AccountStatus[]
   /** `?equipo=TEAM-…,TEAM-…`. */
   teamIds: string[]
@@ -228,7 +236,9 @@ const ROLE_SLUG_ALIASES: Record<string, RoleId> = { supervisoras: 'supervisor' }
 const ACCOUNT_STATUS_SLUGS: Record<AccountStatus, string> = {
   active: 'activas',
   locked: 'bloqueadas',
+  invited: 'pendientes',
   inactive: 'desactivadas',
+  cancelled: 'canceladas',
 }
 
 const TEAM_STATUS_SLUGS: Record<TeamState, string> = {
@@ -276,7 +286,8 @@ export const EMPTY_USERS_STATE: UsersUrlState = {
   create: false,
 }
 
-const ACCOUNT_STATUS_ORDER: readonly AccountStatus[] = ['active', 'locked', 'inactive']
+/** The "Estado" options of "Filtros" (a cancelled invitation is never listed). */
+const ACCOUNT_STATUS_ORDER: readonly AccountStatus[] = ['active', 'locked', 'invited', 'inactive']
 
 export function parseUsersSearch(params: URLSearchParams): UsersUrlState {
   const roles = listParam(params, 'rol').map(
@@ -715,7 +726,8 @@ export function toggleValue<T extends string>(values: readonly T[], value: T, on
 export const SELF_CHANGE_COPY: Record<SelfChangeAction, string> = {
   remove_own_admin: 'No puedes quitarte tu propio rol de Administración.',
   deactivate_self: 'No puedes desactivar tu propia cuenta.',
-  reset_own_password: 'Pídele a otra persona de Administración que restablezca tu contraseña.',
+  reset_own_password:
+    'Pídele a otra persona de Administración que te envíe un enlace para restablecer tu contraseña.',
 }
 
 export const LAST_ADMIN_HINT = 'Es la única persona activa con Administración.'
@@ -882,6 +894,16 @@ export function describeAdminFailure(error: unknown, context: AdminFailureContex
       }
     case 'staff_inactive':
       return { message: 'Esta cuenta está desactivada. Reactívala primero.', action: 'refetch' }
+    case 'staff_invited':
+      return {
+        message: 'Esta persona todavía no activó su cuenta. Reenvía la invitación.',
+        action: 'refetch',
+      }
+    case 'invalid_transition':
+      return {
+        message: 'Esta persona ya no tiene una invitación pendiente.',
+        action: 'refetch',
+      }
     case 'invalid_value': {
       const field = error.stringExtension('field')
       if (context.subject === 'team' && field === 'name') {
@@ -964,16 +986,133 @@ export function unlockedToast(name: string, changed: boolean) {
     : { title: 'La cuenta ya no estaba bloqueada.' }
 }
 
-/** Text of the temporary-password dialog. */
-export function temporaryPasswordCopy(name: string, kind: 'created' | 'reset') {
+// ── Invitations and reset links (part 4: nobody but her sees her password) ──
+
+/** Team-generated lifetimes, as the server applies them (said in the copy). */
+export const INVITATION_TTL_HOURS = 48
+export const RESET_LINK_TTL_LABEL = '1 hora'
+
+/** The info box of "Nuevo usuario" (Admin.dc.html `nuevo`). */
+export const INVITATION_INFO = {
+  title: 'Le llega una invitación por correo',
+  text: `Con el enlace crea su contraseña y configura la verificación en dos pasos. Nadie más ve su contraseña. El enlace vence en ${INVITATION_TTL_HOURS} horas.`,
+}
+
+/** "Invitación enviada" dialog: what happens next (icon + short line). */
+export const INVITATION_STEPS: readonly {
+  key: string
+  icon: 'lock' | 'smartphone' | 'check'
+  text: string
+}[] = [
+  { key: 'password', icon: 'lock', text: 'Crea su propia contraseña' },
+  { key: 'mfa', icon: 'smartphone', text: 'Configura la verificación en dos pasos' },
+  { key: 'active', icon: 'check', text: 'Su cuenta queda activa y empieza En pausa' },
+]
+
+export const INVITATION_SENT_FOOTNOTE =
+  'Mientras tanto aparece como Invitación pendiente. Puedes reenviarla o cancelarla desde su ficha.'
+
+/** "El enlace vence en 48 horas." (after the bold address). */
+export const INVITATION_EXPIRY_SENTENCE = `El enlace vence en ${INVITATION_TTL_HOURS} horas.`
+
+/**
+ * "hace 3 h", "en 45 h", "en 20 min": an invitation lives 48 hours, so its times read
+ * in hours up to then (`formatRelativeTime` would say "en 1 día"); older ones fall
+ * back to it ("hace 3 días").
+ */
+export function invitationSpan(value: DateInput, now: DateInput): string {
+  const diff = toMs(value) - toMs(now)
+  const minutes = Math.round(Math.abs(diff) / 60_000)
+  const hours = Math.floor(minutes / 60)
+  if (minutes < 60 || hours > INVITATION_TTL_HOURS) return formatRelativeTime(value, now)
+  return diff > 0 ? `en ${hours} h` : `hace ${hours} h`
+}
+
+export interface InvitationFact {
+  key: string
+  label: string
+  value: string
+}
+
+/**
+ * Facts of an invited person's aside (Admin.dc.html `pendiente`): when it was sent,
+ * when it expires (or expired) and her last sign-in (never).
+ */
+export function invitationFacts(
+  invitation: Pick<AdminInvitation, 'sentAt' | 'expiresAt'>,
+  now: DateInput,
+): InvitationFact[] {
+  const expired = toMs(invitation.expiresAt) <= toMs(now)
+  return [
+    {
+      key: 'sent',
+      label: 'Invitación enviada',
+      value: invitationSpan(invitation.sentAt, now),
+    },
+    {
+      key: 'expires',
+      label: expired ? 'Venció' : 'Vence',
+      value: invitationSpan(invitation.expiresAt, now),
+    },
+    { key: 'login', label: 'Último ingreso', value: 'Nunca' },
+  ]
+}
+
+/** Whether her invitation link no longer works (expired: only "Reenviar" helps). */
+export function invitationExpired(
+  invitation: Pick<AdminInvitation, 'expiresAt'>,
+  now: DateInput,
+): boolean {
+  return toMs(invitation.expiresAt) <= toMs(now)
+}
+
+export function resentInvitationToast(email: string) {
   return {
-    title: kind === 'created' ? 'Cuenta creada' : 'Contraseña restablecida',
-    text: `${name} ya puede ingresar con su correo y esta contraseña temporal. Cópiala ahora: no la volveremos a mostrar.`,
+    title: 'Invitación reenviada',
+    description: `Le enviamos un enlace nuevo a ${email}. Vence en ${INVITATION_TTL_HOURS} horas y el anterior ya no funciona.`,
   }
 }
 
-export const REPLAYED_PASSWORD_COPY =
-  'La contraseña temporal se mostró al crear la cuenta. Si no la tienes, restablécela.'
+export function cancelledInvitationToast(name: string) {
+  return {
+    title: 'Invitación cancelada',
+    description: `El enlace que recibió ${name} ya no funciona.`,
+  }
+}
+
+export function cancelInvitationCopy(name: string) {
+  return {
+    title: `¿Cancelar la invitación de ${name}?`,
+    text: 'El enlace que le enviamos deja de funcionar y la cuenta no se crea. Si hace falta, puedes invitarle de nuevo.',
+  }
+}
+
+/** "¿Enviar a … un enlace para restablecer su contraseña?" (Admin.dc.html `dlg.reset`). */
+export function resetLinkCopy(name: string, email: string) {
+  return {
+    title: `¿Enviar a ${name} un enlace para restablecer su contraseña?`,
+    consequences: [
+      `Le llega un correo a ${email} con un enlace para crear una contraseña nueva. Vence en ${RESET_LINK_TTL_LABEL}.`,
+      'Se cierran sus sesiones abiertas ahora.',
+      'Si la cuenta estaba bloqueada, se desbloquea.',
+      'Nadie del equipo ve la contraseña nueva.',
+    ],
+  }
+}
+
+export function resetLinkSentToast(email: string) {
+  return {
+    title: 'Enlace enviado',
+    description: `Le enviamos a ${email} un enlace para crear una contraseña nueva. Sus sesiones abiertas se cerraron.`,
+  }
+}
+
+/** "Verificación en dos pasos" fact (null while she has no login account). */
+export function secondFactorLabel(secondFactor: AdminUser['secondFactor']): string | null {
+  if (secondFactor === 'totp') return 'App de autenticación'
+  if (secondFactor === 'dev_code') return 'Código de desarrollo'
+  return null
+}
 
 export const DEACTIVATE_CONSEQUENCES: readonly string[] = [
   'No podrá ingresar.',
@@ -990,7 +1129,10 @@ export function addMemberCandidates(
   teamId: string,
 ): { value: string; label: string; user: AdminUser }[] {
   return users
-    .filter((user) => user.status !== 'inactive' && user.team.id !== teamId)
+    .filter(
+      (user) =>
+        user.status !== 'inactive' && user.status !== 'cancelled' && user.team.id !== teamId,
+    )
     .slice()
     .sort(byName)
     .map((user) => ({ value: user.id, label: `${user.name} · ${user.team.name}`, user }))

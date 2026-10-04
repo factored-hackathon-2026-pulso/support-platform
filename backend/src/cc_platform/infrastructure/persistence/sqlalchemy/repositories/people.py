@@ -15,10 +15,12 @@ from sqlalchemy.exc import IntegrityError
 from cc_platform.domain.people.admin_roster import ROSTER_ID, AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
 from cc_platform.domain.people.errors import EmailTakenError, TeamNameTakenError
+from cc_platform.domain.people.invitation import Invitation, InvitationState
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge, MfaChallengeStatus, MfaMethod
+from cc_platform.domain.people.password_reset import PasswordReset, PasswordResetState
 from cc_platform.domain.people.session import SessionEndReason, StaffSession
-from cc_platform.domain.people.staff import Language, Staff, StaffRole
+from cc_platform.domain.people.staff import AccountSetup, Language, Staff, StaffRole
 from cc_platform.domain.people.team import Team
 from cc_platform.domain.shared.errors import ConcurrentUpdateError, DomainError
 from cc_platform.infrastructure.persistence.sqlalchemy import tables
@@ -52,6 +54,7 @@ class SqlStaffRepository(VersionedRepository[Staff]):
             "active": aggregate.active,
             "created_at": aggregate.created_at,
             "creation_key": aggregate.creation_key,
+            "setup": aggregate.setup.value,
         }
 
     def _from_row(self, row: Row) -> Staff:
@@ -65,6 +68,7 @@ class SqlStaffRepository(VersionedRepository[Staff]):
             created_at=row["created_at"],
             active=row["active"],
             creation_key=row["creation_key"],
+            setup=AccountSetup(row["setup"]),
         )
 
     def _integrity_error(self, exc: IntegrityError, *, insert: bool) -> DomainError:
@@ -175,6 +179,7 @@ class SqlLoginAccountRepository(VersionedRepository[LoginAccount]):
             "failed_attempts": aggregate.failed_attempts,
             "locked_until": aggregate.locked_until,
             "last_login_at": aggregate.last_login_at,
+            "totp_secret": aggregate.totp_secret,
         }
 
     def _from_row(self, row: Row) -> LoginAccount:
@@ -184,6 +189,7 @@ class SqlLoginAccountRepository(VersionedRepository[LoginAccount]):
             failed_attempts=row["failed_attempts"],
             locked_until=row["locked_until"],
             last_login_at=row["last_login_at"],
+            totp_secret=row["totp_secret"],
         )
 
     async def list(self) -> list[LoginAccount]:
@@ -323,3 +329,109 @@ class SqlAnalystAvailabilityRepository(VersionedRepository[AnalystAvailability])
         table = tables.analyst_availability
         result = await self._session.execute(select(table).order_by(table.c.staff_id))
         return [self._materialize(row) for row in result.mappings()]
+
+
+# ----------------------------------------------------------------------------- invitations
+class SqlInvitationRepository(VersionedRepository[Invitation]):
+    """Part 4. ``staff_id`` and ``token_hash`` are unique: a second invitation for the same
+    person (two concurrent creates) is a concurrent update (the retry finds the first)."""
+
+    table = tables.invitations
+    insert_race_is_retryable = True
+
+    def _key(self, aggregate: Invitation) -> str:
+        return aggregate.id
+
+    def _to_row(self, aggregate: Invitation) -> dict[str, Any]:
+        return {
+            "id": aggregate.id,
+            "staff_id": aggregate.staff_id,
+            "token_hash": aggregate.token_hash,
+            "state": aggregate.state.value,
+            "created_at": aggregate.created_at,
+            "sent_at": aggregate.sent_at,
+            "expires_at": aggregate.expires_at,
+            "created_by": aggregate.created_by,
+            "resend_count": aggregate.resend_count,
+            "accepted_at": aggregate.accepted_at,
+            "cancelled_at": aggregate.cancelled_at,
+            "password_hash": aggregate.password_hash,
+            "totp_secret": aggregate.totp_secret,
+            "failed_codes": aggregate.failed_codes,
+            "locked_until": aggregate.locked_until,
+        }
+
+    def _from_row(self, row: Row) -> Invitation:
+        return Invitation(
+            id=row["id"],
+            staff_id=row["staff_id"],
+            token_hash=row["token_hash"],
+            state=InvitationState(row["state"]),
+            created_at=row["created_at"],
+            sent_at=row["sent_at"],
+            expires_at=row["expires_at"],
+            created_by=row["created_by"],
+            resend_count=row["resend_count"],
+            accepted_at=row["accepted_at"],
+            cancelled_at=row["cancelled_at"],
+            password_hash=row["password_hash"],
+            totp_secret=row["totp_secret"],
+            failed_codes=row["failed_codes"],
+            locked_until=row["locked_until"],
+        )
+
+    def _integrity_error(self, exc: IntegrityError, *, insert: bool) -> DomainError:
+        return ConcurrentUpdateError(entity=self.table.name)
+
+    async def get_for_staff(self, staff_id: str) -> Invitation | None:
+        return await self._get_where(tables.invitations.c.staff_id == staff_id)
+
+    async def get_by_token_hash(self, token_hash: str) -> Invitation | None:
+        return await self._get_where(tables.invitations.c.token_hash == token_hash)
+
+    async def list(self) -> list[Invitation]:
+        table = tables.invitations
+        result = await self._session.execute(select(table).order_by(table.c.staff_id))
+        return [self._materialize(row) for row in result.mappings()]
+
+
+# ----------------------------------------------------------------------------- password resets
+class SqlPasswordResetRepository(VersionedRepository[PasswordReset]):
+    table = tables.password_resets
+    insert_race_is_retryable = True
+
+    def _key(self, aggregate: PasswordReset) -> str:
+        return aggregate.id
+
+    def _to_row(self, aggregate: PasswordReset) -> dict[str, Any]:
+        return {
+            "id": aggregate.id,
+            "staff_id": aggregate.staff_id,
+            "token_hash": aggregate.token_hash,
+            "state": aggregate.state.value,
+            "sent_at": aggregate.sent_at,
+            "expires_at": aggregate.expires_at,
+            "created_by": aggregate.created_by,
+            "used_at": aggregate.used_at,
+        }
+
+    def _from_row(self, row: Row) -> PasswordReset:
+        return PasswordReset(
+            id=row["id"],
+            staff_id=row["staff_id"],
+            token_hash=row["token_hash"],
+            state=PasswordResetState(row["state"]),
+            sent_at=row["sent_at"],
+            expires_at=row["expires_at"],
+            created_by=row["created_by"],
+            used_at=row["used_at"],
+        )
+
+    def _integrity_error(self, exc: IntegrityError, *, insert: bool) -> DomainError:
+        return ConcurrentUpdateError(entity=self.table.name)
+
+    async def get_for_staff(self, staff_id: str) -> PasswordReset | None:
+        return await self._get_where(tables.password_resets.c.staff_id == staff_id)
+
+    async def get_by_token_hash(self, token_hash: str) -> PasswordReset | None:
+        return await self._get_where(tables.password_resets.c.token_hash == token_hash)

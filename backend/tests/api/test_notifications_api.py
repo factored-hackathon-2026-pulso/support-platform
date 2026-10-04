@@ -58,12 +58,18 @@ def test_every_role_reads_its_own_list(client: TestClient, sign_in: SignIn) -> N
     lucia = page(client, sign_in(SUPERVISOR.email))
     assert {"case_escalated", "case_queued"} <= {item["kind"] for item in lucia["items"]}
     valeria = page(client, sign_in(ADMIN_ONLY.email))
-    (lock,) = valeria["items"]
+    lock, accepted = valeria["items"]
     assert (lock["kind"], lock["targetName"], lock["failedAttempts"], lock["caseId"]) == (
         "account_locked",
         "Mariana Duque",
         5,
         None,
+    )
+    # Part 4: Tatiana accepted her invitation an hour before the seed (already read).
+    assert (accepted["kind"], accepted["targetName"], accepted["readAt"] is not None) == (
+        "invitation_accepted",
+        "Tatiana Rojas",
+        True,
     )
     assert valeria["unreadCount"] == 1
 

@@ -1,25 +1,30 @@
 import { useState } from 'react'
 import { Button, Callout, Dialog } from '@/components/ui'
-import { useFailureHandler, useResetPassword } from '../hooks'
-import type { AdminUser, PasswordResetResult } from '../types'
+import { resetLinkCopy } from '../model'
+import { useFailureHandler, useSendPasswordResetLink } from '../hooks'
+import type { AdminUser, PasswordResetLinkSent } from '../types'
 
 export interface ResetPasswordDialogProps {
   user: AdminUser
   onClose(): void
-  /** The new temporary password is handed to the parent (TemporaryPasswordDialog). */
-  onDone(result: PasswordResetResult): void
+  onDone(result: PasswordResetLinkSent): void
 }
 
-/** "¿Restablecer la contraseña de …?" (contract §10.3): a confirm, then the new password. */
+/**
+ * "¿Enviar a … un enlace para restablecer su contraseña?" (Admin.dc.html `dlg.reset`,
+ * part 4): she gets a link by email (1 hour); her sessions end now; nobody else ever
+ * sees the new password.
+ */
 export function ResetPasswordDialog({ user, onClose, onDone }: ResetPasswordDialogProps) {
-  const reset = useResetPassword(user.id)
+  const send = useSendPasswordResetLink(user.id)
   const handleFailure = useFailureHandler()
   const [error, setError] = useState<string | null>(null)
+  const copy = resetLinkCopy(user.name, user.email)
 
   function confirm() {
     setError(null)
-    reset.mutate(undefined, {
-      onSuccess: (result) => onDone(result),
+    send.mutate(undefined, {
+      onSuccess: onDone,
       onError: (problem) => setError(handleFailure(problem, { kind: 'user', id: user.id }).message),
     })
   }
@@ -31,22 +36,23 @@ export function ResetPasswordDialog({ user, onClose, onDone }: ResetPasswordDial
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title={`¿Restablecer la contraseña de ${user.name}?`}
+      title={copy.title}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button variant="primary" loading={reset.isPending} onClick={confirm}>
-            Restablecer
+          <Button variant="primary" loading={send.isPending} onClick={confirm}>
+            Enviar enlace
           </Button>
         </>
       }
     >
-      <p className="m-0 text-14 text-ink-2">
-        Se genera una contraseña temporal nueva, se cierran sus sesiones abiertas y se desbloquea la
-        cuenta si estaba bloqueada.
-      </p>
+      <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-14 text-ink-2">
+        {copy.consequences.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
       {error ? <Callout tone="danger">{error}</Callout> : null}
     </Dialog>
   )

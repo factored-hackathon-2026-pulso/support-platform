@@ -186,11 +186,84 @@ class StaffAccountUnlocked(DomainEvent):
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class StaffPasswordReset(DomainEvent):
-    """A new temporary password was issued (the password itself is never recorded)."""
+    """Part 4: the person set a new password through a reset link (actor = herself). The
+    password is never recorded; ``cleared_lock`` says whether a lock was cleared with it."""
 
     event_type = "staff.password_reset"
     entity = "staff"
 
+    cleared_lock: bool
+
+
+# ----------------------------------------------------------------------------- onboarding
+# Part 4 (secure onboarding): administration never sees or hands out a password. A new
+# person gets an invitation by email (a single-use link), sets her own password and enrolls
+# a TOTP authenticator; a forgotten password is replaced through a reset link. Every event
+# is about the person (``entity = staff``, ``entity_id`` = her id); none carries an email,
+# a token, a password or a TOTP secret.
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StaffInvitationSent(DomainEvent):
+    """Administration invited her (a new person, or one whose invitation was cancelled)."""
+
+    event_type = "staff.invitation_sent"
+    entity = "staff"
+
+    invitation_id: str
+    expires_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StaffInvitationResent(DomainEvent):
+    """A new link replaced the previous one (which stops working)."""
+
+    event_type = "staff.invitation_resent"
+    entity = "staff"
+
+    invitation_id: str
+    expires_at: datetime
+    resend_count: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StaffInvitationCancelled(DomainEvent):
+    event_type = "staff.invitation_cancelled"
+    entity = "staff"
+
+    invitation_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StaffInvitationAccepted(DomainEvent):
+    """She set her password and her authenticator: the account is active (actor: herself).
+    The notification projector maps it to ``invitation_accepted`` for administration."""
+
+    event_type = "staff.invitation_accepted"
+    entity = "staff"
+
+    invitation_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StaffMfaEnrolled(DomainEvent):
+    """She configured two-step verification (an authenticator app, RFC 6238)."""
+
+    event_type = "staff.mfa_enrolled"
+    entity = "staff"
+
+    method: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StaffPasswordResetLinkSent(DomainEvent):
+    """Administration sent her a link to set a new password; her sessions ended now."""
+
+    event_type = "staff.password_reset_link_sent"
+    entity = "staff"
+
+    reset_id: str
+    expires_at: datetime
     revoked_sessions: int
     cleared_lock: bool
 
@@ -228,7 +301,8 @@ class TeamReactivated(DomainEvent):
     name: str
 
 
-#: Every event administration records about a person (``staff.*`` minus availability).
+#: Every event about a person's account (``staff.*`` minus availability): administration's
+#: changes and, since part 4, the invitation and reset links (some recorded by herself).
 STAFF_ADMIN_EVENTS: tuple[type[DomainEvent], ...] = (
     StaffCreated,
     StaffProfileUpdated,
@@ -239,6 +313,22 @@ STAFF_ADMIN_EVENTS: tuple[type[DomainEvent], ...] = (
     StaffReactivated,
     StaffAccountUnlocked,
     StaffPasswordReset,
+    StaffInvitationSent,
+    StaffInvitationResent,
+    StaffInvitationCancelled,
+    StaffInvitationAccepted,
+    StaffMfaEnrolled,
+    StaffPasswordResetLinkSent,
+)
+
+#: Part 4: what the onboarding links record (a subset of ``STAFF_ADMIN_EVENTS``).
+ONBOARDING_EVENTS: tuple[type[DomainEvent], ...] = (
+    StaffInvitationSent,
+    StaffInvitationResent,
+    StaffInvitationCancelled,
+    StaffInvitationAccepted,
+    StaffMfaEnrolled,
+    StaffPasswordResetLinkSent,
 )
 
 #: Every event of the ``Team`` aggregate.

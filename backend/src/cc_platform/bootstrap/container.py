@@ -81,10 +81,12 @@ from cc_platform.application.notifications.use_cases import (
 )
 from cc_platform.application.notifications.writer import NotificationSignals, NotificationWriter
 from cc_platform.application.people.admin.commands import (
+    CancelInvitation,
     CreateUser,
     DeactivateUser,
     ReactivateUser,
-    ResetPassword,
+    ResendInvitation,
+    SendPasswordResetLink,
     UnlockAccount,
     UpdateUser,
 )
@@ -109,18 +111,32 @@ from cc_platform.application.people.auth import (
     VerifyMfa,
 )
 from cc_platform.application.people.availability import GetMyAvailability, SetMyAvailability
+from cc_platform.application.people.onboarding.commands import (
+    ActivateInvitation,
+    CheckInvitation,
+    CheckPasswordReset,
+    CompletePasswordReset,
+    LinkGuard,
+    SetInvitationPassword,
+)
+from cc_platform.application.people.onboarding.dev_mailbox import ListDevMailbox
+from cc_platform.application.people.onboarding.links import AppLinks
+from cc_platform.application.people.onboarding.mailer import OnboardingMailer
+from cc_platform.application.people.onboarding.use_cases import OnboardingUseCases
 from cc_platform.application.people.queries import GetCurrentStaff, ListStaff
 from cc_platform.application.people.use_cases import PeopleUseCases
 from cc_platform.application.ports.clock import Clock
+from cc_platform.application.ports.email import DevMailbox, EmailSender
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.health import HealthProbe
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.realtime import RealtimeHub
 from cc_platform.application.ports.security import (
     MfaVerifier,
+    OneTimeTokens,
     PasswordHasher,
+    SecretBox,
     SessionTokenService,
-    TemporaryPasswordGenerator,
 )
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.realtime.projector import (
@@ -137,6 +153,11 @@ from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
 from cc_platform.infrastructure.background import AsyncioBackgroundTasks, PeriodicTask
 from cc_platform.infrastructure.clock import SystemClock
+from cc_platform.infrastructure.email.dev_mailbox import (
+    DiscardingEmailSender,
+    InMemoryDevMailbox,
+    SqlDevMailbox,
+)
 from cc_platform.infrastructure.events.in_process_bus import InProcessEventBus
 from cc_platform.infrastructure.ids import UlidIdGenerator
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
@@ -147,14 +168,15 @@ from cc_platform.infrastructure.realtime.in_memory_hub import InMemoryRealtimeHu
 from cc_platform.infrastructure.security.customer_tokens import HmacCustomerTokenService
 from cc_platform.infrastructure.security.login_attempts import InMemoryUnknownLoginAttempts
 from cc_platform.infrastructure.security.mfa import DevMfaVerifier
+from cc_platform.infrastructure.security.one_time_tokens import SecretsOneTimeTokens
 from cc_platform.infrastructure.security.passwords import Argon2PasswordHasher
-from cc_platform.infrastructure.security.temporary_passwords import (
-    SecretsTemporaryPasswordGenerator,
-)
+from cc_platform.infrastructure.security.secret_box import FernetSecretBox, derive_key
 from cc_platform.infrastructure.security.tokens import HmacSessionTokenService
+from cc_platform.infrastructure.security.totp import PyotpTotpService
 from cc_platform.infrastructure.seed.activity import seed_demo_activity
 from cc_platform.infrastructure.seed.customers import seed_demo_customers
 from cc_platform.infrastructure.seed.notifications import mark_seed_notifications_seen
+from cc_platform.infrastructure.seed.onboarding import SeedOnboarding
 from cc_platform.infrastructure.seed.people import seed_demo_staff
 
 _log = structlog.get_logger(__name__)
@@ -176,6 +198,12 @@ class Container:
     use_cases: UseCases
     background: AsyncioBackgroundTasks
     drain_queue: DrainQueue
+    # Part 4: secure onboarding.
+    one_time_tokens: OneTimeTokens
+    totp: PyotpTotpService
+    secret_box: SecretBox
+    mailer: OnboardingMailer
+    dev_mailbox: DevMailbox | None = None
     database: Database | None = None
     health_probes: Sequence[HealthProbe] = field(default_factory=tuple)
     sla_sweep: PeriodicTask | None = None
@@ -189,7 +217,11 @@ class Container:
             realtime_hub=self.realtime_hub,
             topic_access=self.topic_access,
             health_probes=self.health_probes,
-            build_info=BuildInfo(build=self.settings.build, environment=self.settings.env),
+            build_info=BuildInfo(
+                build=self.settings.build,
+                environment=self.settings.env,
+                dev_mailbox=self.dev_mailbox is not None,
+            ),
             realtime=RealtimeOptions(
                 expiry_check_interval=self.settings.realtime_expiry_check_interval
             ),
@@ -211,13 +243,23 @@ class Container:
 
     async def seed_demo_data(self) -> None:
         """ "Datos de ejemplo": invented staff, customers, availability and the seeded cases."""
+        onboarding = SeedOnboarding(
+            hasher=self.password_hasher, tokens=self.one_time_tokens, box=self.secret_box
+        )
         created = {
             "staff": await seed_demo_staff(self.uow, self.password_hasher, now=self.clock.now()),
             "customers": await seed_demo_customers(self.uow),
             **await seed_demo_activity(
-                self.uow, self.ids, self.clock, ttl=self.settings.session_ttl
+                self.uow,
+                self.ids,
+                self.clock,
+                ttl=self.settings.session_ttl,
+                onboarding=onboarding,
             ),
         }
+        # Part 4: the seeded pending invitation's email, now that its link exists.
+        for email in onboarding.emails:
+            await self.mailer.invitation(email.staff, team_name=email.team_name, token=email.token)
         if created["cases"]:
             # Slice 10: the story's older notifications start read.
             created["notifications_seen"] = await mark_seed_notifications_seen(
@@ -234,16 +276,63 @@ class Container:
             await self.database.dispose()
 
 
+@dataclass(frozen=True, slots=True)
+class _OnboardingKit:
+    tokens: OneTimeTokens
+    totp: PyotpTotpService
+    box: SecretBox
+    mailer: OnboardingMailer
+    dev_mailbox: DevMailbox | None
+
+
+def _onboarding_kit(
+    settings: Settings,
+    *,
+    clock: Clock,
+    ids: IdGenerator,
+    database: Database | None,
+    tokens: OneTimeTokens | None,
+) -> _OnboardingKit:
+    """Part 4 adapters: link tokens, TOTP, the secret box and the email sender (the dev
+    mailbox while ``CC_DEV_MAILBOX`` is on, else a sender that drops the message)."""
+    key = (
+        settings.totp_secret_key.get_secret_value().encode()
+        if settings.totp_secret_key is not None
+        else derive_key(settings.session_secret.get_secret_value())
+    )
+    dev_mailbox: DevMailbox | None = None
+    if settings.dev_mailbox_enabled:
+        dev_mailbox = (
+            SqlDevMailbox(database.session_factory, clock=clock, ids=ids)
+            if database is not None
+            else InMemoryDevMailbox(clock=clock, ids=ids)
+        )
+    sender: EmailSender = dev_mailbox if dev_mailbox is not None else DiscardingEmailSender()
+    return _OnboardingKit(
+        tokens=tokens or SecretsOneTimeTokens(),
+        totp=PyotpTotpService(issuer=settings.totp_issuer),
+        box=FernetSecretBox(key),
+        mailer=OnboardingMailer(
+            sender=sender,
+            links=AppLinks(settings.public_app_url),
+            invitation_ttl=settings.invitation_ttl,
+            reset_ttl=settings.password_reset_ttl,
+        ),
+        dev_mailbox=dev_mailbox,
+    )
+
+
 def build_container(
     settings: Settings,
     *,
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
-    temporary_passwords: TemporaryPasswordGenerator | None = None,
+    one_time_tokens: OneTimeTokens | None = None,
 ) -> Container:
     if settings.env == "prod":
-        # Fail fast: only the development MFA verifier exists today.
-        raise RuntimeError("No production MFA provider is configured yet (DevMfaVerifier only).")
+        # Fail fast: there is no production email adapter yet (part 4: the dev mailbox only),
+        # so nobody could receive an invitation or a reset link.
+        raise RuntimeError("No production email adapter is configured yet (dev mailbox only).")
     clock = clock or SystemClock()
     ids = ids or UlidIdGenerator(clock)
     bus = InProcessEventBus()
@@ -277,8 +366,12 @@ def build_container(
     mfa_verifier = DevMfaVerifier(settings.dev_mfa_code)
 
     customer_tokens = HmacCustomerTokenService(settings.session_secret.get_secret_value())
-    passwords = temporary_passwords or SecretsTemporaryPasswordGenerator()
     background = AsyncioBackgroundTasks()
+
+    # Part 4: secure onboarding (links by email, TOTP enrollment).
+    kit = _onboarding_kit(settings, clock=clock, ids=ids, database=database, tokens=one_time_tokens)
+    link_tokens, totp, secret_box, mailer = kit.tokens, kit.totp, kit.box, kit.mailer
+    link_guard = LinkGuard(attempts=InMemoryUnknownLoginAttempts(), clock=clock)
 
     # Assignment (brief §4.6): one use case, two callers. ``AssignCase`` runs inside the
     # Unit of Work that opens a case (``PostCustomerTurn``) and inside ``DrainQueue``, which
@@ -342,6 +435,8 @@ def build_container(
                 ids=ids,
                 lockout=lockout,
                 session_ttl=settings.session_ttl,
+                totp=totp,
+                box=secret_box,
             ),
             authenticate=AuthenticateSession(uow=uow, tokens=tokens, clock=clock),
             logout=Logout(uow=uow, clock=clock),
@@ -402,13 +497,19 @@ def build_container(
             list_users=ListUsers(uow=uow, clock=clock),
             get_user=GetUser(uow=uow, clock=clock),
             create_user=CreateUser(
-                uow=uow, clock=clock, ids=ids, hasher=hasher, passwords=passwords
+                uow=uow, clock=clock, ids=ids, tokens=link_tokens, mailer=mailer
             ),
             update_user=UpdateUser(uow=uow, clock=clock),
             deactivate_user=DeactivateUser(uow=uow, clock=clock),
             reactivate_user=ReactivateUser(uow=uow, clock=clock),
             unlock_user=UnlockAccount(uow=uow, clock=clock),
-            reset_password=ResetPassword(uow=uow, clock=clock, hasher=hasher, passwords=passwords),
+            reset_password=SendPasswordResetLink(
+                uow=uow, clock=clock, ids=ids, tokens=link_tokens, mailer=mailer
+            ),
+            resend_invitation=ResendInvitation(
+                uow=uow, clock=clock, tokens=link_tokens, mailer=mailer
+            ),
+            cancel_invitation=CancelInvitation(uow=uow, clock=clock),
             list_teams=ListTeams(uow=uow),
             get_team=GetTeam(uow=uow, clock=clock),
             create_team=CreateTeam(uow=uow, clock=clock, ids=ids),
@@ -423,6 +524,36 @@ def build_container(
                 uow=uow, clock=clock, signals=notification_signals
             ),
             sweep_sla_risk=sweep_sla_risk,
+        ),
+        onboarding=OnboardingUseCases(
+            check_invitation=CheckInvitation(
+                uow=uow, tokens=link_tokens, clock=clock, guard=link_guard
+            ),
+            set_invitation_password=SetInvitationPassword(
+                uow=uow,
+                tokens=link_tokens,
+                clock=clock,
+                guard=link_guard,
+                hasher=hasher,
+                totp=totp,
+                box=secret_box,
+            ),
+            activate_invitation=ActivateInvitation(
+                uow=uow,
+                tokens=link_tokens,
+                clock=clock,
+                guard=link_guard,
+                totp=totp,
+                box=secret_box,
+                lockout=lockout,
+            ),
+            check_password_reset=CheckPasswordReset(
+                uow=uow, tokens=link_tokens, clock=clock, guard=link_guard
+            ),
+            complete_password_reset=CompletePasswordReset(
+                uow=uow, tokens=link_tokens, clock=clock, guard=link_guard, hasher=hasher
+            ),
+            dev_mailbox=ListDevMailbox(kit.dev_mailbox),
         ),
     )
     sla_sweep = (
@@ -446,6 +577,11 @@ def build_container(
         use_cases=use_cases,
         background=background,
         drain_queue=drain_queue,
+        one_time_tokens=link_tokens,
+        totp=totp,
+        secret_box=secret_box,
+        mailer=mailer,
+        dev_mailbox=kit.dev_mailbox,
         database=database,
         health_probes=tuple(probes),
         sla_sweep=sla_sweep,

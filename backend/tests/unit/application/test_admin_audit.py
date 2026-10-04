@@ -46,14 +46,25 @@ def stored(
 ADMIN_TYPES = {
     "staff.created", "staff.profile_updated", "staff.roles_changed", "staff.languages_changed",
     "staff.team_changed", "staff.deactivated", "staff.reactivated", "staff.account_unlocked",
-    "staff.password_reset", "team.created", "team.renamed", "team.deactivated",
-    "team.reactivated",
+    "team.created", "team.renamed", "team.deactivated", "team.reactivated",
+    # part 4: what administration sends
+    "staff.invitation_sent", "staff.invitation_resent", "staff.invitation_cancelled",
+    "staff.password_reset_link_sent",
 }  # fmt: skip
+
+#: Part 4: what the person does with her link (her own access).
+ONBOARDING_ACCESS_TYPES = {
+    "staff.invitation_accepted",
+    "staff.mfa_enrolled",
+    "staff.password_reset",
+}
 
 
 def test_the_administration_family_changes_state() -> None:
     assert types_of(AuditFamily.ADMINISTRATION) == ADMIN_TYPES
     assert ADMIN_TYPES <= CHANGES_STATE
+    assert ONBOARDING_ACCESS_TYPES <= CHANGES_STATE
+    assert {FAMILY[t] for t in ONBOARDING_ACCESS_TYPES} == {AuditFamily.ACCESS}
     assert FAMILY["staff.availability_changed"] is AuditFamily.AVAILABILITY
 
 
@@ -147,14 +158,36 @@ def test_the_administration_family_changes_state() -> None:
         ),
         (
             "staff.password_reset",
-            {"revoked_sessions": 0, "cleared_lock": False},
-            "Restableció la contraseña de Ana Gil",
+            {"cleared_lock": False},
+            "Creó una contraseña nueva con el enlace de restablecimiento",
         ),
         (
-            "staff.password_reset",
-            {"revoked_sessions": 2, "cleared_lock": True},
-            "Restableció la contraseña de Ana Gil y cerró sus 2 sesiones",
+            "staff.password_reset_link_sent",
+            {"reset_id": "PWR-1", "expires_at": "2026-10-03T15:00:00Z",
+             "revoked_sessions": 0, "cleared_lock": False},
+            "Le envió a Ana Gil un enlace para restablecer la contraseña",
         ),
+        (
+            "staff.password_reset_link_sent",
+            {"reset_id": "PWR-1", "expires_at": "2026-10-03T15:00:00Z",
+             "revoked_sessions": 2, "cleared_lock": True},
+            "Le envió a Ana Gil un enlace para restablecer la contraseña y cerró sus 2 sesiones",
+        ),
+        (
+            "staff.invitation_sent",
+            {"invitation_id": "INV-1", "expires_at": "2026-10-05T14:00:00Z"},
+            "Invitó a Ana Gil por correo",
+        ),
+        (
+            "staff.invitation_resent",
+            {"invitation_id": "INV-1", "expires_at": "2026-10-05T14:00:00Z", "resend_count": 1},
+            "Reenvió la invitación a Ana Gil",
+        ),
+        ("staff.invitation_cancelled", {"invitation_id": "INV-1"},
+         "Canceló la invitación de Ana Gil"),
+        ("staff.invitation_accepted", {"invitation_id": "INV-1"},
+         "Aceptó la invitación y activó su cuenta"),
+        ("staff.mfa_enrolled", {"method": "totp"}, "Configuró la verificación en dos pasos"),
         (
             "staff.availability_changed",
             {"from_status": "available", "to_status": "paused", "reason": "deactivated"},

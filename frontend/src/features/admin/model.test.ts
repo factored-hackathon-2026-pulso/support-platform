@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
 import {
   andres,
+  bruna,
   carolina,
   daniela,
   makeAdminTeam,
@@ -52,7 +53,17 @@ import {
   teamNotEmptyCopy,
   teamOptionLabel,
   teamsSubtitle,
-  temporaryPasswordCopy,
+  INVITATION_INFO,
+  INVITATION_STEPS,
+  INVITATION_EXPIRY_SENTENCE,
+  cancelInvitationCopy,
+  cancelledInvitationToast,
+  invitationExpired,
+  invitationFacts,
+  resentInvitationToast,
+  resetLinkCopy,
+  resetLinkSentToast,
+  secondFactorLabel,
   toTeamsSearch,
   toUsersSearch,
   toggleValue,
@@ -79,14 +90,16 @@ const problem = (code: string, extensions: Record<string, unknown> = {}, status 
 describe('labels', () => {
   it('pins the role descriptions and the account status labels', () => {
     expect(ROLE_DESCRIPTION.analyst).toBe('Atiende casos por chat con los clientes.')
-    expect(ROLE_DESCRIPTION.admin).toBe('Crea y edita cuentas, roles, idiomas y equipos.')
+    expect(ROLE_DESCRIPTION.admin).toBe('Invita y edita cuentas, roles, idiomas y equipos.')
     expect(ROLE_DESCRIPTION.supervisor).toBe(
       'Ve las colas y el equipo, atiende escalamientos, reasigna casos y revisa la auditoría.',
     )
     expect(ACCOUNT_STATUS_LABEL).toEqual({
       active: 'Activa',
       locked: 'Bloqueada',
+      invited: 'Invitación pendiente',
       inactive: 'Desactivada',
+      cancelled: 'Invitación cancelada',
     })
   })
 
@@ -94,7 +107,9 @@ describe('labels', () => {
     expect(ACCOUNT_STATUS).toEqual({
       active: { shape: 'check', tone: 'success', label: 'Activa' },
       locked: { shape: 'lock', tone: 'warn', label: 'Bloqueada', strong: true },
+      invited: { shape: 'dashed', tone: 'accent', label: 'Invitación pendiente' },
       inactive: { shape: 'cross', tone: 'closed', label: 'Desactivada' },
+      cancelled: { shape: 'cross', tone: 'closed', label: 'Invitación cancelada' },
     })
     expect(TEAM_STATUS).toEqual({
       active: { shape: 'check', tone: 'success', label: 'Activo' },
@@ -136,6 +151,8 @@ describe('accountStatusAt', () => {
     expect(accountStatusAt(mariana, minutesFrom(14))).toBe('active')
     expect(accountStatusAt(andres, NOW)).toBe('inactive')
     expect(accountStatusAt(daniela, NOW)).toBe('active')
+    expect(accountStatusAt(bruna, NOW)).toBe('invited')
+    expect(accountStatusAt({ status: 'cancelled', lockedUntil: null }, NOW)).toBe('cancelled')
     // The server said active but a lock is still running (computed before a failed login).
     expect(accountStatusAt({ status: 'active', lockedUntil: minutesFrom(1) }, NOW)).toBe('locked')
     expect(lockedUntilTitle(minutesFrom(13))).toBe('Hasta las 11:13')
@@ -155,6 +172,7 @@ describe('accountStatusAt', () => {
       action: 'reactivate',
     })
     expect(statusCallout(daniela, NOW)).toBeNull()
+    expect(statusCallout(bruna, NOW)).toBeNull()
     expect(statusCallout(mariana, minutesFrom(20))).toBeNull()
   })
 })
@@ -162,12 +180,12 @@ describe('accountStatusAt', () => {
 describe('URL state', () => {
   it('parses and serializes the users screen with several values per group', () => {
     const params = new URLSearchParams(
-      'rol=analistas,supervision&estado=bloqueadas,desactivadas&equipo=TEAM-1,TEAM-2&idioma=pt&q=mar&persona=STF-1&nueva=1',
+      'rol=analistas,supervision&estado=bloqueadas,pendientes,desactivadas&equipo=TEAM-1,TEAM-2&idioma=pt&q=mar&persona=STF-1&nueva=1',
     )
     const state = parseUsersSearch(params)
     expect(state).toEqual({
       roles: ['analyst', 'supervisor'],
-      statuses: ['locked', 'inactive'],
+      statuses: ['locked', 'invited', 'inactive'],
       teamIds: ['TEAM-1', 'TEAM-2'],
       languages: ['pt'],
       query: 'mar',
@@ -329,7 +347,12 @@ describe('"Filtros" of the directory (slice 9)', () => {
     // The role group ignores its own selection.
     expect(counts('role')).toEqual({ Analista: 2, Supervisión: 2, Administración: 2 })
     // The others count only supervisors.
-    expect(counts('status')).toEqual({ Activa: 1, Bloqueada: 1, Desactivada: 0 })
+    expect(counts('status')).toEqual({
+      Activa: 1,
+      Bloqueada: 1,
+      'Invitación pendiente': 0,
+      Desactivada: 0,
+    })
     expect(counts('language')).toEqual({ Español: 1, Portugués: 0 })
     expect(groups[2]!.options.map((option) => option.label)).toEqual([
       'Equipo Andes',
@@ -459,7 +482,8 @@ describe('guard rails', () => {
     expect(userGuardState(selfAdmin)).toEqual({
       adminLocked: 'No puedes quitarte tu propio rol de Administración.',
       deactivateBlocked: 'No puedes desactivar tu propia cuenta.',
-      resetBlocked: 'Pídele a otra persona de Administración que restablezca tu contraseña.',
+      resetBlocked:
+        'Pídele a otra persona de Administración que te envíe un enlace para restablecer tu contraseña.',
     })
   })
 
@@ -599,6 +623,14 @@ describe('describeAdminFailure', () => {
       message: 'Esta cuenta está desactivada. Reactívala primero.',
       action: 'refetch',
     })
+    expect(describeAdminFailure(problem('staff_invited'), user)).toEqual({
+      message: 'Esta persona todavía no activó su cuenta. Reenvía la invitación.',
+      action: 'refetch',
+    })
+    expect(describeAdminFailure(problem('invalid_transition'), user)).toEqual({
+      message: 'Esta persona ya no tiene una invitación pendiente.',
+      action: 'refetch',
+    })
     expect(describeAdminFailure(ApiProblem.network(), user)).toEqual({
       message: 'No pudimos guardar los cambios. Inténtalo de nuevo.',
       action: 'none',
@@ -638,11 +670,85 @@ describe('toasts and dialogs', () => {
     expect(unlockedToast('Mariana Duque', false)).toEqual({
       title: 'La cuenta ya no estaba bloqueada.',
     })
-    expect(temporaryPasswordCopy('Ana Gil', 'created')).toEqual({
-      title: 'Cuenta creada',
-      text: 'Ana Gil ya puede ingresar con su correo y esta contraseña temporal. Cópiala ahora: no la volveremos a mostrar.',
+  })
+})
+
+describe('invitations and reset links (part 4)', () => {
+  it('words the invitation: the note, what happens next, the expiry', () => {
+    expect(INVITATION_INFO).toEqual({
+      title: 'Le llega una invitación por correo',
+      text: 'Con el enlace crea su contraseña y configura la verificación en dos pasos. Nadie más ve su contraseña. El enlace vence en 48 horas.',
     })
-    expect(temporaryPasswordCopy('Ana Gil', 'reset').title).toBe('Contraseña restablecida')
+    expect(INVITATION_STEPS.map((step) => step.text)).toEqual([
+      'Crea su propia contraseña',
+      'Configura la verificación en dos pasos',
+      'Su cuenta queda activa y empieza En pausa',
+    ])
+    expect(INVITATION_EXPIRY_SENTENCE).toBe('El enlace vence en 48 horas.')
+  })
+
+  it('shows when an invitation was sent and when it expires (or expired)', () => {
+    const invitation = bruna.invitation!
+    expect(invitationFacts(invitation, NOW)).toEqual([
+      { key: 'sent', label: 'Invitación enviada', value: 'hace 3 h' },
+      { key: 'expires', label: 'Vence', value: 'en 45 h' },
+      { key: 'login', label: 'Último ingreso', value: 'Nunca' },
+    ])
+    expect(invitationExpired(invitation, NOW)).toBe(false)
+    const later = minutesFrom(48 * 60)
+    expect(invitationExpired(invitation, later)).toBe(true)
+    expect(invitationFacts(invitation, later)[1]).toEqual({
+      key: 'expires',
+      label: 'Venció',
+      value: 'hace 3 h',
+    })
+  })
+
+  it('words resend, cancel and the reset link', () => {
+    expect(resentInvitationToast('bruna.esteves@latambank.example')).toEqual({
+      title: 'Invitación reenviada',
+      description:
+        'Le enviamos un enlace nuevo a bruna.esteves@latambank.example. Vence en 48 horas y el anterior ya no funciona.',
+    })
+    expect(cancelledInvitationToast('Bruna Esteves')).toEqual({
+      title: 'Invitación cancelada',
+      description: 'El enlace que recibió Bruna Esteves ya no funciona.',
+    })
+    expect(cancelInvitationCopy('Bruna Esteves')).toEqual({
+      title: '¿Cancelar la invitación de Bruna Esteves?',
+      text: 'El enlace que le enviamos deja de funcionar y la cuenta no se crea. Si hace falta, puedes invitarle de nuevo.',
+    })
+    expect(resetLinkCopy('Tomás Arango', 'tomas.arango@latambank.example')).toEqual({
+      title: '¿Enviar a Tomás Arango un enlace para restablecer su contraseña?',
+      consequences: [
+        'Le llega un correo a tomas.arango@latambank.example con un enlace para crear una contraseña nueva. Vence en 1 hora.',
+        'Se cierran sus sesiones abiertas ahora.',
+        'Si la cuenta estaba bloqueada, se desbloquea.',
+        'Nadie del equipo ve la contraseña nueva.',
+      ],
+    })
+    expect(resetLinkSentToast('tomas.arango@latambank.example')).toEqual({
+      title: 'Enlace enviado',
+      description:
+        'Le enviamos a tomas.arango@latambank.example un enlace para crear una contraseña nueva. Sus sesiones abiertas se cerraron.',
+    })
+  })
+
+  it('names the second factor', () => {
+    expect(secondFactorLabel('totp')).toBe('App de autenticación')
+    expect(secondFactorLabel('dev_code')).toBe('Código de desarrollo')
+    expect(secondFactorLabel(null)).toBeNull()
+  })
+
+  it('counts invited people under "Invitación pendiente" in the filters', () => {
+    const groups = userFilterGroups([daniela, bruna, andres], [], {}, NOW)
+    const status = groups.find((group) => group.key === 'status')!
+    expect(status.options.map((option) => [option.label, option.count])).toEqual([
+      ['Activa', 1],
+      ['Bloqueada', 0],
+      ['Invitación pendiente', 1],
+      ['Desactivada', 1],
+    ])
   })
 })
 

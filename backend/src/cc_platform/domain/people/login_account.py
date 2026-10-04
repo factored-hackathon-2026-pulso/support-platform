@@ -26,6 +26,7 @@ from cc_platform.domain.people.events import (
     LoginFailed,
     PasswordAccepted,
     StaffAccountUnlocked,
+    StaffMfaEnrolled,
     StaffPasswordReset,
 )
 from cc_platform.domain.shared.actor import ActorRef
@@ -119,19 +120,53 @@ class FailedAttemptCounter:
         )
 
 
+#: The second factor of an account that enrolled an authenticator app (part 4).
+TOTP_METHOD = "totp"
+
+
 @dataclass(eq=False)
 class LoginAccount(AggregateRoot):
+    """Her credentials. Part 4: ``totp_secret`` is her authenticator's RFC 6238 secret,
+    sealed by the ``SecretBox`` (never stored or shown in clear after the enrollment).
+    ``None`` only for the seeded development accounts, which use the dev code instead
+    (``VerifyMfa``); every account created through an invitation has one."""
+
     staff_id: str
     password_hash: str
     failed_attempts: int = 0
     locked_until: datetime | None = None
     last_login_at: datetime | None = None
+    totp_secret: str | None = None
 
     def __post_init__(self) -> None:
         require_id(self.staff_id, IdPrefix.STAFF)
         if not self.password_hash:
             raise InvalidValueError("password hash must not be empty", field="password_hash")
         self._apply(self.attempts)  # validates the counter fields
+
+    @classmethod
+    def open(
+        cls,
+        *,
+        staff_id: str,
+        password_hash: str,
+        totp_secret: str,
+        now: datetime,
+        actor: ActorRef,
+    ) -> LoginAccount:
+        """The account an accepted invitation creates: her password and her authenticator
+        (records ``staff.mfa_enrolled``)."""
+        if not totp_secret:
+            raise InvalidValueError("an invited account needs a TOTP secret", field="totp_secret")
+        account = cls(staff_id=staff_id, password_hash=password_hash, totp_secret=totp_secret)
+        account._record(
+            StaffMfaEnrolled(occurred_at=now, actor=actor, entity_id=staff_id, method=TOTP_METHOD)
+        )
+        return account
+
+    @property
+    def uses_totp(self) -> bool:
+        return self.totp_secret is not None
 
     @property
     def attempts(self) -> FailedAttemptCounter:
@@ -214,20 +249,22 @@ class LoginAccount(AggregateRoot):
         )
         return True
 
-    def reset_password(
-        self, new_hash: str, *, now: datetime, actor: ActorRef, revoked_sessions: int
-    ) -> None:
-        """A new (temporary) password: replaces the hash and clears the counter and lock."""
+    def clear_attempts(self, *, now: datetime) -> bool:
+        """A reset link was sent (part 4): the counter and a lock are cleared, recorded by
+        ``staff.password_reset_link_sent`` (``cleared_lock``). Returns whether it was locked."""
+        cleared_lock = self.is_locked(now)
+        self._apply(FailedAttemptCounter())
+        return cleared_lock
+
+    def reset_password(self, new_hash: str, *, now: datetime, actor: ActorRef) -> None:
+        """She set a new password through a reset link (part 4): replaces the hash and
+        clears the counter (records ``staff.password_reset``, actor herself)."""
         cleared_lock = self.is_locked(now)
         self.change_password_hash(new_hash)
         self._apply(FailedAttemptCounter())
         self._record(
             StaffPasswordReset(
-                occurred_at=now,
-                actor=actor,
-                entity_id=self.staff_id,
-                revoked_sessions=revoked_sessions,
-                cleared_lock=cleared_lock,
+                occurred_at=now, actor=actor, entity_id=self.staff_id, cleared_lock=cleared_lock
             )
         )
 

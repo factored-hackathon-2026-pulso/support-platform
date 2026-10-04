@@ -19,6 +19,7 @@ from datetime import datetime
 from cc_platform.application.cases.ports import OpenCaseRef
 from cc_platform.application.people.admin.dto import (
     AccountStatus,
+    AdminInvitationView,
     AdminTeamDetailView,
     AdminTeamListView,
     AdminTeamMemberView,
@@ -26,6 +27,7 @@ from cc_platform.application.people.admin.dto import (
     AdminUserGuardsView,
     AdminUserListView,
     AdminUserView,
+    InvitationStatus,
     OpenCaseCountsView,
     RoleCountsView,
     TeamStatusCountsView,
@@ -39,7 +41,8 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
 from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
-from cc_platform.domain.people.login_account import LoginAccount
+from cc_platform.domain.people.invitation import Invitation
+from cc_platform.domain.people.login_account import TOTP_METHOD, LoginAccount
 from cc_platform.domain.people.names import fold
 from cc_platform.domain.people.staff import (
     Language,
@@ -56,7 +59,15 @@ from cc_platform.domain.shared.ids import IdPrefix, is_valid_id
 MAX_DIRECTORY_ROWS = 500
 
 
+#: Part 4: how administration reads a seeded account without an authenticator.
+DEV_CODE_FACTOR = "dev_code"
+
+
 def account_status(staff: Staff, account: LoginAccount | None, now: datetime) -> AccountStatus:
+    if staff.is_withdrawn:
+        return AccountStatus.CANCELLED
+    if staff.is_invited:
+        return AccountStatus.INVITED
     if not staff.active:
         return AccountStatus.INACTIVE
     if account is not None and account.is_locked(now):
@@ -87,6 +98,7 @@ class Directory:
     open_cases: dict[str, list[OpenCaseRef]]
     teams: dict[str, Team]
     active_admin_ids: frozenset[str]
+    invitations: dict[str, Invitation]
 
     @classmethod
     async def load(cls, uow: UnitOfWork, *, open_cases_of: set[str] | None = None) -> Directory:
@@ -99,6 +111,7 @@ class Directory:
             open_cases=await uow.cases.open_refs_by_assignee(open_cases_of),
             teams={team.id: team for team in await uow.teams.list()},
             active_admin_ids=frozenset(person.id for person in staff if person.is_active_admin),
+            invitations={i.staff_id: i for i in await uow.invitations.list()},
         )
 
     def find(self, staff_id: str) -> Staff | None:
@@ -117,6 +130,7 @@ class Directory:
             row = self.availability.get(staff.id)
             availability = row.status if row is not None else AvailabilityStatus.PAUSED
         refs = self.open_cases.get(staff.id, [])
+        invitation = self.invitations.get(staff.id) if staff.is_invited else None
         return AdminUserView(
             id=staff.id,
             name=staff.name,
@@ -142,7 +156,26 @@ class Directory:
                 last_active_admin=staff.is_active_admin and self.active_admin_ids == {staff.id},
             ),
             version=staff.version,
+            invitation=invitation_view(invitation, now) if invitation is not None else None,
+            second_factor=_second_factor(account),
         )
+
+
+def _second_factor(account: LoginAccount | None) -> str | None:
+    if account is None:
+        return None
+    return TOTP_METHOD if account.uses_totp else DEV_CODE_FACTOR
+
+
+def invitation_view(invitation: Invitation, now: datetime) -> AdminInvitationView:
+    return AdminInvitationView(
+        id=invitation.id,
+        status=InvitationStatus(invitation.state_at(now).value),
+        created_at=invitation.created_at,
+        sent_at=invitation.sent_at,
+        expires_at=invitation.expires_at,
+        resend_count=invitation.resend_count,
+    )
 
 
 async def user_view(
@@ -159,9 +192,11 @@ def _status_matches(view: AdminUserView, status: UserStatusFilter) -> bool:
         case UserStatusFilter.ALL:
             return True
         case UserStatusFilter.ACTIVE:
-            return view.status is not AccountStatus.INACTIVE
+            return view.status in {AccountStatus.ACTIVE, AccountStatus.LOCKED}
         case UserStatusFilter.LOCKED:
             return view.status is AccountStatus.LOCKED
+        case UserStatusFilter.INVITED:
+            return view.status is AccountStatus.INVITED
         case UserStatusFilter.INACTIVE:
             return view.status is AccountStatus.INACTIVE
 
@@ -206,11 +241,11 @@ def _role_counts(views: Sequence[AdminUserView]) -> RoleCountsView:
 
 def _status_counts(views: Sequence[AdminUserView]) -> UserStatusCountsView:
     statuses = Counter(view.status for view in views)
-    inactive = statuses[AccountStatus.INACTIVE]
     return UserStatusCountsView(
-        active=len(views) - inactive,
+        active=statuses[AccountStatus.ACTIVE] + statuses[AccountStatus.LOCKED],
         locked=statuses[AccountStatus.LOCKED],
-        inactive=inactive,
+        invited=statuses[AccountStatus.INVITED],
+        inactive=statuses[AccountStatus.INACTIVE],
         all=len(views),
     )
 
@@ -224,7 +259,9 @@ class ListUsers:
         now = self.clock.now()
         async with self.uow() as uow:
             directory = await Directory.load(uow)
-        people = sorted(directory.staff, key=_by_name)
+        # Part 4: a cancelled invitation leaves the directory (``GET /admin/users/{id}`` still
+        # answers, with status ``cancelled``).
+        people = sorted((p for p in directory.staff if not p.is_withdrawn), key=_by_name)
         views = [directory.user(person, viewer_id=actor.staff_id, now=now) for person in people]
         checks = _checks(filters)
         return AdminUserListView(
@@ -252,15 +289,17 @@ class GetUser:
 
 # ----------------------------------------------------------------------------- teams
 def team_view(team: Team, members: Iterable[Staff]) -> AdminTeamView:
-    mine = [person for person in members if person.team_id == team.id]
-    active = [person for person in mine if person.active]
+    """Part 4: invited people count as members (they are on their way); a cancelled
+    invitation is not a member at all."""
+    mine = [p for p in members if p.team_id == team.id and not p.is_withdrawn]
+    current = [person for person in mine if person.is_member]
     return AdminTeamView(
         id=team.id,
         name=team.name,
         active=team.active,
-        member_count=len(active),
-        analyst_count=sum(person.has_role(StaffRole.ANALYST) for person in active),
-        inactive_member_count=len(mine) - len(active),
+        member_count=len(current),
+        analyst_count=sum(person.has_role(StaffRole.ANALYST) for person in current),
+        inactive_member_count=len(mine) - len(current),
         created_at=team.created_at,
         version=team.version,
     )
@@ -319,8 +358,8 @@ class GetTeam:
             staff = await uow.staff.list()
             accounts = {a.staff_id: a for a in await uow.login_accounts.list()}
         members = sorted(
-            (person for person in staff if person.team_id == team.id),
-            key=lambda person: (not person.active, *_by_name(person)),
+            (p for p in staff if p.team_id == team.id and not p.is_withdrawn),
+            key=lambda person: (not person.is_member, *_by_name(person)),
         )
         return AdminTeamDetailView(
             team=team_view(team, staff),

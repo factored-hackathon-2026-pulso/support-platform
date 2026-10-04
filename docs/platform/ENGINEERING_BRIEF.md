@@ -15,7 +15,8 @@ Roles. They combine: one person can hold several, and the role switcher moves be
 - **Supervisión** (slice 9: the role is named gender-neutrally, never "Supervisora"): "Colas" (every
   open case by language; assignment is automatic), "Equipo", "Escalados" (answer, take, reassign),
   reassignment as the exception, audit.
-- **Administración**: users (create, edit, deactivate, unlock), roles, languages, teams.
+- **Administración**: users (invite by email, edit, deactivate, unlock, send a reset link),
+  roles, languages, teams. It never sees or hands out a password (part 4, slice 11).
 
 In scope:
 - dev auth and roles (done);
@@ -39,6 +40,10 @@ In scope:
   persisted per person and derived from facts already in the event log (plus the first-response
   SLA risk, from a periodic sweep), the toasts of those facts on every screen of the role with
   "Más tarde"; no AI, fixed templates.
+- secure onboarding by email invitation (done, slice 11 = part 4; user decision of 2026-10-04:
+  "no tiene sentido si somos una empresa segura"): invitations by email with a single-use link,
+  the person sets her own password and enrolls an authenticator app (TOTP), password resets by an
+  email link, TOTP at sign-in, the dev mailbox. No temporary passwords anywhere.
 
 The chat must work for real in two browser windows: the analyst Workspace and the customer simulator.
 
@@ -49,7 +54,8 @@ The chat must work for real in two browser windows: the analyst Workspace and th
 - identity verification and security questions;
 - approvals and four-eyes;
 - the Automatización role and its screens;
-- calls, outbound calls, email, WhatsApp;
+- calls, outbound calls, email, WhatsApp (as **support channels**; the platform's own account
+  emails of part 4 — invitations and reset links — are not a channel);
 - analyst-to-analyst transfers;
 - the customer mobile app (only the minimal **customer chat simulator** exists, as a dev/demo tool);
 - core-banking integration;
@@ -151,8 +157,21 @@ Keep it pragmatic: add no abstraction without a second caller or a named seam in
   - Clients subscribe to topics: `case:<id>`, `inbox:<staffId>` and `customer:<customerId>`. Supervision topics come in slice 3; `staff:<staffId>` (slice 4) also carries her notifications (slice 10).
   - Sockets only *signal* changes. REST and the event log stay the source of truth.
 
-### 4.5 Auth (dev mode)
-- **Staff sign-in:** no real IdP yet. `POST /api/v1/auth/login` takes email + password from the seeded staff, then the MFA code `000000` in dev. It returns a signed session token (HMAC, configurable secret) carrying the session id, staff id and roles.
+### 4.5 Auth
+- **Staff sign-in:** no external IdP. `POST /api/v1/auth/login` takes email + password (Argon2id),
+  then `POST /api/v1/auth/mfa` the second factor. It returns a signed session token (HMAC,
+  configurable secret) carrying the session id, staff id and roles.
+- **Second factor (part 4, slice 11):** every account created by an invitation enrolled an
+  authenticator app (TOTP, RFC 6238: 30 s, 6 digits, SHA-1; the secret sealed with Fernet) and
+  signs in with its codes. The development code `000000` works **only** for the seeded accounts
+  that have no authenticator, and only outside production (`CC_ENV=prod` has no dev verifier).
+- **Nobody hands out passwords (part 4):** administration invites (`POST /admin/users` → an
+  email with a single-use link, 48 h) and sends reset links (1 h); the person sets her own password
+  (policy: ≥ 12 characters, not her email name nor her name, not a common one) on the public
+  routes `/api/v1/onboarding/*` (tokens in POST bodies, hashed at rest, one generic 410 for any
+  unusable link, per-client rate limit). Emails go through the `EmailSender` port; the only
+  adapter is the development mailbox (`GET /api/v1/dev/mailbox`, SPA `/dev/correos`), never in
+  production. Contract: `api/slice-11-invitations.md`.
 - **Lockout:** 5 failed attempts lock the account for 15 minutes (canvas `BoLocked`). Unlocking by hand is administration, in slice 4.
 - **Roles:** roles are re-read on every request. Every route declares the roles it allows (`require_roles(...)`).
 - **Customer simulator:** it uses `POST /api/v1/customer/sessions` with a seeded customer id. The channel identity is the app or web session. Customer tokens and staff tokens are never interchangeable.
@@ -305,3 +324,4 @@ Test coverage required:
 | S8 | **Prioridad del caso (part 1).** `CasePriority` = none · low · medium · high · critical (every case opens with none); `PUT /cases/{caseId}/priority` (`{priority, expectedVersion}`; the assignee analyst or Supervisión on any open case; 409 `case_closed` / `version_conflict` with `current`; same level = `changed: false`), CAS + `retry_on_conflict`, `case.priority_changed {from, to}` in the event log, audit "Cambió la prioridad a Alta" (Casos family), `case.updated` / `team.updated` / `queue.updated` on the existing topics. The first-response SLA is a fixed 15 minutes for every case. Frontend: `PriorityIcon` + `ChoiceMenu` primitives, one `CASE_PRIORITY` map, the ficha menu (optimistic, rollback + toast), the supervisor header menu, card glyph for high/critical, supervision row glyphs, "Lo primero" order (overdue, critical, high, nearest SLA). Rating with less text in lists (face + tooltip) and in the ficha/footer (face + one word). Seed: 101 critical, 102 and 112 high, 106 and 114 low. | `api/slice-8-priority.md` | done. Gates 2026-10-04: see the slice report. |
 | S9 | **Supervisión v2 + escalamientos.** Rail Colas / Equipo / Escalados / Auditoría (landing `/supervision/colas`); "Colas" lists every open case of a language (`GET /supervision/open-cases`), no manual "Asignar"; "Equipo" one table with one "Filtros" dropdown (no team tabs) and the redesigned reassign dialog (only speakers, 3 suggestions, search, "+N más", paused people on demand); escalations as their own aggregate (`escalations`, one open per case through `cases.open_escalation_id`): escalate / withdraw / "Entendido" (analyst), answer / take / reassign (supervision), `escalation.*` events with motive and note redacted in the audit, `escalation.updated` on `case:`, `inbox:` and the new `supervision:escalations`; gender-neutral "Supervisión"; admin users list with search + "Filtros" + chips, "Nuevo usuario", language pills. | `api/slice-9-supervision-v2.md` | done. Gates 2026-10-04: backend `ruff check`, `ruff format --check` (250 files), `mypy src` (177 files), `pytest` 857 passed, `export_openapi --check` clean; frontend `typecheck`, `lint`, `test` 783 passed in 76 files, `build` (screen copy only in lazy chunks), `format:check`, `check:api`; `pnpm e2e` 11/11 twice in a row (new: an analyst escalates, supervision answers from Escalados and she sees it live). |
 | S10 | **Centro de notificaciones.** `Notification` aggregate + `notifications` table (`NTF-…`, structured data, `source_key` unique per person, newest 200 kept), `NotificationProjector` on the bus (assigned on arrival / from the queue / by supervision, reassigned away, customer returned, escalation answered / taken / reassigned, case rated; case escalated, queued (once per language while it waits); account locked; invitation accepted, defined for part 4), `SweepSlaRisk` (once at startup, then every 30 s), `GET /me/notifications`, `POST /me/notifications/{id}/read`, `POST /me/notifications/read-all`, `notification.created` / `notifications.read` on `staff:<id>`. SPA: `features/notifications` (bell + panel in the rail through `routes/staff-shell.tsx`, toasts from the stream on every screen of the role with "Más tarde"), the restyled toast ("Avisos"), the ad-hoc toasts of Casos and supervision removed. Part-2 leftovers: "Escalado" in "Lo primero", no " · " in the audit detail and the closed footer, Equipos with `Status` and "Filtros". | `api/slice-10-notifications.md` | done. Gates 2026-10-04: backend `ruff check`, `ruff format --check` (266 files), `mypy src` (190 files), `pytest` 911 passed, `export_openapi --check` clean; frontend `typecheck`, `lint`, `test` 811 passed in 79 files, `build` (the bell's copy is in the entry chunk on purpose: it is on every staff screen), `format:check`, `check:api`; `pnpm e2e` 12/12 twice in a row (new: supervision opens an escalation from the bell, the answer reaches the analyst's bell). |
+| S11 | **Altas seguras por invitación (parte 4).** No temporary passwords anywhere: `POST /admin/users` invites (person `invited`, `Invitation` `INV-…` with a single-use 48 h link, only its SHA-256 stored, one per person; resend replaces the token, cancel withdraws her and the same email can be invited again); public `POST /onboarding/invitations/{check,password,activate}` (password policy ≥ 12 / not her email name or name / not common; Argon2id; TOTP enrollment with `pyotp`, QR + manual key shown once, secret sealed with Fernet; `staff.mfa_enrolled` + `staff.invitation_accepted`, which notifies administration) and `POST /onboarding/password-resets/{check,complete}` (`PasswordReset` `PWR-…`, 1 h; "Enviar enlace para restablecer" ends her sessions now); one 410 `link_invalid` for any unusable token, 429 `rate_limited` per client, 423 after 5 wrong enrollment codes; TOTP at sign-in (dev code only for seeded accounts); `EmailSender` port + dev mailbox (`GET /dev/mailbox`, `/dev/correos`, `CC_DEV_MAILBOX`, never in prod); audit texts; seed Tatiana (accepted, TOTP) and Bruna (pending). SPA: "Enviar invitación", "Invitación enviada", "Invitación pendiente" with Reenviar / Cancelar, the reset-link dialog, `/activar` and `/restablecer`, `/dev/correos`. | `api/slice-11-invitations.md` | done. Gates 2026-10-04: see the slice report. |

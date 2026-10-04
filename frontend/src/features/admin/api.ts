@@ -14,8 +14,8 @@ import type {
   AdminUserFilters,
   AdminUserList,
   CreateUserRequest,
-  CreatedUser,
-  PasswordResetResult,
+  InvitedUser,
+  PasswordResetLinkSent,
   TeamStatusFilter,
   UpdateUserRequest,
 } from './types'
@@ -33,8 +33,17 @@ export const adminKeys = {
 
 export const adminMutationKeys = {
   createUser: ['admin', 'create-user'] as const,
-  user: (staffId: string, action: 'update' | 'deactivate' | 'reactivate' | 'unlock' | 'reset') =>
-    ['admin', 'user', staffId, action] as const,
+  user: (
+    staffId: string,
+    action:
+      | 'update'
+      | 'deactivate'
+      | 'reactivate'
+      | 'unlock'
+      | 'reset'
+      | 'resend-invitation'
+      | 'cancel-invitation',
+  ) => ['admin', 'user', staffId, action] as const,
   createTeam: ['admin', 'create-team'] as const,
   team: (teamId: string, action: 'rename' | 'deactivate' | 'reactivate') =>
     ['admin', 'team', teamId, action] as const,
@@ -56,13 +65,14 @@ export async function fetchAdminUser(staffId: string, signal?: AbortSignal): Pro
 }
 
 /**
- * POST /admin/users. `idempotencyKey` is one per open dialog: a retry of the
- * same create answers 200 with the existing person and `temporaryPassword: null`.
+ * POST /admin/users (part 4): invites the person (she gets an email with a link
+ * that lasts 48 hours; nobody sees a password). `idempotencyKey` is one per open
+ * dialog: a retry answers 200 with the same person and sends no second email.
  */
 export async function createUser(
   body: CreateUserRequest,
   idempotencyKey: string,
-): Promise<CreatedUser> {
+): Promise<InvitedUser> {
   return unwrap(
     api.POST('/api/v1/admin/users', {
       params: { header: { 'Idempotency-Key': idempotencyKey } },
@@ -107,10 +117,31 @@ export async function unlockUser(staffId: string): Promise<AdminUserChange> {
   return unwrap(api.POST('/api/v1/admin/users/{staffId}/unlock', { params: { path: { staffId } } }))
 }
 
-/** POST /admin/users/{staffId}/password-reset: a new temporary password (not idempotent). */
-export async function resetPassword(staffId: string): Promise<PasswordResetResult> {
+/**
+ * POST /admin/users/{staffId}/password-reset (part 4): emails her a link to set a
+ * new password (1 hour); her sessions end now. Not idempotent: a new link each time.
+ */
+export async function sendPasswordResetLink(staffId: string): Promise<PasswordResetLinkSent> {
   return unwrap(
     api.POST('/api/v1/admin/users/{staffId}/password-reset', { params: { path: { staffId } } }),
+  )
+}
+
+/** POST …/invitation/resend: a new link (48 h); the previous one stops working. */
+export async function resendInvitation(staffId: string): Promise<AdminUserChange> {
+  return unwrap(
+    api.POST('/api/v1/admin/users/{staffId}/invitation/resend', {
+      params: { path: { staffId } },
+    }),
+  )
+}
+
+/** POST …/invitation/cancel: the link stops working and the account is not created. */
+export async function cancelInvitation(staffId: string): Promise<AdminUserChange> {
+  return unwrap(
+    api.POST('/api/v1/admin/users/{staffId}/invitation/cancel', {
+      params: { path: { staffId } },
+    }),
   )
 }
 

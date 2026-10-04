@@ -10,7 +10,9 @@ import {
   reactivateTeam,
   reactivateUser,
   renameTeam,
-  resetPassword,
+  resendInvitation,
+  cancelInvitation,
+  sendPasswordResetLink,
   unlockUser,
   updateUser,
 } from '../api'
@@ -21,8 +23,8 @@ import type {
   AdminUser,
   AdminUserChange,
   CreateUserRequest,
-  CreatedUser,
-  PasswordResetResult,
+  InvitedUser,
+  PasswordResetLinkSent,
   UpdateUserRequest,
 } from '../types'
 
@@ -56,7 +58,7 @@ export interface CreateUserVariables {
 
 export function useCreateUser() {
   const queryClient = useQueryClient()
-  return useMutation<CreatedUser, ApiProblem, CreateUserVariables>({
+  return useMutation<InvitedUser, ApiProblem, CreateUserVariables>({
     mutationKey: adminMutationKeys.createUser,
     mutationFn: ({ body, idempotencyKey }) => createUser(body, idempotencyKey),
     onSuccess: (result) => storeUser(queryClient, result.user),
@@ -99,12 +101,31 @@ export function useUnlockUser(staffId: string) {
   })
 }
 
-/** The temporary password stays in the mutation result only (never in the query cache). */
-export function useResetPassword(staffId: string) {
+/** "Enviar enlace para restablecer" (part 4): a link by email, never a password. */
+export function useSendPasswordResetLink(staffId: string) {
   const queryClient = useQueryClient()
-  return useMutation<PasswordResetResult, ApiProblem, void>({
+  return useMutation<PasswordResetLinkSent, ApiProblem, void>({
     mutationKey: adminMutationKeys.user(staffId, 'reset'),
-    mutationFn: () => resetPassword(staffId),
+    mutationFn: () => sendPasswordResetLink(staffId),
+    onSuccess: (result) => storeUser(queryClient, result.user),
+  })
+}
+
+export function useResendInvitation(staffId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<AdminUserChange, ApiProblem, void>({
+    mutationKey: adminMutationKeys.user(staffId, 'resend-invitation'),
+    mutationFn: () => resendInvitation(staffId),
+    onSuccess: (result) => storeUser(queryClient, result.user),
+  })
+}
+
+/** After a cancel the person leaves the directory (`cancelled`): lists refetch. */
+export function useCancelInvitation(staffId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<AdminUserChange, ApiProblem, void>({
+    mutationKey: adminMutationKeys.user(staffId, 'cancel-invitation'),
+    mutationFn: () => cancelInvitation(staffId),
     onSuccess: (result) => storeUser(queryClient, result.user),
   })
 }

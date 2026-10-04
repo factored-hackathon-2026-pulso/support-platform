@@ -12,7 +12,7 @@ export interface Actors {
   /** A fresh window signed in through the UI (password + MFA) as this person. */
   signedIn(
     label: string,
-    person: { name: string; email: string; password?: string },
+    person: { name: string; email: string; password?: string; totpSecret?: string },
   ): Promise<{
     page: Page
     shell: AppShell
@@ -22,11 +22,14 @@ export interface Actors {
 }
 
 export interface People {
-  /** Administration creates an analyst (starts "En pausa"); paused again after the test. */
+  /**
+   * Administration invites an analyst and she activates the invitation (password +
+   * authenticator, through the API); starts "En pausa"; paused again after the test.
+   */
   analyst(languages: Language[], extraRoles?: StaffRole[]): Promise<CreatedPerson>
   /** A person with exactly these roles. */
   person(roles: StaffRole[], languages: Language[]): Promise<CreatedPerson>
-  /** A person the scenario created through the UI: paused again after the test too. */
+  /** A person the scenario invited and activated through the UI: paused again after the test too. */
   adopt(person: Omit<CreatedPerson, 'id'>): Promise<CreatedPerson>
 }
 
@@ -87,7 +90,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       open,
       async signedIn(label, person) {
         const page = await open(label)
-        await new LoginPage(page).signIn(person.email, person.password)
+        await new LoginPage(page).signIn(person.email, person.password, person.totpSecret)
         const shell = new AppShell(page, person.name)
         await expect(shell.roleSwitcherButton).toBeVisible()
         return { page, shell }

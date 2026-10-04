@@ -68,6 +68,9 @@ staff = Table(
     Column("active", Boolean, nullable=False, default=True),
     Column("created_at", UtcDateTime, nullable=False),
     Column("creation_key", String(64), nullable=True, unique=True),
+    # Part 4: ``invited`` (pending invitation, no password) · ``withdrawn`` (cancelled
+    # before activation; hidden) · ``complete`` (activated or seeded). See ``AccountSetup``.
+    Column("setup", String(20), nullable=False, default="complete"),
     _version(),
 )
 
@@ -88,7 +91,66 @@ login_accounts = Table(
     Column("failed_attempts", Integer, nullable=False, default=0),
     Column("locked_until", UtcDateTime, nullable=True),
     Column("last_login_at", UtcDateTime, nullable=True),
+    # Part 4: her authenticator's RFC 6238 secret, sealed (Fernet). NULL only for the seeded
+    # development accounts (they use the dev code).
+    Column("totp_secret", String(512), nullable=True),
     _version(),
+)
+
+# Part 4: one invitation per person (``staff_id`` unique). Only the SHA-256 hash of the
+# single-use link token is stored. ``state`` is pending | accepted | cancelled (expired is
+# derived from ``expires_at``). ``password_hash`` / ``totp_secret`` (sealed) hold an
+# enrollment in progress, between her password and her first code.
+invitations = Table(
+    "invitations",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("staff_id", String(ID), ForeignKey("staff.id"), nullable=False, unique=True),
+    Column("token_hash", String(128), nullable=False, unique=True),
+    Column("state", String(20), nullable=False),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("sent_at", UtcDateTime, nullable=False),
+    Column("expires_at", UtcDateTime, nullable=False),
+    Column("created_by", String(ID), nullable=False),
+    Column("resend_count", Integer, nullable=False, default=0),
+    Column("accepted_at", UtcDateTime, nullable=True),
+    Column("cancelled_at", UtcDateTime, nullable=True),
+    Column("password_hash", String(255), nullable=True),
+    Column("totp_secret", String(512), nullable=True),
+    Column("failed_codes", Integer, nullable=False, default=0),
+    Column("locked_until", UtcDateTime, nullable=True),
+    _version(),
+)
+
+# Part 4: one password-reset link per person (a new link replaces the token). Only the
+# token's hash is stored; ``state`` is pending | used (expired is derived).
+password_resets = Table(
+    "password_resets",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("staff_id", String(ID), ForeignKey("staff.id"), nullable=False, unique=True),
+    Column("token_hash", String(128), nullable=False, unique=True),
+    Column("state", String(20), nullable=False),
+    Column("sent_at", UtcDateTime, nullable=False),
+    Column("expires_at", UtcDateTime, nullable=False),
+    Column("created_by", String(ID), nullable=False),
+    Column("used_at", UtcDateTime, nullable=True),
+    _version(),
+)
+
+# Part 4, development only: what the dev ``EmailSender`` "sent" (``GET /dev/mailbox`` while
+# ``CC_DEV_MAILBOX`` is on). Never written in production (no dev adapter there).
+dev_mailbox = Table(
+    "dev_mailbox",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("kind", String(20), nullable=False),
+    Column("to_address", String(320), nullable=False),
+    Column("subject", String(200), nullable=False),
+    Column("text", Text, nullable=False),
+    Column("link", String(1000), nullable=False),
+    Column("sent_at", UtcDateTime, nullable=False),
+    Index("ix_dev_mailbox_sent", "sent_at", "id"),
 )
 
 mfa_challenges = Table(

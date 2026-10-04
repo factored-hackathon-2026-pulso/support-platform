@@ -1,6 +1,6 @@
-"""Administration API (slice 4 §5): RBAC on every route, the problem shapes and extensions,
-``version_conflict.current``, idempotent creates, temporary-password headers, and what an
-account change does to the person's next request."""
+"""Administration API (slice 4 §5, part 4): RBAC on every route, the problem shapes and
+extensions, ``version_conflict.current``, idempotent invitations, the invitation and reset
+links (never a password), and what an account change does to the person's next request."""
 
 from __future__ import annotations
 
@@ -15,8 +15,12 @@ from cc_platform.api.schemas.administration import (
     AdminTeamDetail,
     AdminTeamList,
     AdminUser,
+    AdminUserChange,
     AdminUserList,
+    InvitedUser,
+    PasswordResetLinkSent,
 )
+from cc_platform.bootstrap.container import Container
 from cc_platform.infrastructure.seed.people import seed_staff_id, seed_team_id
 from tests.support import (
     ADMIN,
@@ -36,6 +40,7 @@ PROBLEM = "application/problem+json"
 ANDES, PACIFICO, CARIBE = seed_team_id(1), seed_team_id(2), seed_team_id(4)
 DANIELA_ID, TOMAS_ID, VALERIA_ID = seed_staff_id(1), seed_staff_id(8), seed_staff_id(7)
 FELIPE_ID, MARIANA_ID, ANDRES_ID = seed_staff_id(11), seed_staff_id(12), seed_staff_id(13)
+TATIANA_ID, BRUNA_ID = seed_staff_id(14), seed_staff_id(15)
 UNKNOWN_STAFF = "STF-" + "9" * 26
 NEW_USER = {
     "name": "Ana Gil",
@@ -55,6 +60,8 @@ ROUTES: list[tuple[str, str, dict[str, Any] | None]] = [
     ("POST", f"/api/v1/admin/users/{ANDRES_ID}/reactivate", {"expectedVersion": 1}),
     ("POST", f"/api/v1/admin/users/{MARIANA_ID}/unlock", None),
     ("POST", f"/api/v1/admin/users/{MARIANA_ID}/password-reset", None),
+    ("POST", f"/api/v1/admin/users/{BRUNA_ID}/invitation/resend", None),
+    ("POST", f"/api/v1/admin/users/{BRUNA_ID}/invitation/cancel", None),
     ("GET", "/api/v1/admin/teams", None),
     ("GET", f"/api/v1/admin/teams/{ANDES}", None),
     ("POST", "/api/v1/admin/teams", {"name": "Equipo Sur"}),
@@ -88,8 +95,23 @@ def test_list_and_get_users(client: TestClient, sign_in: SignIn) -> None:
     token = sign_in(ADMIN_ONLY.email)
     listed = client.get("/api/v1/admin/users", headers=bearer(token)).json()
     assert AdminUserList.model_validate(listed).model_dump(mode="json", by_alias=True) == listed
-    assert listed["roleCounts"] == {"all": 12, "analyst": 6, "supervisor": 5, "admin": 2}
-    assert listed["statusCounts"] == {"active": 12, "locked": 1, "inactive": 1, "all": 13}
+    assert listed["roleCounts"] == {"all": 13, "analyst": 7, "supervisor": 5, "admin": 2}
+    assert listed["statusCounts"] == {
+        "active": 13,
+        "locked": 1,
+        "invited": 1,
+        "inactive": 1,
+        "all": 15,
+    }
+    invited = client.get(
+        "/api/v1/admin/users", params={"status": "invited"}, headers=bearer(token)
+    ).json()
+    (bruna,) = invited["items"]
+    assert (bruna["id"], bruna["status"], bruna["secondFactor"]) == (BRUNA_ID, "invited", None)
+    assert bruna["invitation"]["status"] == "pending"
+    assert set(bruna["invitation"]) == {
+        "id", "status", "createdAt", "sentAt", "expiresAt", "resendCount"
+    }  # fmt: skip
     mariana = next(u for u in listed["items"] if u["id"] == MARIANA_ID)
     assert (mariana["status"], mariana["failedAttempts"]) == ("locked", 5)
     assert mariana["lockedUntil"].endswith("Z")
@@ -112,21 +134,19 @@ def test_list_and_get_users(client: TestClient, sign_in: SignIn) -> None:
         assert invalid.json()["code"] == "validation_error", params
 
 
-def test_create_user_and_replay(client: TestClient, sign_in: SignIn) -> None:
+def test_create_user_and_replay(client: TestClient, sign_in: SignIn, container: Container) -> None:
     token = sign_in(ADMIN_ONLY.email)
     headers = {**bearer(token), "Idempotency-Key": "create-ana-0001"}
     created = client.post("/api/v1/admin/users", json=NEW_USER, headers=headers)
     assert created.status_code == 201, created.text
-    assert created.headers["cache-control"] == "no-store"
     body = created.json()
-    password = body["temporaryPassword"]
-    assert len(password) == 14
-    assert password.count("-") == 2
-    assert (body["user"]["status"], body["user"]["availability"]) == ("active", "paused")
+    assert InvitedUser.model_validate(body).model_dump(mode="json", by_alias=True) == body
+    assert set(body) == {"user"}  # part 4: never a password
+    assert (body["user"]["status"], body["user"]["invitation"]["status"]) == ("invited", "pending")
+    assert "password" not in created.text.lower()
     replay = client.post("/api/v1/admin/users", json=NEW_USER, headers=headers)
     assert replay.status_code == 200
     assert replay.headers["Idempotent-Replayed"] == "true"
-    assert replay.json()["temporaryPassword"] is None
     assert replay.json()["user"]["id"] == body["user"]["id"]
     other = client.post(
         "/api/v1/admin/users", json={**NEW_USER, "email": "otra@latambank.example"}, headers=headers
@@ -135,11 +155,53 @@ def test_create_user_and_replay(client: TestClient, sign_in: SignIn) -> None:
     duplicate = client.post("/api/v1/admin/users", json=NEW_USER, headers=bearer(token))
     assert (duplicate.status_code, duplicate.json()["code"]) == (409, "email_taken")
     assert duplicate.json()["field"] == "email"
-    # The new person signs in with the temporary password.
+    # She cannot sign in until she accepts the invitation (one email, despite the replay).
     login = client.post(
-        "/api/v1/auth/login", json={"email": NEW_USER["email"], "password": password}
+        "/api/v1/auth/login", json={"email": NEW_USER["email"], "password": PASSWORD}
     )
-    assert login.status_code == 200
+    assert login.json()["code"] == "invalid_credentials"
+    mailbox = client.get("/api/v1/dev/mailbox").json()["items"]
+    assert [m["to"] for m in mailbox].count(NEW_USER["email"]) == 1
+
+
+def test_invitation_resend_and_cancel(client: TestClient, sign_in: SignIn) -> None:
+    token = sign_in(ADMIN_ONLY.email)
+    resent = client.post(f"/api/v1/admin/users/{BRUNA_ID}/invitation/resend", headers=bearer(token))
+    assert resent.status_code == 200, resent.text
+    assert (
+        AdminUserChange.model_validate(resent.json()).model_dump(mode="json", by_alias=True)
+        == resent.json()
+    )
+    assert resent.json()["user"]["invitation"]["resendCount"] == 1
+    cancelled = client.post(
+        f"/api/v1/admin/users/{BRUNA_ID}/invitation/cancel", headers=bearer(token)
+    )
+    assert (cancelled.status_code, cancelled.json()["user"]["status"]) == (200, "cancelled")
+    again = client.post(f"/api/v1/admin/users/{BRUNA_ID}/invitation/cancel", headers=bearer(token))
+    assert (again.status_code, again.json()["code"]) == (409, "invalid_transition")
+    for staff_id in (TATIANA_ID, DANIELA_ID):  # active people have no pending invitation
+        resend = client.post(
+            f"/api/v1/admin/users/{staff_id}/invitation/resend", headers=bearer(token)
+        )
+        assert (resend.status_code, resend.json()["code"]) == (409, "invalid_transition")
+    missing = client.post(
+        f"/api/v1/admin/users/{UNKNOWN_STAFF}/invitation/resend", headers=bearer(token)
+    )
+    assert (missing.status_code, missing.json()["code"]) == (404, "not_found")
+    listed = client.get("/api/v1/admin/users?status=all", headers=bearer(token)).json()
+    assert BRUNA_ID not in {u["id"] for u in listed["items"]}
+    assert listed["statusCounts"]["invited"] == 0
+    # Reactivating or resetting someone who never activated her account is refused.
+    tatiana = client.get(f"/api/v1/admin/users/{TATIANA_ID}", headers=bearer(token)).json()
+    assert tatiana["secondFactor"] == "totp"
+    reactivate = client.post(
+        f"/api/v1/admin/users/{BRUNA_ID}/reactivate",
+        json={"expectedVersion": cancelled.json()["user"]["version"]},
+        headers=bearer(token),
+    )
+    assert (reactivate.status_code, reactivate.json()["code"]) == (409, "staff_invited")
+    reset = client.post(f"/api/v1/admin/users/{BRUNA_ID}/password-reset", headers=bearer(token))
+    assert (reset.status_code, reset.json()["code"]) == (409, "staff_invited")
 
 
 @pytest.mark.parametrize(
@@ -263,7 +325,7 @@ def test_guard_rail_problems(client: TestClient, sign_in: SignIn) -> None:
         json={"expectedVersion": andes["version"]},
         headers=bearer(token),
     ).json()
-    assert (full["code"], full["memberCount"]) == ("team_not_empty", 4)
+    assert (full["code"], full["memberCount"]) == ("team_not_empty", 6)  # + Tatiana, Bruna
     andres = client.post(f"/api/v1/admin/users/{ANDRES_ID}/password-reset", headers=bearer(token))
     assert (andres.status_code, andres.json()["code"]) == (409, "staff_inactive")
     taken = client.post("/api/v1/admin/teams", json={"name": "EQUIPO andes"},
@@ -276,13 +338,19 @@ def test_reset_password_response(client: TestClient, sign_in: SignIn) -> None:
         f"/api/v1/admin/users/{MARIANA_ID}/password-reset", headers=bearer(sign_in(ADMIN.email))
     )
     assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store"
     body = response.json()
-    assert set(body) == {"user", "temporaryPassword", "revokedSessions"}
+    assert PasswordResetLinkSent.model_validate(body).model_dump(mode="json", by_alias=True) == body
+    assert set(body) == {"user", "revokedSessions", "expiresAt"}  # part 4: never a password
     assert body["user"]["status"] == "active"  # the lock is cleared
-    login = client.post(
-        "/api/v1/auth/login", json={"email": MARIANA.email, "password": body["temporaryPassword"]}
+    # The link went to her email; her password keeps working until she sets a new one.
+    (email,) = [m for m in client.get("/api/v1/dev/mailbox").json()["items"]
+                if m["to"] == MARIANA.email]  # fmt: skip
+    assert (email["kind"], email["subject"]) == (
+        "password_reset",
+        "Crea una contraseña nueva para la Plataforma CC",
     )
+    assert "/restablecer?token=" in email["link"]
+    login = client.post("/api/v1/auth/login", json={"email": MARIANA.email, "password": PASSWORD})
     assert login.status_code == 200
 
 
@@ -308,9 +376,7 @@ def test_a_password_reset_cancels_a_sign_in_past_the_password_step(
     late = finish_sign_in(client, pending)
     assert (late.status_code, late.json()["code"]) == (401, "mfa_challenge_invalid")
     assert "token" not in late.json()
-    fresh = finish_sign_in(
-        client, start_sign_in(client, TOMAS.email, reset.json()["temporaryPassword"])
-    )
+    fresh = finish_sign_in(client, start_sign_in(client, TOMAS.email))
     assert fresh.status_code == 200
 
 
@@ -438,13 +504,27 @@ def test_admin_audit_family_and_staff_include_inactive(client: TestClient, sign_
         "/api/v1/audit/events", params={"family": "administration"}, headers=bearer(token)
     ).json()["items"]
     assert [e["description"] for e in events] == [
+        "Invitó a Bruna Esteves por correo",
+        "Creó la cuenta de Bruna Esteves · Analista · Equipo Andes",
         "Desactivó el equipo Equipo Caribe",
+        "Invitó a Tatiana Rojas por correo",
+        "Creó la cuenta de Tatiana Rojas · Analista · Equipo Andes",
         "Desactivó la cuenta de Andrés Villamil",
         "Creó el equipo Equipo Caribe",
         "Le dio a Felipe Echeverri el rol de Supervisión",
     ]
     assert {e["family"] for e in events} == {"administration"}
-    assert events[0]["entity"] == "team"
+    assert events[2]["entity"] == "team"
+    # Part 4: Tatiana's own steps are her access (next to her name).
+    tatiana = client.get(
+        "/api/v1/audit/events",
+        params={"family": "access", "actorId": TATIANA_ID},
+        headers=bearer(token),
+    ).json()["items"]
+    assert [e["description"] for e in tatiana] == [
+        "Aceptó la invitación y activó su cuenta",
+        "Configuró la verificación en dos pasos",
+    ]
     by_team = client.get(
         "/api/v1/audit/events", params={"q": CARIBE}, headers=bearer(token)
     ).json()["items"]

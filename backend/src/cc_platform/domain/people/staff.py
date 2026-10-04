@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from cc_platform.domain.people.errors import TeamInactiveError
+from cc_platform.domain.people.errors import StaffInvitedError, TeamInactiveError
 from cc_platform.domain.people.events import (
     StaffCreated,
     StaffDeactivated,
@@ -65,6 +65,22 @@ ROLE_PRECEDENCE: tuple[StaffRole, ...] = (
 class Language(StrEnum):
     SPANISH = "es"
     PORTUGUESE = "pt"
+
+
+class AccountSetup(StrEnum):
+    """Part 4: where a person is in getting her account (stored on ``Staff``).
+
+    - ``invited``: administration created her; her invitation is pending (or expired). She
+      has no password and no login account yet, so she cannot sign in (``active`` false).
+    - ``withdrawn``: her invitation was cancelled before she activated it. The record stays
+      (history, audit) but the directory hides it; inviting the same email again reuses it.
+    - ``complete``: she activated her account (or was seeded). Only then does ``active``
+      mean what slice 4 says (deactivate / reactivate).
+    """
+
+    INVITED = "invited"
+    WITHDRAWN = "withdrawn"
+    COMPLETE = "complete"
 
 
 def canonical_roles(roles: Iterable[StaffRole]) -> tuple[StaffRole, ...]:
@@ -197,9 +213,12 @@ class Staff(AggregateRoot):
     created_at: datetime
     active: bool = True
     creation_key: str | None = None
+    setup: AccountSetup = AccountSetup.COMPLETE
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.STAFF)
+        if self.setup is not AccountSetup.COMPLETE and self.active:
+            raise InvalidValueError("only a complete account can be active", field="active")
         self.name = normalize_person_name(self.name)
         self.email = normalize_email(self.email)
         self.roles = frozenset(self.roles)
@@ -216,6 +235,19 @@ class Staff(AggregateRoot):
 
     def speaks(self, language: Language) -> bool:
         return language in self.languages
+
+    @property
+    def is_invited(self) -> bool:
+        return self.setup is AccountSetup.INVITED
+
+    @property
+    def is_withdrawn(self) -> bool:
+        return self.setup is AccountSetup.WITHDRAWN
+
+    @property
+    def is_member(self) -> bool:
+        """She counts in her team: active, or invited and on her way (part 4)."""
+        return self.active or self.is_invited
 
     @property
     def is_active_admin(self) -> bool:
@@ -248,7 +280,8 @@ class Staff(AggregateRoot):
         actor: ActorRef,
         creation_key: str | None = None,
     ) -> Staff:
-        """A new, active person in an active team (records ``staff.created``)."""
+        """A new person in an active team (records ``staff.created``). Part 4: she starts
+        ``invited`` (inactive, no password) until she accepts her invitation."""
         if not team.active:
             raise TeamInactiveError(team.id)
         staff = cls(
@@ -260,6 +293,8 @@ class Staff(AggregateRoot):
             team_id=team.id,
             created_at=now,
             creation_key=creation_key,
+            active=False,
+            setup=AccountSetup.INVITED,
         )
         staff._record(
             StaffCreated(
@@ -404,6 +439,33 @@ class Staff(AggregateRoot):
         edit = self.plan_edit(team_id=team.id)
         return self.apply_edit(edit, now=now, actor=actor, team=team, from_team_name=from_team_name)
 
+    # ------------------------------------------------------------------ onboarding (part 4)
+    def activate(self, team: Team) -> None:
+        """Her invitation was accepted: the account is complete and active. No event of its
+        own (``staff.invitation_accepted`` says it); her team must be active."""
+        if not self.is_invited:
+            raise ValueError("only an invited person can be activated")
+        if team.id != self.team_id:
+            raise ValueError("activate needs the person's own team")
+        if not team.active:
+            raise TeamInactiveError(team.id)
+        self.setup = AccountSetup.COMPLETE
+        self.active = True
+
+    def withdraw(self) -> None:
+        """Her invitation was cancelled before she activated it (no event of its own)."""
+        if not self.is_invited:
+            raise ValueError("only an invited person can be withdrawn")
+        self.setup = AccountSetup.WITHDRAWN
+
+    def reinvite(self, *, creation_key: str | None) -> None:
+        """Invited again with the same email after a cancelled invitation."""
+        if not self.is_withdrawn:
+            raise ValueError("only a withdrawn person can be invited again")
+        self.setup = AccountSetup.INVITED
+        if creation_key is not None:
+            self.creation_key = creation_key
+
     # ------------------------------------------------------------------ lifecycle
     def deactivate(self, *, revoked_sessions: int, now: datetime, actor: ActorRef) -> bool:
         """She can no longer sign in; her history, audit and team membership stay."""
@@ -418,9 +480,12 @@ class Staff(AggregateRoot):
         return True
 
     def reactivate(self, team: Team, *, now: datetime, actor: ActorRef) -> bool:
-        """Back in her (active) team; her availability is left as it was (paused)."""
+        """Back in her (active) team; her availability is left as it was (paused). Someone
+        who never activated her account cannot be reactivated (``staff_invited``)."""
         if self.active:
             return False
+        if self.setup is not AccountSetup.COMPLETE:
+            raise StaffInvitedError()
         if team.id != self.team_id:
             raise ValueError("reactivate needs the person's own team")
         if not team.active:

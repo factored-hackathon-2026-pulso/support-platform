@@ -405,10 +405,11 @@ async def test_rows_are_capped_at_ten_with_the_total(world: Container) -> None:
 async def test_team_snapshot_counts_her_team_and_her_languages(world: Container) -> None:
     view = await home(world)
     team = view.team_now
-    # Equipo Andes: Daniela, Julián and Felipe (Andrés is deactivated); nobody available.
+    # Equipo Andes: Daniela, Julián, Felipe and Tatiana (part 4: she accepted her
+    # invitation; Andrés is deactivated, Bruna only invited); nobody available.
     assert (team.team_name, team.analyst_count, team.available_count) == (
         "Equipo Andes",
-        3,
+        4,
         0,
     )
     assert [(q.language, q.waiting) for q in team.queues] == [

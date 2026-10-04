@@ -28,6 +28,8 @@ class BuildInfo:
 
     build: str
     environment: str
+    #: Part 4: the dev mailbox is on (``GET /dev/mailbox``); the SPA then links to it.
+    dev_mailbox: bool = False
 
 
 @dataclass(frozen=True, slots=True)

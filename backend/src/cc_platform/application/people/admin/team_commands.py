@@ -145,8 +145,9 @@ class DeactivateTeam:
             await ensure_team_version(uow, team, expected_version)
             if not team.active:
                 return False
+            # Part 4: an invited person counts too (her activation needs an active team).
             members = sum(
-                person.active and person.team_id == team.id for person in await uow.staff.list()
+                person.is_member and person.team_id == team.id for person in await uow.staff.list()
             )
             team.deactivate(active_members=members, now=now, actor=admin)
             # A move into this team saves it too (``touch``), so the two serialise: when the

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from cc_platform.domain.shared.errors import ConflictError, DomainError
-from cc_platform.domain.shared.json import iso_utc
+from cc_platform.domain.shared.json import JsonValue, iso_utc
 
 
 class AccountLockedError(DomainError):
@@ -76,3 +76,24 @@ class LastAdminError(ConflictError):
 
     code = "last_admin"
     default_message = "Debe quedar al menos una persona activa con el rol de Administración."
+
+
+# ----------------------------------------------------------------------------- onboarding
+class StaffInvitedError(ConflictError):
+    """Part 4: she has not activated her account yet (her invitation is still pending), so
+    there is nothing to reactivate or reset: administration resends the invitation."""
+
+    code = "staff_invited"
+    default_message = "Esta persona todavía no activó su cuenta. Reenvía la invitación."
+
+
+class PasswordRejectedError(DomainError):
+    """Part 4: the new password breaks the password policy (``reasons``: the rules)."""
+
+    code = "password_rejected"
+    default_message = "La contraseña no cumple los requisitos."
+
+    def __init__(self, reasons: list[str]) -> None:
+        values: list[JsonValue] = list(reasons)
+        super().__init__(None, reasons=values)
+        self.reasons = tuple(reasons)

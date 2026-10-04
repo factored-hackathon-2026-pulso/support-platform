@@ -83,12 +83,38 @@ async def test_admin_story_and_directory_of_a_fresh_start() -> None:
         for e in events
         if e.event_type.startswith(("staff.", "team.")) and e.actor_role == "admin"
     ]
+    valeria, carolina = seed_staff_id(7), seed_staff_id(9)
     assert admin == [
-        ("staff.roles_changed", now - timedelta(days=5), seed_staff_id(7)),
-        ("team.created", now - timedelta(days=3), seed_staff_id(7)),
-        ("staff.deactivated", now - timedelta(days=2), seed_staff_id(9)),
-        ("team.deactivated", now - timedelta(days=1), seed_staff_id(7)),
+        ("staff.roles_changed", now - timedelta(days=5), valeria),
+        ("team.created", now - timedelta(days=3), valeria),
+        # part 4: Valeria invited Tatiana (she accepted at T−1h) and, at T−3h, Bruna
+        ("staff.deactivated", now - timedelta(days=2), carolina),
+        ("staff.created", now - timedelta(days=2), valeria),
+        ("staff.invitation_sent", now - timedelta(days=2), valeria),
+        ("team.deactivated", now - timedelta(days=1), valeria),
+        ("staff.created", now - timedelta(hours=3), valeria),
+        ("staff.invitation_sent", now - timedelta(hours=3), valeria),
     ]
+    tatiana_id, bruna_id = seed_staff_id(14), seed_staff_id(15)
+    hers = [(e.event_type, e.event_time) for e in events if e.actor_id == tatiana_id]
+    assert hers == [
+        ("staff.mfa_enrolled", now - timedelta(hours=1)),
+        ("staff.invitation_accepted", now - timedelta(hours=1)),
+    ]
+    async with container.uow() as uow:
+        tatiana = await uow.staff.get(tatiana_id)
+        bruna = await uow.staff.get(bruna_id)
+        tatiana_account = await uow.login_accounts.get(tatiana_id)
+        bruna_invitation = await uow.invitations.get_for_staff(bruna_id)
+    assert tatiana is not None
+    assert bruna is not None
+    assert (tatiana.active, tatiana.is_invited, bruna.active, bruna.is_invited) == (
+        True, False, False, True
+    )  # fmt: skip
+    assert tatiana_account is not None
+    assert tatiana_account.uses_totp
+    assert bruna_invitation is not None
+    assert bruna_invitation.expires_at == now + timedelta(hours=45)
     times = [e.event_time for e in events]
     assert times == sorted(times)  # the story is logged in story-time order
     locks = [e for e in events if e.entity_id == seed_staff_id(12)]

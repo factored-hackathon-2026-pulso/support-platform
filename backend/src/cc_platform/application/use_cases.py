@@ -13,6 +13,7 @@ from cc_platform.application.cases.use_cases import CasesUseCases
 from cc_platform.application.customers.use_cases import CustomersUseCases
 from cc_platform.application.notifications.use_cases import NotificationsUseCases
 from cc_platform.application.people.admin.use_cases import AdministrationUseCases
+from cc_platform.application.people.onboarding.use_cases import OnboardingUseCases
 from cc_platform.application.people.use_cases import PeopleUseCases
 
 
@@ -24,3 +25,4 @@ class UseCases:
     audit: AuditUseCases
     administration: AdministrationUseCases
     notifications: NotificationsUseCases
+    onboarding: OnboardingUseCases

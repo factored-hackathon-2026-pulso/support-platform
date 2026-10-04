@@ -59,6 +59,20 @@ export const routes: RouteObject[] = [
     ],
   },
 
+  // Part 4: the invitation and password-reset links. Same look as the login, but not
+  // GuestOnly: a signed-in person opening a link (an admin trying it) still sees it.
+  {
+    Component: AuthLayout,
+    ErrorBoundary: RouteErrorBoundary,
+    children: [
+      lazyRoute('/activar', () => import('@/routes/onboarding/activate')),
+      lazyRoute('/restablecer', () => import('@/routes/onboarding/reset')),
+    ],
+  },
+
+  // Development mailbox (part 4): only meaningful when the backend runs it.
+  lazyRoute('/dev/correos', () => import('@/routes/dev/mailbox')),
+
   // Customer chat simulator: dev/demo tool outside the staff shell.
   lazyRoute('/cliente', () => import('@/routes/customer/simulator')),
 

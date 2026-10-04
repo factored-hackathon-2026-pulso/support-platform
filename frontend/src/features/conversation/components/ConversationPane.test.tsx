@@ -95,7 +95,7 @@ describe('ConversationPane · chat', () => {
       within(arrival)
         .getAllByRole('listitem')
         .map((item) => item.textContent),
-    ).toEqual(['Estabas disponible', 'Hablas español'])
+    ).toEqual(['Estabas disponible', expect.stringMatching(/^HablasEspañolES/)])
     expect(arrival).toHaveTextContent('Asignado: 5 mar, 10:46')
     expect(arrival.textContent).not.toContain('·')
 
@@ -371,14 +371,15 @@ describe('ConversationPane · accessibility', () => {
     expect(log).not.toContainElement(button)
   })
 
-  it('shows the facts whole, with "Portugués", and a short case number', async () => {
+  it('shows the facts whole, with the PT language mark, and a short case number', async () => {
     const detail = makeCaseDetail()
     detail.case = { ...detail.case, language: 'pt' }
     setup(detail)
     const header = (await screen.findByRole('heading', { name: 'Marcela Quintana Pardo' }))
       .parentElement!
     expect(header).toHaveTextContent(/Barranquilla, Colombia/)
-    expect(header).toHaveTextContent('Idioma: Portugués')
+    expect(header).toHaveTextContent('Idioma: PortuguêsPT')
+    expect(header.querySelector('svg[data-language="pt"]')).not.toBeNull()
     expect(within(header).getByText('CASE-…0101')).toBeInTheDocument()
     expect(within(header).getByTitle(CASE_ID)).toBeInTheDocument()
     expect(

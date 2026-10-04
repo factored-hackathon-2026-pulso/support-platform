@@ -7,6 +7,7 @@ import {
   Fact,
   FACT_ICONS,
   FactList,
+  LanguageName,
   Skeleton,
   Status,
   type FactIcon,
@@ -120,7 +121,7 @@ function pillIcon(icon: FactIcon | undefined) {
 
 /**
  * Label column (icon + label) and value column: text, the status, a rating pill, short
- * facts, or (slice 8) the priority menu of `detail`.
+ * facts, a language (mark + own name), or (slice 8) the priority menu of `detail`.
  */
 function FileRows({
   rows,
@@ -153,6 +154,8 @@ function FileRows({
                 </Badge>
               ) : row.facts ? (
                 <FactList items={row.facts} size="md" />
+              ) : row.language ? (
+                <LanguageName language={row.language} />
               ) : (
                 row.text
               )}

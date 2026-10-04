@@ -1,6 +1,6 @@
 # ADR 0004 · Tool service: agent-core's tools over the bank data (`gold_restricted`)
 
-- Status: **Proposed** (design only; no code yet). Decided by the user on 2026-10-04: tools go over HTTP from the start, backed by the `data-pipeline` `gold_restricted` dataset, in a separate read-only service.
+- Status: **Proposed** (design; T1, the agent-core side, is built: agent-core ADR 0025). Decided by the user on 2026-10-04: tools go over HTTP from the start, backed by the `data-pipeline` `gold_restricted` dataset, in a separate read-only service.
 - Date: 2026-10-04
 - Scope: a new small service (`tool-service`), a new adapter in `agent-core` (`HttpToolExecutor`), and the platform's part (identity linkage, grants, a store for filed PQRs).
 - Related: ADR 0003 (agent-core integration), `slice-14-assistant.md` §10 (gaps). In `agent-core`: ADR 0007 (writes: confirm → act → verify), ADR 0024 (the LLM gateway as an external service, the model for this one), ADR 0006 (principals and delegation). In `data-pipeline`: `docs/02-gobierno-de-datos.md` (governance matrix), the `gold_restricted` read-models.
@@ -27,7 +27,8 @@ The data exists: `data-pipeline` publishes `gold_restricted.duckdb` (PII in clea
    {
      "args": {...},                 # model-controlled, validated against the tool's args_schema
      "bound_params": {...},         # engine-controlled (subject, case); NEVER taken from args
-     "context": {"principal": <signed JWS>, "delegation": <signed JWS|null>, "run_id", "call_id", "level"},
+     "context": {"principal": {type, id, roles, scopes, attrs, auth_level}, "subject": {kind, ref}|null,
+                  "on_behalf_of": {subject, grant_ref, grantee, scopes}|null, "run_id", "call_id", "release", "turn_id"},
      "idempotency_key": "<action_id>|null"
    }
    → 200 {"status": "ok|denied|step_up_required|error|uncertain", "result": {...}, "source": "<table>",
@@ -35,7 +36,7 @@ The data exists: `data-pipeline` publishes `gold_restricted.duckdb` (PII in clea
    ```
 
    `HttpToolExecutor` maps transport failures to the typed kinds (`timeout`, `unavailable`, `bad_response`) and never raises into the engine, exactly as the gateway adapter does. A transport failure on a **write** is `uncertain`, never `error` (ADR 0007: the engine then reads back by idempotency key instead of retrying blindly).
-3. **The subject is never an argument.** The customer whose data is read comes from the verified principal / `bound_params` (`bank_customer_id`), not from what the model typed. The service verifies the JWS with the same public keys agent-core loads (`--identity-keys`, `--staff-keys`), checks `kid`, expiry and audience, and, for an `advisor` principal acting with a delegation, that the delegation's `on_behalf_of` is the customer in `bound_params`. A mismatch is `denied`, not an empty result. Every query is a parameterized `WHERE customer_id = ?`; there is no query-by-text tool.
+3. **The subject is never an argument.** The customer whose data is read comes from the verified principal / `bound_params` (`bank_customer_id`), not from what the model typed. agent-core has already verified the JWS at its edge and does not keep the token, so the service receives the verified **claims** (never a JWS; amended by agent-core ADR 0025) and trusts agent-core through the bearer. It checks that, for an `advisor` principal acting with a delegation, the delegation's `on_behalf_of` is the customer in `bound_params`, and that a `customer` principal's id is the one in `bound_params`. A mismatch is `denied`, not an empty result. Every query is a parameterized `WHERE customer_id = ?`; there is no query-by-text tool.
 4. **Mapping to the read-models** (first set; names follow the existing registry yamls):
 
    | Tool | Kind | Reads | Notes |
@@ -51,13 +52,13 @@ The data exists: `data-pipeline` publishes `gold_restricted.duckdb` (PII in clea
 6. **Writes need a writable store; `gold_restricted` stays read-only.** `radicar_pqr` writes to a small table owned by the tool-service (`filed_pqrs`: `idempotency_key` unique, customer, product ref, text, status, `filed_at`), SQLite at first and Postgres with the platform's S17 move. The idempotent replay returns the first result; the read-back returns the stored row. `leer_pqr_cliente` unions the dataset's cases with `filed_pqrs`, so a PQR filed today is visible tomorrow even before the pipeline reruns. The next pipeline run does not know about `filed_pqrs`: reconciliation (the bank's real case system) is out of scope and is named here as the production gap.
 7. **Which dataset version.** The service reads `publish/latest.json` per request batch (cached for a short TTL, 60 s default), opens the pointed DuckDB file read-only, and keeps the previous handle until in-flight calls finish. Every result carries `dataset_run_id` in its `source` metadata so an audit line says which data the answer came from. If the pointer or file is unreadable the service answers `error: data_unavailable`; it never falls back to stale data silently. Local development points `TOOL_DATA_DIR` at a `data/publish` folder; production reads S3 (`TOOL_DATA_URI=s3://…`) with a role scoped to `publish/*` read.
 8. **Linkage to the platform's customers.** The platform's customer id is not the bank's. `CC_BANK_CUSTOMER_LINKS_FILE` (already used by S14) maps platform customer → `bank_customer_id`, and the platform puts that id in the customer principal (`bound_params`). The service only ever sees `bank_customer_id`, which equals `customer_id` in the read-models. A customer with no link starts no assistant conversation that needs tools (already so in S14). A real link table comes with S17's real customer authentication.
-9. **Service-to-service security.** A static bearer token per direction in this first version (`TOOL_SERVICE_TOKEN` for agent-core → service; `CC_INTERNAL_SERVICE_TOKEN` already exists for the other direction), constant-time compare, TLS terminated in front, the service not reachable from the public internet. The JWS in the body is the authorization; the bearer only says "this is agent-core". No PII in logs: the service logs tool name, status, latency, `call_id`, `run_id`, `dataset_run_id`, never args or results. mTLS or workload identity replaces the static token with the AWS move (ADR 0023 in agent-core).
+9. **Service-to-service security.** A static bearer token per direction in this first version (`TOOL_SERVICE_TOKEN` for agent-core → service; `CC_INTERNAL_SERVICE_TOKEN` already exists for the other direction), constant-time compare, TLS terminated in front, the service not reachable from the public internet. The bearer says "this is agent-core", which is what lets the service trust the claims; so it is a deployment secret and the service must not be reachable outside the private network. No PII in logs: the service logs tool name, status, latency, `call_id`, `run_id`, `dataset_run_id`, never args or results. mTLS or workload identity replaces the static token with the AWS move (ADR 0023 in agent-core).
 10. **What else agent-core needs to leave the demo doubles** (tracked here because they gate production, not because the tool-service owns them): a `grant_active` adapter calling the platform's `GET /api/v1/internal/grants/{grantRef}` (built in S17), a real `AuthzPort`, a transcript store, calibration data and the field classifier above. Each is its own small adapter in agent-core, selected by env like the gateway.
 
 ## Phasing (when implementation starts)
 
 - **T1** `HttpToolExecutor` in agent-core + a **fake tool-service** in its tests (contract test against the endpoint above, error mapping, uncertain-on-write). No data yet.
-- **T2** `tool-service` with the three read tools over a local `publish/` folder; JWS verification; contract test shared by both sides (the request/response JSON lives in one schema file copied to both repos, as `agent-core-openapi.json` is today).
+- **T2** `tool-service` with the three read tools over a local `publish/` folder; claims/`bound_params` coherence checks; contract test shared by both sides (the request/response JSON lives in one schema file copied to both repos, as `agent-core-openapi.json` is today).
 - **T3** `radicar_pqr` + `filed_pqrs` + `leer_pqr_cliente` union; idempotency and read-back tests.
 - **T4** Wire `serve` to the HTTP executor and the exported catalog; re-run the end-to-end scripts (customer chat, handoff, copilot) and compare the copilot's answers with the demo-double baseline.
 - **T5** S3 source, caching, deployment, tokens in the secret manager.

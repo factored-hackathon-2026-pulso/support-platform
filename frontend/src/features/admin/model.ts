@@ -7,7 +7,14 @@
  * model.test.ts.
  */
 import { ROLE_LABEL, sortRoles, type RoleId } from '@/app/roles'
-import type { FactItem, FilterGroup, FilterSelection, StatusAppearance } from '@/components/ui'
+import {
+  LANGUAGE_NATIVE_NAME,
+  type FactItem,
+  type FilterGroup,
+  type FilterOption,
+  type FilterSelection,
+  type StatusAppearance,
+} from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
 import { formatRelativeTime, formatTime, joinEs, pluralize } from '@/lib/format'
 import type {
@@ -45,8 +52,7 @@ export const ROLE_DESCRIPTION: Record<RoleId, string> = {
 
 export const LANGUAGES: readonly Language[] = ['es', 'pt']
 
-/** "Español" (controls) and "español" (inside a sentence). */
-export const LANGUAGE_LABEL: Record<Language, string> = { es: 'Español', pt: 'Portugués' }
+/** "español" (inside a sentence); controls show the language mark or its own name. */
 export const LANGUAGE_IN_SENTENCE: Record<Language, string> = { es: 'español', pt: 'portugués' }
 
 /**
@@ -79,14 +85,6 @@ export const TEAM_STATUS: Readonly<Record<'active' | 'inactive', StatusAppearanc
 
 export function teamStatus(team: Pick<AdminTeam, 'active'>): StatusAppearance {
   return TEAM_STATUS[team.active ? 'active' : 'inactive']
-}
-
-/** "español, portugués", or "—" without languages. */
-export function languagesLabel(languages: readonly Language[]): string {
-  const sorted = LANGUAGES.filter((language) => languages.includes(language))
-  return sorted.length > 0
-    ? sorted.map((language) => LANGUAGE_IN_SENTENCE[language]).join(', ')
-    : '—'
 }
 
 /** "Equipo Andes (inactivo)" for options naming an inactive team. */
@@ -163,19 +161,15 @@ export function openCasesFact(openCases: AdminUser['openCases']): string {
 
 /**
  * Aside facts under the name (slice 6 UI rule: structured items, never a
- * dot-joined line; the roles are chips next to them): [languages] "Español y
- * portugués", [users] the team.
+ * dot-joined line; the roles are chips next to them): her languages as marks
+ * ("[ES] [PT]", named "Español y Português") or [languages] "Sin idiomas", [users] the team.
  */
 export function userSummaryFacts(user: Pick<AdminUser, 'languages' | 'team'>): FactItem[] {
-  const sorted = LANGUAGES.filter((language) => user.languages.includes(language))
-  const spoken = joinEs(sorted.map((language) => LANGUAGE_IN_SENTENCE[language]))
+  const languages = LANGUAGES.filter((language) => user.languages.includes(language))
   return [
-    {
-      key: 'languages',
-      icon: 'languages',
-      text: spoken ? spoken.charAt(0).toUpperCase() + spoken.slice(1) : 'Sin idiomas',
-      label: 'Idiomas',
-    },
+    languages.length > 0
+      ? { key: 'languages', icon: 'languages', text: '', label: 'Idiomas', languages }
+      : { key: 'languages', icon: 'languages', text: 'Sin idiomas', label: 'Idiomas' },
     { key: 'team', icon: 'users', text: user.team.name, label: 'Equipo' },
   ]
 }
@@ -327,7 +321,7 @@ export function userFilterGroups(
   selection: FilterSelection,
   now: DateInput,
 ): FilterGroup[] {
-  const counted = (key: UserFilterKey, options: { value: string; label: string }[]) => {
+  const counted = (key: UserFilterKey, options: FilterOption[]) => {
     const base = filterUsers(users, selection, now, key)
     return {
       key,
@@ -371,7 +365,11 @@ export function userFilterGroups(
     {
       ...counted(
         'language',
-        LANGUAGES.map((language) => ({ value: language, label: LANGUAGE_LABEL[language] })),
+        LANGUAGES.map((language) => ({
+          value: language,
+          label: LANGUAGE_NATIVE_NAME[language],
+          language,
+        })),
       ),
       legend: 'Idioma',
     },

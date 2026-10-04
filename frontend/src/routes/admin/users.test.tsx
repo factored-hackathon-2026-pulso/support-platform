@@ -87,7 +87,12 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     const danielaRow = row(/Daniela Ríos Medina/)
     expect(within(danielaRow).getByText('daniela.rios@latambank.example')).toBeInTheDocument()
     expect(within(danielaRow).getByText('Analista')).toBeInTheDocument()
-    expect(within(danielaRow).getByText('español, portugués')).toBeInTheDocument()
+    // Her languages as marks (flag + code), named for screen readers.
+    expect(
+      within(danielaRow).getByText('Español y Português', { selector: '.sr-only' }),
+    ).toBeInTheDocument()
+    expect(danielaRow).toHaveTextContent(/ESPT/)
+    expect(danielaRow.querySelectorAll('svg[data-language]')).toHaveLength(2)
     expect(within(danielaRow).getByText('Equipo Andes')).toBeInTheDocument()
     expect(within(danielaRow).getByText('Activa')).toBeInTheDocument()
     const carolinaRow = row(/Carolina Peña Ruiz/)
@@ -130,7 +135,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     expect(
       await within(panel).findByRole('checkbox', { name: 'Equipo Caribe (inactivo) 0' }),
     ).toBeInTheDocument()
-    expect(within(panel).getByRole('checkbox', { name: 'Portugués 1' })).toBeInTheDocument()
+    expect(within(panel).getByRole('checkbox', { name: 'Português 1' })).toBeInTheDocument()
 
     await user.click(within(panel).getByRole('checkbox', { name: 'Supervisión 2' }))
     expect(router.state.location.search).toBe('?role=supervisor')
@@ -277,10 +282,10 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     const save = within(panel).getByRole('button', { name: 'Guardar cambios' })
     expect(save).toBeDisabled()
 
-    await user.click(within(panel).getByRole('checkbox', { name: 'Portugués' }))
+    await user.click(within(panel).getByRole('checkbox', { name: 'Português' }))
     expect(save).toBeEnabled()
     await user.click(save)
-    const portuguese = within(panel).getByRole('checkbox', { name: 'Portugués' })
+    const portuguese = within(panel).getByRole('checkbox', { name: 'Português' })
     // It asks again first (the count may be stale); the server still says 1.
     await waitFor(() =>
       expect(portuguese).toHaveAccessibleDescription(
@@ -291,7 +296,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     )
     expect(within(panel).getByRole('checkbox', { name: 'Español' })).toHaveFocus()
 
-    await user.click(within(panel).getByRole('checkbox', { name: 'Portugués' }))
+    await user.click(within(panel).getByRole('checkbox', { name: 'Português' }))
     await user.click(within(panel).getByRole('checkbox', { name: /^Analista/ }))
     await user.click(within(panel).getByRole('checkbox', { name: /^Supervisión/ }))
     await user.click(within(panel).getByRole('button', { name: 'Guardar cambios' }))
@@ -317,7 +322,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       ...daniela,
       openCases: { total: 4, es: 4, pt: 0 },
     })
-    await user.click(within(panel).getByRole('checkbox', { name: 'Portugués' }))
+    await user.click(within(panel).getByRole('checkbox', { name: 'Português' }))
     await user.click(within(panel).getByRole('button', { name: 'Guardar cambios' }))
     await waitFor(() =>
       expect(updateUser).toHaveBeenCalledWith(daniela.id, {
@@ -430,15 +435,19 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       'ana.gil@latambank.example',
     )
     await user.click(within(dialog).getByRole('checkbox', { name: /^Analista/ }))
-    // Languages are pill toggles (a native checkbox inside each pill, keyboard included).
+    // Languages are option cards: the flag and the language's own name, a native
+    // checkbox inside each card (keyboard included) and a round check when selected.
     const spanish = within(dialog).getByRole('checkbox', { name: 'Español' })
+    const card = spanish.closest('label')!
+    expect(card.querySelector('svg[data-language="es"]')).toHaveAttribute('width', '21')
+    expect(within(dialog).getByRole('checkbox', { name: 'Português' })).toBeInTheDocument()
     spanish.focus()
     await user.keyboard(' ')
     expect(spanish).toBeChecked()
-    expect(spanish.closest('label')?.querySelector('svg')).not.toBeNull()
+    expect(card.querySelectorAll('svg')).toHaveLength(2)
     await user.click(spanish)
     expect(spanish).not.toBeChecked()
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Portugués' }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Português' }))
     await user.selectOptions(
       within(dialog).getByRole('combobox', { name: 'Equipo' }),
       TEAM_PACIFICO.id,
@@ -487,7 +496,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     await user.type(within(dialog).getByRole('textbox', { name: 'Nombre completo' }), bruna.name)
     await user.type(within(dialog).getByRole('textbox', { name: 'Correo' }), bruna.email)
     await user.click(within(dialog).getByRole('checkbox', { name: /^Analista/ }))
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Portugués' }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Português' }))
     await waitFor(() => expect(within(dialog).getAllByRole('option').length).toBeGreaterThan(1))
     await user.selectOptions(
       within(dialog).getByRole('combobox', { name: 'Equipo' }),

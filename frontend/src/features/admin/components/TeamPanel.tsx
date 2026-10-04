@@ -9,6 +9,7 @@ import {
   Field,
   Input,
   Kicker,
+  LanguageMarks,
   Spinner,
   Status,
   useToast,
@@ -19,7 +20,6 @@ import { formatDate } from '@/lib/format'
 import {
   ACCOUNT_STATUS,
   TEAM_NAME_MAX_LENGTH,
-  languagesLabel,
   normalizeName,
   sortMembers,
   teamNotEmptyCopy,
@@ -302,9 +302,16 @@ function MemberRow({ member }: { member: AdminTeamMember }) {
       </span>
       <span className="flex flex-wrap items-center gap-2 text-12">
         <RoleChips roles={member.roles} className={cn(inactive && 'opacity-70')} />
-        <span className={inactive ? 'text-muted' : 'text-ink-2'}>
-          {languagesLabel(member.languages)}
-        </span>
+        {member.languages.length > 0 ? (
+          <LanguageMarks
+            languages={member.languages}
+            className={cn(inactive && 'text-muted opacity-70')}
+          />
+        ) : (
+          <span title="Sin idiomas" className={inactive ? 'text-muted' : 'text-ink-2'}>
+            —
+          </span>
+        )}
       </span>
     </li>
   )

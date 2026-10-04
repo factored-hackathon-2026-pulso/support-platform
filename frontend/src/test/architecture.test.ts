@@ -185,6 +185,24 @@ describe('import boundaries', () => {
   })
 })
 
+/** Where the SPA's paths are written (ARCHITECTURE.md §4): nowhere else in the source. */
+const PATHS_MODULE = 'src/app/paths.ts'
+
+/** A string literal that starts with one of the SPA's top-level path segments. */
+const APP_PATH_LITERAL =
+  /['"`]\/(?:analyst|supervision|admin|customer|login|activate|reset-password|dev)(?:[/?'"`]|$)/m
+
+describe('route paths', () => {
+  it(`are written only in ${PATHS_MODULE}`, () => {
+    const offending = Object.entries(SOURCES)
+      .map(([key, source]) => [key.replace(/^\//, ''), stripComments(source)] as const)
+      .filter(([file]) => file !== PATHS_MODULE && !isTestFile(file))
+      .filter(([, source]) => APP_PATH_LITERAL.test(source))
+      .map(([file]) => file)
+    expect(offending).toEqual([])
+  })
+})
+
 /** Source file of a resolved module path ("src/features/x/core" → "src/features/x/core.ts"). */
 function fileOf(target: string): string | null {
   for (const candidate of [

@@ -159,9 +159,11 @@ describe('/analyst/home (Inicio)', () => {
       'Marcela Quintana Pardo: Ya no es tuyo. Lo reasignó: Lucía Herrera, Ahora lo atiende: Sebastián Cárdenas, Solo lectura, hace 6 min. Abrir en solo lectura',
     )
     expect(within(list).getByText('Larissa Monteiro Alves').tagName).toBe('STRONG')
-    // Rule 3 applied: the language and the "Regla 3" tag as their own fact.
+    // Rule 3 applied: the language mark and the "Regla 3" tag as their own fact.
     const arrival = within(list).getByRole('link', { name: /^Larissa Monteiro Alves: Te llegó/ })
-    expect(arrival).toHaveTextContent('Por idioma: PortuguésRegla 3')
+    expect(arrival).toHaveAccessibleName(/Por idioma: Português/)
+    expect(arrival).toHaveTextContent(/Por idioma: PortuguêsPT.*Regla 3/)
+    expect(arrival.querySelector('svg[data-language="pt"]')).not.toBeNull()
     expect(list.textContent).not.toContain('·')
 
     const more = within(feed).getByRole('button', { name: 'Ver todo (5)' })
@@ -191,8 +193,13 @@ describe('/analyst/home (Inicio)', () => {
     const team = await screen.findByRole('region', { name: 'Tu equipo ahora' })
     await within(team).findByText('Disponibles')
     expect(team).toHaveTextContent('Disponibles0 de 4')
-    expect(team).toHaveTextContent('Cola en español2El más antiguo: hace 17 min')
-    expect(team).toHaveTextContent('Cola en portugués1El más antiguo: hace 6 min')
+    // Each queue starts with its language mark (named for screen readers).
+    const [, spanish, portuguese] = Array.from(team.querySelectorAll('dl > div'))
+    expect(spanish).toHaveTextContent(/^EspañolES.*Esperan en la cola2El más antiguo: hace 17 min/)
+    expect(spanish!.querySelector('svg[data-language="es"]')).not.toBeNull()
+    expect(portuguese).toHaveTextContent(
+      /^PortuguêsPT.*Esperan en la cola1El más antiguo: hace 6 min/,
+    )
     expect(team).toHaveTextContent('Al empezar, la cola de tus idiomas se reparte primero contigo.')
     expect(team.querySelector('dl')?.textContent).not.toContain('·')
   })

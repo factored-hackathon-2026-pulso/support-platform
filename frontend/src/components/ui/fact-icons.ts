@@ -34,7 +34,7 @@ import {
   Users,
   type LucideProps,
 } from 'lucide-react'
-import type { LanguageCode } from './language'
+import { languagesName, type LanguageCode } from './language'
 import { PriorityIcon } from './PriorityIcon'
 import type { PriorityLevel } from './priority-levels'
 
@@ -131,4 +131,13 @@ export interface FactItem {
    * text the marks stand in for the icon ("Idiomas: [ES] [PT]").
    */
   languages?: readonly LanguageCode[]
+}
+
+/**
+ * What a fact says to a screen reader, for a control that names itself from its facts:
+ * "Canal: App", "Por idioma: Português", "Hablas Português".
+ */
+export function spokenFact(fact: Pick<FactItem, 'label' | 'text' | 'languages'>): string {
+  const words = [fact.text, languagesName(fact.languages ?? [])].filter(Boolean).join(' ')
+  return fact.label ? `${fact.label}: ${words}` : words
 }

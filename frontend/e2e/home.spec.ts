@@ -30,7 +30,9 @@ test.describe('Analyst home ("Inicio")', () => {
     await expect(rail.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
     await expect(rail.getByText('Estado: En pausa')).toBeAttached()
     await expect(home.firstCase(customer.name)).toHaveCount(0)
-    await expect(home.team).toContainText('Cola en español')
+    // Her language queue, as its mark (named "Español" for screen readers).
+    await expect(home.team).toContainText('Esperan en la cola')
+    await expect(home.team.getByText('Español', { exact: true }).first()).toBeAttached()
 
     // "Empezar a atender": the queue drains to her, live.
     await home.startWorking()

@@ -1,4 +1,4 @@
-import { Fact, FACT_ICONS, Skeleton } from '@/components/ui'
+import { Fact, FACT_ICONS, LanguageMarks, Skeleton } from '@/components/ui'
 import { TEAM_PAUSED_NOTE, teamRows } from '../model'
 import type { HomeTeam } from '../types'
 
@@ -12,8 +12,8 @@ export interface TeamNowProps {
 
 /**
  * "Tu equipo ahora" (canvas `team`): how many of her team are available (a
- * count, no names) and, per language she speaks, how many cases wait in that
- * queue and the oldest wait (its own clock fact). Nobody else's cases.
+ * count, no names) and, per language she speaks (its mark), how many cases wait
+ * in that queue and the oldest wait (its own clock fact). Nobody else's cases.
  */
 export function TeamNow({ team, failed, meAvailable, now }: TeamNowProps) {
   return (
@@ -32,7 +32,11 @@ export function TeamNow({ team, failed, meAvailable, now }: TeamNowProps) {
               return (
                 <div key={row.key} className="flex items-center justify-between gap-3 text-14">
                   <dt className="flex items-center gap-1.5 text-ink-2">
-                    <Icon size={15} aria-hidden="true" />
+                    {row.language ? (
+                      <LanguageMarks languages={[row.language]} />
+                    ) : (
+                      <Icon size={15} aria-hidden="true" />
+                    )}
                     {row.label}
                   </dt>
                   <dd className="m-0 flex items-center gap-2.5">

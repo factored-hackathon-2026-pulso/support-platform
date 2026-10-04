@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { Fact, FactList } from './Fact'
+import { spokenFact } from './fact-icons'
 
 describe('Fact / FactList', () => {
   it('draws one short fact with its icon, an optional screen-reader label and a tag', () => {
@@ -51,6 +52,16 @@ describe('Fact / FactList', () => {
     expect(marks).toHaveTextContent('Idiomas: Español y PortuguêsESPTEspañol y Português')
     expect(marks!.querySelectorAll('svg')).toHaveLength(2) // two flags, no icon
     expect(container.querySelectorAll('svg[data-language]')).toHaveLength(3)
+  })
+
+  it('says a fact as a control names it', () => {
+    expect(spokenFact({ label: 'Canal', text: 'App' })).toBe('Canal: App')
+    expect(spokenFact({ label: 'Por idioma', text: '', languages: ['pt'] })).toBe(
+      'Por idioma: Português',
+    )
+    expect(spokenFact({ text: 'Hablas', languages: ['es', 'pt'] })).toBe(
+      'Hablas Español y Português',
+    )
   })
 
   it('lists facts as list items and renders nothing for none', () => {

@@ -144,7 +144,7 @@ Contract: `docs/platform/api/slice-2-case-lifecycle.md` §9. Dependency directio
 
 Contract: `docs/platform/api/slice-6-analyst-home.md`. Dependency direction:
 `routes/analyst/home` → `features/home` → `features/cases` (index) and
-`features/conversation/core` (language names); `app/` composes the rail badge and presence.
+`features/conversation/core` (types); `app/` composes the rail badge and presence.
 
 - **`home`** (new): "Inicio" (`HomeScreen`): greeting by local time, date + team pill, the
   availability block ("Empezar a atender" / "Pausar casos nuevos", same mutation as Casos), the
@@ -247,7 +247,7 @@ direction unchanged (`routes/supervision/*` → `features/supervision` → `feat
   column, team pills and `AssignCaseDialog` are gone.
 - **`audit`**: the "Escalamientos" family and its redaction notes; role badge "Supervisión".
 - **`admin`**: the users list filters with `FilterMenu` (multi-value URL), "Nuevo usuario",
-  language pill toggles.
+  language option cards (flag + own name, `LanguageOptionLabel`).
 
 ### Notification center (slice 10)
 
@@ -720,8 +720,11 @@ only the language's own name ("Español", "Português"). Dense rows and headers 
 tooltip and its screen-reader text); an "Idioma" value uses `LanguageName` (mark + own name);
 form and filter options use `LanguageOptionLabel` (21 px flag + own name, also through
 `FilterOption.language`); a fact takes `FactItem.languages` (marks after its text, or in place
-of the icon when the text is empty). The flags are inline SVGs from the Figma "Flags icons"
-community file: artwork colors, not tokens, and no ids, so they repeat on a page.
+of the icon when the text is empty) or `FactItem.language` (the text is that language's own
+name: its mark goes first); `spokenFact` says a fact for a control's accessible name. The flags
+are inline SVGs from the Figma "Flags icons" community file: artwork colors, not tokens, and no
+ids, so they repeat on a page. Sentences keep the Spanish word ("Cola en portugués", "Nadie con
+ese nombre habla portugués.").
 
 Layout (`@/components/layout`): `SidePanel` / `SidePanelSection` (slice 6: the 360 px right
 panel slot of the Workspace, sections, close button + Escape, focus in on open and back to the

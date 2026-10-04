@@ -33,6 +33,17 @@ def b64url_decode(text: str) -> bytes:
     return urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
+def read_jws(token: str) -> tuple[dict[str, object], dict[str, object]]:
+    """``(header, payload)`` of a compact JWS, without checking the signature (test doubles and
+    diagnostics only: agent-core is the one that verifies)."""
+    head, body, _signature = token.split(".")
+    header, payload = json.loads(b64url_decode(head)), json.loads(b64url_decode(body))
+    return (
+        header if isinstance(header, dict) else {},
+        payload if isinstance(payload, dict) else {},
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class SigningKey:
     kid: str

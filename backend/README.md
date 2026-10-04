@@ -9,7 +9,7 @@ Read first: `docs/platform/ENGINEERING_BRIEF.md` (scope, rules, conventions),
 (slice 2 case life cycle, slice 3 supervision, slice 4 administration, slice 6 analyst home,
 slice 7 customer rating, slice 8 case priority, slice 9 supervision v2: Colas and escalations,
 slice 10 notification center, slice 11 secure onboarding by email invitation, slice 12
-simulated phone and email channels, slice 14 the assistant (agent-core), slice 15 the analyst's copilot; a later slice wins).
+simulated phone and email channels, slice 14 the assistant (agent-core), slice 15 the analyst's copilot, slice 16 the agent builder; a later slice wins).
 Operating the app (accounts, reset, troubleshooting) is in `docs/platform/RUNBOOK.md`.
 
 ## Run
@@ -74,6 +74,7 @@ re-read on every request.
 | Customer calls and email (slice 12) | `GET /customer/call`, `POST /customer/calls` (+ `Idempotency-Key`), `POST /customer/calls/{callId}/answer\|reject\|hangup\|transcript`, `GET\|POST /customer/emails` | customer token |
 | Customer simulator | `GET /customer/demo-customers`, `POST /customer/sessions`, `GET /customer/conversation`, `POST /customer/conversation/turns`, `GET /customer/conversations`, `GET /customer/conversations/{id}`, `POST /customer/conversations/{id}/rating` (slice 7: `{score 1–4, comment?}` + `Idempotency-Key`) | customer token |
 | Assistant (slice 14, ADR 0003) | `POST /customer/conversation/confirmation` `{token, answer}`, `POST /customer/conversation/step-up` `{code}`, `POST /customer/conversation/human`; `GET /cases/{id}/handoff`; `POST /supervision/cases/{id}/assistant/release`; `POST /cases/{id}/close` also takes `handoffQuality`. Without agent-core they answer `404 assistant_disabled` | customer token · the assignee analyst · supervisor |
+| Agent builder (slice 16, ADR 0003 §7) | `GET /builder/status`; proposals: `GET/POST /builder/proposals`, `POST /builder/proposals/track`, `GET /builder/proposals/{id}`, `PUT .../draft`, `POST .../validate\|freeze\|reopen\|evaluate`; **with `stepUpCode`** (a fresh authenticator code): `POST .../approve\|reject\|publish` (+ `Idempotency-Key`), `POST /builder/aliases/{agent}/{alias}/promote`, `POST /builder/releases/{id}/revoke`; reads: `GET /builder/aliases/{agent}/{alias}`, `/releases/{id}`, `/releases/{a}/diff/{b}`, `/versions/{kind}/{id}`, `/entities/{kind}/{id}`; chat: `GET /builder/chat`, `POST /builder/chat/messages` `{text, clientMessageId}` + `Idempotency-Key`. Without agent-core they answer `404 assistant_disabled` (`status` and `chat` answer `available: false`) | Supervisión · Administración (revoke) |
 | Copilot (slice 15) | `GET /cases/{id}/copilot` (the analyst's thread; `available: false` without agent-core or a linked customer), `POST /cases/{id}/copilot/messages` `{text, clientMessageId}` + `Idempotency-Key` (waits for the model; idempotent) | the assignee analyst |
 | Supervision | `GET /supervision/team`, `GET /supervision/queues`, `PUT /supervision/cases/{id}/assignee` (`{analystId, expectedAnalystId, confirmPaused}`; ends an open escalation as `reassigned`) | supervisor |
 | Colas (slice 9) | `GET /supervision/open-cases?language=es\|pt`: every open case of a language and who holds it | supervisor |
@@ -223,8 +224,9 @@ Regenerate after every API change, then run `pnpm gen:api` in `frontend/`.
 
 ## Known gaps
 
+- **The agent builder (slice 16):** agent-core only evaluates an agent that has an `eval_suite` (none has one yet), so nothing goes past `candidate` for now; there is no agent catalog and agent-core cannot list proposals (the platform keeps an index; a proposal the builder chat makes is found only if its answer names the id); the second-factor code can be replayed inside its window (shared with sign-in). Details: `docs/platform/api/slice-16-agent-builder.md` §8.
 - **The copilot (slice 15):** answers are text (no structured suggested tools yet) and as good as agent-core's tools; no live listening mode; a call lost with its process is recovered by asking again with the same `clientMessageId`. Details: `docs/platform/api/slice-15-copilot.md` §6.
-- **The assistant (slice 14):** the second factor is simulated; agent-core's `grant_active` is not answered yet (delegations live 10 minutes); a background job lost with its process is only recovered when the customer writes again (no sweep yet); only `CC_ASSISTANT_LANGUAGES` start with the assistant; links to dataset customers come from a startup file (no endpoint). Details: `docs/platform/api/slice-14-assistant.md` §10.
+- **The assistant (slice 14):** the second factor is simulated; a sweep (`CC_ASSISTANT_SWEEP_SECONDS`) re-runs assistant work lost with its process; `GET /api/v1/internal/grants/{grantRef}` answers agent-core's `grant_active` (shared secret `CC_INTERNAL_SERVICE_TOKEN`, not in the public OpenAPI), but agent-core still needs an adapter that calls it (delegations live 10 minutes meanwhile); only `CC_ASSISTANT_LANGUAGES` start with the assistant; links to dataset customers come from a startup file (no endpoint). Details: `docs/platform/api/slice-14-assistant.md` §10.
 
 - **No migrations.** `metadata.create_all` runs at startup. A database created by an older
   build fails fast with `OutdatedSchemaError` (it names the missing tables or columns): delete

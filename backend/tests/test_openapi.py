@@ -70,6 +70,13 @@ RESPONSE_SCHEMAS = (
     "AssistantConfirmation", "AssistantStepUp", "AssistantState", "CaseHandoff",
     # slice 15: the copilot
     "CopilotMessage", "CopilotThread", "CopilotExchange",
+    # slice 16: the agent builder
+    "BuilderStatus", "VersionRef", "VersionDocs", "EntityDraft", "Violation", "YardstickChange",
+    "GateItem", "EvalReport", "EvalRun", "ReleaseSettingChange", "ApprovalReview", "Proposal",
+    "ProposalSummary", "ProposalList", "ProposalDetail", "ValidationReport", "CandidateView",
+    "Approval", "EntityRef", "EntityInRelease", "ReleaseDetail", "AliasState", "AliasChange",
+    "ChangedRef", "ReleaseDiff", "VersionSummary", "VersionList", "EntityVersion",
+    "BuilderMessage", "BuilderThread", "BuilderExchange",
 )  # fmt: skip
 
 
@@ -123,8 +130,36 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "invalid_step_up_code", "handoff_unavailable", "agent_core_unavailable",
         "copilot_unavailable", "copilot_busy",
         "agent_core_rejected",
+        # slice 16 (the agent builder)
+        "builder_step_up_invalid", "builder_busy", "registry_validation_failed",
+        "registry_gate_failed", "registry_loosening_not_accepted", "registry_conflict",
+        "registry_forbidden", "registry_not_found", "registry_quota_exceeded",
     }  # fmt: skip
     for removed in ("CreatedUser", "PasswordResetResult"):  # part 4: no temporary passwords
         assert removed not in schemas
     assert "temporaryPassword" not in str(document)
     assert set(schemas["CloseCaseRequest"]["required"]) == {"reason", "note"}
+
+
+def test_the_builder_contract_names_the_second_factor_and_the_registry_problems() -> None:
+    document = build_openapi()
+    schemas, paths = document["components"]["schemas"], document["paths"]
+    for route in ("approve", "reject", "publish"):
+        body = paths[f"/api/v1/builder/proposals/{{proposalId}}/{route}"]["post"]["requestBody"]
+        name = body["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1]
+        assert "stepUpCode" in schemas[name]["required"], route
+    for name in ("PromoteRequest", "RevokeRequest"):
+        assert "stepUpCode" in schemas[name]["required"], name
+    # the steps that only change a draft ask for nothing extra
+    assert "stepUpCode" not in schemas["SaveDraftRequest"]["properties"]
+    assert "stepUpCode" not in schemas["EvaluateRequest"]["properties"]
+    problem = schemas["ProblemDetails"]["properties"]
+    assert {"registryCode", "violations", "report", "evalRunId", "yardstickLoosened"} <= set(
+        problem
+    )
+    assert set(schemas["ProposalState"]["enum"]) == {
+        "draft", "candidate", "evaluated", "approved", "published",
+    }  # fmt: skip
+    assert "agents" in schemas["AuditFamily"]["enum"]
+    publish = paths["/api/v1/builder/proposals/{proposalId}/publish"]["post"]
+    assert any(p["name"] == "Idempotency-Key" and p["required"] for p in publish["parameters"])

@@ -115,7 +115,10 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_AGENT_CORE_URL`, `CC_AGENT_KEYS_FILE` | unset | ADR 0003: agent-core's runtime URL and the private signing keys of the credentials the platform issues to it. They go together or not at all; unset, the platform is people-only (§4.1) |
 | `CC_AGENT_CORE_TIMEOUT_SECONDS` | `60` | How long a turn may take before the case falls back to a person |
 | `CC_ASSISTANT_AGENT` | `recepcion@prod` | Slice 14: the agent a conversation starts with (`id`, `id@alias` or `id@X.Y.Z`) |
+| `CC_ASSISTANT_SWEEP_SECONDS` | `30` | S17: how often a sweep re-runs assistant work lost with its process (sessions quiet for 20 s); `0` turns it off |
+| `CC_INTERNAL_SERVICE_TOKEN` | unset | S17: shared secret of `/api/v1/internal/*` (agent-core's `grant_active` check, bearer, constant-time compare). Unset = those routes answer 404. A long random value; never commit it |
 | `CC_COPILOT_AGENT` | `copiloto-asesor@prod` | Slice 15: the agent the analyst's copilot asks |
+| `CC_BUILDER_AGENT` | `constructor-chat@prod` | Slice 16: the builder agent supervisors chat with (`id`, `id@alias` or `id@X.Y.Z`) |
 | `CC_ASSISTANT_LANGUAGES` | `["es", "pt"]` | Slice 14: case languages the assistant serves (JSON list, policy `H1`); others go straight to people |
 | `CC_ASSISTANT_STEP_UP_CODE` | `000000` | Slice 14: the **simulated** second-factor code (a development stand-in) |
 | `CC_BANK_CUSTOMER_LINKS_FILE` | unset | Slice 14: private JSON `{"CUS-…": "<dataset customer_id>"}` read at startup; only linked customers can talk to the assistant. Never commit it |
@@ -141,7 +144,15 @@ uv run python -m cc_platform.scripts.gen_agent_keys --suffix 2026-10
 2. Start the platform with `CC_AGENT_CORE_URL=http://127.0.0.1:8001` (agent-core's port; the
    platform uses 8000, so start `serve` with `--port 8001`) and
    `CC_AGENT_KEYS_FILE=.agent-keys/private.json`.
-3. Rotating: generate into a new `--out` with a new `--suffix`, publish both public files side by
+3. The agent builder (slice 16) needs agent-core started with `--registry-api` (it also asks for
+   `--staff-keys`, which is the platform's `staff-keys.json`, and its evaluation database). The platform
+   signs two credentials for the same person: the **registry** one with the *staff* key and the **chat** one
+   with the *identity* key, so both files must be the platform's. Approving, rejecting, publishing,
+   promoting and revoking ask the person for a fresh authenticator code in the request (the seeded demo
+   accounts have no authenticator: they use `CC_DEV_MFA_CODE`, `000000`). No agent has an `eval_suite` in
+   the local stack, so nothing can be evaluated, approved or published yet (see
+   `api/slice-16-agent-builder.md` §8).
+4. Rotating: generate into a new `--out` with a new `--suffix`, publish both public files side by
    side (agent-core re-reads them every few seconds), switch `CC_AGENT_KEYS_FILE`, retire the old key.
 
 `private.json` holds the seeds: never commit it; in a deployment it belongs in a secrets manager.

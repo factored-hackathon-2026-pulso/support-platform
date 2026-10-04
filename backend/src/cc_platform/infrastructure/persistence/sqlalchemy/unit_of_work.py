@@ -19,6 +19,10 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.assistant im
     SqlBankCustomerLinks,
     SqlCopilotThreadRepository,
 )
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.builder import (
+    SqlBuilderProposalRepository,
+    SqlBuilderThreadRepository,
+)
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import (
     SqlAssignmentRepository,
     SqlCallRepository,
@@ -78,6 +82,8 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     notifications: SqlNotificationRepository
     assistant_sessions: SqlAssistantSessionRepository
     copilot_threads: SqlCopilotThreadRepository
+    builder_threads: SqlBuilderThreadRepository
+    builder_proposals: SqlBuilderProposalRepository
     bank_links: SqlBankCustomerLinks
     event_log: SqlEventLogRepository
     analyst_home: SqlAnalystHomeReader
@@ -116,6 +122,8 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.notifications = SqlNotificationRepository(session, self.track)
         self.assistant_sessions = SqlAssistantSessionRepository(session, self.track)
         self.copilot_threads = SqlCopilotThreadRepository(session, self.track)
+        self.builder_threads = SqlBuilderThreadRepository(session, self.track)
+        self.builder_proposals = SqlBuilderProposalRepository(session, self.track)
         self.bank_links = SqlBankCustomerLinks(session)
         self.event_log = SqlEventLogRepository(session)
         self.analyst_home = SqlAnalystHomeReader(session)

@@ -11,7 +11,9 @@ Platform actor        agent-core credential
 ====================  ======================================================================
 customer session      ``customer`` principal; ``id`` is the dataset ``customer_id``
 analyst on a case     ``advisor`` principal + a delegation (``X-On-Behalf-Of``) on that customer
-supervision, admin    ``builder`` principal (``constructor``/``aprobador``, plus ``admin``)
+supervision, admin    ``builder`` principal (``constructor``/``aprobador``, plus ``admin``);
+                      signed with the **staff** key for the registry, and with the
+                      **identity** key for the runtime (the chat with the builder agent)
 ====================  ======================================================================
 """
 
@@ -66,5 +68,13 @@ class AgentCredentialIssuer(Protocol):
         ...
 
     def builder(self, identity: BuilderIdentity) -> AgentCredentials:
-        """A supervisor's or administrator's credential for the registry and the builder agent."""
+        """A supervisor's or administrator's credential for agent-core's **registry** API
+        (``/v1/registry``), signed with the staff key (``--staff-keys``)."""
+        ...
+
+    def builder_run(self, identity: BuilderIdentity) -> AgentCredentials:
+        """The same person as a ``builder`` principal for agent-core's **runtime** API (the chat
+        with the builder agent: ``POST /v1/runs`` and turns), signed with the identity key
+        (``--identity-keys``): the runtime verifies principals against those keys and the registry
+        against the staff keys, so neither accepts the other's credential. Never ``step_up``."""
         ...

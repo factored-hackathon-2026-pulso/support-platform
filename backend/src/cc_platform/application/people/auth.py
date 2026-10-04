@@ -98,7 +98,7 @@ class _PasswordCheck:
 
 
 @dataclass(slots=True)
-class _MfaCodeCheck:
+class MfaCodeCheck:
     """One submitted MFA code, checked at most once per staff member (retries reuse it).
 
     Her authenticator (TOTP secret, opened from the ``SecretBox``) when she has one; else the
@@ -217,12 +217,12 @@ class VerifyMfa:
     box: SecretBox
 
     async def execute(self, command: VerifyMfaCommand) -> SessionGrant:
-        check = _MfaCodeCheck(
+        check = MfaCodeCheck(
             self.totp, self.box, self.verifier, command.method, command.code.strip()
         )
         return await retry_on_conflict(lambda: self._attempt(command, check))
 
-    async def _attempt(self, command: VerifyMfaCommand, check: _MfaCodeCheck) -> SessionGrant:
+    async def _attempt(self, command: VerifyMfaCommand, check: MfaCodeCheck) -> SessionGrant:
         async with self.uow() as uow:
             challenge = await uow.mfa_challenges.get(command.challenge_id)
             if challenge is None:

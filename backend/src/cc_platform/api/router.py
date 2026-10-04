@@ -10,11 +10,13 @@ from cc_platform.api.routers import (
     audit,
     auth,
     availability,
+    builder,
     cases,
     channels,
     customer,
     dev,
     home,
+    internal,
     notifications,
     onboarding,
     people,
@@ -38,12 +40,14 @@ def build_api_router() -> APIRouter:
     router.include_router(cases.router)
     router.include_router(channels.router)
     router.include_router(supervision.router)
+    router.include_router(builder.router)
     router.include_router(audit.router)
     router.include_router(administration.router)
     router.include_router(customer.router)
     router.include_router(channels.customer_router)
     router.include_router(realtime.router)
     router.include_router(dev.router)
+    router.include_router(internal.router)
     return router
 
 

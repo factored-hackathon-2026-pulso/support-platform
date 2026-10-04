@@ -16,6 +16,9 @@ import structlog
 from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
+from cc_platform.application.ai.builder import AgentBuilder
+from cc_platform.application.ai.builder_chat import AskBuilder, GetBuilderThread
+from cc_platform.application.ai.builder_step_up import BuilderStepUp
 from cc_platform.application.ai.config import AssistantConfig, AssistantGate
 from cc_platform.application.ai.copilot import AskCopilot, GetCopilotThread
 from cc_platform.application.ai.customer import (
@@ -24,15 +27,18 @@ from cc_platform.application.ai.customer import (
     VerifyAssistantStepUp,
 )
 from cc_platform.application.ai.engine import AssistantEngine, AssistantHandover
+from cc_platform.application.ai.grants import GetGrantStatus
 from cc_platform.application.ai.priority import ApplyHandoffPriority, HandoffPriorityProcess
 from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
+from cc_platform.application.ai.registry import AgentRegistryClient
 from cc_platform.application.ai.staff import (
     GetCaseHandoff,
     LinkBankCustomers,
     RecordHandoffResolution,
     ReleaseAssistantCase,
 )
-from cc_platform.application.ai.use_cases import AssistantUseCases
+from cc_platform.application.ai.sweep import SweepAssistantSessions
+from cc_platform.application.ai.use_cases import AssistantUseCases, BuilderUseCases
 from cc_platform.application.audit.queries import GetAuditEvent, ListAuditEvents
 from cc_platform.application.audit.use_cases import AuditUseCases
 from cc_platform.application.cases.analyst_home import GetAnalystHome
@@ -196,6 +202,7 @@ from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
 from cc_platform.domain.people.staff import Language
 from cc_platform.infrastructure.ai.ed25519_issuer import Ed25519AgentCredentialIssuer
+from cc_platform.infrastructure.ai.http_registry import HttpAgentRegistry
 from cc_platform.infrastructure.ai.http_runtime import HttpAgentRuntime
 from cc_platform.infrastructure.ai.keys import AgentSigningKeys
 from cc_platform.infrastructure.background import AsyncioBackgroundTasks, PeriodicTask
@@ -257,6 +264,7 @@ class Container:
     #: ADR 0003: ``None`` while ``CC_AGENT_CORE_URL`` is unset (the platform stays people-only).
     agent_core: AgentCoreServices | None = None
     assistant_engine: AssistantEngine | None = None
+    assistant_sweep: PeriodicTask | None = None
 
     def api_context(self) -> ApiContext:
         """The narrow view the HTTP/WebSocket layer gets (no adapters, no Unit of Work)."""
@@ -275,6 +283,11 @@ class Container:
             realtime=RealtimeOptions(
                 expiry_check_interval=self.settings.realtime_expiry_check_interval
             ),
+            internal_token=(
+                self.settings.internal_service_token.get_secret_value()
+                if self.settings.internal_service_token is not None
+                else None
+            ),
         )
 
     async def startup(self) -> None:
@@ -291,6 +304,8 @@ class Container:
             # Slice 10: cases already at risk get their notification now, then every tick.
             await self.use_cases.notifications.sweep_sla_risk.execute()
             self.sla_sweep.start()
+        if self.assistant_sweep is not None:
+            self.assistant_sweep.start()
 
     async def _link_bank_customers(self) -> None:
         """ADR 0003: apply the private ``{platform customer id: dataset customer id}`` file."""
@@ -339,6 +354,8 @@ class Container:
     async def shutdown(self) -> None:
         if self.sla_sweep is not None:
             await self.sla_sweep.stop()
+        if self.assistant_sweep is not None:
+            await self.assistant_sweep.stop()
         await self.background.drain()
         if self.agent_core is not None and self.agent_core.http_client is not None:
             await self.agent_core.http_client.aclose()
@@ -354,6 +371,8 @@ class AgentCoreServices:
     runtime: AgentRuntime
     http_client: httpx.AsyncClient | None = None
     """Closed on shutdown; ``None`` for a test double that owns no connection."""
+    registry: AgentRegistryClient | None = None
+    """The registry API (slice 16, the agent builder); ``None`` leaves the builder disabled."""
 
 
 def _agent_core_services(settings: Settings, clock: Clock) -> AgentCoreServices | None:
@@ -367,6 +386,7 @@ def _agent_core_services(settings: Settings, clock: Clock) -> AgentCoreServices 
         issuer=Ed25519AgentCredentialIssuer(keys, clock),
         runtime=HttpAgentRuntime(client),
         http_client=client,
+        registry=HttpAgentRegistry(client),
     )
 
 
@@ -410,6 +430,7 @@ class _AssistantParts:
     engine: AssistantEngine
     resolution: RecordHandoffResolution
     use_cases: AssistantUseCases
+    sweep: SweepAssistantSessions
 
 
 def _build_assistant(
@@ -422,6 +443,7 @@ def _build_assistant(
     bus: EventBus,
     background: AsyncioBackgroundTasks,
     assign_case: AssignCase,
+    step_up: BuilderStepUp,
 ) -> _AssistantParts:
     """Wire the assistant: engine, the bus process that keeps it answering, and the use cases."""
     config = AssistantConfig(
@@ -462,6 +484,7 @@ def _build_assistant(
         ),
         release=ReleaseAssistantCase(uow=uow, clock=clock, handover=handover),
         copilot_thread=GetCopilotThread(uow=uow),
+        grant_status=GetGrantStatus(uow=uow),
         ask_copilot=AskCopilot(
             uow=uow,
             clock=clock,
@@ -469,6 +492,9 @@ def _build_assistant(
             runtime=agent_core.runtime,
             issuer=agent_core.issuer,
             agent=settings.copilot_agent,
+        ),
+        builder=_build_builder(
+            settings, agent_core, uow=uow, clock=clock, ids=ids, step_up=step_up
         ),
     )
     return _AssistantParts(
@@ -478,6 +504,42 @@ def _build_assistant(
             uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
         ),
         use_cases=use_cases,
+        sweep=SweepAssistantSessions(uow=uow, clock=clock, tasks=background, engine=engine),
+    )
+
+
+def _build_builder(
+    settings: Settings,
+    agent_core: AgentCoreServices,
+    *,
+    uow: UnitOfWorkFactory,
+    clock: Clock,
+    ids: IdGenerator,
+    step_up: BuilderStepUp,
+) -> BuilderUseCases | None:
+    """Slice 16: the agent builder exists when agent-core's registry is wired."""
+    if agent_core.registry is None:
+        return None
+    registry = AgentBuilder(
+        uow=uow,
+        clock=clock,
+        registry=agent_core.registry,
+        issuer=agent_core.issuer,
+        step_up=step_up,
+    )
+    return BuilderUseCases(
+        registry=registry,
+        thread=GetBuilderThread(uow=uow),
+        ask=AskBuilder(
+            uow=uow,
+            clock=clock,
+            ids=ids,
+            runtime=agent_core.runtime,
+            registry=agent_core.registry,
+            issuer=agent_core.issuer,
+            builder=registry,
+            agent=settings.builder_agent,
+        ),
     )
 
 
@@ -602,6 +664,11 @@ def build_container(
     bus.subscribe(NotificationProjector(uow, notification_writer))
     sweep_sla_risk = SweepSlaRisk(uow=uow, clock=clock, writer=notification_writer)
 
+    lockout = LockoutPolicy(
+        max_failed_attempts=settings.lockout_max_attempts,
+        lock_duration=settings.lockout_duration,
+    )
+
     # ADR 0003: the assistant (agent-core). It exists only when agent-core is configured.
     agent_core = agent_core or _agent_core_services(settings, clock)
     assistant = (
@@ -616,16 +683,20 @@ def build_container(
             bus=bus,
             background=background,
             assign_case=assign_case,
+            step_up=BuilderStepUp(
+                uow=uow,
+                clock=clock,
+                lockout=lockout,
+                totp=totp,
+                box=secret_box,
+                dev_verifier=mfa_verifier,
+            ),
         )
     )
     assistant_gate = assistant.gate if assistant else None
     assistant_use_cases = assistant.use_cases if assistant else None
     assistant_engine = assistant.engine if assistant else None
     handoff_resolution = assistant.resolution if assistant else None
-    lockout = LockoutPolicy(
-        max_failed_attempts=settings.lockout_max_attempts,
-        lock_duration=settings.lockout_duration,
-    )
     use_cases = UseCases(
         people=PeopleUseCases(
             login=LoginWithPassword(
@@ -803,6 +874,11 @@ def build_container(
         ),
         assistant=assistant_use_cases,
     )
+    assistant_sweep = (
+        PeriodicTask("assistant_sweep", settings.assistant_sweep_seconds, assistant.sweep.execute)
+        if assistant is not None and settings.assistant_sweep_seconds > 0
+        else None
+    )
     sla_sweep = (
         PeriodicTask("sla_sweep", settings.notification_sweep_seconds, sweep_sla_risk.execute)
         if settings.notification_sweep_seconds > 0
@@ -834,4 +910,5 @@ def build_container(
         sla_sweep=sla_sweep,
         agent_core=agent_core,
         assistant_engine=assistant_engine,
+        assistant_sweep=assistant_sweep,
     )

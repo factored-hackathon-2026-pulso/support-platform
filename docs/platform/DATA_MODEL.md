@@ -494,6 +494,10 @@ locking like every aggregate. No message text is stored here (it lives in `turns
 
 `copilot_threads` (slice 15) — one row per (case, analyst), unique `(case_id, analyst_id)`: `id` `CPT-…`, `agent`, agent-core's `agent_session_id` / `run_id`, `runs` (the idempotency suffix of each run), `messages` (JSON list of `{id, role: analyst|copilot, text, created_at, client_message_id, answers}`, newest 200), `last_trace_id`, `version`. The text lives here; the event log carries sizes only.
 
+`builder_threads` (slice 16) — one row per person, unique `staff_id`: `id` `BLT-…`, `staff_id` → staff, `agent` (`constructor-chat@prod`), agent-core's `agent_session_id` / `run_id`, `runs` (the idempotency suffix of each run), `messages` (JSON list of `{id, role: person|agent, text, created_at, client_message_id, answers}`, newest 200), `last_trace_id`, `version`. The text lives here; the event log carries sizes only.
+
+`builder_proposals` (slice 16) — the platform's index of agent-core's proposals (its registry cannot list them): `id` is **agent-core's proposal id** (a UUID, not a platform id), `agent_id`, `title`, `origin` (`manual|builder_chat|auto_detect|import`), `created_by` (a staff id or the builder service's identity), `registered_by` → staff (who brought it into the list), `source` (`platform|chat|tracked`), and the last state read from the registry: `state` (`draft|candidate|evaluated|approved|published`), `rev`, `base_release_id`, `candidate_hash`, `updated_at` (the registry's), `refreshed_at` (when the platform read it), `created_at`, `version`. Indexes `(agent_id, updated_at)` and `(state, updated_at)`. The registry is the source of truth: this is a cache plus "who brought it here".
+
 `bank_customer_links` (`customer_id` PK → customers, `bank_customer_id`) — which dataset customer each
 platform customer is; filled at startup from a private file.
 

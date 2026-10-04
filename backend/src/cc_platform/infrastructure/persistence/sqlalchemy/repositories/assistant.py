@@ -150,6 +150,18 @@ class SqlAssistantSessionRepository(VersionedRepository[AssistantSession]):
     async def get_by_case(self, case_id: str) -> AssistantSession | None:
         return await self._get_where(self.table.c.case_id == case_id)
 
+    async def list_active(self) -> list[AssistantSession]:
+        c = self.table.c
+        result = await self._session.execute(
+            select(self.table).where(c.state == AssistantState.ACTIVE.value).order_by(c.created_at)
+        )
+        found: list[AssistantSession] = []
+        for row in result.mappings():
+            session = self._load(row)
+            if session is not None:
+                found.append(session)
+        return found
+
 
 def _message_to_json(m: CopilotMessage) -> dict[str, Any]:
     return {

@@ -62,7 +62,8 @@ class ProblemDetails(ApiModel):
     remaining_attempts: int | None = Field(
         default=None,
         description=(
-            "invalid_credentials, mfa_invalid, totp_invalid: failed attempts left before the lock."
+            "invalid_credentials, mfa_invalid, totp_invalid, builder_step_up_invalid: failed "
+            "attempts left before the lock."
         ),
     )
     unlock_at: datetime | None = Field(
@@ -105,6 +106,31 @@ class ProblemDetails(ApiModel):
     )
     agent_core_status: int | None = Field(
         default=None, description="agent_core_rejected: the HTTP status agent-core answered with."
+    )
+    registry_code: str | None = Field(
+        default=None,
+        description=(
+            "registry_*: agent-core's own code (validation_failed, gate_failed, proposal_stale, "
+            "candidate_changed, illegal_transition, forbidden_role, step_up_required, not_found, "
+            "loosening_not_accepted, idempotency_conflict, quota_exceeded)."
+        ),
+    )
+    violations: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="registry_validation_failed: the rules the draft breaks (`Violation`, "
+        "camelCase: rule, flow, nodeId, path, message).",
+    )
+    report: dict[str, Any] | None = Field(
+        default=None,
+        description="registry_gate_failed: the failed evaluation (`EvalReport`, camelCase).",
+    )
+    eval_run_id: str | None = Field(
+        default=None, description="registry_gate_failed: the run the registry stored it under."
+    )
+    yardstick_loosened: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="registry_loosening_not_accepted: what the proposal loosens "
+        "(`YardstickChange`: kind, target, message).",
     )
     field: str | None = Field(
         default=None,

@@ -38,6 +38,7 @@ class AuditFamily(StrEnum):
     ACCESS = "access"
     ADMINISTRATION = "administration"
     ESCALATION = "escalation"
+    AGENTS = "agents"
     OTHER = "other"
 
 
@@ -65,6 +66,21 @@ FAMILY: Mapping[str, AuditFamily] = {
     "assistant.ended": AuditFamily.LIFECYCLE,
     "copilot.query_asked": AuditFamily.CONVERSATION,
     "copilot.answered": AuditFamily.CONVERSATION,
+    # the agent builder (slice 16): who changed which agent, and who approved and published it
+    "builder.proposal_created": AuditFamily.AGENTS,
+    "builder.proposal_tracked": AuditFamily.AGENTS,
+    "builder.draft_saved": AuditFamily.AGENTS,
+    "builder.proposal_validated": AuditFamily.AGENTS,
+    "builder.proposal_frozen": AuditFamily.AGENTS,
+    "builder.proposal_reopened": AuditFamily.AGENTS,
+    "builder.proposal_evaluated": AuditFamily.AGENTS,
+    "builder.proposal_approved": AuditFamily.AGENTS,
+    "builder.proposal_rejected": AuditFamily.AGENTS,
+    "builder.proposal_published": AuditFamily.AGENTS,
+    "builder.alias_promoted": AuditFamily.AGENTS,
+    "builder.release_revoked": AuditFamily.AGENTS,
+    "builder.question_asked": AuditFamily.AGENTS,
+    "builder.answered": AuditFamily.AGENTS,
     # escalations to supervision (slice 9)
     "escalation.opened": AuditFamily.ESCALATION,
     "escalation.withdrawn": AuditFamily.ESCALATION,
@@ -131,6 +147,16 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "case.assistant_started",
         "case.assistant_released",
         "assistant.ended",
+        "builder.proposal_created",
+        "builder.draft_saved",
+        "builder.proposal_frozen",
+        "builder.proposal_reopened",
+        "builder.proposal_evaluated",
+        "builder.proposal_approved",
+        "builder.proposal_rejected",
+        "builder.proposal_published",
+        "builder.alias_promoted",
+        "builder.release_revoked",
         "escalation.opened",
         "escalation.withdrawn",
         "escalation.answered",
@@ -384,6 +410,36 @@ def _assistant_ended(event: StoredEvent, _names: AuditNames) -> str:
     return _ASSISTANT_END_TEXT.get(_text(event.payload, "result") or "", "Terminó el asistente")
 
 
+# ----------------------------------------------------------------------------- builder (slice 16)
+_VERDICT_TEXT: Mapping[str, str] = {
+    "pass": "La evaluación de la propuesta pasó el gate",
+    "fail": "La evaluación de la propuesta no pasó el gate: volvió a borrador",
+    "failed_infra": "La evaluación de la propuesta falló por la infraestructura",
+}
+
+
+def _builder_validated(event: StoredEvent, _names: AuditNames) -> str:
+    count = _int(event.payload, "violations") or 0
+    if count == 0:
+        return "Validó la propuesta: sin violaciones"
+    return f"Validó la propuesta: {count} {'violación' if count == 1 else 'violaciones'}"
+
+
+def _builder_approved(event: StoredEvent, _names: AuditNames) -> str:
+    if (_int(event.payload, "yardstick_loosened") or 0) > 0:
+        return "Aprobó la propuesta, aceptando que afloja la vara de evaluación"
+    return "Aprobó la propuesta"
+
+
+def _builder_promoted(event: StoredEvent, _names: AuditNames) -> str:
+    alias = _text(event.payload, "alias") or "staging"
+    return f"Promovió una versión de un agente a {alias}"
+
+
+def _builder_evaluated(event: StoredEvent, _names: AuditNames) -> str:
+    return _VERDICT_TEXT.get(_text(event.payload, "verdict") or "", "Evaluó la propuesta")
+
+
 # ----------------------------------------------------------------------------- calls (slice 12)
 def _call_started(event: StoredEvent, names: AuditNames) -> str:
     """Next to the actor: "Daniela Ríos · Llamó a Claudia Restrepo Varela"; the reason is
@@ -581,6 +637,21 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     # slice 15: the copilot (the audit never shows what was asked or answered)
     "copilot.query_asked": _fixed("Le preguntó algo al copiloto sobre el caso"),
     "copilot.answered": _fixed("El copiloto respondió"),
+    # slice 16: the agent builder (the audit never shows a draft, a reason or a chat text)
+    "builder.proposal_created": _fixed("Creó una propuesta de cambio de un agente"),
+    "builder.proposal_tracked": _fixed("Agregó una propuesta del constructor a la lista"),
+    "builder.draft_saved": _fixed("Guardó el borrador de una propuesta"),
+    "builder.proposal_validated": _builder_validated,
+    "builder.proposal_frozen": _fixed("Congeló la candidata de una propuesta"),
+    "builder.proposal_reopened": _fixed("Reabrió una propuesta para editarla"),
+    "builder.proposal_evaluated": _builder_evaluated,
+    "builder.proposal_approved": _builder_approved,
+    "builder.proposal_rejected": _fixed("Rechazó la propuesta: volvió a borrador"),
+    "builder.proposal_published": _fixed("Publicó la propuesta como una versión nueva del agente"),
+    "builder.alias_promoted": _builder_promoted,
+    "builder.release_revoked": _fixed("Revocó una versión de un agente"),
+    "builder.question_asked": _fixed("Le escribió al constructor de agentes"),
+    "builder.answered": _fixed("El constructor de agentes respondió"),
     # slice 9: the log shows the actor next to them ("Daniela Ríos · Escaló el caso a
     # supervisión"); the motive and the answer are never shown (only their length).
     "escalation.opened": _fixed("Escaló el caso a supervisión"),

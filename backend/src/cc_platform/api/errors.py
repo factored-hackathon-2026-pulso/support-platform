@@ -26,7 +26,9 @@ from cc_platform.api.problems import (
     problem_code,
     spec_for,
 )
+from cc_platform.api.schemas import builder as builder_schemas
 from cc_platform.api.schemas.common import PROBLEM_MEDIA_TYPE
+from cc_platform.application.ai.errors import RegistryRejectedError
 from cc_platform.application.errors import ApplicationError
 from cc_platform.domain.shared.errors import DomainError
 
@@ -93,6 +95,32 @@ async def _handle_business_error(request: Request, exc: Exception) -> JSONRespon
     return problem_response(request, code=code, detail=exc.message, extensions=exc.details)
 
 
+async def _handle_registry_error(request: Request, exc: Exception) -> JSONResponse:
+    """A registry refusal: its structured parts are rendered with the builder schemas."""
+    if not isinstance(exc, RegistryRejectedError):  # pragma: no cover - registration bug
+        raise exc
+    code = code_for(exc)
+    extensions: dict[str, Any] = {"registryCode": exc.registry_code}
+    if exc.violations:
+        extensions["violations"] = [
+            builder_schemas.Violation.model_validate(v).model_dump(mode="json", by_alias=True)
+            for v in exc.violations
+        ]
+    if exc.report is not None:
+        extensions["report"] = builder_schemas.EvalReport.model_validate(exc.report).model_dump(
+            mode="json", by_alias=True
+        )
+    if exc.eval_run_id is not None:
+        extensions["evalRunId"] = exc.eval_run_id
+    if exc.yardstick_loosened:
+        extensions["yardstickLoosened"] = [
+            builder_schemas.YardstickChange.model_validate(c).model_dump(mode="json", by_alias=True)
+            for c in exc.yardstick_loosened
+        ]
+    _log.info("request_rejected", code=code.value, registry_code=exc.registry_code)
+    return problem_response(request, code=code, detail=exc.message, extensions=extensions)
+
+
 async def _handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, RequestValidationError):  # pragma: no cover - registration bug
         raise exc
@@ -122,5 +150,6 @@ async def _handle_http_error(request: Request, exc: Exception) -> JSONResponse:
 def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(DomainError, _handle_business_error)
     app.add_exception_handler(ApplicationError, _handle_business_error)
+    app.add_exception_handler(RegistryRejectedError, _handle_registry_error)
     app.add_exception_handler(RequestValidationError, _handle_validation_error)
     app.add_exception_handler(StarletteHTTPException, _handle_http_error)

@@ -10,6 +10,7 @@ checked by agent-core with its own clock; credentials are minted per call and sh
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -20,6 +21,9 @@ from cc_platform.infrastructure.ai.keys import AgentSigningKeys, SigningKey, b64
 PRINCIPAL_TYP = "principal+jws"
 DELEGATION_TYP = "delegation+jws"
 DEFAULT_TTL = timedelta(minutes=10)
+#: A builder credential at ``step_up`` (approve, publish, promote, revoke): minutes, not the
+#: ordinary ten, because the platform checks a fresh second factor right before each call.
+STEP_UP_TTL = timedelta(minutes=2)
 _SUBJECT_KIND = "customer"
 
 
@@ -86,6 +90,14 @@ class Ed25519AgentCredentialIssuer:
         )
 
     def builder(self, identity: BuilderIdentity) -> AgentCredentials:
+        principal = self._builder_principal(identity)
+        return AgentCredentials(_sign(self._keys.staff, PRINCIPAL_TYP, principal))
+
+    def builder_run(self, identity: BuilderIdentity) -> AgentCredentials:
+        principal = self._builder_principal(replace(identity, step_up=False))
+        return AgentCredentials(_sign(self._keys.principal, PRINCIPAL_TYP, principal))
+
+    def _builder_principal(self, identity: BuilderIdentity) -> dict[str, Any]:
         now = self._clock.now()
         roles = [
             role
@@ -96,15 +108,16 @@ class Ed25519AgentCredentialIssuer:
             )
             if held
         ]
-        principal = self._principal(
+        return self._principal(
             now,
             kind="builder",
             subject_id=identity.staff_id,
             roles=roles,
             attrs={"actor": "human"},
             level="step_up" if identity.step_up else "session",
+            # a second factor is fresh for the one call it was asked for, not for ten minutes
+            ttl=STEP_UP_TTL if identity.step_up else None,
         )
-        return AgentCredentials(_sign(self._keys.staff, PRINCIPAL_TYP, principal))
 
     def _principal(
         self,
@@ -117,6 +130,7 @@ class Ed25519AgentCredentialIssuer:
         level: str = "session",
         level_at: datetime | None = None,
         simulated: bool = False,
+        ttl: timedelta | None = None,
     ) -> dict[str, Any]:
         return {
             "type": kind,
@@ -125,5 +139,5 @@ class Ed25519AgentCredentialIssuer:
             "scopes": [],
             "attrs": attrs or {},
             "auth": {"level": level, "at": _iso(level_at or now), "simulated": simulated},
-            "exp": _iso(now + self._ttl),
+            "exp": _iso(now + (ttl or self._ttl)),
         }

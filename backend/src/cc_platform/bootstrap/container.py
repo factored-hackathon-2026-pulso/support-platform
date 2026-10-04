@@ -24,6 +24,22 @@ from cc_platform.application.cases.assignment import (
     QueueDrainer,
     RepositoryAnalystDirectory,
 )
+from cc_platform.application.cases.calls import (
+    AddInternalNote,
+    AnswerCall,
+    AnswerOutboundCall,
+    EndCustomerCall,
+    GetCustomerCall,
+    HangUpCall,
+    HoldCall,
+    ListCaseCalls,
+    PostCallLine,
+    PostCustomerCallLine,
+    ResumeCall,
+    SetCallMuted,
+    StartInboundCall,
+    StartOutboundCall,
+)
 from cc_platform.application.cases.commands import CloseCase, MarkCaseRead, PostAnalystTurn
 from cc_platform.application.cases.customer_chat import (
     GetCustomerConversation,
@@ -31,6 +47,12 @@ from cc_platform.application.cases.customer_chat import (
     ListPastConversations,
     PostCustomerTurn,
     RateConversation,
+)
+from cc_platform.application.cases.emails import (
+    GetCustomerEmails,
+    GetEmailThread,
+    ReplyEmail,
+    SendCustomerEmail,
 )
 from cc_platform.application.cases.escalations import (
     AcknowledgeEscalation,
@@ -64,7 +86,7 @@ from cc_platform.application.cases.supervision_realtime import (
     SUPERVISION_EVENTS,
     SupervisionRealtimeProjector,
 )
-from cc_platform.application.cases.use_cases import CasesUseCases
+from cc_platform.application.cases.use_cases import CasesUseCases, ChannelsUseCases
 from cc_platform.application.customers.use_cases import (
     AuthenticateCustomer,
     CustomersUseCases,
@@ -477,6 +499,39 @@ def build_container(
             respond_escalation=RespondEscalation(uow=uow, clock=clock, ids=ids),
             take_escalated_case=TakeEscalatedCase(uow=uow, clock=clock, ids=ids),
             escalation_overview=GetEscalationOverview(uow=uow, clock=clock),
+        ),
+        channels=ChannelsUseCases(
+            list_calls=ListCaseCalls(uow=uow, clock=clock),
+            start_outbound_call=StartOutboundCall(uow=uow, clock=clock, ids=ids),
+            answer_call=AnswerCall(uow=uow, clock=clock),
+            hold_call=HoldCall(uow=uow, clock=clock, ids=ids),
+            resume_call=ResumeCall(uow=uow, clock=clock, ids=ids),
+            set_call_muted=SetCallMuted(uow=uow, clock=clock),
+            hang_up_call=HangUpCall(uow=uow, clock=clock, ids=ids),
+            post_call_line=PostCallLine(uow=uow, clock=clock, ids=ids),
+            add_note=AddInternalNote(uow=uow, clock=clock, ids=ids),
+            email_thread=GetEmailThread(uow=uow),
+            reply_email=ReplyEmail(uow=uow, clock=clock, ids=ids),
+            start_inbound_call=StartInboundCall(
+                uow=uow,
+                clock=clock,
+                ids=ids,
+                sla=FirstResponseSlaPolicy(),
+                assign_case=assign_case,
+            ),
+            customer_call=GetCustomerCall(uow=uow),
+            answer_outbound_call=AnswerOutboundCall(uow=uow, clock=clock),
+            reject_call=EndCustomerCall(uow=uow, clock=clock, ids=ids, reject=True),
+            customer_hang_up=EndCustomerCall(uow=uow, clock=clock, ids=ids),
+            post_customer_call_line=PostCustomerCallLine(uow=uow, clock=clock, ids=ids),
+            send_customer_email=SendCustomerEmail(
+                uow=uow,
+                clock=clock,
+                ids=ids,
+                sla=FirstResponseSlaPolicy(),
+                assign_case=assign_case,
+            ),
+            customer_emails=GetCustomerEmails(uow=uow),
         ),
         customers=CustomersUseCases(
             list_demo_customers=ListDemoCustomers(uow=uow),

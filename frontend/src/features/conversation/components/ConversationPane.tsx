@@ -18,6 +18,16 @@ import {
   type TranscriptItem,
 } from '../model'
 import {
+  barCall,
+  centerMode,
+  isActiveCall,
+  outboundReason,
+  threadSubject,
+  transcriptCaption,
+  type CenterMode,
+} from '../channels'
+import {
+  useCaseCalls,
   useCaseDetail,
   useCaseTurns,
   useConversationLive,
@@ -25,15 +35,20 @@ import {
   useMarkRead,
   useSendMessage,
 } from '../hooks'
-import type { CaseDetail, TranscriptCache } from '../types'
+import type { Call, CaseDetail, TranscriptCache } from '../types'
 import { ArrivalNote } from './ArrivalNote'
+import { CallBar } from './CallBar'
+import { CallComposer } from './CallComposer'
+import { CallReasonCard } from './CallReasonCard'
 import { CaseHeader } from './CaseHeader'
 import { ChatTranscript } from './ChatTranscript'
 import { CloseCaseDialog } from './CloseCaseDialog'
+import { EmailComposer } from './EmailComposer'
 import { EscalateCaseDialog } from './EscalateCaseDialog'
 import { EscalationCard } from './EscalationCard'
 import { Composer } from './Composer'
 import { ReadOnlyFooter } from './ReadOnlyFooter'
+import { StartCallDialog } from './StartCallDialog'
 import { UnsentDraft } from './UnsentDraft'
 
 export interface ConversationPaneProps {
@@ -69,7 +84,9 @@ export interface ConversationPaneProps {
  * The conversation column for one case (it takes the whole width next to the
  * Workspace list, or the whole supervisor case view): header, "Cómo llegó a ti",
  * the chat transcript, the composer (or the read-only footer) and the close
- * dialog. Live through `case:<id>`.
+ * dialog. Live through `case:<id>`. Slice 12: the same screen for every channel, only the
+ * center changes (`centerMode`): a call shows the call bar, "Por qué llamas", the live
+ * transcript and "Lo que dices" + "Nota interna"; an email case the thread and the reply.
  */
 export function ConversationPane(props: ConversationPaneProps) {
   // A fresh body per case: drafts, scroll and dialogs never leak between cases.
@@ -170,6 +187,17 @@ function LoadedConversation({
   const canReply = capabilities.canReply && !supervision
   const [closing, setClosing] = useState(false)
   const [escalating, setEscalating] = useState(false)
+  const [calling, setCalling] = useState(false)
+  const center = centerMode(detail, turns.data?.turns)
+  const activeCall = detail.activeCall && isActiveCall(detail.activeCall) ? detail.activeCall : null
+  const hasCallTurns = turns.data?.turns.some((turn) => turn.kind === 'transcript') ?? false
+  const calls = useCaseCalls(
+    summary.id,
+    center === 'call' || activeCall !== null || Boolean(summary.activeCallId) || hasCallTurns,
+  )
+  const callItems = calls.data?.items
+  const bar = center === 'call' ? barCall(detail, callItems) : activeCall
+  const subject = useMemo(() => (turns.data ? threadSubject(turns.data.turns) : null), [turns.data])
   // "hace 6 min" on the escalation card (slice 9).
   const now = useNow(30_000)
   const escalationCard = escalationCardOf(detail, meId, mode, now)
@@ -179,8 +207,8 @@ function LoadedConversation({
   const toastClearance = useToastClearance<HTMLDivElement>()
   const { send, retry } = useSendMessage(summary.id)
   const items = useMemo(
-    () => (turns.data ? toTranscriptItems(turns.data, meId) : []),
-    [turns.data, meId],
+    () => (turns.data ? toTranscriptItems(turns.data, meId, { calls: callItems }) : []),
+    [turns.data, meId, callItems],
   )
 
   return (
@@ -193,18 +221,43 @@ function LoadedConversation({
         headingRef={headingRef}
         onRequestClose={() => setClosing(true)}
         onRequestEscalate={supervision ? undefined : () => setEscalating(true)}
+        onRequestCall={supervision ? undefined : () => setCalling(true)}
         onOpenHistory={onOpenHistory}
         actions={headerActions}
         hideClose={supervision}
         customerFile={customerFile}
       />
+      {bar ? (
+        <CallBar
+          caseId={summary.id}
+          call={bar}
+          canAct={!supervision && summary.assignedAnalystId === meId && summary.status !== 'closed'}
+        />
+      ) : null}
       {escalationCard ? <EscalationCard caseId={summary.id} card={escalationCard} /> : null}
       <ArrivalNote detail={detail} meId={meId} mode={mode} />
-      <TranscriptArea caseId={summary.id} turns={turns} items={items} onRetry={retry} />
+      <TranscriptArea
+        caseId={summary.id}
+        turns={turns}
+        items={items}
+        onRetry={retry}
+        center={center}
+        call={bar}
+        subject={subject}
+      />
       {/* Toasts rise above the composer so they never cover "Enviar". */}
       <div ref={toastClearance} className="shrink-0 border-t border-border px-6 pt-3 pb-[18px]">
         <div className="mx-auto w-full max-w-[880px]">
-          {canReply ? (
+          {canReply && (activeCall || center === 'call') ? (
+            <CallComposer caseId={summary.id} call={activeCall} canNote={capabilities.canAddNote} />
+          ) : canReply && center === 'email' ? (
+            <EmailComposer
+              caseId={summary.id}
+              language={summary.language}
+              customerName={summary.customer.displayName}
+              subject={subject}
+            />
+          ) : canReply ? (
             <Composer value={draft} onChange={setDraft} onSend={send} />
           ) : (
             <div className="flex flex-col gap-2.5">
@@ -225,6 +278,7 @@ function LoadedConversation({
             onClosed={onClosed}
           />
           <EscalateCaseDialog summary={summary} open={escalating} onOpenChange={setEscalating} />
+          <StartCallDialog summary={summary} open={calling} onOpenChange={setCalling} />
         </>
       )}
     </section>
@@ -236,9 +290,30 @@ interface TranscriptAreaProps {
   turns: ReturnType<typeof useCaseTurns>
   items: TranscriptItem[]
   onRetry: (clientMessageId: string) => void
+  center: CenterMode
+  /** The call of the bar (call panel): its reason and whether the transcript is live. */
+  call: Call | null
+  /** The email thread's subject (email panel). */
+  subject: string | null
 }
 
-function TranscriptArea({ caseId, turns, items, onRetry }: TranscriptAreaProps) {
+const LIST_LABEL: Record<CenterMode, string> = {
+  chat: 'Mensajes',
+  call: 'Transcripción de la llamada',
+  email: 'Correos y mensajes del caso',
+}
+
+function TranscriptArea({
+  caseId,
+  turns,
+  items,
+  onRetry,
+  center,
+  call,
+  subject,
+}: TranscriptAreaProps) {
+  const reason = center === 'call' ? outboundReason(call) : null
+  const live = call !== null && isActiveCall(call)
   const scrollRef = useStickToBottom(items, turns.data)
   const older = useLoadOlderTurns(caseId)
   const olderBusy = useOlderPageBusy(older.isPending, items[0]?.key ?? '')
@@ -273,7 +348,7 @@ function TranscriptArea({ caseId, turns, items, onRetry }: TranscriptAreaProps) 
         aria-busy={olderBusy || undefined}
         className="flex flex-col gap-2.5"
       >
-        <ChatTranscript items={items} onRetry={onRetry} />
+        <ChatTranscript items={items} onRetry={onRetry} label={LIST_LABEL[center]} />
       </div>
     )
   }
@@ -301,6 +376,23 @@ function TranscriptArea({ caseId, turns, items, onRetry }: TranscriptAreaProps) 
               </span>
             ) : null}
           </div>
+        ) : null}
+        {reason ? <CallReasonCard reason={reason} /> : null}
+        {center === 'call' ? (
+          <p className="m-0 inline-flex items-center gap-2 text-11 font-semibold tracking-[0.05em] text-muted uppercase">
+            {live ? (
+              <span
+                aria-hidden="true"
+                className="size-2 rounded-full bg-success motion-safe:animate-pulse"
+              />
+            ) : null}
+            {transcriptCaption(call)}
+          </p>
+        ) : null}
+        {center === 'email' && subject ? (
+          <h3 className="m-0 font-display text-20 font-bold tracking-display text-ink">
+            {subject}
+          </h3>
         ) : null}
         {body}
       </div>

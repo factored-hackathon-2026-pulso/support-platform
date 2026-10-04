@@ -34,13 +34,13 @@ async def test_daniela_inbox_counts_match_the_contract() -> None:
         queued = await uow.cases.list_by_status(CaseStatus.QUEUED)
         old = await uow.cases.get(seed_case_id(110))
         every = [await uow.cases.get(seed_case_id(n)) for n, _ in DEMO_STORIES]
-    assert len(open_items) == 5
+    assert len(open_items) == 6
     assert Counter(item.inbox_status for item in open_items) == {
-        InboxStatus.TO_REPLY: 2,
+        InboxStatus.TO_REPLY: 3,
         InboxStatus.NEW: 2,
         InboxStatus.WAITING: 1,
     }
-    assert [c.id for c in closed] == [seed_case_id(n) for n in (106, 105, 104)]
+    assert [c.id for c in closed] == [seed_case_id(n) for n in (106, 116, 105, 115, 104)]
     assert [c.id for c in queued] == [seed_case_id(n) for n in (111, 112, 109)]
     assert [c.queue_label for c in queued] == ["Cola en español"] * 2 + ["Cola en portugués"]
     assert old is not None
@@ -49,7 +49,7 @@ async def test_daniela_inbox_counts_match_the_contract() -> None:
     assert now - old.closed_at > CLOSED_INBOX_WINDOW
     assert julian_closed == []
     cases = [case for case in every if case is not None]
-    assert {case.channel for case in cases} <= {CaseChannel.APP_CHAT, CaseChannel.WEB_CHAT}
+    assert {case.channel for case in cases} == set(CaseChannel)  # slice 12: every channel
     assert all(case.last_turn_author_role is not None for case in cases)
 
 
@@ -100,7 +100,7 @@ async def test_seeding_is_idempotent_and_nobody_starts_available() -> None:
 
 def test_seed_people_are_invented_and_ids_unique() -> None:
     assert len({seed.number for seed in DEMO_CUSTOMERS}) == len(DEMO_CUSTOMERS)
-    assert len({number for number, _ in DEMO_STORIES}) == 14
+    assert len({number for number, _ in DEMO_STORIES}) == 17
     simulator = [seed for seed in DEMO_CUSTOMERS if seed.simulator]
     assert {seed.locale.value for seed in simulator} == {"es-CO", "es-MX", "es-AR", "pt-BR"}
     assert all(seed.suggestions for seed in DEMO_CUSTOMERS)

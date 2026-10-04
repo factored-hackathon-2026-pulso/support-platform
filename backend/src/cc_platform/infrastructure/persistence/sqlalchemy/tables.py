@@ -243,6 +243,8 @@ cases = Table(
     Column("rating_key", String(64), nullable=True),
     # slice 9: the escalation to supervision that is open now (one per case at a time)
     Column("open_escalation_id", String(ID), nullable=True),
+    # slice 12: the call that is ringing or connected now (one per case at a time)
+    Column("active_call_id", String(ID), nullable=True),
     _version(),
     Index("ix_cases_assignee_status", "assigned_analyst_id", "status"),
     Index("ix_cases_assignee_closed", "assigned_analyst_id", "closed_at"),
@@ -270,6 +272,8 @@ turns = Table(
     Column("language", String(5), nullable=False),
     Column("created_at", UtcDateTime, nullable=False),
     Column("client_message_id", String(64), nullable=True),
+    # slice 12: the subject of an ``email`` turn (null on every other kind)
+    Column("subject", String(200), nullable=True),
     UniqueConstraint("case_id", "sequence", name="uq_turns_case_sequence"),
     UniqueConstraint("author_id", "client_message_id", name="uq_turns_author_client_message"),
 )
@@ -320,6 +324,31 @@ escalations = Table(
     # "Escalados": the open ones, and the ones attended since a time.
     Index("ix_escalations_state_escalated", "state", "escalated_at"),
     Index("ix_escalations_resolved", "resolved_at"),
+)
+
+# Slice 12: simulated phone calls (no telephony). One row per call; the active one is also
+# pointed to by ``cases.active_call_id``. ``holds`` is the list of hold intervals (JSON:
+# ``[{"started_at", "ended_at"}]``); the transcript lives in ``turns`` (kind ``transcript``).
+calls = Table(
+    "calls",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("case_id", String(ID), ForeignKey("cases.id"), nullable=False),
+    Column("customer_id", String(ID), ForeignKey("customers.id"), nullable=False),
+    Column("direction", String(10), nullable=False),
+    Column("state", String(10), nullable=False),
+    Column("reason", String(500), nullable=True),
+    Column("analyst_id", String(ID), nullable=True),
+    Column("started_at", UtcDateTime, nullable=False),
+    Column("answered_at", UtcDateTime, nullable=True),
+    Column("ended_at", UtcDateTime, nullable=True),
+    Column("end_reason", String(20), nullable=True),
+    Column("ended_by_role", String(20), nullable=True),
+    Column("muted", Boolean, nullable=False, default=False),
+    Column("holds", JSON, nullable=False),
+    Column("creation_key", String(64), nullable=True, unique=True),
+    _version(),
+    Index("ix_calls_case_started", "case_id", "started_at"),
 )
 
 # Slice 10: each staff member's notifications (a projection of facts already in the event

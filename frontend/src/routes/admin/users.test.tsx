@@ -272,7 +272,7 @@ describe('Usuarios y roles', () => {
     const { user } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await within(panel).findByRole('heading', { name: daniela.name })
-    expect(within(panel).getByText('5 · 4 en español · 1 en portugués')).toBeInTheDocument()
+    expect(within(panel).getByText('5 (4 en español y 1 en portugués)')).toBeInTheDocument()
     expect(within(panel).getByText('Disponible')).toBeInTheDocument()
     const save = within(panel).getByRole('button', { name: 'Guardar cambios' })
     expect(save).toBeDisabled()

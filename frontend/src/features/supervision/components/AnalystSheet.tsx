@@ -8,6 +8,7 @@ import {
   firstResponseFact,
   languageWord,
   withoutKey,
+  caseRowFacts,
 } from '../model'
 import { RecentRating } from './RecentRating'
 import type { CaseSummary, TeamAnalyst } from '../types'
@@ -123,14 +124,9 @@ function OpenCaseItem({ summary, now, onOpenCase, onReassign }: OpenCaseItemProp
       <span className="flex items-center justify-between gap-2 text-12 text-muted">
         <span className="flex min-w-0 items-center gap-2.5">
           <CaseStatusCell summary={summary} size="sm" />
-          <Fact
-            icon={summary.channel === 'app_chat' ? 'smartphone' : 'globe'}
-            text={
-              summary.channel === 'app_chat' ? 'Escribió desde la app' : 'Escribió desde la web'
-            }
-            label="Canal"
-            iconOnly
-          />
+          {caseRowFacts(summary).map(({ key, ...fact }) => (
+            <Fact key={key} {...fact} />
+          ))}
         </span>
         <span className="shrink-0">{formatRelativeTime(summary.lastInteractionAt, now)}</span>
       </span>

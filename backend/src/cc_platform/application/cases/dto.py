@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from cc_platform.domain.cases.call import CallDirection, CallEndReason, CallState
 from cc_platform.domain.cases.escalation import EscalationState
 from cc_platform.domain.cases.values import (
     AssignmentReason,
@@ -16,6 +17,7 @@ from cc_platform.domain.cases.values import (
     CloseReason,
     CustomerConversationStatus,
     CustomerTurnAuthor,
+    EmailDirection,
     InboxStatus,
     TurnAudience,
     TurnAuthorRole,
@@ -74,6 +76,8 @@ class CaseSummaryView:
     rating: CaseRatingView | None
     escalated: bool
     """An escalation to supervision is open (slice 9: the "Escalado" marker)."""
+    active_call_id: str | None
+    """Slice 12: the call ringing or connected now ("En llamada"), if any."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +149,13 @@ class CaseCapabilitiesView:
     """The caller is the assignee analyst or holds ``supervisor``, and the case is open."""
     can_escalate: bool
     """Slice 9: the caller is the assignee analyst, the case is open and not escalated."""
+    can_call: bool
+    """Slice 12: the caller is the assignee analyst, the case is open and has no active call
+    (an outbound call, ``POST /cases/{caseId}/calls``)."""
+    can_email: bool
+    """Slice 12: the caller is the assignee analyst and the case is open (an email reply)."""
+    can_add_note: bool
+    """Slice 12: the caller is the assignee analyst and the case is open (an internal note)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +189,8 @@ class CaseDetailView:
     previous_case_count: int
     escalation: EscalationView | None
     """The case's latest escalation (any state; slice 9), or ``None``."""
+    active_call: CallView | None
+    """Slice 12: the call ringing or connected now, or ``None``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,6 +227,8 @@ class TurnView:
     language: Language
     created_at: datetime
     client_message_id: str | None
+    subject: str | None = None
+    """Slice 12: the subject of an ``email`` turn."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,6 +283,8 @@ class CustomerTurnView:
     language: Language
     created_at: datetime
     client_message_id: str | None
+    subject: str | None = None
+    """Slice 12: the subject of an ``email`` turn."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,4 +332,163 @@ class RateConversationCommand:
 @dataclass(frozen=True, slots=True)
 class RateConversationResult:
     conversation: CustomerConversationView
+    replayed: bool
+
+
+# ----------------------------------------------------------------------------- calls (slice 12)
+@dataclass(frozen=True, slots=True)
+class HoldIntervalView:
+    started_at: datetime
+    ended_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class CallView:
+    """A simulated call as staff see it."""
+
+    id: str
+    case_id: str
+    direction: CallDirection
+    state: CallState
+    reason: str | None
+    analyst_id: str | None
+    analyst_name: str | None
+    started_at: datetime
+    answered_at: datetime | None
+    ended_at: datetime | None
+    end_reason: CallEndReason | None
+    ended_by_role: ActorRole | None
+    muted: bool
+    holds: tuple[HoldIntervalView, ...]
+    hold_seconds: int
+    duration_seconds: int | None
+    version: int
+
+
+@dataclass(frozen=True, slots=True)
+class CallResult:
+    call: CallView
+    case: CaseSummaryView
+    replayed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CallListView:
+    items: tuple[CallView, ...]
+    server_time: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerCallView:
+    """What the customer sees of a call: no reason, no staff ids, the analyst's first name."""
+
+    id: str
+    case_id: str
+    direction: CallDirection
+    state: CallState
+    agent_name: str | None
+    started_at: datetime
+    answered_at: datetime | None
+    ended_at: datetime | None
+    end_reason: CallEndReason | None
+    on_hold: bool
+    duration_seconds: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerCallResult:
+    call: CustomerCallView
+    conversation: CustomerConversationView
+    case_created: bool = False
+    replayed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class StartOutboundCallCommand:
+    reason: str
+    idempotency_key: str
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerTurnResult:
+    """A line the customer said in a call (``kind = transcript``)."""
+
+    turn: CustomerTurnView
+    call: CustomerCallView
+    replayed: bool
+
+
+# ----------------------------------------------------------------------------- email (slice 12)
+@dataclass(frozen=True, slots=True)
+class EmailMessageView:
+    """One email of a case thread (an ``email`` turn)."""
+
+    id: str
+    case_id: str
+    sequence: int
+    direction: EmailDirection
+    subject: str
+    body: str
+    author_role: TurnAuthorRole
+    author_id: str | None
+    author_name: str | None
+    created_at: datetime
+    client_message_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class EmailThreadView:
+    case_id: str
+    subject: str | None
+    """The thread's subject: the first email's (``None`` while the case has no email)."""
+    items: tuple[EmailMessageView, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EmailReplyCommand:
+    body: str
+    client_message_id: str
+    subject: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EmailReplyResult:
+    email: EmailMessageView
+    case: CaseSummaryView
+    replayed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerEmailCommand:
+    subject: str
+    body: str
+    client_message_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerEmailView:
+    """An email of the customer's thread (analysts by first name in ``author_name``)."""
+
+    id: str
+    sequence: int
+    direction: EmailDirection
+    subject: str
+    body: str
+    author_name: str | None
+    created_at: datetime
+    client_message_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerEmailThreadView:
+    case_id: str | None
+    subject: str | None
+    items: tuple[CustomerEmailView, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerEmailResult:
+    email: CustomerEmailView
+    conversation: CustomerConversationView
+    case_created: bool
     replayed: bool

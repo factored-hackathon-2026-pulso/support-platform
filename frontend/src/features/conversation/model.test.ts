@@ -22,7 +22,7 @@ import {
   addPending,
   applySummary,
   arrivalFacts,
-  caseHeaderMeta,
+  caseHeaderFacts,
   CLOSED_NOTICE,
   closedFooter,
   closureNote,
@@ -323,17 +323,33 @@ describe('priority failures (slice 8)', () => {
 })
 
 describe('header', () => {
-  it('builds the meta line: country, city and channel (slice 8: the priority is a menu)', () => {
-    expect(caseHeaderMeta(makeCaseDetail())).toBe('Colombia · Barranquilla · chat web')
-    const app = makeCaseDetail()
-    app.case = { ...app.case, channel: 'app_chat', priority: 'high' }
-    expect(caseHeaderMeta(app)).toBe('Colombia · Barranquilla · chat en la app')
+  it('builds the header facts: place and channel icon, no dot-joined line', () => {
+    expect(caseHeaderFacts(makeCaseDetail())).toEqual([
+      {
+        key: 'place',
+        icon: 'map-pin',
+        text: 'Barranquilla, Colombia',
+        label: 'Ciudad',
+      },
+      { key: 'channel', icon: 'message', text: 'Chat web', label: 'Canal', iconOnly: true },
+    ])
+    const call = makeCaseDetail()
+    call.case = { ...call.case, channel: 'phone_inbound' }
+    expect(caseHeaderFacts(call)[1]).toMatchObject({
+      icon: 'phone-incoming',
+      text: 'Llamada entrante',
+    })
   })
 
-  it('ends with "en portugués" for a Portuguese case (rule 3)', () => {
+  it('adds "Portugués" for a Portuguese case (rule 3)', () => {
     const pt = makeCaseDetail()
     pt.case = { ...pt.case, language: 'pt' }
-    expect(caseHeaderMeta(pt)).toBe('Colombia · Barranquilla · chat web · en portugués')
+    expect(caseHeaderFacts(pt).at(-1)).toEqual({
+      key: 'language',
+      icon: 'languages',
+      text: 'Portugués',
+      label: 'Idioma',
+    })
   })
 
   it('shortens the case number and labels the history button', () => {
@@ -601,6 +617,9 @@ describe('closure and the read-only footer', () => {
         canAssign: false,
         canChangePriority: false,
         canEscalate: false,
+        canCall: false,
+        canEmail: false,
+        canAddNote: false,
       },
       assignment: {
         ...makeCaseDetail().assignment!,
@@ -810,7 +829,7 @@ describe('"Ficha del cliente" rows (slice 6 §5)', () => {
     const rows = caseRows(makeCaseDetail(), now)
     expect(rows.map((row) => [row.icon, row.label])).toEqual([
       ['hash', 'Número'],
-      ['globe', 'Canal'],
+      ['message', 'Canal'],
       ['flag', 'Prioridad'],
       ['calendar-clock', 'Abierto'],
       ['inbox', 'Estado'],

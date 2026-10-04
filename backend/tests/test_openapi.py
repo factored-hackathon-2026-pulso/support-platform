@@ -62,6 +62,10 @@ RESPONSE_SCHEMAS = (
     "AdminTeam", "TeamStatusCounts", "AdminTeamList", "AdminTeamMember", "AdminTeamDetail",
     "AdminTeamChange", "StaffListResponse", "Escalation", "EscalationResult", "EscalationItem",
     "EscalationOverview", "LanguageOpenCases", "OpenCaseRow",
+    # slice 12: calls, email, notes
+    "Call", "HoldInterval", "CallResponse", "CallList", "EmailMessage", "EmailThread",
+    "EmailReplyResponse", "CustomerCall", "CustomerCallState", "CustomerCallResponse",
+    "CustomerCallLineResponse", "CustomerEmail", "CustomerEmailThread", "SendEmailResponse",
 )  # fmt: skip
 
 
@@ -78,7 +82,13 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
     schemas = document["components"]["schemas"]
     for removed in ("RouteStop", "RoutingSummary", "ChannelIdentity", "CustomerProfile"):
         assert removed not in schemas
-    assert schemas["CaseChannel"]["enum"] == ["app_chat", "web_chat"]
+    assert schemas["CaseChannel"]["enum"] == [
+        "chat_app",
+        "chat_web",
+        "phone_inbound",
+        "phone_outbound",
+        "email",
+    ]
     assert schemas["CaseStatus"]["enum"] == ["queued", "assigned", "in_progress", "closed"]
     assert schemas["InboxStatus"]["enum"] == ["new", "to_reply", "waiting", "closed"]
     assert schemas["StaffRole"]["enum"] == ["analyst", "supervisor", "admin"]
@@ -93,6 +103,8 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "self_change_forbidden", "last_admin", "staff_has_open_cases", "team_not_empty",
         "team_inactive", "staff_inactive", "case_not_closed", "already_rated",
         "escalation_open", "escalation_not_open",
+        # slice 12 (calls)
+        "call_in_progress", "call_not_active",
         # part 4 (secure onboarding)
         "staff_invited", "link_invalid", "rate_limited", "password_rejected", "totp_invalid",
     }  # fmt: skip

@@ -22,6 +22,7 @@ from cc_platform.application.people.admin import copy as admin_copy
 from cc_platform.domain.cases.values import (
     LANGUAGE_RULE_ID,
     AssignmentReason,
+    CaseChannel,
     CasePriority,
     CloseReason,
 )
@@ -61,6 +62,13 @@ FAMILY: Mapping[str, AuditFamily] = {
     "escalation.reassigned": AuditFamily.ESCALATION,
     "escalation.closed": AuditFamily.ESCALATION,
     "escalation.acknowledged": AuditFamily.ESCALATION,
+    # simulated phone calls (slice 12): part of the conversation with the customer
+    "call.started": AuditFamily.CONVERSATION,
+    "call.answered": AuditFamily.CONVERSATION,
+    "call.held": AuditFamily.CONVERSATION,
+    "call.resumed": AuditFamily.CONVERSATION,
+    "call.mute_changed": AuditFamily.CONVERSATION,
+    "call.ended": AuditFamily.CONVERSATION,
     "staff.availability_changed": AuditFamily.AVAILABILITY,
     "customer.session_started": AuditFamily.ACCESS,
     "auth.password_accepted": AuditFamily.ACCESS,
@@ -115,6 +123,12 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "escalation.taken",
         "escalation.reassigned",
         "escalation.closed",
+        "call.started",
+        "call.answered",
+        "call.held",
+        "call.resumed",
+        "call.mute_changed",
+        "call.ended",
         "staff.availability_changed",
         "auth.account_locked",
         "staff.invitation_accepted",
@@ -173,15 +187,29 @@ def _queue(language: Language) -> str:
     return copy.in_sentence(copy.QUEUE_LABEL[language])
 
 
+#: Slice 12: how a case opened, inside a sentence ("Abrió un caso nuevo por …").
+CHANNEL_PHRASE: Mapping[str, str] = {
+    CaseChannel.CHAT_APP.value: "chat en la app",
+    CaseChannel.CHAT_WEB.value: "chat web",
+    CaseChannel.PHONE_INBOUND.value: "llamada entrante",
+    CaseChannel.PHONE_OUTBOUND.value: "llamada saliente",
+    CaseChannel.EMAIL.value: "correo",
+}
+
+
 def _channel_phrase(channel: str | None) -> str:
-    return "chat web" if channel == "web_chat" else "chat en la app"
+    return CHANNEL_PHRASE.get(channel or "", CHANNEL_PHRASE[CaseChannel.CHAT_APP.value])
 
 
 # ----------------------------------------------------------------------------- descriptions
 def _case_opened(event: StoredEvent, _names: AuditNames) -> str:
-    channel = _channel_phrase(_text(event.payload, "channel"))
+    raw = _text(event.payload, "channel")
+    channel = _channel_phrase(raw)
+    if raw == CaseChannel.PHONE_OUTBOUND.value:  # slice 12: an analyst's follow-up
+        return "Abrió un caso de seguimiento para llamar al cliente"
     if _text(event.payload, "previous_case_id"):
-        return f"Volvió a escribir y abrió un caso nuevo por {channel}"
+        verb = "Volvió a llamar" if raw == CaseChannel.PHONE_INBOUND.value else "Volvió a escribir"
+        return f"{verb} y abrió un caso nuevo por {channel}"
     return f"Abrió un caso nuevo por {channel}"
 
 
@@ -200,6 +228,8 @@ def _case_assigned(event: StoredEvent, names: AuditNames) -> str:
     language = _language(event, names)
     reason = _text(payload, "reason")
     previous = payload.get("previous_analyst_id")
+    if reason == AssignmentReason.OUTBOUND_CALL.value:  # slice 12: she called the customer
+        return "Se asignó el caso para hacer una llamada de seguimiento"
     if reason == AssignmentReason.QUEUE_DRAINED.value:
         minutes = copy.queue_wait_minutes(_int(payload, "waited_seconds") or 0)
         text = f"Asignó el caso a {analyst} desde la {_queue(language)} después de {minutes} min"
@@ -292,15 +322,53 @@ def _case_viewed(_event: StoredEvent, _names: AuditNames) -> str:
     return "Abrió la conversación en modo supervisión (solo lectura)"
 
 
+#: ``turn.created`` by (kind, author role); ``None`` = any author. Slice 12 adds call lines,
+#: internal notes (staff only) and emails.
+_TURN_TEXT: Mapping[tuple[str, str | None], str] = {
+    ("notice", None): "La plataforma le envió un aviso al cliente",
+    ("routing", None): "Dejó una nota de asignación para el equipo",
+    ("note", None): "Dejó una nota interna para el equipo",
+    ("email", "customer"): "Envió un correo",
+    ("email", None): "Respondió por correo",
+    ("transcript", "system"): "Anotó un cambio de la llamada en la transcripción",
+    ("transcript", None): "Habló en la llamada",
+    ("message", "customer"): "Escribió un mensaje",
+}
+
+
 def _turn_created(event: StoredEvent, _names: AuditNames) -> str:
-    kind = _text(event.payload, "kind")
-    if kind == "notice":
-        return "La plataforma le envió un aviso al cliente"
-    if kind == "routing":
-        return "Dejó una nota de asignación para el equipo"
-    if _text(event.payload, "author_role") == "customer":
-        return "Escribió un mensaje"
-    return "Respondió al cliente"
+    kind = _text(event.payload, "kind") or "message"
+    role = _text(event.payload, "author_role")
+    return _TURN_TEXT.get((kind, role)) or _TURN_TEXT.get((kind, None)) or "Respondió al cliente"
+
+
+# ----------------------------------------------------------------------------- calls (slice 12)
+def _call_started(event: StoredEvent, names: AuditNames) -> str:
+    """Next to the actor: "Daniela Ríos · Llamó a Claudia Restrepo Varela"; the reason is
+    never shown (only its length)."""
+    if _text(event.payload, "direction") == "outbound":
+        return f"Llamó a {names.name(event.payload.get('customer_id'))}"
+    return "Llamó a la línea de atención"
+
+
+def _call_answered(event: StoredEvent, _names: AuditNames) -> str:
+    if _text(event.payload, "answered_by_role") == "customer":
+        return "Contestó la llamada"
+    return "Atendió la llamada"
+
+
+def _call_mute_changed(event: StoredEvent, _names: AuditNames) -> str:
+    return "Silenció su micrófono" if event.payload.get("muted") is True else "Activó su micrófono"
+
+
+def _call_ended(event: StoredEvent, _names: AuditNames) -> str:
+    reason = _text(event.payload, "end_reason")
+    if reason == "rejected":
+        return "Rechazó la llamada"
+    if reason == "cancelled":
+        return "Colgó antes de que contestaran"
+    minutes = copy.queue_wait_minutes(_int(event.payload, "duration_seconds") or 0)
+    return f"Terminó la llamada · duró {minutes} min"
 
 
 def _availability_changed(event: StoredEvent, names: AuditNames) -> str:
@@ -314,7 +382,7 @@ def _availability_changed(event: StoredEvent, names: AuditNames) -> str:
 
 
 def _customer_session(event: StoredEvent, _names: AuditNames) -> str:
-    channel = "web" if _text(event.payload, "channel") == "web_chat" else "app"
+    channel = "web" if _text(event.payload, "channel") == CaseChannel.CHAT_WEB.value else "app"
     return f"Abrió el chat ({channel})"
 
 
@@ -468,6 +536,13 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "escalation.reassigned": _escalation_reassigned,
     "escalation.closed": _fixed("El escalamiento terminó porque se cerró el caso"),
     "escalation.acknowledged": _fixed("Leyó lo que hizo supervisión con su escalamiento"),
+    # slice 12: simulated calls (gender-neutral, next to the actor's name)
+    "call.started": _call_started,
+    "call.answered": _call_answered,
+    "call.held": _fixed("Puso la llamada en espera"),
+    "call.resumed": _fixed("Retomó la llamada"),
+    "call.mute_changed": _call_mute_changed,
+    "call.ended": _call_ended,
     "staff.availability_changed": _availability_changed,
     "customer.session_started": _customer_session,
     "auth.password_accepted": _fixed("Ingresó la contraseña correcta"),

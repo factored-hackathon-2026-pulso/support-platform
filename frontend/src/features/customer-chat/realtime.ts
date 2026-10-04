@@ -18,8 +18,15 @@ import {
   type RealtimeRegistration,
 } from '@/lib/realtime'
 import { customerChatKeys } from './api'
+import { isNewerCustomerCall } from './channels'
 import { applyConversation, isNewerConversation, isSameCase, mergeCustomerTurns } from './model'
-import type { CustomerChatCache, CustomerConversation, CustomerTurn } from './types'
+import type {
+  CustomerCall,
+  CustomerCallState,
+  CustomerChatCache,
+  CustomerConversation,
+  CustomerTurn,
+} from './types'
 
 function readData(envelope: RealtimeEnvelope) {
   const payload = envelopePayload(envelope)
@@ -83,8 +90,28 @@ function applyConversationUpdate(envelope: RealtimeEnvelope, queryClient: QueryC
   })
 }
 
+/**
+ * `call.updated` (slice 12): the customer's call → the call cache of the signed-in customer
+ * (a call of the bank starts ringing here: "LATAM Bank te está llamando").
+ */
+function applyCall(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
+  const data = readData(envelope)
+  if (!data || typeof data.payload.id !== 'string' || typeof data.payload.state !== 'string') return
+  const call = data.payload as unknown as CustomerCall
+  const callQueries = {
+    queryKey: customerChatKeys.all,
+    predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[2] === 'call',
+  }
+  for (const [key] of queryClient.getQueriesData<CustomerCallState>(callQueries)) {
+    queryClient.setQueryData<CustomerCallState>(key, (current) =>
+      !current || isNewerCustomerCall(call, current.call) ? { call } : current,
+    )
+  }
+}
+
 export const registerCustomerChatRealtime: RealtimeRegistration = (registry) => {
   registry.register('turn.created', applyTurn)
+  registry.register('call.updated', applyCall)
   registry.register('conversation.updated', applyConversationUpdate)
 }
 

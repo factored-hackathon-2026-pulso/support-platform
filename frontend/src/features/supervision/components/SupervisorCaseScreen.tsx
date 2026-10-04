@@ -83,7 +83,7 @@ export function SupervisorCaseScreen({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <DocumentTitle title={`Caso ${shortCaseId(caseId)} · Supervisión`} />
+      <DocumentTitle title={`Caso ${shortCaseId(caseId)} en supervisión`} />
       <div className="flex shrink-0 items-center gap-3 border-b border-border bg-surface px-6 py-2">
         <LinkButton
           to={backTo}

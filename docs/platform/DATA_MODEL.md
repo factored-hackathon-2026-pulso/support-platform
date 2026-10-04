@@ -1,14 +1,14 @@
 # Modelo de datos de la plataforma
 
-Versión: slices 0 a 11 (slice 7: calificación del cliente; slice 8: prioridad del caso; slice 9: escalamientos a supervisión; slice 10: notificaciones; slice 11: altas seguras por invitación, parte 4). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
+Versión: slices 0 a 12 (slice 7: calificación del cliente; slice 8: prioridad del caso; slice 9: escalamientos a supervisión; slice 10: notificaciones; slice 11: altas seguras por invitación, parte 4; slice 12: teléfono y correo simulados). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
 
-La plataforma es solo para personas: clientes y equipo de soporte conversan por chat. Guarda las conversaciones, quién atiende cada caso, las cuentas del equipo y el registro de eventos; nada más (la [última sección](#diferencias-con-contractsplatform_historyjson) compara este modelo con la muestra sintética).
+La plataforma es solo para personas: clientes y equipo de soporte conversan por chat y, desde el slice 12, por teléfono y por correo **simulados** (sin telefonía ni servidor de correo: se guarda el estado de la llamada, sus tiempos y lo que dijo cada persona, y el hilo de correos del caso). Guarda las conversaciones, quién atiende cada caso, las cuentas del equipo y el registro de eventos; nada más (la [última sección](#diferencias-con-contractsplatform_historyjson) compara este modelo con la muestra sintética).
 
 ## Cómo se guarda
 
 - Base de datos SQLite por defecto, escrita con SQL portable para pasar a Postgres sin cambios.
 - **No hay migraciones todavía**: el esquema se crea al arrancar. Si cambia, se borra `backend/cc_platform.db` y se vuelve a crear con los datos de ejemplo.
-- Ids de texto con prefijo: `CASE-…`, `TRN-…` (mensaje), `ASG-…` (asignación), `CUS-…` (cliente), `STF-…` (persona del equipo), `SES-…` (sesión), `MFA-…`, `TEAM-…` (equipo), `EVT-…` (evento), `CSN-…` (sesión de cliente), `ESC-…` (escalamiento), `NTF-…` (notificación), `INV-…` (invitación), `PWR-…` (enlace para restablecer la contraseña), `EML-…` (correo del buzón de desarrollo).
+- Ids de texto con prefijo: `CASE-…`, `TRN-…` (mensaje), `ASG-…` (asignación), `CUS-…` (cliente), `STF-…` (persona del equipo), `SES-…` (sesión), `MFA-…`, `TEAM-…` (equipo), `EVT-…` (evento), `CSN-…` (sesión de cliente), `ESC-…` (escalamiento), `NTF-…` (notificación), `INV-…` (invitación), `PWR-…` (enlace para restablecer la contraseña), `EML-…` (correo del buzón de desarrollo), `CALL-…` (llamada, slice 12).
 - Fechas en UTC (ISO-8601).
 - Las tablas con columna `version` usan control de concurrencia optimista: si dos personas cambian lo mismo a la vez, la segunda escritura se rechaza y se reintenta sobre datos frescos.
 - `turns` y `event_log` son de solo agregar: nunca se editan ni se borran filas.
@@ -31,6 +31,7 @@ erDiagram
     staff ||--o| analyst_availability : "disponible / en pausa"
     cases ||--o{ event_log : "case_id"
     cases ||--o{ escalations : "escalamientos (uno abierto a la vez)"
+    cases ||--o{ calls : "llamadas (una activa a la vez, slice 12)"
     staff ||--o{ escalations : "escalated_by_id"
     staff ||--o{ notifications : "recipient_id (las últimas 200)"
     staff ||--o| invitations : "una invitación por persona"
@@ -48,7 +49,7 @@ erDiagram
     cases {
         string id PK "CASE-…"
         string customer_id FK
-        string channel "app_chat web_chat"
+        string channel "chat_app chat_web phone_inbound phone_outbound email"
         string language "es pt"
         string priority "none low medium high critical"
         string status "queued assigned in_progress closed"
@@ -67,6 +68,25 @@ erDiagram
         datetime rated_at
         string rating_key
         string open_escalation_id "slice 9"
+        string active_call_id "slice 12"
+        int version
+    }
+    calls {
+        string id PK "CALL-…"
+        string case_id FK
+        string customer_id FK
+        string direction "inbound outbound"
+        string state "ringing in_call on_hold ended"
+        string reason "saliente: hasta 500"
+        string analyst_id
+        datetime started_at
+        datetime answered_at
+        datetime ended_at
+        string end_reason "completed cancelled rejected"
+        string ended_by_role
+        bool muted
+        json holds "intervalos en espera"
+        string creation_key
         int version
     }
     escalations {
@@ -88,7 +108,7 @@ erDiagram
         string id PK "TRN-…"
         string case_id FK
         int sequence "sin huecos por caso"
-        string kind "message routing notice"
+        string kind "message routing notice transcript note email"
         string audience "everyone staff"
         string author_role "customer analyst system"
         string author_id
@@ -96,12 +116,13 @@ erDiagram
         string language
         datetime created_at
         string client_message_id
+        string subject "solo correos, slice 12"
     }
     assignments {
         string id PK "ASG-…"
         string case_id FK
         string staff_id FK
-        string reason "language_least_loaded queue_drained manual"
+        string reason "language_least_loaded queue_drained manual outbound_call"
         string policy_rule_id "H1"
         int open_cases_at_assignment
         string assigned_by_role
@@ -268,6 +289,25 @@ stateDiagram-v2
     reassigned --> reassigned: "Entendido"
 ```
 
+- Llamadas (slice 12, simuladas): un caso tiene a lo sumo una llamada activa
+  (`cases.active_call_id`); **no se cierra un caso con una llamada activa** (409
+  `call_in_progress`: primero se cuelga). Atender una llamada cuenta como respuesta: la primera fija
+  `first_response_at`. El canal del caso dice cómo se abrió: una llamada o un correo de un cliente
+  con un caso abierto se suma a ese caso.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ringing: el cliente llama (entrante) o la analista llama con un motivo (saliente)
+    ringing --> in_call: contesta la analista asignada (entrante) o el cliente (saliente)
+    in_call --> on_hold: la analista la pone en espera
+    on_hold --> in_call: la analista la retoma
+    ringing --> ended: quien llamó cuelga (cancelled) o el cliente rechaza la saliente (rejected)
+    in_call --> ended: cualquiera cuelga (completed)
+    on_hold --> ended: cualquiera cuelga (completed)
+    in_call --> in_call: la analista silencia o activa su micrófono (muted)
+    ended --> [*]
+```
+
 **Estado en la bandeja del analista** (se calcula, no se guarda):
 
 | Bandeja | Condición |
@@ -275,6 +315,9 @@ stateDiagram-v2
 | Nuevos | `assigned` (el analista todavía no lo abre) |
 | Por responder | `in_progress` y el último mensaje es del cliente |
 | Esperando al cliente | `in_progress` y el último mensaje es del analista |
+
+Slice 12: los correos cuentan como mensajes (último mensaje, no leídos, Por responder); las líneas de
+una llamada no (atender la llamada ya fue la respuesta).
 | Cerrados | `closed` en los últimos 7 días |
 
 ## Tablas
@@ -299,7 +342,7 @@ stateDiagram-v2
 |---|---|---|
 | `id` | texto, PK | `CASE-…` |
 | `customer_id` | FK → customers | |
-| `channel` | texto | `app_chat`, `web_chat` |
+| `channel` | texto | cómo se abrió (slice 12): `chat_app`, `chat_web`, `phone_inbound` (llamó el cliente), `phone_outbound` (una analista lo abrió para llamar al cliente; solo en los datos de ejemplo), `email`. Antes `app_chat` / `web_chat` |
 | `language` | texto | `es`, `pt` |
 | `priority` | texto | `none` (al abrir), `low`, `medium`, `high`, `critical` (slice 8); la cambia la analista asignada o Supervisión |
 | `status` | texto | `queued`, `assigned`, `in_progress`, `closed` |
@@ -323,6 +366,7 @@ stateDiagram-v2
 | `rated_at` | fecha, nula | cuándo calificó |
 | `rating_key` | texto(64), nulo | `Idempotency-Key` de la solicitud: un reintento con la misma respuesta no califica dos veces |
 | `open_escalation_id` | texto, nulo | escalamiento abierto ahora (slice 9); a lo sumo uno por caso |
+| `active_call_id` | texto, nulo | llamada que suena o está en curso ahora (slice 12); a lo sumo una por caso. Mientras tenga valor, el caso no se cierra |
 | `version` | entero | concurrencia optimista (una calificación, un cambio de prioridad o un escalamiento sube la versión: dos a la vez, gana una; el cambio de prioridad además exige la versión que vio quien lo pide, `expectedVersion`) |
 
 Índice de "Calificación 7 días" (slice 7): `ix_cases_closer_closed` (`closed_by_id`, `closed_at`).
@@ -367,7 +411,7 @@ los ordena.
 | `id` | texto, PK | `TRN-…` |
 | `case_id` | FK → cases | |
 | `sequence` | entero | 1, 2, 3… sin huecos dentro del caso (único por caso) |
-| `kind` | texto | `message` (escrito por una persona), `routing` (aviso de asignación), `notice` (aviso de cierre, reasignación…) |
+| `kind` | texto | `message` (escrito por una persona), `routing` (aviso de asignación), `notice` (aviso de cierre, reasignación…); slice 12: `transcript` (una línea de una llamada: la dijo el cliente o la analista, o `system` al ponerla en espera, retomarla o terminarla), `note` (nota interna de la analista, siempre `staff`), `email` (un correo del hilo: del cliente = entrante, de una analista = saliente) |
 | `audience` | texto | `everyone` (lo ve el cliente) o `staff` (solo el equipo) |
 | `author_role` | texto | `customer`, `analyst`, `system` |
 | `author_id` | texto, nulo | `CUS-…` o `STF-…` |
@@ -375,6 +419,7 @@ los ordena.
 | `language` | texto | `es`, `pt` |
 | `created_at` | fecha | |
 | `client_message_id` | texto, nulo | evita duplicados si se reenvía (único por autor) |
+| `subject` | texto(200), nulo | asunto de un `email` (slice 12); nulo en los demás tipos. El hilo de un caso son sus `email` en orden; su asunto es el del primero |
 
 **`assignments`** · historial de a quién se asignó cada caso. Índices de "Inicio" (slice 6):
 `(staff_id, assigned_at)` y `(previous_staff_id, assigned_at)`, para leer qué casos le llegaron
@@ -386,7 +431,7 @@ propia: se lee de `event_log`, `assignments` y `cases`.
 | `id` | texto, PK | `ASG-…` |
 | `case_id` | FK → cases | |
 | `staff_id` | FK → staff | analista que lo recibe |
-| `reason` | texto | `language_least_loaded` (al llegar), `queue_drained` (desde la cola), `manual` (lo eligió supervisión) |
+| `reason` | texto | `language_least_loaded` (al llegar), `queue_drained` (desde la cola), `manual` (lo eligió supervisión), `outbound_call` (slice 12: la analista abrió el caso para llamar al cliente; solo en los datos de ejemplo) |
 | `policy_rule_id` | texto, nulo | `H1` (regla 3, idioma) |
 | `open_cases_at_assignment` | entero | carga del analista en ese momento |
 | `strategy` | texto | estrategia de asignación usada |
@@ -395,6 +440,34 @@ propia: se lee de `event_log`, `assignments` y `cases`.
 | `previous_staff_id` | texto, nulo | quién lo tenía antes (reasignación) |
 | `paused_override` | booleano | se asignó a alguien en pausa con confirmación |
 | `assigned_at` | fecha | |
+
+**`calls`** · llamadas simuladas (slice 12). Una fila por llamada; la activa también la apunta
+`cases.active_call_id`. La transcripción no está aquí: son los `turns` de tipo `transcript` del caso
+escritos entre `started_at` y `ended_at` (una llamada activa a la vez).
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | texto, PK | `CALL-…` |
+| `case_id`, `customer_id` | FK | el caso y su cliente |
+| `direction` | texto | `inbound` (llamó el cliente) o `outbound` (llamó una analista) |
+| `state` | texto | `ringing`, `in_call`, `on_hold`, `ended` |
+| `reason` | texto(500), nulo | por qué llama la analista (solo saliente; la auditoría muestra solo su largo) |
+| `analyst_id` | texto, nulo | quién está en la línea por el banco: quien llamó (saliente) o quien contestó (entrante; nulo mientras suena) |
+| `started_at`, `answered_at`, `ended_at` | fecha | empezó a sonar, la contestaron, terminó |
+| `end_reason` | texto, nulo | `completed` (se colgó después de contestar), `cancelled` (quien llamó colgó mientras sonaba), `rejected` (el cliente rechazó la saliente) |
+| `ended_by_role` | texto, nulo | `customer` o `analyst` |
+| `muted` | booleano | el micrófono de la analista está silenciado |
+| `holds` | JSON | intervalos en espera `[{started_at, ended_at}]` (`ended_at` nulo mientras sigue en espera) |
+| `creation_key` | texto(64), único, nulo | `Idempotency-Key` de quien la inició: un reintento devuelve la misma llamada |
+| `version` | entero | concurrencia optimista |
+
+Índice: `(case_id, started_at)`. Duración (se calcula): `ended_at − answered_at` (con las esperas);
+nula si nadie contestó.
+
+**Por qué un agregado propio.** Un caso puede tener varias llamadas a lo largo del tiempo, cada una
+con sus tiempos, esperas y final. La regla "una activa por caso" vive en el caso
+(`active_call_id`): empezar y terminar una llamada también guarda el caso, así que su control de
+concurrencia ordena una llamada contra un cierre o contra otra llamada.
 
 **`customer_case_slots`** · garantiza un solo caso abierto por cliente (`customer_id` PK, `open_case_id`, `version`).
 
@@ -478,7 +551,8 @@ Tipos de evento:
 |---|---|
 | Casos | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.rated` (el cliente calificó; `payload`: `score`, `comment`, `analyst_id`; la auditoría muestra solo el largo del comentario), `case.priority_changed` (slice 8; `payload`: `from`, `to`; auditoría: "Cambió la prioridad a Alta"), `case.viewed` (supervisión abrió el caso) |
 | Escalamientos (slice 9) | `escalation.opened` (`motive`, `analyst_id`; auditoría: "Escaló el caso a supervisión", solo el largo del motivo), `escalation.withdrawn`, `escalation.answered` (`note`; solo su largo), `escalation.taken`, `escalation.reassigned` (`previous_analyst_id`, `analyst_id`), `escalation.closed`, `escalation.acknowledged` |
-| Mensajes | `turn.created` |
+| Mensajes | `turn.created` (slice 12: también líneas de llamada, notas internas y correos; los correos llevan `subject`, que la auditoría muestra solo como largo) |
+| Llamadas (slice 12) | `call.started` (`direction`, `customer_id`, `analyst_id`, `reason`: solo su largo en la auditoría; "Llamó a la línea de atención" / "Llamó a {cliente}"), `call.answered` (`answered_by_role`, `analyst_id`, `ring_seconds`), `call.held`, `call.resumed` (`hold_seconds`), `call.mute_changed` (`muted`), `call.ended` (`end_reason`, `ended_by_role`, `answered`, `duration_seconds`, `hold_seconds`); familia `conversation`, todos cambian algo |
 | Equipo | `staff.availability_changed` |
 | Administración | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated`; parte 4: `staff.invitation_sent` (`invitation_id`, `expires_at`), `staff.invitation_resent` (+ `resend_count`), `staff.invitation_cancelled`, `staff.password_reset_link_sent` (`reset_id`, `expires_at`, `revoked_sessions`, `cleared_lock`) |
 | Acceso | `auth.login_failed`, `auth.password_accepted`, `auth.mfa_challenge_issued`, `auth.mfa_failed`, `auth.account_locked`, `auth.session_started`, `auth.session_ended`, `customer.session_started`; parte 4 (la persona misma): `staff.invitation_accepted` (`invitation_id`), `staff.mfa_enrolled` (`method: totp`), `staff.password_reset` (`cleared_lock`: creó su contraseña nueva con el enlace) |
@@ -497,6 +571,9 @@ Tipos de evento:
 - Slice 11 (parte 4) agrega las tablas `invitations`, `password_resets` y `dev_mailbox` y las
   columnas `staff.setup` y `login_accounts.totp_secret`: una base anterior falla al arrancar
   (`OutdatedSchemaError`) hasta borrarla.
+- Slice 12 agrega la tabla `calls` y las columnas `cases.active_call_id` y `turns.subject`, y
+  renombra los canales (`app_chat` → `chat_app`, `web_chat` → `chat_web`): una base anterior falla
+  al arrancar (`OutdatedSchemaError`) hasta borrarla.
 - Pendiente conocido: no hay migraciones. Cualquier cambio futuro de esquema exige borrar `backend/cc_platform.db` hasta que se agreguen.
 
 ## Diferencias con `contracts/platform_history.json`
@@ -509,6 +586,6 @@ Ese contrato (v0.5.1) describe la muestra sintética que compartimos para el equ
 | `case_close` (`resolved`, `contact_reason`, `resolution_code`, `followup_at`, `csat`) | distinto: dentro de `cases`, `close_reason` y `close_note`; `csat` (misma escala 1 a 4) es `rating_score` + `rating_comment`, que pone el cliente después del cierre (slice 7) |
 | `was_escalated` (sí/no) | sí, como `escalations`: el motivo y lo que hizo supervisión; sin tipos, montos, niveles ni plazos |
 | `routing_step` (juez, árbol, agente, humano) | no: el caso va directo a una persona; quién lo recibió y por qué queda en `assignments`, que es nuevo |
-| canales `phone`, `email`; origen `regulator`, `branch` | no: solo `app_chat` y `web_chat` |
+| canales `phone`, `email`; origen `regulator`, `branch` | `phone` y `email` sí, simulados (slice 12: `phone_inbound`, `phone_outbound`, `email`, sin telefonía ni servidor de correo); el chat es `chat_app` y `chat_web`; no hay origen `regulator` ni `branch` |
 | tema del caso (`topic`) | no existe (lo asignaba el juez) |
 | `tool_call`, `identity_check`, `copilot_query`, `approval`, `suggestion`, `signal`, `component` | no existen |

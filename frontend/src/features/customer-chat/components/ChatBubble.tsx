@@ -5,7 +5,7 @@ import type { ChatItem, CustomerChatCopy } from '../model'
 
 /**
  * One message of the customer's chat: their own on the right in brand green,
- * the analyst's on the left with "{Nombre} · LATAM Bank", platform notices
+ * the analyst's on the left with "{Nombre}, de LATAM Bank", platform notices
  * centred. `onRetry` is absent in read-only past conversations. `copy` is the
  * customer's language.
  */
@@ -48,7 +48,7 @@ export function ChatBubble({
           role="alert"
         >
           <CircleAlert size={13} aria-hidden="true" />
-          {copy.notSent} ·
+          {copy.notSent}
           <button
             type="button"
             className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-app-brand underline-offset-2 hover:underline"

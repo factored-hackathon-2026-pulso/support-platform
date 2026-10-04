@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent }
 import { ArrowRight } from 'lucide-react'
 import { Button, Callout, Skeleton } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { chatTurns } from '../channels'
 import {
   chatLang,
   closedConversationNote,
@@ -54,7 +55,8 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
   const { send, retry } = useSendCustomerMessage(customerId)
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const items = useMemo(() => (chat.data ? toChatItems(chat.data) : []), [chat.data])
+  // Slice 12: call lines and emails have their own views; the chat shows messages and notices.
+  const items = useMemo(() => (chat.data ? toChatItems(chatTurns(chat.data)) : []), [chat.data])
   const scrollRef = useScrollToEnd(items)
   const conversation = chat.data?.conversation ?? null
   const chips = chat.status === 'success' ? visibleSuggestions(suggestions, chat.data) : []

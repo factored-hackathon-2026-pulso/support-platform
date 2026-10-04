@@ -5,6 +5,7 @@ import {
   customerChatCopy,
   endedSummary,
   hiddenPastCount,
+  pastBlockByline,
   pastBlockTitle,
   pastBlocks,
   pastConversationsButton,
@@ -151,6 +152,7 @@ function PastBlock({
   const items = shown ? toChatItems({ turns: shown, pending: [] }) : []
   const panelId = `past-${summary.caseId}`
   const title = pastBlockTitle(summary, language)
+  const byline = pastBlockByline(summary, language)
 
   return (
     <li className="flex flex-col gap-2 border-b border-app-line py-3">
@@ -169,6 +171,7 @@ function PastBlock({
         )}
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="text-13 font-semibold">{title}</span>
+          {byline ? <span className="text-12 text-app-ink">{byline}</span> : null}
           {summary.preview ? (
             <span className="truncate text-12 text-app-muted">{summary.preview}</span>
           ) : null}

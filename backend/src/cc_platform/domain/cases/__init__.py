@@ -1,6 +1,16 @@
 """Cases context: the case, its transcript, its assignment and the one-open-case rule."""
 
 from cc_platform.domain.cases.assignment import Assignment, ensure_speaks_case_language
+from cc_platform.domain.cases.call import (
+    ACTIVE_CALL_STATES,
+    MAX_CALL_REASON,
+    Call,
+    CallDirection,
+    CallEndReason,
+    CallState,
+    HoldInterval,
+    normalize_call_reason,
+)
 from cc_platform.domain.cases.case import (
     MAX_CLOSE_NOTE,
     Case,
@@ -12,6 +22,8 @@ from cc_platform.domain.cases.case import (
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.errors import (
     AlreadyRatedError,
+    CallInProgressError,
+    CallNotActiveError,
     CaseClosedError,
     CaseNotClosedError,
     EscalationNotOpenError,
@@ -27,7 +39,14 @@ from cc_platform.domain.cases.escalation import (
     normalize_escalation_text,
 )
 from cc_platform.domain.cases.events import (
+    CALL_EVENTS,
     CASE_EVENTS,
+    CallAnswered,
+    CallEnded,
+    CallHeld,
+    CallMuteChanged,
+    CallResumed,
+    CallStarted,
     CaseAssigned,
     CaseClosed,
     CaseFirstResponded,
@@ -53,9 +72,17 @@ from cc_platform.domain.cases.rating import (
     normalize_rating_comment,
     normalize_rating_score,
 )
-from cc_platform.domain.cases.turn import MAX_TURN_TEXT, Turn, normalize_turn_text
+from cc_platform.domain.cases.turn import (
+    MAX_EMAIL_SUBJECT,
+    MAX_TURN_TEXT,
+    Turn,
+    normalize_email_subject,
+    normalize_turn_text,
+)
 from cc_platform.domain.cases.values import (
+    CHAT_CHANNELS,
     CLOSABLE_STATUSES,
+    CONVERSATION_KINDS,
     LANGUAGE_RULE_ID,
     OPEN_ASSIGNED_STATUSES,
     REPLYABLE_STATUSES,
@@ -66,6 +93,7 @@ from cc_platform.domain.cases.values import (
     CloseReason,
     CustomerConversationStatus,
     CustomerTurnAuthor,
+    EmailDirection,
     InboxStatus,
     TurnAudience,
     TurnAuthorRole,
@@ -73,11 +101,17 @@ from cc_platform.domain.cases.values import (
 )
 
 __all__ = [
+    "ACTIVE_CALL_STATES",
     "ATTENDED_STATES",
+    "CALL_EVENTS",
     "CASE_EVENTS",
+    "CHAT_CHANNELS",
     "CLOSABLE_STATUSES",
+    "CONVERSATION_KINDS",
     "LANGUAGE_RULE_ID",
+    "MAX_CALL_REASON",
     "MAX_CLOSE_NOTE",
+    "MAX_EMAIL_SUBJECT",
     "MAX_ESCALATION_TEXT",
     "MAX_RATING_COMMENT",
     "MAX_TURN_TEXT",
@@ -86,6 +120,18 @@ __all__ = [
     "AlreadyRatedError",
     "Assignment",
     "AssignmentReason",
+    "Call",
+    "CallAnswered",
+    "CallDirection",
+    "CallEndReason",
+    "CallEnded",
+    "CallHeld",
+    "CallInProgressError",
+    "CallMuteChanged",
+    "CallNotActiveError",
+    "CallResumed",
+    "CallStarted",
+    "CallState",
     "Case",
     "CaseAssigned",
     "CaseChannel",
@@ -108,6 +154,7 @@ __all__ = [
     "CustomerCaseSlot",
     "CustomerConversationStatus",
     "CustomerTurnAuthor",
+    "EmailDirection",
     "Escalation",
     "EscalationAcknowledged",
     "EscalationAnswered",
@@ -119,6 +166,7 @@ __all__ = [
     "EscalationState",
     "EscalationTaken",
     "EscalationWithdrawn",
+    "HoldInterval",
     "IdempotencyConflictError",
     "InboxStatus",
     "LanguageMismatchError",
@@ -128,7 +176,9 @@ __all__ = [
     "TurnCreated",
     "TurnKind",
     "ensure_speaks_case_language",
+    "normalize_call_reason",
     "normalize_close_note",
+    "normalize_email_subject",
     "normalize_escalation_text",
     "normalize_rating_comment",
     "normalize_rating_score",

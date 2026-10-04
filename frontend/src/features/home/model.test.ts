@@ -138,11 +138,11 @@ describe('Lo primero', () => {
       sla: { icon: 'flame', text: '3 min', tone: 'warn', tooltip: 'Vence en 3 min' },
       href: '/analista?caso=CASE-00000000000000000000000102&estado=por-responder',
     })
-    expect(texts(beatriz!.facts)).toEqual(['App'])
-    expect(beatriz!.facts[0]).toMatchObject({ icon: 'smartphone', iconOnly: true })
-    expect(texts(patricia!.facts)).toEqual(['App', 'Volvió a escribir'])
+    expect(texts(beatriz!.facts)).toEqual(['Chat en la app'])
+    expect(beatriz!.facts[0]).toMatchObject({ icon: 'message', iconOnly: true })
+    expect(texts(patricia!.facts)).toEqual(['Chat en la app', 'Volvió a escribir'])
     // No language in a case summary: it shows only in the customer file.
-    expect(texts(larissa!.facts)).toEqual(['Web'])
+    expect(texts(larissa!.facts)).toEqual(['Chat web'])
     expect(larissa!.sla).toMatchObject({ icon: 'clock', text: '13 min', tone: 'muted' })
     expect(marcela).toMatchObject({ sla: null, last: { icon: 'clock', text: 'hace 2 min' } })
     expect(joaquin).toMatchObject({

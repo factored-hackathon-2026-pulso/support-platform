@@ -38,6 +38,7 @@ from tests.support import (
 
 DANIELA = actor_for(ANALYST)
 MARCELA, BEATRIZ, LARISSA, JOAQUIN = (seed_case_id(n) for n in (101, 102, 103, 107))
+NATALIA_CALL, CLAUDIA_CALL, IGNACIO_EMAIL = (seed_case_id(n) for n in (115, 116, 117))
 PATRICIA_REFUND, CLAUDIA, HECTOR, PATRICIA_AGAIN, GABRIELA, PATRICIA_OLD = (
     seed_case_id(n) for n in (104, 105, 106, 108, 109, 110)
 )
@@ -373,19 +374,32 @@ async def test_history_caps_at_20_newest_first() -> None:
 async def test_inbox_lists_counts_and_search(container: Container) -> None:
     inbox = container.use_cases.cases.inbox
     everything = await inbox.execute(DANIELA)
-    assert [i.id for i in everything.items] == [PATRICIA_AGAIN, LARISSA, MARCELA, BEATRIZ, JOAQUIN]
+    assert [i.id for i in everything.items] == [
+        IGNACIO_EMAIL,  # slice 12: his email waits since last night
+        PATRICIA_AGAIN,
+        LARISSA,
+        MARCELA,
+        BEATRIZ,
+        JOAQUIN,
+    ]
     to_reply = await inbox.execute(DANIELA, status=InboxStatus.TO_REPLY)
-    assert [i.id for i in to_reply.items] == [MARCELA, BEATRIZ]
+    assert [i.id for i in to_reply.items] == [IGNACIO_EMAIL, MARCELA, BEATRIZ]
     closed = await inbox.execute(DANIELA, status=InboxStatus.CLOSED)
-    assert [i.id for i in closed.items] == [HECTOR, CLAUDIA, PATRICIA_REFUND]  # newest close first
+    assert [i.id for i in closed.items] == [  # newest close first
+        HECTOR,
+        CLAUDIA_CALL,
+        CLAUDIA,
+        NATALIA_CALL,
+        PATRICIA_REFUND,
+    ]
     assert to_reply.counts == everything.counts == closed.counts
     counts = everything.counts
     assert (counts.all, counts.to_reply, counts.new, counts.waiting, counts.closed) == (
-        5,
-        2,
+        6,
+        3,
         2,
         1,
-        3,
+        5,
     )
     found = await inbox.execute(DANIELA, query="  joaquin ")
     assert [i.id for i in found.items] == [JOAQUIN]

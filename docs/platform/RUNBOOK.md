@@ -212,7 +212,10 @@ Prioridad (slice 8): todo caso abre "Sin prioridad"; la historia sembrada la cam
 | 103 | Larissa Monteiro Alves (pt-BR) | Daniela · Nuevo, en portugués |
 | 108 | Patricia Lozano Vega (es-MX) | Daniela · Nuevo, "Volvió a escribir" (casos anteriores 104 y 110) |
 | 107 | Joaquín Ferreyra Paz (es-AR) | Daniela · Esperando al cliente, prioridad media; Lucía **respondió** su escalamiento (Daniela ve la tarjeta hasta "Entendido") |
+| 117 | Ignacio Bustos Lagos (es-AR, Córdoba) | Daniela · Por responder, **correo** (slice 12): su correo, la respuesta de Daniela con saludo y firma, y su contestación |
 | 104, 105, 106 | Patricia, Claudia, Héctor | Daniela · Cerrados en los últimos 7 días (media, sin prioridad, baja) |
+| 115 | Natalia Rendón Úsuga (es-CO, Medellín) | Daniela · Cerrado ayer: **llamada entrante** (slice 12) atendida, en espera una vez, nota interna |
+| 116 | Claudia | Daniela · Cerrado: **llamada saliente** de seguimiento de su chat 105 (slice 12) |
 | 110 | Patricia | Cerrado por Julián hace 20 días (fuera de la ventana de 7 días) |
 | 113 | Camila Torres Benavides (es-CO) | Julián · Por responder, SLA vencido, prioridad media, **escalado** (abierto, hace 21 min) |
 | 114 | Esteban Morales Quiroga (es-CO) | Julián · Esperando al cliente (Paula lo escaló y Lucía se lo reasignó: escalamiento "Reasignado"), prioridad baja |

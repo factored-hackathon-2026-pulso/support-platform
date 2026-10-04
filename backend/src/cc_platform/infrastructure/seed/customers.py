@@ -2,7 +2,8 @@
 
 Every name, id and city pairing here is invented (brief §4.7: never copy customer records
 from the dataset). 1001–1012 are the people of the seeded cases (Daniela's inbox, Julián's
-cases, the Spanish and Portuguese queues); 2001–2005 are fresh simulator customers. Opener chips
+cases, the Spanish and Portuguese queues), 1013–1014 the people of the slice 12 call and email
+stories; 2001–2005 are fresh simulator customers. Opener chips
 are written in each customer's own voice (es-CO, es-MX, es-AR with voseo, pt-BR). Minimal
 profile only: no documents, segments, phones or emails.
 """
@@ -82,6 +83,12 @@ DEMO_CUSTOMERS: tuple[CustomerSeed, ...] = (
                  suggestions=("¿Alguna novedad de la transferencia?",)),
     CustomerSeed(1012, "Esteban Morales Quiroga", ES_CO, "Pereira", CO,
                  suggestions=("Fue en el extracto de septiembre", "Gracias")),
+    # Slice 12 (calls and email): Natalia called the bank yesterday (Daniela answered);
+    # Ignacio (Córdoba, voseo) wrote an email Daniela answered and he wrote back.
+    CustomerSeed(1013, "Natalia Rendón Úsuga", ES_CO, "Medellín", CO,
+                 suggestions=("¿Ya quedó el reclamo del cobro?", "Gracias por la llamada")),
+    CustomerSeed(1014, "Ignacio Bustos Lagos", ES_AR, "Córdoba", AR,
+                 suggestions=("¿Pudieron ver lo del cobro doble?", "Avisame cualquier cosa")),
     # Fresh simulator customers: a first message opens a new case.
     CustomerSeed(2001, "Natalia Guzmán Rincón", ES_CO, "Bogotá", CO, simulator=True,
                  suggestions=("No reconozco un cargo en mi tarjeta",

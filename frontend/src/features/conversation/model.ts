@@ -9,7 +9,9 @@
 import type { FactIcon, FactItem, StatusAppearance, Tone } from '@/components/ui'
 import {
   caseStatus,
-  channelPhrase,
+  caseChannel,
+  channelFact,
+  channelLabel,
   countryName,
   isNewerCase,
   casePriority,
@@ -24,13 +26,22 @@ import {
 } from '@/features/cases/core'
 import { isApiProblem } from '@/lib/api'
 import {
+  callEventKind,
+  callForTime,
+  lineOffset,
+  unansweredEmailIds,
+  type CallEventKind,
+} from './channels'
+import {
   formatDate,
   formatDateTime,
   formatDuration,
   formatRelativeTime,
   formatTime,
+  getInitials,
 } from '@/lib/format'
 import type {
+  Call,
   CaseClosure,
   CaseDetail,
   CaseHistoryItem,
@@ -179,7 +190,9 @@ export function needsDetailRefetch(detail: CaseDetail, summary: CaseSummary): bo
     detail.case.id === summary.id &&
     isNewerCase(summary, detail.case) &&
     (summary.status !== detail.case.status ||
-      summary.assignedAnalystId !== detail.case.assignedAnalystId)
+      summary.assignedAnalystId !== detail.case.assignedAnalystId ||
+      // Slice 12: a call started or ended changes what the caller may do (call, close).
+      (summary.activeCallId ?? null) !== (detail.case.activeCallId ?? null))
   )
 }
 
@@ -199,9 +212,15 @@ export function readTarget(summary: CaseSummary, meId: string): number | null {
 /**
  * `customer` left; `own` (the viewer) right in ink; `analyst` another analyst
  * (e.g. Julián in a history case) right in ink-2; `routing` the centred staff-only
- * assignment banner; `notice` a centred muted note.
+ * assignment banner; `notice` a centred muted note. Slice 12: `line` a call transcript
+ * line (time, speaker, text), `call-event` a system line of a call (held, resumed,
+ * ended), `note` a staff-only note, `email` one email of the thread.
  */
-export type TranscriptVariant = 'customer' | 'own' | 'analyst' | 'routing' | 'notice'
+export type TranscriptVariant =
+  'customer' | 'own' | 'analyst' | 'routing' | 'notice' | 'line' | 'call-event' | 'note' | 'email'
+
+/** Who speaks on a call line or wrote an email. */
+export type TranscriptSpeaker = 'customer' | 'own' | 'analyst'
 
 export interface TranscriptItem {
   /**
@@ -222,11 +241,27 @@ export interface TranscriptItem {
   error: string | null
   retryable: boolean
   clientMessageId: string | null
+  /** Call lines and emails: who it is (avatar tone and side). */
+  speaker?: TranscriptSpeaker
+  /** Call lines and emails: the author's initials for the avatar (never "Tú"). */
+  initials?: string
+  /** Call lines and events: "02:41" inside the call (or the clock time). */
+  time?: string
+  /** Call events: which glyph. */
+  event?: CallEventKind
+  /** Emails: the subject, and whether the customer's email is still unanswered ("Nuevo"). */
+  subject?: string | null
+  isNew?: boolean
+  /** Emails: the newest of the thread (it starts open, the older ones as one line). */
+  latest?: boolean
 }
 
 export function turnVariant(turn: Turn, meId: string): TranscriptVariant {
   if (turn.kind === 'routing') return 'routing'
   if (turn.kind === 'notice') return 'notice'
+  if (turn.kind === 'note') return 'note'
+  if (turn.kind === 'email') return 'email'
+  if (turn.kind === 'transcript') return turn.authorRole === 'system' ? 'call-event' : 'line'
   switch (turn.authorRole) {
     case 'customer':
       return 'customer'
@@ -237,7 +272,12 @@ export function turnVariant(turn: Turn, meId: string): TranscriptVariant {
   }
 }
 
-export function turnAuthor(turn: Turn, variant: TranscriptVariant): string | null {
+function turnSpeaker(turn: Turn, meId: string): TranscriptSpeaker {
+  if (turn.authorRole === 'customer') return 'customer'
+  return turn.authorId === meId ? 'own' : 'analyst'
+}
+
+export function turnAuthor(turn: Turn, variant: TranscriptVariant, meId = ''): string | null {
   switch (variant) {
     case 'own':
       return 'Tú'
@@ -245,20 +285,72 @@ export function turnAuthor(turn: Turn, variant: TranscriptVariant): string | nul
       return turn.authorName ?? 'Cliente'
     case 'analyst':
       return turn.authorName ?? 'Analista'
+    case 'line': {
+      // The canvas labels the call's two sides "Cliente" and "Tú".
+      const speaker = turnSpeaker(turn, meId)
+      if (speaker === 'customer') return 'Cliente'
+      return speaker === 'own' ? 'Tú' : (turn.authorName ?? 'Analista')
+    }
+    case 'note':
+    case 'email':
+      if (turn.authorRole === 'customer') return turn.authorName ?? 'Cliente'
+      return turn.authorId === meId ? 'Tú' : (turn.authorName ?? 'Analista')
     default:
       return null
   }
 }
 
+/** What the transcript needs besides the turns (slice 12): the calls, to time their lines. */
+export interface TranscriptContext {
+  calls?: readonly Call[]
+}
+
+function channelFields(
+  turn: Turn,
+  variant: TranscriptVariant,
+  meId: string,
+  context: TranscriptContext,
+  unanswered: ReadonlySet<string>,
+  lastEmailId: string | null,
+): Partial<TranscriptItem> {
+  if (variant === 'line' || variant === 'call-event') {
+    const call = context.calls ? callForTime(context.calls, turn.createdAt) : null
+    const time = call ? lineOffset(call, turn.createdAt) : formatTime(turn.createdAt)
+    if (variant === 'call-event') return { time, event: callEventKind(turn.text) }
+    const speaker = turnSpeaker(turn, meId)
+    return {
+      time,
+      speaker,
+      initials: getInitials(turn.authorName ?? (speaker === 'customer' ? 'Cliente' : 'Tú')),
+    }
+  }
+  if (variant === 'email') {
+    return {
+      speaker: turnSpeaker(turn, meId),
+      initials: getInitials(turn.authorName ?? 'Cliente'),
+      subject: turn.subject,
+      isNew: unanswered.has(turn.id),
+      latest: turn.id === lastEmailId,
+    }
+  }
+  return {}
+}
+
 /** Confirmed turns in sequence order, then the pending messages in the order they were sent. */
-export function toTranscriptItems(cache: TranscriptCache, meId: string): TranscriptItem[] {
+export function toTranscriptItems(
+  cache: TranscriptCache,
+  meId: string,
+  context: TranscriptContext = {},
+): TranscriptItem[] {
+  const unanswered = unansweredEmailIds(cache.turns)
+  const lastEmailId = cache.turns.findLast((turn) => turn.kind === 'email')?.id ?? null
   const confirmed = cache.turns.map((turn): TranscriptItem => {
     const variant = turnVariant(turn, meId)
     return {
       key: turn.clientMessageId ?? turn.id,
       variant,
       text: turn.text,
-      author: turnAuthor(turn, variant),
+      author: turnAuthor(turn, variant, meId),
       createdAt: turn.createdAt,
       sequence: turn.sequence,
       staffOnly: turn.audience === 'staff',
@@ -266,6 +358,7 @@ export function toTranscriptItems(cache: TranscriptCache, meId: string): Transcr
       error: null,
       retryable: false,
       clientMessageId: turn.clientMessageId,
+      ...channelFields(turn, variant, meId, context, unanswered, lastEmailId),
     }
   })
   const pending = cache.pending.map((message): TranscriptItem => ({
@@ -292,16 +385,26 @@ export function noticeLabel(item: TranscriptItem): string {
 // ── Header ──────────────────────────────────────────────────────────────────
 
 /**
- * Header meta line of the supervisor view (contract §9.3): "Colombia · Barranquilla ·
- * chat web"; a Portuguese case ends "· en portugués" (rule 3: the only cue outside the
- * transcript that the reply must be in Portuguese). Slice 8: the priority left the line;
- * it is a control of its own (the priority menu in the header).
+ * The facts after the case number in the supervisor view's header (contract §9.3; no
+ * dot-joined line): the place, the channel (icon-only) and, for a Portuguese case,
+ * "Portugués" (rule 3: the only cue outside the transcript that the reply must be in
+ * Portuguese). Slice 8: the priority is a control of its own (the menu in the header).
  */
-export function caseHeaderMeta(detail: Pick<CaseDetail, 'case' | 'customer'>): string {
+export function caseHeaderFacts(detail: Pick<CaseDetail, 'case' | 'customer'>): FactItem[] {
   const { case: summary, customer } = detail
-  const parts = [countryName(customer.country), customer.city, channelPhrase(summary.channel)]
-  if (summary.language === 'pt') parts.push('en portugués')
-  return parts.join(' · ')
+  const facts: FactItem[] = [
+    {
+      key: 'place',
+      icon: 'map-pin',
+      text: `${customer.city}, ${countryName(customer.country)}`,
+      label: 'Ciudad',
+    },
+    channelFact(summary.channel),
+  ]
+  if (summary.language === 'pt') {
+    facts.push({ key: 'language', icon: 'languages', text: 'Portugués', label: 'Idioma' })
+  }
+  return facts
 }
 
 /**
@@ -577,9 +680,9 @@ export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | 
     { key: 'id', icon: 'hash', label: 'Número', text: summary.id, mono: true },
     {
       key: 'channel',
-      icon: summary.channel === 'app_chat' ? 'smartphone' : 'globe',
+      icon: caseChannel(summary.channel).icon,
       label: 'Canal',
-      text: channelName(summary.channel),
+      text: channelLabel(summary.channel),
     },
     {
       key: 'priority',
@@ -630,12 +733,6 @@ export function ratingRow(rating: Pick<CaseRating, 'score'> | null): FileRow {
     label: 'Calificación',
     pill: { label: option.label, tone: option.tone, icon: option.icon },
   }
-}
-
-/** "Chat en la app" / "Chat web". */
-function channelName(channel: CaseSummary['channel']): string {
-  const phrase = channelPhrase(channel)
-  return phrase.charAt(0).toUpperCase() + phrase.slice(1)
 }
 
 /** "Cómo llegó a ti" as structured facts: a heading, its time, one icon row per fact. */
@@ -930,6 +1027,7 @@ export function noteCounter(note: string): string {
 
 export function describeCloseFailure(error: unknown): string {
   if (isApiProblem(error, 'case_closed')) return 'Este caso ya estaba cerrado.'
+  if (isApiProblem(error, 'call_in_progress')) return 'Cuelga la llamada antes de cerrar el caso.'
   if (isApiProblem(error, 'invalid_transition')) {
     return 'Este caso no se puede cerrar en su estado actual.'
   }

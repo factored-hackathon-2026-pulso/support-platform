@@ -39,6 +39,7 @@ export function makeTurn(overrides: Partial<Turn> = {}): Turn {
     language: 'es',
     createdAt: new Date(Date.UTC(2026, 2, 5, 15, 46, sequence)).toISOString(),
     clientMessageId: null,
+    subject: null,
     ...overrides,
   }
 }
@@ -89,6 +90,7 @@ export function makeCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail 
   const summary = makeCaseSummary({ lastSequence: 4, assignedAnalystId: ME, unreadCount: 0 })
   return {
     case: summary,
+    activeCall: null,
     customer: {
       id: CUSTOMER_ID,
       displayName: 'Marcela Quintana Pardo',
@@ -119,6 +121,9 @@ export function makeCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail 
       canAssign: false,
       canChangePriority: true,
       canEscalate: false,
+      canCall: false,
+      canEmail: false,
+      canAddNote: false,
     },
     previousCaseCount: 0,
     escalation: null,
@@ -153,6 +158,9 @@ export function makeClosedDetail(overrides: Partial<CaseDetail> = {}): CaseDetai
       canAssign: false,
       canChangePriority: false,
       canEscalate: false,
+      canCall: false,
+      canEmail: false,
+      canAddNote: false,
     },
     ...overrides,
   }
@@ -165,7 +173,7 @@ export function makeHistoryItem(overrides: Partial<CaseHistoryItem> = {}): CaseH
   return {
     id: 'CASE-00000000000000000000000104',
     status: 'closed',
-    channel: 'app_chat',
+    channel: 'chat_app',
     openedAt: '2026-03-03T15:30:00Z',
     closedAt: '2026-03-03T16:00:00Z',
     closeReason: 'resolved',
@@ -189,7 +197,7 @@ export const patriciaHistory: CaseHistory = {
     }),
     makeHistoryItem({
       id: JULIAN_CASE_ID,
-      channel: 'web_chat',
+      channel: 'chat_web',
       openedAt: '2026-02-13T15:00:00Z',
       closedAt: '2026-02-13T15:15:00Z',
       analystId: OTHER_ANALYST_ID,
@@ -205,6 +213,7 @@ export const patriciaHistory: CaseHistory = {
 export function makeJulianDetail(): CaseDetail {
   const base = makeCaseDetail()
   return {
+    activeCall: null,
     case: makeCaseSummary({
       id: JULIAN_CASE_ID,
       customer: { id: 'CUS-00000000000000000000001004', displayName: 'Patricia Lozano Vega' },
@@ -252,6 +261,9 @@ export function makeJulianDetail(): CaseDetail {
       canAssign: false,
       canChangePriority: false,
       canEscalate: false,
+      canCall: false,
+      canEmail: false,
+      canAddNote: false,
     },
     previousCaseCount: 2,
     escalation: null,
@@ -383,7 +395,7 @@ export const demoCustomers: DemoCustomer[] = [
     suggestions: ['Fue a mediados de mes, unos $48.300', '¿Lo pudiste encontrar?'],
     openConversation: {
       caseId: 'CASE-00000000000000000000000107',
-      channel: 'app_chat',
+      channel: 'chat_app',
       status: 'with_agent',
     },
     closedConversationCount: 0,
@@ -409,7 +421,7 @@ export const demoCustomers: DemoCustomer[] = [
     suggestions: ['Alguém aí?'],
     openConversation: {
       caseId: 'CASE-00000000000000000000000109',
-      channel: 'web_chat',
+      channel: 'chat_web',
       status: 'waiting_agent',
     },
     closedConversationCount: 0,
@@ -422,7 +434,7 @@ export function makeCustomerConversation(
   return {
     caseId: SIM_CASE_ID,
     status: 'waiting_agent',
-    channel: 'app_chat',
+    channel: 'chat_app',
     language: 'pt',
     openedAt: '2026-03-05T16:00:00Z',
     closedAt: null,
@@ -440,7 +452,7 @@ export function makePastSummary(
   return {
     caseId: 'CASE-00000000000000000000000105',
     status: 'closed',
-    channel: 'web_chat',
+    channel: 'chat_web',
     openedAt: '2026-03-04T13:00:00Z',
     closedAt: '2026-03-04T16:00:00Z',
     agentName: 'Daniela',
@@ -461,6 +473,7 @@ export function makeCustomerTurn(overrides: Partial<CustomerTurn> = {}): Custome
     language: 'pt',
     createdAt: new Date(Date.UTC(2026, 2, 5, 16, 0, sequence)).toISOString(),
     clientMessageId: null,
+    subject: null,
     ...overrides,
   }
 }

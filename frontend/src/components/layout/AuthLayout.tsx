@@ -24,7 +24,7 @@ export function AuthLayout() {
             Atención al cliente por chat, de principio a fin.
           </p>
           <p className="m-0 text-16 text-rail-icon">
-            Contact center de LATAM Bank · México, Colombia y Argentina
+            Contact center de LATAM Bank en México, Colombia y Argentina
           </p>
         </div>
         <span className="text-13 text-faint">Uso exclusivo del personal autorizado del banco.</span>

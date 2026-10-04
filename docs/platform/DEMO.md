@@ -1,8 +1,9 @@
 # Guion de demo · plataforma de soporte
 
-Demo de 7 a 10 minutos para jurados. Muestra la plataforma de punta a punta con personas reales
-detrás de cada ventana: una clienta escribe, un analista la atiende en vivo, cierra el caso, la
-clienta vuelve, supervisión reparte el trabajo respetando el idioma, todo queda en auditoría, y
+Demo de 7 a 10 minutos para jurados (12 con las llamadas y el correo). Muestra la plataforma de
+punta a punta con personas reales detrás de cada ventana: una clienta escribe, un analista la
+atiende en vivo, cierra el caso, la clienta vuelve, otro cliente llama y otra escribe un correo,
+supervisión reparte el trabajo respetando el idioma, todo queda en auditoría, y
 administración invita por correo a una persona nueva, que crea su propia contraseña, configura la
 verificación en dos pasos y recibe su primer caso. Nadie del equipo ve ni entrega contraseñas.
 
@@ -80,10 +81,12 @@ solo lo atiende alguien que habla portugués."
 
 ### 3. Una clienta escribe y el analista la atiende en vivo (1:30 – 3:00)
 
-**A (cliente):** elige **Natalia Guzmán Rincón** (Español de Colombia). Escribe
-`Hola, no reconozco un cargo de $250.000 en mi tarjeta` y pulsa **Enviar**.
+**A (cliente):** elige **Natalia Guzmán Rincón** (Español de Colombia). En "¿Cómo se comunica
+Natalia con el banco?" pulsa **"Chat"** (las otras tarjetas son "Llamar" y "Escribir un correo",
+pasos 5b y 5c). Escribe `Hola, no reconozco un cargo de $250.000 en mi tarjeta` y pulsa
+**Enviar**.
 
-**Se ve en A:** "Te atiende Felipe · LATAM Bank" y el aviso "Recibimos tu mensaje. En unos minutos
+**Se ve en A:** "Te atiende Felipe, de LATAM Bank" y el aviso "Recibimos tu mensaje. En unos minutos
 te responde una persona del equipo."
 
 **Se ve en B, sin recargar:** el aviso "Te llegó un caso nuevo" y la tarjeta de Natalia con la
@@ -92,7 +95,8 @@ o menos, llama roja "Vencido" si ya pasó).
 
 **B:** abre la tarjeta de Natalia.
 
-**Señalar:** el encabezado (solo el nombre y el número de caso copiable) y la fila **"Cómo llegó
+**Señalar:** el ícono del canal en la tarjeta (burbuja de chat; pasa el mouse: "Chat en la app"),
+el encabezado (solo el nombre y el número de caso copiable) y la fila **"Cómo llegó
 a ti"** (Estabas disponible, Hablas español). Pulsa el **nombre de Natalia**: se abre a la derecha
 la **"Ficha del cliente"** (Cliente, Este caso, Cómo llegó a ti, Casos anteriores). Ciérrala con
 Escape o con el botón. La nota interna de asignación solo la ve el equipo.
@@ -154,6 +158,63 @@ lectura, con su motivo de cierre. Cierra la ficha.
 **Decir:** "Un cliente tiene como máximo un caso abierto. Si escribe después de un cierre se
 abre un caso nuevo, enlazado al anterior, y se asigna con las mismas reglas. El historial es de
 conversaciones, no de datos bancarios."
+
+### 5b. Un cliente llama por teléfono (simulado)
+
+**A:** pulsa **"Cambiar de cliente"**, elige **Lucas Benítez Sosa** y pulsa **"Llamar"**. El
+simulador marca de una vez: **"Llamando…"**, "Línea de atención LATAM Bank" y "Colgar".
+
+**Se ve en B, sin recargar:** una tarjeta nueva de Lucas con el ícono de **teléfono con flecha
+entrante** ("Llamada entrante") y el teléfono verde ("Llamada en curso"). Ábrela: bajo el
+encabezado, la barra de la llamada: **"Sonando"**, el contador, "Entrante" y **"Contestar"**. No
+hay "Cerrar caso": un caso no se cierra con una llamada en la línea.
+
+**B:** pulsa **"Contestar"**. La barra pasa a **"En llamada"** y el contador corre desde que
+contestó; aparecen "Poner en espera", "Silenciar" y "Colgar". **En A:** "Te atiende Felipe".
+
+**B:** en **"Lo que dices"** escribe `Buenas tardes, le habla Felipe de LATAM Bank. ¿En qué le
+ayudo?` y pulsa **"Decir"**. **A:** la línea aparece en "Lo que se dice en la llamada". En **"Lo
+que dices"** del simulador escribe `Hola, perdí mi tarjeta y veo una compra que no hice` y pulsa
+Enter: en B aparece en la **"Transcripción en vivo"** (hora de la llamada en mono, avatar,
+"Cliente").
+
+**B:** pulsa **"Poner en espera"**: la barra dice "En espera" y la transcripción "Llamada en
+espera."; en A, "Felipe te puso en espera" y el campo se desactiva. Pulsa **"Retomar"** ("La
+llamada continúa."). En **"Nota interna"** escribe `Pedir bloqueo de la tarjeta` y pulsa
+**"Guardar nota"**: solo la ve el equipo. Pulsa **"Colgar"**: "Llamada terminada, …" en ambas
+ventanas, y vuelve "Cerrar caso" (su diálogo no muestra "El cliente verá": en una llamada no hay
+pantalla). En A queda "Volver a llamar".
+
+**Llamar de vuelta (opcional):** con el caso de Lucas abierto en B pulsa **"Llamar al cliente"**,
+escribe el motivo `Confirmar el bloqueo de la tarjeta` y pulsa **"Llamar"**. La barra dice
+"Sonando", "Saliente", y arriba de la transcripción aparece **"Por qué llamas"**. En A, pulsa
+**"Cambiar de canal"** → **"Chat"**: arriba aparece **"LATAM Bank te está llamando"** con
+"Contestar" y "Rechazar". Pulsa **"Contestar"** y cuelga desde cualquiera de las dos ventanas.
+
+**Decir:** "No hay telefonía: es una llamada simulada. La plataforma guarda el estado, los tiempos
+y lo que dicen las personas, y contestar cuenta como primera respuesta para el SLA."
+
+### 5c. Una clienta escribe un correo (simulado)
+
+**A:** **"Cambiar de cliente"** → **Ximena Robles Treviño** → **"Escribir un correo"**. Asunto
+`Cobro duplicado en mi tarjeta`, mensaje `Hola, aparece dos veces el mismo cobro de $54.990 en mi
+resumen.` y **"Enviar"**. El correo queda en el hilo con el aviso "Recibimos tu correo…".
+
+**Se ve en B:** la tarjeta de Ximena con el ícono de **sobre** ("Correo"). Ábrela: el asunto como
+título, el correo marcado **"Nuevo"** (los anteriores se pliegan a una línea) y abajo la respuesta:
+"Para" (la dirección está oculta), "Asunto: Re: Cobro duplicado en mi tarjeta", **"El saludo y la
+firma se agregan solos"** y el clip de adjuntar deshabilitado ("Pronto").
+
+**B:** escribe `Ya pedimos el reverso del segundo cobro; lo verás en tu próximo resumen.` y pulsa
+**"Enviar correo"**. El correo aparece con "Hola, Ximena:" al principio y la firma de Felipe al
+final.
+
+**Se ve en A:** la respuesta de "Felipe, LATAM Bank" en el mismo hilo, marcada **"Nuevo"**.
+Ximena contesta abajo en **"Responder"** (`Gracias, quedo atenta`) y llega a B en vivo. Si Felipe
+cierra el caso, el diálogo dice **"El cliente lo recibe por correo"**, y en A aparece la encuesta.
+
+**Decir:** "Los tres canales son la misma pantalla: solo cambia el centro. Un cliente tiene un
+solo caso abierto: si llama o escribe un correo con un caso abierto, se suma a ese caso."
 
 ### 6. Supervisión: colas, un escalamiento y una reasignación (5:00 – 6:30)
 
@@ -242,12 +303,12 @@ menú indica "1 pendiente", es Mariana Duque: la semilla la deja bloqueada solo 
    cuenta"** → **"Tu cuenta está lista"** → **"Entrar"**.
 6. Entra como Ana con su contraseña y el **código de la app** (el `000000` de desarrollo no le
    sirve). Llega a **"Inicio"**, en pausa. Pulsa **"Empezar a atender"**.
-7. **A (cliente):** pulsa **"Cambiar de cliente"** y elige **Rafael Nogueira Costa** (Portugués de
-   Brasil). El simulador habla en portugués. Pulsa la sugerencia
+7. **A (cliente):** pulsa **"Cambiar de cliente"**, elige **Rafael Nogueira Costa** (Portugués de
+   Brasil) y **"Chat"**. El simulador habla en portugués. Pulsa la sugerencia
    **"Olá, não reconheço uma compra no meu cartão"** y **Enviar**.
 
 **Se ve:** en C, la ficha de Ana pasa a "Activa" y la campana de Valeria trae "Invitación
-aceptada: Ana Gil". En A, "Você está falando com Ana · LATAM Bank". En la pestaña de Ana, "Te
+aceptada: Ana Gil". En A, "Você está falando com Ana, do LATAM Bank". En la pestaña de Ana, "Te
 llegó un caso nuevo"; al abrirlo, "Te llegó porque estás disponible y hablas portugués (regla 3)".
 
 **Decir:** "Administración nunca ve ni entrega una contraseña: invita por correo con un enlace de
@@ -263,9 +324,9 @@ En **C** (Valeria, "Usuarios y roles"):
    puedes quitarte tu propio rol de Administración."** y que "Desactivar cuenta" está deshabilitado
    con **"No puedes desactivar tu propia cuenta."** Además la plataforma nunca se queda sin una
    administradora activa.
-2. Pulsa **Felipe Echeverri** → **"Desactivar cuenta"**. El diálogo dice **"Tiene 4 casos
-   abiertos. Supervisión tiene que reasignarlos antes de desactivar la cuenta."** y el botón no se
-   habilita. Pulsa **"Cancelar"**. "Administración nunca mueve casos: eso es de supervisión."
+2. Pulsa **Felipe Echeverri** → **"Desactivar cuenta"**. El diálogo dice **"Tiene 6 casos
+   abiertos. Supervisión tiene que reasignarlos antes de desactivar la cuenta."** (4 si saltaste los
+   pasos 5b y 5c) y el botón no se habilita. Pulsa **"Cancelar"**. "Administración nunca mueve casos: eso es de supervisión."
 3. Bloqueo y desbloqueo, en vivo. Abre una **pestaña nueva** en http://localhost:5173/login e
    intenta entrar 5 veces como `martin.salazar@latambank.example` con una contraseña errada (por
    ejemplo `clave-errada`). Cada intento avisa cuántos quedan ("Te quedan 4 intentos" … "Te queda
@@ -292,7 +353,7 @@ En **C** (Valeria, "Usuarios y roles"):
 
 ### 10. Cierre (9:45 – 10:00)
 
-**Decir:** "Chat en vivo entre personas, ciclo de vida completo del caso, la regla del idioma
+**Decir:** "Chat, llamadas y correo entre personas, ciclo de vida completo del caso, la regla del idioma
 aplicada por el sistema, escalamientos a supervisión, auditoría de todo y administración con barandas.
 Todo pensado para el trabajo diario del equipo de soporte."
 
@@ -312,4 +373,6 @@ Todo pensado para el trabajo diario del equipo de soporte."
 | `/dev/correos` dice "No disponible" | El backend no corre con `CC_ENV=dev` (o `CC_DEV_MAILBOX=false`). Arráncalo con `uv run cc-api` sin cambiar `CC_ENV` |
 | Una ventana muestra a otra persona | Se duplicó una pestaña. Abre una ventana nueva y escribe la URL |
 | La pantalla se queda sin sesión de golpe | La sesión se cerró (cierre de sesión, desactivación, enlace para restablecer enviado o base reiniciada). Vuelve a entrar |
+| La llamada sigue "Sonando" | No hay tiempo límite de timbre: contesta en B o pulsa "Colgar" en cualquiera de las dos ventanas |
+| "Cerrar caso" no aparece en un caso con llamada | Hay una llamada en la línea: cuelga primero |
 | Algo quedó en un estado raro | Reinicio completo en un minuto: detén el backend, `rm -f backend/cc_platform.db`, arráncalo, recarga las tres ventanas y vuelve a entrar |

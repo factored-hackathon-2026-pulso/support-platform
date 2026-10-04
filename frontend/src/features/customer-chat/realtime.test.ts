@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EnvelopeHandlerRegistry } from '@/lib/realtime'
+import { makeCustomerCall } from '@/test/channel-fixtures'
 import {
   envelope,
   makeCustomerConversation,
@@ -118,5 +119,26 @@ describe('conversation.updated', () => {
   it('never handles staff-only event types', () => {
     expect(registry.dispatch(envelope('case.updated', {}), queryClient)).toBe(0)
     expect(registry.dispatch(envelope('inbox.counts', {}), queryClient)).toBe(0)
+  })
+})
+
+describe('customer call.updated (slice 12)', () => {
+  it('rings a call of the bank and keeps an ended call final', () => {
+    const callKey = customerChatKeys.call(SIM_CUSTOMER_ID)
+    queryClient.setQueryData(callKey, { call: null })
+    const ringing = makeCustomerCall({ direction: 'outbound', state: 'ringing', answeredAt: null })
+    registry.dispatch(envelope('call.updated', ringing, SIM_CASE_ID), queryClient)
+    expect(queryClient.getQueryData<{ call: { state: string } }>(callKey)?.call.state).toBe(
+      'ringing',
+    )
+    registry.dispatch(
+      envelope('call.updated', { ...ringing, state: 'ended' }, SIM_CASE_ID),
+      queryClient,
+    )
+    registry.dispatch(
+      envelope('call.updated', { ...ringing, state: 'in_call' }, SIM_CASE_ID),
+      queryClient,
+    )
+    expect(queryClient.getQueryData<{ call: { state: string } }>(callKey)?.call.state).toBe('ended')
   })
 })

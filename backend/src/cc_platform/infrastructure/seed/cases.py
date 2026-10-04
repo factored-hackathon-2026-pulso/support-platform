@@ -1,7 +1,12 @@
-"""Seed cases — "Datos de ejemplo" (slice 2 contract §8.3, slice 3 §9). Chat only, invented
+"""Seed cases — "Datos de ejemplo" (slice 2 contract §8.3, slice 3 §9, slice 12). Invented
 people.
 
-Daniela's inbox: Todos 5 · Por responder 2 · Nuevos 2 · Esperando al cliente 1 · Cerrados 3.
+Daniela's inbox: Todos 6 · Por responder 3 · Nuevos 2 · Esperando al cliente 1 · Cerrados 5.
+Slice 12 (simulated calls and email, no telephony or mail server): Natalia's inbound call
+(115, yesterday: answered, on hold once, ended, an internal note, closed), Daniela's
+outbound follow-up call to Claudia (116, linked to her unanswered chat 105, closed) and
+Ignacio's email thread (117, es-AR voseo: his email, Daniela's framed reply, his answer →
+Por responder).
 Priorities (slice 8): every case opens with ``none`` and staff set it through the domain
 (``case.priority_changed``): Marcela's 101 critical and Beatriz's 102 high (Daniela),
 Mauricio's queued 112 high (Lucía), 106 and 114 low, 104/107/110/113 medium, the rest none.
@@ -43,6 +48,7 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.domain.cases.assignment import Assignment
+from cc_platform.domain.cases.call import Call
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.escalation import Escalation
@@ -68,7 +74,14 @@ DANIELA, JULIAN, PAULA, LUCIA = 1, 2, 3, 5
 STRATEGY = LanguageLeastLoadedStrategy().strategy
 SLA = FirstResponseSlaPolicy()
 ES, PT = Language.SPANISH, Language.PORTUGUESE
-APP, WEB = CaseChannel.APP_CHAT, CaseChannel.WEB_CHAT
+APP, WEB = CaseChannel.CHAT_APP, CaseChannel.CHAT_WEB
+PHONE_IN, PHONE_OUT, EMAIL = (
+    CaseChannel.PHONE_INBOUND,
+    CaseChannel.PHONE_OUTBOUND,
+    CaseChannel.EMAIL,
+)
+#: Slice 12: the strategy name of a case an analyst opened to call the customer back.
+FOLLOW_UP_STRATEGY = "analyst_follow_up_call"
 
 
 def seed_case_id(number: int) -> str:
@@ -78,6 +91,11 @@ def seed_case_id(number: int) -> str:
 def seed_escalation_id(case_number: int) -> str:
     """Seeded escalations: one per case, numbered like it."""
     return make_id(IdPrefix.ESCALATION, str(case_number).zfill(BODY_LENGTH))
+
+
+def seed_call_id(case_number: int) -> str:
+    """Seeded calls (slice 12): one per case, numbered like it."""
+    return make_id(IdPrefix.CALL, str(case_number).zfill(BODY_LENGTH))
 
 
 def _staff_name(number: int) -> str:
@@ -102,6 +120,7 @@ class _Story:
     turns: list[Turn] = field(default_factory=list)
     assignments: list[Assignment] = field(default_factory=list)
     escalations: list[Escalation] = field(default_factory=list)
+    calls: list[Call] = field(default_factory=list)
 
     def _turn(
         self,
@@ -112,6 +131,7 @@ class _Story:
         role: TurnAuthorRole,
         author: str | None,
         audience: TurnAudience = TurnAudience.EVERYONE,
+        subject: str | None = None,
     ) -> None:
         self.turns.append(
             self.case.append_turn(
@@ -122,6 +142,7 @@ class _Story:
                 author_id=author,
                 text=text,
                 created_at=at,
+                subject=subject,
             )
         )
 
@@ -137,7 +158,7 @@ class _Story:
     def opened_notice(self, at: datetime) -> None:
         self._turn(
             at,
-            copy.NOTICE_OPENED[self.case.language],
+            copy.opened_notice(self.case.channel, self.case.language),
             kind=TurnKind.NOTICE,
             role=TurnAuthorRole.SYSTEM,
             author=None,
@@ -281,6 +302,136 @@ class _Story:
             at=at,
         )
 
+    # ------------------------------------------------------------------ slice 12
+    def follow_up(self, at: datetime, staff: int) -> None:
+        """An analyst opened this case herself to call the customer back (``outbound_call``)."""
+        assignment = Assignment(
+            id=self.ids.new_id(IdPrefix.ASSIGNMENT),
+            case_id=self.case.id,
+            staff_id=seed_staff_id(staff),
+            reason=AssignmentReason.OUTBOUND_CALL,
+            policy_rule_id=None,
+            open_cases_at_assignment=0,
+            strategy=FOLLOW_UP_STRATEGY,
+            assigned_at=at,
+            assigned_by=ActorRef(ActorRole.ANALYST, seed_staff_id(staff)),
+        )
+        self.case.assign(assignment)
+        self.assignments.append(assignment)
+        self.banner(at, copy.follow_up_call(_staff_name(staff), self.customer_first_name))
+
+    def _call(self) -> Call:
+        return next(c for c in self.calls if c.id == self.case.active_call_id)
+
+    def _analyst_ref(self) -> ActorRef:
+        return ActorRef(ActorRole.ANALYST, self.case.assigned_analyst_id or seed_staff_id(DANIELA))
+
+    def ring_in(self, at: datetime) -> None:
+        """The customer calls the bank (``StartInboundCall``)."""
+        number = int(self.case.id.removeprefix("CASE-"))
+        call = Call.start_inbound(
+            call_id=seed_call_id(number),
+            case_id=self.case.id,
+            customer_id=self.case.customer_id,
+            at=at,
+        )
+        self.case.start_call(call.id)
+        self.calls.append(call)
+
+    def call_customer(self, at: datetime, reason: str) -> None:
+        """The assignee calls the customer (``StartOutboundCall``)."""
+        number = int(self.case.id.removeprefix("CASE-"))
+        analyst = self._analyst_ref()
+        call = Call.start_outbound(
+            call_id=seed_call_id(number),
+            case_id=self.case.id,
+            customer_id=self.case.customer_id,
+            analyst_id=analyst.actor_id,
+            reason=reason,
+            at=at,
+        )
+        self.case.start_call(call.id)
+        self.case.start_progress(at=at)
+        self.calls.append(call)
+
+    def answer(self, at: datetime) -> None:
+        """Inbound: the assignee answers; outbound: the customer does. Either way it is the
+        case's first response (``AnswerCall`` / ``AnswerOutboundCall``)."""
+        call, analyst = self._call(), self._analyst_ref()
+        if call.reason is None:
+            call.answer(actor=analyst, at=at)
+            self.case.start_progress(at=at)
+        else:
+            call.answer(actor=ActorRef(ActorRole.CUSTOMER, self.case.customer_id), at=at)
+        self.case.respond_by_call(actor=analyst, at=at)
+
+    def say(self, at: datetime, text: str, *, by_customer: bool) -> None:
+        """A line of the call transcript."""
+        role = TurnAuthorRole.CUSTOMER if by_customer else TurnAuthorRole.ANALYST
+        author = self.case.customer_id if by_customer else self._analyst_ref().actor_id
+        self._turn(at, text, kind=TurnKind.TRANSCRIPT, role=role, author=author)
+
+    def _system_line(self, at: datetime, text: str) -> None:
+        self._turn(at, text, kind=TurnKind.TRANSCRIPT, role=TurnAuthorRole.SYSTEM, author=None)
+
+    def hold(self, at: datetime) -> None:
+        self._call().hold(actor=self._analyst_ref(), at=at)
+        self._system_line(at, copy.CALL_HELD[self.case.language])
+
+    def resume(self, at: datetime) -> None:
+        self._call().resume(actor=self._analyst_ref(), at=at)
+        self._system_line(at, copy.CALL_RESUMED[self.case.language])
+
+    def mute(self, at: datetime, muted: bool) -> None:
+        self._call().set_muted(actor=self._analyst_ref(), muted=muted, at=at)
+
+    def hang_up(self, at: datetime, *, by_customer: bool = False) -> None:
+        call = self._call()
+        who = ActorRef(ActorRole.CUSTOMER, self.case.customer_id) if by_customer else None
+        call.hang_up(actor=who or self._analyst_ref(), at=at)
+        self.case.end_call(call.id)
+        self._system_line(at, copy.CALL_ENDED[self.case.language])
+
+    def note(self, at: datetime, text: str) -> None:
+        """An internal note of the assignee (staff only)."""
+        self._turn(
+            at,
+            text,
+            kind=TurnKind.NOTE,
+            role=TurnAuthorRole.ANALYST,
+            author=self._analyst_ref().actor_id,
+            audience=TurnAudience.STAFF,
+        )
+
+    def email_in(self, at: datetime, subject: str, body: str) -> None:
+        """The customer emails the bank (``SendCustomerEmail``)."""
+        self._turn(
+            at,
+            body,
+            kind=TurnKind.EMAIL,
+            role=TurnAuthorRole.CUSTOMER,
+            author=self.case.customer_id,
+            subject=subject,
+        )
+
+    def email_out(self, at: datetime, body: str) -> None:
+        """The assignee answers by email, framed like ``ReplyEmail`` does."""
+        analyst = self._analyst_ref().actor_id
+        thread = next(t.subject for t in self.turns if t.subject is not None)
+        framed = copy.email_reply_body(
+            self.case.language, self.customer_first_name, _staff_name_of(analyst), body
+        )
+        self.case.start_progress(at=at)
+        self._turn(
+            at,
+            framed,
+            kind=TurnKind.EMAIL,
+            role=TurnAuthorRole.ANALYST,
+            author=analyst,
+            subject=copy.reply_subject(thread),
+        )
+        self.case.mark_read(up_to=self.case.last_sequence, at=at)
+
     async def save(self, uow: UnitOfWork) -> None:
         """Store the case; an open case takes the customer's one-open-case slot."""
         slot = await uow.case_slots.get(self.case.customer_id)
@@ -299,6 +450,8 @@ class _Story:
             await uow.assignments.add(assignment)
         for escalation in self.escalations:
             await uow.escalations.add(escalation)
+        for call in self.calls:
+            await uow.calls.add(call)
 
 
 def _open(
@@ -310,8 +463,14 @@ def _open(
     language: Language,
     opened: datetime,
     previous: int | None = None,
+    opened_by: int | None = None,
 ) -> _Story:
     customer_id = seed_customer_id(customer)
+    actor = (
+        ActorRef(ActorRole.ANALYST, seed_staff_id(opened_by))
+        if opened_by is not None
+        else ActorRef(ActorRole.CUSTOMER, customer_id)
+    )
     case = Case.open(
         case_id=seed_case_id(number),
         customer_id=customer_id,
@@ -321,7 +480,7 @@ def _open(
         priority=CasePriority.NONE,  # every case opens without a priority (slice 8)
         opened_at=opened,
         sla_due_at=SLA.due_at(opened_at=opened),
-        actor=ActorRef(ActorRole.CUSTOMER, customer_id),
+        actor=actor,
         previous_case_id=seed_case_id(previous) if previous is not None else None,
     )
     return _Story(ids=ids, case=case, customer_first_name=_customer_name(customer).split()[0])
@@ -571,6 +730,98 @@ def _mauricio_queued(ids: IdGenerator, t: datetime) -> _Story:
     return s
 
 
+# ----------------------------------------------------------------------------- slice 12
+def _natalia_called(ids: IdGenerator, t: datetime) -> _Story:
+    """115 · Natalia called the bank yesterday (``phone_inbound``): Daniela answered (the first
+    response), put her on hold to check, wrote an internal note and closed it → Cerrados."""
+    opened = t - timedelta(days=1, hours=5)
+    s = _open(ids, number=115, customer=1013, channel=PHONE_IN, language=ES, opened=opened)
+    s.ring_in(opened)
+    s.opened_notice(opened)
+    s.assign(opened, DANIELA, open_cases=0)
+    at = opened + timedelta(seconds=20)
+    s.answer(at)
+    s.say(at + timedelta(seconds=10),
+          "Hola, buenas tardes. Llamo porque me apareció un cobro de una tienda en línea que no "
+          "reconozco.", by_customer=True)  # fmt: skip
+    s.say(at + timedelta(seconds=25),
+          "Buenas tardes, Natalia. Habla Daniela, de LATAM Bank. ¿Me confirma la fecha y el "
+          "valor del cobro?", by_customer=False)  # fmt: skip
+    s.say(at + timedelta(seconds=45), "Fue el 2 de octubre, por 189.900 pesos.", by_customer=True)
+    s.prioritize(at + timedelta(seconds=50), CasePriority.MEDIUM, by=DANIELA)
+    s.say(at + timedelta(seconds=55), "Gracias. Permítame un momento mientras lo reviso.",
+          by_customer=False)  # fmt: skip
+    s.hold(at + timedelta(minutes=1))
+    s.mute(at + timedelta(minutes=1, seconds=5), True)
+    s.mute(at + timedelta(minutes=2, seconds=25), False)
+    s.resume(at + timedelta(minutes=2, seconds=30))
+    s.say(at + timedelta(minutes=2, seconds=40),
+          "Ya lo veo. Le explico cómo abrir el reclamo por ese cobro y le llega la confirmación "
+          "por correo.", by_customer=False)  # fmt: skip
+    s.say(at + timedelta(minutes=4), "Listo, muchas gracias.", by_customer=True)
+    s.hang_up(at + timedelta(minutes=4, seconds=20))
+    s.note(at + timedelta(minutes=5),
+           "Llamada de 4 min: no reconoce un cobro en línea del 2 de octubre por $189.900. Se le "
+           "explicó cómo abrir el reclamo.")  # fmt: skip
+    s.close(at + timedelta(minutes=6), CloseReason.RESOLVED, "Se explicó el reclamo por teléfono.")
+    return s
+
+
+def _claudia_follow_up(ids: IdGenerator, t: datetime) -> _Story:
+    """116 · Daniela called Claudia back (``phone_outbound``, linked to her unanswered chat
+    105): Claudia answered, the call ended when she hung up, and Daniela closed it."""
+    opened = t - timedelta(hours=20)
+    s = _open(ids, number=116, customer=1005, channel=PHONE_OUT, language=ES, opened=opened,
+              previous=105, opened_by=DANIELA)  # fmt: skip
+    s.follow_up(opened, DANIELA)
+    s.call_customer(opened, "Seguimiento del chat de ayer, que quedó sin respuesta: confirmar "
+                    "qué cargo no reconoce.")  # fmt: skip
+    at = opened + timedelta(seconds=15)
+    s.answer(at)
+    s.say(at + timedelta(seconds=5),
+          "Buenos días, Claudia. Le habla Daniela, de LATAM Bank. La llamo por el chat de ayer "
+          "sobre un cargo.", by_customer=False)  # fmt: skip
+    s.say(at + timedelta(seconds=20), "Ay, sí, qué pena, se me descargó el celular.",
+          by_customer=True)  # fmt: skip
+    s.say(at + timedelta(seconds=30), "No se preocupe. ¿Me confirma qué cargo no reconoce?",
+          by_customer=False)  # fmt: skip
+    s.say(at + timedelta(seconds=50), "Uno de 45.000 pesos de una plataforma de música.",
+          by_customer=True)  # fmt: skip
+    s.say(at + timedelta(minutes=1, seconds=30),
+          "Ya lo veo: es la renovación de una suscripción. Le explico cómo cancelarla si ya no "
+          "la usa.", by_customer=False)  # fmt: skip
+    s.say(at + timedelta(minutes=3), "Perfecto, gracias por llamar.", by_customer=True)
+    s.hang_up(at + timedelta(minutes=3, seconds=10), by_customer=True)
+    s.close(at + timedelta(minutes=5), CloseReason.RESOLVED, "Seguimiento por teléfono.")
+    return s
+
+
+IGNACIO_SUBJECT = "Cobro duplicado en mi tarjeta"
+
+
+def _ignacio_email(ids: IdGenerator, t: datetime) -> _Story:
+    """117 · Ignacio (es-AR, voseo) wrote an email last night; Daniela answered (greeting and
+    signature added by the platform) and he wrote back → Por responder."""
+    opened = t - timedelta(hours=16)
+    s = _open(ids, number=117, customer=1014, channel=EMAIL, language=ES, opened=opened)
+    s.email_in(opened, IGNACIO_SUBJECT,
+               "Hola, ¿cómo andan? Les escribo porque en el resumen de la tarjeta me aparece dos "
+               "veces el mismo cobro de una estación de servicio, del 28 de septiembre. ¿Me "
+               "pueden decir qué tengo que hacer?\n\nGracias,\nIgnacio")  # fmt: skip
+    s.opened_notice(opened)
+    s.assign(opened, DANIELA, open_cases=0)
+    s.prioritize(opened + timedelta(minutes=8), CasePriority.MEDIUM, by=DANIELA)
+    s.email_out(
+        opened + timedelta(minutes=10),
+        "Gracias por escribirnos. Ya vemos los dos cobros del 28 de septiembre en su "
+        "tarjeta. ¿Nos confirma si hizo una sola carga de combustible ese día?",
+    )
+    s.email_in(t - timedelta(hours=9), copy.reply_subject(IGNACIO_SUBJECT),
+               "Hola, Daniela. Sí, cargué una sola vez, el sábado a la mañana. Si necesitás el "
+               "detalle del resumen, te lo mando.\n\nAbrazo,\nIgnacio")  # fmt: skip
+    return s
+
+
 #: Lucía opened Julián's overdue case in supervision mode (an audited read).
 SUPERVISOR_VIEW = (LUCIA, 113, timedelta(minutes=5))
 
@@ -584,7 +835,10 @@ type StoryFactory = Callable[[IdGenerator, datetime], _Story]
 DEMO_STORIES: tuple[tuple[int, StoryFactory], ...] = (
     (110, _patricia_old),
     (104, _patricia_refund),
+    (115, _natalia_called),
     (105, _claudia_unresponsive),
+    (116, _claudia_follow_up),
+    (117, _ignacio_email),
     (106, _hector_out_of_scope),
     (107, _joaquin_waiting),
     (114, _esteban_reassigned),
@@ -610,7 +864,7 @@ async def add_demo_cases(
             continue
         story = factory(ids, t)
         await story.save(unit)
-        timeline.take(story.case, *story.escalations)
+        timeline.take(story.case, *story.escalations, *story.calls)
         built[story.case.id] = story.case
     await _add_supervisor_view(unit, t, timeline, built)
     return len(built)

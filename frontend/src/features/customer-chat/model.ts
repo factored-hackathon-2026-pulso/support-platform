@@ -191,7 +191,7 @@ export interface ChatItem {
    */
   key: string
   side: ChatSide
-  /** "Daniela · LATAM Bank"; null for the customer and notices. */
+  /** "Daniela, de LATAM Bank"; null for the customer and notices. */
   author: string | null
   text: string
   createdAt: string
@@ -200,7 +200,7 @@ export interface ChatItem {
 }
 
 function bankAuthor(turn: CustomerTurn): string {
-  return turn.authorName ? `${turn.authorName} · LATAM Bank` : 'LATAM Bank'
+  return turn.authorName ? `${turn.authorName}, de LATAM Bank` : 'LATAM Bank'
 }
 
 /** Customer bubbles right, the analyst left (first name), platform notices centred. */
@@ -326,7 +326,7 @@ export function conversationStatusLine(
       return pt ? 'Procurando uma pessoa da equipe…' : 'Buscando a una persona del equipo…'
     case 'with_agent': {
       const who = conversation.agentName ?? (pt ? 'uma pessoa da equipe' : 'una persona del equipo')
-      return pt ? `Você está falando com ${who} · LATAM Bank` : `Te atiende ${who} · LATAM Bank`
+      return pt ? `Você está falando com ${who}, do LATAM Bank` : `Te atiende ${who}, de LATAM Bank`
     }
     default:
       return pt ? 'Conversa encerrada' : 'Conversación terminada'
@@ -434,26 +434,24 @@ function formatCustomerDate(value: string, language: Language): string {
   return [day, PT_MONTHS[month] ?? month, year].join(' ')
 }
 
-/**
- * "Conversación del 3 mar 2026 · Terminada · Te atendió Daniela" /
- * "Conversa de 3 mar 2026 · Encerrada · Atendida por Daniela".
- */
+/** "Conversación del 3 mar 2026" / "Conversa de 3 mar 2026": a past block's title. */
 export function pastBlockTitle(
-  conversation: Pick<CustomerConversationSummary, 'openedAt' | 'status' | 'agentName'>,
+  conversation: Pick<CustomerConversationSummary, 'openedAt'>,
   language: Language,
 ): string {
-  const pt = language === 'pt'
   const date = formatCustomerDate(conversation.openedAt, language)
-  const closed = conversation.status === 'closed'
-  const parts = pt
-    ? [`Conversa de ${date}`, closed ? 'Encerrada' : 'Em andamento']
-    : [`Conversación del ${date}`, closed ? 'Terminada' : 'En curso']
-  if (conversation.agentName) {
-    parts.push(
-      pt ? `Atendida por ${conversation.agentName}` : `Te atendió ${conversation.agentName}`,
-    )
-  }
-  return parts.join(' · ')
+  return language === 'pt' ? `Conversa de ${date}` : `Conversación del ${date}`
+}
+
+/** "Te atendió Daniela" / "Atendida por Daniela" under the title, or null (nobody took it). */
+export function pastBlockByline(
+  conversation: Pick<CustomerConversationSummary, 'agentName'>,
+  language: Language,
+): string | null {
+  if (!conversation.agentName) return null
+  return language === 'pt'
+    ? `Atendida por ${conversation.agentName}`
+    : `Te atendió ${conversation.agentName}`
 }
 
 /** Last visible message of a past conversation (the list's `preview`, or from its turns). */

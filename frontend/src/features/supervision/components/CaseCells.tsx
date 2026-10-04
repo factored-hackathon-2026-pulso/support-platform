@@ -1,7 +1,7 @@
 import { Fact, Status } from '@/components/ui'
 import { ESCALATED_MARKER } from '@/features/cases'
 import { shortCaseId } from '@/features/conversation'
-import { channelTooltip, casePriorityFact, openCaseStatus } from '../model'
+import { casePriorityFact, caseRowFacts, openCaseStatus } from '../model'
 import type { CaseSummary } from '../types'
 import { CaseLink } from './CaseLink'
 
@@ -11,7 +11,7 @@ export interface CaseCustomerCellProps {
 }
 
 /**
- * The customer of a supervision row: the channel icon (icon-only, tooltip "Chat web")
+ * The customer of a supervision row: the channel icon (icon-only, tooltip "Chat web", "Llamada entrante")
  * before the name, which links to the read-only case view, and the short case number
  * under it.
  */
@@ -19,13 +19,9 @@ export function CaseCustomerCell({ summary, onOpenCase }: CaseCustomerCellProps)
   return (
     <span className="flex min-w-0 flex-col py-1.5">
       <span className="flex min-w-0 items-center gap-1.5">
-        <Fact
-          icon={summary.channel === 'app_chat' ? 'smartphone' : 'globe'}
-          text={channelTooltip(summary)}
-          label="Canal"
-          tone="muted"
-          iconOnly
-        />
+        {caseRowFacts(summary).map(({ key, ...fact }) => (
+          <Fact key={key} {...fact} tone="muted" />
+        ))}
         <CaseLink caseId={summary.id} onOpen={onOpenCase} className="truncate font-semibold">
           {summary.customer.displayName}
         </CaseLink>

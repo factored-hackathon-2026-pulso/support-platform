@@ -124,7 +124,7 @@ describe('CaseListPanel', () => {
       within(marcela).getByText('Por responder').parentElement!.querySelector('svg'),
     ).toHaveAttribute('data-status-shape', 'pie-75')
     expect(within(marcela).getByText('Por responder')).not.toHaveClass('bg-warn-soft')
-    expect(within(marcela).getByText('Canal: Web')).toHaveClass('sr-only')
+    expect(within(marcela).getByText('Canal: Chat web')).toHaveClass('sr-only')
     expect(marcela).toHaveTextContent('Última actividad: hace 2 min')
     expect(marcela.textContent).not.toContain('·')
     expect(marcela).not.toHaveTextContent('Prioridad media') // only a high priority shows
@@ -137,7 +137,9 @@ describe('CaseListPanel', () => {
     expect(
       within(card(/Joaquín Ferreyra Paz/)).getByText('Esperando al cliente'),
     ).toBeInTheDocument()
-    expect(within(card(/Joaquín Ferreyra Paz/)).getByText('Canal: App')).toBeInTheDocument()
+    expect(
+      within(card(/Joaquín Ferreyra Paz/)).getByText('Canal: Chat en la app'),
+    ).toBeInTheDocument()
   })
 
   it('shows the first-response SLA only while the first reply is pending', async () => {

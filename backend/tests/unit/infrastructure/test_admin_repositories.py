@@ -278,7 +278,7 @@ async def test_open_refs_by_assignee() -> None:
         nobody = await uow.cases.open_refs_by_assignee(set())
     assert sorted(everyone) == [seed_staff_id(1), seed_staff_id(2)]
     refs = daniela[seed_staff_id(1)]
-    assert [r.case_id for r in refs] == [seed_case_id(n) for n in (101, 102, 103, 107, 108)]
+    assert [r.case_id for r in refs] == [seed_case_id(n) for n in (101, 102, 103, 107, 108, 117)]
     assert [r.language.value for r in refs].count("pt") == 1
     assert nobody == {}
 

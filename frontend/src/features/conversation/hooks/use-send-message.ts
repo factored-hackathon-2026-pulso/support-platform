@@ -11,7 +11,7 @@ import {
   mergeTurns,
   updatePending,
 } from '../model'
-import type { CaseDetail, TranscriptCache } from '../types'
+import type { CaseDetail, CaseSummary, TranscriptCache, Turn } from '../types'
 
 export function newClientMessageId(): string {
   return crypto.randomUUID()
@@ -33,22 +33,34 @@ interface SendInput {
  * replaces the pending one (same `clientMessageId`, also matched against the
  * realtime echo), or the pending one turns "failed".
  */
+/**
+ * A turn the analyst wrote (a chat reply, a call line, a note, an email) and the case
+ * summary the server answered with → the transcript, the detail and the inboxes.
+ */
+export function storeTurnResult(
+  queryClient: QueryClient,
+  caseId: string,
+  { turn, case: summary }: { turn: Turn; case: CaseSummary },
+): void {
+  const turnsKey = conversationKeys.turns(caseId)
+  const merged = queryClient.setQueryData<TranscriptCache>(turnsKey, (current) =>
+    mergeTurns(current ?? emptyTranscript(), [turn]),
+  )
+  // Our turn landed past a turn this tab never got (socket down meanwhile): catch up.
+  if (merged && hasMissingTurns(merged)) {
+    void queryClient.invalidateQueries({ queryKey: turnsKey, exact: true })
+  }
+  queryClient.setQueryData<CaseDetail>(conversationKeys.detail(caseId), (detail) =>
+    detail ? applySummary(detail, summary) : detail,
+  )
+  // Same summary the server pushes as `case.updated`: patch now, refetch only on a move.
+  applyCaseSummaryToInboxes(queryClient, summary)
+}
+
 async function sendAndReconcile(queryClient: QueryClient, caseId: string, input: SendInput) {
   const turnsKey = conversationKeys.turns(caseId)
   try {
-    const { turn, case: summary } = await postAnalystTurn(caseId, input)
-    const merged = queryClient.setQueryData<TranscriptCache>(turnsKey, (current) =>
-      mergeTurns(current ?? emptyTranscript(), [turn]),
-    )
-    // Our turn landed past a turn this tab never got (socket down meanwhile): catch up.
-    if (merged && hasMissingTurns(merged)) {
-      void queryClient.invalidateQueries({ queryKey: turnsKey, exact: true })
-    }
-    queryClient.setQueryData<CaseDetail>(conversationKeys.detail(caseId), (detail) =>
-      detail ? applySummary(detail, summary) : detail,
-    )
-    // Same summary the server pushes as `case.updated`: patch now, refetch only on a move.
-    applyCaseSummaryToInboxes(queryClient, summary)
+    storeTurnResult(queryClient, caseId, await postAnalystTurn(caseId, input))
   } catch (error) {
     const failure = describeSendFailure(error)
     queryClient.setQueryData<TranscriptCache>(turnsKey, (current) =>

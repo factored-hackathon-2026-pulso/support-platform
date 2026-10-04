@@ -700,11 +700,12 @@
         "type": "object"
       },
       "AssignmentReason": {
-        "description": "Why a case reached its analyst: on arrival, from the queue when someone became\navailable, or ``manual`` (a supervisor chose her, from the queue or by reassignment).",
+        "description": "Why a case reached its analyst: on arrival, from the queue when someone became\navailable, ``manual`` (a supervisor chose her, from the queue or by reassignment) or\n``outbound_call`` (she opened it to call the customer, slice 12).",
         "enum": [
           "language_least_loaded",
           "queue_drained",
-          "manual"
+          "manual",
+          "outbound_call"
         ],
         "title": "AssignmentReason",
         "type": "string"
@@ -963,11 +964,280 @@
         "title": "AvailabilityStatus",
         "type": "string"
       },
+      "Call": {
+        "description": "A simulated phone call (slice 12) as staff see it. Its transcript is the case's\n`transcript` turns written between `startedAt` and `endedAt`.",
+        "properties": {
+          "analystId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who is on the line for the bank (outbound: the caller; inbound: who answered, null while it rings).",
+            "title": "Analystid"
+          },
+          "analystName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analystname"
+          },
+          "answeredAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answeredat"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/CallDirection"
+          },
+          "durationSeconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Talk time (answer → end, holds included) of an ended, answered call.",
+            "title": "Durationseconds"
+          },
+          "endReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "completed (hung up after an answer) · cancelled (who called hung up while it rang) · rejected (the customer rejected an outbound call)."
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "endedByRole": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActorRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holdSeconds": {
+            "description": "Total time on hold (closed holds).",
+            "title": "Holdseconds",
+            "type": "integer"
+          },
+          "holds": {
+            "items": {
+              "$ref": "#/components/schemas/HoldInterval"
+            },
+            "title": "Holds",
+            "type": "array"
+          },
+          "id": {
+            "description": "CALL-…",
+            "title": "Id",
+            "type": "string"
+          },
+          "muted": {
+            "description": "The analyst's line is muted.",
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the analyst called (outbound only).",
+            "title": "Reason"
+          },
+          "startedAt": {
+            "description": "When it started ringing.",
+            "format": "date-time",
+            "title": "Startedat",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CallState",
+            "description": "ringing → in_call ⇄ on_hold → ended."
+          },
+          "version": {
+            "description": "Realtime: apply only when newer than the cached one.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "caseId",
+          "version",
+          "direction",
+          "state",
+          "reason",
+          "analystId",
+          "analystName",
+          "startedAt",
+          "answeredAt",
+          "endedAt",
+          "endReason",
+          "endedByRole",
+          "muted",
+          "holds",
+          "holdSeconds",
+          "durationSeconds"
+        ],
+        "title": "Call",
+        "type": "object"
+      },
+      "CallDirection": {
+        "description": "``inbound``: the customer called the bank; ``outbound``: an analyst called them.",
+        "enum": [
+          "inbound",
+          "outbound"
+        ],
+        "title": "CallDirection",
+        "type": "string"
+      },
+      "CallEndReason": {
+        "description": "How the call ended (team-generated list).",
+        "enum": [
+          "completed",
+          "cancelled",
+          "rejected"
+        ],
+        "title": "CallEndReason",
+        "type": "string"
+      },
+      "CallLineRequest": {
+        "additionalProperties": false,
+        "description": "A line said on the call (a `transcript` turn), only while it is `in_call`.",
+        "properties": {
+          "clientMessageId": {
+            "description": "Client-generated id (UUID v4); also the Idempotency-Key header.",
+            "examples": [
+              "0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10"
+            ],
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Clientmessageid",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "clientMessageId"
+        ],
+        "title": "CallLineRequest",
+        "type": "object"
+      },
+      "CallList": {
+        "properties": {
+          "items": {
+            "description": "Every call of the case, the most recent first.",
+            "items": {
+              "$ref": "#/components/schemas/Call"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "serverTime"
+        ],
+        "title": "CallList",
+        "type": "object"
+      },
+      "CallResponse": {
+        "properties": {
+          "call": {
+            "$ref": "#/components/schemas/Call"
+          },
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          }
+        },
+        "required": [
+          "call",
+          "case"
+        ],
+        "title": "CallResponse",
+        "type": "object"
+      },
+      "CallState": {
+        "enum": [
+          "ringing",
+          "in_call",
+          "on_hold",
+          "ended"
+        ],
+        "title": "CallState",
+        "type": "string"
+      },
       "CaseCapabilities": {
         "properties": {
+          "canAddNote": {
+            "description": "Slice 12: the caller is the assignee analyst and the case is open (POST /cases/{caseId}/notes).",
+            "title": "Canaddnote",
+            "type": "boolean"
+          },
           "canAssign": {
             "description": "The caller is a supervisor and the case is open (\"Asignar\"/\"Reasignar\").",
             "title": "Canassign",
+            "type": "boolean"
+          },
+          "canCall": {
+            "description": "Slice 12: the caller is the assignee analyst, the case is open and has no active call (POST /cases/{caseId}/calls).",
+            "title": "Cancall",
             "type": "boolean"
           },
           "canChangePriority": {
@@ -977,6 +1247,11 @@
           },
           "canClose": {
             "title": "Canclose",
+            "type": "boolean"
+          },
+          "canEmail": {
+            "description": "Slice 12: the caller is the assignee analyst and the case is open (POST /cases/{caseId}/emails).",
+            "title": "Canemail",
             "type": "boolean"
           },
           "canEscalate": {
@@ -1005,16 +1280,22 @@
           "canClose",
           "canAssign",
           "canChangePriority",
-          "canEscalate"
+          "canEscalate",
+          "canCall",
+          "canEmail",
+          "canAddNote"
         ],
         "title": "CaseCapabilities",
         "type": "object"
       },
       "CaseChannel": {
-        "description": "Where the customer writes from (the simulator stands in for both).",
+        "description": "How the case opened (slice 12). Later contacts of any channel join the open case (one\nopen case per customer), so a chat case may hold a call or an email too.\n\n``phone_outbound`` is a case staff opened to call the customer (a follow-up); an outbound\ncall placed on an open case keeps that case's channel.",
         "enum": [
-          "app_chat",
-          "web_chat"
+          "chat_app",
+          "chat_web",
+          "phone_inbound",
+          "phone_outbound",
+          "email"
         ],
         "title": "CaseChannel",
         "type": "string"
@@ -1104,6 +1385,17 @@
       },
       "CaseDetail": {
         "properties": {
+          "activeCall": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Call"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 12: the call ringing or connected now, or null."
+          },
           "assignment": {
             "anyOf": [
               {
@@ -1159,7 +1451,8 @@
           "closure",
           "capabilities",
           "previousCaseCount",
-          "escalation"
+          "escalation",
+          "activeCall"
         ],
         "title": "CaseDetail",
         "type": "object"
@@ -1367,6 +1660,18 @@
       },
       "CaseSummary": {
         "properties": {
+          "activeCallId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 12: the call ringing or connected now (\"En llamada\"), or null.",
+            "title": "Activecallid"
+          },
           "assignedAnalystId": {
             "anyOf": [
               {
@@ -1545,7 +1850,8 @@
           "closedAt",
           "closeReason",
           "rating",
-          "escalated"
+          "escalated",
+          "activeCallId"
         ],
         "title": "CaseSummary",
         "type": "object"
@@ -1626,8 +1932,8 @@
             "anyOf": [
               {
                 "enum": [
-                  "app_chat",
-                  "web_chat"
+                  "chat_app",
+                  "chat_web"
                 ],
                 "type": "string"
               },
@@ -1635,7 +1941,7 @@
                 "type": "null"
               }
             ],
-            "description": "Default app_chat; ignored while the customer has an open case.",
+            "description": "The chat a new case opens from: default chat_app. While the customer has an open chat case its channel wins. Calls and emails have their own routes (slice 12).",
             "title": "Channel"
           },
           "customerId": {
@@ -1716,6 +2022,163 @@
           "teamId"
         ],
         "title": "CreateUserRequest",
+        "type": "object"
+      },
+      "CustomerCall": {
+        "description": "A call as the customer sees it: no reason, no staff ids, the analyst's first name.",
+        "properties": {
+          "agentName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First name of the analyst on the line.",
+            "title": "Agentname"
+          },
+          "answeredAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answeredat"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/CallDirection"
+          },
+          "durationSeconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationseconds"
+          },
+          "endReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "onHold": {
+            "title": "Onhold",
+            "type": "boolean"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "title": "Startedat",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CallState"
+          }
+        },
+        "required": [
+          "id",
+          "caseId",
+          "direction",
+          "state",
+          "agentName",
+          "startedAt",
+          "answeredAt",
+          "endedAt",
+          "endReason",
+          "onHold",
+          "durationSeconds"
+        ],
+        "title": "CustomerCall",
+        "type": "object"
+      },
+      "CustomerCallLineResponse": {
+        "properties": {
+          "call": {
+            "$ref": "#/components/schemas/CustomerCall"
+          },
+          "turn": {
+            "$ref": "#/components/schemas/CustomerTurn"
+          }
+        },
+        "required": [
+          "turn",
+          "call"
+        ],
+        "title": "CustomerCallLineResponse",
+        "type": "object"
+      },
+      "CustomerCallResponse": {
+        "properties": {
+          "call": {
+            "$ref": "#/components/schemas/CustomerCall"
+          },
+          "caseCreated": {
+            "title": "Casecreated",
+            "type": "boolean"
+          },
+          "conversation": {
+            "$ref": "#/components/schemas/CustomerConversation"
+          }
+        },
+        "required": [
+          "call",
+          "conversation",
+          "caseCreated"
+        ],
+        "title": "CustomerCallResponse",
+        "type": "object"
+      },
+      "CustomerCallState": {
+        "properties": {
+          "call": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CustomerCall"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The active call of the current conversation, else its latest call, else null."
+          }
+        },
+        "required": [
+          "call"
+        ],
+        "title": "CustomerCallState",
         "type": "object"
       },
       "CustomerConversation": {
@@ -1953,6 +2416,110 @@
         "title": "CustomerConversationSummary",
         "type": "object"
       },
+      "CustomerEmail": {
+        "properties": {
+          "authorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An analyst's first name on `out` emails.",
+            "title": "Authorname"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "clientMessageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only on the customer's own emails.",
+            "title": "Clientmessageid"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/EmailDirection"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sequence",
+          "direction",
+          "subject",
+          "body",
+          "authorName",
+          "createdAt",
+          "clientMessageId"
+        ],
+        "title": "CustomerEmail",
+        "type": "object"
+      },
+      "CustomerEmailThread": {
+        "properties": {
+          "caseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caseid"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerEmail"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "caseId",
+          "subject",
+          "items"
+        ],
+        "title": "CustomerEmailThread",
+        "type": "object"
+      },
       "CustomerLocale": {
         "enum": [
           "es-CO",
@@ -2072,9 +2639,12 @@
             "type": "string"
           },
           "kind": {
+            "description": "message · notice · transcript (a line of a call, slice 12) · email (slice 12, with `subject`).",
             "enum": [
               "message",
-              "notice"
+              "notice",
+              "transcript",
+              "email"
             ],
             "title": "Kind",
             "type": "string"
@@ -2086,6 +2656,18 @@
             "description": "Case sequence (customer-visible turns may skip numbers).",
             "title": "Sequence",
             "type": "integer"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 12: the subject of an `email` turn.",
+            "title": "Subject"
           },
           "text": {
             "title": "Text",
@@ -2101,7 +2683,8 @@
           "text",
           "language",
           "createdAt",
-          "clientMessageId"
+          "clientMessageId",
+          "subject"
         ],
         "title": "CustomerTurn",
         "type": "object"
@@ -2275,6 +2858,15 @@
         "title": "DevMailbox",
         "type": "object"
       },
+      "EmailDirection": {
+        "description": "Slice 12: ``in`` = the customer wrote to the bank; ``out`` = an analyst answered.",
+        "enum": [
+          "in",
+          "out"
+        ],
+        "title": "EmailDirection",
+        "type": "string"
+      },
       "EmailKind": {
         "enum": [
           "invitation",
@@ -2282,6 +2874,185 @@
         ],
         "title": "EmailKind",
         "type": "string"
+      },
+      "EmailMessage": {
+        "description": "One email of a case thread (an `email` turn: `id` is the turn id).",
+        "properties": {
+          "authorId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorid"
+          },
+          "authorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authorname"
+          },
+          "authorRole": {
+            "$ref": "#/components/schemas/TurnAuthorRole"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "clientMessageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientmessageid"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/EmailDirection",
+            "description": "in: from the customer · out: from an analyst."
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "caseId",
+          "sequence",
+          "direction",
+          "subject",
+          "body",
+          "authorRole",
+          "authorId",
+          "authorName",
+          "createdAt",
+          "clientMessageId"
+        ],
+        "title": "EmailMessage",
+        "type": "object"
+      },
+      "EmailReplyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "description": "What the analyst writes. The platform adds the greeting (\"Hola, {nombre}:\") and the signature (\"Saludos,\\n{Analista}\\nLATAM Bank\").",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "clientMessageId": {
+            "description": "Client-generated id (UUID v4); also the Idempotency-Key header.",
+            "examples": [
+              "0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10"
+            ],
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Clientmessageid",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default \"Re: <thread subject>\"; required when the case has no email yet.",
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "body",
+          "clientMessageId"
+        ],
+        "title": "EmailReplyRequest",
+        "type": "object"
+      },
+      "EmailReplyResponse": {
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "email": {
+            "$ref": "#/components/schemas/EmailMessage"
+          }
+        },
+        "required": [
+          "email",
+          "case"
+        ],
+        "title": "EmailReplyResponse",
+        "type": "object"
+      },
+      "EmailThread": {
+        "properties": {
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "items": {
+            "description": "Oldest first, at most 200.",
+            "items": {
+              "$ref": "#/components/schemas/EmailMessage"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first email's subject; null without emails.",
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "caseId",
+          "subject",
+          "items"
+        ],
+        "title": "EmailThread",
+        "type": "object"
       },
       "EscalateRequest": {
         "additionalProperties": false,
@@ -2567,6 +3338,34 @@
           "checks"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HoldInterval": {
+        "properties": {
+          "endedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null while the call is on hold.",
+            "title": "Endedat"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "title": "Startedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "startedAt",
+          "endedAt"
+        ],
+        "title": "HoldInterval",
         "type": "object"
       },
       "HomeActivity": {
@@ -3291,6 +4090,20 @@
         "title": "MfaRequest",
         "type": "object"
       },
+      "MuteCallRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "muted": {
+            "title": "Muted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "muted"
+        ],
+        "title": "MuteCallRequest",
+        "type": "object"
+      },
       "NewPasswordRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3314,6 +4127,35 @@
           "password"
         ],
         "title": "NewPasswordRequest",
+        "type": "object"
+      },
+      "NoteRequest": {
+        "additionalProperties": false,
+        "description": "An internal note (a staff-only `note` turn).",
+        "properties": {
+          "clientMessageId": {
+            "description": "Client-generated id (UUID v4); also the Idempotency-Key header.",
+            "examples": [
+              "0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10"
+            ],
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Clientmessageid",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "clientMessageId"
+        ],
+        "title": "NoteRequest",
         "type": "object"
       },
       "Notification": {
@@ -3901,6 +4743,8 @@
           "already_rated",
           "escalation_open",
           "escalation_not_open",
+          "call_in_progress",
+          "call_not_active",
           "analyst_not_eligible",
           "language_mismatch",
           "analyst_paused",
@@ -4511,6 +5355,62 @@
         "title": "SelfChangeAction",
         "type": "string"
       },
+      "SendEmailRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "clientMessageId": {
+            "description": "Client-generated id (UUID v4); also the Idempotency-Key header.",
+            "examples": [
+              "0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10"
+            ],
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Clientmessageid",
+            "type": "string"
+          },
+          "subject": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "body",
+          "clientMessageId"
+        ],
+        "title": "SendEmailRequest",
+        "type": "object"
+      },
+      "SendEmailResponse": {
+        "properties": {
+          "caseCreated": {
+            "title": "Casecreated",
+            "type": "boolean"
+          },
+          "conversation": {
+            "$ref": "#/components/schemas/CustomerConversation"
+          },
+          "email": {
+            "$ref": "#/components/schemas/CustomerEmail"
+          }
+        },
+        "required": [
+          "email",
+          "conversation",
+          "caseCreated"
+        ],
+        "title": "SendEmailResponse",
+        "type": "object"
+      },
       "SessionOut": {
         "properties": {
           "expiresAt": {
@@ -4677,6 +5577,23 @@
         ],
         "title": "StaffRole",
         "type": "string"
+      },
+      "StartCallRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "description": "Why the analyst calls (required, at most 500).",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "StartCallRequest",
+        "type": "object"
       },
       "TeamAnalyst": {
         "properties": {
@@ -5014,6 +5931,18 @@
             "title": "Sequence",
             "type": "integer"
           },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 12: the subject of an `email` turn.",
+            "title": "Subject"
+          },
           "text": {
             "title": "Text",
             "type": "string"
@@ -5031,7 +5960,8 @@
           "text",
           "language",
           "createdAt",
-          "clientMessageId"
+          "clientMessageId",
+          "subject"
         ],
         "title": "Turn",
         "type": "object"
@@ -5056,11 +5986,14 @@
         "type": "string"
       },
       "TurnKind": {
-        "description": "``message`` = conversation; ``routing`` = staff-only assignment banner (how the case\narrived); ``notice`` = platform note.",
+        "description": "``message`` = chat conversation; ``routing`` = staff-only assignment banner (how the\ncase arrived); ``notice`` = platform note. Slice 12: ``transcript`` = a line of a call\n(said by the customer or the analyst, or a ``system`` line when the call is held, resumed\nor ends); ``note`` = an analyst's internal note (staff only); ``email`` = an email of the\ncase thread (``subject`` set; from the customer = inbound, from an analyst = outbound).",
         "enum": [
           "message",
           "routing",
-          "notice"
+          "notice",
+          "transcript",
+          "note",
+          "email"
         ],
         "title": "TurnKind",
         "type": "string"
@@ -7513,6 +8446,884 @@
         ]
       }
     },
+    "/api/v1/cases/{caseId}/calls": {
+      "get": {
+        "operationId": "channels_list_calls",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The calls of a case, the most recent first",
+        "tags": [
+          "channels"
+        ]
+      },
+      "post": {
+        "description": "The assignee analyst only (403 `case_not_assigned`), on an open assigned case (409 `case_closed` / `invalid_transition`) without an active call (409 `call_in_progress` with `callId`). It rings until the customer answers or rejects it; a `new` case moves to `in_progress`. Records `call.started`.",
+        "operationId": "channels_start_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "One key per call the caller means to start: a retry with it replays the call it started (200 + `Idempotent-Replayed: true`).",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "One key per call the caller means to start: a retry with it replays the call it started (200 + `Idempotent-Replayed: true`).",
+              "maxLength": 64,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallResponse"
+                }
+              }
+            },
+            "description": "Replay of the same Idempotency-Key"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Call the customer (outbound, the assignee, with a reason)",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/calls/{callId}/answer": {
+      "post": {
+        "description": "`ringing → in_call`. Answering is a response: the first one stops the first-response SLA (`case.first_responded`) and a `new` case moves to `in_progress`. An outbound call is answered by the customer (409 `invalid_transition`). 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.",
+        "operationId": "channels_answer_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Answer an inbound call that rings (the assignee)",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/calls/{callId}/hangup": {
+      "post": {
+        "description": "Ends the call (`completed` once answered, `cancelled` while it rang) and writes a `system` transcript line; the case can be closed again. 409 `call_not_active` once it ended.",
+        "operationId": "channels_hang_up_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Hang up (or stop calling while it rings)",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/calls/{callId}/hold": {
+      "post": {
+        "description": "Writes a `system` transcript line. 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.",
+        "operationId": "channels_hold_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Put the call on hold (`in_call → on_hold`)",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/calls/{callId}/mute": {
+      "post": {
+        "description": "While `in_call` or `on_hold`. The same value changes nothing (no event). 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.",
+        "operationId": "channels_mute_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MuteCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Mute or unmute the analyst's line",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/calls/{callId}/resume": {
+      "post": {
+        "description": "Closes the hold interval and writes a `system` transcript line. 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.",
+        "operationId": "channels_resume_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Resume the call (`on_hold → in_call`)",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/calls/{callId}/transcript": {
+      "post": {
+        "description": "A `transcript` turn (the customer sees it), only while the call is `in_call` (409 `invalid_transition` on hold or ringing, `call_not_active` once ended). Idempotent on `clientMessageId` (= `Idempotency-Key`).",
+        "operationId": "channels_add_call_line",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallLineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTurnResponse"
+                }
+              }
+            },
+            "description": "Replay of an already-added line"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTurnResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Add what the analyst said to the call transcript",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
     "/api/v1/cases/{caseId}/close": {
       "post": {
         "description": "Assignee only, from `assigned` or `in_progress`. The note is internal (trimmed, blank becomes null, at most 500 characters); the customer never sees the reason or the note. Their next message opens a new case linked to this one.",
@@ -7612,6 +9423,210 @@
         "summary": "Close the case with a reason; the customer is told the conversation ended",
         "tags": [
           "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/emails": {
+      "get": {
+        "operationId": "channels_get_email_thread",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailThread"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The case's email thread, oldest first",
+        "tags": [
+          "channels"
+        ]
+      },
+      "post": {
+        "description": "The platform frames the body with \"Hola, {nombre}:\" and \"Saludos,\\n{Analista}\\nLATAM Bank\" (Portuguese cases: \"Olá, {nome}:\" / \"Atenciosamente,\"). Subject: \"Re: <thread subject>\" unless given (required without a thread: 422 `invalid_value`). The first reply stops the first-response SLA. Idempotent on `clientMessageId` (= `Idempotency-Key`).",
+        "operationId": "channels_reply_email",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailReplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailReplyResponse"
+                }
+              }
+            },
+            "description": "Replay of an already-sent email"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailReplyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Answer the customer by email (the assignee)",
+        "tags": [
+          "channels"
         ]
       }
     },
@@ -8029,6 +10044,131 @@
         "summary": "\"Casos anteriores de este cliente\": the customer's other cases",
         "tags": [
           "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/notes": {
+      "post": {
+        "description": "A `note` turn with audience `staff`: the customer never sees it (REST or socket). The assignee analyst, on an open assigned case. Idempotent on `clientMessageId` (= `Idempotency-Key`).",
+        "operationId": "channels_add_note",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTurnResponse"
+                }
+              }
+            },
+            "description": "Replay of an already-added note"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostTurnResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Add an internal note (staff only)",
+        "tags": [
+          "channels"
         ]
       }
     },
@@ -8477,6 +10617,483 @@
         ]
       }
     },
+    "/api/v1/customer/call": {
+      "get": {
+        "operationId": "customer_get_my_call",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCallState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "My call now: the active one, else the latest of my current conversation",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/calls": {
+      "post": {
+        "description": "With no open case a new one opens (channel `phone_inbound`, linked to the previous closed one) and is assigned like a chat (`with_agent`) or waits in the queue (`waiting_agent`); it rings until the assignee answers. With an open case the call joins it (409 `call_in_progress` if it already has one).",
+        "operationId": "customer_start_my_call",
+        "parameters": [
+          {
+            "description": "One key per call the caller means to start: a retry with it replays the call it started (200 + `Idempotent-Replayed: true`).",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "One key per call the caller means to start: a retry with it replays the call it started (200 + `Idempotent-Replayed: true`).",
+              "maxLength": 64,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCallResponse"
+                }
+              }
+            },
+            "description": "Replay of the same Idempotency-Key"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Call the bank: joins the open conversation or opens one (phone_inbound)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/calls/{callId}/answer": {
+      "post": {
+        "description": "`ringing → in_call`; the analyst's first response if the case had none. An inbound call is answered by the bank (409 `invalid_transition`). 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.",
+        "operationId": "customer_answer_my_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Answer the bank's call (outbound)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/calls/{callId}/hangup": {
+      "post": {
+        "operationId": "customer_hang_up_my_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Hang up (an inbound call that still rings is cancelled)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/calls/{callId}/reject": {
+      "post": {
+        "operationId": "customer_reject_my_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Reject the bank's call while it rings",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/calls/{callId}/transcript": {
+      "post": {
+        "operationId": "customer_add_my_call_line",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "callId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CALL-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Callid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallLineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCallLineResponse"
+                }
+              }
+            },
+            "description": "Replay of an already-added line"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCallLineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Add what I said to the call transcript (only while in_call)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
     "/api/v1/customer/conversation": {
       "get": {
         "operationId": "customer_get_conversation",
@@ -8871,6 +11488,132 @@
           }
         },
         "summary": "Seeded customers for the simulator picker (no auth; empty without demo data)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/emails": {
+      "get": {
+        "operationId": "customer_get_my_emails",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerEmailThread"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "The email thread of my current conversation",
+        "tags": [
+          "customer"
+        ]
+      },
+      "post": {
+        "description": "With no open case a new one opens (channel `email`) and is assigned like a chat or waits in the queue; with an open case the email joins it. Idempotent on `clientMessageId` (= `Idempotency-Key`).",
+        "operationId": "customer_send_my_email",
+        "parameters": [
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendEmailResponse"
+                }
+              }
+            },
+            "description": "Replay of an already-sent email"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendEmailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Email the bank: joins the open conversation or opens one (email)",
         "tags": [
           "customer"
         ]

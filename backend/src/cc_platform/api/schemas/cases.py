@@ -11,6 +11,7 @@ from pydantic import Field, StringConstraints, field_validator
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.application.cases.dto import (
     AssignmentView,
+    CallView,
     CaseCapabilitiesView,
     CaseClosureView,
     CaseCustomerView,
@@ -29,6 +30,7 @@ from cc_platform.application.cases.dto import (
 )
 from cc_platform.application.cases.escalations import EscalationResult as EscalationResultView
 from cc_platform.application.cases.priority import PriorityResultView
+from cc_platform.domain.cases.call import CallDirection, CallEndReason, CallState
 from cc_platform.domain.cases.case import MAX_CLOSE_NOTE
 from cc_platform.domain.cases.escalation import MAX_ESCALATION_TEXT, EscalationState
 from cc_platform.domain.cases.turn import MAX_TURN_TEXT
@@ -75,6 +77,65 @@ class CaseRating(ApiModel):
         return cls(score=view.score, comment=view.comment, rated_at=view.rated_at)
 
 
+# ----------------------------------------------------------------------------- calls (slice 12)
+class HoldInterval(ApiModel):
+    started_at: datetime
+    ended_at: datetime | None = Field(description="null while the call is on hold.")
+
+
+class Call(ApiModel):
+    """A simulated phone call (slice 12) as staff see it. Its transcript is the case's
+    `transcript` turns written between `startedAt` and `endedAt`."""
+
+    id: str = Field(description="CALL-…")
+    case_id: str
+    version: int = Field(description="Realtime: apply only when newer than the cached one.")
+    direction: CallDirection
+    state: CallState = Field(description="ringing → in_call ⇄ on_hold → ended.")
+    reason: str | None = Field(description="Why the analyst called (outbound only).")
+    analyst_id: str | None = Field(
+        description="Who is on the line for the bank (outbound: the caller; inbound: who "
+        "answered, null while it rings)."
+    )
+    analyst_name: str | None
+    started_at: datetime = Field(description="When it started ringing.")
+    answered_at: datetime | None
+    ended_at: datetime | None
+    end_reason: CallEndReason | None = Field(
+        description="completed (hung up after an answer) · cancelled (who called hung up "
+        "while it rang) · rejected (the customer rejected an outbound call)."
+    )
+    ended_by_role: ActorRole | None
+    muted: bool = Field(description="The analyst's line is muted.")
+    holds: list[HoldInterval]
+    hold_seconds: int = Field(description="Total time on hold (closed holds).")
+    duration_seconds: int | None = Field(
+        description="Talk time (answer → end, holds included) of an ended, answered call."
+    )
+
+    @classmethod
+    def from_view(cls, view: CallView) -> Call:
+        return cls(
+            id=view.id,
+            case_id=view.case_id,
+            version=view.version,
+            direction=view.direction,
+            state=view.state,
+            reason=view.reason,
+            analyst_id=view.analyst_id,
+            analyst_name=view.analyst_name,
+            started_at=view.started_at,
+            answered_at=view.answered_at,
+            ended_at=view.ended_at,
+            end_reason=view.end_reason,
+            ended_by_role=view.ended_by_role,
+            muted=view.muted,
+            holds=[HoldInterval(started_at=h.started_at, ended_at=h.ended_at) for h in view.holds],
+            hold_seconds=view.hold_seconds,
+            duration_seconds=view.duration_seconds,
+        )
+
+
 # ----------------------------------------------------------------------------- summaries
 class CustomerRef(ApiModel):
     id: str
@@ -114,6 +175,9 @@ class CaseSummary(ApiModel):
     escalated: bool = Field(
         description='Slice 9: an escalation to supervision is open ("Escalado").'
     )
+    active_call_id: str | None = Field(
+        description='Slice 12: the call ringing or connected now ("En llamada"), or null.'
+    )
 
     @classmethod
     def from_view(cls, view: CaseSummaryView) -> CaseSummary:
@@ -140,6 +204,7 @@ class CaseSummary(ApiModel):
             close_reason=view.close_reason,
             rating=CaseRating.from_view(view.rating),
             escalated=view.escalated,
+            active_call_id=view.active_call_id,
         )
 
 
@@ -267,6 +332,18 @@ class CaseCapabilities(ApiModel):
         description="Slice 9: the caller is the assignee analyst, the case is open and has no "
         "open escalation (POST /cases/{caseId}/escalations)."
     )
+    can_call: bool = Field(
+        description="Slice 12: the caller is the assignee analyst, the case is open and has no "
+        "active call (POST /cases/{caseId}/calls)."
+    )
+    can_email: bool = Field(
+        description="Slice 12: the caller is the assignee analyst and the case is open "
+        "(POST /cases/{caseId}/emails)."
+    )
+    can_add_note: bool = Field(
+        description="Slice 12: the caller is the assignee analyst and the case is open "
+        "(POST /cases/{caseId}/notes)."
+    )
 
     @classmethod
     def from_view(cls, view: CaseCapabilitiesView) -> CaseCapabilities:
@@ -277,6 +354,9 @@ class CaseCapabilities(ApiModel):
             can_assign=view.can_assign,
             can_change_priority=view.can_change_priority,
             can_escalate=view.can_escalate,
+            can_call=view.can_call,
+            can_email=view.can_email,
+            can_add_note=view.can_add_note,
         )
 
 
@@ -337,6 +417,9 @@ class CaseDetail(ApiModel):
     escalation: Escalation | None = Field(
         description="Slice 9: the case's latest escalation (any state), or null."
     )
+    active_call: Call | None = Field(
+        description="Slice 12: the call ringing or connected now, or null."
+    )
 
     @classmethod
     def from_view(cls, view: CaseDetailView) -> CaseDetail:
@@ -348,6 +431,7 @@ class CaseDetail(ApiModel):
             capabilities=CaseCapabilities.from_view(view.capabilities),
             previous_case_count=view.previous_case_count,
             escalation=Escalation.from_view(view.escalation) if view.escalation else None,
+            active_call=Call.from_view(view.active_call) if view.active_call else None,
         )
 
 
@@ -402,6 +486,7 @@ class Turn(ApiModel):
     language: Language
     created_at: datetime
     client_message_id: str | None
+    subject: str | None = Field(description="Slice 12: the subject of an `email` turn.")
 
     @classmethod
     def from_view(cls, view: TurnView) -> Turn:
@@ -418,6 +503,7 @@ class Turn(ApiModel):
             language=view.language,
             created_at=view.created_at,
             client_message_id=view.client_message_id,
+            subject=view.subject,
         )
 
 

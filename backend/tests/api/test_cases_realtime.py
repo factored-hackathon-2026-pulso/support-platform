@@ -11,7 +11,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from cc_platform.api.schemas.availability import Availability
-from cc_platform.api.schemas.cases import CaseSummary, Escalation, InboxCounts, Turn
+from cc_platform.api.schemas.cases import Call, CaseSummary, Escalation, InboxCounts, Turn
+from cc_platform.api.schemas.channels import CustomerCall
 from cc_platform.api.schemas.common import ApiModel
 from cc_platform.api.schemas.customer import CustomerConversation, CustomerTurn
 from cc_platform.infrastructure.seed.cases import seed_case_id
@@ -30,6 +31,7 @@ PAYLOAD_SCHEMAS: dict[str, type[ApiModel]] = {
     "availability.updated": Availability,
     "conversation.updated": CustomerConversation,
     "escalation.updated": Escalation,
+    "call.updated": Call,
 }
 
 
@@ -58,6 +60,8 @@ def assert_contract_payloads(envelopes: list[dict[str, Any]], *, customer: bool 
         schema = PAYLOAD_SCHEMAS.get(envelope["type"])
         if envelope["type"] == "turn.created":
             schema = CustomerTurn if customer else Turn
+        if envelope["type"] == "call.updated" and customer:
+            schema = CustomerCall
         assert schema is not None, envelope["type"]
         payload = envelope["data"]["payload"]
         assert schema.model_validate(payload).model_dump(mode="json", by_alias=True) == payload
@@ -116,8 +120,8 @@ def test_customer_message_reaches_the_analyst_inbox_and_case(
     assert turn["payload"]["authorName"] == "Beatriz Salcedo Prieto"
     assert envelopes[1]["data"]["payload"]["unreadCount"] == 4
     assert envelopes[1]["id"] == envelopes[0]["id"]  # same source event, different type
-    assert envelopes[2]["data"]["payload"]["toReply"] == 2
-    assert envelopes[2]["data"]["payload"]["closed"] == 3
+    assert envelopes[2]["data"]["payload"]["toReply"] == 3
+    assert envelopes[2]["data"]["payload"]["closed"] == 5
     assert_contract_payloads(envelopes)
 
 
@@ -225,7 +229,7 @@ def test_close_notice_reaches_the_customer_never_the_reason(
     summary = [e for e in to_analyst if e["type"] == "case.updated"][-1]["data"]["payload"]
     assert (summary["inboxStatus"], summary["closeReason"]) == ("closed", "out_of_scope")
     counts = [e for e in to_analyst if e["type"] == "inbox.counts"][-1]["data"]["payload"]
-    assert (counts["all"], counts["toReply"], counts["closed"]) == (4, 1, 4)
+    assert (counts["all"], counts["toReply"], counts["closed"]) == (5, 2, 6)
     assert_contract_payloads(to_analyst)
 
 
@@ -273,8 +277,8 @@ def test_writing_after_a_close_switches_the_conversation_and_reaches_the_analyst
         (new_id, MARCELA_CASE, "new")
     ]
     counts = [e for e in to_analyst if e["type"] == "inbox.counts"][-1]["data"]["payload"]
-    # 4 open + the 3 drained queued cases + the new one; 101 closed (4 in Cerrados).
-    assert (counts["all"], counts["new"], counts["closed"]) == (8, 6, 4)
+    # 5 open + the 3 drained queued cases + the new one; 101 closed (6 in Cerrados).
+    assert (counts["all"], counts["new"], counts["closed"]) == (9, 6, 6)
     assert not {e["type"] for e in to_analyst} & {"case.opened", "case.queued"}
     assert_contract_payloads(to_analyst)
 

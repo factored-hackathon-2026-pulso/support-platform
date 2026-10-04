@@ -15,6 +15,7 @@ from cc_platform.infrastructure.seed.cases import seed_case_id
 from tests.support import ANALYST, JULIAN, PAULA, SUPERVISOR, TEAM_LEAD, bearer
 
 MARCELA, BEATRIZ, LARISSA, JOAQUIN = (seed_case_id(n) for n in (101, 102, 103, 107))
+NATALIA_CALL, CLAUDIA_CALL, IGNACIO_EMAIL = (seed_case_id(n) for n in (115, 116, 117))
 PATRICIA_REFUND, CLAUDIA, HECTOR, PATRICIA_AGAIN, GABRIELA, PATRICIA_OLD = (
     seed_case_id(n) for n in (104, 105, 106, 108, 109, 110)
 )
@@ -24,7 +25,7 @@ SUMMARY_KEYS = {
     "id", "version", "customer", "channel", "language", "priority", "status", "inboxStatus",
     "openedAt", "slaDueAt", "firstResponseAt", "lastInteractionAt", "preview",
     "previewAuthorRole", "assignedAnalystId", "unreadCount", "lastSequence", "previousCaseId",
-    "closedAt", "closeReason", "rating", "escalated",
+    "closedAt", "closeReason", "rating", "escalated", "activeCallId",
 }  # fmt: skip
 
 
@@ -62,18 +63,26 @@ def test_inbox_lists_the_open_cases_with_counts(
     assert response.status_code == 200
     body = response.json()
     assert body["counts"] == {
-        "all": 5,
+        "all": 6,
         "new": 2,
-        "toReply": 2,
+        "toReply": 3,
         "waiting": 1,
-        "closed": 3,
+        "closed": 5,
         "computedAt": "2026-10-02T14:00:00Z",
     }
-    assert [i["id"] for i in body["items"]] == [PATRICIA_AGAIN, LARISSA, MARCELA, BEATRIZ, JOAQUIN]
-    first = body["items"][0]
+    assert [i["id"] for i in body["items"]] == [
+        IGNACIO_EMAIL,  # slice 12: his email waits since last night (the oldest interaction)
+        PATRICIA_AGAIN,
+        LARISSA,
+        MARCELA,
+        BEATRIZ,
+        JOAQUIN,
+    ]
+    assert (body["items"][0]["channel"], body["items"][0]["inboxStatus"]) == ("email", "to_reply")
+    first = body["items"][1]
     assert set(first) == SUMMARY_KEYS
     assert (first["inboxStatus"], first["previousCaseId"]) == ("new", PATRICIA_REFUND)
-    beatriz = body["items"][3]
+    beatriz = body["items"][4]
     assert (beatriz["firstResponseAt"], beatriz["slaDueAt"]) == (None, "2026-10-02T14:02:00Z")
     assert body["serverTime"] == "2026-10-02T14:00:00Z"
 
@@ -81,19 +90,27 @@ def test_inbox_lists_the_open_cases_with_counts(
 def test_inbox_filters_closed_and_search(client: TestClient, daniela: dict[str, str]) -> None:
     waiting = client.get("/api/v1/cases/inbox?status=waiting", headers=daniela).json()
     assert [i["id"] for i in waiting["items"]] == [JOAQUIN]
-    assert waiting["counts"]["all"] == 5
+    assert waiting["counts"]["all"] == 6
     closed = client.get("/api/v1/cases/inbox?status=closed", headers=daniela).json()
-    assert [i["id"] for i in closed["items"]] == [HECTOR, CLAUDIA, PATRICIA_REFUND]
+    assert [i["id"] for i in closed["items"]] == [
+        HECTOR,
+        CLAUDIA_CALL,
+        CLAUDIA,
+        NATALIA_CALL,
+        PATRICIA_REFUND,
+    ]
     assert [i["closeReason"] for i in closed["items"]] == [
         "out_of_scope",
+        "resolved",
         "customer_unresponsive",
+        "resolved",
         "resolved",
     ]
     assert {i["inboxStatus"] for i in closed["items"]} == {"closed"}
     assert closed["counts"] == waiting["counts"]
     found = client.get("/api/v1/cases/inbox", params={"q": "BEATRIZ"}, headers=daniela).json()
     assert [i["customer"]["displayName"] for i in found["items"]] == ["Beatriz Salcedo Prieto"]
-    assert found["counts"]["closed"] == 3  # q never changes the counters
+    assert found["counts"]["closed"] == 5  # q never changes the counters
     for old_slug in ("live", "en-curso", "bogus"):
         bad = client.get(f"/api/v1/cases/inbox?status={old_slug}", headers=daniela)
         assert (bad.status_code, bad.json()["code"]) == (422, "validation_error")
@@ -107,8 +124,8 @@ def test_closed_window_in_the_api(
     clock.advance(timedelta(days=5, hours=23))  # Patricia's refund closed 7 d 23 h ago
     daniela = bearer(sign_in(ANALYST.email))  # sessions last 8 h
     closed = client.get("/api/v1/cases/inbox?status=closed", headers=daniela).json()
-    assert [i["id"] for i in closed["items"]] == [HECTOR, CLAUDIA]
-    assert closed["counts"]["closed"] == 2
+    assert [i["id"] for i in closed["items"]] == [HECTOR, CLAUDIA_CALL, CLAUDIA]
+    assert closed["counts"]["closed"] == 3  # Natalia's call case left the window too
 
 
 def test_inbox_needs_an_analyst(client: TestClient, sign_in: Callable[[str], str]) -> None:
@@ -131,6 +148,7 @@ def test_case_detail_for_the_assignee(client: TestClient, daniela: dict[str, str
         "capabilities",
         "previousCaseCount",
         "escalation",
+        "activeCall",
     }
     assert detail["customer"] == {
         "id": detail["case"]["customer"]["id"],
@@ -156,6 +174,9 @@ def test_case_detail_for_the_assignee(client: TestClient, daniela: dict[str, str
         "canAssign": False,
         "canChangePriority": True,
         "canEscalate": True,
+        "canCall": True,
+        "canEmail": True,
+        "canAddNote": True,
     }
     portuguese = client.get(f"/api/v1/cases/{LARISSA}", headers=daniela).json()
     assert portuguese["assignment"]["policyRuleId"] == "H1"
@@ -177,6 +198,9 @@ def test_closed_case_detail(client: TestClient, daniela: dict[str, str]) -> None
         "canAssign": False,
         "canChangePriority": False,
         "canEscalate": False,
+        "canCall": False,
+        "canEmail": False,
+        "canAddNote": False,
     }
 
 
@@ -215,7 +239,7 @@ def test_history_lists_the_customers_other_cases(
     assert old == {
         "id": PATRICIA_OLD,
         "status": "closed",
-        "channel": "web_chat",
+        "channel": "chat_web",
         "openedAt": "2026-09-12T14:00:00Z",
         "closedAt": "2026-09-12T14:15:00Z",
         "closeReason": "resolved",
@@ -246,6 +270,9 @@ def test_history_access_is_read_only(
         "canAssign": False,
         "canChangePriority": False,
         "canEscalate": False,
+        "canCall": False,
+        "canEmail": False,
+        "canAddNote": False,
     }
     turns = client.get(f"/api/v1/cases/{PATRICIA_OLD}/turns", headers=daniela).json()
     assert [t["authorName"] for t in turns["items"] if t["authorRole"] == "analyst"] == [
@@ -277,7 +304,7 @@ def test_turn_pages(client: TestClient, daniela: dict[str, str]) -> None:
     assert latest["lastSequence"] == 6
     assert set(latest["items"][0]) == {
         "id", "caseId", "sequence", "kind", "audience", "authorRole", "authorId",
-        "authorName", "text", "language", "createdAt", "clientMessageId",
+        "authorName", "text", "language", "createdAt", "clientMessageId", "subject",
     }  # fmt: skip
     older = client.get(
         f"/api/v1/cases/{BEATRIZ}/turns", params={"cursor": latest["olderCursor"]}, headers=daniela
@@ -410,6 +437,9 @@ def test_close_with_every_reason(client: TestClient, daniela: dict[str, str], re
         "canAssign": False,
         "canChangePriority": False,
         "canEscalate": False,
+        "canCall": False,
+        "canEmail": False,
+        "canAddNote": False,
     }
 
 
@@ -440,9 +470,9 @@ def test_close_then_nothing_more(client: TestClient, daniela: dict[str, str]) ->
     assert (late.status_code, late.json()["code"]) == (409, "case_closed")
     inbox = client.get("/api/v1/cases/inbox", headers=daniela).json()
     assert (inbox["counts"]["all"], inbox["counts"]["toReply"], inbox["counts"]["closed"]) == (
-        4,
-        1,
-        4,
+        5,
+        2,
+        6,
     )
     closed = client.get("/api/v1/cases/inbox?status=closed", headers=daniela).json()
     assert closed["items"][0]["id"] == BEATRIZ  # the most recent close first

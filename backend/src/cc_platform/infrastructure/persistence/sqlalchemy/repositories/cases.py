@@ -13,6 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cc_platform.application.cases.ports import AssigneeLoad, CaseRef, OpenCaseRef, RatingTotals
 from cc_platform.domain.cases.assignment import Assignment
+from cc_platform.domain.cases.call import (
+    Call,
+    CallDirection,
+    CallEndReason,
+    CallState,
+    HoldInterval,
+)
 from cc_platform.domain.cases.case import Case, CaseClosure
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.escalation import Escalation, EscalationState
@@ -33,6 +40,7 @@ from cc_platform.domain.customers.customer import CountryCode, Customer, Custome
 from cc_platform.domain.people.staff import Language
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.errors import ConcurrentUpdateError, ConflictError
+from cc_platform.domain.shared.json import iso_utc
 from cc_platform.infrastructure.persistence.sqlalchemy import tables
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.base import (
     Row,
@@ -95,6 +103,7 @@ class SqlCaseRepository(VersionedRepository[Case]):
             "rated_at": rating.rated_at if rating else None,
             "rating_key": rating.key if rating else None,
             "open_escalation_id": aggregate.open_escalation_id,
+            "active_call_id": aggregate.active_call_id,
         }
 
     def _from_row(self, row: Row) -> Case:
@@ -143,6 +152,7 @@ class SqlCaseRepository(VersionedRepository[Case]):
             closure=closure,
             rating=rating,
             open_escalation_id=row["open_escalation_id"],
+            active_call_id=row["active_call_id"],
         )
 
     async def _list(self, *criteria: Any, order: tuple[Any, ...] = ()) -> list[Case]:
@@ -373,6 +383,100 @@ class SqlEscalationRepository(VersionedRepository[Escalation]):
         )
 
 
+# ----------------------------------------------------------------------------- calls
+def holds_to_json(holds: tuple[HoldInterval, ...]) -> list[dict[str, str | None]]:
+    return [
+        {
+            "started_at": iso_utc(hold.started_at),
+            "ended_at": iso_utc(hold.ended_at) if hold.ended_at else None,
+        }
+        for hold in holds
+    ]
+
+
+def holds_from_json(raw: list[dict[str, str | None]]) -> tuple[HoldInterval, ...]:
+    holds: list[HoldInterval] = []
+    for item in raw:
+        started, ended = item["started_at"], item.get("ended_at")
+        if started is None:  # pragma: no cover - written by ``holds_to_json``
+            continue
+        holds.append(
+            HoldInterval(
+                started_at=datetime.fromisoformat(started),
+                ended_at=datetime.fromisoformat(ended) if ended else None,
+            )
+        )
+    return tuple(holds)
+
+
+class SqlCallRepository(VersionedRepository[Call]):
+    table = tables.calls
+    #: A duplicate ``creation_key`` = the same request racing itself: retry and replay.
+    insert_race_is_retryable = True
+
+    def _key(self, aggregate: Call) -> str:
+        return aggregate.id
+
+    def _to_row(self, aggregate: Call) -> dict[str, Any]:
+        return {
+            "id": aggregate.id,
+            "case_id": aggregate.case_id,
+            "customer_id": aggregate.customer_id,
+            "direction": aggregate.direction.value,
+            "state": aggregate.state.value,
+            "reason": aggregate.reason,
+            "analyst_id": aggregate.analyst_id,
+            "started_at": aggregate.started_at,
+            "answered_at": aggregate.answered_at,
+            "ended_at": aggregate.ended_at,
+            "end_reason": aggregate.end_reason.value if aggregate.end_reason else None,
+            "ended_by_role": aggregate.ended_by_role.value if aggregate.ended_by_role else None,
+            "muted": aggregate.muted,
+            "holds": holds_to_json(aggregate.holds),
+            "creation_key": aggregate.creation_key,
+        }
+
+    def _from_row(self, row: Row) -> Call:
+        return Call(
+            id=row["id"],
+            case_id=row["case_id"],
+            customer_id=row["customer_id"],
+            direction=CallDirection(row["direction"]),
+            started_at=row["started_at"],
+            state=CallState(row["state"]),
+            reason=row["reason"],
+            analyst_id=row["analyst_id"],
+            answered_at=row["answered_at"],
+            ended_at=row["ended_at"],
+            end_reason=CallEndReason(row["end_reason"]) if row["end_reason"] else None,
+            ended_by_role=ActorRole(row["ended_by_role"]) if row["ended_by_role"] else None,
+            muted=bool(row["muted"]),
+            holds=holds_from_json(row["holds"]),
+            creation_key=row["creation_key"],
+        )
+
+    async def get_by_creation_key(self, key: str) -> Call | None:
+        return await self._get_where(self.table.c.creation_key == key)
+
+    async def list_for_case(self, case_id: str) -> list[Call]:
+        c = self.table.c
+        result = await self._session.execute(
+            select(self.table)
+            .where(c.case_id == case_id)
+            .order_by(c.started_at.desc(), c.id.desc())
+        )
+        found: list[Call] = []
+        for row in result.mappings():
+            call = self._load(row)
+            if call is not None:
+                found.append(call)
+        return found
+
+    async def latest_for_case(self, case_id: str) -> Call | None:
+        found = await self.list_for_case(case_id)
+        return found[0] if found else None
+
+
 class SqlCustomerCaseSlotRepository(VersionedRepository[CustomerCaseSlot]):
     table = tables.customer_case_slots
     insert_race_is_retryable = True
@@ -423,6 +527,7 @@ class SqlTurnRepository(_AppendOnly):
                 "language": turn.language.value,
                 "created_at": turn.created_at,
                 "client_message_id": turn.client_message_id,
+                "subject": turn.subject,
             },
             race=True,
         )
@@ -441,7 +546,19 @@ class SqlTurnRepository(_AppendOnly):
             language=Language(row["language"]),
             created_at=row["created_at"],
             client_message_id=row["client_message_id"],
+            subject=row["subject"],
         )
+
+    async def list_of_kind(self, case_id: str, kind: TurnKind, *, limit: int) -> list[Turn]:
+        c = tables.turns.c
+        statement = (
+            select(tables.turns)
+            .where(c.case_id == case_id, c.kind == kind.value)
+            .order_by(c.sequence)
+            .limit(limit)
+        )
+        rows = (await self._session.execute(statement)).mappings().all()
+        return [self._from_row(row) for row in rows]
 
     async def page(
         self,

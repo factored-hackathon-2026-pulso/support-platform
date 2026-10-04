@@ -6,12 +6,16 @@
  */
 import { api, unwrap } from '@/lib/api'
 import type {
+  CallList,
+  CallResponse,
   CaseDetail,
   CaseHistory,
   CasePriorityResult,
   CaseSummary,
   ChangePriorityRequest,
   CloseCaseRequest,
+  EmailReplyRequest,
+  EmailReplyResponse,
   EscalationResult,
   PostAnalystTurnRequest,
   PostTurnResponse,
@@ -24,6 +28,8 @@ export const conversationKeys = {
   detail: (caseId: string) => ['conversation', caseId, 'detail'] as const,
   turns: (caseId: string) => ['conversation', caseId, 'turns'] as const,
   history: (caseId: string) => ['conversation', caseId, 'history'] as const,
+  /** Slice 12: the case's calls, most recent first. */
+  calls: (caseId: string) => ['conversation', caseId, 'calls'] as const,
 }
 
 export const conversationMutationKeys = {
@@ -35,6 +41,10 @@ export const conversationMutationKeys = {
   withdrawEscalation: (caseId: string) => ['conversation', caseId, 'escalation-withdraw'] as const,
   acknowledgeEscalation: (caseId: string) =>
     ['conversation', caseId, 'escalation-acknowledge'] as const,
+  call: (caseId: string) => ['conversation', caseId, 'call'] as const,
+  callLine: (caseId: string) => ['conversation', caseId, 'call-line'] as const,
+  note: (caseId: string) => ['conversation', caseId, 'note'] as const,
+  email: (caseId: string) => ['conversation', caseId, 'email'] as const,
 }
 
 /** GET /cases/{caseId}: case, customer, assignment ("Cómo llegó a ti"), closure, capabilities. */
@@ -154,6 +164,108 @@ export async function acknowledgeEscalation(
   return unwrap(
     api.POST('/api/v1/cases/{caseId}/escalations/{escalationId}/acknowledge', {
       params: { path: { caseId, escalationId } },
+    }),
+  )
+}
+
+// ── Slice 12: calls, internal notes and email replies (docs/platform/api/slice-12-channels.md) ──
+
+/** GET /cases/{caseId}/calls: the case's calls, most recent first. */
+export async function fetchCalls(caseId: string, signal?: AbortSignal): Promise<CallList> {
+  return unwrap(api.GET('/api/v1/cases/{caseId}/calls', { params: { path: { caseId } }, signal }))
+}
+
+/**
+ * POST /cases/{caseId}/calls: the assignee calls the customer (outbound) with a reason.
+ * `idempotencyKey`: one per open dialog, so a retry replays the call it started.
+ */
+export async function startCall(
+  caseId: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<CallResponse> {
+  return unwrap(
+    api.POST('/api/v1/cases/{caseId}/calls', {
+      params: { path: { caseId }, header: { 'Idempotency-Key': idempotencyKey } },
+      body: { reason },
+    }),
+  )
+}
+
+/** The call commands of the analyst on the line (answer, hold, resume, hang up). */
+export type CallCommand = 'answer' | 'hold' | 'resume' | 'hangup'
+
+export async function commandCall(
+  caseId: string,
+  callId: string,
+  command: CallCommand,
+): Promise<CallResponse> {
+  const params = { path: { caseId, callId } }
+  switch (command) {
+    case 'answer':
+      return unwrap(api.POST('/api/v1/cases/{caseId}/calls/{callId}/answer', { params }))
+    case 'hold':
+      return unwrap(api.POST('/api/v1/cases/{caseId}/calls/{callId}/hold', { params }))
+    case 'resume':
+      return unwrap(api.POST('/api/v1/cases/{caseId}/calls/{callId}/resume', { params }))
+    case 'hangup':
+      return unwrap(api.POST('/api/v1/cases/{caseId}/calls/{callId}/hangup', { params }))
+  }
+}
+
+/** POST …/mute: the analyst's microphone flag (the same value is a no-op). */
+export async function muteCall(
+  caseId: string,
+  callId: string,
+  muted: boolean,
+): Promise<CallResponse> {
+  return unwrap(
+    api.POST('/api/v1/cases/{caseId}/calls/{callId}/mute', {
+      params: { path: { caseId, callId } },
+      body: { muted },
+    }),
+  )
+}
+
+/** POST …/transcript: what the analyst says on the line (only `in_call`). */
+export async function postCallLine(
+  caseId: string,
+  callId: string,
+  body: { text: string; clientMessageId: string },
+): Promise<PostTurnResponse> {
+  return unwrap(
+    api.POST('/api/v1/cases/{caseId}/calls/{callId}/transcript', {
+      params: {
+        path: { caseId, callId },
+        header: { 'Idempotency-Key': body.clientMessageId },
+      },
+      body,
+    }),
+  )
+}
+
+/** POST /cases/{caseId}/notes: a staff-only note (never reaches the customer). */
+export async function postNote(
+  caseId: string,
+  body: { text: string; clientMessageId: string },
+): Promise<PostTurnResponse> {
+  return unwrap(
+    api.POST('/api/v1/cases/{caseId}/notes', {
+      params: { path: { caseId }, header: { 'Idempotency-Key': body.clientMessageId } },
+      body,
+    }),
+  )
+}
+
+/** POST /cases/{caseId}/emails: the analyst's reply; the platform adds greeting and signature. */
+export async function replyByEmail(
+  caseId: string,
+  body: EmailReplyRequest,
+): Promise<EmailReplyResponse> {
+  return unwrap(
+    api.POST('/api/v1/cases/{caseId}/emails', {
+      params: { path: { caseId }, header: { 'Idempotency-Key': body.clientMessageId } },
+      body,
     }),
   )
 }

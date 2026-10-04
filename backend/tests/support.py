@@ -311,7 +311,7 @@ def actor_for(seed: StaffSeed) -> Actor:
     )
 
 
-def customer_actor(number: int, *, channel: CaseChannel = CaseChannel.APP_CHAT) -> CustomerActor:
+def customer_actor(number: int, *, channel: CaseChannel = CaseChannel.CHAT_APP) -> CustomerActor:
     seed = next(s for s in DEMO_CUSTOMERS if s.number == number)
     return CustomerActor(
         customer_id=seed.id,

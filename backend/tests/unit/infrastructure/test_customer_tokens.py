@@ -20,7 +20,7 @@ NOW = datetime(2026, 10, 2, 14, tzinfo=UTC)
 CLAIMS = CustomerSessionClaims(
     session_id="CSN-" + "0" * 25 + "1",
     customer_id="CUS-" + "0" * 22 + "2001",
-    channel=CaseChannel.WEB_CHAT,
+    channel=CaseChannel.CHAT_WEB,
     issued_at=NOW,
     expires_at=NOW + timedelta(hours=8),
 )

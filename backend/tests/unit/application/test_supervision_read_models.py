@@ -87,11 +87,11 @@ async def test_seeded_team_matches_the_contract() -> None:
         AvailabilityStatus.PAUSED,
     )
     assert daniela.availability_since == now - timedelta(minutes=12)
-    assert (daniela.counts.open, daniela.counts.new, daniela.counts.to_reply) == (5, 2, 2)
+    assert (daniela.counts.open, daniela.counts.new, daniela.counts.to_reply) == (6, 2, 3)
     assert daniela.counts.waiting == 1
-    assert daniela.oldest_waiting_since == now - timedelta(minutes=14)  # 108
+    assert daniela.oldest_waiting_since == now - timedelta(hours=9)  # 117, Ignacio's email
     assert [c.id for c in daniela.open_cases] == [
-        seed_case_id(n) for n in (108, 103, 101, 102, 107)
+        seed_case_id(n) for n in (117, 108, 103, 101, 102, 107)
     ]  # inbox order: new/to_reply by oldest interaction, then waiting
     assert [lang.value for lang in daniela.languages] == ["es", "pt"]
     assert [r.value for r in daniela.roles] == ["analyst"]
@@ -125,8 +125,9 @@ async def test_seeded_team_matches_the_contract() -> None:
     )
     # offline: Daniela, Felipe and Tatiana (part 4)
     assert (andes.activity.busy, andes.activity.paused, andes.activity.offline) == (0, 1, 3)
-    # 108, 102 and 103 (first response due within 5 min) and 113 (overdue).
-    assert (andes.open_cases, andes.at_risk_cases) == (7, 4)
+    # 108, 102 and 103 (first response due within 5 min) and 113 (overdue); Ignacio's 117 had
+    # its first response.
+    assert (andes.open_cases, andes.at_risk_cases) == (8, 4)
     assert (pacifico.id, pacifico.analyst_count, pacifico.activity.offline) == (
         seed_team_id(2),
         3,
@@ -229,4 +230,4 @@ async def test_both_queues_are_listed_even_when_empty() -> None:
     ]
     assert overview.counts.total == 0
     team = await container.use_cases.cases.team_overview.execute()
-    assert row(team, 1).counts.open == 8
+    assert row(team, 1).counts.open == 9

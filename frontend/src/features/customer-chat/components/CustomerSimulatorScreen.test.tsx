@@ -23,6 +23,7 @@ vi.mock('../api', async (importOriginal) => {
   return {
     ...actual,
     listDemoCustomers: vi.fn<typeof actual.listDemoCustomers>(),
+    fetchCustomerCall: vi.fn<typeof actual.fetchCustomerCall>(),
     createCustomerSession: vi.fn<typeof actual.createCustomerSession>(),
     fetchCustomerConversation: vi.fn<typeof actual.fetchCustomerConversation>(),
     postCustomerTurn: vi.fn<typeof actual.postCustomerTurn>(),
@@ -36,7 +37,7 @@ const token = () => fakeCustomerToken(SIM_CUSTOMER_ID)
 function renderSimulator() {
   const customerSockets = createFakeSocketFactory()
   const view = renderWithProviders(
-    <CustomerSimulatorScreen createSocket={customerSockets.factory} />,
+    <CustomerSimulatorScreen createSocket={customerSockets.factory} channel="chat" />,
     {
       route: '/cliente',
     },
@@ -45,6 +46,7 @@ function renderSimulator() {
 }
 
 beforeEach(() => {
+  vi.mocked(api.fetchCustomerCall).mockResolvedValue({ call: null })
   vi.mocked(api.listDemoCustomers).mockResolvedValue({ items: demoCustomers })
   vi.mocked(api.fetchCustomerConversation).mockResolvedValue({
     conversation: null,
@@ -65,7 +67,7 @@ describe('CustomerSimulatorScreen · picker', () => {
         locale: 'pt-BR',
         language: 'pt',
       },
-      channel: 'app_chat',
+      channel: 'chat_app',
     })
     const { user } = renderSimulator()
 
@@ -86,6 +88,11 @@ describe('CustomerSimulatorScreen · picker', () => {
 
     await user.click(rafael)
     expect(api.createCustomerSession).toHaveBeenCalledWith({ customerId: SIM_CUSTOMER_ID })
+    // Slice 12: then how the customer reaches the bank.
+    expect(
+      await screen.findByRole('heading', { name: '¿Cómo se comunica Rafael con el banco?' }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^Chat/ }))
     expect(await screen.findByText('Suporte')).toBeInTheDocument()
     expect(customerSessionToken.get()).toBe(issued)
     // The staff session is untouched.
@@ -198,8 +205,8 @@ describe('CustomerSimulatorScreen · chat', () => {
       )
     })
     expect(await screen.findByText('Olá, Rafael! Vou verificar.')).toBeInTheDocument()
-    expect(screen.getByText('Daniela · LATAM Bank')).toBeInTheDocument()
-    expect(screen.getByText('Você está falando com Daniela · LATAM Bank')).toBeInTheDocument()
+    expect(screen.getByText('Daniela, de LATAM Bank')).toBeInTheDocument()
+    expect(screen.getByText('Você está falando com Daniela, do LATAM Bank')).toBeInTheDocument()
     expect(screen.getByText('Recebemos sua mensagem.')).toBeInTheDocument()
     // POST response + echo = one bubble; the chip already sent is not offered again.
     expect(screen.getAllByText('Olá, não reconheço uma compra no meu cartão')).toHaveLength(1)
@@ -236,7 +243,7 @@ describe('CustomerSimulatorScreen · chat', () => {
       pastConversationCount: 0,
     })
     const { user } = renderSimulator()
-    expect(await screen.findByText('Te atiende Daniela · LATAM Bank')).toBeInTheDocument()
+    expect(await screen.findByText('Te atiende Daniela, de LATAM Bank')).toBeInTheDocument()
     await user.click(
       await screen.findByRole('button', { name: 'Fue a mediados de mes, unos $48.300' }),
     )
@@ -424,8 +431,8 @@ describe('CustomerSimulatorScreen · chat', () => {
     // The button is gone: the focus moves to the first loaded block, not to <body>.
     expect(blocks[0]).toHaveFocus()
     expect(blocks.map((block) => block.textContent)).toEqual([
-      'Conversación del 10 feb 2026 · Terminada · Te atendió JuliánGracias, ya quedó.',
-      'Conversación del 4 mar 2026 · Terminada · Te atendió DanielaHola, Claudia. Soy Daniela, de LATAM Bank. ¿Me cuenta qué cargo es y de qué fecha?',
+      'Conversación del 10 feb 2026Te atendió JuliánGracias, ya quedó.',
+      'Conversación del 4 mar 2026Te atendió DanielaHola, Claudia. Soy Daniela, de LATAM Bank. ¿Me cuenta qué cargo es y de qué fecha?',
     ])
     // Past conversations sit outside the live log.
     expect(screen.getByRole('log')).not.toContainElement(past)
@@ -499,7 +506,7 @@ describe('CustomerSimulatorScreen · chat', () => {
     expect(await screen.findByText('Procurando uma pessoa da equipe…')).toBeInTheDocument()
     const past = screen.getByRole('region', { name: 'Conversas anteriores' })
     const block = within(past).getByRole('button', { expanded: true })
-    expect(block).toHaveTextContent('Encerrada · Atendida por Daniela')
+    expect(block).toHaveTextContent('Atendida por Daniela')
     expect(within(past).getByText(/A conversa foi encerrada/)).toBeInTheDocument()
     const log = screen.getByRole('log', { name: 'Conversa com o suporte' })
     expect(within(log).getByText('Oi de novo')).toBeInTheDocument()

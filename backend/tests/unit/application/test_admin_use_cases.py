@@ -348,9 +348,9 @@ async def test_update_rules_in_order(container: Container, valeria: Actor) -> No
     with pytest.raises(StaffHasOpenCasesError) as analyst:
         await update.execute(valeria, DANIELA_ID, UpdateUserCommand(version, roles=(S,)))
     assert analyst.value.details["blockReason"] == "remove_analyst"
-    assert analyst.value.details["openCases"] == 5
+    assert analyst.value.details["openCases"] == 6
     assert sorted(analyst.value.details["caseIds"]) == [  # type: ignore[arg-type]
-        seed_case_id(n) for n in (101, 102, 103, 107, 108)
+        seed_case_id(n) for n in (101, 102, 103, 107, 108, 117)
     ]
     with pytest.raises(StaffHasOpenCasesError) as language:
         await update.execute(valeria, DANIELA_ID, UpdateUserCommand(version, languages=(ES,)))
@@ -530,7 +530,7 @@ async def test_deactivate_rules(container: Container, valeria: Actor) -> None:
     with pytest.raises(StaffHasOpenCasesError) as blocked:
         await deactivate.execute(valeria, DANIELA_ID, daniela.version)
     assert blocked.value.details["blockReason"] == "deactivate"
-    assert blocked.value.details["openCases"] == 5
+    assert blocked.value.details["openCases"] == 6
     andres = await user(container, ANDRES_ID, valeria)
     again = await deactivate.execute(valeria, ANDRES_ID, andres.version)
     assert (again.changed, again.revoked_sessions, again.user.version) == (
@@ -860,7 +860,7 @@ async def test_directory_filters_and_counts(container: Container, valeria: Actor
 
 async def test_per_user_fields(container: Container, valeria: Actor) -> None:
     daniela = await user(container, DANIELA_ID, valeria)
-    assert (daniela.open_cases.total, daniela.open_cases.es, daniela.open_cases.pt) == (5, 4, 1)
+    assert (daniela.open_cases.total, daniela.open_cases.es, daniela.open_cases.pt) == (6, 5, 1)
     assert daniela.availability is AvailabilityStatus.PAUSED
     assert daniela.guards.is_self is False
     lucia = await user(container, seed_staff_id(5), valeria)

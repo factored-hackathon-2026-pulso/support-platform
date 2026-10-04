@@ -8,6 +8,11 @@ import { createApiClient, unwrap } from '@/lib/api'
 import { customerSessionToken } from '@/lib/session-token'
 import type {
   CreateCustomerSessionRequest,
+  CustomerCallLineResponse,
+  CustomerCallResponse,
+  CustomerCallState,
+  SendEmailRequest,
+  SendEmailResponse,
   CustomerConversationDetail,
   CustomerConversationList,
   CustomerConversationResponse,
@@ -27,12 +32,16 @@ export const customerChatKeys = {
   pastConversations: (customerId: string) => ['customer-chat', customerId, 'past'] as const,
   pastConversation: (customerId: string, caseId: string) =>
     ['customer-chat', customerId, 'past', caseId] as const,
+  /** Slice 12: the current (or latest) call of the signed-in customer. */
+  call: (customerId: string) => ['customer-chat', customerId, 'call'] as const,
 }
 
 export const customerChatMutationKeys = {
   start: ['customer-chat', 'start'] as const,
   send: (customerId: string) => ['customer-chat', customerId, 'send'] as const,
   rate: (customerId: string) => ['customer-chat', customerId, 'rate'] as const,
+  call: (customerId: string) => ['customer-chat', customerId, 'call'] as const,
+  email: (customerId: string) => ['customer-chat', customerId, 'email'] as const,
 }
 
 /** Bearer = customer token; a 401 for it clears it (back to the picker). */
@@ -104,6 +113,66 @@ export async function rateConversation(
   return unwrap(
     customerApi.POST('/api/v1/customer/conversations/{caseId}/rating', {
       params: { path: { caseId }, header: { 'Idempotency-Key': idempotencyKey } },
+      body,
+    }),
+  )
+}
+
+// ── Slice 12: calls and emails (docs/platform/api/slice-12-channels.md §3.2) ──
+
+/** GET /customer/call: the active call of the current conversation, else its latest one. */
+export async function fetchCustomerCall(signal?: AbortSignal): Promise<CustomerCallState> {
+  return unwrap(customerApi.GET('/api/v1/customer/call', { signal }))
+}
+
+/**
+ * POST /customer/calls: the customer calls the bank. Joins the open case or opens one
+ * (`phone_inbound`). `idempotencyKey`: a retry replays the same call.
+ */
+export async function startCustomerCall(idempotencyKey: string): Promise<CustomerCallResponse> {
+  return unwrap(
+    customerApi.POST('/api/v1/customer/calls', {
+      params: { header: { 'Idempotency-Key': idempotencyKey } },
+    }),
+  )
+}
+
+export type CustomerCallCommand = 'answer' | 'reject' | 'hangup'
+
+/** "Contestar" / "Rechazar" a call of the bank; "Colgar" any active call. */
+export async function commandCustomerCall(
+  callId: string,
+  command: CustomerCallCommand,
+): Promise<CustomerCallResponse> {
+  const params = { path: { callId } }
+  switch (command) {
+    case 'answer':
+      return unwrap(customerApi.POST('/api/v1/customer/calls/{callId}/answer', { params }))
+    case 'reject':
+      return unwrap(customerApi.POST('/api/v1/customer/calls/{callId}/reject', { params }))
+    case 'hangup':
+      return unwrap(customerApi.POST('/api/v1/customer/calls/{callId}/hangup', { params }))
+  }
+}
+
+/** POST /customer/calls/{callId}/transcript: what the customer says (only `in_call`). */
+export async function postCustomerCallLine(
+  callId: string,
+  body: { text: string; clientMessageId: string },
+): Promise<CustomerCallLineResponse> {
+  return unwrap(
+    customerApi.POST('/api/v1/customer/calls/{callId}/transcript', {
+      params: { path: { callId }, header: { 'Idempotency-Key': body.clientMessageId } },
+      body,
+    }),
+  )
+}
+
+/** POST /customer/emails: joins the open case or opens one (`email`). */
+export async function sendCustomerEmail(body: SendEmailRequest): Promise<SendEmailResponse> {
+  return unwrap(
+    customerApi.POST('/api/v1/customer/emails', {
+      params: { header: { 'Idempotency-Key': body.clientMessageId } },
       body,
     }),
   )

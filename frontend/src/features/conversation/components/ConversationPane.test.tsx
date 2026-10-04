@@ -83,10 +83,11 @@ describe('ConversationPane · chat', () => {
       await screen.findByRole('heading', { name: 'Marcela Quintana Pardo' }),
     ).toBeInTheDocument()
     expect(screen.getByText(CASE_ID)).toBeInTheDocument()
-    expect(
-      // Slice 8: the priority left the meta line (it is a menu now).
-      screen.getByText(/· Colombia · Barranquilla · chat web$/),
-    ).toBeInTheDocument()
+    // Slice 8: the priority left the meta line (it is a menu now); slice 12: facts, no " · ".
+    const facts = screen.getByRole('list', { name: 'Datos del caso' })
+    expect(facts).toHaveTextContent('Ciudad: Barranquilla, Colombia')
+    expect(within(facts).getByText('Canal: Chat web')).toHaveClass('sr-only')
+    expect(facts).not.toHaveTextContent('·')
     expect(screen.queryByText('Datos de ejemplo')).not.toBeInTheDocument()
     // Short facts, never a sentence (slice 6 UI rule).
     const arrival = screen.getByText('Cómo llegó a ti').parentElement!
@@ -370,13 +371,14 @@ describe('ConversationPane · accessibility', () => {
     expect(log).not.toContainElement(button)
   })
 
-  it('shows the meta line whole, with "en portugués", and a short case number', async () => {
+  it('shows the facts whole, with "Portugués", and a short case number', async () => {
     const detail = makeCaseDetail()
     detail.case = { ...detail.case, language: 'pt' }
     setup(detail)
     const header = (await screen.findByRole('heading', { name: 'Marcela Quintana Pardo' }))
       .parentElement!
-    expect(header).toHaveTextContent(/Colombia · Barranquilla · chat web · en portugués/)
+    expect(header).toHaveTextContent(/Barranquilla, Colombia/)
+    expect(header).toHaveTextContent('Idioma: Portugués')
     expect(within(header).getByText('CASE-…0101')).toBeInTheDocument()
     expect(within(header).getByTitle(CASE_ID)).toBeInTheDocument()
     expect(
@@ -489,6 +491,9 @@ describe('ConversationPane · states', () => {
           canAssign: false,
           canChangePriority: false,
           canEscalate: false,
+          canCall: false,
+          canEmail: false,
+          canAddNote: false,
         },
         assignment: { ...base.assignment!, analystId: 'STF-2', analystName: 'Julián Ortega' },
       }),
@@ -515,6 +520,9 @@ describe('ConversationPane · states', () => {
           canAssign: false,
           canChangePriority: false,
           canEscalate: false,
+          canCall: false,
+          canEmail: false,
+          canAddNote: false,
         },
         assignment: {
           ...base.assignment!,

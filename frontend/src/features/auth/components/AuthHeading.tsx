@@ -4,7 +4,7 @@ import { DocumentTitle } from '@/components/ui'
 export interface AuthHeadingProps {
   title: string
   subtitle?: ReactNode
-  /** Line above the title ("correo · No soy yo"). */
+  /** Line above the title (the email and "No soy yo"). */
   eyebrow?: ReactNode
 }
 

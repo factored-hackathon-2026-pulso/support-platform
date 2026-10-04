@@ -39,7 +39,7 @@ export function RouteErrorBoundary() {
   if (import.meta.env.DEV && !notFound) console.error(error)
 
   const detail = isRouteErrorResponse(error)
-    ? `${error.status} · ${error.statusText}`
+    ? `Error ${error.status}: ${error.statusText}`
     : error instanceof Error
       ? error.message
       : null

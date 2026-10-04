@@ -22,7 +22,9 @@ import {
   CASE_PRIORITY,
   CASE_STATUS,
   PRIORITY_OPTIONS,
+  caseChannel,
   channelFact,
+  channelLabel,
   countryName,
   formatSla,
   priorityFact,
@@ -950,8 +952,8 @@ export function escalationCaseFacts(
     { key: 'language', icon: 'languages', text: languageWord(summary.language), label: 'Idioma' },
     {
       key: 'channel',
-      icon: summary.channel === 'app_chat' ? 'smartphone' : 'globe',
-      text: channelTooltip(summary),
+      icon: caseChannel(summary.channel).icon,
+      text: channelLabel(summary.channel),
       label: 'Canal',
     },
     {
@@ -1148,11 +1150,6 @@ export const RECENT_RATING_HEADER = {
   title: 'Promedio de calificaciones de clientes, escala 1 a 4, últimos 7 días',
   empty: 'Sin calificaciones en los últimos 7 días',
 } as const
-
-/** The channel word for the "Colas" row's icon tooltip ("Chat en la app" / "Chat web"). */
-export function channelTooltip(summary: Pick<CaseSummary, 'channel'>): string {
-  return summary.channel === 'app_chat' ? 'Chat en la app' : 'Chat web'
-}
 
 /** Teams by id → name (the analyst sheet's team fact). */
 export function teamNames(teams: readonly TeamSummary[]): Record<string, string> {

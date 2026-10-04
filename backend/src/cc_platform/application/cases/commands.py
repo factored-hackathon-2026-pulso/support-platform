@@ -27,6 +27,7 @@ from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFac
 from cc_platform.application.security import Actor
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.errors import (
+    CallInProgressError,
     CaseClosedError,
     IdempotencyConflictError,
     invalid_case_transition,
@@ -155,6 +156,8 @@ class CloseCase:
                 raise CaseClosedError()
             if case.status not in CLOSABLE_STATUSES:
                 raise invalid_case_transition(case.status, CaseStatus.CLOSED.value)
+            if case.active_call_id is not None:  # slice 12: hang up first
+                raise CallInProgressError(case.active_call_id)
 
             now = self.clock.now()
             notice = case.append_turn(

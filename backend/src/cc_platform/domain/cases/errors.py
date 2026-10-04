@@ -72,6 +72,27 @@ class EscalationNotOpenError(ConflictError):
         super().__init__(None, currentState=current_state)
 
 
+class CallInProgressError(ConflictError):
+    """The case already has an active call: one call at a time, and a case is not closed
+    while its call is still ringing or connected (409, slice 12)."""
+
+    code = "call_in_progress"
+    default_message = "Este caso tiene una llamada en curso."
+
+    def __init__(self, call_id: str) -> None:
+        super().__init__(None, callId=call_id)
+
+
+class CallNotActiveError(ConflictError):
+    """The call already ended: nothing more happens on it (409, slice 12)."""
+
+    code = "call_not_active"
+    default_message = "Esta llamada ya terminó."
+
+    def __init__(self, current_state: str) -> None:
+        super().__init__(None, currentState=current_state)
+
+
 def invalid_case_transition(current: CaseStatus, target: str) -> InvalidTransitionError:
     return InvalidTransitionError(
         f"Un caso en estado {current.value} no puede pasar a {target}.",

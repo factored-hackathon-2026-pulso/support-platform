@@ -43,6 +43,9 @@ class ProblemCode(StrEnum):
     # escalations (slice 9)
     ESCALATION_OPEN = "escalation_open"
     ESCALATION_NOT_OPEN = "escalation_not_open"
+    # calls (slice 12)
+    CALL_IN_PROGRESS = "call_in_progress"
+    CALL_NOT_ACTIVE = "call_not_active"
     # supervision (manual assignment)
     ANALYST_NOT_ELIGIBLE = "analyst_not_eligible"
     LANGUAGE_MISMATCH = "language_mismatch"
@@ -119,6 +122,10 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
     P.ESCALATION_NOT_OPEN: ProblemSpec(
         409, "Escalation not open", "Este escalamiento ya no está abierto."
     ),
+    P.CALL_IN_PROGRESS: ProblemSpec(
+        409, "Call in progress", "Este caso tiene una llamada en curso."
+    ),
+    P.CALL_NOT_ACTIVE: ProblemSpec(409, "Call not active", "Esta llamada ya terminó."),
     P.ANALYST_NOT_ELIGIBLE: ProblemSpec(
         422, "Analyst not eligible", "Esa persona no puede recibir casos."
     ),

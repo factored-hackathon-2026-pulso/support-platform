@@ -57,6 +57,9 @@ function ownCaseDetail(): CaseDetail {
       canAssign: true,
       canChangePriority: true,
       canEscalate: false,
+      canCall: false,
+      canEmail: false,
+      canAddNote: false,
     },
   })
   detail.case = {
@@ -85,6 +88,9 @@ function queuedDetail(): CaseDetail {
         canAssign: true,
         canChangePriority: true,
         canEscalate: false,
+        canCall: false,
+        canEmail: false,
+        canAddNote: false,
       },
     }),
     case: queuedRosa,
@@ -152,7 +158,7 @@ describe('supervisor case view', () => {
         name: 'Conversación de Marcela Quintana Pardo (supervisión)',
       }),
     ).toBeInTheDocument()
-    expect(document.title).toBe('Caso CASE-…0101 · Supervisión · LATAM Bank Soporte')
+    expect(document.title).toBe('Caso CASE-…0101 en supervisión · LATAM Bank Soporte')
     expect(screen.getByText('Solo lectura')).toBeInTheDocument()
     await screen.findByRole('list', { name: 'Mensajes' })
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()

@@ -14,6 +14,7 @@ export {
   registerCasesRealtime,
 } from './realtime'
 export {
+  CASE_CHANNEL,
   CASE_PRIORITY,
   CASE_STATUS,
   CLOSE_REASONS,
@@ -29,8 +30,8 @@ export {
   casePriority,
   caseStatus,
   channelFact,
+  caseChannel,
   channelLabel,
-  channelPhrase,
   closeReasonLabel,
   closeReasonOption,
   compareByUrgency,
@@ -57,6 +58,7 @@ export {
   urgencyGroup,
 } from './model'
 export type {
+  CaseChannelConfig,
   CasePriorityConfig,
   CaseStatusConfig,
   CaseStatusKey,

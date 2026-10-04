@@ -184,6 +184,7 @@ async def case_detail(uow: UnitOfWork, case: Case, viewer: Actor) -> CaseDetailV
         capabilities=capabilities_for(case, viewer),
         previous_case_count=len(others),
         escalation=await reader.latest_escalation(case),
+        active_call=await reader.active_call(case),
     )
 
 

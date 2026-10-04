@@ -24,6 +24,12 @@ schemas the REST endpoints return), so socket and REST cannot drift.
   "Escalado" marker, ``CaseSummary.escalated``) and ``escalation.updated`` (``Escalation``)
   to ``case:<id>``, ``inbox:<who escalated>`` (she sees supervision's answer live, even
   after the case left her) and ``supervision:escalations``. Never to the customer.
+- Slice 12, calls: every ``call.*`` event sends ``case.updated`` (``activeCallId``, the status
+  and the first response an answer sets) and ``call.updated`` (``Call``) to ``case:<id>`` and
+  ``inbox:<assignee>`` (and ``inbox:<analyst on the line>`` if another), and ``call.updated``
+  (``CustomerCall``: no reason, no staff ids) to ``customer:<cus>``. Transcript lines, emails
+  and internal notes are turns: ``turn.created`` as above (a note is staff-only, so it never
+  reaches the customer topic).
 - ``conversation.updated`` → ``customer:<cus>`` (``CustomerConversation``), after
   case.opened, case.queued, case.assigned, case.status_changed, case.closed, case.rated
   (the simulator stops asking for a rating in every open tab). A new case
@@ -41,7 +47,9 @@ from __future__ import annotations
 from typing import Protocol
 
 from cc_platform.application.cases.dto import (
+    CallView,
     CaseSummaryView,
+    CustomerCallView,
     CustomerConversationView,
     CustomerTurnView,
     EscalationView,
@@ -59,6 +67,7 @@ from cc_platform.application.realtime.projector import derived_envelope
 from cc_platform.application.realtime.topics import Topic
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.events import (
+    CALL_EVENTS,
     CASE_EVENTS,
     ESCALATION_EVENTS,
     CaseAssigned,
@@ -108,6 +117,7 @@ _CASE_UPDATING = (
     CaseRated,
     CasePriorityChanged,
     *ESCALATION_EVENTS,
+    *CALL_EVENTS,
 )
 _CONVERSATION_UPDATING = (
     CaseOpened,
@@ -136,6 +146,10 @@ class CaseRealtimePresenter(Protocol):
 
     def escalation(self, view: EscalationView) -> JsonObject: ...
 
+    def call(self, view: CallView) -> JsonObject: ...
+
+    def customer_call(self, view: CustomerCallView) -> JsonObject: ...
+
 
 def turn_from_event(event: TurnCreated) -> Turn:
     """The turn exactly as committed (the event carries every field)."""
@@ -151,6 +165,7 @@ def turn_from_event(event: TurnCreated) -> Turn:
         language=Language(event.language),
         created_at=event.occurred_at,
         client_message_id=event.client_message_id,
+        subject=event.subject,
     )
 
 
@@ -228,6 +243,8 @@ class CaseRealtimeProjector:
                 await self._send_counts(record, reader, previous)
         if isinstance(event, ESCALATION_EVENTS):
             await self._escalation(uow, reader, record, event, case)
+        if isinstance(event, CALL_EVENTS):
+            await self._call(uow, reader, record, event, case)
         if isinstance(event, _CONVERSATION_UPDATING):
             conversation = await reader.conversation(case)
             await self._send(
@@ -256,6 +273,30 @@ class CaseRealtimeProjector:
             Topic.supervision_escalations(),
         )
         await self._send(record, topics, "escalation.updated", payload)
+
+    async def _call(
+        self,
+        uow: UnitOfWork,
+        reader: CaseReader,
+        record: EventRecord,
+        event: DomainEvent,
+        case: Case,
+    ) -> None:
+        call = await uow.calls.get(event.entity_id)
+        if call is None:
+            return
+        on_the_line = {s for s in (case.assigned_analyst_id, call.analyst_id) if s}
+        topics = (Topic.case(case.id), *(Topic.inbox(s) for s in sorted(on_the_line)))
+        await self._send(
+            record, topics, "call.updated", self._present.call(await reader.call_view(call))
+        )
+        await self._send(
+            record,
+            Topic.customer(case.customer_id),
+            "call.updated",
+            self._present.customer_call(await reader.customer_call_view(call)),
+            customer_id=case.customer_id,
+        )
 
     async def _send_counts(self, record: EventRecord, reader: CaseReader, staff_id: str) -> None:
         now = self._clock.now()

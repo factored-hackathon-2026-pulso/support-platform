@@ -389,6 +389,147 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/cases/{caseId}/calls': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The calls of a case, the most recent first */
+    get: operations['channels_list_calls']
+    put?: never
+    /**
+     * Call the customer (outbound, the assignee, with a reason)
+     * @description The assignee analyst only (403 `case_not_assigned`), on an open assigned case (409 `case_closed` / `invalid_transition`) without an active call (409 `call_in_progress` with `callId`). It rings until the customer answers or rejects it; a `new` case moves to `in_progress`. Records `call.started`.
+     */
+    post: operations['channels_start_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/calls/{callId}/answer': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Answer an inbound call that rings (the assignee)
+     * @description `ringing → in_call`. Answering is a response: the first one stops the first-response SLA (`case.first_responded`) and a `new` case moves to `in_progress`. An outbound call is answered by the customer (409 `invalid_transition`). 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.
+     */
+    post: operations['channels_answer_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/calls/{callId}/hangup': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Hang up (or stop calling while it rings)
+     * @description Ends the call (`completed` once answered, `cancelled` while it rang) and writes a `system` transcript line; the case can be closed again. 409 `call_not_active` once it ended.
+     */
+    post: operations['channels_hang_up_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/calls/{callId}/hold': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Put the call on hold (`in_call → on_hold`)
+     * @description Writes a `system` transcript line. 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.
+     */
+    post: operations['channels_hold_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/calls/{callId}/mute': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Mute or unmute the analyst's line
+     * @description While `in_call` or `on_hold`. The same value changes nothing (no event). 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.
+     */
+    post: operations['channels_mute_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/calls/{callId}/resume': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Resume the call (`on_hold → in_call`)
+     * @description Closes the hold interval and writes a `system` transcript line. 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.
+     */
+    post: operations['channels_resume_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/calls/{callId}/transcript': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Add what the analyst said to the call transcript
+     * @description A `transcript` turn (the customer sees it), only while the call is `in_call` (409 `invalid_transition` on hold or ringing, `call_not_active` once ended). Idempotent on `clientMessageId` (= `Idempotency-Key`).
+     */
+    post: operations['channels_add_call_line']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/cases/{caseId}/close': {
     parameters: {
       query?: never
@@ -403,6 +544,27 @@ export interface paths {
      * @description Assignee only, from `assigned` or `in_progress`. The note is internal (trimmed, blank becomes null, at most 500 characters); the customer never sees the reason or the note. Their next message opens a new case linked to this one.
      */
     post: operations['cases_close_case']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/emails': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The case's email thread, oldest first */
+    get: operations['channels_get_email_thread']
+    put?: never
+    /**
+     * Answer the customer by email (the assignee)
+     * @description The platform frames the body with "Hola, {nombre}:" and "Saludos,\n{Analista}\nLATAM Bank" (Portuguese cases: "Olá, {nome}:" / "Atenciosamente,"). Subject: "Re: <thread subject>" unless given (required without a thread: 422 `invalid_value`). The first reply stops the first-response SLA. Idempotent on `clientMessageId` (= `Idempotency-Key`).
+     */
+    post: operations['channels_reply_email']
     delete?: never
     options?: never
     head?: never
@@ -489,6 +651,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/cases/{caseId}/notes': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Add an internal note (staff only)
+     * @description A `note` turn with audience `staff`: the customer never sees it (REST or socket). The assignee analyst, on an open assigned case. Idempotent on `clientMessageId` (= `Idempotency-Key`).
+     */
+    post: operations['channels_add_note']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/cases/{caseId}/priority': {
     parameters: {
       query?: never
@@ -544,6 +726,114 @@ export interface paths {
      * @description Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true` and the original turn; the same id with another text is `idempotency_conflict`. Moves a `new` case to `in_progress`; the first reply stops the first-response SLA.
      */
     post: operations['cases_post_turn']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/call': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** My call now: the active one, else the latest of my current conversation */
+    get: operations['customer_get_my_call']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/calls': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Call the bank: joins the open conversation or opens one (phone_inbound)
+     * @description With no open case a new one opens (channel `phone_inbound`, linked to the previous closed one) and is assigned like a chat (`with_agent`) or waits in the queue (`waiting_agent`); it rings until the assignee answers. With an open case the call joins it (409 `call_in_progress` if it already has one).
+     */
+    post: operations['customer_start_my_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/calls/{callId}/answer': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Answer the bank's call (outbound)
+     * @description `ringing → in_call`; the analyst's first response if the case had none. An inbound call is answered by the bank (409 `invalid_transition`). 409 `call_not_active` (with `currentState`) once the call ended; 409 `invalid_transition` (with `currentState`) from any other state.
+     */
+    post: operations['customer_answer_my_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/calls/{callId}/hangup': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Hang up (an inbound call that still rings is cancelled) */
+    post: operations['customer_hang_up_my_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/calls/{callId}/reject': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Reject the bank's call while it rings */
+    post: operations['customer_reject_my_call']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/calls/{callId}/transcript': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Add what I said to the call transcript (only while in_call) */
+    post: operations['customer_add_my_call_line']
     delete?: never
     options?: never
     head?: never
@@ -661,6 +951,27 @@ export interface paths {
     get: operations['customer_list_demo_customers']
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/emails': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The email thread of my current conversation */
+    get: operations['customer_get_my_emails']
+    put?: never
+    /**
+     * Email the bank: joins the open conversation or opens one (email)
+     * @description With no open case a new one opens (channel `email`) and is assigned like a chat or waits in the queue; with an open case the email joins it. Idempotent on `clientMessageId` (= `Idempotency-Key`).
+     */
+    post: operations['customer_send_my_email']
     delete?: never
     options?: never
     head?: never
@@ -1403,10 +1714,11 @@ export interface components {
     /**
      * AssignmentReason
      * @description Why a case reached its analyst: on arrival, from the queue when someone became
-     *     available, or ``manual`` (a supervisor chose her, from the queue or by reassignment).
+     *     available, ``manual`` (a supervisor chose her, from the queue or by reassignment) or
+     *     ``outbound_call`` (she opened it to call the customer, slice 12).
      * @enum {string}
      */
-    AssignmentReason: 'language_least_loaded' | 'queue_drained' | 'manual'
+    AssignmentReason: 'language_least_loaded' | 'queue_drained' | 'manual' | 'outbound_call'
     /** AssignmentResult */
     AssignmentResult: {
       assignment: components['schemas']['AssignmentOut']
@@ -1539,13 +1851,136 @@ export interface components {
      * @enum {string}
      */
     AvailabilityStatus: 'available' | 'paused'
+    /**
+     * Call
+     * @description A simulated phone call (slice 12) as staff see it. Its transcript is the case's
+     *     `transcript` turns written between `startedAt` and `endedAt`.
+     */
+    Call: {
+      /**
+       * Analystid
+       * @description Who is on the line for the bank (outbound: the caller; inbound: who answered, null while it rings).
+       */
+      analystId: string | null
+      /** Analystname */
+      analystName: string | null
+      /** Answeredat */
+      answeredAt: string | null
+      /** Caseid */
+      caseId: string
+      direction: components['schemas']['CallDirection']
+      /**
+       * Durationseconds
+       * @description Talk time (answer → end, holds included) of an ended, answered call.
+       */
+      durationSeconds: number | null
+      /** @description completed (hung up after an answer) · cancelled (who called hung up while it rang) · rejected (the customer rejected an outbound call). */
+      endReason: components['schemas']['CallEndReason'] | null
+      /** Endedat */
+      endedAt: string | null
+      endedByRole: components['schemas']['ActorRole'] | null
+      /**
+       * Holdseconds
+       * @description Total time on hold (closed holds).
+       */
+      holdSeconds: number
+      /** Holds */
+      holds: components['schemas']['HoldInterval'][]
+      /**
+       * Id
+       * @description CALL-…
+       */
+      id: string
+      /**
+       * Muted
+       * @description The analyst's line is muted.
+       */
+      muted: boolean
+      /**
+       * Reason
+       * @description Why the analyst called (outbound only).
+       */
+      reason: string | null
+      /**
+       * Startedat
+       * Format: date-time
+       * @description When it started ringing.
+       */
+      startedAt: string
+      /** @description ringing → in_call ⇄ on_hold → ended. */
+      state: components['schemas']['CallState']
+      /**
+       * Version
+       * @description Realtime: apply only when newer than the cached one.
+       */
+      version: number
+    }
+    /**
+     * CallDirection
+     * @description ``inbound``: the customer called the bank; ``outbound``: an analyst called them.
+     * @enum {string}
+     */
+    CallDirection: 'inbound' | 'outbound'
+    /**
+     * CallEndReason
+     * @description How the call ended (team-generated list).
+     * @enum {string}
+     */
+    CallEndReason: 'completed' | 'cancelled' | 'rejected'
+    /**
+     * CallLineRequest
+     * @description A line said on the call (a `transcript` turn), only while it is `in_call`.
+     */
+    CallLineRequest: {
+      /**
+       * Clientmessageid
+       * @description Client-generated id (UUID v4); also the Idempotency-Key header.
+       * @example 0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10
+       */
+      clientMessageId: string
+      /** Text */
+      text: string
+    }
+    /** CallList */
+    CallList: {
+      /**
+       * Items
+       * @description Every call of the case, the most recent first.
+       */
+      items: components['schemas']['Call'][]
+      /**
+       * Servertime
+       * Format: date-time
+       */
+      serverTime: string
+    }
+    /** CallResponse */
+    CallResponse: {
+      call: components['schemas']['Call']
+      case: components['schemas']['CaseSummary']
+    }
+    /**
+     * CallState
+     * @enum {string}
+     */
+    CallState: 'ringing' | 'in_call' | 'on_hold' | 'ended'
     /** CaseCapabilities */
     CaseCapabilities: {
+      /**
+       * Canaddnote
+       * @description Slice 12: the caller is the assignee analyst and the case is open (POST /cases/{caseId}/notes).
+       */
+      canAddNote: boolean
       /**
        * Canassign
        * @description The caller is a supervisor and the case is open ("Asignar"/"Reasignar").
        */
       canAssign: boolean
+      /**
+       * Cancall
+       * @description Slice 12: the caller is the assignee analyst, the case is open and has no active call (POST /cases/{caseId}/calls).
+       */
+      canCall: boolean
       /**
        * Canchangepriority
        * @description Slice 8: the caller is the assignee analyst or a supervisor, and the case is open (PUT /cases/{caseId}/priority).
@@ -1553,6 +1988,11 @@ export interface components {
       canChangePriority: boolean
       /** Canclose */
       canClose: boolean
+      /**
+       * Canemail
+       * @description Slice 12: the caller is the assignee analyst and the case is open (POST /cases/{caseId}/emails).
+       */
+      canEmail: boolean
       /**
        * Canescalate
        * @description Slice 9: the caller is the assignee analyst, the case is open and has no open escalation (POST /cases/{caseId}/escalations).
@@ -1564,10 +2004,14 @@ export interface components {
     }
     /**
      * CaseChannel
-     * @description Where the customer writes from (the simulator stands in for both).
+     * @description How the case opened (slice 12). Later contacts of any channel join the open case (one
+     *     open case per customer), so a chat case may hold a call or an email too.
+     *
+     *     ``phone_outbound`` is a case staff opened to call the customer (a follow-up); an outbound
+     *     call placed on an open case keeps that case's channel.
      * @enum {string}
      */
-    CaseChannel: 'app_chat' | 'web_chat'
+    CaseChannel: 'chat_app' | 'chat_web' | 'phone_inbound' | 'phone_outbound' | 'email'
     /** CaseClosure */
     CaseClosure: {
       /**
@@ -1600,6 +2044,8 @@ export interface components {
     }
     /** CaseDetail */
     CaseDetail: {
+      /** @description Slice 12: the call ringing or connected now, or null. */
+      activeCall: components['schemas']['Call'] | null
       /** @description "Cómo llegó a ti". */
       assignment: components['schemas']['AssignmentOut'] | null
       /** @description Computed for the caller. */
@@ -1704,6 +2150,11 @@ export interface components {
     CaseStatus: 'queued' | 'assigned' | 'in_progress' | 'closed'
     /** CaseSummary */
     CaseSummary: {
+      /**
+       * Activecallid
+       * @description Slice 12: the call ringing or connected now ("En llamada"), or null.
+       */
+      activeCallId: string | null
       /** Assignedanalystid */
       assignedAnalystId: string | null
       channel: components['schemas']['CaseChannel']
@@ -1795,9 +2246,9 @@ export interface components {
     CreateCustomerSessionRequest: {
       /**
        * Channel
-       * @description Default app_chat; ignored while the customer has an open case.
+       * @description The chat a new case opens from: default chat_app. While the customer has an open chat case its channel wins. Calls and emails have their own routes (slice 12).
        */
-      channel?: ('app_chat' | 'web_chat') | null
+      channel?: ('chat_app' | 'chat_web') | null
       /** Customerid */
       customerId: string
     }
@@ -1836,6 +2287,54 @@ export interface components {
        * @description An active team (TEAM-…).
        */
       teamId: string
+    }
+    /**
+     * CustomerCall
+     * @description A call as the customer sees it: no reason, no staff ids, the analyst's first name.
+     */
+    CustomerCall: {
+      /**
+       * Agentname
+       * @description First name of the analyst on the line.
+       */
+      agentName: string | null
+      /** Answeredat */
+      answeredAt: string | null
+      /** Caseid */
+      caseId: string
+      direction: components['schemas']['CallDirection']
+      /** Durationseconds */
+      durationSeconds: number | null
+      endReason: components['schemas']['CallEndReason'] | null
+      /** Endedat */
+      endedAt: string | null
+      /** Id */
+      id: string
+      /** Onhold */
+      onHold: boolean
+      /**
+       * Startedat
+       * Format: date-time
+       */
+      startedAt: string
+      state: components['schemas']['CallState']
+    }
+    /** CustomerCallLineResponse */
+    CustomerCallLineResponse: {
+      call: components['schemas']['CustomerCall']
+      turn: components['schemas']['CustomerTurn']
+    }
+    /** CustomerCallResponse */
+    CustomerCallResponse: {
+      call: components['schemas']['CustomerCall']
+      /** Casecreated */
+      caseCreated: boolean
+      conversation: components['schemas']['CustomerConversation']
+    }
+    /** CustomerCallState */
+    CustomerCallState: {
+      /** @description The active call of the current conversation, else its latest call, else null. */
+      call: components['schemas']['CustomerCall'] | null
     }
     /** CustomerConversation */
     CustomerConversation: {
@@ -1927,6 +2426,42 @@ export interface components {
       preview: string | null
       status: components['schemas']['CustomerConversationStatus']
     }
+    /** CustomerEmail */
+    CustomerEmail: {
+      /**
+       * Authorname
+       * @description An analyst's first name on `out` emails.
+       */
+      authorName: string | null
+      /** Body */
+      body: string
+      /**
+       * Clientmessageid
+       * @description Only on the customer's own emails.
+       */
+      clientMessageId: string | null
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      direction: components['schemas']['EmailDirection']
+      /** Id */
+      id: string
+      /** Sequence */
+      sequence: number
+      /** Subject */
+      subject: string
+    }
+    /** CustomerEmailThread */
+    CustomerEmailThread: {
+      /** Caseid */
+      caseId: string | null
+      /** Items */
+      items: components['schemas']['CustomerEmail'][]
+      /** Subject */
+      subject: string | null
+    }
     /**
      * CustomerLocale
      * @enum {string}
@@ -1979,15 +2514,21 @@ export interface components {
       id: string
       /**
        * Kind
+       * @description message · notice · transcript (a line of a call, slice 12) · email (slice 12, with `subject`).
        * @enum {string}
        */
-      kind: 'message' | 'notice'
+      kind: 'message' | 'notice' | 'transcript' | 'email'
       language: components['schemas']['Language']
       /**
        * Sequence
        * @description Case sequence (customer-visible turns may skip numbers).
        */
       sequence: number
+      /**
+       * Subject
+       * @description Slice 12: the subject of an `email` turn.
+       */
+      subject: string | null
       /** Text */
       text: string
     }
@@ -2061,10 +2602,85 @@ export interface components {
       items: components['schemas']['DevEmail'][]
     }
     /**
+     * EmailDirection
+     * @description Slice 12: ``in`` = the customer wrote to the bank; ``out`` = an analyst answered.
+     * @enum {string}
+     */
+    EmailDirection: 'in' | 'out'
+    /**
      * EmailKind
      * @enum {string}
      */
     EmailKind: 'invitation' | 'password_reset'
+    /**
+     * EmailMessage
+     * @description One email of a case thread (an `email` turn: `id` is the turn id).
+     */
+    EmailMessage: {
+      /** Authorid */
+      authorId: string | null
+      /** Authorname */
+      authorName: string | null
+      authorRole: components['schemas']['TurnAuthorRole']
+      /** Body */
+      body: string
+      /** Caseid */
+      caseId: string
+      /** Clientmessageid */
+      clientMessageId: string | null
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      /** @description in: from the customer · out: from an analyst. */
+      direction: components['schemas']['EmailDirection']
+      /** Id */
+      id: string
+      /** Sequence */
+      sequence: number
+      /** Subject */
+      subject: string
+    }
+    /** EmailReplyRequest */
+    EmailReplyRequest: {
+      /**
+       * Body
+       * @description What the analyst writes. The platform adds the greeting ("Hola, {nombre}:") and the signature ("Saludos,\n{Analista}\nLATAM Bank").
+       */
+      body: string
+      /**
+       * Clientmessageid
+       * @description Client-generated id (UUID v4); also the Idempotency-Key header.
+       * @example 0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10
+       */
+      clientMessageId: string
+      /**
+       * Subject
+       * @description Default "Re: <thread subject>"; required when the case has no email yet.
+       */
+      subject?: string | null
+    }
+    /** EmailReplyResponse */
+    EmailReplyResponse: {
+      case: components['schemas']['CaseSummary']
+      email: components['schemas']['EmailMessage']
+    }
+    /** EmailThread */
+    EmailThread: {
+      /** Caseid */
+      caseId: string
+      /**
+       * Items
+       * @description Oldest first, at most 200.
+       */
+      items: components['schemas']['EmailMessage'][]
+      /**
+       * Subject
+       * @description The first email's subject; null without emails.
+       */
+      subject: string | null
+    }
     /** EscalateRequest */
     EscalateRequest: {
       /**
@@ -2181,6 +2797,19 @@ export interface components {
        * @enum {string}
        */
       status: 'ok' | 'degraded'
+    }
+    /** HoldInterval */
+    HoldInterval: {
+      /**
+       * Endedat
+       * @description null while the call is on hold.
+       */
+      endedAt: string | null
+      /**
+       * Startedat
+       * Format: date-time
+       */
+      startedAt: string
     }
     /** HomeActivity */
     HomeActivity: {
@@ -2530,6 +3159,11 @@ export interface components {
       /** @default totp */
       method: components['schemas']['MfaMethod']
     }
+    /** MuteCallRequest */
+    MuteCallRequest: {
+      /** Muted */
+      muted: boolean
+    }
     /** NewPasswordRequest */
     NewPasswordRequest: {
       /**
@@ -2542,6 +3176,20 @@ export interface components {
        * @description The token of the link (?token=).
        */
       token: string
+    }
+    /**
+     * NoteRequest
+     * @description An internal note (a staff-only `note` turn).
+     */
+    NoteRequest: {
+      /**
+       * Clientmessageid
+       * @description Client-generated id (UUID v4); also the Idempotency-Key header.
+       * @example 0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10
+       */
+      clientMessageId: string
+      /** Text */
+      text: string
     }
     /** Notification */
     Notification: {
@@ -2815,6 +3463,8 @@ export interface components {
       | 'already_rated'
       | 'escalation_open'
       | 'escalation_not_open'
+      | 'call_in_progress'
+      | 'call_not_active'
       | 'analyst_not_eligible'
       | 'language_mismatch'
       | 'analyst_paused'
@@ -3108,6 +3758,26 @@ export interface components {
      * @enum {string}
      */
     SelfChangeAction: 'remove_own_admin' | 'deactivate_self' | 'reset_own_password'
+    /** SendEmailRequest */
+    SendEmailRequest: {
+      /** Body */
+      body: string
+      /**
+       * Clientmessageid
+       * @description Client-generated id (UUID v4); also the Idempotency-Key header.
+       * @example 0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10
+       */
+      clientMessageId: string
+      /** Subject */
+      subject: string
+    }
+    /** SendEmailResponse */
+    SendEmailResponse: {
+      /** Casecreated */
+      caseCreated: boolean
+      conversation: components['schemas']['CustomerConversation']
+      email: components['schemas']['CustomerEmail']
+    }
     /** SessionOut */
     SessionOut: {
       /**
@@ -3189,6 +3859,14 @@ export interface components {
      * @enum {string}
      */
     StaffRole: 'analyst' | 'supervisor' | 'admin'
+    /** StartCallRequest */
+    StartCallRequest: {
+      /**
+       * Reason
+       * @description Why the analyst calls (required, at most 500).
+       */
+      reason: string
+    }
     /** TeamAnalyst */
     TeamAnalyst: {
       /** @description Derived: busy/available (available, with or without open cases), paused (paused and signed in), offline (paused and not signed in). */
@@ -3354,6 +4032,11 @@ export interface components {
        * @description 1-based, gap-free per case (staff-only turns included).
        */
       sequence: number
+      /**
+       * Subject
+       * @description Slice 12: the subject of an `email` turn.
+       */
+      subject: string | null
       /** Text */
       text: string
     }
@@ -3371,11 +4054,14 @@ export interface components {
     TurnAuthorRole: 'customer' | 'analyst' | 'system'
     /**
      * TurnKind
-     * @description ``message`` = conversation; ``routing`` = staff-only assignment banner (how the case
-     *     arrived); ``notice`` = platform note.
+     * @description ``message`` = chat conversation; ``routing`` = staff-only assignment banner (how the
+     *     case arrived); ``notice`` = platform note. Slice 12: ``transcript`` = a line of a call
+     *     (said by the customer or the analyst, or a ``system`` line when the call is held, resumed
+     *     or ends); ``note`` = an analyst's internal note (staff only); ``email`` = an email of the
+     *     case thread (``subject`` set; from the customer = inbound, from an analyst = outbound).
      * @enum {string}
      */
-    TurnKind: 'message' | 'routing' | 'notice'
+    TurnKind: 'message' | 'routing' | 'notice' | 'transcript' | 'note' | 'email'
     /** TurnPage */
     TurnPage: {
       /**
@@ -4897,6 +5583,575 @@ export interface operations {
       }
     }
   }
+  channels_list_calls: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CallList']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_start_call: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description One key per call the caller means to start: a retry with it replays the call it started (200 + `Idempotent-Replayed: true`). */
+        'Idempotency-Key': string
+      }
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StartCallRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of the same Idempotency-Key */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CallResponse']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_answer_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_hang_up_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_hold_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_mute_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MuteCallRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_resume_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_add_call_line: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Must equal the body `clientMessageId`; a retry with it is a replay. */
+        'Idempotency-Key': string
+      }
+      path: {
+        caseId: string
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CallLineRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of an already-added line */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PostTurnResponse']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PostTurnResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   cases_close_case: {
     parameters: {
       query?: never
@@ -4919,6 +6174,147 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['CaseDetail']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_get_email_thread: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmailThread']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  channels_reply_email: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Must equal the body `clientMessageId`; a retry with it is a replay. */
+        'Idempotency-Key': string
+      }
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EmailReplyRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of an already-sent email */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmailReplyResponse']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmailReplyResponse']
         }
       }
       /** @description Problem details (RFC 7807) */
@@ -5245,6 +6641,89 @@ export interface operations {
       }
     }
   }
+  channels_add_note: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Must equal the body `clientMessageId`; a retry with it is a replay. */
+        'Idempotency-Key': string
+      }
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NoteRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of an already-added note */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PostTurnResponse']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PostTurnResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   cases_change_priority: {
     parameters: {
       query?: never
@@ -5487,6 +6966,342 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_get_my_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerCallState']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_start_my_call: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description One key per call the caller means to start: a retry with it replays the call it started (200 + `Idempotent-Replayed: true`). */
+        'Idempotency-Key': string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Replay of the same Idempotency-Key */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerCallResponse']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerCallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_answer_my_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerCallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_hang_up_my_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerCallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_reject_my_call: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerCallResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_add_my_call_line: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Must equal the body `clientMessageId`; a retry with it is a replay. */
+        'Idempotency-Key': string
+      }
+      path: {
+        callId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CallLineRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of an already-added line */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerCallLineResponse']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerCallLineResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
         headers: {
           [name: string]: unknown
         }
@@ -5794,6 +7609,98 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['DemoCustomerList']
+        }
+      }
+    }
+  }
+  customer_get_my_emails: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerEmailThread']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_send_my_email: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Must equal the body `clientMessageId`; a retry with it is a replay. */
+        'Idempotency-Key': string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SendEmailRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of an already-sent email */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SendEmailResponse']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SendEmailResponse']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
         }
       }
     }

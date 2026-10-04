@@ -89,7 +89,7 @@ class StartCustomerSession:
     async def execute(
         self, customer_id: str, channel: CaseChannel | None = None
     ) -> CustomerSessionGrant:
-        """Sign in as a seeded customer. While a case is open its channel wins (one open
+        """Sign in as a seeded customer. While a chat case is open its channel wins (one open
         case per customer)."""
         now = self.clock.now()
         session_id = self.ids.new_id(IdPrefix.CUSTOMER_SESSION)
@@ -102,9 +102,13 @@ class StartCustomerSession:
             if customer is None:
                 raise NotFoundError("No encontramos ese cliente.", customerId=customer_id)
             open_case = _open_conversation(await current_case(uow, customer.id))
-            session_channel = (
-                open_case.channel if open_case is not None else channel or CaseChannel.APP_CHAT
-            )
+            # The session is a chat (app or web): an open chat case keeps its channel; a case
+            # opened by a call or an email does not turn the chat into a phone or a mailbox.
+            session_channel = CaseChannel.CHAT_APP
+            if open_case is not None and open_case.channel.is_chat:
+                session_channel = open_case.channel
+            elif channel is not None and channel.is_chat:
+                session_channel = channel
             uow.record(
                 CustomerSessionStarted(
                     occurred_at=now,

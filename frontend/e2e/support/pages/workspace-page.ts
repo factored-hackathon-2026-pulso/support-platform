@@ -119,12 +119,62 @@ export class WorkspacePage {
     return this.main.getByRole('region', { name: `Conversación con ${customerName}` })
   }
 
-  /** The transcript items of the open conversation, in order. */
+  /**
+   * The transcript items of the open conversation, in order. Slice 12: the list is named by
+   * the center ("Mensajes", "Transcripción de la llamada", "Correos y mensajes del caso").
+   */
   messages(customerName: string): Locator {
     return this.conversation(customerName)
       .getByRole('log', { name: 'Conversación del caso' })
-      .getByRole('list', { name: 'Mensajes' })
+      .getByRole('list')
+      .first()
       .getByRole('listitem')
+  }
+
+  // ── Slice 12: calls and email ────────────────────────────────────────────────
+
+  /** The call bar under the header. */
+  callBar(customerName: string): Locator {
+    return this.conversation(customerName).getByRole('region', { name: 'Llamada' })
+  }
+
+  /** The call's state word ("Sonando", "En llamada", "En espera", "Llamada terminada, …"). */
+  callState(customerName: string, state: string | RegExp): Locator {
+    return this.callBar(customerName).getByRole('status').filter({ hasText: state })
+  }
+
+  async callButton(customerName: string, label: string): Promise<void> {
+    await this.callBar(customerName).getByRole('button', { name: label, exact: true }).click()
+  }
+
+  /** Says something on the line ("Lo que dices" + "Decir"). */
+  async say(customerName: string, text: string): Promise<void> {
+    const conversation = this.conversation(customerName)
+    const input = conversation.getByRole('textbox', { name: 'Lo que dices' })
+    await input.fill(text)
+    await conversation.getByRole('button', { name: 'Decir', exact: true }).click()
+    await expect(input).toHaveValue('')
+    await expect(this.messages(customerName).filter({ hasText: text })).toHaveCount(1)
+  }
+
+  /** "Nota interna" + "Guardar nota": a staff-only note in the transcript. */
+  async addNote(customerName: string, text: string): Promise<void> {
+    const conversation = this.conversation(customerName)
+    const input = conversation.getByRole('textbox', { name: 'Nota interna' })
+    await input.fill(text)
+    await conversation.getByRole('button', { name: 'Guardar nota', exact: true }).click()
+    await expect(input).toHaveValue('')
+    await expect(this.messages(customerName).filter({ hasText: text })).toHaveCount(1)
+  }
+
+  /** The email reply composer ("Enviar correo"); the platform adds greeting and signature. */
+  async replyByEmail(customerName: string, text: string): Promise<void> {
+    const form = this.conversation(customerName).getByRole('form', { name: 'Responder por correo' })
+    const body = form.getByRole('textbox', { name: 'Respuesta por correo' })
+    await body.fill(text)
+    await form.getByRole('button', { name: 'Enviar correo' }).click()
+    await expect(body).toHaveValue('')
+    await expect(this.messages(customerName).filter({ hasText: text })).toHaveCount(1)
   }
 
   async openCase(customerName: string): Promise<Locator> {

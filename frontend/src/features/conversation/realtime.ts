@@ -10,8 +10,9 @@ import type { QueryClient } from '@tanstack/react-query'
 import { readCaseSummary, readEscalation } from '@/features/cases/core'
 import { envelopePayload, type RealtimeEnvelope, type RealtimeRegistration } from '@/lib/realtime'
 import { conversationKeys } from './api'
+import { applyCallToDetail, upsertCall } from './channels'
 import { applySummary, hasSequenceGap, mergeTurns, needsDetailRefetch } from './model'
-import type { CaseDetail, Escalation, TranscriptCache, Turn } from './types'
+import type { Call, CallList, CaseDetail, Escalation, TranscriptCache, Turn } from './types'
 
 /** Staff `Turn` payload (the customer socket has its own registry and shape). */
 export function readTurn(envelope: RealtimeEnvelope): Turn | null {
@@ -94,8 +95,39 @@ function applyEscalation(envelope: RealtimeEnvelope, queryClient: QueryClient): 
   })
 }
 
+/** Staff `Call` payload of `call.updated` (slice 12). */
+export function readCall(envelope: RealtimeEnvelope): Call | null {
+  const payload = envelopePayload(envelope)
+  if (
+    !payload ||
+    typeof payload.id !== 'string' ||
+    typeof payload.caseId !== 'string' ||
+    typeof payload.state !== 'string' ||
+    typeof payload.version !== 'number'
+  )
+    return null
+  return payload as unknown as Call
+}
+
+/**
+ * `call.updated` (slice 12): the call → the case's calls list (only if loaded) and the detail's
+ * active call. Newer versions only, so a late or repeated envelope is a no-op. The
+ * `case.updated` that follows refetches the detail when the active call came or went.
+ */
+function applyCall(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
+  const call = readCall(envelope)
+  if (!call) return
+  queryClient.setQueryData<CallList>(conversationKeys.calls(call.caseId), (list) =>
+    list ? upsertCall(list, call) : list,
+  )
+  queryClient.setQueryData<CaseDetail>(conversationKeys.detail(call.caseId), (detail) =>
+    detail ? applyCallToDetail(detail, call) : detail,
+  )
+}
+
 export const registerConversationRealtime: RealtimeRegistration = (registry) => {
   registry.register('turn.created', applyTurn)
+  registry.register('call.updated', applyCall)
   registry.register('escalation.updated', applyEscalation)
   registry.register('case.updated', applyCase)
   registry.register('case.assigned', applyCase)

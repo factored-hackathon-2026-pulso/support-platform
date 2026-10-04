@@ -8,8 +8,8 @@ Read first: `docs/platform/ENGINEERING_BRIEF.md` (scope, rules, conventions),
 `docs/platform/adr/0001-architecture.md`, and the slice contracts in `docs/platform/api/`
 (slice 2 case life cycle, slice 3 supervision, slice 4 administration, slice 6 analyst home,
 slice 7 customer rating, slice 8 case priority, slice 9 supervision v2: Colas and escalations,
-slice 10 notification center, slice 11 secure onboarding by email invitation; a later slice
-wins).
+slice 10 notification center, slice 11 secure onboarding by email invitation, slice 12
+simulated phone and email channels; a later slice wins).
 Operating the app (accounts, reset, troubleshooting) is in `docs/platform/RUNBOOK.md`.
 
 ## Run
@@ -70,6 +70,8 @@ re-read on every request.
 | Home (slice 6) | `GET /me/home`: `since` (end of her previous session, else now − 8 h), activity rows from the event log (structured, no text), her team's availability and queues (counts) | analyst |
 | Cases | `GET /cases/inbox?status=&q=` (`closed` = last 7 days), `GET /cases/{id}`, `GET /cases/{id}/history`, `GET\|POST /cases/{id}/turns`, `POST /cases/{id}/read`, `POST /cases/{id}/close` (`{reason, note}`) | analyst; supervisors read any case (audited `case.viewed`) |
 | Case priority (slice 8) | `PUT /cases/{id}/priority` (`{priority, expectedVersion}` → `{changed, case}`) | the assignee analyst, or a supervisor on any open case |
+| Calls, email, notes (slice 12) | `GET\|POST /cases/{id}/calls` (`{reason}` + `Idempotency-Key`), `POST /cases/{id}/calls/{callId}/answer\|hold\|resume\|mute\|hangup\|transcript`, `POST /cases/{id}/notes`, `GET\|POST /cases/{id}/emails` (reply framed with greeting and signature) | the assignee analyst writes; reads like the case |
+| Customer calls and email (slice 12) | `GET /customer/call`, `POST /customer/calls` (+ `Idempotency-Key`), `POST /customer/calls/{callId}/answer\|reject\|hangup\|transcript`, `GET\|POST /customer/emails` | customer token |
 | Customer simulator | `GET /customer/demo-customers`, `POST /customer/sessions`, `GET /customer/conversation`, `POST /customer/conversation/turns`, `GET /customer/conversations`, `GET /customer/conversations/{id}`, `POST /customer/conversations/{id}/rating` (slice 7: `{score 1–4, comment?}` + `Idempotency-Key`) | customer token |
 | Supervision | `GET /supervision/team`, `GET /supervision/queues`, `PUT /supervision/cases/{id}/assignee` (`{analystId, expectedAnalystId, confirmPaused}`; ends an open escalation as `reassigned`) | supervisor |
 | Colas (slice 9) | `GET /supervision/open-cases?language=es\|pt`: every open case of a language and who holds it | supervisor |
@@ -113,6 +115,12 @@ Product rules enforced in the service layer (brief §4.3):
   every `CC_NOTIFICATION_SWEEP_SECONDS` (30 s; 0 = off). `(recipient_id, source_key)` is unique
   (idempotent); the newest 200 per person are kept. Notifications are not domain events and
   never enter the event log.
+- Slice 12 (simulated calls and email, no telephony or mail server): a call or an email joins the
+  customer's open case or opens one (`phone_inbound`, `email`); one active call per case
+  (`409 call_in_progress`), and a case with an active call is not closed; answering a call (or
+  the first email reply) is the first response; the transcript is `transcript` turns, emails are
+  `email` turns with a subject, internal notes are staff-only `note` turns. Contract:
+  `docs/platform/api/slice-12-channels.md`.
 - Only the assignee writes; a closed case is read-only. A close needs a reason from a fixed
   list; the customer sees a notice, never the reason. Staff banners never reach customers.
 - Administration guard rails: nobody removes their own Administración, deactivates themself or
@@ -131,7 +139,7 @@ Product rules enforced in the service layer (brief §4.3):
 ## API conventions
 
 - camelCase JSON, ISO-8601 UTC timestamps, prefixed opaque ids (`CASE-…`, `TRN-…`, `ASG-…`,
-  `CUS-…`, `STF-…`, `TEAM-…`, `EVT-…`).
+  `CUS-…`, `STF-…`, `TEAM-…`, `EVT-…`, `CALL-…`).
 - Errors are RFC 7807 `application/problem+json` with a stable `code` and a `requestId`. Every
   code is a member of `ProblemCode` (`api/problems.py`, one registry of status and title),
   published in `openapi.json`, so the frontend's `pnpm check:api` catches drift.
@@ -153,9 +161,9 @@ signal changes: REST and the event log stay the source of truth.
 
 | Topic | Who | Envelopes |
 |---|---|---|
-| `case:<caseId>` | assignee, supervisors | `turn.created`, `case.updated`, `escalation.updated` |
-| `inbox:<staffId>` | that analyst | `case.updated`, `case.assigned`, `case.unassigned`, `inbox.counts`, `availability.updated`, `escalation.updated` (her escalations) |
-| `customer:<customerId>` | that customer | `turn.created`, `conversation.updated` |
+| `case:<caseId>` | assignee, supervisors | `turn.created`, `case.updated`, `escalation.updated`, `call.updated` (slice 12) |
+| `inbox:<staffId>` | that analyst | `case.updated`, `case.assigned`, `case.unassigned`, `inbox.counts`, `availability.updated`, `escalation.updated` (her escalations), `call.updated` (her calls) |
+| `customer:<customerId>` | that customer | `turn.created`, `conversation.updated`, `call.updated` (`CustomerCall`) |
 | `supervision:queues`, `supervision:team`, `supervision:escalations` | supervisors | `queue.updated`, `queue.case_queued`, `team.updated`, `escalation.updated` |
 | `admin:directory` | admins | `directory.updated` |
 | `staff:<staffId>` | that person | `me.updated`, `notification.created` (`{notification, unreadCount}`), `notifications.read` (`{notificationIds \| null, unreadCount}`) |

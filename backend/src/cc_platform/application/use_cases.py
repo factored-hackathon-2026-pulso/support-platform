@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cc_platform.application.audit.use_cases import AuditUseCases
-from cc_platform.application.cases.use_cases import CasesUseCases
+from cc_platform.application.cases.use_cases import CasesUseCases, ChannelsUseCases
 from cc_platform.application.customers.use_cases import CustomersUseCases
 from cc_platform.application.notifications.use_cases import NotificationsUseCases
 from cc_platform.application.people.admin.use_cases import AdministrationUseCases
@@ -21,6 +21,7 @@ from cc_platform.application.people.use_cases import PeopleUseCases
 class UseCases:
     people: PeopleUseCases
     cases: CasesUseCases
+    channels: ChannelsUseCases
     customers: CustomersUseCases
     audit: AuditUseCases
     administration: AdministrationUseCases

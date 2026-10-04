@@ -21,11 +21,17 @@ from cc_platform.application.events import EventPage, EventRecord, StoredEvent
 from cc_platform.application.notifications.ports import NotificationCursor
 from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.cases.assignment import Assignment
+from cc_platform.domain.cases.call import Call
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.escalation import Escalation, EscalationState
 from cc_platform.domain.cases.turn import Turn
-from cc_platform.domain.cases.values import OPEN_ASSIGNED_STATUSES, CaseStatus, TurnAudience
+from cc_platform.domain.cases.values import (
+    OPEN_ASSIGNED_STATUSES,
+    CaseStatus,
+    TurnAudience,
+    TurnKind,
+)
 from cc_platform.domain.customers.customer import Customer
 from cc_platform.domain.notifications.notification import Notification
 from cc_platform.domain.people.admin_roster import ROSTER_ID, AdminRoster
@@ -624,6 +630,45 @@ class InMemoryEscalationRepository(_StagedRepository[Escalation]):
         )
 
 
+class InMemoryCallRepository(_StagedRepository[Call]):
+    """Slice 12. Same answers as ``SqlCallRepository``."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, Call], track: Tracker) -> None:
+        super().__init__(committed, lambda call: call.id, track)
+
+    def _unique_violation(self, aggregate: Call, other: Call) -> DomainError | None:
+        key = aggregate.creation_key
+        if key is not None and other.creation_key == key:
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    async def get(self, call_id: str) -> Call | None:
+        return await self._get(call_id)
+
+    async def get_by_creation_key(self, key: str) -> Call | None:
+        found = [call for call in self._all() if call.creation_key == key]
+        if not found:
+            return None
+        self._track(found[0])
+        return found[0]
+
+    async def list_for_case(self, case_id: str) -> list[Call]:
+        mine = sorted(
+            (call for call in self._all() if call.case_id == case_id),
+            key=lambda call: (call.started_at, call.id),
+            reverse=True,
+        )
+        for call in mine:
+            self._track(call)
+        return mine
+
+    async def latest_for_case(self, case_id: str) -> Call | None:
+        found = await self.list_for_case(case_id)
+        return found[0] if found else None
+
+
 class InMemoryNotificationRepository(_StagedRepository[Notification]):
     """Slice 10. Same answers as ``SqlNotificationRepository``; deletions (retention) are
     staged like writes and applied at commit."""
@@ -790,6 +835,13 @@ class InMemoryTurnRepository(_AppendOnlyRepository[Turn]):
         if before is not None:
             turns = [turn for turn in turns if turn.sequence < before]
         return turns[-limit:] if limit > 0 else []
+
+    async def list_of_kind(self, case_id: str, kind: TurnKind, *, limit: int) -> list[Turn]:
+        turns = sorted(
+            (t for t in self._all() if t.case_id == case_id and t.kind is kind),
+            key=lambda turn: turn.sequence,
+        )
+        return turns[:limit]
 
     async def find_by_client_message_id(
         self, author_id: str, client_message_id: str

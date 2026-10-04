@@ -16,7 +16,8 @@ export function makeCaseSummary(overrides: Partial<CaseSummary> = {}): CaseSumma
     id: 'CASE-00000000000000000000000101',
     version: 3,
     customer: { id: 'CUS-00000000000000000000001001', displayName: 'Marcela Quintana Pardo' },
-    channel: 'web_chat',
+    channel: 'chat_web',
+    activeCallId: null,
     language: 'es',
     priority: 'medium',
     status: 'in_progress',
@@ -44,7 +45,7 @@ export const seededInbox: CaseSummary[] = [
   makeCaseSummary({
     id: 'CASE-00000000000000000000000102',
     customer: { id: 'CUS-00000000000000000000001002', displayName: 'Beatriz Salcedo Prieto' },
-    channel: 'app_chat',
+    channel: 'chat_app',
     openedAt: minutesFrom(-12),
     slaDueAt: minutesFrom(3),
     firstResponseAt: null,
@@ -71,7 +72,7 @@ export const seededInbox: CaseSummary[] = [
   makeCaseSummary({
     id: 'CASE-00000000000000000000000108',
     customer: { id: 'CUS-00000000000000000000001004', displayName: 'Patricia Lozano Vega' },
-    channel: 'app_chat',
+    channel: 'chat_app',
     status: 'assigned',
     inboxStatus: 'new',
     openedAt: minutesFrom(-4),
@@ -86,7 +87,7 @@ export const seededInbox: CaseSummary[] = [
   makeCaseSummary({
     id: 'CASE-00000000000000000000000107',
     customer: { id: 'CUS-00000000000000000000001007', displayName: 'Joaquín Ferreyra Paz' },
-    channel: 'app_chat',
+    channel: 'chat_app',
     openedAt: minutesFrom(-50),
     slaDueAt: minutesFrom(-35),
     firstResponseAt: minutesFrom(-40),
@@ -104,7 +105,7 @@ export const closedInbox: CaseSummary[] = [
   makeCaseSummary({
     id: 'CASE-00000000000000000000000106',
     customer: { id: 'CUS-00000000000000000000001006', displayName: 'Héctor Villarreal Garza' },
-    channel: 'app_chat',
+    channel: 'chat_app',
     priority: 'low',
     status: 'closed',
     inboxStatus: 'closed',
@@ -134,7 +135,7 @@ export const closedInbox: CaseSummary[] = [
   makeCaseSummary({
     id: 'CASE-00000000000000000000000104',
     customer: { id: 'CUS-00000000000000000000001004', displayName: 'Patricia Lozano Vega' },
-    channel: 'app_chat',
+    channel: 'chat_app',
     status: 'closed',
     inboxStatus: 'closed',
     openedAt: minutesFrom(-48 * 60 - 30),

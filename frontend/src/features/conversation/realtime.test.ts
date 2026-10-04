@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeCall } from '@/test/channel-fixtures'
 import { createEnvelopeHandlerRegistry, type EnvelopeHandlerRegistry } from '@/lib/realtime'
 import {
   CASE_ID,
@@ -168,5 +169,42 @@ describe('escalation.updated (slice 9)', () => {
     queryClient.setQueryData(detailKey, makeCaseDetail())
     registry.dispatch(envelope('escalation.updated', { id: 1 }), queryClient)
     expect(queryClient.getQueryData<CaseDetail>(detailKey)?.escalation).toBeNull()
+  })
+})
+
+describe('call.updated (slice 12)', () => {
+  it('puts the call in the detail and the calls list, newer versions only', () => {
+    queryClient.setQueryData<CaseDetail>(detailKey, makeCaseDetail())
+    queryClient.setQueryData(conversationKeys.calls(CASE_ID), { items: [], serverTime: 'x' })
+    registry.dispatch(
+      envelope('call.updated', makeCall({ state: 'ringing', version: 1 })),
+      queryClient,
+    )
+    expect(queryClient.getQueryData<CaseDetail>(detailKey)?.activeCall?.state).toBe('ringing')
+    registry.dispatch(
+      envelope('call.updated', makeCall({ state: 'in_call', version: 2 })),
+      queryClient,
+    )
+    // A late, older envelope changes nothing.
+    registry.dispatch(
+      envelope('call.updated', makeCall({ state: 'ringing', version: 1 })),
+      queryClient,
+    )
+    expect(queryClient.getQueryData<CaseDetail>(detailKey)?.activeCall?.state).toBe('in_call')
+    registry.dispatch(
+      envelope('call.updated', makeCall({ state: 'ended', version: 3 })),
+      queryClient,
+    )
+    expect(queryClient.getQueryData<CaseDetail>(detailKey)?.activeCall).toBeNull()
+    const calls = queryClient.getQueryData<{ items: { state: string }[] }>(
+      conversationKeys.calls(CASE_ID),
+    )
+    expect(calls?.items.map((call) => call.state)).toEqual(['ended'])
+  })
+
+  it('ignores a payload that is not a call', () => {
+    queryClient.setQueryData<CaseDetail>(detailKey, makeCaseDetail())
+    registry.dispatch(envelope('call.updated', { id: 'x' }), queryClient)
+    expect(queryClient.getQueryData<CaseDetail>(detailKey)?.activeCall).toBeNull()
   })
 })

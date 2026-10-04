@@ -39,6 +39,15 @@ export type PostCustomerTurnRequest = Schemas['PostCustomerTurnRequest']
 export type CaseRating = Schemas['CaseRating']
 export type RateConversationRequest = Schemas['RateConversationRequest']
 export type PostCustomerTurnResponse = Schemas['PostCustomerTurnResponse']
+/** Slice 12: the customer's side of a simulated call (never the reason nor staff ids). */
+export type CustomerCall = Schemas['CustomerCall']
+export type CustomerCallState = Schemas['CustomerCallState']
+export type CustomerCallResponse = Schemas['CustomerCallResponse']
+export type CustomerCallLineResponse = Schemas['CustomerCallLineResponse']
+/** Slice 12: an email the customer sent or got (`in` = from the customer). */
+export type CustomerEmail = Schemas['CustomerEmail']
+export type SendEmailRequest = Schemas['SendEmailRequest']
+export type SendEmailResponse = Schemas['SendEmailResponse']
 
 /** A message the customer sent that the server has not confirmed yet. */
 export interface PendingCustomerMessage {

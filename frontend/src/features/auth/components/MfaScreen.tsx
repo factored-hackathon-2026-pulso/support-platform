@@ -79,8 +79,8 @@ export function MfaScreen({
     <>
       <AuthHeading
         eyebrow={
-          <span className="text-14 text-ink-2">
-            {email} ·{' '}
+          <span className="inline-flex flex-wrap items-center gap-x-3 text-14 text-ink-2">
+            <span>{email}</span>
             <Link to="/login" replace className="text-link">
               No soy yo
             </Link>

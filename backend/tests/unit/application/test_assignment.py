@@ -101,10 +101,10 @@ async def test_directory_lists_only_available_analysts_with_their_open_load() ->
     container = await memory_container()  # nobody available at seed
     async with container.uow() as uow:
         assert await RepositoryAnalystDirectory().candidates(uow) == []
-    await make_available_quietly(container.uow, DANIELA)  # 5 open cases
+    await make_available_quietly(container.uow, DANIELA)  # 6 open cases
     async with container.uow() as uow:
         candidates = await RepositoryAnalystDirectory().candidates(uow)
-    assert [(c.name, c.open_case_count) for c in candidates] == [("Daniela Ríos", 5)]
+    assert [(c.name, c.open_case_count) for c in candidates] == [("Daniela Ríos", 6)]
     assert candidates[0].languages == frozenset({ES, PT})
     assert candidates[0].last_assigned_at is not None
     await set_availability(container, ANALYST.number, AvailabilityStatus.PAUSED)

@@ -126,7 +126,7 @@ def test_team_and_queues(client: TestClient, sign_in: SignIn) -> None:
         "offline",
         False,
     )
-    assert rows["Daniela Ríos"]["counts"] == {"open": 5, "new": 2, "toReply": 2, "waiting": 1}
+    assert rows["Daniela Ríos"]["counts"] == {"open": 6, "new": 2, "toReply": 3, "waiting": 1}
     assert rows["Daniela Ríos"]["openCases"][0]["customer"]["displayName"]
     assert [(t["id"], t["name"]) for t in team["teams"]] == [
         ("TEAM-00000000000000000000000001", "Equipo Andes"),
@@ -244,6 +244,9 @@ def test_reassignment_keeps_the_previous_analyst_reading(
         "canAssign": False,
         "canChangePriority": False,
         "canEscalate": False,
+        "canCall": False,
+        "canEmail": False,
+        "canAddNote": False,
     }
     cmid = str(uuid.uuid4())
     write = client.post(

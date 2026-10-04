@@ -17,7 +17,8 @@ import {
   caseCardFacts,
   changesInboxPlacement,
   channelLabel,
-  channelPhrase,
+  caseChannel,
+  channelFact,
   closeReasonLabel,
   closeReasonOption,
   countForFilter,
@@ -182,11 +183,27 @@ describe('case status (the one map)', () => {
 })
 
 describe('labels', () => {
-  it('names the two chat channels for the card and the header', () => {
-    expect(channelLabel('app_chat')).toBe('App')
-    expect(channelLabel('web_chat')).toBe('Web')
-    expect(channelPhrase('app_chat')).toBe('chat en la app')
-    expect(channelPhrase('web_chat')).toBe('chat web')
+  it('names the five channels with one icon each (slice 12)', () => {
+    expect(channelLabel('chat_app')).toBe('Chat en la app')
+    expect(channelLabel('chat_web')).toBe('Chat web')
+    expect(channelLabel('phone_inbound')).toBe('Llamada entrante')
+    expect(channelLabel('phone_outbound')).toBe('Llamada saliente')
+    expect(channelLabel('email')).toBe('Correo')
+    expect(caseChannel('chat_app').icon).toBe('message')
+    expect(caseChannel('chat_web').icon).toBe('message')
+    expect(caseChannel('phone_inbound')).toMatchObject({ icon: 'phone-incoming', kind: 'phone' })
+    expect(caseChannel('phone_outbound')).toMatchObject({ icon: 'phone-outgoing', kind: 'phone' })
+    expect(caseChannel('email')).toMatchObject({ icon: 'mail', kind: 'email' })
+  })
+
+  it('shows the channel as an icon-only fact with the label as tooltip', () => {
+    expect(channelFact('phone_outbound')).toEqual({
+      key: 'channel',
+      icon: 'phone-outgoing',
+      text: 'Llamada saliente',
+      label: 'Canal',
+      iconOnly: true,
+    })
   })
 
   it('names priorities and countries', () => {
@@ -201,14 +218,20 @@ describe('labels', () => {
 
   it('builds the card facts: channel, priority only when high, a customer who came back', () => {
     expect(caseCardFacts(makeCaseSummary())).toEqual([
-      { key: 'channel', icon: 'globe', text: 'Web', label: 'Canal', iconOnly: true },
+      { key: 'channel', icon: 'message', text: 'Chat web', label: 'Canal', iconOnly: true },
     ])
     expect(
       caseCardFacts(
-        makeCaseSummary({ channel: 'app_chat', priority: 'high', previousCaseId: 'CASE-1' }),
+        makeCaseSummary({ channel: 'chat_app', priority: 'high', previousCaseId: 'CASE-1' }),
       ),
     ).toEqual([
-      { key: 'channel', icon: 'smartphone', text: 'App', label: 'Canal', iconOnly: true },
+      {
+        key: 'channel',
+        icon: 'message',
+        text: 'Chat en la app',
+        label: 'Canal',
+        iconOnly: true,
+      },
       { key: 'priority', icon: 'priority-high', text: 'Prioridad alta', iconOnly: true },
       {
         key: 'returned',

@@ -11,12 +11,16 @@ import pytest
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.domain.cases import (
     OPEN_ASSIGNED_STATUSES,
+    Call,
+    CallEndReason,
+    CallState,
     CaseStatus,
     CloseReason,
     CustomerCaseSlot,
     TurnAudience,
 )
 from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
+from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.errors import ConcurrentUpdateError
 from cc_platform.infrastructure.clock import FixedClock
 from cc_platform.infrastructure.events.in_process_bus import InProcessEventBus
@@ -31,6 +35,7 @@ from cc_platform.infrastructure.seed.people import seed_demo_staff, seed_staff_i
 from tests.support import PlainHasher
 
 DANIELA = seed_staff_id(1)
+KEY = "key-12345678"
 
 
 @dataclass
@@ -126,23 +131,23 @@ async def test_queries_by_assignee_status_customer_and_load(harness: Harness) ->
         no_refs = await uow.cases.refs([])
     assert (paula_held_esteban, tomas_held_esteban) == (True, False)
     assert {c.id for c in open_cases} == {
-        seed_case_id(n) for n in (101, 102, 103, 107, 108, 113, 114)
+        seed_case_id(n) for n in (101, 102, 103, 107, 108, 113, 114, 117)
     }
     assert {k: (v.customer_id, v.language.value) for k, v in refs.items()} == {
         seed_case_id(103): (seed_customer_id(1003), "pt"),
         seed_case_id(101): (seed_customer_id(1001), "es"),
     }
     assert no_refs == {}
-    assert len(mine) == 5
-    assert {c.id for c in closed} == {seed_case_id(n) for n in (104, 105, 106)}
-    assert {c.id for c in recent} == {seed_case_id(n) for n in (105, 106)}
+    assert len(mine) == 6
+    assert {c.id for c in closed} == {seed_case_id(n) for n in (104, 105, 106, 115, 116)}
+    assert {c.id for c in recent} == {seed_case_id(n) for n in (105, 106, 116)}
     assert [c.id for c in queued] == [seed_case_id(n) for n in (111, 112, 109)]  # oldest first
     assert latest is not None
     assert latest.id == seed_case_id(108)
     assert [c.id for c in history] == [seed_case_id(n) for n in (108, 104, 110)]  # newest first
     assert nobody is None
     assert (daniela_held, julian_held, paula_held) == (True, True, False)
-    assert loads[DANIELA].open_cases == 5
+    assert loads[DANIELA].open_cases == 6
     assert loads[DANIELA].last_assigned_at is not None
     assert loads[DANIELA].last_assigned_at.tzinfo is not None
 
@@ -200,8 +205,80 @@ async def test_customers_read_model(harness: Harness) -> None:
         customers = await uow.customers.list()
         many = await uow.customers.get_many([seed_customer_id(2004), seed_customer_id(9999)])
     assert [c.id for c in customers] == sorted(c.id for c in customers)
-    assert len(customers) == 17
+    assert len(customers) == 19
     rafael = many[seed_customer_id(2004)]
     assert (rafael.locale.value, rafael.language.value, rafael.simulator) == ("pt-BR", "pt", True)
     assert len(rafael.suggestions) == 3
     assert list(many) == [seed_customer_id(2004)]
+
+
+async def store_call(unit: UnitOfWork, call: Call, *, insert: bool) -> None:
+    async with unit as uow:
+        await (uow.calls.add(call) if insert else uow.calls.save(call))
+        await uow.commit()
+
+
+async def test_call_round_trip_holds_versions_and_creation_key(harness: Harness) -> None:
+    """Slice 12: a call keeps every field (holds as JSON), saves with compare-and-set and a
+    second insert with the same ``creation_key`` is a retryable race."""
+    case_id, customer_id = seed_case_id(101), seed_customer_id(1001)
+    call_id, other_id = "CALL-" + "0" * 25 + "1", "CALL-" + "0" * 25 + "2"
+    t = harness.clock.now()
+    analyst = ActorRef(ActorRole.ANALYST, DANIELA)
+    async with harness.uow() as uow:
+        call = Call.start_outbound(
+            call_id=call_id,
+            case_id=case_id,
+            customer_id=customer_id,
+            analyst_id=DANIELA,
+            reason="Seguimiento",
+            at=t,
+            creation_key=KEY,
+        )
+        call.answer(actor=ActorRef(ActorRole.CUSTOMER, customer_id), at=t + timedelta(seconds=5))
+        call.hold(actor=analyst, at=t + timedelta(seconds=20))
+        call.resume(actor=analyst, at=t + timedelta(seconds=50))
+        call.hold(actor=analyst, at=t + timedelta(seconds=60))
+        await uow.calls.add(call)
+        await uow.commit()
+    async with harness.uow() as uow:
+        stored = await uow.calls.get(call_id)
+        assert stored is not None
+        assert (stored.state, stored.version, stored.reason) == (
+            CallState.ON_HOLD,
+            1,
+            "Seguimiento",
+        )
+        assert [(h.started_at, h.ended_at) for h in stored.holds] == [
+            (t + timedelta(seconds=20), t + timedelta(seconds=50)),
+            (t + timedelta(seconds=60), None),
+        ]
+        stored.hang_up(actor=analyst, at=t + timedelta(seconds=90))
+        await uow.calls.save(stored)
+        await uow.commit()
+    async with harness.uow() as uow:
+        ended = await uow.calls.get_by_creation_key(KEY)
+        listed = await uow.calls.list_for_case(case_id)
+        stale = await uow.calls.get(call_id)
+    assert ended is not None
+    assert (ended.state, ended.end_reason, ended.ended_by_role, ended.version) == (
+        CallState.ENDED,
+        CallEndReason.COMPLETED,
+        ActorRole.ANALYST,
+        2,
+    )
+    assert (ended.hold_seconds, ended.duration_seconds) == (60, 85)
+    assert [c.id for c in listed] == [call_id]
+    assert stale is not None
+    stale.mark_persisted(1)  # an old revision loses the compare-and-set
+    with pytest.raises(ConcurrentUpdateError):
+        await store_call(harness.uow(), stale, insert=False)
+    duplicate = Call.start_inbound(
+        call_id=other_id,
+        case_id=case_id,
+        customer_id=customer_id,
+        at=t,
+        creation_key=KEY,
+    )
+    with pytest.raises(ConcurrentUpdateError):
+        await store_call(harness.uow(), duplicate, insert=True)

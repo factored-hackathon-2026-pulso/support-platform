@@ -285,6 +285,62 @@ only `@/features/cases/core` (rating words, the Cerrados slug) and `@/features/c
 - **Primitive:** the toast is ink at 88 % with a 12 px backdrop blur and a hairline border; its
   live region is "Avisos" (the panel is "Notificaciones").
 
+### Simulated channels: calls and email (slice 12)
+
+Contract: `docs/platform/api/slice-12-channels.md`. No new feature folder and no new dependency
+direction. Everything is simulated (no telephony, no mail server): people type what is said.
+
+- **`cases`** (core): the one channel map `CASE_CHANNEL` (`chat_app`, `chat_web`,
+  `phone_inbound`, `phone_outbound`, `email`: `kind`, `icon`, `label`), `caseChannel`,
+  `channelLabel`, `channelFact` (icon-only: chat bubble `message`, `phone-incoming`,
+  `phone-outgoing`, `mail`; the label is the tooltip). Cards, Inicio rows and the supervision
+  tables (Colas, Equipo sheet, the case header) show the icon; the ficha's "Canal" row says the
+  label. A case with `activeCallId` adds the green `phone` fact "Llamada en curso" to its card.
+  `channelPhrase` and supervision's `channelTooltip` are gone.
+- **`components/ui`**: fact icons `phone`, `phone-incoming`, `phone-outgoing`, `mic-off`.
+- **`conversation`**: the rules live in `channels.ts` (pure, `channels.test.ts`):
+  `centerMode` (a live call takes the center; otherwise the channel; a chat whose customer last
+  wrote an email is answered by email), `CALL_STATUS` (Sonando = ring, En llamada = dot, En espera
+  = pause, Llamada terminada = check), `callElapsedSeconds` (ringing from `startedAt`, answered
+  from `answeredAt`, ended = `durationSeconds`), `callStateLabel`, `callControls`,
+  `callDirectionFact`, `upsertCall` / `applyCallToDetail` (newer `version` only), `callForTime` /
+  `lineOffset` (a line's "02:41" inside its call), `callEventKind` (the backend's fixed system
+  lines), `threadSubject`, `replySubject` (never "Re: Re:"), `unansweredEmailIds` ("Nuevo"),
+  `emailToTurn`, `closeNoticeChannel`, the failure copy. `TranscriptItem` gained the variants
+  `line`, `call-event`, `note` and `email` (`TranscriptMessage` + `EmailCard`), so every view of a
+  transcript (Workspace, supervision, history) renders every kind. Components: `CallBar` (state,
+  live timer, direction, "Silenciado", Contestar / Poner en espera / Retomar / Silenciar /
+  Colgar; read-only in supervision), `CallReasonCard` ("Por qué llamas", outbound calls),
+  `CallComposer` ("Lo que dices", only `in_call`, + "Nota interna"), `EmailComposer` (Para hidden:
+  the API exposes no address; "Re: …" or an Asunto field before the first email; "El saludo y la
+  firma se agregan solos"; attach `aria-disabled` with tooltip "Pronto"), `StartCallDialog`
+  ("Llamar al cliente", required reason, one `Idempotency-Key` per opening). The header hides
+  "Cerrar caso" (and "Llamar al cliente") while a call is on; `describeCloseFailure` covers
+  `call_in_progress`; the close dialog drops "El cliente verá" for a phone case and says "El
+  cliente lo recibe por correo" for an email case. Hooks: `useCaseCalls` (only where a call
+  matters), `useCallCommand`, `useStartCall`, `useCallLine`, `useAddNote`, `useEmailReply` (writes
+  are not optimistic: the box keeps the text until the server answers; a retry re-sends the same
+  `clientMessageId`; they share the case's send scope). `call.updated` patches the calls list and
+  `detail.activeCall`; `case.updated` refetches the detail when `activeCallId` changes.
+- **`customer-chat`**: `channels.ts` (pure): `?canal=` (`chat` | `llamada` | `correo`),
+  `customerCallPhase` (dialing, incoming, live, hold, ended), titles and copy in es / pt,
+  `customerCallLines` (the conversation's `transcript` turns inside the call window),
+  `customerMailItems` ("Nuevo" = the bank's emails after the customer's last one),
+  `mailComposeMode`, `chatTurns` (the chat view shows messages and notices only). Screens: after
+  the customer, `ChannelPicker` ("Chat", "Llamar" dials at once, "Escribir un correo"),
+  `CustomerCallView` (phone frame: "Llamando…", "Te atiende {nombre}", timer, a local
+  "Silenciar", "Colgar", the lines, "Lo que dices"; "Volver a llamar" after the end),
+  `CustomerMailView` (thread + "Escribe tu correo" / "Responder"), `IncomingCallBanner` ("LATAM
+  Bank te está llamando", Contestar / Rechazar, over any channel) and `ConversationSurvey` (the
+  rating after a close, in the call and email views too). The route `routes/customer/simulator.tsx`
+  owns `?canal=`; the screen also works uncontrolled (tests). `call.updated` on `customer:<id>`
+  updates the call cache (`isNewerCustomerCall`: an ended call is final).
+- **No " · " joins** (UI rule): the supervisor header meta became facts (`caseHeaderFacts`), the
+  simulator lines ("Te atiende Daniela, de LATAM Bank", past blocks with title + byline), admin
+  `openCasesFact` ("5 (4 en español y 1 en portugués)") and the "Agregar persona" options
+  ("Nombre (Equipo)"), the MFA eyebrow, the error boundary and the auth panel. Only the document
+  title keeps its app suffix ("Página · LATAM Bank Soporte").
+
 ### Supervision and audit (slice 3)
 
 Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
@@ -426,7 +482,7 @@ route composes `@/features/audit`, and `app/` composes the badge and the session
 | `/administracion/usuarios?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=`             | Usuarios y roles                                   | admin      |
 | `/administracion/equipos?estado=&equipo=&nuevo=`                                       | Equipos                                            | admin      |
 | `/administracion/auditoria?…` (the supervision audit params)                           | Auditoría (same screen, `canOpenCases`)            | admin      |
-| `/cliente`                                                                             | customer chat simulator (dev tool, no staff shell) | —          |
+| `/cliente?canal=`                                                                      | customer simulator: chat, call or email (dev tool) | —          |
 
 Any other path inside a role section shows that role's not-found page; any other
 path at all (including the removed automation, approvals, tools, rules and
@@ -558,7 +614,8 @@ it with `lazyRoute()` in the right role section. Until it is built, render
   actor with `envelopeActor`. Slice 4: `directory.updated` (topic `admin:directory`,
   admins only, `{ staffIds, teamIds }`) and `me.updated` (topic `staff:<id>`, only
   that person, a fresh `StaffOut`): `topics.adminDirectory()`, `topics.staff(id)`. Slice 10:
-  `notification.created` and `notifications.read` on `staff:<id>` (the bell).
+  `notification.created` and `notifications.read` on `staff:<id>` (the bell). Slice 12:
+  `call.updated` (`Call` on `case:` / `inbox:`, `CustomerCall` on `customer:`).
 
 ## 8. Tokens and styling
 
@@ -702,7 +759,13 @@ is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
   authenticator (the test computes the TOTP code from the key on screen, `support/totp.ts`),
   signs in with password + code and gets a case; a role change reaches the role switcher live
   and back; deactivation signs the other window out),
-  `auth.spec.ts` (5 wrong passwords → lockout; an admin unlocks). Slice 10: `supervision.spec.ts`
+  `auth.spec.ts` (5 wrong passwords → lockout; an admin unlocks), `channels.spec.ts` (slice 12:
+  the customer calls, the analyst answers, lines both ways, hold / resume, a staff-only note,
+  hang up, close without "El cliente verá", the survey in the call view; the customer emails, the
+  analyst replies by email, the framed reply reaches the customer marked "Nuevo", the customer
+  answers in the thread). The simulator page object picks a channel (`open(channel)`,
+  `actors.customer(label, customer, channel)`, chat by default) and has call and email helpers;
+  the Workspace page object has `callBar`, `callState`, `say`, `addNote`, `replyByEmail`. Slice 10: `supervision.spec.ts`
   › "the bell: …" (supervision's count goes up live, "Revisar" in the panel lands on Escalados
   with it open, the answer reaches the analyst's bell); the shell page object has `bell`,
   `unreadCount()`, `openNotifications()` and `notification(title, line)`, and `toast()` reads the

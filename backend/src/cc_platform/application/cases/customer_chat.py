@@ -13,8 +13,8 @@ appended (a customer message never changes the status).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
-from cc_platform.application.cases import copy
 from cc_platform.application.cases.assignment import AssignCase
 from cc_platform.application.cases.commands import find_replay
 from cc_platform.application.cases.dto import (
@@ -26,22 +26,20 @@ from cc_platform.application.cases.dto import (
     RateConversationCommand,
     RateConversationResult,
 )
+from cc_platform.application.cases.intake import CaseIntake
 from cc_platform.application.cases.read_model import CaseReader
 from cc_platform.application.cases.sla import SlaPolicy
 from cc_platform.application.concurrency import retry_on_conflict
-from cc_platform.application.errors import AuthenticationRequiredError
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import CustomerActor
 from cc_platform.domain.cases.case import Case
-from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.errors import AlreadyRatedError, IdempotencyConflictError
 from cc_platform.domain.cases.rating import normalize_rating_comment, normalize_rating_score
 from cc_platform.domain.cases.turn import Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
-    AssignmentReason,
-    CasePriority,
+    CaseChannel,
     TurnAudience,
     TurnAuthorRole,
     TurnKind,
@@ -61,12 +59,6 @@ async def current_case(uow: UnitOfWork, customer_id: str) -> Case | None:
         if case is not None:
             return case
     return await uow.cases.latest_for_customer(customer_id)
-
-
-def latest_closed(cases: list[Case]) -> Case | None:
-    """The most recently closed case (whatever its age)."""
-    closed = [case for case in cases if case.closure is not None]
-    return max(closed, key=lambda c: (c.closed_at or c.opened_at, c.id)) if closed else None
 
 
 async def past_conversations(uow: UnitOfWork, customer_id: str) -> list[Case]:
@@ -209,11 +201,18 @@ class RateConversation:
 
 @dataclass(frozen=True, slots=True)
 class PostCustomerTurn:
+    """The customer writes in the chat: the message joins the open case or opens one
+    (``CaseIntake``, channel = the session's chat)."""
+
     uow: UnitOfWorkFactory
     clock: Clock
     ids: IdGenerator
     sla: SlaPolicy
     assign_case: AssignCase
+
+    @property
+    def intake(self) -> CaseIntake:
+        return CaseIntake(self.clock, self.ids, self.sla, self.assign_case)
 
     async def execute(
         self, customer: CustomerActor, command: PostTurnCommand
@@ -237,97 +236,28 @@ class PostCustomerTurn:
                     raise NotFoundError(caseId=replay.case_id)
                 return await _result(reader, case, replay, customer, created=False, replayed=True)
 
-            slot = await uow.case_slots.get(customer.customer_id)
-            case = None
-            if slot is not None and slot.open_case_id is not None:
-                case = await uow.cases.get(slot.open_case_id)
-            if case is not None and not case.is_closed:
-                turn = self._append_message(case, customer, text, client_message_id)
-                await uow.cases.save(case)
-                await uow.turns.add(turn)
-                created = False
-            else:
-                case, turns = await self._open(uow, customer, text, client_message_id)
-                if slot is None:
-                    slot = CustomerCaseSlot(customer_id=customer.customer_id)
-                    slot.occupy(case.id)
-                    await uow.case_slots.add(slot)
-                else:
-                    slot.release(slot.open_case_id or case.id)
-                    slot.occupy(case.id)
-                    await uow.case_slots.save(slot)
-                await uow.cases.add(case)
-                for item in turns:
-                    await uow.turns.add(item)
-                await self.assign_case.place(
-                    uow, case, reason=AssignmentReason.LANGUAGE_LEAST_LOADED
-                )
-                turn, created = turns[0], True
-            result = await _result(reader, case, turn, customer, created=created, replayed=False)
+            def message(case: Case, at: datetime) -> list[Turn]:
+                return [
+                    case.append_turn(
+                        turn_id=self.ids.new_id(IdPrefix.TURN),
+                        kind=TurnKind.MESSAGE,
+                        audience=TurnAudience.EVERYONE,
+                        author_role=TurnAuthorRole.CUSTOMER,
+                        author_id=customer.customer_id,
+                        text=text,
+                        created_at=at,
+                        client_message_id=client_message_id,
+                    )
+                ]
+
+            channel = customer.channel if customer.channel.is_chat else CaseChannel.CHAT_APP
+            intake = await self.intake.open_or_join(uow, customer, channel=channel, contact=message)
+            turn = intake.turns[0]
+            result = await _result(
+                reader, intake.case, turn, customer, created=intake.created, replayed=False
+            )
             await uow.commit()
         return result
-
-    def _append_message(
-        self, case: Case, customer: CustomerActor, text: str, client_message_id: str
-    ) -> Turn:
-        return case.append_turn(
-            turn_id=self.ids.new_id(IdPrefix.TURN),
-            kind=TurnKind.MESSAGE,
-            audience=TurnAudience.EVERYONE,
-            author_role=TurnAuthorRole.CUSTOMER,
-            author_id=customer.customer_id,
-            text=text,
-            created_at=self.clock.now(),
-            client_message_id=client_message_id,
-        )
-
-    async def _open(
-        self, uow: UnitOfWork, customer: CustomerActor, text: str, client_message_id: str
-    ) -> tuple[Case, list[Turn]]:
-        profile = await uow.customers.get(customer.customer_id)
-        if profile is None:
-            raise AuthenticationRequiredError()
-        previous = latest_closed(await uow.cases.list_for_customer(profile.id))
-        now = self.clock.now()
-        case = Case.open(
-            case_id=self.ids.new_id(IdPrefix.CASE),
-            customer_id=profile.id,
-            customer_name=profile.display_name,
-            channel=customer.channel,
-            language=profile.language,
-            priority=CasePriority.NONE,  # every case opens without a priority (slice 8)
-            opened_at=now,
-            sla_due_at=self.sla.due_at(opened_at=now),
-            actor=customer.actor_ref(),
-            previous_case_id=previous.id if previous else None,
-        )
-        turns = [self._append_message(case, customer, text, client_message_id)]
-        turns.append(
-            case.append_turn(
-                turn_id=self.ids.new_id(IdPrefix.TURN),
-                kind=TurnKind.NOTICE,
-                audience=TurnAudience.EVERYONE,
-                author_role=TurnAuthorRole.SYSTEM,
-                author_id=None,
-                text=copy.NOTICE_OPENED[case.language],
-                created_at=now,
-            )
-        )
-        if previous is not None and previous.closure is not None:
-            turns.append(
-                case.append_turn(
-                    turn_id=self.ids.new_id(IdPrefix.TURN),
-                    kind=TurnKind.ROUTING,
-                    audience=TurnAudience.STAFF,
-                    author_role=TurnAuthorRole.SYSTEM,
-                    author_id=None,
-                    text=copy.wrote_again(
-                        profile.first_name, previous.closure.closed_at, previous.closure.reason
-                    ),
-                    created_at=now,
-                )
-            )
-        return case, turns
 
 
 async def _result(

@@ -40,7 +40,7 @@ def open_case() -> Case:
         case_id=CASE_ID,
         customer_id=CUSTOMER_ID,
         customer_name="Natalia Guzmán Rincón",
-        channel=CaseChannel.APP_CHAT,
+        channel=CaseChannel.CHAT_APP,
         language=Language.SPANISH,
         priority=CasePriority.NONE,
         opened_at=NOW,

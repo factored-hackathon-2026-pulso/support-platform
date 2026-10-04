@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from cc_platform.application.cases.ports import (
         AnalystHomeReader,
         AssignmentRepository,
+        CallRepository,
         CaseRepository,
         CustomerCaseSlotRepository,
         EscalationRepository,
@@ -101,6 +102,11 @@ class UnitOfWork(Protocol):
 
     @property
     def escalations(self) -> EscalationRepository: ...
+
+    @property
+    def calls(self) -> CallRepository:
+        """Simulated phone calls of the cases (slice 12)."""
+        ...
 
     @property
     def notifications(self) -> NotificationRepository:

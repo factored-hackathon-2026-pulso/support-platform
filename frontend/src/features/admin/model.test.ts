@@ -137,7 +137,7 @@ describe('labels', () => {
       { key: 'team', icon: 'users', text: 'Equipo Andes', label: 'Equipo' },
     ])
     expect(userSummaryFacts({ ...daniela, languages: [] })[0]?.text).toBe('Sin idiomas')
-    expect(openCasesFact(daniela.openCases)).toBe('5 · 4 en español · 1 en portugués')
+    expect(openCasesFact(daniela.openCases)).toBe('5 (4 en español y 1 en portugués)')
     expect(openCasesFact({ total: 0, es: 0, pt: 0 })).toBe('0')
     expect(usersSubtitle(13)).toBe('13 personas en la plataforma')
     expect(usersSubtitle(undefined)).toBe('Quién puede hacer qué en la plataforma')
@@ -756,8 +756,8 @@ describe('teams', () => {
   it('offers active people of other teams to "Agregar persona"', () => {
     const candidates = addMemberCandidates([daniela, mariana, andres, carolina], daniela.team.id)
     expect(candidates.map((c) => c.label)).toEqual([
-      'Carolina Peña Ruiz · Administración de la plataforma',
-      'Mariana Duque · Equipo Pacífico',
+      'Carolina Peña Ruiz (Administración de la plataforma)',
+      'Mariana Duque (Equipo Pacífico)',
     ])
   })
 

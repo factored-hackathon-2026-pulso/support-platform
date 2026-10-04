@@ -40,6 +40,16 @@ export type CasePriorityResult = Schemas['CasePriorityResult']
 /** Slice 9: escalations to supervision (staff only). */
 export type Escalation = Schemas['Escalation']
 export type EscalationResult = Schemas['EscalationResult']
+/** Slice 12: simulated calls (`CALL-…`) and email replies. */
+export type Call = Schemas['Call']
+export type CallList = Schemas['CallList']
+export type CallResponse = Schemas['CallResponse']
+export type CallState = Schemas['CallState']
+export type CallDirection = Schemas['CallDirection']
+export type CallEndReason = Schemas['CallEndReason']
+export type EmailMessage = Schemas['EmailMessage']
+export type EmailReplyRequest = Schemas['EmailReplyRequest']
+export type EmailReplyResponse = Schemas['EmailReplyResponse']
 
 /** A message the analyst sent that the server has not confirmed yet (optimistic UI). */
 export interface PendingMessage {

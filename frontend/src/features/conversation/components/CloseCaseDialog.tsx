@@ -13,6 +13,7 @@ import {
   type CloseCaseForm,
   type CloseFormErrors,
 } from '../model'
+import { closeNoticeChannel } from '../channels'
 import { useCloseCase } from '../hooks/use-close-case'
 import type { CaseSummary } from '../types'
 
@@ -47,6 +48,8 @@ export function CloseCaseDialog({ summary, open, onOpenChange, onClosed }: Close
   const reasonsRef = useRef<HTMLDivElement>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
   const noteTooLong = form.note.trim().length > CLOSE_NOTE_MAX_LENGTH
+  // Slice 12: a call has no screen to show the notice on; an email case gets it by email.
+  const noticeChannel = closeNoticeChannel(summary)
 
   function update(patch: Partial<CloseCaseForm>) {
     setForm((current) => ({ ...current, ...patch }))
@@ -142,9 +145,16 @@ export function CloseCaseDialog({ summary, open, onOpenChange, onClosed }: Close
             onChange={(event) => update({ note: event.target.value })}
           />
         </Field>
-        <Callout tone="neutral" title="El cliente verá">
-          <span lang={summary.language}>{CLOSED_NOTICE[summary.language]}</span>
-        </Callout>
+        {noticeChannel === 'call' ? null : (
+          <Callout
+            tone="neutral"
+            title={
+              noticeChannel === 'email' ? 'El cliente lo recibe por correo' : 'El cliente verá'
+            }
+          >
+            <span lang={summary.language}>{CLOSED_NOTICE[summary.language]}</span>
+          </Callout>
+        )}
         {close.isError ? (
           <Callout tone="danger" title="No se cerró el caso">
             {describeCloseFailure(close.error)}

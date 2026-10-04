@@ -34,13 +34,13 @@ from cc_platform.application.security import Actor
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.events import CaseAssigned, CaseOpened, TurnCreated
 from cc_platform.domain.cases.values import (
+    CONVERSATION_KINDS,
     AssignmentReason,
     CaseStatus,
     CloseReason,
     InboxStatus,
     TurnAudience,
     TurnAuthorRole,
-    TurnKind,
 )
 from cc_platform.domain.people.staff import Language, StaffRole
 from cc_platform.domain.shared.actor import ActorRole
@@ -181,7 +181,7 @@ def _reason(value: str | None) -> AssignmentReason | None:
 def _is_customer_message(payload: Mapping[str, object]) -> bool:
     return (
         payload.get("author_role") == TurnAuthorRole.CUSTOMER.value
-        and payload.get("kind") == TurnKind.MESSAGE.value
+        and payload.get("kind") in {kind.value for kind in CONVERSATION_KINDS}  # chat or email
         and payload.get("audience") == TurnAudience.EVERYONE.value
     )
 
@@ -243,7 +243,9 @@ class _ActivityProjection:
         if event.event_type == CaseAssigned.event_type:
             self._assigned(case, event)
         elif event.event_type == CaseOpened.event_type:
-            if _text(event.payload, "previous_case_id"):
+            # The customer came back (an analyst's follow-up call case is not a return).
+            by_customer = event.actor_role == ActorRole.CUSTOMER.value
+            if by_customer and _text(event.payload, "previous_case_id"):
                 self._returned.append((case, event.event_time))
         elif event.event_type == TurnCreated.event_type:
             self._message(case, event)
@@ -252,6 +254,8 @@ class _ActivityProjection:
         payload = event.payload
         to = _text(payload, "assigned_analyst_id")
         reason = _reason(_text(payload, "reason"))
+        if reason is AssignmentReason.OUTBOUND_CALL:
+            return  # slice 12: she opened it herself to call the customer
         if to == self._me and reason is not None:
             self._went_to_her.add(case.id)
             kind = _ASSIGNED_KIND[reason]

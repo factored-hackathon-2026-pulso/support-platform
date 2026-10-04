@@ -30,6 +30,7 @@ import {
   mergeCustomerTurns,
   normalizeCustomerMessage,
   pastBlocks,
+  pastBlockByline,
   pastBlockTitle,
   pastConversationsButton,
   pickerStatus,
@@ -205,7 +206,7 @@ describe('what the chat shows', () => {
     expect(toChatItems(chat).map((i) => [i.side, i.author, i.delivery])).toEqual([
       ['customer', null, 'sent'],
       ['notice', null, 'sent'],
-      ['bank', 'Daniela · LATAM Bank', 'sent'],
+      ['bank', 'Daniela, de LATAM Bank', 'sent'],
       ['notice', null, 'sent'],
       ['customer', null, 'sending'],
     ])
@@ -221,9 +222,9 @@ describe('what the chat shows', () => {
         makeCustomerConversation({ status: 'with_agent', agentName: 'Daniela' }),
         'es',
       ),
-    ).toBe('Te atiende Daniela · LATAM Bank')
+    ).toBe('Te atiende Daniela, de LATAM Bank')
     expect(conversationStatusLine(makeCustomerConversation({ status: 'with_agent' }), 'es')).toBe(
-      'Te atiende una persona del equipo · LATAM Bank',
+      'Te atiende una persona del equipo, de LATAM Bank',
     )
     expect(conversationStatusLine(makeCustomerConversation({ status: 'closed' }), 'es')).toBe(
       'Conversación terminada',
@@ -242,9 +243,9 @@ describe('what the chat shows', () => {
         makeCustomerConversation({ status: 'with_agent', agentName: 'Daniela' }),
         'pt',
       ),
-    ).toBe('Você está falando com Daniela · LATAM Bank')
+    ).toBe('Você está falando com Daniela, do LATAM Bank')
     expect(conversationStatusLine(makeCustomerConversation({ status: 'with_agent' }), 'pt')).toBe(
-      'Você está falando com uma pessoa da equipe · LATAM Bank',
+      'Você está falando com uma pessoa da equipe, do LATAM Bank',
     )
     expect(conversationStatusLine(makeCustomerConversation({ status: 'closed' }), 'pt')).toBe(
       'Conversa encerrada',
@@ -390,19 +391,15 @@ describe('past conversations', () => {
     ])
   })
 
-  it('titles a block with its date, its state and who attended it', () => {
-    expect(pastBlockTitle(makePastSummary(), 'es')).toBe(
-      'Conversación del 4 mar 2026 · Terminada · Te atendió Daniela',
+  it('titles a block with its date and says who attended it on its own line', () => {
+    expect(pastBlockTitle(makePastSummary(), 'es')).toBe('Conversación del 4 mar 2026')
+    expect(pastBlockByline(makePastSummary(), 'es')).toBe('Te atendió Daniela')
+    expect(pastBlockByline(makePastSummary({ agentName: null }), 'es')).toBeNull()
+    expect(pastBlockTitle(makePastSummary(), 'pt')).toBe('Conversa de 4 mar 2026')
+    expect(pastBlockByline(makePastSummary(), 'pt')).toBe('Atendida por Daniela')
+    expect(pastBlockTitle(makePastSummary({ openedAt: '2026-02-10T15:00:00Z' }), 'pt')).toBe(
+      'Conversa de 10 fev 2026',
     )
-    expect(pastBlockTitle(makePastSummary({ agentName: null }), 'es')).toBe(
-      'Conversación del 4 mar 2026 · Terminada',
-    )
-    expect(pastBlockTitle(makePastSummary(), 'pt')).toBe(
-      'Conversa de 4 mar 2026 · Encerrada · Atendida por Daniela',
-    )
-    expect(
-      pastBlockTitle(makePastSummary({ openedAt: '2026-02-10T15:00:00Z', agentName: null }), 'pt'),
-    ).toBe('Conversa de 10 fev 2026 · Encerrada')
   })
 
   it('turns a conversation that ended here into a block with its last message', () => {
@@ -419,7 +416,7 @@ describe('past conversations', () => {
     expect(endedSummary({ conversation, turns })).toEqual({
       caseId: 'CASE-9',
       status: 'closed',
-      channel: 'app_chat',
+      channel: 'chat_app',
       openedAt: conversation.openedAt,
       closedAt: '2026-03-05T16:30:00Z',
       agentName: 'Daniela',

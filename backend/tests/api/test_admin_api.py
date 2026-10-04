@@ -124,7 +124,7 @@ def test_list_and_get_users(client: TestClient, sign_in: SignIn) -> None:
     assert filtered["items"][0]["guards"] == {"isSelf": True, "lastActiveAdmin": False}
     daniela = client.get(f"/api/v1/admin/users/{DANIELA_ID}", headers=bearer(token)).json()
     assert AdminUser.model_validate(daniela).model_dump(mode="json", by_alias=True) == daniela
-    assert daniela["openCases"] == {"total": 5, "es": 4, "pt": 1}
+    assert daniela["openCases"] == {"total": 6, "es": 5, "pt": 1}
     assert daniela["team"] == {"id": ANDES, "name": "Equipo Andes"}
     for bad in (UNKNOWN_STAFF, "nope", "CASE-" + "0" * 26):
         missing = client.get(f"/api/v1/admin/users/{bad}", headers=bearer(token))
@@ -310,9 +310,9 @@ def test_guard_rail_problems(client: TestClient, sign_in: SignIn) -> None:
     assert (blocked["code"], blocked["blockReason"], blocked["openCases"]) == (
         "staff_has_open_cases",
         "deactivate",
-        5,
+        6,
     )
-    assert len(blocked["caseIds"]) == 5
+    assert len(blocked["caseIds"]) == 6
     pt = client.patch(
         f"/api/v1/admin/users/{DANIELA_ID}",
         json={"expectedVersion": daniela["version"], "languages": ["es"]},

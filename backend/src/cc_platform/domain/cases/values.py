@@ -1,7 +1,8 @@
 """Vocabulary of the cases context (slice 2 contract §2.1).
 
 Enum values are part of the public API (OpenAPI enums the frontend generates types from).
-Every case is a chat: there are no calls, emails, routing tiers or bots.
+Slice 12: a case opens by chat (app or web), by a phone call (simulated: no telephony) or by
+email (simulated: no mail server). There are no routing tiers or bots.
 """
 
 from __future__ import annotations
@@ -12,10 +13,26 @@ from cc_platform.domain.shared.actor import ActorRole
 
 
 class CaseChannel(StrEnum):
-    """Where the customer writes from (the simulator stands in for both)."""
+    """How the case opened (slice 12). Later contacts of any channel join the open case (one
+    open case per customer), so a chat case may hold a call or an email too.
 
-    APP_CHAT = "app_chat"
-    WEB_CHAT = "web_chat"
+    ``phone_outbound`` is a case staff opened to call the customer (a follow-up); an outbound
+    call placed on an open case keeps that case's channel.
+    """
+
+    CHAT_APP = "chat_app"
+    CHAT_WEB = "chat_web"
+    PHONE_INBOUND = "phone_inbound"
+    PHONE_OUTBOUND = "phone_outbound"
+    EMAIL = "email"
+
+    @property
+    def is_chat(self) -> bool:
+        return self in CHAT_CHANNELS
+
+
+#: The channels a customer chat session can open a case from (the simulator's app and web).
+CHAT_CHANNELS: frozenset[CaseChannel] = frozenset({CaseChannel.CHAT_APP, CaseChannel.CHAT_WEB})
 
 
 class CasePriority(StrEnum):
@@ -74,12 +91,31 @@ class TurnAuthorRole(StrEnum):
 
 
 class TurnKind(StrEnum):
-    """``message`` = conversation; ``routing`` = staff-only assignment banner (how the case
-    arrived); ``notice`` = platform note."""
+    """``message`` = chat conversation; ``routing`` = staff-only assignment banner (how the
+    case arrived); ``notice`` = platform note. Slice 12: ``transcript`` = a line of a call
+    (said by the customer or the analyst, or a ``system`` line when the call is held, resumed
+    or ends); ``note`` = an analyst's internal note (staff only); ``email`` = an email of the
+    case thread (``subject`` set; from the customer = inbound, from an analyst = outbound)."""
 
     MESSAGE = "message"
     ROUTING = "routing"
     NOTICE = "notice"
+    TRANSCRIPT = "transcript"
+    NOTE = "note"
+    EMAIL = "email"
+
+
+class EmailDirection(StrEnum):
+    """Slice 12: ``in`` = the customer wrote to the bank; ``out`` = an analyst answered."""
+
+    IN = "in"
+    OUT = "out"
+
+
+#: Turns that are a contact of the conversation for the inbox (last message, unread, "Por
+#: responder", first response): chat messages and emails. Call lines are not (the call
+#: itself is the contact: answering it is the first response).
+CONVERSATION_KINDS: frozenset[TurnKind] = frozenset({TurnKind.MESSAGE, TurnKind.EMAIL})
 
 
 class TurnAudience(StrEnum):
@@ -91,11 +127,14 @@ class TurnAudience(StrEnum):
 
 class AssignmentReason(StrEnum):
     """Why a case reached its analyst: on arrival, from the queue when someone became
-    available, or ``manual`` (a supervisor chose her, from the queue or by reassignment)."""
+    available, ``manual`` (a supervisor chose her, from the queue or by reassignment) or
+    ``outbound_call`` (she opened it to call the customer, slice 12)."""
 
     LANGUAGE_LEAST_LOADED = "language_least_loaded"
     QUEUE_DRAINED = "queue_drained"
     MANUAL = "manual"
+    OUTBOUND_CALL = "outbound_call"
+    """Slice 12: the analyst opened the case herself to call the customer (a follow-up)."""
 
 
 #: Policy id of rule 3 (docs/policies.md): a case only goes to an analyst who speaks its

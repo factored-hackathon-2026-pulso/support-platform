@@ -11,7 +11,7 @@ import math
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from cc_platform.domain.cases.values import CloseReason
+from cc_platform.domain.cases.values import CaseChannel, CloseReason
 from cc_platform.domain.people.staff import Language
 
 #: Display zone for dates baked into stored banner text (team-generated choice). Every
@@ -96,9 +96,16 @@ def assigned_from_queue(analyst_name: str, waited_minutes: int, label: str) -> s
     return f"Asignado a {analyst_name} después de {waited_minutes} min en la {in_sentence(label)}."
 
 
-def wrote_again(first_name: str, closed_at: datetime, reason: CloseReason) -> str:
+def wrote_again(
+    first_name: str,
+    closed_at: datetime,
+    reason: CloseReason,
+    channel: CaseChannel = CaseChannel.CHAT_APP,
+) -> str:
+    """Staff banner of a case that follows a closed one ("volvió a llamar" by phone)."""
+    verb = "volvió a llamar" if channel is CaseChannel.PHONE_INBOUND else "volvió a escribir"
     return (
-        f"{first_name} volvió a escribir. Su caso anterior se cerró el "
+        f"{first_name} {verb}. Su caso anterior se cerró el "
         f"{display_datetime(closed_at)} ({CLOSE_REASON_LABEL[reason].lower()})."
     )
 
@@ -170,3 +177,81 @@ def escalation_answered(supervisor_name: str) -> str:
 def escalation_taken(supervisor_name: str, previous_name: str) -> str:
     """The supervisor took the escalated case herself (she also holds Analista)."""
     return f"{supervisor_name} tomó el caso de {previous_name}."
+
+
+# ----------------------------------------------------------------------------- slice 12
+# Calls and emails (simulated: no telephony, no mail server). Customer-facing texts in the
+# case language; staff-facing ones in Spanish, gender-neutral.
+
+NOTICE_OPENED_BY_CALL: dict[Language, str] = {
+    Language.SPANISH: "Recibimos tu llamada. En un momento te atiende una persona del equipo.",
+    Language.PORTUGUESE: "Recebemos sua ligação. Em instantes uma pessoa da equipe vai te atender.",
+}
+
+NOTICE_OPENED_BY_EMAIL: dict[Language, str] = {
+    Language.SPANISH: "Recibimos tu correo. Una persona del equipo te responde por este medio.",
+    Language.PORTUGUESE: "Recebemos seu e-mail. Uma pessoa da equipe vai te responder por aqui.",
+}
+
+
+def opened_notice(channel: CaseChannel, language: Language) -> str:
+    """The "we got it" notice of a new case, by the channel that opened it."""
+    if channel is CaseChannel.PHONE_INBOUND:
+        return NOTICE_OPENED_BY_CALL[language]
+    if channel is CaseChannel.EMAIL:
+        return NOTICE_OPENED_BY_EMAIL[language]
+    return NOTICE_OPENED[language]
+
+
+#: ``system`` transcript lines of a call (everyone sees them, case language).
+CALL_HELD: dict[Language, str] = {
+    Language.SPANISH: "Llamada en espera.",
+    Language.PORTUGUESE: "Chamada em espera.",
+}
+CALL_RESUMED: dict[Language, str] = {
+    Language.SPANISH: "La llamada continúa.",
+    Language.PORTUGUESE: "A chamada continua.",
+}
+CALL_ENDED: dict[Language, str] = {
+    Language.SPANISH: "La llamada terminó.",
+    Language.PORTUGUESE: "A chamada terminou.",
+}
+CALL_NOT_ANSWERED: dict[Language, str] = {
+    Language.SPANISH: "La llamada terminó sin respuesta.",
+    Language.PORTUGUESE: "A chamada terminou sem resposta.",
+}
+
+#: The email reply frame (slice 12): greeting with the customer's first name and the
+#: analyst's signature, added by the platform around what the analyst wrote.
+EMAIL_GREETING: dict[Language, str] = {
+    Language.SPANISH: "Hola, {name}:",
+    Language.PORTUGUESE: "Olá, {name}:",
+}
+EMAIL_CLOSING: dict[Language, str] = {
+    Language.SPANISH: "Saludos,",
+    Language.PORTUGUESE: "Atenciosamente,",
+}
+EMAIL_SIGNATURE_BANK = "LATAM Bank"
+#: Prefix of a reply's subject ("Re: <subject of the thread>").
+REPLY_PREFIX = "Re: "
+
+
+def email_reply_body(
+    language: Language, customer_first_name: str, analyst_name: str, body: str
+) -> str:
+    """ "Hola, Ignacio:\n\n<body>\n\nSaludos,\nDaniela Ríos\nLATAM Bank"."""
+    greeting = EMAIL_GREETING[language].format(name=customer_first_name)
+    signature = f"{EMAIL_CLOSING[language]}\n{analyst_name}\n{EMAIL_SIGNATURE_BANK}"
+    return f"{greeting}\n\n{body}\n\n{signature}"
+
+
+def reply_subject(thread_subject: str) -> str:
+    """ "Re: <subject>", never "Re: Re: …"."""
+    if thread_subject.lower().startswith(REPLY_PREFIX.lower()):
+        return thread_subject
+    return f"{REPLY_PREFIX}{thread_subject}"
+
+
+def follow_up_call(analyst_name: str, customer_first_name: str) -> str:
+    """Staff banner of a case an analyst opened to call the customer back (seed only)."""
+    return f"{analyst_name} abrió este caso para llamar a {customer_first_name} (seguimiento)."

@@ -27,6 +27,9 @@ class CaseOpened(DomainEvent):
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class TurnCreated(DomainEvent):
+    """A turn of the case: chat message, notice, banner, and since slice 12 a call transcript
+    line, an internal note or an email (``subject`` set only on emails)."""
+
     event_type = "turn.created"
     entity = "turn"
 
@@ -38,6 +41,14 @@ class TurnCreated(DomainEvent):
     text: str
     language: str
     client_message_id: str | None
+    subject: str | None = None
+
+    def payload(self) -> JsonObject:
+        """``subject`` only on emails: the payload of every other turn is unchanged."""
+        data = DomainEvent.payload(self)
+        if self.subject is None:
+            data.pop("subject", None)
+        return data
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -252,6 +263,88 @@ ESCALATION_EVENTS: tuple[type[DomainEvent], ...] = (
     EscalationAcknowledged,
 )
 
+# ----------------------------------------------------------------------------- calls
+# Slice 12: simulated phone calls (no telephony). ``entity_id`` is the call id (``CALL-…``);
+# ``case_id`` is set. The transcript lives in the case's turns (kind ``transcript``).
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CallStarted(DomainEvent):
+    """A call started ringing: the customer called (``inbound``) or an analyst called them
+    (``outbound``, with a reason: staff text, the audit shows only its length)."""
+
+    event_type = "call.started"
+    entity = "call"
+
+    direction: str
+    customer_id: str
+    analyst_id: str | None
+    reason: str | None
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CallAnswered(DomainEvent):
+    """Someone answered: the assignee (inbound) or the customer (outbound)."""
+
+    event_type = "call.answered"
+    entity = "call"
+
+    answered_by_role: str
+    analyst_id: str
+    ring_seconds: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CallHeld(DomainEvent):
+    event_type = "call.held"
+    entity = "call"
+
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CallResumed(DomainEvent):
+    event_type = "call.resumed"
+    entity = "call"
+
+    analyst_id: str
+    hold_seconds: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CallMuteChanged(DomainEvent):
+    """The analyst muted or unmuted her line (every state change leaves an event)."""
+
+    event_type = "call.mute_changed"
+    entity = "call"
+
+    muted: bool
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CallEnded(DomainEvent):
+    event_type = "call.ended"
+    entity = "call"
+
+    end_reason: str
+    ended_by_role: str
+    analyst_id: str | None
+    answered: bool
+    duration_seconds: int | None
+    hold_seconds: int
+
+
+#: Every call event (slice 12).
+CALL_EVENTS: tuple[type[DomainEvent], ...] = (
+    CallStarted,
+    CallAnswered,
+    CallHeld,
+    CallResumed,
+    CallMuteChanged,
+    CallEnded,
+)
+
 #: Every event type of the cases context (the realtime projection owns them).
 CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseOpened,
@@ -265,4 +358,5 @@ CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseRated,
     CasePriorityChanged,
     *ESCALATION_EVENTS,
+    *CALL_EVENTS,
 )

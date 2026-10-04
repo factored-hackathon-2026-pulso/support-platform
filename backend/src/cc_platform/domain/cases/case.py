@@ -13,6 +13,9 @@ State machine (slice 2 contract §2.3; explicit transitions, anything else raise
                                           no transition, never on a closed case)
     assigned | in_progress ──▶ same + open escalation (the assignee escalates, slice 9; one
                                           at a time, ``open_escalation_id``; no transition)
+    open (not closed) ──▶ same + active call (a call starts, slice 12; one at a time,
+                                          ``active_call_id``; a case with an active call is
+                                          not closed: ``call_in_progress``)
 
 A closed case never reopens: the customer's next message opens a new case linked through
 ``previous_case_id``. Every transition records a domain event; the optimistic ``version``
@@ -33,6 +36,7 @@ from datetime import datetime
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.errors import (
     AlreadyRatedError,
+    CallInProgressError,
     CaseClosedError,
     CaseNotClosedError,
     EscalationOpenError,
@@ -58,6 +62,7 @@ from cc_platform.domain.cases.rating import (
 from cc_platform.domain.cases.turn import Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
     CLOSABLE_STATUSES,
+    CONVERSATION_KINDS,
     OPEN_ASSIGNED_STATUSES,
     REPLYABLE_STATUSES,
     CaseChannel,
@@ -153,6 +158,8 @@ class Case(AggregateRoot):
     """The customer's satisfaction rating (slice 7): only on a closed case, at most once."""
     open_escalation_id: str | None = None
     """The escalation to supervision that is open now (slice 9): at most one per case."""
+    active_call_id: str | None = None
+    """The call that is ringing or connected now (slice 12): at most one per case."""
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.CASE)
@@ -171,6 +178,10 @@ class Case(AggregateRoot):
             raise InvalidValueError("only a closed case carries a rating", field="rating")
         if self.open_escalation_id is not None:
             require_id(self.open_escalation_id, IdPrefix.ESCALATION)
+        if self.active_call_id is not None:
+            require_id(self.active_call_id, IdPrefix.CALL)
+            if self.closure is not None:
+                raise InvalidValueError("a closed case has no active call", field="call")
 
     # ------------------------------------------------------------------ factory
     @classmethod
@@ -269,6 +280,33 @@ class Case(AggregateRoot):
             raise InvalidValueError("that escalation is not the open one", field="escalation")
         self.open_escalation_id = None
 
+    # ------------------------------------------------------------------ calls (slice 12)
+    def start_call(self, call_id: str) -> None:
+        """Hold the pointer of a new call (the ``Call`` records the event). One active call at
+        a time (``call_in_progress``); never on a closed case."""
+        require_id(call_id, IdPrefix.CALL)
+        if self.is_closed:
+            raise CaseClosedError()
+        if self.active_call_id is not None:
+            raise CallInProgressError(self.active_call_id)
+        self.active_call_id = call_id
+
+    def end_call(self, call_id: str) -> None:
+        """The active call ended."""
+        if self.active_call_id != call_id:
+            raise InvalidValueError("that call is not the active one", field="call")
+        self.active_call_id = None
+
+    def respond_by_call(self, *, actor: ActorRef, at: datetime) -> bool:
+        """Answering a call is a response: the first one stops the first-response SLA.
+        Returns True when it was the first response."""
+        if self.is_closed:
+            raise CaseClosedError()
+        if self.first_response_at is not None:
+            return False
+        self._first_response(at, actor)
+        return True
+
     # ------------------------------------------------------------------ transcript
     def append_turn(
         self,
@@ -281,11 +319,12 @@ class Case(AggregateRoot):
         text: str,
         created_at: datetime,
         client_message_id: str | None = None,
+        subject: str | None = None,
     ) -> Turn:
         """Add the next turn (``sequence = last_sequence + 1``) and record ``turn.created``.
 
-        The first analyst message also stops the first-response SLA. The caller stores the
-        returned turn in the same Unit of Work as this case.
+        The first analyst message (chat or email) also stops the first-response SLA. The
+        caller stores the returned turn in the same Unit of Work as this case.
         """
         if self.is_closed:
             raise CaseClosedError()
@@ -301,6 +340,7 @@ class Case(AggregateRoot):
             language=self.language,
             created_at=created_at,
             client_message_id=client_message_id,
+            subject=subject,
         )
         self.last_sequence = turn.sequence
         if turn.is_public:
@@ -308,7 +348,7 @@ class Case(AggregateRoot):
         preview = preview_of(turn.text)
         self.last_turn_author_role = author_role
         self.last_turn_preview = preview
-        if kind is TurnKind.MESSAGE:
+        if kind in CONVERSATION_KINDS:
             self.last_message_at = created_at
             self.last_message_author_role = author_role
             self.last_message_preview = preview
@@ -328,19 +368,19 @@ class Case(AggregateRoot):
                 text=turn.text,
                 language=turn.language.value,
                 client_message_id=client_message_id,
+                subject=turn.subject,
             )
         )
         if turn.is_analyst_message and self.first_response_at is None:
-            self._first_response(turn)
+            self._first_response(turn.created_at, turn.author)
         return turn
 
-    def _first_response(self, turn: Turn) -> None:
-        at = turn.created_at
+    def _first_response(self, at: datetime, actor: ActorRef) -> None:
         self.first_response_at = at
         self._record(
             CaseFirstResponded(
                 occurred_at=at,
-                actor=turn.author,
+                actor=actor,
                 entity_id=self.id,
                 case_id=self.id,
                 first_response_at=at,
@@ -484,9 +524,12 @@ class Case(AggregateRoot):
     def close(
         self, *, actor: ActorRef, at: datetime, reason: CloseReason, note: str | None = None
     ) -> None:
-        """``assigned | in_progress → closed`` (terminal). The note is trimmed (≤ 500)."""
+        """``assigned | in_progress → closed`` (terminal). The note is trimmed (≤ 500). A case
+        with an active call is not closed (``call_in_progress``, slice 12)."""
         if self.is_closed:
             raise CaseClosedError()
+        if self.active_call_id is not None:
+            raise CallInProgressError(self.active_call_id)
         if self.status not in CLOSABLE_STATUSES:
             raise invalid_case_transition(self.status, CaseStatus.CLOSED.value)
         clean_note = normalize_close_note(note)

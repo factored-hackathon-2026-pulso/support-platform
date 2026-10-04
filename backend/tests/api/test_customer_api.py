@@ -37,8 +37,8 @@ def test_demo_customers_simulator_first_then_everyone_by_name(client: TestClient
     names = [item["displayName"].split()[0] for item in items]
     assert names == [
         "Natalia", "Ximena", "Lucas", "Rafael", "Andrés",  # simulator customers (by id)
-        "Beatriz", "Camila", "Claudia", "Esteban", "Gabriela", "Héctor", "Joaquín", "Larissa",
-        "Marcela", "Mauricio", "Patricia", "Rosa",
+        "Beatriz", "Camila", "Claudia", "Esteban", "Gabriela", "Héctor", "Ignacio", "Joaquín",
+        "Larissa", "Marcela", "Mauricio", "Natalia", "Patricia", "Rosa",
     ]  # fmt: skip
     first = items[0]
     assert set(first) == {
@@ -49,23 +49,23 @@ def test_demo_customers_simulator_first_then_everyone_by_name(client: TestClient
     by_name = {item["displayName"].split()[0]: item for item in items}
     assert by_name["Patricia"]["openConversation"] == {
         "caseId": PATRICIA_AGAIN,
-        "channel": "app_chat",
+        "channel": "chat_app",
         "status": "with_agent",
     }
     assert by_name["Patricia"]["closedConversationCount"] == 2
     assert by_name["Claudia"]["openConversation"] is None  # closed cases never fill it
-    assert by_name["Claudia"]["closedConversationCount"] == 1
+    assert by_name["Claudia"]["closedConversationCount"] == 2  # + Daniela's follow-up call
     assert by_name["Gabriela"]["openConversation"]["status"] == "waiting_agent"
 
 
 def test_sessions(client: TestClient) -> None:
     created = client.post(
         "/api/v1/customer/sessions",
-        json={"customerId": seed_customer_id(NATALIA), "channel": "web_chat"},
+        json={"customerId": seed_customer_id(NATALIA), "channel": "chat_web"},
     )
     assert created.status_code == 201
     body = created.json()
-    assert body["channel"] == "web_chat"
+    assert body["channel"] == "chat_web"
     assert body["customer"] == {
         "id": seed_customer_id(NATALIA),
         "displayName": "Natalia Guzmán Rincón",
@@ -76,11 +76,11 @@ def test_sessions(client: TestClient) -> None:
     marcela = client.post(
         "/api/v1/customer/sessions", json={"customerId": seed_customer_id(MARCELA)}
     )
-    assert marcela.json()["channel"] == "web_chat"
+    assert marcela.json()["channel"] == "chat_web"
     patricia = client.post(
         "/api/v1/customer/sessions", json={"customerId": seed_customer_id(PATRICIA)}
     )
-    assert (patricia.status_code, patricia.json()["channel"]) == (201, "app_chat")
+    assert (patricia.status_code, patricia.json()["channel"]) == (201, "chat_app")
     for unknown in (seed_customer_id(9999), "nope"):
         missing = client.post("/api/v1/customer/sessions", json={"customerId": unknown})
         assert (missing.status_code, missing.json()["code"]) == (404, "not_found")
@@ -140,7 +140,7 @@ def test_past_conversations(client: TestClient, customer_session: Callable[..., 
     assert past["items"][1] == {
         "caseId": PATRICIA_OLD,
         "status": "closed",
-        "channel": "web_chat",
+        "channel": "chat_web",
         "openedAt": "2026-09-12T14:00:00Z",
         "closedAt": "2026-09-12T14:15:00Z",
         "agentName": "Julián",

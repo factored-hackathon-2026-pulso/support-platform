@@ -234,7 +234,7 @@ async def test_from_the_queue_to_an_available_analyst() -> None:
         case = await uow.cases.get(ROSA_ES)
     assert row is not None
     assert case is not None
-    assert (row.strategy, row.open_cases_at_assignment, row.paused_override) == ("manual", 5, False)
+    assert (row.strategy, row.open_cases_at_assignment, row.paused_override) == ("manual", 6, False)
     assert row.assigned_by.actor_id == LUCIA.staff_id
     added = (await events_of(container))[before:]
     assert [e.event_type for e in added] == ["case.assigned", "turn.created"]

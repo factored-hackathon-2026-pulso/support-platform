@@ -2,7 +2,7 @@ import { test as base, expect, type BrowserContext, type Page } from '@playwrigh
 import { PlatformApi, type CreatedPerson, type StaffRole } from './api'
 import { inventPerson, type DemoCustomerRef, type Language } from './data'
 import { AppShell } from './pages/app-shell'
-import { CustomerSimulatorPage } from './pages/customer-simulator-page'
+import { CustomerSimulatorPage, type SimulatorChannel } from './pages/customer-simulator-page'
 import { LoginPage } from './pages/login-page'
 
 /** One browser window per person in the scenario (own context: own session storage). */
@@ -17,8 +17,15 @@ export interface Actors {
     page: Page
     shell: AppShell
   }>
-  /** A fresh window on the customer simulator, already talking as this customer. */
-  customer(label: string, customer: DemoCustomerRef): Promise<CustomerSimulatorPage>
+  /**
+   * A fresh window on the customer simulator, already acting as this customer on a channel
+   * (slice 12: the chat by default; "Llamar" dials at once).
+   */
+  customer(
+    label: string,
+    customer: DemoCustomerRef,
+    channel?: SimulatorChannel,
+  ): Promise<CustomerSimulatorPage>
 }
 
 export interface People {
@@ -95,9 +102,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await expect(shell.roleSwitcherButton).toBeVisible()
         return { page, shell }
       },
-      async customer(label, customer) {
+      async customer(label, customer, channel) {
         const simulator = new CustomerSimulatorPage(await open(label), customer)
-        await simulator.open()
+        await simulator.open(channel)
         return simulator
       },
     })

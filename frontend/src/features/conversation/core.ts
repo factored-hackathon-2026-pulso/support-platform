@@ -12,6 +12,7 @@ export { LANGUAGE_NAMES, QUEUE_LABEL, formatWait, queueInSentence, shortCaseId }
 export type { ConversationMode } from './model'
 export type {
   AssignmentOut,
+  Call,
   CaseCustomer,
   CaseDetail,
   CaseHistory,

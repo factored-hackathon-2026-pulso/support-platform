@@ -75,9 +75,10 @@ def test_the_customer_rates_and_a_retry_replays(
     problem(rate(client, claudia, CLAUDIA_CLOSED, {"score": 4}), 409, "idempotency_conflict")
     twice = rate(client, claudia, CLAUDIA_CLOSED, {"score": 3}, key="rating-0000-0002")
     problem(twice, 409, "already_rated")
-    # The simulator reads it with the conversation (no survey any more).
-    current = client.get("/api/v1/customer/conversation", headers=bearer(claudia)).json()
-    assert current["conversation"]["rating"] == body["rating"]
+    # The simulator reads it with the conversation (no survey any more). Slice 12: her
+    # current conversation is Daniela's follow-up call (116), so 105 is a past one.
+    past = client.get(f"/api/v1/customer/conversations/{CLAUDIA_CLOSED}", headers=bearer(claudia))
+    assert past.json()["conversation"]["rating"] == body["rating"]
 
 
 def test_blank_comment_is_null_and_the_comment_is_optional(

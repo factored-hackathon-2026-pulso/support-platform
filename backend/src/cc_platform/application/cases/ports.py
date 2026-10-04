@@ -9,11 +9,12 @@ from typing import Protocol
 
 from cc_platform.application.events import StoredEvent
 from cc_platform.domain.cases.assignment import Assignment
+from cc_platform.domain.cases.call import Call
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.escalation import Escalation
 from cc_platform.domain.cases.turn import Turn
-from cc_platform.domain.cases.values import CaseStatus, CloseReason, TurnAudience
+from cc_platform.domain.cases.values import CaseStatus, CloseReason, TurnAudience, TurnKind
 from cc_platform.domain.people.staff import Language
 
 
@@ -149,6 +150,31 @@ class EscalationRepository(Protocol):
         ...
 
 
+class CallRepository(Protocol):
+    """Simulated phone calls (slice 12), versioned like any aggregate."""
+
+    async def get(self, call_id: str) -> Call | None: ...
+
+    async def add(self, call: Call) -> None:
+        """Insert; a duplicate ``creation_key`` raises ``ConcurrentUpdateError`` (a retried
+        request raced the first one: the command re-runs and finds it)."""
+        ...
+
+    async def save(self, call: Call) -> None:
+        """Compare-and-set on ``version``; raises ``ConcurrentUpdateError`` when stale."""
+        ...
+
+    async def get_by_creation_key(self, key: str) -> Call | None: ...
+
+    async def list_for_case(self, case_id: str) -> list[Call]:
+        """Every call of the case, the most recent ``started_at`` first."""
+        ...
+
+    async def latest_for_case(self, case_id: str) -> Call | None:
+        """The case's most recent call (any state), if any."""
+        ...
+
+
 class TurnRepository(Protocol):
     """Append-only transcript storage. Unique ``(case_id, sequence)`` and, when set,
     ``(author_id, client_message_id)`` (message dedupe)."""
@@ -175,6 +201,11 @@ class TurnRepository(Protocol):
     async def find_by_client_message_id(
         self, author_id: str, client_message_id: str
     ) -> Turn | None: ...
+
+    async def list_of_kind(self, case_id: str, kind: TurnKind, *, limit: int) -> list[Turn]:
+        """The case's first ``limit`` turns of ``kind``, ascending ``sequence`` (slice 12: the
+        email thread)."""
+        ...
 
 
 class AssignmentRepository(Protocol):

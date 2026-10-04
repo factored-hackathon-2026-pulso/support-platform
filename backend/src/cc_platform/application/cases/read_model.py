@@ -13,17 +13,22 @@ from datetime import datetime
 
 from cc_platform.application.cases.dto import (
     AssignmentView,
+    CallView,
     CaseCapabilitiesView,
     CaseClosureView,
     CaseCustomerView,
     CaseHistoryItemView,
     CaseRatingView,
     CaseSummaryView,
+    CustomerCallView,
     CustomerConversationSummaryView,
     CustomerConversationView,
+    CustomerEmailView,
     CustomerRefView,
     CustomerTurnView,
+    EmailMessageView,
     EscalationView,
+    HoldIntervalView,
     InboxCountsView,
     ReplyBlockedReason,
     TurnView,
@@ -31,6 +36,7 @@ from cc_platform.application.cases.dto import (
 from cc_platform.application.ports.unit_of_work import UnitOfWork
 from cc_platform.application.security import Actor
 from cc_platform.domain.cases.assignment import Assignment
+from cc_platform.domain.cases.call import Call, CallState
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.escalation import Escalation
 from cc_platform.domain.cases.rating import CaseRating
@@ -107,6 +113,7 @@ def summarize(case: Case, customer_name: str) -> CaseSummaryView:
         close_reason=case.closure.reason if case.closure else None,
         rating=rating_view(case.rating),
         escalated=case.is_escalated,
+        active_call_id=case.active_call_id,
     )
 
 
@@ -156,6 +163,18 @@ def capabilities_for(case: Case, actor: Actor) -> CaseCapabilitiesView:
         can_assign=actor.has_any_role({StaffRole.SUPERVISOR}) and not case.is_closed,
         can_change_priority=can_change_priority(case, actor),
         can_escalate=can_escalate(case, actor),
+        can_call=works_on(case, actor) and case.active_call_id is None,
+        can_email=works_on(case, actor),
+        can_add_note=works_on(case, actor),
+    )
+
+
+def works_on(case: Case, actor: Actor) -> bool:
+    """Slice 12: the assignee (as Analista) of an open assigned case (calls, emails, notes)."""
+    return (
+        case.is_assignee(actor.staff_id)
+        and actor.has_any_role({StaffRole.ANALYST})
+        and case.status in OPEN_ASSIGNED_STATUSES
     )
 
 
@@ -356,6 +375,7 @@ class CaseReader:
                 language=turn.language,
                 created_at=turn.created_at,
                 client_message_id=turn.client_message_id,
+                subject=turn.subject,
             )
             for turn in turns
         ]
@@ -386,6 +406,101 @@ class CaseReader:
                     language=turn.language,
                     created_at=turn.created_at,
                     client_message_id=turn.client_message_id if own else None,
+                    subject=turn.subject,
+                )
+            )
+        return views
+
+    # ------------------------------------------------------------------ calls (slice 12)
+    async def active_call(self, case: Case) -> CallView | None:
+        if case.active_call_id is None:
+            return None
+        call = await self._uow.calls.get(case.active_call_id)
+        return None if call is None else await self.call_view(call)
+
+    async def call_view(self, call: Call) -> CallView:
+        analyst = call.analyst_id
+        return CallView(
+            id=call.id,
+            case_id=call.case_id,
+            direction=call.direction,
+            state=call.state,
+            reason=call.reason,
+            analyst_id=analyst,
+            analyst_name=await self.staff_name(analyst) if analyst else None,
+            started_at=call.started_at,
+            answered_at=call.answered_at,
+            ended_at=call.ended_at,
+            end_reason=call.end_reason,
+            ended_by_role=call.ended_by_role,
+            muted=call.muted,
+            holds=tuple(HoldIntervalView(h.started_at, h.ended_at) for h in call.holds),
+            hold_seconds=call.hold_seconds,
+            duration_seconds=call.duration_seconds,
+            version=call.version,
+        )
+
+    async def customer_call_view(self, call: Call) -> CustomerCallView:
+        """The analyst by first name, never the reason nor staff ids."""
+        name = await self.staff_name(call.analyst_id) if call.analyst_id else None
+        return CustomerCallView(
+            id=call.id,
+            case_id=call.case_id,
+            direction=call.direction,
+            state=call.state,
+            agent_name=first_name(name) if name else None,
+            started_at=call.started_at,
+            answered_at=call.answered_at,
+            ended_at=call.ended_at,
+            end_reason=call.end_reason,
+            on_hold=call.state is CallState.ON_HOLD,
+            duration_seconds=call.duration_seconds,
+        )
+
+    # ------------------------------------------------------------------ email (slice 12)
+    async def email_views(self, turns: Sequence[Turn]) -> list[EmailMessageView]:
+        names = await self._author_names(turns)
+        views: list[EmailMessageView] = []
+        for turn in turns:
+            direction = turn.email_direction
+            if direction is None or turn.subject is None:
+                continue
+            views.append(
+                EmailMessageView(
+                    id=turn.id,
+                    case_id=turn.case_id,
+                    sequence=turn.sequence,
+                    direction=direction,
+                    subject=turn.subject,
+                    body=turn.text,
+                    author_role=turn.author_role,
+                    author_id=turn.author_id,
+                    author_name=names.get(turn.author_id) if turn.author_id else None,
+                    created_at=turn.created_at,
+                    client_message_id=turn.client_message_id,
+                )
+            )
+        return views
+
+    async def customer_email_views(
+        self, turns: Sequence[Turn], customer_id: str
+    ) -> list[CustomerEmailView]:
+        views: list[CustomerEmailView] = []
+        for view in await self.customer_turn_views(turns, customer_id):
+            source = next(t for t in turns if t.id == view.id)
+            direction = source.email_direction
+            if direction is None or view.subject is None:
+                continue
+            views.append(
+                CustomerEmailView(
+                    id=view.id,
+                    sequence=view.sequence,
+                    direction=direction,
+                    subject=view.subject,
+                    body=view.text,
+                    author_name=view.author_name,
+                    created_at=view.created_at,
+                    client_message_id=view.client_message_id,
                 )
             )
         return views

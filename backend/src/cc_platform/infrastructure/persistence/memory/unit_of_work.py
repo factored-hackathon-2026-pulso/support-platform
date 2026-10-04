@@ -10,6 +10,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryAnalystAvailabilityRepository,
     InMemoryAnalystHomeReader,
     InMemoryAssignmentRepository,
+    InMemoryCallRepository,
     InMemoryCaseRepository,
     InMemoryCustomerCaseSlotRepository,
     InMemoryCustomerRepository,
@@ -45,6 +46,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     assignments: InMemoryAssignmentRepository
     case_slots: InMemoryCustomerCaseSlotRepository
     escalations: InMemoryEscalationRepository
+    calls: InMemoryCallRepository
     notifications: InMemoryNotificationRepository
     event_log: InMemoryEventLogRepository
     analyst_home: InMemoryAnalystHomeReader
@@ -72,6 +74,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.assignments = InMemoryAssignmentRepository(store.assignments)
         self.case_slots = InMemoryCustomerCaseSlotRepository(store.case_slots, track)
         self.escalations = InMemoryEscalationRepository(store.escalations, track)
+        self.calls = InMemoryCallRepository(store.calls, track)
         self.notifications = InMemoryNotificationRepository(store.notifications, track)
         self.event_log = InMemoryEventLogRepository(store.events)
         self.analyst_home = InMemoryAnalystHomeReader(
@@ -96,6 +99,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryAssignmentRepository
         | InMemoryCustomerCaseSlotRepository
         | InMemoryEscalationRepository
+        | InMemoryCallRepository
         | InMemoryNotificationRepository
         | InMemoryEventLogRepository,
         ...,
@@ -114,6 +118,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.case_slots,
             self.cases,
             self.escalations,
+            self.calls,
             self.notifications,
             self.customers,
             self.turns,

@@ -1,12 +1,12 @@
 import type { ReactNode, Ref } from 'react'
-import { CircleArrowUp, Copy, History } from 'lucide-react'
-import { Button, IconButton, Status, useToast } from '@/components/ui'
+import { CircleArrowUp, Copy, History, PhoneOutgoing } from 'lucide-react'
+import { Button, FactList, IconButton, Status, useToast } from '@/components/ui'
 import { caseStatus } from '@/features/cases'
 import {
   canEscalate,
   CUSTOMER_FILE_PANEL_ID,
   CUSTOMER_FILE_TRIGGER_ID,
-  caseHeaderMeta,
+  caseHeaderFacts,
   customerFileTriggerLabel,
   previousCasesLabel,
   shortCaseId,
@@ -18,6 +18,8 @@ export interface CaseHeaderProps {
   onRequestClose: () => void
   /** "Escalar a supervisión" (slice 9): absent = no button (supervision mode). */
   onRequestEscalate?: () => void
+  /** "Llamar al cliente" (slice 12): absent = no button (supervision mode). */
+  onRequestCall?: () => void
   /** "Casos anteriores (n)": opens the customer's case history (absent = no button). */
   onOpenHistory?: () => void
   /** The customer-name heading (focusable with `tabIndex=-1`): the Workspace moves focus here on a programmatic case switch. */
@@ -35,18 +37,19 @@ export interface CaseHeaderProps {
 }
 
 /**
- * Case header (contract §9.3): name; short id (copyable) · "{país} · {ciudad} ·
- * {canal} · {prioridad | en portugués}"; "Casos anteriores
+ * Case header (contract §9.3): name; short id (copyable), then the place, the channel icon
+ * and "Portugués" as facts; "Casos anteriores
  * (n)" when the customer has other cases; "Cerrar caso" for the assignee, or the
  * "Cerrado" status on a closed case (the full header always shows the status). The supervisor view adds its "Asignar" /
  * "Reasignar" (`actions`) and never offers "Cerrar caso". The meta line wraps instead of being
- * truncated: "en portugués" is the only cue outside the transcript that the
+ * truncated: "Portugués" is the only cue outside the transcript that the
  * analyst must reply in Portuguese (rule 3).
  */
 export function CaseHeader({
   detail,
   onRequestClose,
   onRequestEscalate,
+  onRequestCall,
   onOpenHistory,
   headingRef,
   actions,
@@ -57,6 +60,8 @@ export function CaseHeader({
   const { toast } = useToast()
   const closed = summary.status === 'closed'
   const historyLabel = previousCasesLabel(detail.previousCaseCount)
+  // Slice 12: a case never closes with a call on the line (the backend says call_in_progress).
+  const callOn = Boolean(summary.activeCallId || detail.activeCall)
 
   function copyId() {
     void navigator.clipboard?.writeText(summary.id).then(
@@ -97,6 +102,15 @@ export function CaseHeader({
           {historyLabel}
         </Button>
       ) : null}
+      {onRequestCall && !hideClose && capabilities.canCall && !callOn ? (
+        <Button
+          variant="secondary"
+          icon={<PhoneOutgoing size={15} aria-hidden="true" />}
+          onClick={onRequestCall}
+        >
+          Llamar al cliente
+        </Button>
+      ) : null}
       {onRequestEscalate && !hideClose && canEscalate(detail) ? (
         <Button
           variant="secondary"
@@ -106,7 +120,7 @@ export function CaseHeader({
           Escalar a supervisión
         </Button>
       ) : null}
-      {!closed && !hideClose && capabilities.canClose ? (
+      {!closed && !hideClose && capabilities.canClose && !callOn ? (
         <Button variant="secondary" onClick={onRequestClose}>
           Cerrar caso
         </Button>
@@ -155,10 +169,10 @@ export function CaseHeader({
         >
           {summary.customer.displayName}
         </h2>
-        <p className="m-0 flex flex-wrap items-center gap-x-1 text-13 text-ink-2">
-          {caseNumber}
-          <span>· {caseHeaderMeta(detail)}</span>
-        </p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13 text-ink-2">
+          <p className="m-0 flex items-center gap-x-1">{caseNumber}</p>
+          <FactList items={caseHeaderFacts(detail)} aria-label="Datos del caso" />
+        </div>
       </div>
       {rightSide}
     </header>

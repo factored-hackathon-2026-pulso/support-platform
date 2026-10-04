@@ -118,7 +118,7 @@ describe('/analista/inicio (Inicio)', () => {
     const status = within(rows[0]!).getByText('Por responder').parentElement!
     expect(status.querySelector('svg')).toHaveAttribute('data-status-shape', 'pie-75')
     expect(status).not.toHaveClass('rounded-full')
-    expect(rows[0]).toHaveTextContent('Canal: App')
+    expect(rows[0]).toHaveTextContent('Canal: Chat en la app')
     expect(rows[0]).toHaveTextContent('SLA de primera respuesta: 3 min')
     expect(rows[0]!.querySelector('.lucide-flame')).toBeInTheDocument()
     // No language in a case summary.

@@ -149,24 +149,46 @@ export function inboxStatusMeta(summary: Pick<CaseSummary, 'inboxStatus'>): Inbo
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
-const CHANNEL_LABELS: Record<CaseChannel, string> = {
-  app_chat: 'App',
-  web_chat: 'Web',
+export interface CaseChannelConfig {
+  value: CaseChannel
+  /** The channel family: what the Workspace's central panel shows. */
+  kind: 'chat' | 'phone' | 'email'
+  /** Chat bubble, phone with an arrow in / out, mail. */
+  icon: Extract<FactIcon, 'message' | 'phone-incoming' | 'phone-outgoing' | 'mail'>
+  /** "Chat en la app", "Llamada entrante": the tooltip, the accessible text, the ficha row. */
+  label: string
 }
 
-/** Card line: "App", "Web". */
+/**
+ * The one channel map of the staff UI (slice 12): how a case opened. Cards, Inicio and the
+ * supervision tables show the icon alone (the label is the tooltip); the ficha says the label.
+ */
+export const CASE_CHANNEL: Readonly<Record<CaseChannel, CaseChannelConfig>> = {
+  chat_app: { value: 'chat_app', kind: 'chat', icon: 'message', label: 'Chat en la app' },
+  chat_web: { value: 'chat_web', kind: 'chat', icon: 'message', label: 'Chat web' },
+  phone_inbound: {
+    value: 'phone_inbound',
+    kind: 'phone',
+    icon: 'phone-incoming',
+    label: 'Llamada entrante',
+  },
+  phone_outbound: {
+    value: 'phone_outbound',
+    kind: 'phone',
+    icon: 'phone-outgoing',
+    label: 'Llamada saliente',
+  },
+  email: { value: 'email', kind: 'email', icon: 'mail', label: 'Correo' },
+}
+
+/** The config of a channel (an unknown value reads as a web chat). */
+export function caseChannel(channel: CaseChannel): CaseChannelConfig {
+  return CASE_CHANNEL[channel] ?? CASE_CHANNEL.chat_web
+}
+
+/** "Chat en la app", "Llamada entrante", "Correo". */
 export function channelLabel(channel: CaseChannel): string {
-  return CHANNEL_LABELS[channel] ?? channel
-}
-
-const CHANNEL_PHRASES: Record<CaseChannel, string> = {
-  app_chat: 'chat en la app',
-  web_chat: 'chat web',
-}
-
-/** Header meta: "chat en la app", "chat web". */
-export function channelPhrase(channel: CaseChannel): string {
-  return CHANNEL_PHRASES[channel] ?? channel
+  return caseChannel(channel).label
 }
 
 // ─── Priority (slice 8: the dataset's complaints.priority levels + "Sin prioridad") ─
@@ -254,15 +276,10 @@ export function countryName(country: CountryCode): string {
   return COUNTRY_NAMES[country] ?? country
 }
 
-/** The channel as a fact: [smartphone] App · [globe] Web. */
+/** The channel as an icon-only fact: the icon, the label as tooltip and accessible text. */
 export function channelFact(channel: CaseChannel): FactItem {
-  return {
-    key: 'channel',
-    icon: channel === 'app_chat' ? 'smartphone' : 'globe',
-    text: channelLabel(channel),
-    label: 'Canal',
-    iconOnly: true,
-  }
+  const config = caseChannel(channel)
+  return { key: 'channel', icon: config.icon, text: config.label, label: 'Canal', iconOnly: true }
 }
 
 /**
@@ -284,10 +301,15 @@ export function priorityFact(
  * The status is a pill and the time its own element (CaseCard).
  */
 export function caseCardFacts(
-  summary: Pick<CaseSummary, 'channel' | 'priority' | 'previousCaseId'>,
+  summary: Pick<CaseSummary, 'channel' | 'priority' | 'previousCaseId'> &
+    Partial<Pick<CaseSummary, 'activeCallId'>>,
 ): FactItem[] {
   const facts: (FactItem | null)[] = [
     channelFact(summary.channel),
+    // Slice 12: a call on the line right now (the customer may be waiting for "Contestar").
+    summary.activeCallId
+      ? { key: 'call', icon: 'phone', text: 'Llamada en curso', tone: 'success', iconOnly: true }
+      : null,
     priorityFact(summary.priority),
     summary.previousCaseId
       ? {

@@ -216,7 +216,7 @@ describe('Equipos', () => {
     const person = await within(dialog).findByRole('combobox', { name: 'Persona' })
     // Daniela is already in Andes: not offered.
     expect(within(dialog).queryByRole('option', { name: /Daniela/ })).not.toBeInTheDocument()
-    await user.selectOptions(person, 'Mariana Duque · Equipo Pacífico')
+    await user.selectOptions(person, 'Mariana Duque (Equipo Pacífico)')
     expect(within(dialog).getByText('Pasa de Equipo Pacífico a Equipo Andes.')).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Mover a Equipo Andes' }))
     expect(updateUser).toHaveBeenCalledWith(mariana.id, {

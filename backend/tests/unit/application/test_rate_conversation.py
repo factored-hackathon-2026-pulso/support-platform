@@ -89,10 +89,12 @@ async def test_the_customer_rates_her_closed_conversation(world: Container) -> N
     # The staff side reads the same rating (summary and detail).
     detail = await world.use_cases.cases.detail.execute(actor_for(ANALYST), CLAUDIA_CLOSED)
     assert detail.case.rating == rating
-    # The customer's conversation carries it too (the simulator stops asking).
-    current = await world.use_cases.cases.customer_conversation.execute(customer_actor(CLAUDIA))
-    assert current.conversation is not None
-    assert current.conversation.rating == rating
+    # The customer's conversation carries it too (the simulator stops asking). Slice 12: her
+    # current conversation is Daniela's follow-up call (116), so 105 is a past one.
+    past = await world.use_cases.cases.past_conversation.execute(
+        customer_actor(CLAUDIA), CLAUDIA_CLOSED
+    )
+    assert past.conversation.rating == rating
 
 
 async def test_a_retry_with_the_same_key_and_answer_is_a_replay(world: Container) -> None:

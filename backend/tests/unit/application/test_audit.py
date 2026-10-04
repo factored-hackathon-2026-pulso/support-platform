@@ -394,9 +394,14 @@ async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
 
 
 async def search(h: Harness, **filters: object) -> list[AuditEventView]:
+    """Every page of a filtered search (the seed has more than 100 events since slice 12)."""
     page = await ListAuditEvents(h.uow).execute(AuditQuery(limit=100, **filters))  # type: ignore[arg-type]
-    assert page.next_cursor is None
-    return list(page.items)
+    items = list(page.items)
+    while page.next_cursor:
+        query = AuditQuery(limit=100, cursor=page.next_cursor, **filters)  # type: ignore[arg-type]
+        page = await ListAuditEvents(h.uow).execute(query)
+        items.extend(page.items)
+    return items
 
 
 def ids(events: list[AuditEventView]) -> list[str]:

@@ -151,13 +151,13 @@ export function statusCallout(
   return null
 }
 
-/** "Casos abiertos": "5 · 4 en español · 1 en portugués", "0". */
+/** "Casos abiertos": "5 (4 en español y 1 en portugués)", "0". */
 export function openCasesFact(openCases: AdminUser['openCases']): string {
   if (openCases.total === 0) return '0'
   const parts = LANGUAGES.filter((language) => openCases[language] > 0).map(
     (language) => `${openCases[language]} en ${LANGUAGE_IN_SENTENCE[language]}`,
   )
-  return [String(openCases.total), ...parts].join(' · ')
+  return parts.length ? `${openCases.total} (${joinEs(parts)})` : String(openCases.total)
 }
 
 /**
@@ -1135,7 +1135,7 @@ export function addMemberCandidates(
     )
     .slice()
     .sort(byName)
-    .map((user) => ({ value: user.id, label: `${user.name} · ${user.team.name}`, user }))
+    .map((user) => ({ value: user.id, label: `${user.name} (${user.team.name})`, user }))
 }
 
 /** Members: active first, then inactive; each by name. */

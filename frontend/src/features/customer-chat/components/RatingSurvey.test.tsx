@@ -21,6 +21,7 @@ vi.mock('../api', async (importOriginal) => {
   return {
     ...actual,
     listDemoCustomers: vi.fn<typeof actual.listDemoCustomers>(),
+    fetchCustomerCall: vi.fn<typeof actual.fetchCustomerCall>(),
     fetchCustomerConversation: vi.fn<typeof actual.fetchCustomerConversation>(),
     postCustomerTurn: vi.fn<typeof actual.postCustomerTurn>(),
     rateConversation: vi.fn<typeof actual.rateConversation>(),
@@ -60,15 +61,19 @@ function signInAs(customerId: string, conversation = closed()) {
 
 function renderSimulator() {
   const sockets = createFakeSocketFactory()
-  const view = renderWithProviders(<CustomerSimulatorScreen createSocket={sockets.factory} />, {
-    route: '/cliente',
-  })
+  const view = renderWithProviders(
+    <CustomerSimulatorScreen createSocket={sockets.factory} channel="chat" />,
+    {
+      route: '/cliente',
+    },
+  )
   return { ...view, sockets }
 }
 
 const survey = () => screen.getByRole('form', { name: '¿Cómo te atendió Daniela?' })
 
 beforeEach(() => {
+  vi.mocked(api.fetchCustomerCall).mockResolvedValue({ call: null })
   vi.mocked(api.listDemoCustomers).mockResolvedValue({ items: demoCustomers })
 })
 

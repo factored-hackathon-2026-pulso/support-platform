@@ -84,8 +84,10 @@ class DemoCustomerList(ApiModel):
 
 class CreateCustomerSessionRequest(RequestModel):
     customer_id: str = Field(min_length=1, max_length=64)
-    channel: Literal["app_chat", "web_chat"] | None = Field(
-        default=None, description="Default app_chat; ignored while the customer has an open case."
+    channel: Literal["chat_app", "chat_web"] | None = Field(
+        default=None,
+        description="The chat a new case opens from: default chat_app. While the customer has an "
+        "open chat case its channel wins. Calls and emails have their own routes (slice 12).",
     )
 
 
@@ -149,20 +151,32 @@ class CustomerConversation(ApiModel):
         )
 
 
+CustomerTurnKind = Literal["message", "notice", "transcript", "email"]
+_CUSTOMER_KINDS: dict[str, CustomerTurnKind] = {
+    "message": "message",
+    "transcript": "transcript",
+    "email": "email",
+}
+
+
 class CustomerTurn(ApiModel):
     id: str
     sequence: int = Field(description="Case sequence (customer-visible turns may skip numbers).")
-    kind: Literal["message", "notice"]
+    kind: CustomerTurnKind = Field(
+        description="message · notice · transcript (a line of a call, slice 12) · email "
+        "(slice 12, with `subject`)."
+    )
     author_role: CustomerTurnAuthor
     author_name: str | None
     text: str
     language: Language
     created_at: datetime
     client_message_id: str | None = Field(description="Only on the customer's own messages.")
+    subject: str | None = Field(description="Slice 12: the subject of an `email` turn.")
 
     @classmethod
     def from_view(cls, view: CustomerTurnView) -> CustomerTurn:
-        kind: Literal["message", "notice"] = "message" if view.kind.value == "message" else "notice"
+        kind = _CUSTOMER_KINDS.get(view.kind.value, "notice")
         return cls(
             id=view.id,
             sequence=view.sequence,
@@ -173,6 +187,7 @@ class CustomerTurn(ApiModel):
             language=view.language,
             created_at=view.created_at,
             client_message_id=view.client_message_id,
+            subject=view.subject,
         )
 
 

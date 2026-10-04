@@ -6,8 +6,11 @@
 export { CustomerSimulatorScreen } from './components/CustomerSimulatorScreen'
 export type { CustomerSimulatorScreenProps } from './components/CustomerSimulatorScreen'
 export { customerChatKeys } from './api'
+export { channelFromSlug, slugFromChannel } from './channels'
+export type { SimChannel } from './channels'
 export { registerCustomerChatRealtime } from './realtime'
 export type {
+  CustomerCall,
   CustomerConversation,
   CustomerConversationSummary,
   CustomerTurn,

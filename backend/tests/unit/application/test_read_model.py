@@ -52,7 +52,7 @@ def case_in(
     return Case(
         id="CASE-" + str(number).zfill(26),
         customer_id="CUS-" + "0" * 25 + "1",
-        channel=CaseChannel.APP_CHAT,
+        channel=CaseChannel.CHAT_APP,
         language=Language.SPANISH,
         priority=CasePriority.MEDIUM,
         status=status,
@@ -169,18 +169,24 @@ async def test_seeded_inbox_order_and_counts() -> None:
             DANIELA, closed_since=now - CLOSED_INBOX_WINDOW, computed_at=now
         )
     names = [item.customer.display_name.split()[0] for item in items]
-    # new/to_reply by the oldest last interaction (Patricia 14 min, Larissa 12.5 min, Marcela
-    # 2 min, Beatriz 1 min), then the case waiting on the customer.
-    assert names == ["Patricia", "Larissa", "Marcela", "Beatriz", "Joaquín"]
-    assert [c.customer.display_name.split()[0] for c in closed] == ["Héctor", "Claudia", "Patricia"]
+    # new/to_reply by the oldest last interaction (Ignacio's email 9 h, Patricia 14 min,
+    # Larissa 12.5 min, Marcela 2 min, Beatriz 1 min), then the case waiting on the customer.
+    assert names == ["Ignacio", "Patricia", "Larissa", "Marcela", "Beatriz", "Joaquín"]
+    assert [c.customer.display_name.split()[0] for c in closed] == [
+        "Héctor",
+        "Claudia",  # 116, the follow-up call
+        "Claudia",
+        "Natalia",  # 115, the inbound call
+        "Patricia",
+    ]
     assert (counts.all, counts.to_reply, counts.new, counts.waiting, counts.closed) == (
-        5,
-        2,
+        6,
+        3,
         2,
         1,
-        3,
+        5,
     )
-    beatriz = items[3]
+    beatriz = items[4]
     assert beatriz.unread_count == 3
     assert beatriz.preview == "contesten!! qué mal servicio"
     assert beatriz.first_response_at is None

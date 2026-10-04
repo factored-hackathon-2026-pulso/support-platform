@@ -51,7 +51,7 @@ def open_case(*, previous: str | None = None) -> Case:
         case_id=CASE_ID,
         customer_id=CUSTOMER_ID,
         customer_name="Natalia Guzmán Rincón",
-        channel=CaseChannel.APP_CHAT,
+        channel=CaseChannel.CHAT_APP,
         language=Language.SPANISH,
         priority=CasePriority.MEDIUM,
         opened_at=NOW,
@@ -121,7 +121,7 @@ def test_open_starts_queued_and_records_case_opened() -> None:
     assert event.event_type == "case.opened"
     assert event.payload() == {
         "customer_id": CUSTOMER_ID,
-        "channel": "app_chat",
+        "channel": "chat_app",
         "language": "es",
         "priority": "medium",
         "sla_due_at": "2026-10-02T14:15:00Z",

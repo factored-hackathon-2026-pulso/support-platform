@@ -63,11 +63,13 @@ ACTOR_ROLES: dict[AuditActorKind, frozenset[str]] = {
 
 #: Payload keys removed by the PII policy, per event type (the value's length is kept).
 #: Slice 9: an escalation's motive and supervision's answer are staff text like messages.
-REDACTED_TEXT: dict[str, str] = {
-    "turn.created": "text",
-    "case.rated": "comment",
-    "escalation.opened": "motive",
-    "escalation.answered": "note",
+#: Slice 12: an email's subject (like its body, the turn text) and an outbound call's reason.
+REDACTED_TEXT: dict[str, tuple[str, ...]] = {
+    "turn.created": ("text", "subject"),
+    "case.rated": ("comment",),
+    "escalation.opened": ("motive",),
+    "escalation.answered": ("note",),
+    "call.started": ("reason",),
 }
 
 
@@ -124,13 +126,14 @@ class AuditEventPageView:
 def redact(event_type: str, payload: JsonObject) -> tuple[JsonObject, tuple[str, ...]]:
     """Remove message text (contract §5.4) and rating comments (slice 7); ``<key>_length``
     keeps their size (0 for none)."""
-    key = REDACTED_TEXT.get(event_type)
-    if key is None or key not in payload:
+    keys = tuple(key for key in REDACTED_TEXT.get(event_type, ()) if key in payload)
+    if not keys:
         return dict(payload), ()
-    redacted = {k: v for k, v in payload.items() if k != key}
-    value = payload[key]
-    redacted[f"{key}_length"] = len(value) if isinstance(value, str) else 0
-    return redacted, (key,)
+    redacted = {k: v for k, v in payload.items() if k not in keys}
+    for key in keys:
+        value = payload[key]
+        redacted[f"{key}_length"] = len(value) if isinstance(value, str) else 0
+    return redacted, keys
 
 
 def filters_of(query: AuditQuery) -> AuditFilters:

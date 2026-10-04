@@ -163,7 +163,7 @@ describe('/analyst/home (Inicio)', () => {
     const arrival = within(list).getByRole('link', { name: /^Larissa Monteiro Alves: Te llegó/ })
     expect(arrival).toHaveAccessibleName(/Por idioma: Português/)
     expect(arrival).toHaveTextContent(/Por idioma: PortuguêsPT.*Regla 3/)
-    expect(arrival.querySelector('svg[data-language="pt"]')).not.toBeNull()
+    expect(arrival.querySelector('[data-languages="pt"] svg.lucide-globe')).not.toBeNull()
     expect(list.textContent).not.toContain('·')
 
     const more = within(feed).getByRole('button', { name: 'Ver todo (5)' })
@@ -196,7 +196,7 @@ describe('/analyst/home (Inicio)', () => {
     // Each queue starts with its language mark (named for screen readers).
     const [, spanish, portuguese] = Array.from(team.querySelectorAll('dl > div'))
     expect(spanish).toHaveTextContent(/^EspañolES.*Esperan en la cola2El más antiguo: hace 17 min/)
-    expect(spanish!.querySelector('svg[data-language="es"]')).not.toBeNull()
+    expect(spanish!.querySelector('[data-languages="es"] svg.lucide-globe')).not.toBeNull()
     expect(portuguese).toHaveTextContent(
       /^PortuguêsPT.*Esperan en la cola1El más antiguo: hace 6 min/,
     )

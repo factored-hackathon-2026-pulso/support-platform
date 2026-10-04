@@ -78,10 +78,10 @@ describe('SessionLiveSync', () => {
     const summary = screen.getByText('Equipo:').closest('ul')!
     const [team, languages] = within(summary).getAllByRole('listitem')
     expect(team).toHaveTextContent(/^Equipo: Equipo Pacífico$/)
-    // Her languages as marks (flag + code), named for screen readers.
+    // Her languages as one mark (globe + code), named for screen readers.
     expect(within(languages!).getByText('Español', { selector: '.sr-only' })).toBeInTheDocument()
     expect(languages).toHaveTextContent(/^Idiomas: EspañolES/)
-    expect(languages!.querySelector('svg[data-language="es"]')).not.toBeNull()
+    expect(languages!.querySelector('[data-languages="es"] svg.lucide-globe')).not.toBeNull()
   })
 
   it('sends her home when the section she is in is gone', async () => {

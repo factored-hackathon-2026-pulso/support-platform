@@ -78,12 +78,12 @@ describe('CustomerSimulatorScreen · picker', () => {
     const joaquin = await screen.findByRole('button', { name: /Joaquín Ferreyra Paz/ })
     expect(within(joaquin).getByText('Conversación abierta')).toBeInTheDocument()
     const rafael = screen.getByRole('button', { name: /Rafael Nogueira Costa/ })
-    // pt-BR shows the PT language mark (Portugal's flag), named by the locale.
+    // pt-BR shows the PT language mark (globe + PT), named by the locale.
     expect(
       within(rafael).getByText('Portugués de Brasil', { selector: '.sr-only' }),
     ).toBeInTheDocument()
     expect(rafael).toHaveTextContent(/PT/)
-    expect(rafael.querySelector('svg[data-language="pt"]')).not.toBeNull()
+    expect(rafael.querySelector('[data-languages="pt"] svg.lucide-globe')).not.toBeNull()
     expect(within(rafael).getByText('Buenos Aires, Argentina')).toBeInTheDocument()
     expect(rafael).not.toHaveTextContent(/conversaci(ó|o)n(es)? anterior/)
     const claudia = screen.getByRole('button', { name: /Claudia Restrepo Varela/ })

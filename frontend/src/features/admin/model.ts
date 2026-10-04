@@ -161,8 +161,8 @@ export function openCasesFact(openCases: AdminUser['openCases']): string {
 
 /**
  * Aside facts under the name (slice 6 UI rule: structured items, never a
- * dot-joined line; the roles are chips next to them): her languages as marks
- * ("[ES] [PT]", named "Español y Português") or [languages] "Sin idiomas", [users] the team.
+ * dot-joined line; the roles are chips next to them): her languages as one mark
+ * ("[globe] ES PT", named "Español y Português") or [languages] "Sin idiomas", [users] the team.
  */
 export function userSummaryFacts(user: Pick<AdminUser, 'languages' | 'team'>): FactItem[] {
   const languages = LANGUAGES.filter((language) => user.languages.includes(language))

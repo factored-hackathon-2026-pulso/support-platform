@@ -58,12 +58,10 @@ describe('FilterMenu', () => {
     const estado = screen.getByRole('group', { name: 'Estado' })
     expect(estado).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'Nuevo 2' })).toHaveFocus()
-    // A language option: the flag and the language's own name.
+    // A language option: only the language's own name, no icon.
     const portuguese = screen.getByRole('checkbox', { name: 'Português 1' })
-    expect(portuguese.parentElement!.querySelector('svg[data-language="pt"]')).toHaveAttribute(
-      'width',
-      '21',
-    )
+    expect(screen.getByText('Português')).toHaveAttribute('lang', 'pt')
+    expect(portuguese.parentElement!.querySelector('svg')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Listo' }))
     expect(screen.queryByRole('group', { name: 'Estado' })).not.toBeInTheDocument()
     expect(button).toHaveFocus()
@@ -78,10 +76,10 @@ describe('FilterMenu', () => {
     expect(screen.getByRole('button', { name: 'Filtros 2 activos' })).toBeInTheDocument()
     const chips = screen.getByRole('group', { name: 'Filtros activos' })
     expect(chips).toHaveTextContent('Por responder')
-    // The language chip shows its mark (flag + code) and is named by the language.
+    // The language chip shows its mark (globe + code) and is named by the language.
     const languageChip = screen.getByRole('button', { name: 'Quitar filtro Português' })
     expect(languageChip).toHaveTextContent(/^PT$/)
-    expect(languageChip.querySelector('svg[data-language="pt"]')).not.toBeNull()
+    expect(languageChip.querySelector('[data-languages="pt"] svg.lucide-globe')).not.toBeNull()
     await user.click(languageChip)
     expect(screen.queryByRole('button', { name: 'Quitar filtro Português' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Filtros 1 activos' })).toBeInTheDocument()

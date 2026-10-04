@@ -379,7 +379,7 @@ describe('ConversationPane · accessibility', () => {
       .parentElement!
     expect(header).toHaveTextContent(/Barranquilla, Colombia/)
     expect(header).toHaveTextContent('Idioma: PortuguêsPT')
-    expect(header.querySelector('svg[data-language="pt"]')).not.toBeNull()
+    expect(header.querySelector('[data-languages="pt"] svg.lucide-globe')).not.toBeNull()
     expect(within(header).getByText('CASE-…0101')).toBeInTheDocument()
     expect(within(header).getByTitle(CASE_ID)).toBeInTheDocument()
     expect(

@@ -55,19 +55,12 @@ export { KeyValueList } from './KeyValueList'
 export type { KeyValueItem, KeyValueListProps } from './KeyValueList'
 export { Kicker } from './Kicker'
 export type { KickerProps, KickerTone } from './Kicker'
-export {
-  LanguageFlag,
-  LanguageMark,
-  LanguageMarks,
-  LanguageName,
-  LanguageOptionLabel,
-} from './LanguageMark'
+export { LanguageMark, LanguageMarks, LanguageName } from './LanguageMark'
 export type {
-  LanguageFlagProps,
   LanguageMarkProps,
+  LanguageMarkSize,
   LanguageMarksProps,
   LanguageNameProps,
-  LanguageOptionLabelProps,
 } from './LanguageMark'
 export {
   LANGUAGE_CODES,

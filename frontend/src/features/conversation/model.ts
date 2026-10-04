@@ -622,7 +622,7 @@ export interface FileRow {
   mono?: boolean
   /** The case status as glyph + word (`caseStatus`, the cases map). */
   status?: StatusAppearance
-  /** A language as its mark and own name ("[PT] Português"). */
+  /** A language as a globe and its own name ("[globe] Português"), no code. */
   language?: Language
   /** The customer's rating, with its face, as a colored pill. */
   pill?: { label: string; tone: Tone; icon?: FactIcon }

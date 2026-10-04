@@ -153,8 +153,8 @@ function QueueButton({ language, figures, selected, onSelect }: QueueButtonProps
         languages={[language]}
         name={QUEUE_LABEL[language]}
         focusable={false}
+        size="lg"
         className="text-ink"
-        markClassName="gap-1.5 text-16"
       />
       {labels && figures ? (
         <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-13">
@@ -212,8 +212,8 @@ function QueueCases({ query, state, now, onStateChange, onOpenCase }: QueueCases
                 languages={[state.language]}
                 name={title}
                 focusable={false}
+                size="lg"
                 className="text-ink"
-                markClassName="gap-1.5 text-16"
               />
             </h2>
             {query.data ? (

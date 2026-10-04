@@ -247,7 +247,7 @@ direction unchanged (`routes/supervision/*` → `features/supervision` → `feat
   column, team pills and `AssignCaseDialog` are gone.
 - **`audit`**: the "Escalamientos" family and its redaction notes; role badge "Supervisión".
 - **`admin`**: the users list filters with `FilterMenu` (multi-value URL), "Nuevo usuario",
-  language option cards (flag + own name, `LanguageOptionLabel`).
+  language option cards (only the language's own name).
 
 ### Notification center (slice 10)
 
@@ -713,18 +713,21 @@ right role section; its query string goes in the feature's `url.ts`. Until it is
 `EmptyState` accepts `as="h4"`.
 
 Languages (`LanguageMark.tsx`, names and codes in `language.ts`): a language is shown as a
-mark, flag + code ("ES", "PT"), never the flag alone and never an emoji; the flag stands for
-the language (ES = Spain's flag, PT = Portugal's, also for pt-BR). Where a name is shown it is
-only the language's own name ("Español", "Português"). Dense rows and headers use
-`LanguageMarks` (`languages`, `focusable`: the group's name, "Español y Português", is its
-tooltip and its screen-reader text); an "Idioma" value uses `LanguageName` (mark + own name);
-form and filter options use `LanguageOptionLabel` (21 px flag + own name, also through
-`FilterOption.language`); a fact takes `FactItem.languages` (marks after its text, or in place
-of the icon when the text is empty) or `FactItem.language` (the text is that language's own
-name: its mark goes first); `spokenFact` says a fact for a control's accessible name. The flags
-are inline SVGs from the Figma "Flags icons" community file: artwork colors, not tokens, and no
-ids, so they repeat on a page. Sentences keep the Spanish word ("Cola en portugués", "Nadie con
-ese nombre habla portugués.").
+mark, lucide's `Globe` + code ("ES", "PT"), one globe per group ("ES PT" for someone who speaks
+both), never the globe alone and never an emoji or a flag; a pt-BR customer shows PT. The globe
+is stroked and `text-muted` like the other UI icons, 14 px with 12 px codes (`size="sm"`) or
+16 px with 16 px codes (`size="lg"`: the "Colas" queue cards and title). Where a name is shown
+it is only the language's own name ("Español", "Português"). Dense rows and headers use
+`LanguageMarks` (`languages`, `focusable`, `name`, `size`: the group's name, "Español y
+Português", is its tooltip and its screen-reader text); `LanguageMark` is the same mark,
+decorative, for a control that names itself (the language filter chip); an "Idioma" value uses
+`LanguageName` (globe + own name, no code); form and filter options show only the own name, no
+icon (`FilterOption.language` sets its `lang`); a fact takes `FactItem.languages` (the mark
+after its text, or in place of the icon when the text is empty) or `FactItem.language` (the
+text is that language's own name: the globe stands in for the icon); `spokenFact` says a fact
+for a control's accessible name. Marks carry `data-languages` ("es pt") and names
+`data-language` for tests. Sentences keep the Spanish word ("Cola en portugués", "Nadie con ese
+nombre habla portugués.").
 
 Layout (`@/components/layout`): `SidePanel` / `SidePanelSection` (slice 6: the 360 px right
 panel slot of the Workspace, sections, close button + Escape, focus in on open and back to the

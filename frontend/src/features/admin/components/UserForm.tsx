@@ -1,7 +1,7 @@
 import { useId, type RefObject } from 'react'
 import { Check, Languages } from 'lucide-react'
 import { ROLE_LABEL, ROLE_ORDER, type RoleId } from '@/app/roles'
-import { Checkbox, Field, Input, Kicker, LanguageOptionLabel, Select } from '@/components/ui'
+import { Checkbox, Field, Input, Kicker, LANGUAGE_NATIVE_NAME, Select } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import {
   EMAIL_MAX_LENGTH,
@@ -147,8 +147,8 @@ export function UserForm({
           Idiomas
         </Kicker>
         {/*
-          Option cards (Admin.dc.html): the flag and the language's own name, a native
-          checkbox (visually hidden) and the round check of the selected state.
+          Option cards (Admin.dc.html): only the language's own name, a native checkbox
+          (visually hidden) and the round check of the selected state.
         */}
         <div className="grid grid-cols-2 gap-2">
           {LANGUAGES.map((language, index) => {
@@ -184,10 +184,9 @@ export function UserForm({
                     })
                   }
                 />
-                <LanguageOptionLabel
-                  language={language}
-                  className="min-w-0 grow gap-2.5 font-semibold text-ink"
-                />
+                <span lang={language} className="min-w-0 grow font-semibold text-ink">
+                  {LANGUAGE_NATIVE_NAME[language]}
+                </span>
                 <span
                   aria-hidden="true"
                   className={cn(

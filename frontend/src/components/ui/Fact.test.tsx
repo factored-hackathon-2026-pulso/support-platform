@@ -36,7 +36,7 @@ describe('Fact / FactList', () => {
     expect(button).toHaveTextContent('Última actividad')
   })
 
-  it('draws language marks after the text, in place of the icon, or before a language name', () => {
+  it('draws a language mark after the text or in place of the icon, and a globe before a name', () => {
     const { container } = render(
       <FactList
         items={[
@@ -47,16 +47,18 @@ describe('Fact / FactList', () => {
       />,
     )
     const named = screen.getAllByRole('listitem')[2]!
-    // A language as the value: icon, its mark, then its own name.
-    expect(named).toHaveTextContent(/^Idioma: PTPortuguês$/)
+    // A language as the value: the globe in place of the icon, then only its own name.
+    expect(named).toHaveTextContent(/^Idioma: Português$/)
     expect(within(named).getByText('Português')).toHaveAttribute('lang', 'pt')
+    expect(named.querySelectorAll('svg')).toHaveLength(1)
+    expect(named.querySelector('svg')).toHaveClass('lucide-globe')
     const [spoken, marks] = screen.getAllByRole('listitem')
-    // Text, the marks' name (screen readers), the code, the tooltip bubble, the tag.
+    // Text, the mark's name (screen readers), the code, the tooltip bubble, the tag.
     expect(spoken).toHaveTextContent('HablasPortuguêsPTPortuguêsRegla 3')
-    expect(spoken!.querySelectorAll('svg')).toHaveLength(2) // the icon and the flag
+    expect(spoken!.querySelectorAll('svg')).toHaveLength(2) // the icon and the globe
     expect(marks).toHaveTextContent('Idiomas: Español y PortuguêsESPTEspañol y Português')
-    expect(marks!.querySelectorAll('svg')).toHaveLength(2) // two flags, no icon
-    expect(container.querySelectorAll('svg[data-language]')).toHaveLength(4)
+    expect(marks!.querySelectorAll('svg')).toHaveLength(1) // one globe, no icon
+    expect(container.querySelectorAll('svg.lucide-globe')).toHaveLength(3)
   })
 
   it('says a fact as a control names it', () => {

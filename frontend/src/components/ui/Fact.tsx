@@ -1,6 +1,6 @@
 import { cn } from '@/lib/cn'
 import { FACT_ICONS, type FactItem, type FactTone } from './fact-icons'
-import { LanguageMark, LanguageMarks } from './LanguageMark'
+import { LanguageMarks, LanguageName } from './LanguageMark'
 import { Tooltip } from './Tooltip'
 
 const TONE_TEXT: Record<FactTone, string> = {
@@ -50,8 +50,8 @@ export function Fact({
       </Tooltip>
     )
   }
-  // Marks with no text: the flags are the glyph, no icon before them.
-  const marksOnly = Boolean(languages?.length) && !text
+  // Marks with no text, or a language's own name: the globe is the glyph, no icon before it.
+  const noIcon = Boolean(language) || (Boolean(languages?.length) && !text)
   const fact = (
     <span
       className={cn(
@@ -61,15 +61,14 @@ export function Fact({
         className,
       )}
     >
-      {marksOnly ? null : (
+      {noIcon ? null : (
         <Icon size={size === 'md' ? 14 : 13} aria-hidden="true" className="shrink-0" />
       )}
       {label ? <span className="sr-only">{label}: </span> : null}
-      {language ? <LanguageMark language={language} className="text-ink" /> : null}
-      {text ? (
-        <span className="truncate" lang={language}>
-          {text}
-        </span>
+      {language ? (
+        <LanguageName language={language} />
+      ) : text ? (
+        <span className="truncate">{text}</span>
       ) : null}
       {languages?.length ? <LanguageMarks languages={languages} focusable={focusable} /> : null}
       {tag ? (

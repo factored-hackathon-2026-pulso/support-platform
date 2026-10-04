@@ -1,10 +1,9 @@
 /**
  * The languages the platform serves and how the UI names them (pure, no React).
  *
- * A language is shown as a mark: flag + code ("ES", "PT"), never the flag alone.
- * The flag stands for the language, not for a country: ES uses Spain's flag and PT
- * uses Portugal's, also for a pt-BR customer. Where a name is shown it is the
- * language's own name ("Español", "Português"), never a translation of it.
+ * A language is shown as a mark: a globe + code ("ES", "PT"), one globe per group
+ * ("ES PT"), never the globe alone; a pt-BR customer shows PT. Where a name is shown
+ * it is the language's own name ("Español", "Português"), never a translation of it.
  */
 import { joinEs } from '@/lib/format'
 

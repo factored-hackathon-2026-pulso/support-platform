@@ -18,6 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from cc_platform.api.dependencies import ApiContextDep, require_roles
 from cc_platform.api.routers._assistant import assistant_use_cases
 from cc_platform.api.schemas.cases import (
+    AskCopilotRequest,
     CaseDetail,
     CaseHandoff,
     CaseHistory,
@@ -25,6 +26,8 @@ from cc_platform.api.schemas.cases import (
     CaseSummary,
     ChangePriorityRequest,
     CloseCaseRequest,
+    CopilotExchange,
+    CopilotThread,
     EscalateRequest,
     EscalationResult,
     InboxResponse,
@@ -271,6 +274,65 @@ async def close_case(
 async def get_handoff(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> CaseHandoff:
     packet = await assistant_use_cases(api).handoff.execute(actor, case_id)
     return CaseHandoff(packet=dict(packet))
+
+
+@router.get(
+    "/{caseId}/copilot",
+    response_model=CopilotThread,
+    summary="The analyst's conversation with the copilot about this case",
+    description=(
+        "Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` "
+        "otherwise). `available: false` (with no messages) while agent-core is not configured "
+        "or the customer is not linked to the dataset: hide the panel, it is not an error."
+    ),
+    responses=problem_responses(401, 403, 404),
+)
+async def get_copilot(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> CopilotThread:
+    use_cases = api.use_cases.assistant
+    if use_cases is None:
+        return CopilotThread(case_id=case_id, available=False, messages=[])
+    return CopilotThread.from_view(await use_cases.copilot_thread.execute(actor, case_id))
+
+
+@router.post(
+    "/{caseId}/copilot/messages",
+    response_model=CopilotExchange,
+    status_code=status.HTTP_201_CREATED,
+    summary="Ask the copilot something about this case",
+    description=(
+        "Slice 15 (ADR 0003). The copilot reads and calculates (it suggests what to look up and "
+        "never acts) and answers as the analyst: agent-core decides what she may see. The call "
+        "waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` "
+        "(= `Idempotency-Key`): a retry with the same text answers 200 with "
+        "`Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. "
+        "Only the assignee, only on an open case (409 `case_closed`) whose customer is linked "
+        "(409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; "
+        "404 `assistant_disabled` without agent-core; 503 `agent_core_unavailable` / 502 "
+        "`agent_core_rejected` when it does not answer (the question stays in the thread: ask "
+        "again with the same `clientMessageId`)."
+    ),
+    responses={
+        200: {"description": "Replay of a question already answered", "model": CopilotExchange},
+        **problem_responses(401, 403, 404, 409, 422, 502, 503),
+    },
+)
+async def ask_copilot(
+    *,
+    case_id: CaseId,
+    body: AskCopilotRequest,
+    idempotency_key: IdempotencyKey,
+    actor: Analyst,
+    api: ApiContextDep,
+    response: Response,
+) -> CopilotExchange:
+    ensure_idempotency_key(idempotency_key, body.client_message_id)
+    exchange = await assistant_use_cases(api).ask_copilot.execute(
+        actor, case_id, text=body.text, client_message_id=body.client_message_id
+    )
+    if exchange.replayed:
+        response.status_code = status.HTTP_200_OK
+        response.headers[REPLAYED_HEADER] = "true"
+    return CopilotExchange.from_view(exchange)
 
 
 @router.put(

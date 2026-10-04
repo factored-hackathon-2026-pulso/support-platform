@@ -9,6 +9,11 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, StringConstraints, field_validator
 
 from cc_platform.api.schemas.common import ApiModel, RequestModel
+from cc_platform.application.ai.copilot import (
+    CopilotExchangeView,
+    CopilotMessageView,
+    CopilotThreadView,
+)
 from cc_platform.application.cases.dto import (
     AssignmentView,
     CallView,
@@ -571,6 +576,67 @@ class CaseHandoff(ApiModel):
         "for the caller's permissions: request summary, verified facts, claimed-but-unverified "
         "slots, actions taken, open questions, evidence references and the transcript reference."
     )
+
+
+# ----------------------------------------------------------------------------- copilot (slice 15)
+class CopilotMessage(ApiModel):
+    id: str
+    role: Literal["analyst", "copilot"]
+    text: str
+    created_at: datetime
+    answers: str | None = Field(
+        description="On a copilot message: the `id` of the analyst's question it answers."
+    )
+
+    @classmethod
+    def from_view(cls, view: CopilotMessageView) -> CopilotMessage:
+        return cls(
+            id=view.id,
+            role=view.role,
+            text=view.text,
+            created_at=view.created_at,
+            answers=view.answers,
+        )
+
+
+class CopilotThread(ApiModel):
+    case_id: str
+    available: bool = Field(
+        description="False while agent-core is not configured or the customer is not linked to "
+        "the dataset: hide the copilot panel."
+    )
+    messages: list[CopilotMessage] = Field(
+        description="The analyst's thread for this case, oldest first (the newest 200)."
+    )
+
+    @classmethod
+    def from_view(cls, view: CopilotThreadView) -> CopilotThread:
+        return cls(
+            case_id=view.case_id,
+            available=view.available,
+            messages=[CopilotMessage.from_view(m) for m in view.messages],
+        )
+
+
+class AskCopilotRequest(RequestModel):
+    text: Annotated[str, Field(min_length=1, max_length=2000)]
+    client_message_id: ClientMessageId
+
+
+class CopilotExchange(ApiModel):
+    question: CopilotMessage
+    answers: list[CopilotMessage] = Field(
+        description="What the copilot answered (one or more messages); empty if it said nothing."
+    )
+    replayed: bool = Field(description="A retry of a question that was already asked.")
+
+    @classmethod
+    def from_view(cls, view: CopilotExchangeView) -> CopilotExchange:
+        return cls(
+            question=CopilotMessage.from_view(view.question),
+            answers=[CopilotMessage.from_view(m) for m in view.answers],
+            replayed=view.replayed,
+        )
 
 
 # ----------------------------------------------------------------------------- priority (slice 8)

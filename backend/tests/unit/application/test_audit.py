@@ -39,7 +39,7 @@ from cc_platform.application.people.dto import LoginCommand, VerifyMfaCommand
 from cc_platform.application.people.onboarding.dto import SetPasswordCommand
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.bootstrap.container import Container
-from cc_platform.domain.ai.events import ASSISTANT_EVENTS
+from cc_platform.domain.ai.events import ASSISTANT_EVENTS, COPILOT_EVENTS
 from cc_platform.domain.cases import CloseReason
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.errors import AccountLockedError
@@ -277,7 +277,7 @@ async def test_every_emitted_event_has_a_description() -> None:
     assistant_types = {
         "case.assistant_started",
         "case.assistant_released",
-        *(event.event_type for event in ASSISTANT_EVENTS),
+        *(event.event_type for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS)),
     }
     assert emitted == set(FAMILY) - assistant_types
     assert not [e for e in events if e.description == fallback_description(e.type)]

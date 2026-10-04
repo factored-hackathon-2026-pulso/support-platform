@@ -38,6 +38,7 @@ from cc_platform.domain.ai.errors import (
 from cc_platform.domain.ai.session import AssistantState
 from cc_platform.domain.cases import (
     AssignmentReason,
+    CasePriority,
     CaseStatus,
     CloseReason,
     TurnAudience,
@@ -245,6 +246,36 @@ async def test_an_escalation_places_the_case_like_an_arrival_rule_3(
     assert banners[1].startswith("Asignado a Daniela Ríos tras el traspaso del asistente")
     # the customer's message is waiting for the analyst (unread), the agent's reply is not
     assert case.unread_count == 1
+
+
+async def test_an_escalation_takes_the_priority_the_agent_saw(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    await make_available_quietly(world.uow, DANIELA)
+    runtime.handoffs["hnd-7"] = {"handoff_ref": "hnd-7", "priority": "critical"}
+    runtime.script.append(escalation("hnd-7"))
+
+    case_id = await write(world, NATALIA)
+    await settle(world)
+    case, _session, _turns = await case_and_session(world, case_id)
+
+    assert case.priority is CasePriority.CRITICAL
+    read = next(c for c in runtime.calls if c.operation == "get_handoff")
+    assert read.credentials is not None
+    assert decode(read.credentials.authorization)["type"] == "customer"  # not an analyst's
+
+
+async def test_an_unknown_or_missing_priority_leaves_the_case_alone(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    runtime.handoffs["hnd-7"] = {"handoff_ref": "hnd-7", "priority": "whenever"}
+    runtime.script.append(escalation("hnd-7"))
+
+    case_id = await write(world, NATALIA)
+    await settle(world)
+    case, _session, _turns = await case_and_session(world, case_id)
+
+    assert case.priority is CasePriority.NONE
 
 
 async def test_an_escalation_with_nobody_available_waits_in_the_language_queue(

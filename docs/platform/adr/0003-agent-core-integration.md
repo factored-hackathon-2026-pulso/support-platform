@@ -1,6 +1,6 @@
 # ADR 0003 · Integrating agent-core: AI-handled chat, analyst copilot and agent builder
 
-- Status: **Accepted in principle** (user decisions of 2026-10-04); the open points in §6 are settled slice by slice. **S13 and the backend of S14 are built** (contract: `api/slice-14-assistant.md`); decided while building S14: the assistant's replies never stop the first-response SLA and the SLA restarts when the case reaches people; only chat cases and `CC_ASSISTANT_LANGUAGES` (default Spanish and Portuguese since 2026-10-04, policy `H1` rewritten) start with the assistant; a call or an email cannot join an assistant conversation; delegations are minted per call and live 10 minutes.
+- Status: **Accepted in principle** (user decisions of 2026-10-04); the open points in §6 are settled slice by slice. **S13, the backend of S14 and the backend of S15 (copilot) are built** (contract: `api/slice-14-assistant.md`); decided while building S14: the assistant's replies never stop the first-response SLA and the SLA restarts when the case reaches people; only chat cases and `CC_ASSISTANT_LANGUAGES` (default Spanish and Portuguese since 2026-10-04, policy `H1` rewritten) start with the assistant; a call or an email cannot join an assistant conversation; delegations are minted per call and live 10 minutes.
 - Date: 2026-10-04
 - Scope: `backend/`, `frontend/`, and the contract with the sibling repo `agent-core`.
 - Related: `ENGINEERING_BRIEF.md` §1 (scope, amended by this ADR), ADR 0001 (architecture, still stands), ADR 0002 (superseded; not revived).

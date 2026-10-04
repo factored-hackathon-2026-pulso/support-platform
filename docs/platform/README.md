@@ -37,6 +37,7 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | English | **Superseded (2026-10-03).** Kept only as a record; do not implement it. |
 | [adr/0003-agent-core-integration.md](./adr/0003-agent-core-integration.md) | English | AI returns through `agent-core`: agent-handled chat and escalation, analyst copilot, agent builder, identity issuer, tools over HTTP, slice plan S13–S17. |
 | [api/slice-14-assistant.md](./api/slice-14-assistant.md) | English | **Hand-over for the frontend.** Slice 14 (ADR 0003): the assistant (agent-core) handles chats first: the `with_assistant` case state, confirmation and step-up endpoints, ask-for-a-person, the analyst's handoff packet and its label, supervision release, realtime, the contract changes to regenerate types from, error codes, configuration. |
+| [api/slice-15-copilot.md](./api/slice-15-copilot.md) | English | **Hand-over for the frontend.** Slice 15 (ADR 0003): the analyst's copilot (`copiloto-asesor`): a thread per (case, analyst), `GET` and `POST` endpoints, idempotent questions stored before the call, what to build, known gaps. |
 | [api/slice-1-cases.md](./api/slice-1-cases.md) | English | Slice 1 contract (live chat, inbox, simulator). **Partly superseded** by slice 2; kept as the record. |
 | [api/slice-2-case-lifecycle.md](./api/slice-2-case-lifecycle.md) | English | Slice 2: the scope-cut removal list and the case life cycle (statuses, close with a reason, linked case after a close, case history, first-response SLA, `AssignCase`), seed. |
 | [api/slice-3-supervision.md](./api/slice-3-supervision.md) | English | Slice 3: team and queues, manual assignment and reassignment (rule 3, paused confirmation), supervisor case view, audit queries, supervision realtime topics. |
@@ -66,5 +67,5 @@ cd frontend && pnpm install && pnpm dev        # SPA on http://localhost:5173
 ```
 
 Sign in at http://localhost:5173/login as `daniela.rios@latambank.example` / `demo1234`, MFA
-code `000000`; the customer simulator is at http://localhost:5173/customer. Everything else
+code `000000`; the customer simulator is at http://localhost:5173/cliente. Everything else
 (other accounts, reset, gates, e2e, troubleshooting) is in [RUNBOOK.md](./RUNBOOK.md).

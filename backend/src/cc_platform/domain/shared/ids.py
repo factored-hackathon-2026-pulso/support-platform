@@ -51,6 +51,8 @@ class IdPrefix(StrEnum):
     EMAIL = "EML"
     CALL = "CALL"
     ASSISTANT_SESSION = "AST"
+    COPILOT_THREAD = "CPT"
+    COPILOT_MESSAGE = "CPM"
 
 
 def encode_body(timestamp_ms: int, randomness: int) -> str:

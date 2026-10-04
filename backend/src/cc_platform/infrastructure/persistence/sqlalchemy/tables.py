@@ -407,6 +407,50 @@ copilot_threads = Table(
     UniqueConstraint("case_id", "analyst_id", name="uq_copilot_threads_case_analyst"),
 )
 
+# ADR 0003 (slice 16): a supervisor's conversation with the builder agent. One per person.
+# ``messages`` is a JSON list (``[{id, role, text, created_at, client_message_id, answers}]``,
+# newest 200), like ``copilot_threads``.
+builder_threads = Table(
+    "builder_threads",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("staff_id", String(ID), ForeignKey("staff.id"), nullable=False, unique=True),
+    Column("agent", String(120), nullable=False),
+    Column("agent_session_id", String(120), nullable=True),
+    Column("run_id", String(120), nullable=True),
+    Column("runs", Integer, nullable=False, default=0),
+    Column("messages", JSON, nullable=False),
+    Column("last_trace_id", String(120), nullable=True),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=False),
+    _version(),
+)
+
+# ADR 0003 (slice 16): the platform's index of agent-core's proposals (its registry has no list
+# call). ``id`` is agent-core's proposal id. The registry is the source of truth: ``state``, ``rev``
+# and ``candidate_hash`` are the last values the platform read from it.
+builder_proposals = Table(
+    "builder_proposals",
+    metadata,
+    Column("id", String(120), primary_key=True),
+    Column("agent_id", String(120), nullable=False),
+    Column("title", String(200), nullable=False),
+    Column("origin", String(20), nullable=False),
+    Column("created_by", String(120), nullable=False),
+    Column("registered_by", String(ID), ForeignKey("staff.id"), nullable=False),
+    Column("source", String(10), nullable=False),
+    Column("state", String(12), nullable=False),
+    Column("rev", Integer, nullable=False, default=0),
+    Column("base_release_id", String(120), nullable=True),
+    Column("candidate_hash", String(120), nullable=True),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=False),
+    Column("refreshed_at", UtcDateTime, nullable=False),
+    _version(),
+    Index("ix_builder_proposals_agent_updated", "agent_id", "updated_at"),
+    Index("ix_builder_proposals_state_updated", "state", "updated_at"),
+)
+
 # ADR 0003: which dataset customer (``customers.customer_id`` of the challenge's data) a
 # platform customer is. agent-core's customer principal carries that id, never ours. Filled at
 # runtime from a private file (``CC_BANK_CUSTOMER_LINKS_FILE``); never committed.

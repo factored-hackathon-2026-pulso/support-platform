@@ -513,6 +513,89 @@
         "title": "AdminUserList",
         "type": "object"
       },
+      "AliasChange": {
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "after": {
+            "title": "After",
+            "type": "string"
+          },
+          "agentId": {
+            "title": "Agentid",
+            "type": "string"
+          },
+          "alias": {
+            "title": "Alias",
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentId",
+          "alias",
+          "before",
+          "after",
+          "actor",
+          "reason",
+          "at"
+        ],
+        "title": "AliasChange",
+        "type": "object"
+      },
+      "AliasState": {
+        "properties": {
+          "agentId": {
+            "title": "Agentid",
+            "type": "string"
+          },
+          "alias": {
+            "title": "Alias",
+            "type": "string"
+          },
+          "releaseId": {
+            "title": "Releaseid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "revoked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentId",
+          "alias",
+          "releaseId",
+          "status"
+        ],
+        "title": "AliasState",
+        "type": "object"
+      },
       "AnalystActivity": {
         "description": "What an analyst is doing now (\"Ahora\"), derived from availability, sessions and load.\n\n``busy`` \"Atendiendo\" · ``available`` \"Disponible\" · ``paused`` \"En pausa\" ·\n``offline`` \"Desconectada\" (paused and not signed in).",
         "enum": [
@@ -610,6 +693,176 @@
           "answer"
         ],
         "title": "AnswerConfirmationRequest",
+        "type": "object"
+      },
+      "Approval": {
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "candidateHash": {
+            "title": "Candidatehash",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "proposalId": {
+            "title": "Proposalid",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "yardstickLoosened": {
+            "items": {
+              "$ref": "#/components/schemas/YardstickChange"
+            },
+            "title": "Yardstickloosened",
+            "type": "array"
+          }
+        },
+        "required": [
+          "proposalId",
+          "candidateHash",
+          "actor",
+          "decision",
+          "reason",
+          "yardstickLoosened",
+          "at"
+        ],
+        "title": "Approval",
+        "type": "object"
+      },
+      "ApprovalReview": {
+        "description": "What the approver reviews, as three separate elements.",
+        "properties": {
+          "functionalChanges": {
+            "items": {
+              "$ref": "#/components/schemas/EntityDraft"
+            },
+            "title": "Functionalchanges",
+            "type": "array"
+          },
+          "gate": {
+            "items": {
+              "$ref": "#/components/schemas/GateItem"
+            },
+            "title": "Gate",
+            "type": "array"
+          },
+          "releaseChanges": {
+            "items": {
+              "$ref": "#/components/schemas/ReleaseSettingChange"
+            },
+            "title": "Releasechanges",
+            "type": "array"
+          },
+          "suite": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
+          "suiteChanges": {
+            "items": {
+              "$ref": "#/components/schemas/EntityDraft"
+            },
+            "title": "Suitechanges",
+            "type": "array"
+          },
+          "yardstickLoosened": {
+            "items": {
+              "$ref": "#/components/schemas/YardstickChange"
+            },
+            "title": "Yardstickloosened",
+            "type": "array"
+          }
+        },
+        "required": [
+          "functionalChanges",
+          "releaseChanges",
+          "suite",
+          "suiteChanges",
+          "gate",
+          "yardstickLoosened"
+        ],
+        "title": "ApprovalReview",
+        "type": "object"
+      },
+      "ApproveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptYardstickLoosened": {
+            "default": false,
+            "description": "Required when the proposal loosens the evaluation yardstick (409 `registry_loosening_not_accepted` lists what).",
+            "title": "Acceptyardstickloosened",
+            "type": "boolean"
+          },
+          "candidateHash": {
+            "description": "From `CandidateView` / the proposal.",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Candidatehash",
+            "type": "string"
+          },
+          "stepUpCode": {
+            "description": "A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.",
+            "maxLength": 12,
+            "minLength": 4,
+            "title": "Stepupcode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidateHash",
+          "stepUpCode"
+        ],
+        "title": "ApproveRequest",
+        "type": "object"
+      },
+      "AskBuilderRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "clientMessageId": {
+            "description": "Client-generated id (UUID v4); also the Idempotency-Key header.",
+            "examples": [
+              "0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10"
+            ],
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Clientmessageid",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "clientMessageId"
+        ],
+        "title": "AskBuilderRequest",
         "type": "object"
       },
       "AskCopilotRequest": {
@@ -1073,6 +1326,7 @@
           "access",
           "administration",
           "escalation",
+          "agents",
           "other"
         ],
         "title": "AuditFamily",
@@ -1103,6 +1357,164 @@
         ],
         "title": "AvailabilityStatus",
         "type": "string"
+      },
+      "BuilderExchange": {
+        "properties": {
+          "answers": {
+            "description": "What the builder answered (one or more messages); empty if it said nothing.",
+            "items": {
+              "$ref": "#/components/schemas/BuilderMessage"
+            },
+            "title": "Answers",
+            "type": "array"
+          },
+          "message": {
+            "$ref": "#/components/schemas/BuilderMessage"
+          },
+          "proposals": {
+            "description": "Proposals the answer mentions that the registry confirmed, now in the list.",
+            "items": {
+              "$ref": "#/components/schemas/ProposalSummary"
+            },
+            "title": "Proposals",
+            "type": "array"
+          },
+          "replayed": {
+            "description": "A retry of a message that was already answered.",
+            "title": "Replayed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message",
+          "answers",
+          "proposals",
+          "replayed"
+        ],
+        "title": "BuilderExchange",
+        "type": "object"
+      },
+      "BuilderMessage": {
+        "properties": {
+          "answers": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On an agent message: the `id` of the person's message it answers.",
+            "title": "Answers"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "person",
+              "agent"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "text",
+          "createdAt",
+          "answers"
+        ],
+        "title": "BuilderMessage",
+        "type": "object"
+      },
+      "BuilderStatus": {
+        "properties": {
+          "available": {
+            "description": "False while agent-core is not configured: hide the agent builder.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "canApprove": {
+            "description": "Approve, reject, publish and promote (needs step-up).",
+            "title": "Canapprove",
+            "type": "boolean"
+          },
+          "canRevoke": {
+            "description": "Revoke a release (Administración; needs step-up).",
+            "title": "Canrevoke",
+            "type": "boolean"
+          },
+          "stepUpDigits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many digits the code has.",
+            "title": "Stepupdigits"
+          },
+          "stepUpMethod": {
+            "anyOf": [
+              {
+                "const": "authenticator",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the second factor is asked: a code from the authenticator app.",
+            "title": "Stepupmethod"
+          }
+        },
+        "required": [
+          "available",
+          "canApprove",
+          "canRevoke",
+          "stepUpMethod",
+          "stepUpDigits"
+        ],
+        "title": "BuilderStatus",
+        "type": "object"
+      },
+      "BuilderThread": {
+        "properties": {
+          "available": {
+            "description": "False while agent-core is not configured.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "messages": {
+            "description": "Oldest first (the newest 200).",
+            "items": {
+              "$ref": "#/components/schemas/BuilderMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "messages"
+        ],
+        "title": "BuilderThread",
+        "type": "object"
       },
       "Call": {
         "description": "A simulated phone call (slice 12) as staff see it. Its transcript is the case's\n`transcript` turns written between `startedAt` and `endedAt`.",
@@ -1362,6 +1774,46 @@
         ],
         "title": "CallState",
         "type": "string"
+      },
+      "CandidateView": {
+        "properties": {
+          "autoBumped": {
+            "items": {
+              "$ref": "#/components/schemas/VersionRef"
+            },
+            "title": "Autobumped",
+            "type": "array"
+          },
+          "candidateHash": {
+            "description": "Send it to approve: the approval binds to it.",
+            "title": "Candidatehash",
+            "type": "string"
+          },
+          "newVersions": {
+            "items": {
+              "$ref": "#/components/schemas/VersionRef"
+            },
+            "title": "Newversions",
+            "type": "array"
+          },
+          "proposalId": {
+            "title": "Proposalid",
+            "type": "string"
+          },
+          "releaseIdPreview": {
+            "title": "Releaseidpreview",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposalId",
+          "candidateHash",
+          "releaseIdPreview",
+          "newVersions",
+          "autoBumped"
+        ],
+        "title": "CandidateView",
+        "type": "object"
       },
       "CaseCapabilities": {
         "properties": {
@@ -2033,6 +2485,26 @@
         "title": "ChangePriorityRequest",
         "type": "object"
       },
+      "ChangedRef": {
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
+          "before": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
+          "docs": {
+            "$ref": "#/components/schemas/VersionDocs"
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "docs"
+        ],
+        "title": "ChangedRef",
+        "type": "object"
+      },
       "CloseCaseRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2230,6 +2702,30 @@
           "customerId"
         ],
         "title": "CreateCustomerSessionRequest",
+        "type": "object"
+      },
+      "CreateProposalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "agentId": {
+            "description": "The agent to change (agent-core's id).",
+            "maxLength": 120,
+            "pattern": "^[a-z0-9][a-z0-9_/-]*$",
+            "title": "Agentid",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentId",
+          "title"
+        ],
+        "title": "CreateProposalRequest",
         "type": "object"
       },
       "CreateTeamRequest": {
@@ -3343,6 +3839,139 @@
         "title": "EmailThread",
         "type": "object"
       },
+      "EntityDraft": {
+        "properties": {
+          "content": {
+            "additionalProperties": true,
+            "description": "The entity as agent-core defines it (it carries its own `id` and `version`).",
+            "title": "Content",
+            "type": "object"
+          },
+          "docs": {
+            "$ref": "#/components/schemas/VersionDocs"
+          },
+          "kind": {
+            "description": "`agent`, `flow`, `prompt`, `tool`... or `release_settings`.",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "content",
+          "docs"
+        ],
+        "title": "EntityDraft",
+        "type": "object"
+      },
+      "EntityDraftRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "additionalProperties": true,
+            "title": "Content",
+            "type": "object"
+          },
+          "docs": {
+            "$ref": "#/components/schemas/VersionDocsRequest"
+          },
+          "kind": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "content",
+          "docs"
+        ],
+        "title": "EntityDraftRequest",
+        "type": "object"
+      },
+      "EntityInRelease": {
+        "properties": {
+          "changedVsBase": {
+            "title": "Changedvsbase",
+            "type": "boolean"
+          },
+          "contentHash": {
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "docs": {
+            "$ref": "#/components/schemas/VersionDocs"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/VersionRef"
+          }
+        },
+        "required": [
+          "ref",
+          "contentHash",
+          "docs",
+          "changedVsBase"
+        ],
+        "title": "EntityInRelease",
+        "type": "object"
+      },
+      "EntityRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "EntityRef",
+        "type": "object"
+      },
+      "EntityVersion": {
+        "properties": {
+          "content": {
+            "additionalProperties": true,
+            "title": "Content",
+            "type": "object"
+          },
+          "contentHash": {
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "createdBy": {
+            "title": "Createdby",
+            "type": "string"
+          },
+          "docs": {
+            "$ref": "#/components/schemas/VersionDocs"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/VersionRef"
+          }
+        },
+        "required": [
+          "ref",
+          "content",
+          "contentHash",
+          "docs",
+          "createdBy",
+          "createdAt"
+        ],
+        "title": "EntityVersion",
+        "type": "object"
+      },
       "EscalateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3599,6 +4228,264 @@
         ],
         "title": "EscalationState",
         "type": "string"
+      },
+      "EvalReport": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "items": {
+            "description": "Each gate item apart: there is no composite score.",
+            "items": {
+              "$ref": "#/components/schemas/GateItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "judgeNotes": {
+            "description": "Informative notes, never in the verdict.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Judgenotes",
+            "type": "array"
+          },
+          "results": {
+            "description": "Result of each scenario run, passed through.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "runs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "agent-core's measurements per run (`base_on_old`, `cand_on_old`, `cand_on_new`), passed through.",
+            "title": "Runs"
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fail",
+              "failed_infra"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "yardstickChanges": {
+            "items": {
+              "$ref": "#/components/schemas/YardstickChange"
+            },
+            "title": "Yardstickchanges",
+            "type": "array"
+          }
+        },
+        "required": [
+          "verdict",
+          "items",
+          "yardstickChanges",
+          "detail",
+          "runs",
+          "results",
+          "judgeNotes"
+        ],
+        "title": "EvalReport",
+        "type": "object"
+      },
+      "EvalRun": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "baseReleaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basereleaseid"
+          },
+          "candidateHash": {
+            "title": "Candidatehash",
+            "type": "string"
+          },
+          "evalRunId": {
+            "title": "Evalrunid",
+            "type": "string"
+          },
+          "proposalId": {
+            "title": "Proposalid",
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/EvalReport"
+          },
+          "suite": {
+            "$ref": "#/components/schemas/VersionRef"
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fail",
+              "failed_infra"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "evalRunId",
+          "proposalId",
+          "candidateHash",
+          "baseReleaseId",
+          "suite",
+          "verdict",
+          "report",
+          "at"
+        ],
+        "title": "EvalRun",
+        "type": "object"
+      },
+      "EvaluateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "suiteId": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Suiteid",
+            "type": "string"
+          },
+          "suiteVersion": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suiteversion"
+          }
+        },
+        "required": [
+          "suiteId"
+        ],
+        "title": "EvaluateRequest",
+        "type": "object"
+      },
+      "GateItem": {
+        "properties": {
+          "baseValue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basevalue"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "metricId": {
+            "title": "Metricid",
+            "type": "string"
+          },
+          "noiseMargin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noisemargin"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "phase": {
+            "description": "base_yardstick, new_yardstick or platform.",
+            "title": "Phase",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact decimal as text; null = not measured.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "metricId",
+          "phase",
+          "role",
+          "value",
+          "baseValue",
+          "noiseMargin",
+          "floor",
+          "passed",
+          "reason"
+        ],
+        "title": "GateItem",
+        "type": "object"
       },
       "HealthResponse": {
         "properties": {
@@ -5047,6 +5934,15 @@
           "copilot_busy",
           "agent_core_unavailable",
           "agent_core_rejected",
+          "builder_step_up_invalid",
+          "builder_busy",
+          "registry_validation_failed",
+          "registry_gate_failed",
+          "registry_loosening_not_accepted",
+          "registry_conflict",
+          "registry_forbidden",
+          "registry_not_found",
+          "registry_quota_exceeded",
           "analyst_not_eligible",
           "language_mismatch",
           "analyst_paused",
@@ -5281,6 +6177,19 @@
             "description": "escalation_open: the case's open escalation (slice 9).",
             "title": "Escalationid"
           },
+          "evalRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "registry_gate_failed: the run the registry stored it under.",
+            "title": "Evalrunid"
+          },
           "field": {
             "anyOf": [
               {
@@ -5361,6 +6270,19 @@
             "description": "password_rejected: every rule the password breaks.",
             "title": "Reasons"
           },
+          "registryCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "registry_*: agent-core's own code (validation_failed, gate_failed, proposal_stale, candidate_changed, illegal_transition, forbidden_role, step_up_required, not_found, loosening_not_accepted, idempotency_conflict, quota_exceeded).",
+            "title": "Registrycode"
+          },
           "remainingAttempts": {
             "anyOf": [
               {
@@ -5371,8 +6293,22 @@
               }
             ],
             "default": null,
-            "description": "invalid_credentials, mfa_invalid, totp_invalid: failed attempts left before the lock.",
+            "description": "invalid_credentials, mfa_invalid, totp_invalid, builder_step_up_invalid: failed attempts left before the lock.",
             "title": "Remainingattempts"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "registry_gate_failed: the failed evaluation (`EvalReport`, camelCase).",
+            "title": "Report"
           },
           "requestId": {
             "anyOf": [
@@ -5443,6 +6379,40 @@
             "default": null,
             "description": "account_locked, rate_limited: when the lock ends.",
             "title": "Unlockat"
+          },
+          "violations": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "registry_validation_failed: the rules the draft breaks (`Violation`, camelCase: rule, flow, nodeId, path, message).",
+            "title": "Violations"
+          },
+          "yardstickLoosened": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "registry_loosening_not_accepted: what the proposal loosens (`YardstickChange`: kind, target, message).",
+            "title": "Yardstickloosened"
           }
         },
         "required": [
@@ -5452,6 +6422,310 @@
           "code"
         ],
         "title": "ProblemDetails",
+        "type": "object"
+      },
+      "PromoteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Reason",
+            "type": "string"
+          },
+          "releaseId": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Releaseid",
+            "type": "string"
+          },
+          "stepUpCode": {
+            "description": "A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.",
+            "maxLength": 12,
+            "minLength": 4,
+            "title": "Stepupcode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "releaseId",
+          "stepUpCode"
+        ],
+        "title": "PromoteRequest",
+        "type": "object"
+      },
+      "Proposal": {
+        "properties": {
+          "agentId": {
+            "title": "Agentid",
+            "type": "string"
+          },
+          "baseReleaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basereleaseid"
+          },
+          "candidateHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set from `candidate` on.",
+            "title": "Candidatehash"
+          },
+          "createdBy": {
+            "description": "A staff id, or the builder agent's service identity.",
+            "title": "Createdby",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ProposalOrigin"
+          },
+          "proposalId": {
+            "title": "Proposalid",
+            "type": "string"
+          },
+          "rev": {
+            "description": "The draft revision: send it back as `expectedRev` to save.",
+            "title": "Rev",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ProposalState"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposalId",
+          "agentId",
+          "origin",
+          "state",
+          "rev",
+          "baseReleaseId",
+          "title",
+          "createdBy",
+          "candidateHash",
+          "updatedAt"
+        ],
+        "title": "Proposal",
+        "type": "object"
+      },
+      "ProposalDetail": {
+        "properties": {
+          "changes": {
+            "description": "The draft: what the proposal changes.",
+            "items": {
+              "$ref": "#/components/schemas/EntityDraft"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "lastEval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvalRun"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The evaluation of the current candidate (null before one, and after a failed gate: the proposal is back in draft; that report came with the 409)."
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/Proposal"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApprovalReview"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present once there is an evaluation."
+          }
+        },
+        "required": [
+          "proposal",
+          "changes",
+          "lastEval",
+          "review"
+        ],
+        "title": "ProposalDetail",
+        "type": "object"
+      },
+      "ProposalList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ProposalList",
+        "type": "object"
+      },
+      "ProposalOrigin": {
+        "enum": [
+          "manual",
+          "builder_chat",
+          "auto_detect",
+          "import"
+        ],
+        "title": "ProposalOrigin",
+        "type": "string"
+      },
+      "ProposalState": {
+        "enum": [
+          "draft",
+          "candidate",
+          "evaluated",
+          "approved",
+          "published"
+        ],
+        "title": "ProposalState",
+        "type": "string"
+      },
+      "ProposalSummary": {
+        "properties": {
+          "agentId": {
+            "title": "Agentid",
+            "type": "string"
+          },
+          "baseReleaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basereleaseid"
+          },
+          "candidateHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidatehash"
+          },
+          "createdBy": {
+            "title": "Createdby",
+            "type": "string"
+          },
+          "live": {
+            "description": "True when `state` was just read from the registry; false when it is the cached value (the registry did not answer for this row).",
+            "title": "Live",
+            "type": "boolean"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ProposalOrigin"
+          },
+          "proposalId": {
+            "title": "Proposalid",
+            "type": "string"
+          },
+          "refreshedAt": {
+            "description": "When the platform last read it from the registry.",
+            "format": "date-time",
+            "title": "Refreshedat",
+            "type": "string"
+          },
+          "registeredBy": {
+            "description": "The staff member who brought it into this list.",
+            "title": "Registeredby",
+            "type": "string"
+          },
+          "rev": {
+            "title": "Rev",
+            "type": "integer"
+          },
+          "source": {
+            "description": "Created here, found through the builder chat, or tracked by id.",
+            "enum": [
+              "platform",
+              "chat",
+              "tracked"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ProposalState"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposalId",
+          "agentId",
+          "title",
+          "origin",
+          "state",
+          "rev",
+          "baseReleaseId",
+          "candidateHash",
+          "createdBy",
+          "registeredBy",
+          "source",
+          "updatedAt",
+          "refreshedAt",
+          "live"
+        ],
+        "title": "ProposalSummary",
+        "type": "object"
+      },
+      "PublishRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "stepUpCode": {
+            "description": "A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.",
+            "maxLength": 12,
+            "minLength": 4,
+            "title": "Stepupcode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stepUpCode"
+        ],
+        "title": "PublishRequest",
         "type": "object"
       },
       "QueueCount": {
@@ -5597,6 +6871,213 @@
         "title": "RatingStats",
         "type": "object"
       },
+      "RejectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "stepUpCode": {
+            "description": "A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.",
+            "maxLength": 12,
+            "minLength": 4,
+            "title": "Stepupcode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "stepUpCode"
+        ],
+        "title": "RejectRequest",
+        "type": "object"
+      },
+      "ReleaseDetail": {
+        "properties": {
+          "agentId": {
+            "title": "Agentid",
+            "type": "string"
+          },
+          "baseReleaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basereleaseid"
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/EntityInRelease"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "evalSuiteRefs": {
+            "items": {
+              "$ref": "#/components/schemas/VersionRef"
+            },
+            "title": "Evalsuiterefs",
+            "type": "array"
+          },
+          "injectionRuleset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interrupts": {
+            "description": "agent-core's interrupts, passed through.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Interrupts",
+            "type": "array"
+          },
+          "knowledgeSnapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledgesnapshot"
+          },
+          "languageDetection": {
+            "$ref": "#/components/schemas/EntityRef"
+          },
+          "maxInputChars": {
+            "title": "Maxinputchars",
+            "type": "integer"
+          },
+          "proposalId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposalid"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "title": "Publishedat",
+            "type": "string"
+          },
+          "publishedBy": {
+            "title": "Publishedby",
+            "type": "string"
+          },
+          "releaseId": {
+            "title": "Releaseid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "revoked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "releaseId",
+          "status",
+          "agentId",
+          "entities",
+          "knowledgeSnapshot",
+          "proposalId",
+          "baseReleaseId",
+          "publishedBy",
+          "publishedAt",
+          "evalSuiteRefs",
+          "interrupts",
+          "languageDetection",
+          "injectionRuleset",
+          "maxInputChars"
+        ],
+        "title": "ReleaseDetail",
+        "type": "object"
+      },
+      "ReleaseDiff": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "string"
+          },
+          "added": {
+            "items": {
+              "$ref": "#/components/schemas/VersionRef"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "b": {
+            "title": "B",
+            "type": "string"
+          },
+          "changed": {
+            "items": {
+              "$ref": "#/components/schemas/ChangedRef"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/VersionRef"
+            },
+            "title": "Removed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "added",
+          "removed",
+          "changed"
+        ],
+        "title": "ReleaseDiff",
+        "type": "object"
+      },
+      "ReleaseSettingChange": {
+        "properties": {
+          "after": {
+            "title": "After"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "ReleaseSettingChange",
+        "type": "object"
+      },
       "RenameTeamRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5645,6 +7126,30 @@
         "title": "RespondEscalationRequest",
         "type": "object"
       },
+      "RevokeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "stepUpCode": {
+            "description": "A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.",
+            "maxLength": 12,
+            "minLength": 4,
+            "title": "Stepupcode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "stepUpCode"
+        ],
+        "title": "RevokeRequest",
+        "type": "object"
+      },
       "RoleCounts": {
         "properties": {
           "admin": {
@@ -5671,6 +7176,32 @@
           "admin"
         ],
         "title": "RoleCounts",
+        "type": "object"
+      },
+      "SaveDraftRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "description": "The whole draft: it replaces the previous one.",
+            "items": {
+              "$ref": "#/components/schemas/EntityDraftRequest"
+            },
+            "maxItems": 100,
+            "title": "Changes",
+            "type": "array"
+          },
+          "expectedRev": {
+            "description": "The `rev` the caller saw (stale = 409).",
+            "minimum": 0.0,
+            "title": "Expectedrev",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expectedRev",
+          "changes"
+        ],
+        "title": "SaveDraftRequest",
         "type": "object"
       },
       "SelfChangeAction": {
@@ -6194,6 +7725,22 @@
         "title": "TotpEnrollment",
         "type": "object"
       },
+      "TrackProposalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "proposalId": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Proposalid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposalId"
+        ],
+        "title": "TrackProposalRequest",
+        "type": "object"
+      },
       "Turn": {
         "properties": {
           "audience": {
@@ -6531,6 +8078,43 @@
         "title": "ValidationIssue",
         "type": "object"
       },
+      "ValidationReport": {
+        "properties": {
+          "autoBumped": {
+            "items": {
+              "$ref": "#/components/schemas/VersionRef"
+            },
+            "title": "Autobumped",
+            "type": "array"
+          },
+          "candidateHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null while there are violations.",
+            "title": "Candidatehash"
+          },
+          "violations": {
+            "items": {
+              "$ref": "#/components/schemas/Violation"
+            },
+            "title": "Violations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "violations",
+          "candidateHash",
+          "autoBumped"
+        ],
+        "title": "ValidationReport",
+        "type": "object"
+      },
       "VerifyStepUpRequest": {
         "additionalProperties": false,
         "properties": {
@@ -6548,6 +8132,98 @@
         "title": "VerifyStepUpRequest",
         "type": "object"
       },
+      "VersionDocs": {
+        "properties": {
+          "changelog": {
+            "title": "Changelog",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why this entity changes.",
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "rationale",
+          "changelog"
+        ],
+        "title": "VersionDocs",
+        "type": "object"
+      },
+      "VersionDocsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "changelog": {
+            "maxLength": 8000,
+            "title": "Changelog",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "rationale": {
+            "maxLength": 4000,
+            "title": "Rationale",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "rationale",
+          "changelog"
+        ],
+        "title": "VersionDocsRequest",
+        "type": "object"
+      },
+      "VersionList": {
+        "properties": {
+          "items": {
+            "description": "Oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/VersionSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "VersionList",
+        "type": "object"
+      },
+      "VersionRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "version"
+        ],
+        "title": "VersionRef",
+        "type": "object"
+      },
       "VersionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -6562,6 +8238,117 @@
           "expectedVersion"
         ],
         "title": "VersionRequest",
+        "type": "object"
+      },
+      "VersionSummary": {
+        "properties": {
+          "contentHash": {
+            "title": "Contenthash",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "createdBy": {
+            "title": "Createdby",
+            "type": "string"
+          },
+          "docs": {
+            "$ref": "#/components/schemas/VersionDocs"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/VersionRef"
+          }
+        },
+        "required": [
+          "ref",
+          "contentHash",
+          "docs",
+          "createdBy",
+          "createdAt"
+        ],
+        "title": "VersionSummary",
+        "type": "object"
+      },
+      "Violation": {
+        "properties": {
+          "flow": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flow"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "nodeId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodeid"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "rule": {
+            "description": "agent-core's rule id (G0-05, REG-PROPOSAL...).",
+            "title": "Rule",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "flow",
+          "nodeId",
+          "path",
+          "message"
+        ],
+        "title": "Violation",
+        "type": "object"
+      },
+      "YardstickChange": {
+        "properties": {
+          "kind": {
+            "description": "metric_removed, floor_loosened, noise_widened...",
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "message"
+        ],
+        "title": "YardstickChange",
         "type": "object"
       }
     },
@@ -8611,6 +10398,2677 @@
         "summary": "Verify the second factor and start a session",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/builder/aliases/{agentId}/{alias}": {
+      "get": {
+        "description": "404 `registry_not_found` when the alias points nowhere.",
+        "operationId": "builder_get_alias",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agentId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Agentid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "alias",
+            "required": true,
+            "schema": {
+              "examples": [
+                "staging",
+                "prod"
+              ],
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Alias",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AliasState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Which release an alias (`staging`, `prod`) points to",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/aliases/{agentId}/{alias}/promote": {
+      "post": {
+        "description": "Promoting to `prod` is what customers feel. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).",
+        "operationId": "builder_promote_alias",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agentId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Agentid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "alias",
+            "required": true,
+            "schema": {
+              "examples": [
+                "staging",
+                "prod"
+              ],
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Alias",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AliasChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Point an alias (`staging` or `prod`) at a release",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/chat": {
+      "get": {
+        "description": "One thread per person. `available: false` (no messages, status 200) while agent-core is not configured: hide the chat.",
+        "operationId": "builder_get_chat",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuilderThread"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The caller's conversation with the builder agent",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/chat/messages": {
+      "post": {
+        "description": "The agent (`constructor-chat`) reads the current version, drafts the change, creates a proposal, writes the draft and validates it. It only proposes: freezing, evaluating, approving and publishing are the screens' steps, and approving and publishing are a person's. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`), like the analyst's copilot: a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Proposals the answer mentions are tracked and returned in `proposals`. 409 `builder_busy` while it answers a previous message; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the message stays in the thread: send it again with the same `clientMessageId`).",
+        "operationId": "builder_ask_builder",
+        "parameters": [
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskBuilderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuilderExchange"
+                }
+              }
+            },
+            "description": "Replay of a message already answered"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuilderExchange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Tell the builder agent what to change",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/entities/{kind}/{entityId}": {
+      "get": {
+        "description": "The latest version, or `?version=X.Y.Z`. `entityId` may contain `/`.",
+        "operationId": "builder_get_entity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "examples": [
+                "agent",
+                "flow",
+                "prompt"
+              ],
+              "maxLength": 60,
+              "minLength": 1,
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entityId",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Entityid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityVersion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "An entity version with its full content",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals": {
+      "get": {
+        "description": "agent-core's registry has no list call, so this is the platform's index: the proposals created here, found through the builder chat or tracked by id. With `refresh` (default) each row is re-read from the registry (`live: true`); a row the registry did not answer for keeps its cached state (`live: false`). At most 50.",
+        "operationId": "builder_list_proposals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "agentId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agentid"
+            }
+          },
+          {
+            "description": "Filter by the proposal state.",
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProposalState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by the proposal state.",
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Re-read each row from the registry.",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Re-read each row from the registry.",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The proposals to change agents, newest first",
+        "tags": [
+          "builder"
+        ]
+      },
+      "post": {
+        "description": "Creates a proposal in `draft`, based on the agent's `staging` release. The next steps are `PUT .../draft`, `validate`, `freeze`, `evaluate`, then a person approves and publishes.",
+        "operationId": "builder_create_proposal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProposalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Proposal"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Start a proposal to change an agent",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/track": {
+      "post": {
+        "description": "For a proposal made outside this screen (the builder chat's answer names the id, or someone made it by hand). Idempotent. 404 `registry_not_found` if the registry does not know it.",
+        "operationId": "builder_track_proposal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackProposalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Bring a proposal agent-core already has into the list",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}": {
+      "get": {
+        "operationId": "builder_get_proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "One proposal: its draft, the last evaluation and the approver's review",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/approve": {
+      "post": {
+        "description": "A person's decision, never the builder agent's. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`). `candidateHash` must be the proposal's current one (409 `registry_conflict`, `candidate_changed`). A proposal that loosens the yardstick needs `acceptYardstickLoosened` (409 `registry_loosening_not_accepted` lists what it loosens).",
+        "operationId": "builder_approve_proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Approve the evaluated candidate (`evaluated` → `approved`)",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/draft": {
+      "put": {
+        "description": "Replaces the whole draft (only while the proposal is in `draft`). `expectedRev` must be the proposal's current `rev` (409 `registry_conflict`, `registryCode: proposal_stale`). Each change is a full entity (`kind`, `content` with its own `id` and `version`, `docs`). agent-core checks its limits and refuses edits to the platform's guardrails (403 `registry_forbidden`).",
+        "operationId": "builder_save_draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Proposal"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Write the draft: the entities this proposal changes",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/evaluate": {
+      "post": {
+        "description": "Waits for the evaluation (it runs the real agent: seconds to minutes). `200` with the report: the verdict is `pass` (the proposal is `evaluated`) or `failed_infra`. A failed gate is `409 registry_gate_failed` with the `report` (the proposal went back to `draft`). An agent without an `eval_suite` cannot be evaluated: 404 `registry_not_found` or 422 `registry_validation_failed`, and so it cannot be approved or published.",
+        "operationId": "builder_evaluate_proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Run the agent's evaluation suite on the candidate (`candidate` → `evaluated`)",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/freeze": {
+      "post": {
+        "description": "The candidate is identified by its hash; evaluation and approval bind to it, and any edit makes another one. 422 `registry_validation_failed` (with `violations`) if the draft is not valid.",
+        "operationId": "builder_freeze_proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Freeze the draft into a candidate (`draft` → `candidate`)",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/publish": {
+      "post": {
+        "description": "`staging` now points at the release; promoting to `prod` is a separate step. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`). Idempotent on `Idempotency-Key`. If `staging` moved since the proposal was made it goes back to `draft` (409 `registry_conflict`, `proposal_stale`): freeze and evaluate again.",
+        "operationId": "builder_publish_proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "One key per publication the caller means to make: a retry with it returns the same release (the registry de-duplicates it).",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "One key per publication the caller means to make: a retry with it returns the same release (the registry de-duplicates it).",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Publish the approved candidate as a release (`approved` → `published`)",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/reject": {
+      "post": {
+        "description": "The reason is kept by the registry. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).",
+        "operationId": "builder_reject_proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Proposal"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Reject the evaluated candidate: back to `draft`",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/reopen": {
+      "post": {
+        "operationId": "builder_reopen_proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Proposal"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Back to `draft` to edit (from `candidate`, `evaluated` or `approved`)",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/validate": {
+      "post": {
+        "description": "Always 200: `violations` empty means the draft can be frozen. Changes nothing.",
+        "operationId": "builder_validate_proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Check the draft: the violations, or the candidate hash",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/releases/{a}/diff/{b}": {
+      "get": {
+        "operationId": "builder_diff_releases",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "a",
+            "required": true,
+            "schema": {
+              "title": "A",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "b",
+            "required": true,
+            "schema": {
+              "title": "B",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseDiff"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "What changed between two releases",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/releases/{releaseId}": {
+      "get": {
+        "operationId": "builder_get_release",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "releaseId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Releaseid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "A release: the exact versions it holds",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/releases/{releaseId}/revoke": {
+      "post": {
+        "description": "No gate. Refused while `prod` points at the release (409 `registry_conflict`: promote another first). Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).",
+        "operationId": "builder_revoke_release",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "releaseId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Releaseid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Withdraw a release at once (Administración)",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/status": {
+      "get": {
+        "description": "Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured (hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for.",
+        "operationId": "builder_get_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuilderStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Whether the agent builder is available, and what the caller may do",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/versions/{kind}/{entityId}": {
+      "get": {
+        "description": "`entityId` may contain `/` (`t/saludo`).",
+        "operationId": "builder_list_versions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "examples": [
+                "agent",
+                "flow",
+                "prompt"
+              ],
+              "maxLength": 60,
+              "minLength": 1,
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entityId",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Entityid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The versions of an entity, oldest first",
+        "tags": [
+          "builder"
         ]
       }
     },

@@ -20,6 +20,7 @@ from cc_platform.application.cases.ports import (
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
 from cc_platform.application.notifications.ports import NotificationCursor
 from cc_platform.application.ports.event_log import AuditFilters
+from cc_platform.domain.ai.builder import BuilderProposal, BuilderThread
 from cc_platform.domain.ai.copilot import CopilotThread
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.cases.assignment import Assignment
@@ -808,6 +809,54 @@ class InMemoryCopilotThreadRepository(_StagedRepository[CopilotThread]):
     async def get_for(self, case_id: str, analyst_id: str) -> CopilotThread | None:
         found = [t for t in self._all() if (t.case_id, t.analyst_id) == (case_id, analyst_id)]
         return await self._get(found[0].id) if found else None
+
+
+class InMemoryBuilderThreadRepository(_StagedRepository[BuilderThread]):
+    """ADR 0003 (slice 16). Same answers as ``SqlBuilderThreadRepository`` (a thread per person)."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, BuilderThread], track: Tracker) -> None:
+        super().__init__(committed, lambda thread: thread.id, track)
+
+    def _unique_violation(
+        self, aggregate: BuilderThread, other: BuilderThread
+    ) -> DomainError | None:
+        if aggregate.staff_id == other.staff_id:
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    async def get_for(self, staff_id: str) -> BuilderThread | None:
+        found = [t for t in self._all() if t.staff_id == staff_id]
+        return await self._get(found[0].id) if found else None
+
+
+class InMemoryBuilderProposalRepository(_StagedRepository[BuilderProposal]):
+    """ADR 0003 (slice 16): the index of agent-core's proposals."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, BuilderProposal], track: Tracker) -> None:
+        super().__init__(committed, lambda proposal: proposal.id, track)
+
+    async def get(self, proposal_id: str) -> BuilderProposal | None:
+        return await self._get(proposal_id)
+
+    async def search(
+        self, *, agent_id: str | None = None, state: str | None = None, limit: int = 50
+    ) -> list[BuilderProposal]:
+        found = [
+            p
+            for p in self._all()
+            if (agent_id is None or p.agent_id == agent_id) and (state is None or p.state == state)
+        ]
+        found.sort(key=lambda p: (p.updated_at, p.id), reverse=True)
+        result = []
+        for proposal in found[:limit]:
+            loaded = await self._get(proposal.id)
+            if loaded is not None:
+                result.append(loaded)
+        return result
 
 
 class InMemoryBankCustomerLinks:

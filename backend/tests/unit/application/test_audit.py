@@ -39,12 +39,17 @@ from cc_platform.application.people.dto import LoginCommand, VerifyMfaCommand
 from cc_platform.application.people.onboarding.dto import SetPasswordCommand
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.bootstrap.container import Container
-from cc_platform.domain.ai.events import ASSISTANT_EVENTS, COPILOT_EVENTS
+from cc_platform.domain.ai.events import (
+    ASSISTANT_EVENTS,
+    BUILDER_EVENTS,
+    COPILOT_EVENTS,
+    BuilderProposalCreated,
+)
 from cc_platform.domain.cases import CloseReason
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.errors import AccountLockedError
 from cc_platform.domain.people.staff import Language, StaffRole
-from cc_platform.domain.shared.actor import ActorRef
+from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
 from cc_platform.domain.shared.events import DomainEvent
 from cc_platform.infrastructure.clock import FixedClock
@@ -273,11 +278,12 @@ async def test_every_emitted_event_has_a_description() -> None:
     events = await all_events(container.uow)
     emitted = {e.type for e in events}
     # The people-only seed tells no assistant story (ADR 0003); ``test_assistant.py`` emits
-    # those events and checks that each one has a description.
+    # those events and checks that each one has a description; ``test_builder.py`` does the
+    # same for the agent builder (slice 16).
     assistant_types = {
         "case.assistant_started",
         "case.assistant_released",
-        *(event.event_type for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS)),
+        *(event.event_type for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS, *BUILDER_EVENTS)),
     }
     assert emitted == set(FAMILY) - assistant_types
     assert not [e for e in events if e.description == fallback_description(e.type)]
@@ -395,6 +401,18 @@ async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
     await seed_demo_admin_story(factory, clock)
     async with factory() as uow:  # an event type the catalog does not know
         uow.record(_Unknown(occurred_at=T, actor=ActorRef.system(), entity_id="x_100%"))
+        await uow.commit()
+    async with factory() as uow:  # slice 16: a supervisor started a proposal (family ``agents``)
+        uow.record(
+            BuilderProposalCreated(
+                occurred_at=T,
+                actor=ActorRef(ActorRole.SUPERVISOR, LUCIA_ID),
+                entity_id="00000000-0000-7000-8000-000000000001",
+                agent_id="disputas",
+                origin="manual",
+                base_release_id=None,
+            )
+        )
         await uow.commit()
     yield Harness(factory, await all_events(factory))
     if database is not None:

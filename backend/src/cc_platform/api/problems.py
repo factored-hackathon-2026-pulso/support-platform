@@ -60,6 +60,16 @@ class ProblemCode(StrEnum):
     COPILOT_BUSY = "copilot_busy"
     AGENT_CORE_UNAVAILABLE = "agent_core_unavailable"
     AGENT_CORE_REJECTED = "agent_core_rejected"
+    # the agent builder (slice 16)
+    BUILDER_STEP_UP_INVALID = "builder_step_up_invalid"
+    BUILDER_BUSY = "builder_busy"
+    REGISTRY_VALIDATION_FAILED = "registry_validation_failed"
+    REGISTRY_GATE_FAILED = "registry_gate_failed"
+    REGISTRY_LOOSENING_NOT_ACCEPTED = "registry_loosening_not_accepted"
+    REGISTRY_CONFLICT = "registry_conflict"
+    REGISTRY_FORBIDDEN = "registry_forbidden"
+    REGISTRY_NOT_FOUND = "registry_not_found"
+    REGISTRY_QUOTA_EXCEEDED = "registry_quota_exceeded"
     # supervision (manual assignment)
     ANALYST_NOT_ELIGIBLE = "analyst_not_eligible"
     LANGUAGE_MISMATCH = "language_mismatch"
@@ -180,6 +190,39 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
     ),
     P.AGENT_CORE_REJECTED: ProblemSpec(
         502, "Assistant service refused", "El asistente no pudo atender esta solicitud."
+    ),
+    P.BUILDER_STEP_UP_INVALID: ProblemSpec(
+        422,
+        "Invalid step-up code",
+        "El código de verificación no es correcto. Escribe el que muestra ahora tu app.",
+    ),
+    P.BUILDER_BUSY: ProblemSpec(
+        409, "Builder busy", "El constructor todavía está respondiendo tu mensaje anterior."
+    ),
+    P.REGISTRY_VALIDATION_FAILED: ProblemSpec(
+        422, "Proposal not valid", "La propuesta no es válida todavía. Revisa las violaciones."
+    ),
+    P.REGISTRY_GATE_FAILED: ProblemSpec(
+        409, "Evaluation gate failed", "La candidata no pasa el gate de evaluación."
+    ),
+    P.REGISTRY_LOOSENING_NOT_ACCEPTED: ProblemSpec(
+        409,
+        "Yardstick loosening not accepted",
+        "La propuesta afloja la vara de evaluación: apruébala aparte, aceptándolo.",
+    ),
+    P.REGISTRY_CONFLICT: ProblemSpec(
+        409,
+        "Proposal state conflict",
+        "La propuesta cambió o no está en el estado que esto necesita.",
+    ),
+    P.REGISTRY_FORBIDDEN: ProblemSpec(
+        403, "Registry refused", "El registro no permite esta operación con tu rol."
+    ),
+    P.REGISTRY_NOT_FOUND: ProblemSpec(
+        404, "Not found in the registry", "No encontramos eso en el registro de agentes."
+    ),
+    P.REGISTRY_QUOTA_EXCEEDED: ProblemSpec(
+        429, "Registry quota exceeded", "Se alcanzó el tope de operaciones para esta propuesta."
     ),
     P.ANALYST_NOT_ELIGIBLE: ProblemSpec(
         422, "Analyst not eligible", "Esa persona no puede recibir casos."

@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cc_platform.application.ai.builder import AgentBuilder
+from cc_platform.application.ai.builder_chat import AskBuilder, GetBuilderThread
 from cc_platform.application.ai.copilot import AskCopilot, GetCopilotThread
 from cc_platform.application.ai.customer import (
     AnswerAssistantConfirmation,
@@ -13,6 +15,15 @@ from cc_platform.application.ai.customer import (
     VerifyAssistantStepUp,
 )
 from cc_platform.application.ai.staff import GetCaseHandoff, ReleaseAssistantCase
+
+
+@dataclass(frozen=True, slots=True)
+class BuilderUseCases:
+    """The agent builder (slice 16): the registry operations and the chat with the builder agent."""
+
+    registry: AgentBuilder
+    thread: GetBuilderThread
+    ask: AskBuilder
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,3 +38,5 @@ class AssistantUseCases:
     # the analyst's copilot (slice 15)
     copilot_thread: GetCopilotThread
     ask_copilot: AskCopilot
+    # the agent builder for supervisors (slice 16): ``None`` when the registry is not wired
+    builder: BuilderUseCases | None = None

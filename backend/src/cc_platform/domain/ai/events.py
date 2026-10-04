@@ -112,6 +112,193 @@ class CopilotAnswered(DomainEvent):
 COPILOT_EVENTS: tuple[type[DomainEvent], ...] = (CopilotQueryAsked, CopilotAnswered)
 
 
+# ----------------------------------------------------------------------------- agent builder (S16)
+# ``entity`` is ``builder``; ``entity_id`` is the proposal id (agent-core's), the agent id (an alias
+# change), the release id (a revocation) or the chat thread id. Payloads carry ids, states and
+# counters only: never a draft's content, a prompt, a reason or a chat text.
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalCreated(DomainEvent):
+    event_type = "builder.proposal_created"
+    entity = "builder"
+
+    agent_id: str
+    origin: str
+    base_release_id: str | None
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalTracked(DomainEvent):
+    """A proposal that agent-core already had (made by the builder chat or by hand) joined the
+    platform's list."""
+
+    event_type = "builder.proposal_tracked"
+    entity = "builder"
+
+    agent_id: str
+    source: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderDraftSaved(DomainEvent):
+    event_type = "builder.draft_saved"
+    entity = "builder"
+
+    agent_id: str
+    rev: int
+    changes: int
+    kinds: list[str]
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalValidated(DomainEvent):
+    event_type = "builder.proposal_validated"
+    entity = "builder"
+
+    agent_id: str
+    violations: int
+    candidate_hash: str | None
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalFrozen(DomainEvent):
+    event_type = "builder.proposal_frozen"
+    entity = "builder"
+
+    agent_id: str
+    candidate_hash: str
+    new_versions: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalReopened(DomainEvent):
+    event_type = "builder.proposal_reopened"
+    entity = "builder"
+
+    agent_id: str
+    rev: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalEvaluated(DomainEvent):
+    """``verdict``: ``pass``, ``fail`` (the gate refused: the proposal went back to draft) or
+    ``failed_infra``."""
+
+    event_type = "builder.proposal_evaluated"
+    entity = "builder"
+
+    agent_id: str
+    suite_id: str
+    verdict: str
+    items: int
+    items_failed: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalApproved(DomainEvent):
+    event_type = "builder.proposal_approved"
+    entity = "builder"
+
+    agent_id: str
+    candidate_hash: str
+    yardstick_loosened: int
+    step_up: bool
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalRejected(DomainEvent):
+    event_type = "builder.proposal_rejected"
+    entity = "builder"
+
+    agent_id: str
+    reason_length: int
+    step_up: bool
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderProposalPublished(DomainEvent):
+    event_type = "builder.proposal_published"
+    entity = "builder"
+
+    agent_id: str
+    release_id: str
+    step_up: bool
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderAliasPromoted(DomainEvent):
+    """``entity_id`` is the agent id; ``alias`` is ``staging`` or ``prod``."""
+
+    event_type = "builder.alias_promoted"
+    entity = "builder"
+
+    alias: str
+    release_id: str
+    before: str | None
+    reason_length: int
+    step_up: bool
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderReleaseRevoked(DomainEvent):
+    """``entity_id`` is the release id."""
+
+    event_type = "builder.release_revoked"
+    entity = "builder"
+
+    agent_id: str
+    reason_length: int
+    step_up: bool
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderQuestionAsked(DomainEvent):
+    """A supervisor wrote to the builder agent. ``entity_id`` is her thread; only the size of the
+    text is kept."""
+
+    event_type = "builder.question_asked"
+    entity = "builder"
+
+    question_id: str
+    question_length: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BuilderAnswered(DomainEvent):
+    """The builder agent answered (``trace_id`` correlates with agent-core's traces)."""
+
+    event_type = "builder.answered"
+    entity = "builder"
+
+    question_id: str
+    agent: str
+    run_id: str | None
+    trace_id: str
+    status: str
+    messages: int
+
+
+#: Every builder event: audited, never sent on a socket (nothing here is for the customer, and a
+#: draft is not for every supervisor's screen).
+BUILDER_EVENTS: tuple[type[DomainEvent], ...] = (
+    BuilderProposalCreated,
+    BuilderProposalTracked,
+    BuilderDraftSaved,
+    BuilderProposalValidated,
+    BuilderProposalFrozen,
+    BuilderProposalReopened,
+    BuilderProposalEvaluated,
+    BuilderProposalApproved,
+    BuilderProposalRejected,
+    BuilderProposalPublished,
+    BuilderAliasPromoted,
+    BuilderReleaseRevoked,
+    BuilderQuestionAsked,
+    BuilderAnswered,
+)
+
+
 #: Every assistant event (the realtime projection owns them).
 ASSISTANT_EVENTS: tuple[type[DomainEvent], ...] = (
     AssistantSessionStarted,

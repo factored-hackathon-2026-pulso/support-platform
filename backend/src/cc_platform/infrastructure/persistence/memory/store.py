@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cc_platform.application.events import StoredEvent
+from cc_platform.domain.ai.builder import BuilderProposal, BuilderThread
 from cc_platform.domain.ai.copilot import CopilotThread
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.cases.assignment import Assignment
@@ -47,5 +48,7 @@ class InMemoryStore:
     notifications: dict[str, Notification] = field(default_factory=dict)
     assistant_sessions: dict[str, AssistantSession] = field(default_factory=dict)
     copilot_threads: dict[str, CopilotThread] = field(default_factory=dict)
+    builder_threads: dict[str, BuilderThread] = field(default_factory=dict)
+    builder_proposals: dict[str, BuilderProposal] = field(default_factory=dict)
     bank_links: dict[str, str] = field(default_factory=dict)
     events: list[StoredEvent] = field(default_factory=list)

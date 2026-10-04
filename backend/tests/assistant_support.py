@@ -30,7 +30,7 @@ from tests.support import make_settings
 
 #: Natalia (es-CO) and Ximena (es-MX): Spanish simulator customers without a case in the seed.
 NATALIA, XIMENA = 2001, 2002
-#: Rafael (pt-BR): linked too, to prove a Portuguese case never starts with the assistant.
+#: Rafael (pt-BR): linked too, to prove the assistant serves Portuguese (policy ``H1``).
 RAFAEL = 2004
 BANK_ID = {NATALIA: "bank-0001", XIMENA: "bank-0002", RAFAEL: "bank-0004"}
 
@@ -105,9 +105,14 @@ def last_credentials_payload(runtime: InMemoryAgentRuntime, operation: str) -> d
 
 
 async def assistant_world(
-    persistence: str, tmp_path: Path, runtime: InMemoryAgentRuntime, *, link: bool = True
+    persistence: str,
+    tmp_path: Path,
+    runtime: InMemoryAgentRuntime,
+    *,
+    link: bool = True,
+    **settings: object,
 ) -> AsyncIterator[Container]:
-    overrides: dict[str, object] = {"persistence": persistence}
+    overrides: dict[str, object] = {"persistence": persistence, **settings}
     if persistence == "sqlalchemy":
         overrides["database_url"] = f"sqlite+aiosqlite:///{tmp_path / 'assistant.db'}"
     clock = FixedClock()

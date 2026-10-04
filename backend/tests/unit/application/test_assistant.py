@@ -161,18 +161,47 @@ async def test_the_customer_view_shows_the_assistants_answer_and_no_internal_ids
     assert "recepcion" not in repr(view)  # the agent's id never reaches the customer
 
 
-@pytest.mark.parametrize(("number", "why"), [(RAFAEL, "portuguese"), (2003, "not linked")])
-async def test_portuguese_and_unlinked_customers_go_straight_to_people(
-    world: Container, runtime: InMemoryAgentRuntime, number: int, why: str
+async def test_a_linked_portuguese_customer_is_served_by_the_assistant_too_policy_h1(
+    world: Container, runtime: InMemoryAgentRuntime
 ) -> None:
-    case_id = await write(world, number)
+    runtime.script.append(turn("Olá Rafael, me conte o que aconteceu."))
+
+    case_id = await write(world, RAFAEL)
+    await settle(world)
+
+    case, session, _turns = await case_and_session(world, case_id)
+    assert case.status is CaseStatus.WITH_ASSISTANT
+    assert case.language is Language.PORTUGUESE
+    assert session is not None
+
+
+async def test_an_unlinked_customer_goes_straight_to_people(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    case_id = await write(world, 2003)
     await settle(world)
 
     case, session, _turns = await case_and_session(world, case_id)
 
-    assert session is None, why
+    assert session is None
     assert case.status is CaseStatus.QUEUED  # nobody available: the language queue, as before
     assert runtime.calls == []
+
+
+async def test_a_language_left_out_of_the_setting_goes_straight_to_people(
+    tmp_path: Path, runtime: InMemoryAgentRuntime
+) -> None:
+    async for spanish_only in assistant_world(
+        "memory", tmp_path, runtime, assistant_languages=["es"]
+    ):
+        case_id = await write(spanish_only, RAFAEL)
+        await settle(spanish_only)
+
+        case, session, _turns = await case_and_session(spanish_only, case_id)
+
+        assert session is None
+        assert case.status is CaseStatus.QUEUED
+        assert runtime.calls == []
 
 
 async def test_a_call_or_an_email_cannot_join_a_conversation_the_assistant_handles(

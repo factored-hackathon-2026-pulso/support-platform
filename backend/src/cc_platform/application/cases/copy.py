@@ -252,6 +252,72 @@ def reply_subject(thread_subject: str) -> str:
     return f"{REPLY_PREFIX}{thread_subject}"
 
 
+# ----------------------------------------------------------------------------- assistant
+# ADR 0003: the agent (agent-core) handles a conversation first. Customer-facing texts in the
+# case language; staff-facing ones in Spanish, gender-neutral. The agent's own replies come
+# from agent-core and are never written here.
+
+#: ``assistant_name``: how the customer-facing views call the agent ("Asistente virtual").
+ASSISTANT_NAME: dict[Language, str] = {
+    Language.SPANISH: "Asistente virtual",
+    Language.PORTUGUESE: "Assistente virtual",
+}
+
+NOTICE_ASSISTANT_HANDOVER: dict[Language, str] = {
+    Language.SPANISH: "Te paso con una persona del equipo para que siga con tu caso.",
+    Language.PORTUGUESE: "Vou te passar para uma pessoa da equipe para continuar com o seu caso.",
+}
+
+NOTICE_CONFIRMED: dict[Language, str] = {
+    Language.SPANISH: "Confirmaste la acción.",
+    Language.PORTUGUESE: "Você confirmou a ação.",
+}
+
+NOTICE_DECLINED: dict[Language, str] = {
+    Language.SPANISH: "Cancelaste la acción.",
+    Language.PORTUGUESE: "Você cancelou a ação.",
+}
+
+NOTICE_STEP_UP_VERIFIED: dict[Language, str] = {
+    Language.SPANISH: "Verificamos tu identidad.",
+    Language.PORTUGUESE: "Verificamos a sua identidade.",
+}
+
+
+def assistant_handover_notice(language: Language) -> str:
+    return NOTICE_ASSISTANT_HANDOVER[language]
+
+
+def confirmation_notice(language: Language, *, confirmed: bool) -> str:
+    return (NOTICE_CONFIRMED if confirmed else NOTICE_DECLINED)[language]
+
+
+#: Staff-only banner (``routing`` turn) when the case leaves the assistant, by release reason.
+_ASSISTANT_RELEASE_TEXT: dict[str, str] = {
+    "escalated": "El asistente escaló el caso a una persona (traspaso {ref}).",
+    "ended": "El asistente terminó su atención sin resolver el caso ({code}).",
+    "failed": "El asistente no pudo seguir atendiendo ({code}). El caso pasa a una persona.",
+    "supervision": "{who} tomó el caso del asistente.",
+    "customer_request": "El cliente pidió hablar con una persona.",
+}
+
+
+def assistant_released(
+    reason: str, *, ref: str | None = None, code: str | None = None, who: str | None = None
+) -> str:
+    template = _ASSISTANT_RELEASE_TEXT.get(reason, _ASSISTANT_RELEASE_TEXT["failed"])
+    return template.format(
+        ref=ref or "sin referencia", code=code or "sin detalle", who=who or "Supervisión"
+    )
+
+
+def assigned_from_assistant(analyst_name: str, language: Language) -> str:
+    return (
+        f"Asignado a {analyst_name} tras el traspaso del asistente: está disponible y habla "
+        f"{LANGUAGE_NAME[language]}{_rule_3(language)}."
+    )
+
+
 def follow_up_call(analyst_name: str, customer_first_name: str) -> str:
     """Staff banner of a case an analyst opened to call the customer back (seed only)."""
     return f"{analyst_name} abrió este caso para llamar a {customer_first_name} (seguimiento)."

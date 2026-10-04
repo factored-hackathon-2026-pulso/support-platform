@@ -8,6 +8,10 @@ State machine (slice 2 contract §2.3; explicit transitions, anything else raise
     assigned ──▶ in_progress            (the assignee opens or replies)
     assigned | in_progress ──▶ assigned (a supervisor reassigns it to another analyst)
     assigned | in_progress ──▶ closed   (the assignee closes with a reason; terminal)
+    with_assistant ──▶ queued           (ADR 0003: the agent escalated or failed, or a supervisor
+                                          took the case from it; ``AssignCase`` then places it)
+    with_assistant ──▶ closed           (ADR 0003: the agent resolved it; terminal)
+    (a new case may open directly in ``with_assistant``; nobody holds it, it is in no queue)
     closed ──▶ closed + rating          (its customer rates it once, slice 7; no transition)
     open (not closed) ──▶ same + priority (the assignee or supervision sets it, slice 8;
                                           no transition, never on a closed case)
@@ -44,6 +48,8 @@ from cc_platform.domain.cases.errors import (
 )
 from cc_platform.domain.cases.events import (
     CaseAssigned,
+    CaseAssistantReleased,
+    CaseAssistantStarted,
     CaseClosed,
     CaseFirstResponded,
     CaseOpened,
@@ -166,6 +172,8 @@ class Case(AggregateRoot):
         require_id(self.customer_id, IdPrefix.CUSTOMER)
         if self.assigned_analyst_id is not None:
             require_id(self.assigned_analyst_id, IdPrefix.STAFF)
+            if self.status is CaseStatus.WITH_ASSISTANT:
+                raise InvalidValueError("nobody holds a case the agent handles", field="status")
         if self.previous_case_id is not None:
             require_id(self.previous_case_id, IdPrefix.CASE)
             if self.previous_case_id == self.id:
@@ -198,20 +206,25 @@ class Case(AggregateRoot):
         sla_due_at: datetime,
         actor: ActorRef,
         previous_case_id: str | None = None,
+        assistant: tuple[str, str] | None = None,
     ) -> Case:
-        """A new case, ``queued`` until ``AssignCase`` places it (same Unit of Work)."""
+        """A new case, ``queued`` until ``AssignCase`` places it (same Unit of Work).
+
+        With ``assistant=(assistant_session_id, agent)`` (ADR 0003) it opens ``with_assistant``
+        instead: nobody holds it, it is not queued (``queued_at`` unset) and no
+        ``AssignCase`` runs until the agent hands it over."""
         case = cls(
             id=case_id,
             customer_id=customer_id,
             channel=channel,
             language=language,
             priority=priority,
-            status=CaseStatus.QUEUED,
+            status=CaseStatus.QUEUED if assistant is None else CaseStatus.WITH_ASSISTANT,
             opened_at=opened_at,
             sla_due_at=sla_due_at,
             search_text=search_key(customer_name, case_id),
             previous_case_id=previous_case_id,
-            queued_at=opened_at,
+            queued_at=opened_at if assistant is None else None,
         )
         case._record(
             CaseOpened(
@@ -227,12 +240,27 @@ class Case(AggregateRoot):
                 previous_case_id=previous_case_id,
             )
         )
+        if assistant is not None:
+            case._record(
+                CaseAssistantStarted(
+                    occurred_at=opened_at,
+                    actor=ActorRef.system(),
+                    entity_id=case_id,
+                    case_id=case_id,
+                    assistant_session_id=assistant[0],
+                    agent=assistant[1],
+                )
+            )
         return case
 
     # ------------------------------------------------------------------ queries
     @property
     def is_closed(self) -> bool:
         return self.status is CaseStatus.CLOSED
+
+    @property
+    def is_with_assistant(self) -> bool:
+        return self.status is CaseStatus.WITH_ASSISTANT
 
     @property
     def closed_at(self) -> datetime | None:
@@ -396,6 +424,69 @@ class Case(AggregateRoot):
             raise CaseClosedError()
         if self.status not in REPLYABLE_STATUSES:
             raise invalid_case_transition(self.status, CaseStatus.IN_PROGRESS.value)
+
+    # ------------------------------------------------------------------ assistant (ADR 0003)
+    def release_from_assistant(
+        self,
+        *,
+        actor: ActorRef,
+        at: datetime,
+        sla_due_at: datetime,
+        reason: str,
+        handoff_ref: str | None = None,
+    ) -> None:
+        """``with_assistant → queued``: the agent hands the case to people (or a supervisor
+        takes it). The first-response SLA starts now (``sla_due_at``): the agent's replies were
+        never a person's response. ``AssignCase`` places it next (rule 3)."""
+        if self.is_closed:
+            raise CaseClosedError()
+        if self.status is not CaseStatus.WITH_ASSISTANT:
+            raise invalid_case_transition(self.status, CaseStatus.QUEUED.value)
+        if sla_due_at < at:
+            raise InvalidValueError("SLA cannot be due before it starts", field="sla_due_at")
+        self.sla_due_at = sla_due_at
+        self.queued_at = at
+        self.queue_label = None
+        self._record(
+            CaseAssistantReleased(
+                occurred_at=at,
+                actor=actor,
+                entity_id=self.id,
+                case_id=self.id,
+                reason=reason,
+                handoff_ref=handoff_ref,
+                sla_due_at=sla_due_at,
+            )
+        )
+        self._change_status(CaseStatus.QUEUED, at=at, actor=actor, reason=f"assistant_{reason}")
+
+    def close_by_assistant(self, *, actor: ActorRef, at: datetime) -> None:
+        """``with_assistant → closed``: the agent resolved the case (reason ``resolved``). The
+        customer may rate it like any closed case."""
+        if self.is_closed:
+            raise CaseClosedError()
+        if self.status is not CaseStatus.WITH_ASSISTANT:
+            raise invalid_case_transition(self.status, CaseStatus.CLOSED.value)
+        self.closure = CaseClosure(
+            closed_at=at,
+            closed_by_id=actor.actor_id,
+            closed_by_role=actor.role,
+            reason=CloseReason.RESOLVED,
+        )
+        self._record(
+            CaseClosed(
+                occurred_at=at,
+                actor=actor,
+                entity_id=self.id,
+                case_id=self.id,
+                closed_at=at,
+                closed_by_role=actor.role.value,
+                closed_by_id=actor.actor_id,
+                reason=CloseReason.RESOLVED.value,
+                note=None,
+            )
+        )
+        self._change_status(CaseStatus.CLOSED, at=at, actor=actor, reason="closed")
 
     # ------------------------------------------------------------------ assignment
     def mark_waiting_in_queue(

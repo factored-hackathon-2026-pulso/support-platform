@@ -18,6 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from cc_platform.application.ai.config import AssistantGate
 from cc_platform.application.cases import copy
 from cc_platform.application.cases.assignment import AssignCase
 from cc_platform.application.cases.sla import SlaPolicy
@@ -26,6 +27,8 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork
 from cc_platform.application.security import CustomerActor
+from cc_platform.domain.ai.errors import AssistantActiveError
+from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.turn import Turn
@@ -68,6 +71,8 @@ class CaseIntake:
     ids: IdGenerator
     sla: SlaPolicy
     assign_case: AssignCase
+    assistant: AssistantGate | None = None
+    """ADR 0003: when set, a new chat case of a linked customer opens in the agent's hands."""
 
     async def open_or_join(
         self,
@@ -86,6 +91,8 @@ class CaseIntake:
         if slot is not None and slot.open_case_id is not None:
             case = await uow.cases.get(slot.open_case_id)
         if case is not None and not case.is_closed:
+            if case.is_with_assistant and not channel.is_chat:
+                raise AssistantActiveError()  # nobody would answer a call or an email now
             if on_case is not None:
                 on_case(case)
             turns = contact(case, now)
@@ -94,7 +101,7 @@ class CaseIntake:
                 await uow.turns.add(turn)
             return Intake(case=case, created=False, turns=turns)
 
-        case, turns = await self._open(uow, customer, channel, contact, now)
+        case, turns, session = await self._open(uow, customer, channel, contact, now)
         if on_case is not None:
             on_case(case)
         if slot is None:
@@ -108,7 +115,11 @@ class CaseIntake:
         await uow.cases.add(case)
         for turn in turns:
             await uow.turns.add(turn)
-        await self.assign_case.place(uow, case, reason=AssignmentReason.LANGUAGE_LEAST_LOADED)
+        if session is not None:
+            # ADR 0003: nobody holds it and it is in no queue until the agent hands it over.
+            await uow.assistant_sessions.add(session)
+        else:
+            await self.assign_case.place(uow, case, reason=AssignmentReason.LANGUAGE_LEAST_LOADED)
         return Intake(case=case, created=True, turns=turns)
 
     async def _open(
@@ -118,13 +129,30 @@ class CaseIntake:
         channel: CaseChannel,
         contact: Contact,
         now: datetime,
-    ) -> tuple[Case, list[Turn]]:
+    ) -> tuple[Case, list[Turn], AssistantSession | None]:
         profile = await uow.customers.get(customer.customer_id)
         if profile is None:
             raise AuthenticationRequiredError()
         previous = latest_closed(await uow.cases.list_for_customer(profile.id))
+        case_id = self.ids.new_id(IdPrefix.CASE)
+        agent = (
+            await self.assistant.agent_for(uow, profile, channel)
+            if self.assistant is not None
+            else None
+        )
+        session = (
+            None
+            if agent is None
+            else AssistantSession.start(
+                session_id=self.ids.new_id(IdPrefix.ASSISTANT_SESSION),
+                case_id=case_id,
+                customer_id=profile.id,
+                entry_agent=agent,
+                at=now,
+            )
+        )
         case = Case.open(
-            case_id=self.ids.new_id(IdPrefix.CASE),
+            case_id=case_id,
             customer_id=profile.id,
             customer_name=profile.display_name,
             channel=channel,
@@ -134,19 +162,21 @@ class CaseIntake:
             sla_due_at=self.sla.due_at(opened_at=now),
             actor=customer.actor_ref(),
             previous_case_id=previous.id if previous else None,
+            assistant=None if session is None or agent is None else (session.id, agent),
         )
         turns = contact(case, now)
-        turns.append(
-            case.append_turn(
-                turn_id=self.ids.new_id(IdPrefix.TURN),
-                kind=TurnKind.NOTICE,
-                audience=TurnAudience.EVERYONE,
-                author_role=TurnAuthorRole.SYSTEM,
-                author_id=None,
-                text=copy.opened_notice(channel, case.language),
-                created_at=now,
+        if session is None:  # the assistant answers instead of "una persona te responde"
+            turns.append(
+                case.append_turn(
+                    turn_id=self.ids.new_id(IdPrefix.TURN),
+                    kind=TurnKind.NOTICE,
+                    audience=TurnAudience.EVERYONE,
+                    author_role=TurnAuthorRole.SYSTEM,
+                    author_id=None,
+                    text=copy.opened_notice(channel, case.language),
+                    created_at=now,
+                )
             )
-        )
         if previous is not None and previous.closure is not None:
             turns.append(
                 case.append_turn(
@@ -164,4 +194,4 @@ class CaseIntake:
                     created_at=now,
                 )
             )
-        return case, turns
+        return case, turns, session

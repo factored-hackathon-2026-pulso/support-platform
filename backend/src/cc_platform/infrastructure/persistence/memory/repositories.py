@@ -7,7 +7,7 @@ semantics match the SQL adapter: mutations without ``save`` + ``commit`` are not
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable, Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from datetime import datetime
 
 from cc_platform.application.cases.ports import (
@@ -20,6 +20,7 @@ from cc_platform.application.cases.ports import (
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
 from cc_platform.application.notifications.ports import NotificationCursor
 from cc_platform.application.ports.event_log import AuditFilters
+from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.call import Call
 from cc_platform.domain.cases.case import Case
@@ -28,6 +29,7 @@ from cc_platform.domain.cases.escalation import Escalation, EscalationState
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
     OPEN_ASSIGNED_STATUSES,
+    OPEN_STATUSES,
     CaseStatus,
     TurnAudience,
     TurnKind,
@@ -580,11 +582,10 @@ class InMemoryCaseRepository(_StagedRepository[Case]):
         return totals
 
     async def list_open_by_language(self, language: Language) -> list[Case]:
-        open_statuses = {CaseStatus.QUEUED, *OPEN_ASSIGNED_STATUSES}
         return self._tracked(
             case
             for case in self._all()
-            if case.language is language and case.status in open_statuses
+            if case.language is language and case.status in OPEN_STATUSES
         )
 
 
@@ -761,6 +762,60 @@ class InMemoryCustomerCaseSlotRepository(_StagedRepository[CustomerCaseSlot]):
 
     async def get(self, customer_id: str) -> CustomerCaseSlot | None:
         return await self._get(customer_id)
+
+
+class InMemoryAssistantSessionRepository(_StagedRepository[AssistantSession]):
+    """ADR 0003. Same answers as ``SqlAssistantSessionRepository`` (one session per case)."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, AssistantSession], track: Tracker) -> None:
+        super().__init__(committed, lambda session: session.id, track)
+
+    def _unique_violation(
+        self, aggregate: AssistantSession, other: AssistantSession
+    ) -> DomainError | None:
+        if aggregate.case_id == other.case_id:
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    async def get(self, session_id: str) -> AssistantSession | None:
+        return await self._get(session_id)
+
+    async def get_by_case(self, case_id: str) -> AssistantSession | None:
+        found = [session for session in self._all() if session.case_id == case_id]
+        if not found:
+            return None
+        return await self._get(found[0].id)
+
+
+class InMemoryBankCustomerLinks:
+    """ADR 0003: platform customer → dataset customer. Staged like a write, applied at commit."""
+
+    def __init__(self, committed: dict[str, str]) -> None:
+        self._committed = committed
+        self._staged: dict[str, str] = {}
+
+    async def get(self, customer_id: str) -> str | None:
+        return self._staged.get(customer_id) or self._committed.get(customer_id)
+
+    async def set_many(self, links: Mapping[str, str]) -> int:
+        changed = 0
+        for customer_id, bank_customer_id in links.items():
+            if await self.get(customer_id) != bank_customer_id:
+                self._staged[customer_id] = bank_customer_id
+                changed += 1
+        return changed
+
+    def verify(self) -> None:
+        return None
+
+    def apply(self) -> None:
+        self._committed.update(self._staged)
+        self.discard()
+
+    def discard(self) -> None:
+        self._staged.clear()
 
 
 class _AppendOnlyRepository[E]:

@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from cc_platform.application.ai.config import AssistantGate
 from cc_platform.application.cases.assignment import AssignCase
 from cc_platform.application.cases.commands import find_replay
 from cc_platform.application.cases.dto import (
@@ -209,10 +210,12 @@ class PostCustomerTurn:
     ids: IdGenerator
     sla: SlaPolicy
     assign_case: AssignCase
+    assistant: AssistantGate | None = None
+    """ADR 0003: when set, a new chat case of a linked customer opens in the agent's hands."""
 
     @property
     def intake(self) -> CaseIntake:
-        return CaseIntake(self.clock, self.ids, self.sla, self.assign_case)
+        return CaseIntake(self.clock, self.ids, self.sla, self.assign_case, self.assistant)
 
     async def execute(
         self, customer: CustomerActor, command: PostTurnCommand

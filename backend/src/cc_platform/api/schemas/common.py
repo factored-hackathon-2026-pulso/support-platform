@@ -99,6 +99,13 @@ class ProblemDetails(ApiModel):
         default=None,
         description="assignment_changed: who holds the case now (null = it is queued).",
     )
+    agent_core_code: str | None = Field(
+        default=None,
+        description="agent_core_rejected: the stable problem code agent-core answered with.",
+    )
+    agent_core_status: int | None = Field(
+        default=None, description="agent_core_rejected: the HTTP status agent-core answered with."
+    )
     field: str | None = Field(
         default=None,
         description=(

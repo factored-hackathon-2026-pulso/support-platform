@@ -159,6 +159,7 @@ const ROLE_LABELS: Record<ActorRole, string> = {
   admin: 'Administración',
   customer: 'Cliente',
   system: 'Plataforma',
+  assistant: 'Asistente',
 }
 
 /** Kind badge of the "Quién" column. */
@@ -166,10 +167,10 @@ export function actorRoleLabel(role: ActorRole): string {
   return ROLE_LABELS[role] ?? role
 }
 
-/** Staff in the warm tone of the canvas "Persona" chip, customers in accent, the platform neutral. */
+/** Staff in the warm tone of the canvas "Persona" chip, customers in accent, the platform and the assistant neutral. */
 export function actorTone(role: ActorRole): Tone {
   if (role === 'customer') return 'accent'
-  if (role === 'system') return 'neutral'
+  if (role === 'system' || role === 'assistant') return 'neutral'
   return 'warn'
 }
 

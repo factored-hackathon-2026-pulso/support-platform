@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cc_platform.application.ai.use_cases import AssistantUseCases
 from cc_platform.application.audit.use_cases import AuditUseCases
 from cc_platform.application.cases.use_cases import CasesUseCases, ChannelsUseCases
 from cc_platform.application.customers.use_cases import CustomersUseCases
@@ -27,3 +28,5 @@ class UseCases:
     administration: AdministrationUseCases
     notifications: NotificationsUseCases
     onboarding: OnboardingUseCases
+    assistant: AssistantUseCases | None = None
+    """ADR 0003: ``None`` while agent-core is not configured."""

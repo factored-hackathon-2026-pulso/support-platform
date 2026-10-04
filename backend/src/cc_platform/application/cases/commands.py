@@ -9,6 +9,8 @@ change: a customer message that loses to a close opens a new linked case instead
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
+from typing import Protocol
 
 from cc_platform.application.cases import copy
 from cc_platform.application.cases.dto import (
@@ -21,10 +23,12 @@ from cc_platform.application.cases.dto import (
 from cc_platform.application.cases.queries import case_detail, load_case_for
 from cc_platform.application.cases.read_model import CaseReader
 from cc_platform.application.concurrency import retry_on_conflict
+from cc_platform.application.ports.background import BackgroundTasks
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
+from cc_platform.domain.ai.session import HANDOFF_QUALITIES
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.errors import (
     CallInProgressError,
@@ -41,7 +45,16 @@ from cc_platform.domain.cases.values import (
     TurnKind,
 )
 from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.shared.errors import InvalidValueError
 from cc_platform.domain.shared.ids import IdPrefix
+
+
+class HandoffResolutionSender(Protocol):
+    """What ``CloseCase`` needs of ``ai.staff.RecordHandoffResolution`` (no import of it)."""
+
+    async def execute(
+        self, *, case_id: str, staff_id: str, resolution_code: str, quality: str
+    ) -> bool: ...
 
 
 async def find_replay(
@@ -141,11 +154,30 @@ class CloseCase:
     uow: UnitOfWorkFactory
     clock: Clock
     ids: IdGenerator
+    tasks: BackgroundTasks | None = None
+    resolution: HandoffResolutionSender | None = None
+    """ADR 0003: tells agent-core how the assistant's handoff went (the analyst's label)."""
 
     async def execute(
         self, actor: Actor, case_id: str, command: CloseCaseCommand
     ) -> CaseDetailView:
-        return await retry_on_conflict(lambda: self._attempt(actor, case_id, command))
+        quality = command.handoff_quality
+        if quality is not None and quality not in HANDOFF_QUALITIES:
+            raise InvalidValueError("handoffQuality is not valid", field="handoffQuality")
+        detail = await retry_on_conflict(lambda: self._attempt(actor, case_id, command))
+        if quality is not None and self.resolution is not None and self.tasks is not None:
+            # After the commit and off the request: a failure here never fails the close.
+            self.tasks.spawn(
+                "handoff_resolution",
+                partial(
+                    self.resolution.execute,
+                    case_id=case_id,
+                    staff_id=actor.staff_id,
+                    resolution_code=command.reason.value,
+                    quality=quality,
+                ),
+            )
+        return detail
 
     async def _attempt(
         self, actor: Actor, case_id: str, command: CloseCaseCommand

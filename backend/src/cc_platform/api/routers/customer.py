@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, Path, Query, Response, status
 
 from cc_platform.api.dependencies import ApiContextDep, CurrentCustomer
+from cc_platform.api.routers._assistant import assistant_use_cases
 from cc_platform.api.routers.cases import (
     IDEMPOTENCY_KEY,
     REPLAYED_HEADER,
@@ -20,6 +21,7 @@ from cc_platform.api.routers.cases import (
 )
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.api.schemas.customer import (
+    AnswerConfirmationRequest,
     CreateCustomerSessionRequest,
     CustomerConversation,
     CustomerConversationDetail,
@@ -32,6 +34,7 @@ from cc_platform.api.schemas.customer import (
     PostCustomerTurnRequest,
     PostCustomerTurnResponse,
     RateConversationRequest,
+    VerifyStepUpRequest,
 )
 from cc_platform.application.cases.dto import PostTurnCommand, RateConversationCommand
 from cc_platform.application.pagination import MAX_SEQUENCE
@@ -164,6 +167,67 @@ async def post_turn(
         response.status_code = status.HTTP_200_OK
         response.headers[REPLAYED_HEADER] = "true"
     return PostCustomerTurnResponse.from_result(result)
+
+
+@router.post(
+    "/conversation/confirmation",
+    response_model=CustomerConversation,
+    summary="Answer the assistant's confirmation (yes or no)",
+    description=(
+        "ADR 0003. While `conversation.assistant.confirmation` is set, the assistant waits "
+        "for a yes or no with its `token`. The answer is queued and the assistant's reply "
+        "arrives as a turn over the socket (`turn.created` on `customer:<id>`); this call "
+        "answers right away with the conversation. 409 `confirmation_not_pending` (wrong or "
+        "already-answered token), `confirmation_expired`, `assistant_not_active` (people "
+        "have the case now) or `assistant_busy`. 404 `assistant_disabled` while agent-core is "
+        "not configured."
+    ),
+    responses=problem_responses(401, 404, 409, 422),
+)
+async def answer_confirmation(
+    body: AnswerConfirmationRequest, customer: CurrentCustomer, api: ApiContextDep
+) -> CustomerConversation:
+    view = await assistant_use_cases(api).confirm.execute(
+        customer, token=body.token, answer=body.answer
+    )
+    return CustomerConversation.from_view(view)
+
+
+@router.post(
+    "/conversation/step-up",
+    response_model=CustomerConversation,
+    summary="Pass the second factor the assistant asked for",
+    description=(
+        "ADR 0003. While `conversation.assistant.stepUp` is set. The second factor is "
+        "simulated for now (`stepUp.simulated`): the development code is "
+        "`CC_ASSISTANT_STEP_UP_CODE`. "
+        "A wrong code is 422 `invalid_step_up_code` with `remainingAttempts`; the third wrong "
+        "code hands the case to people. After a right one the assistant carries on by itself "
+        "(its reply arrives over the socket). 409 `step_up_not_pending` / `assistant_not_active`."
+    ),
+    responses=problem_responses(401, 404, 409, 422),
+)
+async def verify_step_up(
+    body: VerifyStepUpRequest, customer: CurrentCustomer, api: ApiContextDep
+) -> CustomerConversation:
+    view = await assistant_use_cases(api).verify_step_up.execute(customer, code=body.code)
+    return CustomerConversation.from_view(view)
+
+
+@router.post(
+    "/conversation/human",
+    response_model=CustomerConversation,
+    summary="Ask to talk to a person instead of the assistant",
+    description=(
+        "ADR 0003. The case leaves the assistant, goes to its language queue and is placed "
+        "like any new arrival (rule 3): `status` becomes `waiting_agent`, then `with_agent`. "
+        "409 `assistant_not_active` when people already have it."
+    ),
+    responses=problem_responses(401, 404, 409),
+)
+async def request_person(customer: CurrentCustomer, api: ApiContextDep) -> CustomerConversation:
+    view = await assistant_use_cases(api).request_person.execute(customer)
+    return CustomerConversation.from_view(view)
 
 
 @router.post(

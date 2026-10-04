@@ -66,6 +66,8 @@ RESPONSE_SCHEMAS = (
     "Call", "HoldInterval", "CallResponse", "CallList", "EmailMessage", "EmailThread",
     "EmailReplyResponse", "CustomerCall", "CustomerCallState", "CustomerCallResponse",
     "CustomerCallLineResponse", "CustomerEmail", "CustomerEmailThread", "SendEmailResponse",
+    # ADR 0003: the assistant
+    "AssistantConfirmation", "AssistantStepUp", "AssistantState", "CaseHandoff",
 )  # fmt: skip
 
 
@@ -89,7 +91,13 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "phone_outbound",
         "email",
     ]
-    assert schemas["CaseStatus"]["enum"] == ["queued", "assigned", "in_progress", "closed"]
+    assert schemas["CaseStatus"]["enum"] == [
+        "queued",
+        "assigned",
+        "in_progress",
+        "closed",
+        "with_assistant",  # ADR 0003
+    ]
     assert schemas["InboxStatus"]["enum"] == ["new", "to_reply", "waiting", "closed"]
     assert schemas["StaffRole"]["enum"] == ["analyst", "supervisor", "admin"]
     assert set(schemas["ProblemCode"]["enum"]) == {
@@ -107,6 +115,11 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "call_in_progress", "call_not_active",
         # part 4 (secure onboarding)
         "staff_invited", "link_invalid", "rate_limited", "password_rejected", "totp_invalid",
+        # ADR 0003 (the assistant)
+        "assistant_disabled", "assistant_not_active", "assistant_active", "assistant_busy",
+        "confirmation_not_pending", "confirmation_expired", "step_up_not_pending",
+        "invalid_step_up_code", "handoff_unavailable", "agent_core_unavailable",
+        "agent_core_rejected",
     }  # fmt: skip
     for removed in ("CreatedUser", "PasswordResetResult"):  # part 4: no temporary passwords
         assert removed not in schemas

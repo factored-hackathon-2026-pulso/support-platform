@@ -423,10 +423,13 @@ class GetQueueOverview:
 
 def open_case_order(row: OpenCaseRowView) -> tuple[int, int, datetime, datetime, str]:
     """ "Colas": the cases nobody holds first (oldest first, the drain order), then the
-    held ones in the open-inbox order (Nuevo and Por responder before Esperando)."""
+    held ones in the open-inbox order (Nuevo and Por responder before Esperando), and last the
+    ones the assistant handles (ADR 0003: nobody waits for a person there)."""
     summary = row.case
     if summary.status is CaseStatus.QUEUED:
         return (0, 0, summary.opened_at, summary.opened_at, summary.id)
+    if summary.status is CaseStatus.WITH_ASSISTANT:
+        return (2, 0, summary.last_interaction_at, summary.opened_at, summary.id)
     group, last, opened, case_id = inbox_order(summary)
     return (1, group, last, opened, case_id)
 

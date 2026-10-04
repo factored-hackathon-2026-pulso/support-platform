@@ -10,6 +10,8 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryAnalystAvailabilityRepository,
     InMemoryAnalystHomeReader,
     InMemoryAssignmentRepository,
+    InMemoryAssistantSessionRepository,
+    InMemoryBankCustomerLinks,
     InMemoryCallRepository,
     InMemoryCaseRepository,
     InMemoryCustomerCaseSlotRepository,
@@ -48,6 +50,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     escalations: InMemoryEscalationRepository
     calls: InMemoryCallRepository
     notifications: InMemoryNotificationRepository
+    assistant_sessions: InMemoryAssistantSessionRepository
+    bank_links: InMemoryBankCustomerLinks
     event_log: InMemoryEventLogRepository
     analyst_home: InMemoryAnalystHomeReader
 
@@ -76,6 +80,10 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.escalations = InMemoryEscalationRepository(store.escalations, track)
         self.calls = InMemoryCallRepository(store.calls, track)
         self.notifications = InMemoryNotificationRepository(store.notifications, track)
+        self.assistant_sessions = InMemoryAssistantSessionRepository(
+            store.assistant_sessions, track
+        )
+        self.bank_links = InMemoryBankCustomerLinks(store.bank_links)
         self.event_log = InMemoryEventLogRepository(store.events)
         self.analyst_home = InMemoryAnalystHomeReader(
             store.sessions, store.cases, store.assignments, store.events
@@ -101,6 +109,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryEscalationRepository
         | InMemoryCallRepository
         | InMemoryNotificationRepository
+        | InMemoryAssistantSessionRepository
+        | InMemoryBankCustomerLinks
         | InMemoryEventLogRepository,
         ...,
     ]:
@@ -119,6 +129,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.cases,
             self.escalations,
             self.calls,
+            self.assistant_sessions,
+            self.bank_links,
             self.notifications,
             self.customers,
             self.turns,

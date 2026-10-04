@@ -112,8 +112,41 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_REALTIME_QUEUE_SIZE` | `256` | Queued messages per WebSocket connection |
 | `CC_REALTIME_EXPIRY_CHECK_SECONDS` | `30` | How often an idle socket checks whether its session expired |
 | `CC_NOTIFICATION_SWEEP_SECONDS` | `30` | Slice 10: how often to look for cases about to miss their first response (the "Caso por vencer sin respuesta" notification for Supervisión); it also runs on startup. `0` turns it off |
+| `CC_AGENT_CORE_URL`, `CC_AGENT_KEYS_FILE` | unset | ADR 0003: agent-core's runtime URL and the private signing keys of the credentials the platform issues to it. They go together or not at all; unset, the platform is people-only (§4.1) |
+| `CC_AGENT_CORE_TIMEOUT_SECONDS` | `60` | How long a turn may take before the case falls back to a person |
+| `CC_ASSISTANT_AGENT` | `recepcion@prod` | Slice 14: the agent a conversation starts with (`id`, `id@alias` or `id@X.Y.Z`) |
+| `CC_ASSISTANT_LANGUAGES` | `["es"]` | Slice 14: case languages the assistant serves (JSON list); others go straight to people (policy `H1`) |
+| `CC_ASSISTANT_STEP_UP_CODE` | `000000` | Slice 14: the **simulated** second-factor code (a development stand-in) |
+| `CC_BANK_CUSTOMER_LINKS_FILE` | unset | Slice 14: private JSON `{"CUS-…": "<dataset customer_id>"}` read at startup; only linked customers can talk to the assistant. Never commit it |
 | `CC_LOG_LEVEL` | `INFO` | Log level |
 | `CC_LOG_FORMAT` | `json` | `console` to read the logs in the terminal |
+
+### 4.1 Connecting agent-core (ADR 0003, slice 13)
+
+The platform issues the identities agent-core trusts, so agent-core must load the platform's
+**public** keys. Nothing here is wired to a screen yet (that is slice 14); this only prepares the
+connection.
+
+```bash
+cd backend
+uv run python -m cc_platform.scripts.gen_agent_keys --suffix 2026-10
+# writes backend/.agent-keys/ (git-ignored): private.json (secret), identity-keys.json, staff-keys.json
+```
+
+1. Give agent-core the two public files: `agentcore serve --identity-keys <identity-keys.json>
+   --staff-keys <staff-keys.json> …`. In agent-core's local e2e stack (`scripts/e2e/serve.ps1`) they
+   are `.e2e/identity-keys.json` and `.e2e/staff-keys.json`: replace them with the platform's (the
+   demo tokens of `testing.demo_identities` then stop working, on purpose).
+2. Start the platform with `CC_AGENT_CORE_URL=http://127.0.0.1:8001` (agent-core's port; the
+   platform uses 8000, so start `serve` with `--port 8001`) and
+   `CC_AGENT_KEYS_FILE=.agent-keys/private.json`.
+3. Rotating: generate into a new `--out` with a new `--suffix`, publish both public files side by
+   side (agent-core re-reads them every few seconds), switch `CC_AGENT_KEYS_FILE`, retire the old key.
+
+`private.json` holds the seeds: never commit it; in a deployment it belongs in a secrets manager.
+`tests/contracts/agent-core-openapi.json` is a copy of agent-core's contract (`1.3.0`); refresh it and
+`agent-core-contract-version.txt` when agent-core's contract changes, and the contract test tells
+whether the adapter still fits.
 
 Frontend (`frontend/.env.local`, template in `frontend/.env.example`):
 

@@ -442,6 +442,7 @@ export function makeCustomerConversation(
     lastSequence: 2,
     previousCaseId: null,
     rating: null,
+    assistant: null,
     ...overrides,
   }
 }

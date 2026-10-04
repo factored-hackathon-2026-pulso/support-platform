@@ -11,8 +11,12 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 
+from cc_platform.application.cases import copy
 from cc_platform.application.cases.dto import (
     AssignmentView,
+    AssistantConfirmationView,
+    AssistantStateView,
+    AssistantStepUpView,
     CallView,
     CaseCapabilitiesView,
     CaseClosureView,
@@ -52,7 +56,7 @@ from cc_platform.domain.cases.values import (
     TurnAuthorRole,
 )
 from cc_platform.domain.customers.customer import Customer
-from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.people.staff import Language, StaffRole
 from cc_platform.domain.shared.actor import ActorRole
 
 UNKNOWN_CUSTOMER = "Cliente"
@@ -61,7 +65,8 @@ MAX_INBOX_ITEMS = 200
 
 # ----------------------------------------------------------------------------- pure projections
 def inbox_status(case: Case) -> InboxStatus | None:
-    """Bucket of a case (contract §4.1); ``None`` while it is queued (in no inbox).
+    """Bucket of a case (contract §4.1); ``None`` while it is queued or with the assistant
+    (in no inbox).
 
     ``in_progress`` splits on who wrote the last message: the customer → Por responder;
     the analyst (or nobody yet) → Esperando al cliente.
@@ -75,8 +80,8 @@ def inbox_status(case: Case) -> InboxStatus | None:
             return InboxStatus.WAITING
         case CaseStatus.CLOSED:
             return InboxStatus.CLOSED
-        case CaseStatus.QUEUED:
-            return None
+        case CaseStatus.QUEUED | CaseStatus.WITH_ASSISTANT:
+            return None  # nobody holds it yet (a queue, or the assistant): in no inbox
 
 
 def rating_view(rating: CaseRating | None) -> CaseRatingView | None:
@@ -322,7 +327,11 @@ class CaseReader:
         return CaseClosureView(
             closed_at=closure.closed_at,
             closed_by_id=closure.closed_by_id,
-            closed_by_name=await self.staff_name(closure.closed_by_id),
+            closed_by_name=(
+                copy.ASSISTANT_NAME[Language.SPANISH]
+                if closure.closed_by_role is ActorRole.ASSISTANT
+                else await self.staff_name(closure.closed_by_id)
+            ),
             reason=closure.reason,
             note=closure.note,
         )
@@ -357,6 +366,8 @@ class CaseReader:
                 names[author] = (await self.customer_names([author]))[author]
             elif turn.author_role is TurnAuthorRole.ANALYST:
                 names[author] = await self.staff_name(author)
+            elif turn.author_role is TurnAuthorRole.ASSISTANT:
+                names[author] = copy.ASSISTANT_NAME[Language.SPANISH]  # staff read Spanish
         return names
 
     async def turn_views(self, turns: Sequence[Turn]) -> list[TurnView]:
@@ -394,6 +405,8 @@ class CaseReader:
             if author is CustomerTurnAuthor.ANALYST and turn.author_id is not None:
                 staff_name = await self.staff_name(turn.author_id)
                 name = first_name(staff_name) if staff_name else None
+            elif author is CustomerTurnAuthor.ASSISTANT:
+                name = copy.ASSISTANT_NAME[turn.language]  # never the agent's internal id
             own = turn.author_role is TurnAuthorRole.CUSTOMER and turn.author_id == customer_id
             views.append(
                 CustomerTurnView(
@@ -505,8 +518,39 @@ class CaseReader:
             )
         return views
 
+    async def _assistant_state(self, case: Case) -> AssistantStateView | None:
+        """What the assistant waits for and whether it is answering (``with_assistant`` only)."""
+        if not case.is_with_assistant:
+            return None
+        session = await self._uow.assistant_sessions.get_by_case(case.id)
+        if session is None:
+            return AssistantStateView(working=False, confirmation=None, step_up=None)
+        confirmation, step_up = session.confirmation, session.step_up
+        pending_customer_message = case.last_message_author_role is TurnAuthorRole.CUSTOMER
+        return AssistantStateView(
+            working=session.is_active
+            and (
+                session.claim is not None
+                or session.queued is not None
+                or session.resend_blocked
+                or (pending_customer_message and confirmation is None and step_up is None)
+            ),
+            confirmation=None
+            if confirmation is None
+            else AssistantConfirmationView(
+                summary=confirmation.summary,
+                token=confirmation.token,
+                expires_at=confirmation.expires_at,
+            ),
+            step_up=None
+            if step_up is None
+            else AssistantStepUpView(reason=step_up.reason, simulated=step_up.simulated),
+        )
+
     async def _agent_name(self, case: Case, status: CustomerConversationStatus) -> str | None:
         """The assignee's first name while with an agent; on a closed case, who attended."""
+        if status is CustomerConversationStatus.WITH_ASSISTANT:
+            return copy.ASSISTANT_NAME[case.language]
         if status is CustomerConversationStatus.WAITING_AGENT or not case.assigned_analyst_id:
             return None
         name = await self.staff_name(case.assigned_analyst_id)
@@ -525,6 +569,7 @@ class CaseReader:
             last_sequence=case.last_public_sequence,
             previous_case_id=case.previous_case_id,
             rating=rating_view(case.rating),
+            assistant=await self._assistant_state(case),
         )
 
     async def conversation_summary(self, case: Case) -> CustomerConversationSummaryView:

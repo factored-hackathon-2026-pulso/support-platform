@@ -13,7 +13,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query
 
 from cc_platform.api.dependencies import ApiContextDep, require_roles
-from cc_platform.api.schemas.cases import EscalationResult, RespondEscalationRequest
+from cc_platform.api.routers._assistant import assistant_use_cases
+from cc_platform.api.schemas.cases import CaseSummary, EscalationResult, RespondEscalationRequest
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.api.schemas.supervision import (
     AssignmentResult,
@@ -57,6 +58,25 @@ async def get_team(_actor: Supervisor, api: ApiContextDep) -> TeamOverview:
 )
 async def get_queues(_actor: Supervisor, api: ApiContextDep) -> QueueOverview:
     return QueueOverview.from_view(await api.use_cases.cases.queue_overview.execute())
+
+
+@router.post(
+    "/cases/{caseId}/assistant/release",
+    response_model=CaseSummary,
+    summary="Take a case from the assistant: it goes to the language queue",
+    description=(
+        "ADR 0003. For a case in `with_assistant`: the assistant stops, the case becomes "
+        "`queued` and `AssignCase` places it like any arrival (rule 3), with a staff banner. "
+        "409 `assistant_not_active` when the assistant does not hold it. 404 "
+        "`assistant_disabled` while agent-core is not configured."
+    ),
+    responses=problem_responses(401, 403, 404, 409),
+)
+async def release_assistant_case(
+    case_id: CaseId, actor: Supervisor, api: ApiContextDep
+) -> CaseSummary:
+    summary = await assistant_use_cases(api).release.execute(actor, case_id)
+    return CaseSummary.from_view(summary)
 
 
 @router.put(

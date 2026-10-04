@@ -65,12 +65,15 @@ from cc_platform.application.ports.realtime import RealtimeHub
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.realtime.projector import derived_envelope
 from cc_platform.application.realtime.topics import Topic
+from cc_platform.domain.ai.events import ASSISTANT_EVENTS
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.events import (
     CALL_EVENTS,
     CASE_EVENTS,
     ESCALATION_EVENTS,
     CaseAssigned,
+    CaseAssistantReleased,
+    CaseAssistantStarted,
     CaseClosed,
     CaseFirstResponded,
     CaseOpened,
@@ -95,13 +98,19 @@ from cc_platform.domain.shared.json import JsonObject
 #: Events this projection owns (the generic projector must not forward them raw).
 OWNED_EVENTS: tuple[type[DomainEvent], ...] = (
     *CASE_EVENTS,
+    *ASSISTANT_EVENTS,
     CustomerSessionStarted,
     StaffAvailabilityChanged,
 )
 
 #: Actor roles a customer topic may show as they are (anyone else shows as ``system``).
 _CUSTOMER_VISIBLE_ROLES = frozenset(
-    {ActorRole.CUSTOMER.value, ActorRole.ANALYST.value, ActorRole.SYSTEM.value}
+    {
+        ActorRole.CUSTOMER.value,
+        ActorRole.ANALYST.value,
+        ActorRole.SYSTEM.value,
+        ActorRole.ASSISTANT.value,
+    }
 )
 
 #: Audited reads: recorded in the event log, never sent on any socket.
@@ -116,6 +125,8 @@ _CASE_UPDATING = (
     CaseClosed,
     CaseRated,
     CasePriorityChanged,
+    CaseAssistantStarted,
+    CaseAssistantReleased,
     *ESCALATION_EVENTS,
     *CALL_EVENTS,
 )
@@ -126,6 +137,8 @@ _CONVERSATION_UPDATING = (
     CaseStatusChanged,
     CaseClosed,
     CaseRated,
+    # ADR 0003: what the assistant waits for (a confirmation, a step-up, "escribiendo…")
+    *ASSISTANT_EVENTS,
 )
 
 
@@ -195,7 +208,7 @@ class CaseRealtimeProjector:
                 self._present.availability(view),
             )
             return
-        if event.case_id is None or not isinstance(event, CASE_EVENTS):
+        if event.case_id is None or not isinstance(event, (*CASE_EVENTS, *ASSISTANT_EVENTS)):
             return  # customer sessions: read through REST
         async with self._uow() as uow:
             case = await uow.cases.get(event.case_id)

@@ -54,6 +54,15 @@ FAMILY: Mapping[str, AuditFamily] = {
     "case.priority_changed": AuditFamily.LIFECYCLE,
     "case.viewed": AuditFamily.ACCESS,
     "turn.created": AuditFamily.CONVERSATION,
+    # the assistant (ADR 0003): agent-core handles a conversation before people do
+    "case.assistant_started": AuditFamily.LIFECYCLE,
+    "case.assistant_released": AuditFamily.ASSIGNMENT,
+    "assistant.session_started": AuditFamily.CONVERSATION,
+    "assistant.turn_answered": AuditFamily.CONVERSATION,
+    "assistant.input_queued": AuditFamily.CONVERSATION,
+    "assistant.step_up_verified": AuditFamily.ACCESS,
+    "assistant.step_up_rejected": AuditFamily.ACCESS,
+    "assistant.ended": AuditFamily.LIFECYCLE,
     # escalations to supervision (slice 9)
     "escalation.opened": AuditFamily.ESCALATION,
     "escalation.withdrawn": AuditFamily.ESCALATION,
@@ -117,6 +126,9 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "case.closed",
         "case.rated",
         "case.priority_changed",
+        "case.assistant_started",
+        "case.assistant_released",
+        "assistant.ended",
         "escalation.opened",
         "escalation.withdrawn",
         "escalation.answered",
@@ -333,6 +345,7 @@ _TURN_TEXT: Mapping[tuple[str, str | None], str] = {
     ("transcript", "system"): "Anotó un cambio de la llamada en la transcripción",
     ("transcript", None): "Habló en la llamada",
     ("message", "customer"): "Escribió un mensaje",
+    ("message", "assistant"): "Respondió al cliente (asistente)",
 }
 
 
@@ -340,6 +353,33 @@ def _turn_created(event: StoredEvent, _names: AuditNames) -> str:
     kind = _text(event.payload, "kind") or "message"
     role = _text(event.payload, "author_role")
     return _TURN_TEXT.get((kind, role)) or _TURN_TEXT.get((kind, None)) or "Respondió al cliente"
+
+
+# ----------------------------------------------------------------------------- assistant
+#: ``case.assistant_released`` by reason (never a message text or a handoff's content).
+_RELEASE_TEXT: Mapping[str, str] = {
+    "escalated": "El asistente escaló el caso a una persona",
+    "ended": "El asistente terminó su atención sin resolver el caso",
+    "failed": "El asistente no pudo seguir y el caso pasó a una persona",
+    "supervision": "Tomó el caso del asistente",
+    "customer_request": "Pidió hablar con una persona",
+}
+
+_ASSISTANT_END_TEXT: Mapping[str, str] = {
+    "resolved": "El asistente resolvió la conversación",
+    "escalated": "El asistente terminó: escaló el caso a una persona",
+    "ended": "El asistente terminó su atención sin resolver",
+    "failed": "El asistente dejó de atender por una falla",
+    "released": "La atención del asistente terminó porque otra persona tomó el caso",
+}
+
+
+def _assistant_released(event: StoredEvent, _names: AuditNames) -> str:
+    return _RELEASE_TEXT.get(_text(event.payload, "reason") or "", "El caso salió del asistente")
+
+
+def _assistant_ended(event: StoredEvent, _names: AuditNames) -> str:
+    return _ASSISTANT_END_TEXT.get(_text(event.payload, "result") or "", "Terminó el asistente")
 
 
 # ----------------------------------------------------------------------------- calls (slice 12)
@@ -527,6 +567,15 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "case.priority_changed": _case_priority_changed,
     "case.viewed": _case_viewed,
     "turn.created": _turn_created,
+    # ADR 0003: the assistant (ids and enums only; the audit never shows what was said)
+    "case.assistant_started": _fixed("La conversación empezó con el asistente"),
+    "case.assistant_released": _assistant_released,
+    "assistant.session_started": _fixed("Empezó la sesión con el asistente"),
+    "assistant.turn_answered": _fixed("El asistente respondió"),
+    "assistant.input_queued": _fixed("Respondió a la confirmación del asistente"),
+    "assistant.step_up_verified": _fixed("Pasó la verificación adicional"),
+    "assistant.step_up_rejected": _fixed("Falló la verificación adicional"),
+    "assistant.ended": _assistant_ended,
     # slice 9: the log shows the actor next to them ("Daniela Ríos · Escaló el caso a
     # supervisión"); the motive and the answer are never shown (only their length).
     "escalation.opened": _fixed("Escaló el caso a supervisión"),

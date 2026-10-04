@@ -37,6 +37,20 @@ class AssistantBusyError(ConflictError):
     default_message = "El asistente todavía está respondiendo. Espera un momento."
 
 
+class CopilotUnavailableError(ConflictError):
+    """The copilot cannot answer about this case: the customer is not linked to the dataset."""
+
+    code: ClassVar[str] = "copilot_unavailable"
+    default_message = "El copiloto no tiene datos de este cliente para responder."
+
+
+class CopilotBusyError(ConflictError):
+    """The copilot is still answering a question of this thread."""
+
+    code: ClassVar[str] = "copilot_busy"
+    default_message = "El copiloto todavía está respondiendo tu pregunta anterior."
+
+
 class AssistantActiveError(ConflictError):
     """A call or an email cannot join a conversation the assistant is handling (nobody would
     answer it): the customer writes in the chat, or asks for a person first."""

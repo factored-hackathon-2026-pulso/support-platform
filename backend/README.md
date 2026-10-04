@@ -9,7 +9,7 @@ Read first: `docs/platform/ENGINEERING_BRIEF.md` (scope, rules, conventions),
 (slice 2 case life cycle, slice 3 supervision, slice 4 administration, slice 6 analyst home,
 slice 7 customer rating, slice 8 case priority, slice 9 supervision v2: Colas and escalations,
 slice 10 notification center, slice 11 secure onboarding by email invitation, slice 12
-simulated phone and email channels, slice 14 the assistant (agent-core); a later slice wins).
+simulated phone and email channels, slice 14 the assistant (agent-core), slice 15 the analyst's copilot; a later slice wins).
 Operating the app (accounts, reset, troubleshooting) is in `docs/platform/RUNBOOK.md`.
 
 ## Run
@@ -74,6 +74,7 @@ re-read on every request.
 | Customer calls and email (slice 12) | `GET /customer/call`, `POST /customer/calls` (+ `Idempotency-Key`), `POST /customer/calls/{callId}/answer\|reject\|hangup\|transcript`, `GET\|POST /customer/emails` | customer token |
 | Customer simulator | `GET /customer/demo-customers`, `POST /customer/sessions`, `GET /customer/conversation`, `POST /customer/conversation/turns`, `GET /customer/conversations`, `GET /customer/conversations/{id}`, `POST /customer/conversations/{id}/rating` (slice 7: `{score 1–4, comment?}` + `Idempotency-Key`) | customer token |
 | Assistant (slice 14, ADR 0003) | `POST /customer/conversation/confirmation` `{token, answer}`, `POST /customer/conversation/step-up` `{code}`, `POST /customer/conversation/human`; `GET /cases/{id}/handoff`; `POST /supervision/cases/{id}/assistant/release`; `POST /cases/{id}/close` also takes `handoffQuality`. Without agent-core they answer `404 assistant_disabled` | customer token · the assignee analyst · supervisor |
+| Copilot (slice 15) | `GET /cases/{id}/copilot` (the analyst's thread; `available: false` without agent-core or a linked customer), `POST /cases/{id}/copilot/messages` `{text, clientMessageId}` + `Idempotency-Key` (waits for the model; idempotent) | the assignee analyst |
 | Supervision | `GET /supervision/team`, `GET /supervision/queues`, `PUT /supervision/cases/{id}/assignee` (`{analystId, expectedAnalystId, confirmPaused}`; ends an open escalation as `reassigned`) | supervisor |
 | Colas (slice 9) | `GET /supervision/open-cases?language=es\|pt`: every open case of a language and who holds it | supervisor |
 | Escalations (slice 9) | `POST /cases/{id}/escalations` (`{motive}` + `Idempotency-Key`), `POST /cases/{id}/escalations/{escId}/withdraw`, `POST /cases/{id}/escalations/{escId}/acknowledge` | analyst (the assignee; acknowledge: who escalated) |
@@ -222,6 +223,7 @@ Regenerate after every API change, then run `pnpm gen:api` in `frontend/`.
 
 ## Known gaps
 
+- **The copilot (slice 15):** answers are text (no structured suggested tools yet) and as good as agent-core's tools; no live listening mode; a call lost with its process is recovered by asking again with the same `clientMessageId`. Details: `docs/platform/api/slice-15-copilot.md` §6.
 - **The assistant (slice 14):** the second factor is simulated; agent-core's `grant_active` is not answered yet (delegations live 10 minutes); a background job lost with its process is only recovered when the customer writes again (no sweep yet); only `CC_ASSISTANT_LANGUAGES` start with the assistant; links to dataset customers come from a startup file (no endpoint). Details: `docs/platform/api/slice-14-assistant.md` §10.
 
 - **No migrations.** `metadata.create_all` runs at startup. A database created by an older

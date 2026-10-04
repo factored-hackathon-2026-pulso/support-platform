@@ -63,6 +63,8 @@ FAMILY: Mapping[str, AuditFamily] = {
     "assistant.step_up_verified": AuditFamily.ACCESS,
     "assistant.step_up_rejected": AuditFamily.ACCESS,
     "assistant.ended": AuditFamily.LIFECYCLE,
+    "copilot.query_asked": AuditFamily.CONVERSATION,
+    "copilot.answered": AuditFamily.CONVERSATION,
     # escalations to supervision (slice 9)
     "escalation.opened": AuditFamily.ESCALATION,
     "escalation.withdrawn": AuditFamily.ESCALATION,
@@ -576,6 +578,9 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "assistant.step_up_verified": _fixed("Pasó la verificación adicional"),
     "assistant.step_up_rejected": _fixed("Falló la verificación adicional"),
     "assistant.ended": _assistant_ended,
+    # slice 15: the copilot (the audit never shows what was asked or answered)
+    "copilot.query_asked": _fixed("Le preguntó algo al copiloto sobre el caso"),
+    "copilot.answered": _fixed("El copiloto respondió"),
     # slice 9: the log shows the actor next to them ("Daniela Ríos · Escaló el caso a
     # supervisión"); the motive and the answer are never shown (only their length).
     "escalation.opened": _fixed("Escaló el caso a supervisión"),

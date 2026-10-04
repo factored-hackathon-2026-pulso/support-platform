@@ -41,6 +41,8 @@ class InMemoryAgentRuntime:
     script: list[AgentTurn | Exception] = field(default_factory=list)
     greeting: str = "Hola, ¿en qué te ayudo?"
     unavailable: bool = False
+    handoffs: dict[str, dict[str, object]] = field(default_factory=dict)
+    """Packets ``get_handoff`` answers by reference (default: just the reference)."""
     _runs: int = 0
     _resolved: set[str] = field(default_factory=set)
 
@@ -120,7 +122,7 @@ class InMemoryAgentRuntime:
         self, credentials: AgentCredentials, *, handoff_ref: str
     ) -> dict[str, object]:
         self._record("get_handoff", credentials, handoff_ref=handoff_ref)
-        return {"handoff_ref": handoff_ref}
+        return self.handoffs.get(handoff_ref, {"handoff_ref": handoff_ref})
 
     async def record_resolution(
         self,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol
 
+from cc_platform.domain.ai.copilot import CopilotThread
 from cc_platform.domain.ai.session import AssistantSession
 
 
@@ -18,6 +19,16 @@ class AssistantSessionRepository(Protocol):
     async def add(self, session: AssistantSession) -> None: ...
 
     async def save(self, session: AssistantSession) -> None: ...
+
+
+class CopilotThreadRepository(Protocol):
+    """One thread per (case, analyst) (optimistic concurrency)."""
+
+    async def get_for(self, case_id: str, analyst_id: str) -> CopilotThread | None: ...
+
+    async def add(self, thread: CopilotThread) -> None: ...
+
+    async def save(self, thread: CopilotThread) -> None: ...
 
 
 class BankCustomerLinks(Protocol):

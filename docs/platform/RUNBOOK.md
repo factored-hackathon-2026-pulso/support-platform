@@ -115,6 +115,7 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_AGENT_CORE_URL`, `CC_AGENT_KEYS_FILE` | unset | ADR 0003: agent-core's runtime URL and the private signing keys of the credentials the platform issues to it. They go together or not at all; unset, the platform is people-only (§4.1) |
 | `CC_AGENT_CORE_TIMEOUT_SECONDS` | `60` | How long a turn may take before the case falls back to a person |
 | `CC_ASSISTANT_AGENT` | `recepcion@prod` | Slice 14: the agent a conversation starts with (`id`, `id@alias` or `id@X.Y.Z`) |
+| `CC_COPILOT_AGENT` | `copiloto-asesor@prod` | Slice 15: the agent the analyst's copilot asks |
 | `CC_ASSISTANT_LANGUAGES` | `["es"]` | Slice 14: case languages the assistant serves (JSON list); others go straight to people (policy `H1`) |
 | `CC_ASSISTANT_STEP_UP_CODE` | `000000` | Slice 14: the **simulated** second-factor code (a development stand-in) |
 | `CC_BANK_CUSTOMER_LINKS_FILE` | unset | Slice 14: private JSON `{"CUS-…": "<dataset customer_id>"}` read at startup; only linked customers can talk to the assistant. Never commit it |

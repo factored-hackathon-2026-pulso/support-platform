@@ -56,6 +56,8 @@ class ProblemCode(StrEnum):
     STEP_UP_NOT_PENDING = "step_up_not_pending"
     INVALID_STEP_UP_CODE = "invalid_step_up_code"
     HANDOFF_UNAVAILABLE = "handoff_unavailable"
+    COPILOT_UNAVAILABLE = "copilot_unavailable"
+    COPILOT_BUSY = "copilot_busy"
     AGENT_CORE_UNAVAILABLE = "agent_core_unavailable"
     AGENT_CORE_REJECTED = "agent_core_rejected"
     # supervision (manual assignment)
@@ -162,6 +164,12 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
         409, "Step-up not pending", "No hace falta una verificación adicional ahora."
     ),
     P.INVALID_STEP_UP_CODE: ProblemSpec(422, "Invalid step-up code", "El código no es correcto."),
+    P.COPILOT_UNAVAILABLE: ProblemSpec(
+        409, "Copilot unavailable", "El copiloto no tiene datos de este cliente para responder."
+    ),
+    P.COPILOT_BUSY: ProblemSpec(
+        409, "Copilot busy", "El copiloto todavía está respondiendo tu pregunta anterior."
+    ),
     P.HANDOFF_UNAVAILABLE: ProblemSpec(
         404, "Handoff unavailable", "Este caso no viene de un traspaso del asistente."
     ),

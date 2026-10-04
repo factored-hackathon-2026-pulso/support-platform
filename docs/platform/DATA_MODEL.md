@@ -492,6 +492,8 @@ locking like every aggregate. No message text is stored here (it lives in `turns
 | `failure_code`, `last_trace_id` | | why it ended; the agent-core trace id |
 | `created_at`, `updated_at`, `version` | | |
 
+`copilot_threads` (slice 15) — one row per (case, analyst), unique `(case_id, analyst_id)`: `id` `CPT-…`, `agent`, agent-core's `agent_session_id` / `run_id`, `runs` (the idempotency suffix of each run), `messages` (JSON list of `{id, role: analyst|copilot, text, created_at, client_message_id, answers}`, newest 200), `last_trace_id`, `version`. The text lives here; the event log carries sizes only.
+
 `bank_customer_links` (`customer_id` PK → customers, `bank_customer_id`) — which dataset customer each
 platform customer is; filled at startup from a private file.
 

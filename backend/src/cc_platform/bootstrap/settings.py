@@ -81,6 +81,8 @@ class Settings(BaseSettings):
     #: Case languages the assistant handles; other languages go straight to people (policy
     #: ``H1``: a person serves Portuguese until the agent's language switch is real).
     assistant_languages: list[str] = ["es"]
+    #: The analyst's copilot agent (``id``, ``id@alias`` or ``id@X.Y.Z``).
+    copilot_agent: str = "copiloto-asesor@prod"
     #: The simulated second factor (development stand-in; a real one replaces it).
     assistant_step_up_code: str = "000000"
     #: Private JSON ``{platform customer id: dataset customer id}``; never committed. Only linked

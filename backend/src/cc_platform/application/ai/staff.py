@@ -47,7 +47,7 @@ def grant_ref(case: Case, staff_id: str) -> str:
     return f"{case.id}:{staff_id}"
 
 
-async def _advisor_credentials(
+async def advisor_credentials(
     uow: UnitOfWork,
     issuer: AgentCredentialIssuer,
     clock: Clock,
@@ -83,7 +83,7 @@ class GetCaseHandoff:
             if session is None or session.handoff_ref is None:
                 raise HandoffUnavailableError()
             handoff_ref = session.handoff_ref
-            credentials = await _advisor_credentials(
+            credentials = await advisor_credentials(
                 uow, self.issuer, self.clock, case, actor.staff_id
             )
         try:
@@ -157,7 +157,7 @@ class RecordHandoffResolution:
             ):
                 return False
             handoff_ref = session.handoff_ref
-            credentials = await _advisor_credentials(uow, self.issuer, self.clock, case, staff_id)
+            credentials = await advisor_credentials(uow, self.issuer, self.clock, case, staff_id)
         try:
             await self.runtime.record_resolution(
                 credentials,

@@ -387,6 +387,26 @@ assistant_sessions = Table(
     Index("ix_assistant_sessions_state_updated", "state", "updated_at"),
 )
 
+# ADR 0003 (slice 15): an analyst's conversation with the copilot about one case. ``messages`` is a
+# JSON list (``[{id, role, text, created_at, client_message_id, answers}]``, newest 200).
+copilot_threads = Table(
+    "copilot_threads",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("case_id", String(ID), ForeignKey("cases.id"), nullable=False),
+    Column("analyst_id", String(ID), ForeignKey("staff.id"), nullable=False),
+    Column("agent", String(120), nullable=False),
+    Column("agent_session_id", String(120), nullable=True),
+    Column("run_id", String(120), nullable=True),
+    Column("runs", Integer, nullable=False, default=0),
+    Column("messages", JSON, nullable=False),
+    Column("last_trace_id", String(120), nullable=True),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=False),
+    _version(),
+    UniqueConstraint("case_id", "analyst_id", name="uq_copilot_threads_case_analyst"),
+)
+
 # ADR 0003: which dataset customer (``customers.customer_id`` of the challenge's data) a
 # platform customer is. agent-core's customer principal carries that id, never ours. Filled at
 # runtime from a private file (``CC_BANK_CUSTOMER_LINKS_FILE``); never committed.

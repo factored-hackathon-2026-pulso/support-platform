@@ -141,6 +141,7 @@ earlier assistant turns stay in the transcript.
   "Asistente virtual"` (staff view: Spanish), and staff-only banners (`kind: "routing"`) saying how the case
   left the assistant (escalated with a handoff reference, ended, failed with a code, taken by Supervisión,
   asked for by the customer). The customer's messages written before the hand-over are **unread** for her.
+- **Priority**: when the assistant escalates, the case takes the priority agent-core saw in its handoff packet (`low`..`critical`; a stolen card arrives `critical`), set by the system in the background right after the hand-over (`case.priority_changed`, actor `system`). Best effort: if agent-core does not answer, the case keeps priority `none`. The card's priority glyph and the supervisor's menu already show it.
 - **The handoff packet**: `GET /cases/{caseId}/handoff` → `{ "packet": { … } }`. Only the case's assignee
   (`403 case_not_assigned` for anyone else, `403 forbidden` without the Analista role) and only when the case
   came from an escalation (`404 handoff_unavailable`). `packet` is agent-core's `HandoffPacket` **as it

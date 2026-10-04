@@ -63,8 +63,8 @@ def test_the_administration_family_changes_state() -> None:
         (
             "staff.created",
             {"name": "Ana Gil", "roles": ["analyst"], "languages": ["pt"],
-             "team_id": TEAM, "team_name": "Disputas · Equipo Andes"},
-            "Creó la cuenta de Ana Gil · Analista · Disputas · Equipo Andes",
+             "team_id": TEAM, "team_name": "Equipo Andes"},
+            "Creó la cuenta de Ana Gil · Analista · Equipo Andes",
         ),
         (
             "staff.created",

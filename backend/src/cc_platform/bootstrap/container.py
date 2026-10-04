@@ -15,6 +15,7 @@ from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.audit.queries import GetAuditEvent, ListAuditEvents
 from cc_platform.application.audit.use_cases import AuditUseCases
+from cc_platform.application.cases.analyst_home import GetAnalystHome
 from cc_platform.application.cases.assignment import (
     QUEUE_DRAINER_EVENTS,
     AssignCase,
@@ -329,6 +330,7 @@ def build_container(
             team_overview=GetTeamOverview(uow=uow, clock=clock),
             queue_overview=GetQueueOverview(uow=uow, clock=clock),
             set_assignee=SetCaseAssignee(uow=uow, clock=clock, ids=ids),
+            analyst_home=GetAnalystHome(uow=uow, clock=clock),
         ),
         customers=CustomersUseCases(
             list_demo_customers=ListDemoCustomers(uow=uow),

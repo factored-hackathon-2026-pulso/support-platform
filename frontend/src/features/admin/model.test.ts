@@ -52,7 +52,7 @@ import {
   unlockedToast,
   userChanges,
   userGuardState,
-  userSummaryLine,
+  userSummaryFacts,
   usersQueryOf,
   usersSubtitle,
   validateTeamName,
@@ -84,10 +84,14 @@ describe('labels', () => {
   it('names languages and teams', () => {
     expect(languagesLabel(['pt', 'es'])).toBe('español, portugués')
     expect(languagesLabel([])).toBe('—')
-    expect(teamOptionLabel({ name: 'Disputas · Equipo Caribe', active: false })).toBe(
-      'Disputas · Equipo Caribe (inactivo)',
+    expect(teamOptionLabel({ name: 'Equipo Caribe', active: false })).toBe(
+      'Equipo Caribe (inactivo)',
     )
-    expect(userSummaryLine(daniela)).toBe('Analista · español, portugués · Disputas · Equipo Andes')
+    expect(userSummaryFacts(daniela)).toEqual([
+      { key: 'languages', icon: 'languages', text: 'Español y portugués', label: 'Idiomas' },
+      { key: 'team', icon: 'users', text: 'Equipo Andes', label: 'Equipo' },
+    ])
+    expect(userSummaryFacts({ ...daniela, languages: [] })[0]?.text).toBe('Sin idiomas')
     expect(openCasesFact(daniela.openCases)).toBe('5 · 4 en español · 1 en portugués')
     expect(openCasesFact({ total: 0, es: 0, pt: 0 })).toBe('0')
     expect(usersSubtitle(13)).toBe('Quién puede hacer qué en la plataforma · 13 personas')
@@ -487,7 +491,7 @@ describe('teams', () => {
     const candidates = addMemberCandidates([daniela, mariana, andres, carolina], daniela.team.id)
     expect(candidates.map((c) => c.label)).toEqual([
       'Carolina Peña Ruiz · Administración de la plataforma',
-      'Mariana Duque · Disputas · Equipo Pacífico',
+      'Mariana Duque · Equipo Pacífico',
     ])
   })
 

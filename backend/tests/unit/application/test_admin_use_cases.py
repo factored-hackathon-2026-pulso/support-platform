@@ -156,7 +156,7 @@ async def test_create_user_returns_the_temporary_password_once(
     )
     assert (new.team.id, new.team.name, new.status, new.version) == (
         PACIFICO,
-        "Disputas · Equipo Pacífico",
+        "Equipo Pacífico",
         AccountStatus.ACTIVE,
         1,
     )
@@ -173,7 +173,7 @@ async def test_create_user_returns_the_temporary_password_once(
         "roles": ["analyst"],
         "languages": ["pt"],
         "team_id": PACIFICO,
-        "team_name": "Disputas · Equipo Pacífico",
+        "team_name": "Equipo Pacífico",
     }
     async with container.uow() as uow:
         account = await uow.login_accounts.get(new.id)
@@ -351,9 +351,9 @@ async def test_update_applies_every_change_in_order(container: Container, valeri
     moved = (await payloads(container, "staff.team_changed"))[-1]
     assert moved == {
         "from_team_id": PACIFICO,
-        "from_team_name": "Disputas · Equipo Pacífico",
+        "from_team_name": "Equipo Pacífico",
         "to_team_id": ANDES,
-        "to_team_name": "Disputas · Equipo Andes",
+        "to_team_name": "Equipo Andes",
     }
 
 
@@ -686,10 +686,10 @@ async def test_reset_leaves_other_people_s_sign_ins_alone(
 async def test_team_commands(container: Container, valeria: Actor) -> None:
     admin = container.use_cases.administration
     with pytest.raises(TeamNameTakenError) as taken:
-        await admin.create_team.execute(valeria, "  disputas ·  equipo ANDES ")
+        await admin.create_team.execute(valeria, "  equipo   ANDES ")
     assert taken.value.details == {"field": "name"}
     with pytest.raises(TeamNameTakenError):  # inactive teams keep their name too
-        await admin.create_team.execute(valeria, "Disputas · Equipo Caribe")
+        await admin.create_team.execute(valeria, "Equipo Caribe")
     with pytest.raises(InvalidValueError):
         await admin.create_team.execute(valeria, "X")
     created = await admin.create_team.execute(valeria, "Equipo Sur", idempotency_key="team-sur-01")
@@ -823,13 +823,13 @@ async def test_teams_read_model(container: Container, valeria: Actor) -> None:
     ]
     assert rows == [
         ("Administración de la plataforma", 2, 0, 0),
-        ("Disputas · Equipo Andes", 4, 3, 1),
-        ("Disputas · Equipo Pacífico", 6, 3, 0),
+        ("Equipo Andes", 4, 3, 1),
+        ("Equipo Pacífico", 6, 3, 0),
     ]  # fmt: skip
     counts = active.status_counts
     assert (counts.active, counts.inactive, counts.all) == (3, 1, 4)
     inactive = await admin.list_teams.execute(valeria, TeamStatusFilter.INACTIVE)
-    assert [t.name for t in inactive.items] == ["Disputas · Equipo Caribe"]
+    assert [t.name for t in inactive.items] == ["Equipo Caribe"]
     detail = await admin.get_team.execute(valeria, ANDES)
     assert [(m.name, m.status) for m in detail.members] == [
         ("Daniela Ríos", AccountStatus.ACTIVE),
@@ -845,15 +845,15 @@ async def test_teams_read_model(container: Container, valeria: Actor) -> None:
 async def test_supervision_follows_team_renames(container: Container, valeria: Actor) -> None:
     pacifico = await team(container, PACIFICO, valeria)
     await container.use_cases.administration.rename_team.execute(
-        valeria, PACIFICO, pacifico.version, "Disputas · Equipo Pacífico Sur"
+        valeria, PACIFICO, pacifico.version, "Equipo Pacífico Sur"
     )
     overview = await container.use_cases.cases.team_overview.execute()
     assert [(t.id, t.name) for t in overview.teams] == [
-        (ANDES, "Disputas · Equipo Andes"),
-        (PACIFICO, "Disputas · Equipo Pacífico Sur"),
+        (ANDES, "Equipo Andes"),
+        (PACIFICO, "Equipo Pacífico Sur"),
     ]
     tomas = next(a for a in overview.analysts if a.id == TOMAS_ID)
-    assert tomas.team.name == "Disputas · Equipo Pacífico Sur"
+    assert tomas.team.name == "Equipo Pacífico Sur"
 
 
 async def test_supervision_lists_only_active_analysts_and_their_teams(

@@ -579,6 +579,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/me/home': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * My home: activity since my previous session and my team's queues now
+     * @description `since` is the end of her previous session (the latest ended or expired session other than the current one), or now − 8 h without one (`sinceSource: fallback`). `activity` lists structured rows (no text) built from the event log after `since`: only her cases (held now, or assigned to her or taken away from her), never her own actions, one row per case and kind, newest first, at most 10 (`total` counts them all). `teamNow` counts the available analysts of her team and the cases waiting in the queues of her languages (no names).
+     */
+    get: operations['home_get_home']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/meta': {
     parameters: {
       query?: never
@@ -879,6 +899,24 @@ export interface components {
       toReply: number
       /** Waiting */
       waiting: number
+    }
+    /** AnalystHome */
+    AnalystHome: {
+      activity: components['schemas']['HomeActivity']
+      /**
+       * Servertime
+       * Format: date-time
+       */
+      serverTime: string
+      /**
+       * Since
+       * Format: date-time
+       * @description Start of 'Mientras no estabas' (exclusive).
+       */
+      since: string
+      /** @description previous_session: her previous session ended then; fallback: now − 8 h. */
+      sinceSource: components['schemas']['SinceSource']
+      teamNow: components['schemas']['HomeTeam']
     }
     /** AssignmentOut */
     AssignmentOut: {
@@ -1508,6 +1546,131 @@ export interface components {
        */
       status: 'ok' | 'degraded'
     }
+    /** HomeActivity */
+    HomeActivity: {
+      /**
+       * Items
+       * @description Newest first, at most 10.
+       */
+      items: components['schemas']['HomeActivityItem'][]
+      /**
+       * Total
+       * @description Every row after `since` (items is capped).
+       */
+      total: number
+    }
+    /** HomeActivityItem */
+    HomeActivityItem: {
+      /**
+       * Actorname
+       * @description assigned_by_supervisor, reassigned_away: the supervisor.
+       */
+      actorName: string | null
+      /** Caseid */
+      caseId: string
+      /** @description The case status now. */
+      caseStatus: components['schemas']['CaseStatus']
+      /** Customername */
+      customerName: string
+      /** Firstresponseat */
+      firstResponseAt: string | null
+      /** @description Its bucket in Casos now. */
+      inboxStatus: components['schemas']['InboxStatus'] | null
+      kind: components['schemas']['HomeActivityKind']
+      /** @description The case language. */
+      language: components['schemas']['Language']
+      /** @description customer_returned: how the case it continues was closed. */
+      lastCloseReason: components['schemas']['CloseReason'] | null
+      /**
+       * Messagecount
+       * @description customer_messages: how many.
+       */
+      messageCount: number | null
+      /**
+       * Occurredat
+       * Format: date-time
+       * @description The fact's time (last message for messages).
+       */
+      occurredAt: string
+      /**
+       * Previouscasescount
+       * @description customer_returned: the customer's cases opened before this one.
+       */
+      previousCasesCount: number | null
+      /**
+       * Readonly
+       * @description The case is not hers now: it opens read-only.
+       */
+      readOnly: boolean
+      /** @description Assignment rows: why it moved. */
+      reason: components['schemas']['AssignmentReason'] | null
+      /**
+       * Sladueat
+       * Format: date-time
+       */
+      slaDueAt: string
+      /**
+       * Targetname
+       * @description reassigned_away: who has it now.
+       */
+      targetName: string | null
+      /**
+       * Waitedseconds
+       * @description assigned_from_queue: the queue wait.
+       */
+      waitedSeconds: number | null
+    }
+    /**
+     * HomeActivityKind
+     * @description One row kind of "Mientras no estabas" (each has one fixed template in the frontend).
+     *
+     *     - ``assigned_on_arrival``: a new case went to her on arrival (rule 3, least loaded).
+     *     - ``assigned_from_queue``: a queued case went to her when she became available.
+     *     - ``assigned_by_supervisor``: a supervisor assigned it to her (from the queue or another
+     *       analyst).
+     *     - ``reassigned_away``: a supervisor gave one of her cases to someone else (read-only now).
+     *     - ``customer_returned``: the case continues a closed one of the same customer (it
+     *       replaces the arrival row of that case).
+     *     - ``customer_messages``: the customer wrote in one of her cases (one row per case).
+     * @enum {string}
+     */
+    HomeActivityKind:
+      | 'assigned_on_arrival'
+      | 'assigned_from_queue'
+      | 'assigned_by_supervisor'
+      | 'reassigned_away'
+      | 'customer_returned'
+      | 'customer_messages'
+    /** HomeQueue */
+    HomeQueue: {
+      language: components['schemas']['Language']
+      /** Oldestqueuedat */
+      oldestQueuedAt: string | null
+      /** Waiting */
+      waiting: number
+    }
+    /** HomeTeam */
+    HomeTeam: {
+      /**
+       * Analystcount
+       * @description Active analysts of her team (her included).
+       */
+      analystCount: number
+      /**
+       * Availablecount
+       * @description Active analysts of her team now available.
+       */
+      availableCount: number
+      /**
+       * Queues
+       * @description Only the languages she speaks (es, then pt).
+       */
+      queues: components['schemas']['HomeQueue'][]
+      /** Teamid */
+      teamId: string
+      /** Teamname */
+      teamName: string
+    }
     /** InboxCounts */
     InboxCounts: {
       /**
@@ -2014,6 +2177,12 @@ export interface components {
        */
       expectedAnalystId: string | null
     }
+    /**
+     * SinceSource
+     * @description Where ``since`` comes from: her previous session's end, or the 8-hour fallback.
+     * @enum {string}
+     */
+    SinceSource: 'previous_session' | 'fallback'
     /** StaffListResponse */
     StaffListResponse: {
       /** Items */
@@ -4273,6 +4442,44 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  home_get_home: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnalystHome']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
         headers: {
           [name: string]: unknown
         }

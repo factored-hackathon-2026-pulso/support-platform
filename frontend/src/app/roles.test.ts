@@ -15,6 +15,8 @@ import {
   adminUserPath,
   supervisionAnalystPath,
   supervisionCasePath,
+  presenceFor,
+  workspacePath,
   type NavItem,
 } from './roles'
 
@@ -25,7 +27,9 @@ describe('roles', () => {
   })
 
   it('lists the destinations of each role', () => {
-    expect(ROLES.analyst.nav.map((item) => item.label)).toEqual(['Casos'])
+    expect(ROLES.analyst.nav.map((item) => item.label)).toEqual(['Inicio', 'Casos'])
+    expect(ROLES.analyst.home).toBe('/analista/inicio')
+    expect(ROLES.analyst.nav[1]?.indicator).toBe('toReplyCases')
     expect(ROLES.supervisor.nav.map((item) => item.label)).toEqual(['Equipo y colas', 'Auditoría'])
     expect(ROLES.admin.nav.map((item) => item.label)).toEqual([
       'Usuarios y roles',
@@ -73,6 +77,29 @@ describe('roles', () => {
     expect(team.indicator).toBe('queuedCases')
   })
 
+  it('marks only Inicio on /analista/inicio and only Casos on /analista', () => {
+    const [home, cases] = ROLES.analyst.nav
+    expect(isNavItemActive(home!, '/analista/inicio')).toBe(true)
+    expect(isNavItemActive(cases!, '/analista/inicio')).toBe(false)
+    expect(isNavItemActive(cases!, '/analista')).toBe(true)
+    expect(isNavItemActive(home!, '/analista')).toBe(false)
+  })
+
+  it('builds the Workspace path with a case and a filter', () => {
+    expect(workspacePath()).toBe('/analista')
+    expect(workspacePath({ filterSlug: 'cerrados' })).toBe('/analista?estado=cerrados')
+    expect(workspacePath({ caseId: 'CASE-1', filterSlug: 'por-responder' })).toBe(
+      '/analista?caso=CASE-1&estado=por-responder',
+    )
+    expect(workspacePath({ caseId: 'CASE-1', filterSlug: null })).toBe('/analista?caso=CASE-1')
+  })
+
+  it('maps availability to the presence dot of the rail avatar', () => {
+    expect(presenceFor('paused')).toEqual({ tone: 'warn', label: 'Estado: En pausa' })
+    expect(presenceFor('available')).toEqual({ tone: 'success', label: 'Estado: Disponible' })
+    expect(presenceFor(undefined)).toBeNull()
+  })
+
   it('builds the supervisor case path', () => {
     expect(supervisionCasePath('CASE-1')).toBe('/supervision/casos/CASE-1')
     expect(roleFromPath(supervisionCasePath('CASE-1'))).toBe('supervisor')
@@ -93,8 +120,9 @@ describe('roles', () => {
     expect(resolvePostLoginPath(['supervisor'], '/administracion/usuarios')).toBe(
       '/supervision/equipo',
     )
-    expect(resolvePostLoginPath(['analyst'], '//evil.example')).toBe('/analista')
-    expect(resolvePostLoginPath(['analyst'], null)).toBe('/analista')
+    expect(resolvePostLoginPath(['analyst'], '//evil.example')).toBe('/analista/inicio')
+    expect(resolvePostLoginPath(['analyst'], null)).toBe('/analista/inicio')
+    expect(resolvePostLoginPath(['analyst'], '/analista?caso=CASE-1')).toBe('/analista?caso=CASE-1')
     expect(resolvePostLoginPath([], '/analista')).toBeNull()
   })
 })

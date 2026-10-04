@@ -47,7 +47,7 @@ CREATED_AT = datetime(2026, 9, 2, 12, tzinfo=UTC)
 async def add_teams(factory: UnitOfWorkFactory) -> None:
     """Staff rows reference a team (foreign key on the SQL adapter)."""
     async with factory() as uow:
-        for team_id, name in ((TEAM_ID, "Disputas · Equipo Andes"), (OTHER_TEAM_ID, "Otro equipo")):
+        for team_id, name in ((TEAM_ID, "Equipo Andes"), (OTHER_TEAM_ID, "Otro equipo")):
             await uow.teams.add(Team(id=team_id, name=name, active=True, created_at=CREATED_AT))
         await uow.commit()
 

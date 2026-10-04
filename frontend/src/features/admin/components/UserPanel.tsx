@@ -6,12 +6,14 @@ import {
   Button,
   Callout,
   EmptyState,
+  FactList,
   IconButton,
   KeyValueList,
   Spinner,
   useToast,
 } from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
+import { RoleChips } from './RoleChips'
 import { formatDate, formatRelativeTime } from '@/lib/format'
 import {
   deactivatedToast,
@@ -25,7 +27,7 @@ import {
   unlockedToast,
   userChanges,
   userGuardState,
-  userSummaryLine,
+  userSummaryFacts,
   validateUserDraft,
   type UserDraft,
   type UserDraftErrors,
@@ -258,7 +260,10 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
     <>
       <div className="flex flex-col gap-1 border-b border-border-soft px-5 pt-[18px] pb-3.5">
         <h2 className="m-0 text-18 font-semibold">{user.name}</h2>
-        <span className="text-13 text-ink-2">{userSummaryLine(user)}</span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <RoleChips roles={user.roles} />
+          <FactList items={userSummaryFacts(user)} size="md" />
+        </span>
         <span className="flex items-center gap-1 font-mono text-12 text-muted">
           {user.id}
           <IconButton

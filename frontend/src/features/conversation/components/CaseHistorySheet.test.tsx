@@ -86,16 +86,18 @@ describe('CaseHistorySheet', () => {
     )
     const list = await within(sheet).findByRole('list', { name: 'Casos anteriores' })
     const rows = within(list).getAllByRole('button')
+    // Short facts (slice 6): the reason with its icon, [calendar] date, [user] who.
     expect(rows.map((row) => row.textContent)).toEqual([
-      '3 mar 2026 · Resuelto · Daniela RíosPerfecto, muchas gracias.',
-      '13 feb 2026 · Resuelto · Julián OrtegaAh, es cierto. Gracias.',
+      'ResueltoAbierto: 3 mar 2026Daniela RíosPerfecto, muchas gracias.',
+      'ResueltoAbierto: 13 feb 2026Julián OrtegaAh, es cierto. Gracias.',
     ])
+    expect(rows[0]!.querySelector('[data-reason="resolved"]')).toBeInTheDocument()
     expect(api.fetchCaseHistory).toHaveBeenCalledWith(PATRICIA_CASE_ID, expect.anything())
 
     await user.click(rows[1]!)
     expect(
       await within(sheet).findByRole('heading', {
-        name: /Caso CASE-…0110 · Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto/,
+        name: 'Caso CASE-…0110',
       }),
     ).toBeInTheDocument()
     expect(api.fetchCaseDetail).toHaveBeenCalledWith(JULIAN_CASE_ID, expect.anything())

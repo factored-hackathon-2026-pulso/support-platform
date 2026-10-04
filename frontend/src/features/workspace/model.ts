@@ -1,5 +1,5 @@
 /**
- * Pure rules of the Workspace screen: URL state (`?caso=&estado=&q=&lista=&historial=`,
+ * Pure rules of the Workspace screen: URL state (`?caso=&estado=&q=&lista=&ficha=&historial=`,
  * docs/platform/api/slice-2-case-lifecycle.md §9.2), which case to show, and the
  * empty-state copy. No React, no I/O: unit-tested in model.test.ts.
  */
@@ -10,7 +10,7 @@ import {
   type InboxStatus,
 } from '@/features/cases'
 
-/** `historial=lista`: the "Casos anteriores" sheet on its list. */
+/** `historial=lista`: "Casos anteriores" (a section of "Ficha del cliente") on its list. */
 export const HISTORY_LIST = 'lista'
 
 export interface WorkspaceUrlState {
@@ -19,8 +19,21 @@ export interface WorkspaceUrlState {
   filter: InboxStatus | null
   query: string
   listCollapsed: boolean
-  /** "Casos anteriores" sheet: `'lista'`, a past case id (its transcript), or null (closed). */
+  /** `?ficha=1`: "Ficha del cliente" is open (slice 6 §5). */
+  customerFile: boolean
+  /**
+   * "Casos anteriores" inside the panel: `'lista'`, a past case id (its
+   * transcript), or null (the list). A value also opens the panel, so the old
+   * `?historial=` deep links keep working.
+   */
   history: typeof HISTORY_LIST | string | null
+}
+
+/** Whether "Ficha del cliente" shows (`?ficha=1`, or a `?historial=` deep link). */
+export function isCustomerFileOpen(
+  state: Pick<WorkspaceUrlState, 'customerFile' | 'history'>,
+): boolean {
+  return state.customerFile || state.history !== null
 }
 
 export interface WorkspaceStateChangeOptions {
@@ -38,6 +51,7 @@ export function parseWorkspaceSearch(params: URLSearchParams): WorkspaceUrlState
     filter: inboxStatusFromSlug(params.get('estado')),
     query: params.get('q') ?? '',
     listCollapsed: params.get('lista') === 'contraida',
+    customerFile: params.get('ficha') === '1',
     history: params.get('historial')?.trim() || null,
   }
 }
@@ -50,6 +64,7 @@ export function toWorkspaceSearch(state: WorkspaceUrlState): URLSearchParams {
   if (slug) params.set('estado', slug)
   if (state.query) params.set('q', state.query)
   if (state.listCollapsed) params.set('lista', 'contraida')
+  if (state.customerFile) params.set('ficha', '1')
   if (state.history) params.set('historial', state.history)
   return params
 }

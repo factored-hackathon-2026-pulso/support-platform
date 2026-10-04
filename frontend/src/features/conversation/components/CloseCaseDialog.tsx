@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Button, Callout, Dialog, Field, RadioGroup, Textarea } from '@/components/ui'
-import { CLOSE_REASONS, type CloseReason } from '@/features/cases'
+import { CLOSE_REASONS, CloseReasonIcon, type CloseReason } from '@/features/cases'
 import {
   CLOSED_NOTICE,
   CLOSE_NOTE_MAX_LENGTH,
@@ -16,6 +16,16 @@ import {
 import { useCloseCase } from '../hooks/use-close-case'
 import type { CaseSummary } from '../types'
 
+/** The reason cards: label, meaning, tone and icon from the one reason map (cases). */
+const REASON_CARDS = CLOSE_REASONS.map((reason) => ({
+  value: reason.value,
+  label: reason.label,
+  description: reason.meaning,
+  tone: reason.tone,
+  icon: <CloseReasonIcon reason={reason.value} size="md" />,
+  wide: reason.value === 'other',
+}))
+
 export interface CloseCaseDialogProps {
   summary: CaseSummary
   open: boolean
@@ -24,7 +34,8 @@ export interface CloseCaseDialogProps {
 }
 
 /**
- * "Cerrar caso" (contract §9.5): a required reason from the fixed list, an
+ * "Cerrar caso" (contract §9.5): a required reason from the fixed list (slice 6:
+ * a two-column grid of cards with the reason's icon, tone and meaning), an
  * optional internal note (≤ 500 characters, only staff see it) and a preview
  * of the notice the customer will get, in the case language. The customer never
  * sees the reason or the note.
@@ -81,12 +92,12 @@ export function CloseCaseDialog({ summary, open, onOpenChange, onClosed }: Close
       onOpenChange={changeOpen}
       title="Cerrar caso"
       description={
-        <>
-          {summary.customer.displayName} ·{' '}
+        <span className="inline-flex flex-wrap items-center gap-x-2">
+          <span>{summary.customer.displayName}</span>
           <span className="font-mono text-12" title={summary.id}>
             {shortCaseId(summary.id)}
           </span>
-        </>
+        </span>
       }
       footer={
         <>
@@ -104,7 +115,9 @@ export function CloseCaseDialog({ summary, open, onOpenChange, onClosed }: Close
           <RadioGroup<CloseReason>
             label="Motivo"
             required
-            options={CLOSE_REASONS}
+            variant="cards"
+            columns={2}
+            options={REASON_CARDS}
             value={form.reason}
             error={errors.reason}
             onValueChange={(reason) => update({ reason })}

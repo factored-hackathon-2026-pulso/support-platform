@@ -243,7 +243,10 @@ stateDiagram-v2
 | `created_at` | fecha | |
 | `client_message_id` | texto, nulo | evita duplicados si se reenvía (único por autor) |
 
-**`assignments`** · historial de a quién se asignó cada caso.
+**`assignments`** · historial de a quién se asignó cada caso. Índices de "Inicio" (slice 6):
+`(staff_id, assigned_at)` y `(previous_staff_id, assigned_at)`, para leer qué casos le llegaron
+o le quitaron a una analista desde su sesión anterior. "Mientras no estabas" no tiene tabla
+propia: se lee de `event_log`, `assignments` y `cases`.
 
 | Columna | Tipo | Notas |
 |---|---|---|

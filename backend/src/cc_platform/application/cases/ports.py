@@ -7,11 +7,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from cc_platform.application.events import StoredEvent
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.turn import Turn
-from cc_platform.domain.cases.values import CaseStatus, TurnAudience
+from cc_platform.domain.cases.values import CaseStatus, CloseReason, TurnAudience
 from cc_platform.domain.people.staff import Language
 
 
@@ -41,6 +42,10 @@ class OpenCaseRef:
 
 class CaseRepository(Protocol):
     async def get(self, case_id: str) -> Case | None: ...
+
+    async def get_many(self, case_ids: Collection[str]) -> dict[str, Case]:
+        """The known cases among ``case_ids``, by id, in one query (unknown ids left out)."""
+        ...
 
     async def add(self, case: Case) -> None: ...
 
@@ -142,3 +147,45 @@ class CustomerCaseSlotRepository(Protocol):
         ...
 
     async def save(self, slot: CustomerCaseSlot) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerCaseFact:
+    """One case of a customer, as "Volvió a escribir" counts them (slice 6 §2.3)."""
+
+    case_id: str
+    opened_at: datetime
+    close_reason: CloseReason | None
+
+
+class AnalystHomeReader(Protocol):
+    """Read port of the analyst home ("Inicio", slice 6): CQRS-lite queries over the
+    append-only facts (``staff_sessions``, ``assignments``, ``cases``, ``event_log``), each
+    one indexed query whatever the analyst's history. Nothing here writes."""
+
+    async def previous_session_end(
+        self, staff_id: str, *, current_session_id: str, now: datetime
+    ) -> datetime | None:
+        """When ``staff_id``'s previous session ended: the latest ``ended_at`` (logout,
+        revocation) or ``expires_at`` (expired, ``<= now``) among her sessions other than
+        ``current_session_id``. ``None`` when there is none (first sign-in)."""
+        ...
+
+    async def touched_case_ids(self, staff_id: str, since: datetime) -> set[str]:
+        """Cases whose activity after ``since`` may concern her: the ones assigned to her
+        now that are open or closed after ``since``, plus every case assigned to her or
+        taken away from her (``previous_staff_id``) after ``since``."""
+        ...
+
+    async def case_events(
+        self, case_ids: Collection[str], *, since: datetime, event_types: Collection[str]
+    ) -> list[StoredEvent]:
+        """Event-log rows of those cases and types with ``event_time > since``, in
+        ingestion order (``sequence``)."""
+        ...
+
+    async def customer_cases(
+        self, customer_ids: Collection[str]
+    ) -> dict[str, list[CustomerCaseFact]]:
+        """Every case of each customer (any order), in one query."""
+        ...

@@ -110,7 +110,7 @@ describe('team and activity filters', () => {
 
   it('resolves the selected team by id, unknown ids (old slugs too) meaning all', () => {
     const { teams } = makeTeamOverview()
-    expect(selectedTeam(teams, ANDES.id)?.name).toBe('Disputas · Equipo Andes')
+    expect(selectedTeam(teams, ANDES.id)?.name).toBe('Equipo Andes')
     expect(selectedTeam(teams, 'disputas-equipo-andes')).toBeNull()
     expect(selectedTeam(teams, null)).toBeNull()
   })
@@ -124,12 +124,12 @@ describe('team and activity filters', () => {
     const cobranzas = 'TEAM-00000000000000000000000009'
     const mixed = [...teams, makeTeamSummary({ id: cobranzas, name: 'Cobranzas' })]
     expect(teamPillLabels(mixed)[cobranzas]).toBe('Cobranzas')
-    expect(teamPillLabels(mixed)[ANDES.id]).toBe('Disputas · Equipo Andes')
+    expect(teamPillLabels(mixed)[ANDES.id]).toBe('Equipo Andes')
   })
 
   it('writes the subtitle', () => {
     expect(teamSubtitle(null, 6)).toBe('Todos los equipos · 6 analistas')
-    expect(teamSubtitle(makeTeamSummary(), 1)).toBe('Disputas · Equipo Andes · 1 analista')
+    expect(teamSubtitle(makeTeamSummary(), 1)).toBe('Equipo Andes · 1 analista')
   })
 })
 
@@ -164,7 +164,7 @@ describe('analyst figures at a pinned now', () => {
 
   it('describes an analyst and her case rows', () => {
     expect(languagesLabel(['es', 'pt'])).toBe('español, portugués')
-    expect(analystSheetDescription(julian)).toBe('En pausa · español · Disputas · Equipo Andes')
+    expect(analystSheetDescription(julian)).toBe('En pausa · español · Equipo Andes')
     expect(caseRowLine(julianCamila)).toBe('Prioridad media · App · español')
   })
 })

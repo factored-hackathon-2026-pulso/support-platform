@@ -3,7 +3,7 @@
  * docs/platform/api/slice-2-case-lifecycle.md §4.1–§4.5, §9.1). No React, no
  * I/O: unit-tested in model.test.ts.
  */
-import type { Tone } from '@/components/ui'
+import type { FactItem, Tone } from '@/components/ui'
 import { formatRelativeTime } from '@/lib/format'
 import type {
   CaseChannel,
@@ -137,21 +137,97 @@ export function countryName(country: CountryCode): string {
   return COUNTRY_NAMES[country] ?? country
 }
 
-/** Card bottom line of an open case: "Prioridad media · Web". */
-export function caseCardLine(summary: Pick<CaseSummary, 'priority' | 'channel'>): string {
-  return [priorityLabel(summary.priority), channelLabel(summary.channel)].join(' · ')
+/** The channel as a fact: [smartphone] App · [globe] Web. */
+export function channelFact(channel: CaseChannel): FactItem {
+  return {
+    key: 'channel',
+    icon: channel === 'app_chat' ? 'smartphone' : 'globe',
+    text: channelLabel(channel),
+    label: 'Canal',
+    iconOnly: true,
+  }
+}
+
+/** Priority is shown only when it is high (slice 6 UI rule): [flag] Prioridad alta. */
+export function priorityFact(priority: CasePriority): FactItem | null {
+  return priority === 'high'
+    ? { key: 'priority', icon: 'flag', text: priorityLabel(priority), tone: 'warn', iconOnly: true }
+    : null
+}
+
+/**
+ * The facts of an open card's bottom line (slice 6 UI rule: one fact each, no
+ * dot-joined line): channel, priority when high, "Volvió a escribir".
+ * The status is a pill and the time its own element (CaseCard).
+ */
+export function caseCardFacts(
+  summary: Pick<CaseSummary, 'channel' | 'priority' | 'previousCaseId'>,
+): FactItem[] {
+  const facts: (FactItem | null)[] = [
+    channelFact(summary.channel),
+    priorityFact(summary.priority),
+    summary.previousCaseId
+      ? {
+          key: 'returned',
+          icon: 'history',
+          text: RETURNED_TAG.label,
+          tone: 'accent',
+          iconOnly: true,
+        }
+      : null,
+  ]
+  return facts.filter((fact): fact is FactItem => fact !== null)
 }
 
 // ─── Close reasons (contract §4.4, team-generated list) ─────────────────────
 
-/** "Motivo" options of the close dialog, in contract order. */
-export const CLOSE_REASONS: ReadonlyArray<{ value: CloseReason; label: string }> = [
-  { value: 'resolved', label: 'Resuelto' },
-  { value: 'customer_unresponsive', label: 'El cliente no respondió' },
-  { value: 'duplicate', label: 'Duplicado' },
-  { value: 'out_of_scope', label: 'Fuera de alcance' },
-  { value: 'other', label: 'Otro' },
+export interface CloseReasonOption {
+  value: CloseReason
+  label: string
+  /** One line under the label in the close dialog (slice 6 §5.4). */
+  meaning: string
+  /**
+   * The reason's color, the same everywhere it shows (dialog card, closed footer,
+   * Cerrados cards, "Casos anteriores"); its icon is `CLOSE_REASON_ICON`.
+   */
+  tone: Tone
+}
+
+/** "Motivo" options of the close dialog, in contract order: the one reason → copy/tone map. */
+export const CLOSE_REASONS: ReadonlyArray<CloseReasonOption> = [
+  { value: 'resolved', label: 'Resuelto', meaning: 'Se atendió lo que pidió.', tone: 'success' },
+  {
+    value: 'customer_unresponsive',
+    label: 'El cliente no respondió',
+    meaning: 'Dejó de contestar y no se pudo seguir.',
+    tone: 'closed',
+  },
+  {
+    value: 'duplicate',
+    label: 'Duplicado',
+    meaning: 'Ya hay otro caso por lo mismo.',
+    tone: 'accent',
+  },
+  {
+    value: 'out_of_scope',
+    label: 'Fuera de alcance',
+    meaning: 'Lo que pide no lo atiende este equipo.',
+    tone: 'warn',
+  },
+  { value: 'other', label: 'Otro', meaning: 'Cuéntalo en la nota interna.', tone: 'neutral' },
 ]
+
+/** The option of a reason (unknown → "Otro"'s look with the raw value as label). */
+export function closeReasonOption(reason: CloseReason): CloseReasonOption {
+  return (
+    CLOSE_REASONS.find((option) => option.value === reason) ?? {
+      value: reason,
+      label: reason,
+      meaning: '',
+      tone: 'neutral',
+    }
+  )
+}
 
 /** "Resuelto", "El cliente no respondió"…; `null` → "Sin motivo". */
 export function closeReasonLabel(reason: CloseReason | null | undefined): string {
@@ -196,6 +272,131 @@ export function formatSla(
   return { text: `SLA ${Math.floor(remaining / DAY)} días`, atRisk }
 }
 
+/** How close the first-response SLA is: past due, at risk (≤ 5 min), or running. */
+export type SlaLevel = 'overdue' | 'at_risk' | 'normal'
+
+/** "12 min", "5 h", "2 días": the time left, without the word "SLA". */
+function remainingText(remainingMs: number): string {
+  if (remainingMs < HOUR) return `${Math.ceil(remainingMs / MINUTE)} min`
+  if (remainingMs < 2 * DAY) return `${Math.floor(remainingMs / HOUR)} h`
+  return `${Math.floor(remainingMs / DAY)} días`
+}
+
+/**
+ * The one SLA level → icon/tone map (slice 6): overdue = filled flame, danger,
+ * "Vencido"; at risk = flame, warn, "1 min"; running = clock, muted, "12 min".
+ * The value stays visible; the word "SLA" lives in the accessible text and the
+ * tooltip. Used by the Casos cards, Inicio ("Lo primero", "Mientras no estabas")
+ * and the customer file. `null` once the first reply was sent or the case closed.
+ */
+export function slaFact(
+  summary: Pick<CaseSummary, 'status' | 'slaDueAt' | 'firstResponseAt'>,
+  now: DateInput,
+): (FactItem & { level: SlaLevel }) | null {
+  if (summary.firstResponseAt || summary.status === 'closed') return null
+  const remaining = toMs(summary.slaDueAt) - toMs(now)
+  const label = 'SLA de primera respuesta'
+  if (remaining <= 0) {
+    return {
+      key: 'sla',
+      level: 'overdue',
+      icon: 'flame-filled',
+      tone: 'danger',
+      text: 'Vencido',
+      label,
+      tooltip: 'Primera respuesta vencida',
+    }
+  }
+  const left = remainingText(remaining)
+  return remaining <= SLA_AT_RISK_MS
+    ? {
+        key: 'sla',
+        level: 'at_risk',
+        icon: 'flame',
+        tone: 'warn',
+        text: left,
+        label,
+        tooltip: `Vence en ${left}`,
+      }
+    : {
+        key: 'sla',
+        level: 'normal',
+        icon: 'clock',
+        tone: 'muted',
+        text: left,
+        label,
+        tooltip: `Primera respuesta: vence en ${left}`,
+      }
+}
+
+// ─── Urgency (Inicio "Lo primero" and the Casos list, slice 6 §4.2) ─────────
+
+/**
+ * Urgency group of a case at `now` (lower = sooner): 0 first-response SLA overdue
+ * or at risk (≤ 5 min), 1 SLA still running, 2 the customer waits without an SLA
+ * (Nuevo / Por responder after the first reply), 3 Esperando al cliente, 4 closed.
+ */
+export function urgencyGroup(
+  summary: Pick<CaseSummary, 'status' | 'inboxStatus' | 'slaDueAt' | 'firstResponseAt'>,
+  now: DateInput,
+): number {
+  if (summary.status === 'closed') return 4
+  if (summary.inboxStatus === 'waiting') return 3
+  if (summary.firstResponseAt) return 2
+  return toMs(summary.slaDueAt) - toMs(now) <= SLA_AT_RISK_MS ? 0 : 1
+}
+
+type UrgencyFields = Pick<
+  CaseSummary,
+  'id' | 'status' | 'inboxStatus' | 'slaDueAt' | 'firstResponseAt' | 'lastInteractionAt'
+>
+
+/**
+ * The one urgency order of open cases (Inicio's "Lo primero" and the Casos list):
+ * SLA overdue or at risk first, then the nearest `slaDueAt`, then whoever has
+ * waited longest without an SLA, Esperando al cliente last; ties by id.
+ */
+export function compareByUrgency(a: UrgencyFields, b: UrgencyFields, now: DateInput): number {
+  const group = urgencyGroup(a, now) - urgencyGroup(b, now)
+  if (group !== 0) return group
+  const bySla = urgencyGroup(a, now) <= 1
+  const key = (item: UrgencyFields) => toMs(bySla ? item.slaDueAt : item.lastInteractionAt)
+  return key(a) - key(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+}
+
+/** A copy of `items` in urgency order at `now` (the input is not changed). */
+export function sortByUrgency<T extends UrgencyFields>(items: readonly T[], now: DateInput): T[] {
+  return items.slice().sort((a, b) => compareByUrgency(a, b, now))
+}
+
+// ─── Availability control (slice 6 §4.3: the control is the pause indicator) ─
+
+export interface AvailabilityControlCopy {
+  label: string
+  /** Second line while paused. */
+  detail: string | null
+  /** Accessible name: the state, then the action a click performs. */
+  accessibleName: string
+}
+
+export function availabilityControlCopy(status: 'available' | 'paused'): AvailabilityControlCopy {
+  return status === 'paused'
+    ? {
+        label: 'En pausa',
+        detail: 'No te llegan casos nuevos',
+        accessibleName: 'En pausa. Volver a disponible',
+      }
+    : { label: 'Disponible', detail: null, accessibleName: 'Disponible. Pausar casos nuevos' }
+}
+
+// ─── Filter chip (the Casos list filter now lives on Inicio, slice 6 §4.3) ───
+
+/** Chip label of the filter in the URL, e.g. "Cerrados", "Por responder"; `null` for Todos. */
+export function filterChipLabel(status: InboxStatus | null): string | null {
+  if (!status) return null
+  return INBOX_FILTERS.find((filter) => filter.status === status)?.label ?? null
+}
+
 /** Bottom-right of an open card: "hace 2 min". */
 export function formatLastInteraction(
   summary: Pick<CaseSummary, 'lastInteractionAt'>,
@@ -204,9 +405,12 @@ export function formatLastInteraction(
   return formatRelativeTime(summary.lastInteractionAt, now)
 }
 
-/** Top right of a closed card: "Cerrado hace 3 h" (`closedAt` missing → "Cerrado"). */
-export function formatClosedAgo(summary: Pick<CaseSummary, 'closedAt'>, now: DateInput): string {
-  return summary.closedAt ? `Cerrado ${formatRelativeTime(summary.closedAt, now)}` : 'Cerrado'
+/** Top right of a closed card: "hace 3 h", next to a clock (`closedAt` missing → null). */
+export function formatClosedAgo(
+  summary: Pick<CaseSummary, 'closedAt'>,
+  now: DateInput,
+): string | null {
+  return summary.closedAt ? formatRelativeTime(summary.closedAt, now) : null
 }
 
 /** Small tag on a card that continues a closed case (contract §4.6). */
@@ -215,21 +419,35 @@ export const RETURNED_TAG = {
   title: 'Escribió de nuevo después de que se cerró su caso anterior',
 } as const
 
-/** "Nada pendiente." / "No cerraste casos en los últimos 7 días." (contract §9.1). */
+/** Empty list copy per filter (contract §9.1; slice 6: a filter reached from Inicio). */
 export function emptyListCopy(filter: InboxStatus | null, searching: boolean): string {
   if (searching) return 'Ningún caso coincide con tu búsqueda.'
-  return filter === 'closed' ? 'No cerraste casos en los últimos 7 días.' : 'Nada pendiente.'
+  switch (filter) {
+    case 'closed':
+      return 'No cerraste casos en los últimos 7 días.'
+    case 'to_reply':
+      return 'Ningún caso espera tu respuesta.'
+    case 'new':
+      return 'No tienes casos nuevos.'
+    case 'waiting':
+      return 'Ningún caso espera al cliente.'
+    default:
+      return 'Nada pendiente.'
+  }
 }
 
 export interface ToastCopy {
   title: string
   description: string
+  /** A small pill on the toast ("Supervisión"), never joined to the description. */
+  tag?: string
 }
 
 /**
  * Toast on `case.assigned` (slice 2 §9.1). A case a supervisor gave her
  * (`fromSupervisor`: the envelope actor is a supervisor, slice 3 §8.3) says so:
- * "Te asignaron un caso" / "{cliente} · desde supervisión".
+ * "Te asignaron un caso", the customer, and the "Supervisión" tag (slice 6: no
+ * dot-joined description).
  */
 export function assignedToastCopy(
   summary: Pick<CaseSummary, 'previousCaseId' | 'customer'>,
@@ -237,7 +455,7 @@ export function assignedToastCopy(
 ): ToastCopy {
   const name = summary.customer.displayName
   if (fromSupervisor) {
-    return { title: 'Te asignaron un caso', description: `${name} · desde supervisión` }
+    return { title: 'Te asignaron un caso', description: name, tag: 'Supervisión' }
   }
   if (summary.previousCaseId) {
     const first = name.trim().split(/\s+/)[0] ?? name

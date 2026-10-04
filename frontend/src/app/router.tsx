@@ -72,6 +72,8 @@ export const routes: RouteObject[] = [
         children: [
           roleSection('analyst', '/analista', [
             lazyRoute(undefined, () => import('@/routes/analyst/workspace')),
+            lazyRoute('inicio', () => import('@/routes/analyst/home')),
+            lazyRoute('*', () => import('@/routes/not-found')),
           ]),
           roleSection('supervisor', '/supervision', [
             indexRedirect('equipo'),

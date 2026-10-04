@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cc_platform.application.cases.analyst_home import GetAnalystHome
 from cc_platform.application.cases.commands import CloseCase, MarkCaseRead, PostAnalystTurn
 from cc_platform.application.cases.customer_chat import (
     GetCustomerConversation,
@@ -39,3 +40,4 @@ class CasesUseCases:
     team_overview: GetTeamOverview
     queue_overview: GetQueueOverview
     set_assignee: SetCaseAssignee
+    analyst_home: GetAnalystHome

@@ -59,7 +59,7 @@ export function Composer({ value: text, onChange: setText, onSend }: ComposerPro
         <span id={hintId} className={tooLong ? 'text-12 text-danger-strong' : 'text-12 text-muted'}>
           {tooLong
             ? 'El mensaje pasa de 4.000 caracteres.'
-            : 'Enter envía · Shift + Enter agrega una línea'}
+            : 'Enter envía. Shift + Enter agrega una línea.'}
         </span>
         <Button
           variant="primary"

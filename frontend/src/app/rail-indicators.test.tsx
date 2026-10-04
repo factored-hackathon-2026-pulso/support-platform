@@ -2,15 +2,17 @@ import { act, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Rail } from '@/components/layout/Rail'
 import type * as AdminApi from '@/features/admin/api'
+import type * as CasesApi from '@/features/cases/api'
+import { fetchAvailability, fetchInbox } from '@/features/cases/api'
 import { fetchAdminUsers } from '@/features/admin/api'
 import type * as SupervisionApi from '@/features/supervision/api'
 import { fetchQueueOverview } from '@/features/supervision/api'
-import { NOW } from '@/test/case-fixtures'
+import { NOW, available, makeInbox, paused } from '@/test/case-fixtures'
 import { makeUserList } from '@/test/admin-fixtures'
 import { adminStaff, supervisorStaff } from '@/test/fixtures'
 import { renderWithProviders } from '@/test/render'
 import { makeQueueOverview } from '@/test/supervision-fixtures'
-import { useRailIndicators } from './rail-indicators'
+import { useRailIndicators, useRailPresence } from './rail-indicators'
 import { ROLES, type RoleId } from './roles'
 
 vi.mock('@/features/supervision/api', async (importOriginal) => {
@@ -19,8 +21,23 @@ vi.mock('@/features/supervision/api', async (importOriginal) => {
 })
 
 function RailFor({ roleId }: { roleId: RoleId }) {
-  return <Rail role={ROLES[roleId]} indicators={useRailIndicators(roleId)} />
+  return (
+    <Rail
+      role={ROLES[roleId]}
+      indicators={useRailIndicators(roleId)}
+      presence={useRailPresence(roleId)}
+    />
+  )
 }
+
+vi.mock('@/features/cases/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof CasesApi>()
+  return {
+    ...actual,
+    fetchInbox: vi.fn<typeof actual.fetchInbox>(),
+    fetchAvailability: vi.fn<typeof actual.fetchAvailability>(),
+  }
+})
 
 vi.mock('@/features/admin/api', async (importOriginal) => {
   const actual = await importOriginal<typeof AdminApi>()
@@ -30,6 +47,8 @@ vi.mock('@/features/admin/api', async (importOriginal) => {
 beforeEach(() => {
   vi.mocked(fetchQueueOverview).mockResolvedValue(makeQueueOverview())
   vi.mocked(fetchAdminUsers).mockResolvedValue(makeUserList())
+  vi.mocked(fetchInbox).mockResolvedValue(makeInbox())
+  vi.mocked(fetchAvailability).mockResolvedValue(paused)
 })
 
 describe('useRailIndicators', () => {
@@ -72,13 +91,46 @@ describe('useRailIndicators', () => {
     ).toBeInTheDocument()
   })
 
-  it('fetches nothing and shows no badge in the analyst role (Felipe on Casos)', async () => {
-    renderWithProviders(<RailFor roleId="analyst" />, {
+  it('shows Por responder on Casos and her presence in the analyst role, never the queues', async () => {
+    const { sockets } = renderWithProviders(<RailFor roleId="analyst" />, {
       staff: supervisorStaff,
       route: '/analista',
     })
-    expect(await screen.findByRole('link', { name: 'Casos' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Casos, 2 pendientes' })).toBeInTheDocument()
+    expect(await screen.findByText('Estado: En pausa')).toBeInTheDocument()
     expect(fetchQueueOverview).not.toHaveBeenCalled()
+    expect(fetchInbox).toHaveBeenCalledWith({ status: null, q: '' }, expect.anything())
+    // Her inbox topic stays subscribed on every analyst screen.
+    act(() => sockets.last()?.open())
+    expect(sockets.last()?.messages()).toContainEqual({
+      action: 'subscribe',
+      topic: `inbox:${supervisorStaff.id}`,
+    })
+    expect(sockets.last()?.messages()).not.toContainEqual({
+      action: 'subscribe',
+      topic: 'supervision:queues',
+    })
+    // availability.updated moves the dot.
+    act(() =>
+      sockets.last()?.receive({
+        type: 'availability.updated',
+        id: 'EVT-AV-1',
+        occurredAt: NOW.toISOString(),
+        data: { entity: 'staff', entityId: 'STF-1', caseId: null, actor: null, payload: available },
+      }),
+    )
+    expect(await screen.findByText('Estado: Disponible')).toBeInTheDocument()
+  })
+
+  it('asks nothing of the cases outside the analyst role, and shows no dot', async () => {
+    renderWithProviders(<RailFor roleId="supervisor" />, {
+      staff: supervisorStaff,
+      route: '/supervision/equipo',
+    })
+    await screen.findByRole('link', { name: 'Equipo y colas, 3 pendientes' })
+    expect(fetchInbox).not.toHaveBeenCalled()
+    expect(fetchAvailability).not.toHaveBeenCalled()
+    expect(screen.queryByText(/^Estado:/)).not.toBeInTheDocument()
   })
 
   it('shows no badge with empty queues', async () => {

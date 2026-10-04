@@ -87,9 +87,15 @@ describe('ConversationPane · chat', () => {
       screen.getByText(/· Colombia · Barranquilla · chat web · prioridad media/),
     ).toBeInTheDocument()
     expect(screen.getByText('Datos de ejemplo')).toBeInTheDocument()
-    expect(screen.getByText('Cómo llegó a ti').parentElement).toHaveTextContent(
-      'Cómo llegó a ti · : Te llegó porque estás disponible y hablas español · 5 mar, 10:46',
-    )
+    // Short facts, never a sentence (slice 6 UI rule).
+    const arrival = screen.getByText('Cómo llegó a ti').parentElement!
+    expect(
+      within(arrival)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Estabas disponible', 'Hablas español'])
+    expect(arrival).toHaveTextContent('Asignado: 5 mar, 10:46')
+    expect(arrival.textContent).not.toContain('·')
 
     const messages = await screen.findByRole('list', { name: 'Mensajes' })
     expect(within(messages).getByText(/hay un cargo en mi tarjeta/)).toBeInTheDocument()
@@ -396,11 +402,15 @@ describe('ConversationPane · states', () => {
   it('shows a closed case read-only, with the closure, the note and no composer', async () => {
     setup(makeClosedDetail())
     const footer = await screen.findByRole('note', { name: 'Solo lectura' })
-    expect(footer).toHaveTextContent('Caso cerrado el 5 mar, 10:58 · Resuelto')
+    expect(footer).toHaveTextContent('Resuelto')
+    expect(footer).toHaveTextContent('Cerrado: 5 mar, 10:58')
+    expect(footer.textContent).not.toContain('·')
+    // The reason's icon and tone (slice 6), not the lock.
+    expect(footer.querySelector('[data-reason="resolved"]')).toHaveClass('bg-success-soft')
     expect(footer).toHaveTextContent('Nota: Se explicó el plazo del reverso (5 días hábiles).')
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cerrar caso' })).not.toBeInTheDocument()
-    expect(screen.getByText('Cerrado')).toBeInTheDocument()
+    expect(screen.getByText('Cerrado', { selector: 'header span' })).toBeInTheDocument()
     // A closed case is never marked read.
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(api.markCaseRead).not.toHaveBeenCalled()
@@ -410,9 +420,11 @@ describe('ConversationPane · states', () => {
     setup(makeJulianDetail(), page({ items: julianTurns(), lastSequence: 3 }))
     expect(await screen.findByText('Quién lo atendió')).toBeInTheDocument()
     expect(screen.queryByText('Cómo llegó a ti')).not.toBeInTheDocument()
-    expect(screen.getByText(/Lo atendió Julián Ortega/)).toBeInTheDocument()
+    expect(screen.getByText('Quién lo atendió').parentElement).toHaveTextContent('Julián Ortega')
     const footer = await screen.findByRole('note', { name: 'Solo lectura' })
-    expect(footer).toHaveTextContent('Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto')
+    expect(footer).toHaveTextContent('Resuelto')
+    expect(footer).toHaveTextContent('Cerrado: 13 feb, 10:15')
+    expect(footer).toHaveTextContent('Lo cerró: Julián Ortega')
     const messages = await screen.findByRole('list', { name: 'Mensajes' })
     expect(within(messages).getByText(/Soy Julián, de LATAM Bank/)).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
@@ -431,9 +443,9 @@ describe('ConversationPane · states', () => {
         assignment: { ...base.assignment!, analystId: 'STF-2', analystName: 'Julián Ortega' },
       }),
     )
-    expect(
-      await screen.findByText('Solo lectura: este caso es de Julián Ortega.'),
-    ).toBeInTheDocument()
+    const footer = await screen.findByRole('note', { name: 'Solo lectura' })
+    expect(within(footer).getByText('Solo lectura')).toBeInTheDocument()
+    expect(within(footer).getByText('Lo atiende Julián Ortega')).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cerrar caso' })).not.toBeInTheDocument()
   })
@@ -470,14 +482,17 @@ describe('ConversationPane · states', () => {
 
     expect(await screen.findByText('Quién lo atiende')).toBeInTheDocument()
     expect(screen.queryByText('Cómo llegó a ti')).not.toBeInTheDocument()
+    const holder = screen.getByText('Quién lo atiende').parentElement!
     expect(
-      screen.getByText('Lucía Herrera pasó este caso a Julián Ortega · 5 mar, 10:46'),
-    ).toBeInTheDocument()
+      within(holder)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Julián Ortega', 'Asignado por Lucía Herrera'])
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
     const draft = screen.getByRole('note', { name: 'Borrador sin enviar' })
     expect(draft).toHaveTextContent('Tu borrador no se envió')
     expect(draft).toHaveTextContent('Ya casi lo tengo, un momento')
-    expect(screen.getByText('Solo lectura: este caso es de Julián Ortega.')).toBeInTheDocument()
+    expect(screen.getByText('Lo atiende Julián Ortega')).toBeInTheDocument()
 
     await user.click(within(draft).getByRole('button', { name: 'Descartar borrador' }))
     expect(screen.queryByText('Tu borrador no se envió')).not.toBeInTheDocument()
@@ -504,15 +519,36 @@ describe('ConversationPane · close', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Cerrar caso' }))
     const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
-    expect(
-      within(dialog).getByText('Marcela Quintana Pardo ·', { exact: false }),
-    ).toHaveTextContent('Marcela Quintana Pardo · CASE-…0101')
+    // The customer and the case number as two elements (no "·").
+    expect(dialog).toHaveAccessibleDescription(/Marcela Quintana Pardo\s*CASE-…0101/)
+    expect(within(dialog).getByText('CASE-…0101')).toHaveClass('font-mono')
     const reasons = within(dialog).getByRole('radiogroup', { name: /Motivo/ })
-    expect(
-      within(reasons)
-        .getAllByRole('radio')
-        .map((radio) => radio.parentElement?.textContent),
-    ).toEqual(['Resuelto', 'El cliente no respondió', 'Duplicado', 'Fuera de alcance', 'Otro'])
+    const radios = within(reasons).getAllByRole('radio')
+    expect(radios.map((radio) => radio.getAttribute('value'))).toEqual([
+      'resolved',
+      'customer_unresponsive',
+      'duplicate',
+      'out_of_scope',
+      'other',
+    ])
+    // Cards (slice 6): bold label as the name, the meaning as the description,
+    // the reason's icon tile; the radio itself is visually hidden.
+    const copy = [
+      ['Resuelto', 'Se atendió lo que pidió.'],
+      ['El cliente no respondió', 'Dejó de contestar y no se pudo seguir.'],
+      ['Duplicado', 'Ya hay otro caso por lo mismo.'],
+      ['Fuera de alcance', 'Lo que pide no lo atiende este equipo.'],
+      ['Otro', 'Cuéntalo en la nota interna.'],
+    ] as const
+    copy.forEach(([name, meaning], index) => {
+      expect(radios[index]).toHaveAccessibleName(name)
+      expect(radios[index]).toHaveAccessibleDescription(meaning)
+    })
+    expect(radios[0]).toHaveClass('sr-only')
+    expect(radios[4]!.closest('label')).toHaveClass('col-span-2')
+    expect(radios[0]!.closest('label')?.querySelector('[data-reason="resolved"]')).toHaveClass(
+      'bg-success-soft',
+    )
 
     await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
     expect(await within(dialog).findByText('Elige un motivo.')).toBeInTheDocument()
@@ -522,6 +558,12 @@ describe('ConversationPane · close', () => {
 
     await user.click(within(dialog).getByRole('radio', { name: 'Duplicado' }))
     expect(within(dialog).queryByText('Elige un motivo.')).not.toBeInTheDocument()
+    // The selected card: the reason's soft background and a 2px border in its ink.
+    const duplicate = within(dialog).getByRole('radio', { name: 'Duplicado' }).closest('label')
+    expect(duplicate).toHaveClass('border-2', 'border-accent-strong', 'bg-accent-soft')
+    expect(within(dialog).getByRole('radio', { name: 'Resuelto' }).closest('label')).toHaveClass(
+      'border-border',
+    )
     const note = within(dialog).getByRole('textbox', { name: 'Nota interna (opcional)' })
     expect(note).toHaveAccessibleDescription('Solo la ve el equipo.')
     await user.type(note, '  Mismo caso que el 104.  ')
@@ -535,7 +577,7 @@ describe('ConversationPane · close', () => {
     })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByRole('note', { name: 'Solo lectura' })).toBeInTheDocument()
-    expect(screen.getByText('Cerrado')).toBeInTheDocument()
+    expect(screen.getByText('Cerrado', { selector: 'header span' })).toBeInTheDocument()
   })
 
   it('previews the notice the customer will see, in the case language', async () => {

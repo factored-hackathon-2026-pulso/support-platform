@@ -106,20 +106,24 @@ test.describe('Chat en vivo · analista ↔ cliente', () => {
     await expect(chat.status({ agent: firstName(analyst.name) })).toBeVisible()
     await workspace.showFilter('Todos')
     await expect(workspace.caseCard(customer.name)).toContainText('Volvió a escribir')
-    const conversation = await workspace.openCase(customer.name)
+    await workspace.openCase(customer.name)
     await expect(workspace.messages(customer.name).filter({ hasText: again })).toHaveCount(1)
     await expect(workspace.messages(customer.name).filter({ hasText: question })).toHaveCount(0)
 
-    // "Casos anteriores (n)": the closed case and its read-only transcript.
+    // "Ficha del cliente" › "Casos anteriores (n)": the closed case and its
+    // read-only transcript, in the right panel; the conversation stays usable.
     const previous = closedBefore + 1
-    await conversation.getByRole('button', { name: `Casos anteriores (${previous})` }).click()
-    const sheet = page.getByRole('dialog', {
-      name: `Casos anteriores de ${firstName(customer.name)}`,
-    })
+    const panel = await workspace.openCustomerFile(customer.name)
+    await expect(panel.getByRole('region', { name: 'Cliente' })).toContainText(customer.name)
+    await expect(panel.getByRole('region', { name: 'Este caso' })).toContainText('Chat en la app')
+    await expect(panel.getByRole('region', { name: 'Cómo llegó a ti' })).toContainText(
+      'Estabas disponible',
+    )
+    const sheet = panel.getByRole('region', { name: `Casos anteriores (${previous})` })
     await expect(sheet).toBeVisible()
     const rows = sheet.getByRole('list', { name: 'Casos anteriores' }).getByRole('listitem')
     await expect(rows).toHaveCount(previous)
-    const closedRow = rows.filter({ hasText: `Resuelto · ${analyst.name}` })
+    const closedRow = rows.filter({ hasText: 'Resuelto' }).filter({ hasText: analyst.name })
     await expect(closedRow).toHaveCount(1)
     await closedRow.getByRole('button').click()
     const transcript = sheet.getByRole('list', { name: 'Mensajes del caso anterior' })
@@ -129,6 +133,9 @@ test.describe('Chat en vivo · analista ↔ cliente', () => {
     await expect(sheet.getByRole('textbox')).toHaveCount(0)
     await sheet.getByRole('button', { name: 'Todos los casos anteriores' }).click()
     await expect(rows).toHaveCount(previous)
+    await expect(workspace.composer(customer.name)).toBeEnabled()
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
 
     // The customer's side keeps the closed conversation too (after a reload, on demand).
     await chat.page.reload()

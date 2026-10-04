@@ -1,4 +1,5 @@
-import { arrivalNote, supervisionArrivalLine, type ConversationMode } from '../model'
+import { Fact } from '@/components/ui'
+import { arrivalFacts, supervisionArrivalLine, type ConversationMode } from '../model'
 import type { CaseDetail } from '../types'
 
 export interface ArrivalNoteProps {
@@ -9,30 +10,42 @@ export interface ArrivalNoteProps {
 }
 
 /**
- * The arrival note (contract §9.3): one muted line under the header that
- * explains the people-based assignment only (available + language, the queue
- * wait, or a supervisor's choice). "Cómo llegó a ti" for the assignee; "Quién
- * lo atiende" / "Quién lo atendió" when someone else holds the case (history
- * access, or supervision moved it away from the viewer). In the supervisor view
- * (slice 3 §8.3) it is "Cómo llegó": who holds the case and why, or the queue it
- * waits in. Nothing while there is nothing to explain.
+ * The arrival note under the case header: the people-based assignment only.
+ * In the Workspace (slice 6 UI rule) it is one row of short facts — the heading
+ * ("Cómo llegó a ti", or "Quién lo atiende" for someone else's case), each fact
+ * an icon + 1–3 words ([check] Estabas disponible, [languages] Hablas portugués
+ * "Regla 3"…) and the time with a clock; never a sentence. The supervisor view
+ * (slice 3 §8.3) keeps its "Cómo llegó" line. Nothing while there is nothing to
+ * explain.
  */
 export function ArrivalNote({ detail, meId, mode = 'workspace' }: ArrivalNoteProps) {
-  const note =
-    mode === 'supervision'
-      ? withHeading('Cómo llegó', supervisionArrivalLine(detail))
-      : arrivalNote(detail, meId)
-  if (!note) return null
+  if (mode === 'supervision') {
+    const line = supervisionArrivalLine(detail)
+    if (!line) return null
+    return (
+      <p className="m-0 shrink-0 border-b border-border bg-subtle px-6 py-2 text-12 text-muted">
+        <span className="font-semibold text-ink-2">Cómo llegó</span>
+        <span aria-hidden="true"> · </span>
+        <span className="sr-only">: </span>
+        {line}
+      </p>
+    )
+  }
+  const arrival = arrivalFacts(detail, meId)
+  if (!arrival) return null
   return (
-    <p className="m-0 shrink-0 border-b border-border bg-subtle px-6 py-2 text-12 text-muted">
-      <span className="font-semibold text-ink-2">{note.heading}</span>
-      <span aria-hidden="true"> · </span>
-      <span className="sr-only">: </span>
-      {note.line}
-    </p>
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-subtle px-6 py-2">
+      <span className="text-12 font-semibold text-ink-2">{arrival.heading}</span>
+      <ul className="m-0 flex list-none flex-wrap items-center gap-x-3 gap-y-1 p-0">
+        {arrival.facts.map(({ key, ...fact }) => (
+          <li key={key} className="flex">
+            <Fact {...fact} />
+          </li>
+        ))}
+      </ul>
+      {arrival.time ? (
+        <Fact icon="clock" text={arrival.time} label="Asignado" tone="muted" className="ml-auto" />
+      ) : null}
+    </div>
   )
-}
-
-function withHeading(heading: string, line: string | null) {
-  return line ? { heading, line } : null
 }

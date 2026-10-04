@@ -6,7 +6,8 @@ CQRS-lite with an append-only event log.
 
 Read first: `docs/platform/ENGINEERING_BRIEF.md` (scope, rules, conventions),
 `docs/platform/adr/0001-architecture.md`, and the slice contracts in `docs/platform/api/`
-(slice 2 case life cycle, slice 3 supervision, slice 4 administration; a later slice wins).
+(slice 2 case life cycle, slice 3 supervision, slice 4 administration, slice 6 analyst home; a
+later slice wins).
 Operating the app (accounts, reset, troubleshooting) is in `docs/platform/RUNBOOK.md`.
 
 ## Run
@@ -55,6 +56,7 @@ re-read on every request.
 | System | `GET /health`, `GET /meta` | anyone |
 | Auth | `POST /auth/login`, `POST /auth/mfa`, `POST /auth/logout`, `GET /auth/me` | staff |
 | Availability | `GET\|PUT /me/availability` (Disponible / En pausa) | analyst |
+| Home (slice 6) | `GET /me/home`: `since` (end of her previous session, else now − 8 h), activity rows from the event log (structured, no text), her team's availability and queues (counts) | analyst |
 | Cases | `GET /cases/inbox?status=&q=` (`closed` = last 7 days), `GET /cases/{id}`, `GET /cases/{id}/history`, `GET\|POST /cases/{id}/turns`, `POST /cases/{id}/read`, `POST /cases/{id}/close` (`{reason, note}`) | analyst; supervisors read any case (audited `case.viewed`) |
 | Customer simulator | `GET /customer/demo-customers`, `POST /customer/sessions`, `GET /customer/conversation`, `POST /customer/conversation/turns`, `GET /customer/conversations`, `GET /customer/conversations/{id}` | customer token |
 | Supervision | `GET /supervision/team`, `GET /supervision/queues`, `PUT /supervision/cases/{id}/assignee` (`{analystId, expectedAnalystId, confirmPaused}`) | supervisor |

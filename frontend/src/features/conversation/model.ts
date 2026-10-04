@@ -6,12 +6,15 @@
  * docs/platform/api/slice-2-case-lifecycle.md §4, §9.3–§9.5 (transcript rules
  * unchanged from slice-1-cases.md §5).
  */
+import type { FactIcon, FactItem, Tone } from '@/components/ui'
 import {
   channelPhrase,
   closeReasonLabel,
   countryName,
+  inboxStatusMeta,
   isNewerCase,
   priorityLabel,
+  slaFact,
   type CloseReason,
 } from '@/features/cases/core'
 import { isApiProblem } from '@/lib/api'
@@ -24,7 +27,6 @@ import type {
   CloseCaseRequest,
   Language,
   PendingMessage,
-  ReplyBlockedReason,
   TranscriptCache,
   Turn,
   TurnPage,
@@ -344,94 +346,6 @@ export function queueInSentence(queueLabel: string | null): string {
   return `la ${queueLabel.charAt(0).toLowerCase()}${queueLabel.slice(1)}`
 }
 
-/** The arrival note under the case header: a short heading and one line. */
-export interface ArrivalNoteCopy {
-  heading: string
-  line: string
-}
-
-/**
- * The one-line arrival note of the Workspace, from the recorded `assignment` only.
- *
- * The viewer holds the case: heading "Cómo llegó a ti",
- * - `language_least_loaded`: "Te llegó porque estás disponible y hablas
- *   portugués (regla 3) · 5 mar, 10:58";
- * - `queue_drained`: "Esperó 6 min en la cola en portugués y te llegó cuando
- *   quedaste disponible · 5 mar, 10:58";
- * - `manual` (slice 3) from the queue: "Lucía Herrera te asignó este caso
- *   después de 7 min en la cola en portugués · 5 mar, 10:58"; by reassignment:
- *   "Lucía Herrera te pasó este caso; antes lo atendía Paula Medina · 5 mar, 10:58".
- *
- * Someone else holds it (history access, or supervision moved it away from the
- * viewer), so nothing "reached" the viewer:
- * - open, heading "Quién lo atiende": "Lucía Herrera pasó este caso a Daniela
- *   Ríos · 3 oct, 11:40" when it was taken from the viewer; "Lo atiende Daniela
- *   Ríos · Lucía Herrera se lo pasó el 3 oct, 11:40" ("se lo asignó" from the
- *   queue) for another manual assignment; "Lo atiende Daniela Ríos" otherwise;
- * - closed, heading "Quién lo atendió": "Lo atendió Julián Ortega".
- *
- * No assignment (queued): null.
- */
-export function arrivalNote(
-  detail: Pick<CaseDetail, 'assignment' | 'case'>,
-  meId: string,
-): ArrivalNoteCopy | null {
-  const { assignment } = detail
-  if (!assignment) return null
-  if (assignment.analystId !== meId) return othersArrivalNote(detail, assignment, meId)
-  return { heading: 'Cómo llegó a ti', line: myArrivalLine(detail, assignment) }
-}
-
-function myArrivalLine(
-  detail: Pick<CaseDetail, 'case'>,
-  assignment: NonNullable<CaseDetail['assignment']>,
-): string {
-  const when = formatDateTime(assignment.assignedAt, { withYear: false })
-  if (assignment.reason === 'manual') {
-    const by = assignment.assignedByName ?? 'Supervisión'
-    if (assignment.previousAnalystId === null) {
-      const waited =
-        assignment.waitedSeconds !== null
-          ? ` después de ${formatWait(assignment.waitedSeconds)}`
-          : ''
-      const queue = assignment.queueLabel ?? QUEUE_LABEL[detail.case.language]
-      return `${by} te asignó este caso${waited} en ${queueInSentence(queue)} · ${when}`
-    }
-    const previous = assignment.previousAnalystName ?? 'otra persona del equipo'
-    return `${by} te pasó este caso; antes lo atendía ${previous} · ${when}`
-  }
-  if (assignment.reason === 'queue_drained') {
-    const waited =
-      assignment.waitedSeconds !== null
-        ? `Esperó ${formatWait(assignment.waitedSeconds)}`
-        : 'Esperó'
-    return `${waited} en ${queueInSentence(assignment.queueLabel)} y te llegó cuando quedaste disponible · ${when}`
-  }
-  const language = LANGUAGE_NAMES[detail.case.language]
-  const rule = detail.case.language === 'pt' ? ' (regla 3)' : ''
-  return `Te llegó porque estás disponible y hablas ${language}${rule} · ${when}`
-}
-
-function othersArrivalNote(
-  detail: Pick<CaseDetail, 'case'>,
-  assignment: NonNullable<CaseDetail['assignment']>,
-  meId: string,
-): ArrivalNoteCopy {
-  const name = assignment.analystName
-  if (detail.case.status === 'closed') {
-    return { heading: 'Quién lo atendió', line: `Lo atendió ${name}` }
-  }
-  const heading = 'Quién lo atiende'
-  if (assignment.reason !== 'manual') return { heading, line: `Lo atiende ${name}` }
-  const when = formatDateTime(assignment.assignedAt, { withYear: false })
-  const by = assignment.assignedByName ?? 'Supervisión'
-  if (assignment.previousAnalystId === meId) {
-    return { heading, line: `${by} pasó este caso a ${name} · ${when}` }
-  }
-  const verb = assignment.previousAnalystId === null ? 'se lo asignó' : 'se lo pasó'
-  return { heading, line: `Lo atiende ${name} · ${by} ${verb} el ${when}` }
-}
-
 /**
  * The arrival line of the supervisor's read-only case view (slice 3 §8.3):
  * - queued: "Espera en la cola en español desde las 10:47: nadie disponible habla español";
@@ -494,33 +408,6 @@ export function closureLine(
 export function closureNote(closure: Pick<CaseClosure, 'note'>): string | null {
   const note = closure.note?.trim()
   return note ? `Nota: ${note}` : null
-}
-
-export const REPLY_BLOCKED_COPY: Record<ReplyBlockedReason, string> = {
-  not_assignee: 'Solo lectura: este caso es de otra persona del equipo.',
-  closed: 'Este caso está cerrado. Si el cliente vuelve a escribir, se abre un caso nuevo.',
-}
-
-/**
- * Lines of the read-only footer that replaces the composer, or null when the
- * viewer can reply. Closed: the closure line (+ "Nota: …"). Not the assignee:
- * "Solo lectura: este caso es de {analystName}."
- */
-export function readOnlyFooter(
-  detail: Pick<CaseDetail, 'capabilities' | 'closure' | 'assignment'>,
-  meId: string,
-): string[] | null {
-  const { capabilities, closure, assignment } = detail
-  if (capabilities.canReply) return null
-  if (closure) {
-    const note = closureNote(closure)
-    return note ? [closureLine(closure, meId), note] : [closureLine(closure, meId)]
-  }
-  const reason = capabilities.replyBlockedReason ?? 'closed'
-  if (reason === 'not_assignee' && assignment?.analystName) {
-    return [`Solo lectura: este caso es de ${assignment.analystName}.`]
-  }
-  return [REPLY_BLOCKED_COPY[reason]]
 }
 
 /**
@@ -602,20 +489,291 @@ export function describeCaseLoadFailure(error: unknown): { title: string; descri
   }
 }
 
+// ── "Ficha del cliente" (slice 6 §5: the right panel of the Workspace) ──────
+//
+// UI rule (slice 6 §4.7): one fact per row (icon + label, a short value), the
+// status as a pill, times with a clock; never a dot-joined line or a sentence.
+
+/** Id of the Workspace panel (`aria-controls` of the name button). */
+export const CUSTOMER_FILE_PANEL_ID = 'ficha-del-cliente'
+/** Id of the name button (the focus returns to it when the panel closes). */
+export const CUSTOMER_FILE_TRIGGER_ID = 'ficha-del-cliente-boton'
+
+/** The customer-name button of the slim header: "Ver ficha de Beatriz Salcedo Prieto". */
+export function customerFileTriggerLabel(customerName: string): string {
+  return `Ver ficha de ${customerName}`
+}
+
+/** "Portugués" / "Español": the language of a case or a customer, as a value. */
+export function languageName(language: Language): string {
+  const name = LANGUAGE_NAMES[language]
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+/** One row of the file: an icon and a label, then the value (text, a pill or facts). */
+export interface FileRow {
+  key: string
+  icon: FactIcon
+  label: string
+  text?: string
+  mono?: boolean
+  /** The case status as a colored pill. */
+  pill?: { label: string; tone: Tone }
+  /** Short facts as the value ("Primera respuesta"). */
+  facts?: FactItem[]
+}
+
+/** "Cliente": name, city and country, language, customer id (only what the platform has). */
+export function customerRows(detail: Pick<CaseDetail, 'customer'>): FileRow[] {
+  const { customer } = detail
+  return [
+    { key: 'name', icon: 'user', label: 'Nombre', text: customer.displayName },
+    {
+      key: 'place',
+      icon: 'map-pin',
+      label: 'Ciudad',
+      text: `${customer.city}, ${countryName(customer.country)}`,
+    },
+    { key: 'language', icon: 'languages', label: 'Idioma', text: languageName(customer.language) },
+    { key: 'id', icon: 'id', label: 'Id de cliente', text: customer.id, mono: true },
+  ]
+}
+
+const PRIORITY_VALUE: Record<CaseSummary['priority'], string> = {
+  low: 'Baja',
+  medium: 'Media',
+  high: 'Alta',
+}
+
+/**
+ * "Primera respuesta": while pending, the shared SLA level fact (flame or clock);
+ * answered, "A tiempo" or "Tarde" and its time; closed unanswered, "Sin respuesta".
+ */
+export function firstResponseFacts(
+  summary: Pick<CaseSummary, 'status' | 'slaDueAt' | 'firstResponseAt'>,
+  now: Date | string | number,
+): FactItem[] {
+  if (summary.firstResponseAt) {
+    const met = new Date(summary.firstResponseAt).getTime() <= new Date(summary.slaDueAt).getTime()
+    return [
+      met
+        ? { key: 'result', icon: 'check', text: 'A tiempo', tone: 'success' }
+        : { key: 'result', icon: 'alert', text: 'Tarde', tone: 'danger' },
+      {
+        key: 'at',
+        icon: 'clock',
+        text: formatDateTime(summary.firstResponseAt, { withYear: false }),
+        label: 'Respondió',
+        tooltip: 'Respondió',
+        tone: 'muted',
+      },
+    ]
+  }
+  const sla = slaFact(summary, now)
+  return sla ? [sla] : [{ key: 'result', icon: 'alert', text: 'Sin respuesta', tone: 'muted' }]
+}
+
+/** "Este caso": number, channel, priority, opened, status pill and the first response. */
+export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | number): FileRow[] {
+  const { case: summary } = detail
+  const status = inboxStatusMeta(summary)
+  return [
+    { key: 'id', icon: 'hash', label: 'Número', text: summary.id, mono: true },
+    {
+      key: 'channel',
+      icon: summary.channel === 'app_chat' ? 'smartphone' : 'globe',
+      label: 'Canal',
+      text: channelName(summary.channel),
+    },
+    { key: 'priority', icon: 'flag', label: 'Prioridad', text: PRIORITY_VALUE[summary.priority] },
+    {
+      key: 'opened',
+      icon: 'calendar-clock',
+      label: 'Abierto',
+      text: formatDateTime(summary.openedAt, { withYear: false }),
+    },
+    {
+      key: 'status',
+      icon: 'inbox',
+      label: 'Estado',
+      pill: { label: status.subLabel, tone: status.tone },
+    },
+    {
+      key: 'first-response',
+      icon: 'clock',
+      label: 'Primera respuesta',
+      facts: firstResponseFacts(summary, now),
+    },
+  ]
+}
+
+/** "Chat en la app" / "Chat web". */
+function channelName(channel: CaseSummary['channel']): string {
+  const phrase = channelPhrase(channel)
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1)
+}
+
+/** "Cómo llegó a ti" as structured facts: a heading, its time, one icon row per fact. */
+export interface ArrivalFacts {
+  heading: string
+  /** When it was assigned ("3 oct, 19:23"), on the heading row. */
+  time: string | null
+  facts: FactItem[]
+}
+
+/**
+ * The people-based assignment as short icon rows built from the assignment
+ * fields, never a sentence:
+ * - hers, on arrival: [check] Estabas disponible, [languages] Hablas portugués + "Regla 3";
+ * - hers, from the queue: [hourglass] Esperó 14 min, [inbox] Cola en portugués,
+ *   [check] Quedaste disponible;
+ * - hers, by a supervisor: [users] Asignado por Lucía Herrera (+ [hourglass] the
+ *   wait from the queue, or [user] Antes: Julián Ortega on a reassignment);
+ * - someone else's (history access): "Quién lo atiende" / "Quién lo atendió":
+ *   [user] the analyst (+ [users] Asignado por … when a supervisor chose).
+ * No assignment (queued): null.
+ */
+export function arrivalFacts(
+  detail: Pick<CaseDetail, 'assignment' | 'case'>,
+  meId: string,
+): ArrivalFacts | null {
+  const { assignment, case: summary } = detail
+  if (!assignment) return null
+  const time = formatDateTime(assignment.assignedAt, { withYear: false })
+  const by: FactItem | null =
+    assignment.reason === 'manual'
+      ? {
+          key: 'by',
+          icon: 'users',
+          text: `Asignado por ${assignment.assignedByName ?? 'Supervisión'}`,
+        }
+      : null
+  const waited: FactItem | null =
+    assignment.waitedSeconds !== null
+      ? { key: 'waited', icon: 'hourglass', text: `Esperó ${formatWait(assignment.waitedSeconds)}` }
+      : null
+  const keep = (facts: (FactItem | null)[]) =>
+    facts.filter((fact): fact is FactItem => fact !== null)
+
+  if (assignment.analystId !== meId) {
+    const closed = summary.status === 'closed'
+    return {
+      heading: closed ? 'Quién lo atendió' : 'Quién lo atiende',
+      time,
+      facts: keep([
+        { key: 'analyst', icon: 'user', text: assignment.analystName },
+        closed ? null : by,
+      ]),
+    }
+  }
+  const heading = 'Cómo llegó a ti'
+  if (assignment.reason === 'manual') {
+    const previous = assignment.previousAnalystId
+      ? {
+          key: 'previous',
+          icon: 'user' as const,
+          text: `Antes: ${assignment.previousAnalystName ?? 'otra persona'}`,
+        }
+      : null
+    return { heading, time, facts: keep([by, previous ?? waited]) }
+  }
+  if (assignment.reason === 'queue_drained') {
+    const queue = assignment.queueLabel ?? QUEUE_LABEL[summary.language]
+    return {
+      heading,
+      time,
+      facts: keep([
+        waited,
+        { key: 'queue', icon: 'inbox', text: queue },
+        { key: 'available', icon: 'check', text: 'Quedaste disponible', tone: 'success' },
+      ]),
+    }
+  }
+  return {
+    heading,
+    time,
+    facts: [
+      { key: 'available', icon: 'check', text: 'Estabas disponible', tone: 'success' },
+      {
+        key: 'language',
+        icon: 'languages',
+        text: `Hablas ${LANGUAGE_NAMES[summary.language]}`,
+        ...(summary.language === 'pt' ? { tag: 'Regla 3' } : {}),
+      },
+    ],
+  }
+}
+
+/**
+ * The workspace read-only footer as facts (slice 6 UI rule): a closed case →
+ * the reason (icon + label, drawn by the component), [clock] when, [user] who
+ * closed it when it was someone else; someone else's case → [lock] Solo
+ * lectura, [user] Lo atiende … . The internal note stays its own line.
+ */
+export interface FooterFacts {
+  reason: CloseReason | null
+  facts: FactItem[]
+  note: string | null
+}
+
+export function footerFacts(
+  detail: Pick<CaseDetail, 'capabilities' | 'closure' | 'assignment'>,
+  meId: string,
+): FooterFacts | null {
+  const { capabilities, closure, assignment } = detail
+  if (capabilities.canReply) return null
+  if (closure) {
+    const facts: FactItem[] = [
+      {
+        key: 'closed-at',
+        icon: 'clock',
+        text: formatDateTime(closure.closedAt, { withYear: false }),
+        label: 'Cerrado',
+        tooltip: 'Cerrado',
+      },
+    ]
+    if (closure.closedById !== meId && closure.closedByName) {
+      facts.push({
+        key: 'closed-by',
+        icon: 'user',
+        text: closure.closedByName,
+        label: 'Lo cerró',
+        tooltip: 'Lo cerró',
+      })
+    }
+    return { reason: closure.reason, facts, note: closureNote(closure) }
+  }
+  const facts: FactItem[] = [{ key: 'read-only', icon: 'lock', text: 'Solo lectura' }]
+  if (assignment && assignment.analystId !== meId) {
+    facts.push({ key: 'owner', icon: 'user', text: `Lo atiende ${assignment.analystName}` })
+  }
+  return { reason: null, facts, note: null }
+}
+
+/** A row of "Casos anteriores" as facts: [calendar] date, the reason (or "Abierto"), [user] who. */
+export function historyItemFacts(
+  item: Pick<CaseHistoryItem, 'openedAt' | 'status' | 'analystName'>,
+): FactItem[] {
+  return [
+    { key: 'date', icon: 'calendar', text: formatDate(item.openedAt), label: 'Abierto' },
+    ...(item.status === 'closed'
+      ? []
+      : [{ key: 'open', icon: 'inbox' as const, text: 'Abierto', tone: 'accent' as const }]),
+    { key: 'analyst', icon: 'user', text: item.analystName ?? 'Sin asignar' },
+  ]
+}
+
+/** "Casos anteriores (2)", the panel section title (also without any: "(0)"). */
+export function previousCasesSectionTitle(count: number): string {
+  return `Casos anteriores (${count})`
+}
+
 // ── "Casos anteriores de este cliente" (contract §4.7, §9.4) ────────────────
 
 /** "Casos anteriores de Patricia". */
 export function historySheetTitle(customerName: string): string {
   const first = firstName(customerName)
   return first ? `Casos anteriores de ${first}` : 'Casos anteriores'
-}
-
-/** "3 mar 2026 · Resuelto · Julián Ortega"; an open case says "Abierto"; nobody → "Sin asignar". */
-export function historyItemLine(
-  item: Pick<CaseHistoryItem, 'openedAt' | 'status' | 'closeReason' | 'analystName'>,
-): string {
-  const state = item.status === 'closed' ? closeReasonLabel(item.closeReason) : 'Abierto'
-  return [formatDate(item.openedAt), state, item.analystName ?? 'Sin asignar'].join(' · ')
 }
 
 /** Shown under the list when the server capped it (it returns at most 20). */

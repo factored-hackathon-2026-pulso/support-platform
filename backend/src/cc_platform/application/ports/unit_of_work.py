@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     # Annotations only: importing the context packages at runtime would be circular
     # (their use cases import this module).
     from cc_platform.application.cases.ports import (
+        AnalystHomeReader,
         AssignmentRepository,
         CaseRepository,
         CustomerCaseSlotRepository,
@@ -86,6 +87,11 @@ class UnitOfWork(Protocol):
 
     @property
     def event_log(self) -> EventLogRepository: ...
+
+    @property
+    def analyst_home(self) -> AnalystHomeReader:
+        """Read-only queries of the analyst home (slice 6); never staged or committed."""
+        ...
 
     async def __aenter__(self) -> Self: ...
 

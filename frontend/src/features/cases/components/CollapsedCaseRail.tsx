@@ -53,7 +53,7 @@ export function CollapsedCaseRail({
                 type="button"
                 aria-label={`${name}, ${meta.subLabel}`}
                 aria-current={selected || undefined}
-                title={`${name} · ${meta.subLabel}`}
+                title={`${name} (${meta.subLabel})`}
                 onClick={() => onSelectCase(summary.id)}
                 className={cn(
                   'flex size-10 cursor-pointer items-center justify-center rounded-full border-[3px] text-13 font-semibold text-ink',

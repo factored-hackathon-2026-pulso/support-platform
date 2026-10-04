@@ -7,14 +7,19 @@ import {
   SLA_AT_RISK_MS,
   assignedToastCopy,
   unassignedToastCopy,
-  caseCardLine,
+  caseCardFacts,
   changesInboxPlacement,
   channelLabel,
   channelPhrase,
   closeReasonLabel,
+  closeReasonOption,
   countForFilter,
   countryName,
   emptyListCopy,
+  filterChipLabel,
+  slaFact,
+  sortByUrgency,
+  urgencyGroup,
   fitsInboxFilter,
   formatClosedAgo,
   formatLastInteraction,
@@ -120,11 +125,29 @@ describe('labels', () => {
     expect(countryName('BR')).toBe('Brasil')
   })
 
-  it('builds the card line: priority and channel', () => {
-    expect(caseCardLine(makeCaseSummary())).toBe('Prioridad media · Web')
-    expect(caseCardLine(makeCaseSummary({ channel: 'app_chat', priority: 'low' }))).toBe(
-      'Prioridad baja · App',
-    )
+  it('builds the card facts: channel, priority only when high, a customer who came back', () => {
+    expect(caseCardFacts(makeCaseSummary())).toEqual([
+      { key: 'channel', icon: 'globe', text: 'Web', label: 'Canal', iconOnly: true },
+    ])
+    expect(
+      caseCardFacts(
+        makeCaseSummary({ channel: 'app_chat', priority: 'high', previousCaseId: 'CASE-1' }),
+      ),
+    ).toEqual([
+      { key: 'channel', icon: 'smartphone', text: 'App', label: 'Canal', iconOnly: true },
+      { key: 'priority', icon: 'flag', text: 'Prioridad alta', tone: 'warn', iconOnly: true },
+      {
+        key: 'returned',
+        icon: 'history',
+        text: 'Volvió a escribir',
+        tone: 'accent',
+        iconOnly: true,
+      },
+    ])
+    // Low and medium priorities are not shown.
+    expect(caseCardFacts(makeCaseSummary({ priority: 'low' })).map((f) => f.key)).toEqual([
+      'channel',
+    ])
   })
 
   it('has the five close reasons in contract order', () => {
@@ -135,6 +158,14 @@ describe('labels', () => {
       ['out_of_scope', 'Fuera de alcance'],
       ['other', 'Otro'],
     ])
+    expect(CLOSE_REASONS.map((reason) => [reason.label, reason.tone, reason.meaning])).toEqual([
+      ['Resuelto', 'success', 'Se atendió lo que pidió.'],
+      ['El cliente no respondió', 'closed', 'Dejó de contestar y no se pudo seguir.'],
+      ['Duplicado', 'accent', 'Ya hay otro caso por lo mismo.'],
+      ['Fuera de alcance', 'warn', 'Lo que pide no lo atiende este equipo.'],
+      ['Otro', 'neutral', 'Cuéntalo en la nota interna.'],
+    ])
+    expect(closeReasonOption('duplicate').tone).toBe('accent')
     expect(closeReasonLabel('customer_unresponsive')).toBe('El cliente no respondió')
     expect(closeReasonLabel(null)).toBe('Sin motivo')
   })
@@ -182,15 +213,17 @@ describe('relative times on the card', () => {
   })
 
   it('shows how long ago a case was closed', () => {
-    expect(formatClosedAgo({ closedAt: at(-3 * 60) }, NOW)).toBe('Cerrado hace 3 h')
-    expect(formatClosedAgo({ closedAt: null }, NOW)).toBe('Cerrado')
+    expect(formatClosedAgo({ closedAt: at(-3 * 60) }, NOW)).toBe('hace 3 h')
+    expect(formatClosedAgo({ closedAt: null }, NOW)).toBeNull()
   })
 })
 
 describe('copy', () => {
   it('says what an empty list means per filter', () => {
     expect(emptyListCopy(null, false)).toBe('Nada pendiente.')
-    expect(emptyListCopy('to_reply', false)).toBe('Nada pendiente.')
+    expect(emptyListCopy('to_reply', false)).toBe('Ningún caso espera tu respuesta.')
+    expect(emptyListCopy('new', false)).toBe('No tienes casos nuevos.')
+    expect(emptyListCopy('waiting', false)).toBe('Ningún caso espera al cliente.')
     expect(emptyListCopy('closed', false)).toBe('No cerraste casos en los últimos 7 días.')
     expect(emptyListCopy('closed', true)).toBe('Ningún caso coincide con tu búsqueda.')
   })
@@ -211,7 +244,8 @@ describe('copy', () => {
       assignedToastCopy(makeCaseSummary({ previousCaseId: 'CASE-1' }), { fromSupervisor: true }),
     ).toEqual({
       title: 'Te asignaron un caso',
-      description: 'Marcela Quintana Pardo · desde supervisión',
+      description: 'Marcela Quintana Pardo',
+      tag: 'Supervisión',
     })
   })
 
@@ -320,5 +354,159 @@ describe('changesInboxPlacement', () => {
     )
     expect(changesInboxPlacement(card, { ...card, assignedAnalystId: 'STF-OTHER' })).toBe(true)
     expect(changesInboxPlacement(card, { ...card, closedAt: NOW.toISOString() })).toBe(true)
+  })
+})
+
+describe('urgency order (Inicio "Lo primero" and the Casos list)', () => {
+  const overdue = makeCaseSummary({
+    id: 'CASE-A',
+    inboxStatus: 'new',
+    status: 'assigned',
+    firstResponseAt: null,
+    slaDueAt: at(-3),
+  })
+  const atRisk = makeCaseSummary({
+    id: 'CASE-B',
+    inboxStatus: 'to_reply',
+    firstResponseAt: null,
+    slaDueAt: at(4),
+  })
+  const running = makeCaseSummary({
+    id: 'CASE-C',
+    inboxStatus: 'new',
+    status: 'assigned',
+    firstResponseAt: null,
+    slaDueAt: at(12),
+  })
+  const runningLater = makeCaseSummary({ ...running, id: 'CASE-D', slaDueAt: at(14) })
+  const answeredLongAgo = makeCaseSummary({
+    id: 'CASE-E',
+    inboxStatus: 'to_reply',
+    firstResponseAt: at(-30),
+    lastInteractionAt: at(-20),
+  })
+  const answeredRecently = makeCaseSummary({
+    ...answeredLongAgo,
+    id: 'CASE-F',
+    lastInteractionAt: at(-1),
+  })
+  const waiting = makeCaseSummary({
+    id: 'CASE-G',
+    inboxStatus: 'waiting',
+    firstResponseAt: at(-40),
+    lastInteractionAt: at(-50),
+  })
+  const waitingWithSla = makeCaseSummary({
+    id: 'CASE-H',
+    inboxStatus: 'waiting',
+    firstResponseAt: null,
+    slaDueAt: at(-10),
+    lastInteractionAt: at(-5),
+  })
+
+  it('groups: SLA overdue or at risk, SLA running, no SLA, waiting for the customer', () => {
+    expect(urgencyGroup(overdue, NOW)).toBe(0)
+    expect(urgencyGroup(atRisk, NOW)).toBe(0)
+    expect(urgencyGroup(running, NOW)).toBe(1)
+    expect(urgencyGroup(answeredLongAgo, NOW)).toBe(2)
+    expect(urgencyGroup(waiting, NOW)).toBe(3)
+    expect(urgencyGroup(waitingWithSla, NOW)).toBe(3)
+    expect(urgencyGroup(makeCaseSummary({ status: 'closed', inboxStatus: 'closed' }), NOW)).toBe(4)
+  })
+
+  it('sorts by the nearest SLA, then the longest wait, waiting for the customer last', () => {
+    const shuffled = [
+      waiting,
+      answeredRecently,
+      runningLater,
+      atRisk,
+      waitingWithSla,
+      running,
+      answeredLongAgo,
+      overdue,
+    ]
+    expect(sortByUrgency(shuffled, NOW).map((item) => item.id)).toEqual([
+      'CASE-A',
+      'CASE-B',
+      'CASE-C',
+      'CASE-D',
+      'CASE-E',
+      'CASE-F',
+      'CASE-G',
+      'CASE-H',
+    ])
+    expect(shuffled[0]).toBe(waiting) // the input is not changed
+  })
+
+  it('moves a case up as its SLA comes due', () => {
+    const later = new Date(NOW.getTime() + 9 * 60_000)
+    expect(urgencyGroup(running, later)).toBe(0)
+    expect(sortByUrgency([answeredLongAgo, running], later).map((item) => item.id)).toEqual([
+      'CASE-C',
+      'CASE-E',
+    ])
+  })
+
+  it('breaks ties by id', () => {
+    const twin = makeCaseSummary({ ...running, id: 'CASE-0' })
+    expect(sortByUrgency([running, twin], NOW).map((item) => item.id)).toEqual(['CASE-0', 'CASE-C'])
+  })
+})
+
+describe('filterChipLabel', () => {
+  it('names the filter of the URL; Todos has no chip', () => {
+    expect(filterChipLabel(null)).toBeNull()
+    expect(filterChipLabel('closed')).toBe('Cerrados')
+    expect(filterChipLabel('to_reply')).toBe('Por responder')
+    expect(filterChipLabel('new')).toBe('Nuevos')
+    expect(filterChipLabel('waiting')).toBe('Esperando al cliente')
+  })
+})
+
+describe('slaFact (the shared SLA level → icon/tone map)', () => {
+  const pending = (minutes: number) => ({
+    status: 'in_progress' as const,
+    slaDueAt: at(minutes),
+    firstResponseAt: null,
+  })
+
+  it('overdue: filled flame, danger, "Vencido"', () => {
+    expect(slaFact(pending(-1), NOW)).toEqual({
+      key: 'sla',
+      level: 'overdue',
+      icon: 'flame-filled',
+      tone: 'danger',
+      text: 'Vencido',
+      label: 'SLA de primera respuesta',
+      tooltip: 'Primera respuesta vencida',
+    })
+  })
+
+  it('at risk (≤ 5 min): flame in warn, the minutes left', () => {
+    expect(slaFact(pending(1), NOW)).toMatchObject({
+      level: 'at_risk',
+      icon: 'flame',
+      tone: 'warn',
+      text: '1 min',
+      tooltip: 'Vence en 1 min',
+    })
+    expect(slaFact(pending(5), NOW)?.level).toBe('at_risk')
+  })
+
+  it('running: clock in muted, the time left, never the word "SLA" in the value', () => {
+    expect(slaFact(pending(12), NOW)).toMatchObject({
+      level: 'normal',
+      icon: 'clock',
+      tone: 'muted',
+      text: '12 min',
+      tooltip: 'Primera respuesta: vence en 12 min',
+    })
+    expect(slaFact(pending(5 * 60), NOW)?.text).toBe('5 h')
+    expect(slaFact(pending(3 * 24 * 60), NOW)?.text).toBe('3 días')
+  })
+
+  it('stops once answered or closed', () => {
+    expect(slaFact({ ...pending(1), firstResponseAt: at(-1) }, NOW)).toBeNull()
+    expect(slaFact({ ...pending(1), status: 'closed' }, NOW)).toBeNull()
   })
 })

@@ -86,13 +86,13 @@ describe('Equipos', () => {
     expect(screen.getByRole('radio', { name: 'Activos 3' })).toBeChecked()
     expect(screen.getByRole('radio', { name: 'Inactivos 1' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Todos 4' })).toBeInTheDocument()
-    const andes = within(table()).getByRole('row', { name: /Disputas · Equipo Andes/ })
+    const andes = within(table()).getByRole('row', { name: /Equipo Andes/ })
     expect(
       within(andes)
         .getAllByRole('cell')
         .map((cell) => cell.textContent),
-    ).toEqual(['Disputas · Equipo Andes', '4', '3', 'Activo'])
-    expect(within(table()).queryByText('Disputas · Equipo Caribe')).not.toBeInTheDocument()
+    ).toEqual(['Equipo Andes', '4', '3', 'Activo'])
+    expect(within(table()).queryByText('Equipo Caribe')).not.toBeInTheDocument()
     expect(
       within(screen.getByRole('navigation', { name: 'Principal' })).getByRole('link', {
         name: 'Equipos',
@@ -116,12 +116,10 @@ describe('Equipos', () => {
 
   it('shows the selected team with its members; deactivation is disabled with members', async () => {
     const { user, router } = renderTeams()
-    await user.click(await screen.findByRole('button', { name: 'Disputas · Equipo Andes' }))
+    await user.click(await screen.findByRole('button', { name: 'Equipo Andes' }))
     expect(new URLSearchParams(router.state.location.search).get('equipo')).toBe(teamAndes.id)
     const panel = aside()
-    expect(
-      await within(panel).findByRole('heading', { name: 'Disputas · Equipo Andes' }),
-    ).toBeInTheDocument()
+    expect(await within(panel).findByRole('heading', { name: 'Equipo Andes' })).toBeInTheDocument()
     expect(within(panel).getByText(teamAndes.id)).toBeInTheDocument()
     expect(within(panel).getByText('Activo · Creado el 3 feb 2026')).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: daniela.name })).toHaveAttribute(
@@ -147,14 +145,14 @@ describe('Equipos', () => {
       )
       .mockResolvedValueOnce({
         changed: true,
-        team: { ...teamAndes, name: 'Disputas · Equipo Andes Norte', version: 2 },
+        team: { ...teamAndes, name: 'Equipo Andes Norte', version: 2 },
       })
     const { user } = renderTeams(`/administracion/equipos?equipo=${teamAndes.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Equipo seleccionado' })
     const name = await within(panel).findByRole('textbox', { name: 'Nombre del equipo' })
     expect(within(panel).getByRole('button', { name: 'Guardar nombre' })).toBeDisabled()
     await user.clear(name)
-    await user.type(name, 'Disputas · Equipo Pacífico')
+    await user.type(name, 'Equipo Pacífico')
     await user.click(within(panel).getByRole('button', { name: 'Guardar nombre' }))
     await waitFor(() =>
       expect(name).toHaveAccessibleDescription('Ya existe un equipo con ese nombre.'),
@@ -162,11 +160,11 @@ describe('Equipos', () => {
     expect(name).toHaveFocus()
 
     await user.clear(name)
-    await user.type(name, 'Disputas · Equipo Andes Norte')
+    await user.type(name, 'Equipo Andes Norte')
     await user.click(within(panel).getByRole('button', { name: 'Guardar nombre' }))
     expect(renameTeam).toHaveBeenLastCalledWith(
       teamAndes.id,
-      'Disputas · Equipo Andes Norte',
+      'Equipo Andes Norte',
       teamAndes.version,
     )
     expect(await screen.findByText('Nombre guardado')).toBeInTheDocument()
@@ -181,30 +179,24 @@ describe('Equipos', () => {
     const { user } = renderTeams(`/administracion/equipos?equipo=${teamAndes.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Equipo seleccionado' })
     await user.click(await within(panel).findByRole('button', { name: 'Agregar persona' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Agregar a Disputas · Equipo Andes' })
+    const dialog = await screen.findByRole('dialog', { name: 'Agregar a Equipo Andes' })
     const person = await within(dialog).findByRole('combobox', { name: 'Persona' })
     // Daniela is already in Andes: not offered.
     expect(within(dialog).queryByRole('option', { name: /Daniela/ })).not.toBeInTheDocument()
-    await user.selectOptions(person, 'Mariana Duque · Disputas · Equipo Pacífico')
-    expect(
-      within(dialog).getByText('Pasa de Disputas · Equipo Pacífico a Disputas · Equipo Andes.'),
-    ).toBeInTheDocument()
-    await user.click(
-      within(dialog).getByRole('button', { name: 'Mover a Disputas · Equipo Andes' }),
-    )
+    await user.selectOptions(person, 'Mariana Duque · Equipo Pacífico')
+    expect(within(dialog).getByText('Pasa de Equipo Pacífico a Equipo Andes.')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Mover a Equipo Andes' }))
     expect(updateUser).toHaveBeenCalledWith(mariana.id, {
       expectedVersion: mariana.version,
       teamId: teamAndes.id,
     })
-    expect(
-      await screen.findByText('Mariana Duque pasó a Disputas · Equipo Andes'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Mariana Duque pasó a Equipo Andes')).toBeInTheDocument()
   })
 
   it('deactivates an empty team and reactivates it; team_not_empty is explained', async () => {
     const empty = makeAdminTeam({
       id: 'TEAM-00000000000000000000000005',
-      name: 'Disputas · Equipo Sur',
+      name: 'Equipo Sur',
       memberCount: 0,
       analystCount: 0,
       inactiveMemberCount: 0,
@@ -218,7 +210,7 @@ describe('Equipos', () => {
     expect(await within(panel).findByText('Este equipo no tiene personas.')).toBeInTheDocument()
     await user.click(within(panel).getByRole('button', { name: 'Desactivar equipo' }))
     let dialog = await screen.findByRole('dialog', {
-      name: '¿Desactivar el equipo Disputas · Equipo Sur?',
+      name: '¿Desactivar el equipo Equipo Sur?',
     })
     expect(
       within(dialog).getByText(
@@ -252,7 +244,7 @@ describe('Equipos', () => {
   it('creates a team with an idempotency key and selects it', async () => {
     const sur = makeAdminTeam({
       id: 'TEAM-00000000000000000000000005',
-      name: 'Disputas · Equipo Sur',
+      name: 'Equipo Sur',
       memberCount: 0,
       analystCount: 0,
     })
@@ -266,12 +258,9 @@ describe('Equipos', () => {
     expect(within(dialog).getByRole('textbox', { name: 'Nombre' })).toHaveAccessibleDescription(
       'Escribe un nombre de al menos 2 caracteres.',
     )
-    await user.type(
-      within(dialog).getByRole('textbox', { name: 'Nombre' }),
-      'Disputas · Equipo Sur',
-    )
+    await user.type(within(dialog).getByRole('textbox', { name: 'Nombre' }), 'Equipo Sur')
     await user.click(within(dialog).getByRole('button', { name: 'Crear equipo' }))
-    expect(createTeam).toHaveBeenCalledWith('Disputas · Equipo Sur', expect.any(String))
+    expect(createTeam).toHaveBeenCalledWith('Equipo Sur', expect.any(String))
     await waitFor(() =>
       expect(new URLSearchParams(router.state.location.search).get('equipo')).toBe(sur.id),
     )

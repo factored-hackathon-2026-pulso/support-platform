@@ -11,7 +11,7 @@ Scope decision of **2026-10-03**. It overrides every earlier doc, canvas note an
 LATAM Bank **support platform**. Support staff and customers talk **by chat**, end to end. A customer writes from the app or the web (the customer simulator stands in for both). The case goes to an available analyst who speaks the customer's language. The two talk until the analyst closes the case with a reason. If the customer writes again, a new case opens, linked to the previous one.
 
 Roles. They combine: one person can hold several, and the role switcher moves between them.
-- **Analista**: works her cases in the Workspace ("Casos").
+- **Analista**: lands on "Inicio" (slice 6) and works her cases in the Workspace ("Casos").
 - **Supervisora**: team and queues, manual assignment and reassignment, cases nobody could take, audit.
 - **Administración**: users (create, edit, deactivate, unlock), roles, languages, teams.
 
@@ -21,7 +21,8 @@ In scope:
 - the full case lifecycle (done, slice 2);
 - supervision (done, slice 3);
 - administration (done, slice 4);
-- browser e2e and the hand-over docs (done, slice 5).
+- browser e2e and the hand-over docs (done, slice 5);
+- the analyst home "Inicio" and the Casos adjustments of 2026-10-03 (done, slice 6).
 
 The chat must work for real in two browser windows: the analyst Workspace and the customer simulator.
 
@@ -188,6 +189,7 @@ Rules:
 
 ### 5.4 Design decisions (user decisions, 2026-10-03)
 - **List title.** The analyst list title is **"Casos"**, never "Mis contactos" or "Te toca".
+- **Analyst home (slice 6).** An analyst lands on **"Inicio"** (`/analista/inicio`): availability, the four status tiles (links to Casos with the filter), "Lo primero" (open cases by urgency), "Mientras no estabas" (event-log facts with fixed templates, never a summary) and "Tu equipo ahora" (counts only). Contract: `api/slice-6-analyst-home.md`.
 - **Case statuses.** There are four, chat only. "Por llamar", "En curso" and "En espera" are gone.
 
   | Tile | Meaning | Tone token |
@@ -197,21 +199,21 @@ Rules:
   | **Esperando al cliente** | The analyst wrote last | `waiting` (grey) |
   | **Cerrados** | The analyst's own cases closed in the last 7 days; read-only transcripts | new neutral `closed` tone, built on the existing `offline`/`muted` tokens |
 
-  - The status counters **are** the filters: Todos (open cases) · Por responder · Nuevos · Esperando al cliente · Cerrados. There is no second filter row.
+  - Slice 6 (user decision, 2026-10-03): the status tiles live on **Inicio** and open Casos with the filter in the URL; the Casos list shows a removable filter chip, no tiles, and one flat list in urgency order (`sortByUrgency`). Cerrados is reached from its tile (or the URL).
   - A case nobody can take yet waits in a queue that only supervision sees (slice 3). It is in no analyst's list.
 - **Case card.**
-  - A left color stripe shows the status.
-  - Top right shows "SLA x", the first-response SLA, only while the first reply is pending. A closed card shows "Cerrado hace x" there instead.
+  - A left color stripe shows the status, and a status pill repeats it.
+  - Top right shows the first-response SLA level (clock, orange flame ≤ 5 min, filled red flame "Vencido"; slice 6 `slaFact`), only while the first reply is pending. A closed card shows when it closed (clock) instead.
   - The second line is the last message.
-  - The bottom line shows priority · channel (App/Web), and the time since the last interaction.
-  - A small "Volvió a escribir" tag appears when the case continues a closed one.
-- **Workspace: two columns.** The case list (collapsible to a rail) and the conversation. The conversation takes the full remaining width. There is **no right-hand panel**: no Copiloto, Herramientas or Cliente tabs, no customer file, no tool or action cards, no identity card, no call bar, no email layout.
+  - The bottom line shows short facts, never a dot-joined line: the channel (icon), the priority only when high (flag), "Volvió a escribir" (icon), and the time since the last interaction (clock).
+- **Metadata rule (slice 6).** Facts are separate short items (icon + 1–3 words, `Fact`); status is a pill; times have a clock; secondary facts may be icon-only with a tooltip. No "·"-joined strings or wrapping sentences in the analyst UI.
+- **Workspace: two columns.** The case list (collapsible to a rail) and the conversation. The conversation takes the full remaining width. There is no Copiloto, Herramientas or tool/action cards, no identity card, no call bar, no email layout. Slice 6 (user decision): one on-demand right panel, **"Ficha del cliente"** (`?ficha=1`), opened from the customer's name, with only platform data: Cliente, Este caso, Cómo llegó a ti, Casos anteriores. No bank data.
 - **Conversation header.**
-  - Content: customer name, short case id (copyable), "{país} · {ciudad} · {chat en la app | chat web} · {prioridad | en portugués}", "Datos de ejemplo" and "Cerrar caso".
-  - A one-line **"Cómo llegó a ti"** note explains the people-based assignment only: available + language (rule 3) + queue wait.
-  - A **"Casos anteriores (n)"** button opens a side sheet with this customer's previous conversations and their read-only transcripts. This is conversation history, not bank data.
+  - Content (slice 6): the customer name (it opens "Ficha del cliente"), the short case id (copyable), "Datos de ejemplo" and "Cerrar caso". The place, channel and priority are in the ficha.
+  - A **"Cómo llegó a ti"** row explains the people-based assignment only, as short facts: available + language (rule 3) + queue wait or the supervisor.
+  - **"Casos anteriores (n)"** is a section of the ficha: this customer's previous conversations and their read-only transcripts. This is conversation history, not bank data. The supervisor view keeps its sheet.
 - **Close dialog.**
-  - A required reason from a fixed list: Resuelto · El cliente no respondió · Duplicado · Fuera de alcance · Otro.
+  - A required reason from a fixed list, shown as cards with an icon, a tone and a one-line meaning (slice 6): Resuelto, El cliente no respondió, Duplicado, Fuera de alcance, Otro.
   - An optional internal note.
   - A preview of the notice the customer will see.
 - **Customer simulator.** It shows the current conversation, its state ("Buscando a una persona del equipo…", "Te atiende {nombre}", "Conversación terminada") and, on demand, the customer's previous closed conversations. Writing after a close starts a new conversation.
@@ -251,3 +253,4 @@ Test coverage required:
 | S3 | **Supervision.** Team and queues: who is available or paused, the load per analyst, queued cases by language with their wait and first-response SLA, cases at risk. Manual assignment of a queued case and reassignment of an open case (rule 3 enforced: a Portuguese case only to a Portuguese speaker; paused analysts allowed only with an explicit confirmation), each with a staff banner and an audit event. Supervisor read-only view of any case. Audit: event-log queries (who did what, on which case, when) with filters and cursor pagination. Realtime topics for team and queues; rail badge for queued cases. | `api/slice-3-supervision.md` | done. Final check 2026-10-03: `openapi.json` and the generated types in sync; every §6 gate green (backend 501 tests, frontend 500 tests, `check:api`); a scripted API/WS live check on a fresh database (68/68: queues, team, rule 3, pause confirmation, reassignment, §3.9 races, audit, and the S1/S2 chat + close + linked-case regression); Playwright smoke at 1440 and 1280. The multi-window browser pass is in S5. |
 | S4 | **Administration.** Users: create, edit, deactivate/reactivate, unlock a locked account, reset the dev password. Combinable roles (Analista, Supervisora, Administración; at least one). Languages spoken (es, pt). Teams: create, rename, deactivate, membership. Guard rails: nobody removes their own admin role or deactivates themself, and the last active admin cannot be removed. Each change is audited. | `api/slice-4-administration.md` | done. Final check 2026-10-03: `openapi.json` and the generated types in sync; every §6 gate green (backend 669 tests, frontend 586 tests, `check:api`); a scripted API/WS live check on a fresh database (68/68: create a pt analyst who signs in with the temporary password + MFA and receives the queued pt case, a role added → 4409 and the next request reflects it, self guards, concurrent demotions keep one admin, deactivation blocked by open cases until supervision reassigns them, then 4401 + revoked sessions, 5-password lockout and unlock, password reset, teams, audit texts, 403 for non-admins on all 14 routes); the S1–S3 regression script on a second fresh database (68/68: queues, team, rule 3, manual assignment and reassignment, §3.9 races, audit, live chat, close with reason, new linked case, "Casos anteriores"); Playwright smoke at 1440 and 1280 (42/42, no page errors). The multi-window browser pass is in S5. |
 | S5 | **Browser e2e + docs.** Playwright scenarios over a fresh backend:<br>• two-window chat;<br>• close and a new linked case;<br>• "Casos anteriores";<br>• queue and drain;<br>• supervisor assignment and reassignment;<br>• admin creates an analyst, who then receives a case;<br>• lockout and unlock.<br>Final READMEs, run book and demo script. | `api/slice-5-e2e.md` | done. Final whole-platform check 2026-10-03: no API change (`export_openapi` + `gen:api` rewrote byte-identical `openapi.json` and the generated types in sync); every §6 gate green (backend: `ruff check`, `ruff format --check` (231 files), `mypy src` (169 files), `pytest` 673 passed; frontend: `typecheck`, `lint`, `format:check`, `test` 592 passed in 63 files, `build`, `check:api`); `pnpm e2e` 8/8 twice in a row, each on its own fresh temporary database (24.4 s each, one worker; the seven bullets above plus a live role change and a live deactivation sign-out), 16/16 with `--repeat-each=2` on one database (50.1 s), temp databases removed by the teardown, and file and title subsets green on their own; one product bug found and fixed with a unit test (`features/cases/realtime.ts` `writeInbox`: an off-screen inbox lost its pending refetch); RUNBOOK and DEMO rehearsed on a fresh database (DEMO step 9.3 locks Martín Salazar live). Known gaps in the contract §9. |
+| S6 | **Inicio de la analista + Casos adjustments.** `GET /me/home` (CQRS-lite `GetAnalystHome`, port `AnalystHomeReader` in SQL and memory): `since` = end of her previous session (fallback now − 8 h), deterministic activity rows from the event log (fixed templates in the frontend), team snapshot (counts only). Inicio screen (`/analista/inicio`, landing of the analyst role, rail Inicio + Casos with a Por responder badge, presence dot). Casos: tiles moved to Inicio (filter chip), urgency order shared with "Lo primero", pause control as the indicator, slim header + "Ficha del cliente" panel, close reasons as cards, SLA levels, facts instead of dot-joined lines; teams renamed "Equipo Andes/Pacífico/Caribe". | `api/slice-6-analyst-home.md` | done. Gates 2026-10-03: see the slice report (backend ruff, format, mypy, pytest, OpenAPI check; frontend typecheck, lint, test, build, format:check, check:api; `pnpm e2e` 9/9 twice). |

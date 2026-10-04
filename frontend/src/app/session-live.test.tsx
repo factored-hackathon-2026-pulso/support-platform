@@ -74,7 +74,13 @@ describe('SessionLiveSync', () => {
     expect(switcher.getAllByRole('link').map((link) => link.textContent)).toEqual([
       'Administración',
     ])
-    expect(screen.getByText('Disputas · Equipo Pacífico · español')).toBeInTheDocument()
+    // Icon rows, not a dot-joined line (slice 6).
+    const summary = screen.getByText('Equipo:').closest('ul')!
+    expect(
+      within(summary)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Equipo: Equipo Pacífico', 'Idiomas: Español'])
   })
 
   it('sends her home when the section she is in is gone', async () => {

@@ -54,6 +54,11 @@ export interface ConversationPaneProps {
   mode?: ConversationMode
   /** Rendered in the header before "Datos de ejemplo" (the supervisor's "Asignar" / "Reasignar"). */
   headerActions?: ReactNode
+  /**
+   * The Workspace's "Ficha del cliente" (slice 6 §5): the header slims down to
+   * the name (a button that toggles the panel) and the case number.
+   */
+  customerFile?: { open: boolean; onToggle(): void }
 }
 
 /**
@@ -75,6 +80,7 @@ function ConversationBody({
   onFocused,
   mode = 'workspace',
   headerActions,
+  customerFile,
 }: ConversationPaneProps) {
   const me = useCurrentUser()
   useConversationLive(caseId)
@@ -127,6 +133,7 @@ function ConversationBody({
       headingRef={setFocusTarget}
       mode={mode}
       headerActions={headerActions}
+      customerFile={customerFile}
     />
   )
 }
@@ -140,6 +147,7 @@ interface LoadedConversationProps {
   headingRef: (element: HTMLElement | null) => void
   mode: ConversationMode
   headerActions?: ReactNode
+  customerFile?: { open: boolean; onToggle(): void }
 }
 
 function LoadedConversation({
@@ -151,6 +159,7 @@ function LoadedConversation({
   headingRef,
   mode,
   headerActions,
+  customerFile,
 }: LoadedConversationProps) {
   const { case: summary, capabilities } = detail
   const supervision = mode === 'supervision'
@@ -178,6 +187,7 @@ function LoadedConversation({
         onOpenHistory={onOpenHistory}
         actions={headerActions}
         hideClose={supervision}
+        customerFile={customerFile}
       />
       <ArrivalNote detail={detail} meId={meId} mode={mode} />
       <TranscriptArea caseId={summary.id} turns={turns} items={items} onRetry={retry} />

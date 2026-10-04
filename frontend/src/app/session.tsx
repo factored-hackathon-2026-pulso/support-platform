@@ -11,7 +11,8 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router'
 import { api, isApiProblem, unwrap, type Schemas } from '@/lib/api'
-import { getInitials } from '@/lib/format'
+import type { FactItem } from '@/components/ui'
+import { getInitials, joinEs } from '@/lib/format'
 import { sessionToken } from '@/lib/session-token'
 import { ROLES, roleFromPath, sortRoles, type RoleDefinition, type RoleId } from './roles'
 
@@ -19,23 +20,39 @@ export type Staff = Schemas['StaffOut']
 
 const LANGUAGE_LABELS: Record<string, string> = { es: 'español', pt: 'portugués' }
 
+/**
+ * The person's summary as short icon rows (slice 6 UI rule: never a dot-joined
+ * line): [users] the team, [languages] "Español y portugués" (skipped when empty).
+ */
+export function summaryFacts(staff: Pick<Staff, 'team' | 'languages'>): FactItem[] {
+  const spoken = joinEs(staff.languages.map((code) => LANGUAGE_LABELS[code] ?? code))
+  const facts: FactItem[] = [{ key: 'team', icon: 'users', text: staff.team.name, label: 'Equipo' }]
+  if (spoken) {
+    facts.push({
+      key: 'languages',
+      icon: 'languages',
+      text: spoken.charAt(0).toUpperCase() + spoken.slice(1),
+      label: 'Idiomas',
+    })
+  }
+  return facts
+}
+
 /** Staff member as the UI uses it: API fields + derived display values. */
 export interface SessionUser extends Staff {
   initials: string
   /** Roles in canonical order, unknown values dropped. */
   roleIds: RoleId[]
-  /** "Disputas · Equipo Andes · español, portugués" (empty parts skipped). */
-  summary: string
+  /** Team and languages as short icon rows (`summaryFacts`). */
+  summary: FactItem[]
 }
 
 export function toSessionUser(staff: Staff): SessionUser {
-  const languages = staff.languages.map((code) => LANGUAGE_LABELS[code] ?? code).join(', ')
-  const summary = [staff.team.name, languages].filter(Boolean).join(' · ')
   return {
     ...staff,
     initials: getInitials(staff.name),
     roleIds: sortRoles(staff.roles),
-    summary,
+    summary: summaryFacts(staff),
   }
 }
 

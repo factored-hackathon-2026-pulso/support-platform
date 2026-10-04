@@ -14,7 +14,7 @@ import { analystStaff } from '@/test/fixtures'
 import {
   addPending,
   applySummary,
-  arrivalNote,
+  arrivalFacts,
   caseHeaderMeta,
   CLOSED_NOTICE,
   closureLine,
@@ -26,7 +26,7 @@ import {
   formatWait,
   hasMissingTurns,
   hasSequenceGap,
-  historyItemLine,
+  historyItemFacts,
   historySheetTitle,
   historyTruncatedNote,
   INITIAL_CLOSE_FORM,
@@ -36,7 +36,7 @@ import {
   normalizeMessage,
   noteCounter,
   previousCasesLabel,
-  readOnlyFooter,
+  footerFacts,
   readTarget,
   removePending,
   shortCaseId,
@@ -49,6 +49,12 @@ import {
   QUEUE_LABEL,
   supervisionArrivalLine,
   supervisionFooter,
+  caseRows,
+  customerFileTriggerLabel,
+  customerRows,
+  firstResponseFacts,
+  languageName,
+  previousCasesSectionTitle,
 } from './model'
 import type { PendingMessage, TranscriptCache } from './types'
 
@@ -295,21 +301,30 @@ describe('header', () => {
   })
 })
 
-describe('arrival note (Cómo llegó a ti / Quién lo atiende)', () => {
-  it('explains a language assignment, with rule 3 for Portuguese', () => {
+describe('arrival facts (Cómo llegó a ti / Quién lo atiende)', () => {
+  const texts = (facts: { text: string }[] | undefined) => facts?.map((fact) => fact.text)
+
+  it('a language assignment: available + the language, and "Regla 3" for Portuguese', () => {
     const detail = makeCaseDetail()
-    expect(arrivalNote(detail, ME)).toEqual({
+    expect(arrivalFacts(detail, ME)).toEqual({
       heading: 'Cómo llegó a ti',
-      line: 'Te llegó porque estás disponible y hablas español · 5 mar, 10:46',
+      time: '5 mar, 10:46',
+      facts: [
+        { key: 'available', icon: 'check', text: 'Estabas disponible', tone: 'success' },
+        { key: 'language', icon: 'languages', text: 'Hablas español' },
+      ],
     })
     const pt = makeCaseDetail()
     pt.case = { ...pt.case, language: 'pt' }
-    expect(arrivalNote(pt, ME)?.line).toBe(
-      'Te llegó porque estás disponible y hablas portugués (regla 3) · 5 mar, 10:46',
-    )
+    expect(arrivalFacts(pt, ME)?.facts[1]).toEqual({
+      key: 'language',
+      icon: 'languages',
+      text: 'Hablas portugués',
+      tag: 'Regla 3',
+    })
   })
 
-  it('explains a case that waited in the queue', () => {
+  it('a case that waited in the queue', () => {
     const drained = makeCaseDetail({
       assignment: {
         id: 'ASG-2',
@@ -326,62 +341,49 @@ describe('arrival note (Cómo llegó a ti / Quién lo atiende)', () => {
         previousAnalystName: null,
       },
     })
-    expect(arrivalNote(drained, ME)?.line).toBe(
-      'Esperó 6 min en la cola en portugués y te llegó cuando quedaste disponible · 5 mar, 10:46',
-    )
+    expect(texts(arrivalFacts(drained, ME)?.facts)).toEqual([
+      'Esperó 6 min',
+      'Cola en portugués',
+      'Quedaste disponible',
+    ])
+    expect(arrivalFacts(drained, ME)?.facts.map((fact) => fact.icon)).toEqual([
+      'hourglass',
+      'inbox',
+      'check',
+    ])
   })
 
-  it("names who attended someone else's closed case, and says nothing without an assignment", () => {
-    expect(arrivalNote(makeJulianDetail(), ME)).toEqual({
+  it("who attended someone else's closed case, and nothing without an assignment", () => {
+    expect(arrivalFacts(makeJulianDetail(), ME)).toEqual({
       heading: 'Quién lo atendió',
-      line: 'Lo atendió Julián Ortega',
+      time: expect.any(String),
+      facts: [{ key: 'analyst', icon: 'user', text: 'Julián Ortega' }],
     })
-    expect(arrivalNote(makeCaseDetail({ assignment: null }), ME)).toBeNull()
+    expect(arrivalFacts(makeCaseDetail({ assignment: null }), ME)).toBeNull()
   })
 
-  it('says who holds an open case that supervision took from the viewer, in the present', () => {
-    const base = makeCaseDetail().assignment!
-    const takenFromMe = makeCaseDetail({
-      assignment: {
-        ...base,
-        analystId: 'STF-2',
-        analystName: 'Julián Ortega',
-        reason: 'manual',
-        assignedByRole: 'supervisor',
-        assignedByName: 'Lucía Herrera',
-        previousAnalystId: ME,
-        previousAnalystName: 'Daniela Ríos',
-      },
-    })
-    expect(arrivalNote(takenFromMe, ME)).toEqual({
-      heading: 'Quién lo atiende',
-      line: 'Lucía Herrera pasó este caso a Julián Ortega · 5 mar, 10:46',
-    })
-  })
-
-  it("says who holds someone else's open case, and how a supervisor gave it", () => {
+  it("who holds someone else's open case, and the supervisor who gave it", () => {
     const base = makeCaseDetail().assignment!
     const other = { ...base, analystId: 'STF-2', analystName: 'Julián Ortega' }
-    expect(arrivalNote(makeCaseDetail({ assignment: other }), ME)).toEqual({
+    expect(arrivalFacts(makeCaseDetail({ assignment: other }), ME)).toMatchObject({
       heading: 'Quién lo atiende',
-      line: 'Lo atiende Julián Ortega',
+      facts: [{ icon: 'user', text: 'Julián Ortega' }],
     })
     const manual = {
       ...other,
       reason: 'manual' as const,
       assignedByRole: 'supervisor' as const,
       assignedByName: 'Lucía Herrera',
+      previousAnalystId: ME,
+      previousAnalystName: 'Daniela Ríos',
     }
-    expect(arrivalNote(makeCaseDetail({ assignment: manual }), ME)?.line).toBe(
-      'Lo atiende Julián Ortega · Lucía Herrera se lo asignó el 5 mar, 10:46',
-    )
-    const passed = { ...manual, previousAnalystId: 'STF-9', previousAnalystName: 'Paula Medina' }
-    expect(arrivalNote(makeCaseDetail({ assignment: passed }), ME)?.line).toBe(
-      'Lo atiende Julián Ortega · Lucía Herrera se lo pasó el 5 mar, 10:46',
-    )
+    expect(texts(arrivalFacts(makeCaseDetail({ assignment: manual }), ME)?.facts)).toEqual([
+      'Julián Ortega',
+      'Asignado por Lucía Herrera',
+    ])
   })
 
-  it('explains a manual assignment from the queue and a reassignment (slice 3)', () => {
+  it('a manual assignment from the queue and a reassignment (slice 3)', () => {
     const base = makeCaseDetail().assignment!
     const fromQueue = makeCaseDetail({
       assignment: {
@@ -393,9 +395,10 @@ describe('arrival note (Cómo llegó a ti / Quién lo atiende)', () => {
         waitedSeconds: 420,
       },
     })
-    expect(arrivalNote(fromQueue, ME)?.line).toBe(
-      'Lucía Herrera te asignó este caso después de 7 min en la cola en portugués · 5 mar, 10:46',
-    )
+    expect(texts(arrivalFacts(fromQueue, ME)?.facts)).toEqual([
+      'Asignado por Lucía Herrera',
+      'Esperó 7 min',
+    ])
     const reassigned = makeCaseDetail({
       assignment: {
         ...base,
@@ -406,9 +409,18 @@ describe('arrival note (Cómo llegó a ti / Quién lo atiende)', () => {
         previousAnalystName: 'Julián Ortega',
       },
     })
-    expect(arrivalNote(reassigned, ME)?.line).toBe(
-      'Lucía Herrera te pasó este caso; antes lo atendía Julián Ortega · 5 mar, 10:46',
-    )
+    expect(arrivalFacts(reassigned, ME)?.facts).toEqual([
+      { key: 'by', icon: 'users', text: 'Asignado por Lucía Herrera' },
+      { key: 'previous', icon: 'user', text: 'Antes: Julián Ortega' },
+    ])
+  })
+
+  it('never joins facts with "·" or writes a sentence', () => {
+    const facts = arrivalFacts(makeCaseDetail(), ME)!.facts
+    for (const fact of facts) {
+      expect(fact.text).not.toContain('·')
+      expect(fact.text.split(' ').length).toBeLessThanOrEqual(3)
+    }
   })
 
   it('formats waits', () => {
@@ -497,18 +509,28 @@ describe('closure and the read-only footer', () => {
     expect(closureNote({ note: '  ' })).toBeNull()
   })
 
-  it('replaces the composer only when the viewer cannot reply', () => {
-    expect(readOnlyFooter(makeCaseDetail(), ME)).toBeNull()
-    expect(readOnlyFooter(makeClosedDetail(), ME)).toEqual([
-      'Caso cerrado el 5 mar, 10:58 · Resuelto',
-      'Nota: Se explicó el plazo del reverso (5 días hábiles).',
-    ])
-    expect(readOnlyFooter(makeJulianDetail(), ME)).toEqual([
-      'Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto',
+  it('replaces the composer only when the viewer cannot reply, as facts', () => {
+    expect(footerFacts(makeCaseDetail(), ME)).toBeNull()
+    expect(footerFacts(makeClosedDetail(), ME)).toEqual({
+      reason: 'resolved',
+      facts: [
+        {
+          key: 'closed-at',
+          icon: 'clock',
+          text: '5 mar, 10:58',
+          label: 'Cerrado',
+          tooltip: 'Cerrado',
+        },
+      ],
+      note: 'Nota: Se explicó el plazo del reverso (5 días hábiles).',
+    })
+    expect(footerFacts(makeJulianDetail(), ME)?.facts.map((fact) => fact.text)).toEqual([
+      '13 feb, 10:15',
+      'Julián Ortega',
     ])
   })
 
-  it('says whose case it is on an open case of someone else', () => {
+  it("says it is read-only and who has it on someone else's open case", () => {
     const notMine = makeCaseDetail({
       capabilities: {
         canReply: false,
@@ -522,7 +544,14 @@ describe('closure and the read-only footer', () => {
         analystName: 'Julián Ortega',
       },
     })
-    expect(readOnlyFooter(notMine, ME)).toEqual(['Solo lectura: este caso es de Julián Ortega.'])
+    expect(footerFacts(notMine, ME)).toEqual({
+      reason: null,
+      facts: [
+        { key: 'read-only', icon: 'lock', text: 'Solo lectura' },
+        { key: 'owner', icon: 'user', text: 'Lo atiende Julián Ortega' },
+      ],
+      note: null,
+    })
   })
 })
 
@@ -532,13 +561,16 @@ describe('case history', () => {
     expect(historySheetTitle('')).toBe('Casos anteriores')
   })
 
-  it('describes each past case: date, reason or "Abierto", and who held it', () => {
-    expect(historyItemLine(makeHistoryItem())).toBe('3 mar 2026 · Resuelto · Daniela Ríos')
+  it('describes each past case as facts: date, "Abierto" when open, and who held it', () => {
+    expect(historyItemFacts(makeHistoryItem()).map((fact) => fact.text)).toEqual([
+      '3 mar 2026',
+      'Daniela Ríos',
+    ])
     expect(
-      historyItemLine(
+      historyItemFacts(
         makeHistoryItem({ status: 'in_progress', closeReason: null, analystName: null }),
-      ),
-    ).toBe('3 mar 2026 · Abierto · Sin asignar')
+      ).map((fact) => fact.text),
+    ).toEqual(['3 mar 2026', 'Abierto', 'Sin asignar'])
   })
 
   it('notes when the list was capped at 20', () => {
@@ -627,5 +659,92 @@ describe('close dialog', () => {
     expect(describeCloseFailure(ApiProblem.network())).toBe(
       'No pudimos cerrar el caso. Inténtalo de nuevo.',
     )
+  })
+})
+
+describe('"Ficha del cliente" rows (slice 6 §5)', () => {
+  const now = new Date('2026-03-05T16:00:00Z')
+
+  it('names the trigger and the language', () => {
+    expect(customerFileTriggerLabel('Marcela Quintana Pardo')).toBe(
+      'Ver ficha de Marcela Quintana Pardo',
+    )
+    expect(languageName('pt')).toBe('Portugués')
+    expect(languageName('es')).toBe('Español')
+  })
+
+  it('lists who the customer is, one icon row each', () => {
+    expect(customerRows(makeCaseDetail())).toEqual([
+      { key: 'name', icon: 'user', label: 'Nombre', text: 'Marcela Quintana Pardo' },
+      { key: 'place', icon: 'map-pin', label: 'Ciudad', text: 'Barranquilla, Colombia' },
+      { key: 'language', icon: 'languages', label: 'Idioma', text: 'Español' },
+      {
+        key: 'id',
+        icon: 'id',
+        label: 'Id de cliente',
+        text: 'CUS-00000000000000000000001001',
+        mono: true,
+      },
+    ])
+  })
+
+  it('lists this case: number, channel, priority, opened, status pill, first response', () => {
+    const rows = caseRows(makeCaseDetail(), now)
+    expect(rows.map((row) => [row.icon, row.label])).toEqual([
+      ['hash', 'Número'],
+      ['globe', 'Canal'],
+      ['flag', 'Prioridad'],
+      ['calendar-clock', 'Abierto'],
+      ['inbox', 'Estado'],
+      ['clock', 'Primera respuesta'],
+    ])
+    expect(rows.map((row) => row.text)).toEqual([
+      'CASE-00000000000000000000000101',
+      'Chat web',
+      'Media',
+      '5 mar, 10:46',
+      undefined,
+      undefined,
+    ])
+    expect(rows[4]!.pill).toEqual({ label: 'Por responder', tone: 'warn' })
+    expect(rows[5]!.facts?.map((fact) => fact.text)).toEqual(['A tiempo', '5 mar, 10:50'])
+    for (const row of rows) expect(row.text ?? '').not.toContain('·')
+  })
+
+  it('first response: the shared SLA level while pending, the result once answered', () => {
+    const base = { status: 'in_progress' as const, slaDueAt: '2026-03-05T16:09:00Z' }
+    expect(firstResponseFacts({ ...base, firstResponseAt: null }, now)).toEqual([
+      expect.objectContaining({ icon: 'clock', text: '9 min', tone: 'muted' }),
+    ])
+    expect(
+      firstResponseFacts({ ...base, slaDueAt: '2026-03-05T16:04:00Z', firstResponseAt: null }, now),
+    ).toEqual([expect.objectContaining({ icon: 'flame', text: '4 min', tone: 'warn' })])
+    expect(
+      firstResponseFacts({ ...base, slaDueAt: '2026-03-05T15:50:00Z', firstResponseAt: null }, now),
+    ).toEqual([
+      expect.objectContaining({
+        icon: 'flame-filled',
+        text: 'Vencido',
+        tone: 'danger',
+        tooltip: 'Primera respuesta vencida',
+      }),
+    ])
+    expect(
+      firstResponseFacts({ ...base, firstResponseAt: '2026-03-05T16:10:00Z' }, now).map((fact) => [
+        fact.text,
+        fact.tone,
+      ]),
+    ).toEqual([
+      ['Tarde', 'danger'],
+      ['5 mar, 11:10', 'muted'],
+    ])
+    expect(firstResponseFacts({ ...base, status: 'closed', firstResponseAt: null }, now)).toEqual([
+      { key: 'result', icon: 'alert', text: 'Sin respuesta', tone: 'muted' },
+    ])
+  })
+
+  it('titles the section of previous cases', () => {
+    expect(previousCasesSectionTitle(2)).toBe('Casos anteriores (2)')
+    expect(previousCasesSectionTitle(0)).toBe('Casos anteriores (0)')
   })
 })

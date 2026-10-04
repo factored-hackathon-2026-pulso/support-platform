@@ -13,7 +13,7 @@ too and must never be copied). Roles combine (Analista, Supervisora, Administrac
   numbers do not move.
 
 Teams are records (slice 4): three active teams that existed before the event log (no
-creation event) and "Disputas · Equipo Caribe", created and deactivated by Valeria in the
+creation event) and "Equipo Caribe", created and deactivated by Valeria in the
 admin story (``add_demo_admin_story``). Every seeded account uses ``DEMO_PASSWORD``.
 """
 
@@ -60,11 +60,11 @@ class TeamSeed:
         return seed_team_id(self.number)
 
 
-TEAM_ANDES = TeamSeed(1, "Disputas · Equipo Andes")
-TEAM_PACIFICO = TeamSeed(2, "Disputas · Equipo Pacífico")
+TEAM_ANDES = TeamSeed(1, "Equipo Andes")
+TEAM_PACIFICO = TeamSeed(2, "Equipo Pacífico")
 TEAM_PLATFORM = TeamSeed(3, "Administración de la plataforma")
 #: Created and deactivated in the admin story (inactive, no members).
-TEAM_CARIBE = TeamSeed(4, "Disputas · Equipo Caribe")
+TEAM_CARIBE = TeamSeed(4, "Equipo Caribe")
 
 #: Teams the staff seed creates (active, no event: they existed before the log).
 DEMO_TEAMS: tuple[TeamSeed, ...] = (TEAM_ANDES, TEAM_PACIFICO, TEAM_PLATFORM)
@@ -196,7 +196,7 @@ async def add_demo_admin_story(unit: UnitOfWork, t: datetime, timeline: SeedTime
 
     - Valeria gave Felipe the Supervisora role at T−5d (his stored row already has it: the
       event is recorded on his earlier revision);
-    - Valeria created "Disputas · Equipo Caribe" at T−3d and deactivated it at T−1d;
+    - Valeria created "Equipo Caribe" at T−3d and deactivated it at T−1d;
     - Carolina deactivated Andrés at T−2d (no sessions to end);
     - Mariana typed a wrong password five times (T−6m … T−2m): locked until T+13m.
     """

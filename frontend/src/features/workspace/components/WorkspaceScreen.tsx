@@ -1,18 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, MousePointerClick } from 'lucide-react'
 import { useCurrentUser } from '@/app/session'
 import { DocumentTitle, EmptyState, Spinner } from '@/components/ui'
-import { CaseListPanel, useAvailability, useInbox, type InboxStatus } from '@/features/cases'
-import { CaseHistorySheet, ConversationPane, useCaseDetail } from '@/features/conversation'
+import {
+  CaseListPanel,
+  sortByUrgency,
+  useAvailability,
+  useInbox,
+  type InboxStatus,
+} from '@/features/cases'
+import { SidePanel } from '@/components/layout'
+import {
+  CUSTOMER_FILE_PANEL_ID,
+  CUSTOMER_FILE_TRIGGER_ID,
+  ConversationPane,
+  CustomerFile,
+} from '@/features/conversation'
+import { useNow } from '@/lib/hooks'
 import { topics, useRealtimeSubscription } from '@/lib/realtime'
 import {
-  HISTORY_LIST,
   emptyWorkspaceCopy,
+  isCustomerFileOpen,
   firstSelectableCase,
   nextCaseAfterClose,
   type WorkspaceStateChangeOptions,
   type WorkspaceUrlState,
 } from '../model'
+
+/** Same tick as the list, so the order the screen follows is the one on screen. */
+const ORDER_TICK_MS = 30_000
 
 type FocusRequest = { kind: 'case'; caseId: string } | { kind: 'empty' }
 
@@ -22,9 +38,10 @@ export interface WorkspaceScreenProps {
 }
 
 /**
- * Analyst Workspace (Workspace.dc.html, contract §9.2): two columns, the "Casos"
- * list (collapsible to a rail) and the conversation, which takes the rest of the
- * width. "Casos anteriores" opens as a side sheet over it. All shareable state
+ * Analyst Workspace (Workspace.dc.html, contract §9.2): the "Casos" list
+ * (collapsible to a rail), the conversation, and, on demand, the right panel
+ * "Ficha del cliente" (slice 6 §5: the customer, this case and "Casos
+ * anteriores"; `?ficha=1`, opened from the customer's name). All shareable state
  * lives in the URL (`state`); the screen reports changes through
  * `onStateChange` and the route writes them back.
  *
@@ -48,10 +65,17 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null)
   const emptyHeading = useRef<HTMLHeadingElement>(null)
 
-  const items = inbox.data?.items
+  // The list's order (urgency; Cerrados keeps the server's most-recent-close order):
+  // auto-selection and "next case after closing" follow what the analyst sees.
+  const data = inbox.data
+  const now = useNow(ORDER_TICK_MS)
+  const items = useMemo(
+    () => (data && state.filter !== 'closed' ? sortByUrgency(data.items, now) : data?.items),
+    [data, state.filter, now],
+  )
   const ready = inbox.status === 'success' && !inbox.isPlaceholderData
-  // Same cache entry as the conversation: the customer's name for the history sheet.
-  const detail = useCaseDetail(state.caseId)
+  /** The panel was opened here (not restored from the URL): its heading takes the focus. */
+  const [panelOpenedHere, setPanelOpenedHere] = useState(false)
 
   /**
    * The filter whose first load already had its chance to auto-select. Auto-select runs
@@ -74,26 +98,38 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
     onStateChange({ caseId: first }, { replace: true })
   }, [state.caseId, state.filter, ready, items, onStateChange])
 
-  // Another case closes the history sheet: it belongs to the previous customer.
+  // Another case resets "Casos anteriores": it belongs to the previous customer. The
+  // panel itself stays open (the next customer's file).
+  const panelOpen = isCustomerFileOpen(state)
   const selectCase = useCallback(
-    (caseId: string) => onStateChange({ caseId, history: null }),
-    [onStateChange],
+    (caseId: string) => onStateChange({ caseId, history: null, customerFile: panelOpen }),
+    [onStateChange, panelOpen],
   )
 
   const openNotifiedCase = useCallback(
     (caseId: string) => {
       setFocusRequest({ kind: 'case', caseId })
-      onStateChange({ caseId, history: null })
+      onStateChange({ caseId, history: null, customerFile: panelOpen })
     },
-    [onStateChange],
+    [onStateChange, panelOpen],
   )
 
-  const openHistory = useCallback(() => onStateChange({ history: HISTORY_LIST }), [onStateChange])
+  const toggleCustomerFile = useCallback(() => {
+    if (panelOpen) {
+      onStateChange({ customerFile: false, history: null })
+      return
+    }
+    setPanelOpenedHere(true)
+    onStateChange({ customerFile: true })
+  }, [panelOpen, onStateChange])
+  const closeCustomerFile = useCallback(
+    () => onStateChange({ customerFile: false, history: null }),
+    [onStateChange],
+  )
   const selectHistory = useCallback(
     (history: string) => onStateChange({ history }, { replace: true }),
     [onStateChange],
   )
-  const closeHistory = useCallback(() => onStateChange({ history: null }), [onStateChange])
 
   const handleClosed = useCallback(
     (caseId: string) => {
@@ -137,7 +173,7 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
           <ConversationPane
             caseId={state.caseId}
             onClosed={handleClosed}
-            onOpenHistory={openHistory}
+            customerFile={{ open: panelOpen, onToggle: toggleCustomerFile }}
             focusOnLoad={focusRequest?.kind === 'case' && focusRequest.caseId === state.caseId}
             onFocused={clearFocusRequest}
           />
@@ -163,14 +199,22 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
         )}
       </main>
 
-      {state.caseId && state.history ? (
-        <CaseHistorySheet
-          caseId={state.caseId}
-          customerName={detail.data?.customer.displayName ?? ''}
-          selected={state.history}
-          onSelect={selectHistory}
-          onClose={closeHistory}
-        />
+      {state.caseId && panelOpen ? (
+        <SidePanel
+          id={CUSTOMER_FILE_PANEL_ID}
+          title="Ficha del cliente"
+          closeLabel="Cerrar la ficha del cliente"
+          onClose={closeCustomerFile}
+          focusOnOpen={panelOpenedHere}
+          returnFocusTo={CUSTOMER_FILE_TRIGGER_ID}
+        >
+          <CustomerFile
+            key={state.caseId}
+            caseId={state.caseId}
+            history={state.history}
+            onHistoryChange={selectHistory}
+          />
+        </SidePanel>
       ) : null}
     </div>
   )

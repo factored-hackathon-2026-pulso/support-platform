@@ -3,7 +3,7 @@
 A name is trimmed and its inner runs of whitespace collapse to one space. Lengths are
 team-generated limits: a person 2–120 characters, a team 2–80. ``fold`` is the comparison
 key used for uniqueness (team names), sorting and search: case-folded, accents stripped,
-spaces collapsed ("Disputas · Equipo Pacífico" and "disputas · equipo pacifico" are the same
+spaces collapsed ("Equipo Pacífico" and "equipo pacifico" are the same
 team name).
 """
 

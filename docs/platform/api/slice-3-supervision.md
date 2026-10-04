@@ -70,7 +70,7 @@ Both live in `application/cases/supervision.py` (queries `GetTeamOverview`, `Get
 ### 2.1 Who is on the team
 
 - The **analysts** are active staff holding the `analyst` role (Felipe, Analista + Supervisora, is one). Supervisors and admins without `analyst` are not listed.
-- **Teams** are the distinct `Staff.team` names of those analysts (today "Disputas · Equipo Andes" and "Disputas · Equipo Pacífico"; "Administración de la plataforma" has no analyst, so it is not listed). Slice 4 turns teams into records; until then a team is identified by `key` = a slug of its name: lower-case, accents stripped, every run of non-alphanumerics → `-`, trimmed (`disputas-equipo-andes`). Clients treat `key` as opaque.
+- **Teams** are the distinct `Staff.team` names of those analysts (today "Equipo Andes" and "Equipo Pacífico"; "Administración de la plataforma" has no analyst, so it is not listed). Slice 4 turns teams into records; until then a team is identified by `key` = a slug of its name: lower-case, accents stripped, every run of non-alphanumerics → `-`, trimmed (`disputas-equipo-andes`). Clients treat `key` as opaque.
 - **Queues** are global, one per language (`es`, `pt`), never per team. Both are always returned, even empty.
 
 ### 2.2 `AnalystActivity` ("Ahora" column)

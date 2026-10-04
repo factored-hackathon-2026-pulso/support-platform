@@ -31,17 +31,18 @@ vi.mock('@/features/cases/api', async (importOriginal) => {
  */
 vi.mock('@/features/conversation', async () => {
   const { useEffect, useRef } = await import('react')
+  const TRIGGER = 'ficha-del-cliente-boton'
   /** Stub pane: a focusable heading that takes the focus when asked, like the real one. */
   function ConversationPane({
     caseId,
     onClosed,
-    onOpenHistory,
+    customerFile,
     focusOnLoad,
     onFocused,
   }: {
     caseId: string
     onClosed?: (id: string) => void
-    onOpenHistory?: () => void
+    customerFile?: { open: boolean; onToggle(): void }
     focusOnLoad?: boolean
     onFocused?: () => void
   }) {
@@ -59,38 +60,38 @@ vi.mock('@/features/conversation', async () => {
         <button type="button" onClick={() => onClosed?.(caseId)}>
           Simular cierre
         </button>
-        <button type="button" onClick={() => onOpenHistory?.()}>
-          Casos anteriores (2)
-        </button>
+        {customerFile ? (
+          <button
+            id={TRIGGER}
+            type="button"
+            aria-expanded={customerFile.open}
+            onClick={customerFile.onToggle}
+          >
+            Ver ficha de Patricia Lozano Vega
+          </button>
+        ) : null}
       </section>
     )
   }
-  /** Stub sheet: shows what the Workspace passes and lets the test drive it. */
-  function CaseHistorySheet({
+  /** Stub sections: show what the Workspace passes and let the test drive them. */
+  function CustomerFile({
     caseId,
-    customerName,
-    selected,
-    onSelect,
-    onClose,
+    history,
+    onHistoryChange,
   }: {
     caseId: string
-    customerName: string
-    selected: string
-    onSelect: (selected: string) => void
-    onClose: () => void
+    history: string | null
+    onHistoryChange: (history: string) => void
   }) {
     return (
-      <dialog open aria-label={`Casos anteriores de ${customerName}`}>
+      <div>
         <p>
-          Historial de {caseId} · {selected}
+          Ficha de {caseId} · {history ?? 'lista'}
         </p>
-        <button type="button" onClick={() => onSelect('CASE-00000000000000000000000110')}>
+        <button type="button" onClick={() => onHistoryChange('CASE-00000000000000000000000110')}>
           Abrir caso 110
         </button>
-        <button type="button" onClick={onClose}>
-          Cerrar historial
-        </button>
-      </dialog>
+      </div>
     )
   }
   return {
@@ -101,30 +102,17 @@ vi.mock('@/features/conversation', async () => {
       history: (caseId: string) => ['conversation', caseId, 'history'],
     },
     registerConversationRealtime: () => {},
+    CUSTOMER_FILE_PANEL_ID: 'ficha-del-cliente',
+    CUSTOMER_FILE_TRIGGER_ID: TRIGGER,
     ConversationPane,
-    CaseHistorySheet,
-    useCaseDetail: (caseId: string | null) => ({
-      status: 'success',
-      isFetching: false,
-      refetch: () => {},
-      data: caseId
-        ? {
-            customer: {
-              id: 'CUS-00000000000000000000001004',
-              displayName: 'Patricia Lozano Vega',
-              country: 'MX',
-              city: 'Guadalajara',
-              locale: 'es-MX',
-              language: 'es',
-            },
-          }
-        : undefined,
-    }),
+    CustomerFile,
   }
 })
 
-// Order of Daniela's open inbox in the fixtures: Beatriz (102), Marcela (101), …
+// Daniela's open inbox in urgency order (slice 6): Beatriz (102, SLA at risk),
+// Patricia (108), Larissa (103), Marcela (101), Joaquín (107).
 const FIRST = 'CASE-00000000000000000000000102'
+const NEXT = 'CASE-00000000000000000000000108'
 const SECOND = 'CASE-00000000000000000000000101'
 
 beforeEach(() => {
@@ -168,48 +156,53 @@ describe('/analista (Workspace)', () => {
     expect(screen.getByText('Conversación CASE-00000000000000000000000107')).toBeInTheDocument()
   })
 
-  it('renders two columns: the list and the conversation, with no support panel', async () => {
+  it('renders the list and the conversation, no status tiles and no panel until asked', async () => {
     renderWorkspace()
     await screen.findByText(`Conversación ${FIRST}`)
     expect(screen.getByRole('region', { name: 'Casos abiertos' })).toBeInTheDocument()
     expect(screen.getByRole('main')).toBeInTheDocument()
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
-    const filters = screen.getByRole('radiogroup', { name: 'Filtrar casos' })
-    for (const name of [
-      '5 Todos',
-      '2 Por responder',
-      '2 Nuevos',
-      '1 Esperando al cliente',
-      '3 Cerrados',
-    ]) {
-      expect(within(filters).getByRole('radio', { name })).toBeInTheDocument()
-    }
+    expect(screen.queryByRole('radiogroup', { name: 'Filtrar casos' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Quitar filtro/ })).not.toBeInTheDocument()
   })
 
-  it('opens Cerrados from ?estado=cerrados, read-only cards, and keeps the filter in the URL', async () => {
+  it('opens Cerrados from ?estado=cerrados with a chip that removes the filter', async () => {
     vi.mocked(fetchInbox).mockImplementation(async ({ status }) =>
       status === 'closed' ? makeInbox(closedInbox) : makeInbox(),
     )
     const { router, user } = renderWorkspace('/analista?estado=cerrados')
-    expect(await screen.findByRole('radio', { name: '3 Cerrados' })).toBeChecked()
     await screen.findByText('Conversación CASE-00000000000000000000000106')
     expect(fetchInbox).toHaveBeenCalledWith({ status: 'closed', q: '' }, expect.anything())
     const list = screen.getByRole('list', { name: 'Casos' })
-    expect(
-      within(list).getByRole('button', { name: /Héctor Villarreal Garza, Cerrado/ }),
-    ).toHaveTextContent('Cerrado hace 3 h')
+    expect(within(list).getByRole('button', { name: /Héctor Villarreal Garza/ })).toHaveTextContent(
+      'Cerrado: hace 3 h',
+    )
 
-    await user.click(screen.getByRole('radio', { name: '5 Todos' }))
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro Cerrados' }))
     expect(searchOf(router).get('estado')).toBeNull()
-    await user.click(screen.getByRole('radio', { name: '1 Esperando al cliente' }))
-    expect(searchOf(router).get('estado')).toBe('esperando')
+    expect(screen.queryByRole('button', { name: /^Quitar filtro/ })).not.toBeInTheDocument()
   })
 
-  it('falls back to Todos for a removed filter slug', async () => {
+  it('opens a case from Inicio with its filter: the card is highlighted', async () => {
+    vi.mocked(fetchInbox).mockImplementation(async ({ status }) =>
+      makeInbox(status ? seededInbox.filter((item) => item.inboxStatus === status) : seededInbox),
+    )
+    renderWorkspace(`/analista?caso=${SECOND}&estado=por-responder`)
+    expect(await screen.findByText(`Conversación ${SECOND}`)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Quitar filtro Por responder' })).toBeInTheDocument()
+    const list = await screen.findByRole('list', { name: 'Casos' })
+    expect(within(list).getByRole('button', { name: /Marcela Quintana Pardo/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+  })
+
+  it('falls back to every open case for a removed filter slug', async () => {
     renderWorkspace('/analista?estado=por-llamar')
-    expect(await screen.findByRole('radio', { name: '5 Todos' })).toBeChecked()
+    await screen.findByText(`Conversación ${FIRST}`)
     expect(fetchInbox).toHaveBeenCalledWith({ status: null, q: '' }, expect.anything())
+    expect(screen.queryByRole('button', { name: /^Quitar filtro/ })).not.toBeInTheDocument()
   })
 
   it('keeps the search in the URL', async () => {
@@ -243,8 +236,10 @@ describe('/analista (Workspace)', () => {
     expect(
       await screen.findByText(/^Estás en pausa: no te llegan casos nuevos/),
     ).toBeInTheDocument()
-    expect(screen.getByText('En pausa · no te llegan casos nuevos')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Volver a disponible' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'En pausa. Volver a disponible' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Los que ya tienes siguen contigo.')).not.toBeInTheDocument()
   })
 
   it('shows a loading state while the inbox loads', async () => {
@@ -267,8 +262,9 @@ describe('/analista (Workspace)', () => {
     const { router, user } = renderWorkspace()
     await screen.findByText(`Conversación ${FIRST}`)
     await user.click(screen.getByRole('button', { name: 'Simular cierre' }))
-    expect(searchOf(router).get('caso')).toBe(SECOND)
-    const next = await screen.findByRole('heading', { name: `Conversación ${SECOND}` })
+    // The one below it in the list (urgency order).
+    expect(searchOf(router).get('caso')).toBe(NEXT)
+    const next = await screen.findByRole('heading', { name: `Conversación ${NEXT}` })
     await waitFor(() => expect(next).toHaveFocus())
   })
 
@@ -347,37 +343,63 @@ describe('/analista (Workspace)', () => {
   })
 })
 
-describe('/analista "Casos anteriores"', () => {
-  it('opens the history sheet through the URL and closes it again', async () => {
+describe('/analista "Ficha del cliente"', () => {
+  it('opens from the customer name, keeps ?ficha=1, focuses the panel and closes with Escape', async () => {
     const { router, user } = renderWorkspace()
     await screen.findByText(`Conversación ${FIRST}`)
-    await user.click(screen.getByRole('button', { name: 'Casos anteriores (2)' }))
-    expect(searchOf(router).get('historial')).toBe('lista')
-    const sheet = await screen.findByRole('dialog', {
-      name: 'Casos anteriores de Patricia Lozano Vega',
-    })
-    expect(sheet).toHaveTextContent(`Historial de ${FIRST} · lista`)
+    const trigger = screen.getByRole('button', { name: 'Ver ficha de Patricia Lozano Vega' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await user.click(trigger)
+    expect(searchOf(router).get('ficha')).toBe('1')
+    const panel = await screen.findByRole('complementary', { name: 'Ficha del cliente' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(panel).toHaveAttribute('id', 'ficha-del-cliente')
+    expect(panel).toHaveTextContent(`Ficha de ${FIRST} · lista`)
+    await waitFor(() =>
+      expect(
+        within(panel).getByRole('heading', { level: 2, name: 'Ficha del cliente' }),
+      ).toHaveFocus(),
+    )
+    // The conversation keeps working next to it.
+    expect(screen.getByText(`Conversación ${FIRST}`)).toBeInTheDocument()
 
-    await user.click(within(sheet).getByRole('button', { name: 'Abrir caso 110' }))
-    expect(searchOf(router).get('historial')).toBe('CASE-00000000000000000000000110')
-    expect(router.state.historyAction).toBe('REPLACE')
-
-    await user.click(within(sheet).getByRole('button', { name: 'Cerrar historial' }))
-    expect(searchOf(router).get('historial')).toBeNull()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(searchOf(router).get('ficha')).toBeNull()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    await waitFor(() => expect(trigger).toHaveFocus())
   })
 
-  it('restores the sheet on a past case from the URL and drops it when another case is picked', async () => {
+  it('shows "Casos anteriores" in the panel, in the URL, and closes with its button', async () => {
+    const { router, user } = renderWorkspace(`/analista?caso=${FIRST}&ficha=1`)
+    const panel = await screen.findByRole('complementary', { name: 'Ficha del cliente' })
+    // Restored from the URL: the focus is left alone.
+    expect(within(panel).getByRole('heading', { level: 2 })).not.toHaveFocus()
+    await user.click(within(panel).getByRole('button', { name: 'Abrir caso 110' }))
+    expect(searchOf(router).get('historial')).toBe('CASE-00000000000000000000000110')
+    expect(router.state.historyAction).toBe('REPLACE')
+    expect(panel).toHaveTextContent(`Ficha de ${FIRST} · CASE-00000000000000000000000110`)
+
+    await user.click(within(panel).getByRole('button', { name: 'Cerrar la ficha del cliente' }))
+    expect(searchOf(router).get('ficha')).toBeNull()
+    expect(searchOf(router).get('historial')).toBeNull()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+  })
+
+  it('maps the old ?historial= link to the panel and keeps it open on another case', async () => {
     const { router, user } = renderWorkspace(
       `/analista?caso=${FIRST}&historial=CASE-00000000000000000000000110`,
     )
     expect(
-      await screen.findByText(`Historial de ${FIRST} · CASE-00000000000000000000000110`),
+      await screen.findByText(`Ficha de ${FIRST} · CASE-00000000000000000000000110`),
     ).toBeInTheDocument()
     const list = await screen.findByRole('list', { name: 'Casos' })
     await user.click(within(list).getByRole('button', { name: /Joaquín Ferreyra Paz/ }))
     expect(searchOf(router).get('caso')).toBe('CASE-00000000000000000000000107')
     expect(searchOf(router).get('historial')).toBeNull()
+    expect(searchOf(router).get('ficha')).toBe('1')
+    expect(
+      await screen.findByText('Ficha de CASE-00000000000000000000000107 · lista'),
+    ).toBeInTheDocument()
   })
 
   it('ignores the removed panel params and restores a collapsed list (contraida)', async () => {

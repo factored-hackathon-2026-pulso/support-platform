@@ -103,7 +103,7 @@ def test_list_and_get_users(client: TestClient, sign_in: SignIn) -> None:
     daniela = client.get(f"/api/v1/admin/users/{DANIELA_ID}", headers=bearer(token)).json()
     assert AdminUser.model_validate(daniela).model_dump(mode="json", by_alias=True) == daniela
     assert daniela["openCases"] == {"total": 5, "es": 4, "pt": 1}
-    assert daniela["team"] == {"id": ANDES, "name": "Disputas · Equipo Andes"}
+    assert daniela["team"] == {"id": ANDES, "name": "Equipo Andes"}
     for bad in (UNKNOWN_STAFF, "nope", "CASE-" + "0" * 26):
         missing = client.get(f"/api/v1/admin/users/{bad}", headers=bearer(token))
         assert (missing.status_code, missing.json()["code"]) == (404, "not_found")
@@ -266,7 +266,7 @@ def test_guard_rail_problems(client: TestClient, sign_in: SignIn) -> None:
     assert (full["code"], full["memberCount"]) == ("team_not_empty", 4)
     andres = client.post(f"/api/v1/admin/users/{ANDRES_ID}/password-reset", headers=bearer(token))
     assert (andres.status_code, andres.json()["code"]) == (409, "staff_inactive")
-    taken = client.post("/api/v1/admin/teams", json={"name": "DISPUTAS · equipo andes"},
+    taken = client.post("/api/v1/admin/teams", json={"name": "EQUIPO andes"},
                         headers=bearer(token)).json()  # fmt: skip
     assert (taken["code"], taken["field"]) == ("team_name_taken", "name")
 
@@ -360,9 +360,9 @@ def test_teams_endpoints(client: TestClient, sign_in: SignIn) -> None:
     assert body["statusCounts"] == {"active": 3, "inactive": 1, "all": 4}
     assert [t["name"] for t in body["items"]] == [
         "Administración de la plataforma",
-        "Disputas · Equipo Andes",
-        "Disputas · Equipo Caribe",
-        "Disputas · Equipo Pacífico",
+        "Equipo Andes",
+        "Equipo Caribe",
+        "Equipo Pacífico",
     ]
     detail = client.get(f"/api/v1/admin/teams/{PACIFICO}", headers=bearer(token)).json()
     assert AdminTeamDetail.model_validate(detail).model_dump(mode="json", by_alias=True) == detail
@@ -438,9 +438,9 @@ def test_admin_audit_family_and_staff_include_inactive(client: TestClient, sign_
         "/api/v1/audit/events", params={"family": "administration"}, headers=bearer(token)
     ).json()["items"]
     assert [e["description"] for e in events] == [
-        "Desactivó el equipo Disputas · Equipo Caribe",
+        "Desactivó el equipo Equipo Caribe",
         "Desactivó la cuenta de Andrés Villamil",
-        "Creó el equipo Disputas · Equipo Caribe",
+        "Creó el equipo Equipo Caribe",
         "Le dio a Felipe Echeverri el rol de Supervisora",
     ]
     assert {e["family"] for e in events} == {"administration"}

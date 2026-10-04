@@ -1,5 +1,6 @@
 import { CUSTOMERS, firstName, SEEDED, uniqueText } from './support/data'
 import { expect, test } from './support/fixtures'
+import { HomePage } from './support/pages/home-page'
 import { SupervisorCasePage, TeamPage } from './support/pages/supervision-pages'
 import { WorkspacePage } from './support/pages/workspace-page'
 
@@ -96,7 +97,8 @@ test.describe('Colas y supervisión', () => {
     await expect(queued).toHaveCount(0)
     await expect(inbox.caseCard(customer.name)).toBeVisible()
     await expect(analyst.shell.toast('Te asignaron un caso')).toBeVisible()
-    await expect(analyst.shell.toast(`${customer.name} · desde supervisión`)).toBeVisible()
+    await expect(analyst.shell.toast(customer.name)).toBeVisible()
+    await expect(analyst.shell.toast('Supervisión')).toBeVisible()
     await expect(chat.status({ agent: firstName(holder.name) })).toBeVisible()
     await inbox.openCase(customer.name)
     await expect(inbox.messages(customer.name).filter({ hasText: text })).toHaveCount(1)
@@ -116,6 +118,24 @@ test.describe('Colas y supervisión', () => {
     await expect(analyst.shell.toast('Supervisión reasignó un caso')).toBeVisible()
     await expect(chat.status({ agent: firstName(next.name) })).toBeVisible()
     await expect(chat.messages.filter({ hasText: notice })).toHaveCount(1)
+
+    // On Inicio, "Mientras no estabas" says who took it; the row opens it read-only
+    // in Casos (history access: she held it).
+    const home = new HomePage(analyst.page)
+    await home.goto()
+    const given = home.feedRow('Te lo asignaron', customer.name)
+    await expect(given).toBeVisible()
+    await expect(given).toContainText(SEEDED.supervisor.name)
+    const away = home.feedRow('Ya no es tuyo', customer.name)
+    await expect(away).toContainText(SEEDED.supervisor.name)
+    await expect(away).toContainText(next.name)
+    await expect(away).toContainText('Solo lectura')
+    await away.click()
+    await expect(analyst.page).toHaveURL(new RegExp(`/analista\\?caso=${caseId}$`))
+    const readOnly = inbox.conversation(customer.name).getByRole('note', { name: 'Solo lectura' })
+    await expect(readOnly).toContainText(`Lo atiende ${next.name}`)
+    await expect(inbox.composer(customer.name)).toHaveCount(0)
+    await expect(inbox.messages(customer.name).filter({ hasText: text })).toHaveCount(1)
 
     // The new assignee has it.
     const second = await actors.signedIn('analista nueva', next)

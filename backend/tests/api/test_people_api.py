@@ -68,5 +68,5 @@ def test_include_inactive_lists_deactivated_people_too(
     )
     people = {person["name"]: person for person in response.json()["items"]}
     assert people["Andrés Villamil"]["active"] is False
-    assert people["Andrés Villamil"]["team"]["name"] == "Disputas · Equipo Andes"
+    assert people["Andrés Villamil"]["team"]["name"] == "Equipo Andes"
     assert len(people) == 13

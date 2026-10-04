@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatLongDate,
+  localHour,
   formatDate,
   formatDateTime,
   formatDuration,
@@ -84,5 +86,16 @@ describe('format', () => {
     expect(joinEs(['Analista', 'Supervisora', 'Administración'])).toBe(
       'Analista, Supervisora y Administración',
     )
+  })
+})
+
+describe('formatLongDate / localHour', () => {
+  it('names the day in the viewer zone (tests run in America/Bogota)', () => {
+    expect(formatLongDate('2026-10-03T15:00:00Z')).toBe('Sábado 3 de octubre')
+    // 02:00 UTC on the 4th is still the 3rd at 21:00 in Bogotá.
+    expect(formatLongDate('2026-10-04T02:00:00Z')).toBe('Sábado 3 de octubre')
+    expect(formatLongDate('2026-01-05T15:00:00Z', { timeZone: 'UTC' })).toBe('Lunes 5 de enero')
+    expect(localHour('2026-10-04T02:00:00Z')).toBe(21)
+    expect(localHour('2026-10-04T02:00:00Z', { timeZone: 'UTC' })).toBe(2)
   })
 })

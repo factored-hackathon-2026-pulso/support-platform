@@ -6,22 +6,39 @@
  * nothing that reaches one: src/test/architecture.test.ts checks it.
  */
 export { availabilityKeys, caseKeys } from './api'
+export { useAvailabilityPresence, useToReplyCount } from './hooks/use-analyst-shell'
 export { applyCaseSummaryToInboxes, readCaseSummary, registerCasesRealtime } from './realtime'
 export {
   CLOSE_REASONS,
   INBOX_FILTERS,
+  caseCardFacts,
+  channelFact,
   channelLabel,
   channelPhrase,
   closeReasonLabel,
+  closeReasonOption,
+  compareByUrgency,
   countryName,
+  filterChipLabel,
   formatSla,
   inboxStatusFromSlug,
   inboxStatusMeta,
   isNewerCase,
+  priorityFact,
   priorityLabel,
+  slaFact,
   slugFromInboxStatus,
+  sortByUrgency,
+  urgencyGroup,
 } from './model'
-export type { InboxFilter, InboxStatusMeta, SlaDisplay, ToastCopy } from './model'
+export type {
+  CloseReasonOption,
+  InboxFilter,
+  InboxStatusMeta,
+  SlaLevel,
+  SlaDisplay,
+  ToastCopy,
+} from './model'
 export type {
   Availability,
   AvailabilityStatus,

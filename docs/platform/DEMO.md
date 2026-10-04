@@ -29,7 +29,7 @@ pantalla.
    | Ventana | URL | Quién | Preparación |
    |---|---|---|---|
    | **A · Cliente** | http://localhost:5173/cliente | el simulador de cliente | Deja visible "Elige un cliente de ejemplo" |
-   | **B · Analista** | http://localhost:5173/login | Felipe Echeverri, `felipe.echeverri@latambank.example` | Entra (contraseña `demo1234`, código `000000`). Queda en "Casos", vacío y **En pausa**. No lo pongas disponible todavía |
+   | **B · Analista** | http://localhost:5173/login | Felipe Echeverri, `felipe.echeverri@latambank.example` | Entra (contraseña `demo1234`, código `000000`). Llega a **"Inicio"** ("Estás en pausa"). No lo pongas disponible todavía |
    | **C · Supervisión y administración** | http://localhost:5173/login | Lucía Herrera, `lucia.herrera@latambank.example` | Entra. Queda en "Equipo y colas" |
 
    Durante la demo abrirás una cuarta pestaña para la persona nueva que crea administración.
@@ -49,14 +49,23 @@ Supervisora reparte el trabajo y revisa la auditoría, Administración gestiona 
 idiomas y equipos. A la izquierda está el simulador que reemplaza la app del cliente; al centro,
 un analista; a la derecha, supervisión."
 
-### 2. El analista se pone disponible (0:45 – 1:30)
+### 2. El analista empieza en "Inicio" y se pone disponible (0:45 – 1:30)
 
-**B (Felipe):** pulsa **"Volver a disponible"** (arriba de la lista o en el aviso "En pausa · no
-te llegan casos nuevos").
+**Señalar en B (Inicio):** el saludo, el bloque "Estás en pausa" con "Sin casos nuevos", los
+cuatro contadores (Por responder, Nuevos, Esperando al cliente, Cerrados), "Lo primero" (sus casos
+abiertos por lo que vence antes), "Mientras no estabas" (lo que pasó en sus casos desde su
+sesión anterior: plantillas fijas, nada generado) y "Tu equipo ahora" (cuántos están disponibles y
+cuántos casos esperan en la cola de sus idiomas, sin nombres).
 
-**Se ve:** llegan Rosa Elena Ibarra Méndez y Mauricio Achával Ríos con el aviso "Te llegó un caso
-nuevo". El contador pasa a "2 Todos · 2 Nuevos". En **C**, la "Cola en español" queda en 0; la
-"Cola en portugués" sigue con Gabriela.
+**B (Felipe):** pulsa **"Empezar a atender"**.
+
+**Se ve:** "Estás disponible"; llegan Rosa Elena Ibarra Méndez y Mauricio Achával Ríos: aparecen
+en "Lo primero" y en "Mientras no estabas" como "Te llegó desde la cola" con "Esperó n min". El
+contador "Nuevos" pasa a 2 y el menú "Casos" muestra la insignia de "Por responder" cuando la
+haya. En **C**, la "Cola en español" queda en 0; la "Cola en portugués" sigue con Gabriela.
+
+**B:** en "Lo primero", pulsa **"Abrir"** en Rosa: se abre "Casos" con su caso y el filtro
+"Nuevos" (el chip "Nuevos ✕" lo quita y vuelve a todos los casos abiertos).
 
 **Decir:** "Mientras nadie estaba disponible, los casos esperaron en la cola de su idioma. Felipe
 se puso disponible y le llegaron los de español, el más antiguo primero. El de Gabriela es en
@@ -71,36 +80,38 @@ solo lo atiende alguien que habla portugués."
 **Se ve en A:** "Te atiende Felipe · LATAM Bank" y el aviso "Recibimos tu mensaje. En unos minutos
 te responde una persona del equipo."
 
-**Se ve en B, sin recargar:** el aviso "Te llegó un caso nuevo" y la tarjeta de Natalia con
-"Nuevo" y su SLA de primera respuesta.
+**Se ve en B, sin recargar:** el aviso "Te llegó un caso nuevo" y la tarjeta de Natalia con la
+etiqueta "Nuevo" y el tiempo de su primera respuesta (reloj; llama naranja cuando faltan 5 minutos
+o menos, llama roja "Vencido" si ya pasó).
 
 **B:** abre la tarjeta de Natalia.
 
-**Señalar:** el encabezado (cliente, número de caso copiable, "Colombia · Bogotá · chat en la
-app · prioridad media", "Datos de ejemplo") y la línea **"Cómo llegó a ti: Te llegó porque estás
-disponible y hablas español"**. La nota interna de asignación solo la ve el equipo.
+**Señalar:** el encabezado (solo el nombre y el número de caso copiable) y la fila **"Cómo llegó
+a ti"** (Estabas disponible, Hablas español). Pulsa el **nombre de Natalia**: se abre a la derecha
+la **"Ficha del cliente"** (Cliente, Este caso, Cómo llegó a ti, Casos anteriores). Ciérrala con
+Escape o con el botón. La nota interna de asignación solo la ve el equipo.
 
 **B:** escribe `Hola Natalia, soy Felipe. ¿Me confirmas la fecha del cargo?` y pulsa Enter.
 **A:** la respuesta aparece al instante. Contesta `Fue ayer en la noche`.
 **B:** el mensaje aparece y la tarjeta pasa a "Por responder".
 
 **Decir:** "Son dos navegadores conectados por un WebSocket. Cada caso tiene una sola persona
-asignada y solo ella escribe. Los estados de la lista son los filtros: Por responder, Nuevos,
-Esperando al cliente, Cerrados."
+asignada y solo ella escribe. La lista de Casos va por urgencia; los filtros por estado se eligen
+desde Inicio."
 
 ### 4. Cerrar con motivo (3:00 – 4:00)
 
 **B:** pulsa **"Cerrar caso"**. En el diálogo:
 
-- elige el motivo **"Resuelto"** (obligatorio; las opciones son Resuelto · El cliente no
-  respondió · Duplicado · Fuera de alcance · Otro);
+- elige el motivo **"Resuelto"** (obligatorio; son tarjetas con ícono y significado: Resuelto,
+  El cliente no respondió, Duplicado, Fuera de alcance y Otro);
 - en **"Nota interna (opcional)"** escribe `Cargo identificado; se explicó a la clienta.`;
 - señala **"El cliente verá"**: el aviso de cierre, sin el motivo ni la nota.
 
 Pulsa **"Cerrar caso"**.
 
-**Se ve:** en B el contador "1 Cerrados" (los cerrados de los últimos 7 días, solo lectura) y la
-lista pasa al siguiente caso. En A: "Conversación terminada" y "La conversación terminó. Si
+**Se ve:** en B la lista pasa al siguiente caso; en Inicio el contador "Cerrados" (últimos 7
+días, solo lectura) sube a 1. En A: "Conversación terminada" y "La conversación terminó. Si
 necesitas algo más, escríbenos y te atendemos en una nueva conversación."
 
 ### 5. La clienta vuelve: caso nuevo vinculado (4:00 – 5:00)
@@ -111,9 +122,9 @@ necesitas algo más, escríbenos y te atendemos en una nueva conversación."
 una nueva con Felipe.
 
 **Se ve en B:** una tarjeta nueva de Natalia con la etiqueta **"Volvió a escribir"**. Ábrela: la
-nota interna "Natalia volvió a escribir. Su caso anterior se cerró … (resuelto)." Pulsa
-**"Casos anteriores (1)"**: se abre "Casos anteriores de Natalia" con la conversación anterior,
-solo lectura. Ciérralo.
+nota interna "Natalia volvió a escribir. Su caso anterior se cerró … (resuelto)." Pulsa su
+**nombre** y, en la ficha, la sección **"Casos anteriores (1)"**: la conversación anterior, solo
+lectura, con su motivo de cierre. Cierra la ficha.
 
 **Decir:** "Un cliente tiene como máximo un caso abierto. Si escribe después de un cierre se
 abre un caso nuevo, enlazado al anterior, y se asigna con las mismas reglas. El historial es de
@@ -168,12 +179,12 @@ menú indica "1 pendiente", es Mariana Duque: la semilla la deja bloqueada solo 
 13 minutos después del reinicio. No hace falta tocarla.
 
 1. Pulsa **"Nueva persona"**: nombre `Bruna Esteves`, correo `bruna.esteves@latambank.example`,
-   rol **Analista**, idioma **Portugués**, equipo **"Disputas · Equipo Andes"**. Pulsa
+   rol **Analista**, idioma **Portugués**, equipo **"Equipo Andes"**. Pulsa
    **"Crear cuenta"**.
 2. Aparece "Cuenta creada" con la **contraseña temporal** (se muestra una sola vez). Pulsa
    **"Copiar"** y luego **"Listo"**.
 3. Abre una **pestaña nueva** en http://localhost:5173/login y entra como Bruna con esa contraseña
-   y el código `000000`. Llega a "Casos", vacío y en pausa. Pulsa **"Volver a disponible"**.
+   y el código `000000`. Llega a **"Inicio"**, en pausa. Pulsa **"Empezar a atender"**.
 4. **A (cliente):** pulsa **"Cambiar de cliente"** y elige **Rafael Nogueira Costa** (Portugués de
    Brasil). El simulador habla en portugués. Pulsa la sugerencia
    **"Olá, não reconheço uma compra no meu cartão"** y **Enviar**.
@@ -228,7 +239,7 @@ Todo pensado para el trabajo diario del equipo de soporte."
 |---|---|
 | Un mensaje no aparece en la otra ventana | Recarga esa ventana (Cmd+R). La sesión sobrevive a la recarga y los datos vienen del servidor. Ver "El chat no se actualiza en vivo" en el [RUNBOOK](./RUNBOOK.md#el-chat-no-se-actualiza-en-vivo-websocket) |
 | "No hay conexión con el servidor" al entrar | El backend no está corriendo o cambió de puerto. Revisa la terminal 1 y `curl -s http://127.0.0.1:8000/api/v1/health` |
-| A Felipe no le llegaron Rosa y Mauricio | No está "Disponible": pulsa el botón de estado arriba de su lista |
+| A Felipe no le llegaron Rosa y Mauricio | No está "Disponible": pulsa "Empezar a atender" en Inicio (o el control naranja "En pausa" arriba de la lista de Casos) |
 | La cola en portugués ya estaba vacía | Alguien que habla portugués estaba disponible (por ejemplo, Daniela entró y se puso disponible). Reinicia la base, o muestra la regla 3 con Rafael: con las personas que hablan portugués en pausa, su caso queda en "Cola en portugués" y lo asignas a mano |
 | Martín ya estaba bloqueado antes del paso 9.3 (quedó de un ensayo) | Desbloquéalo igual desde su ficha y repite los 5 intentos, o reinicia la base |
 | Martín no queda bloqueado al quinto intento | Revisa que el correo sea exactamente `martin.salazar@latambank.example`: los intentos se cuentan por cuenta |

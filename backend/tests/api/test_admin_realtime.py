@@ -192,15 +192,13 @@ def test_a_team_rename_updates_each_active_member(client: TestClient, sign_in: S
         team = client.get(f"/api/v1/admin/teams/{PACIFICO}", headers=bearer(admin)).json()["team"]
         renamed = client.patch(
             f"/api/v1/admin/teams/{PACIFICO}",
-            json={"expectedVersion": team["version"], "name": "Disputas · Equipo Pacífico Sur"},
+            json={"expectedVersion": team["version"], "name": "Equipo Pacífico Sur"},
             headers=bearer(admin),
         )
         assert renamed.status_code == 200
         mine = of_type(until_pong(tomas), "me.updated")
         rows = of_type(until_pong(lucia), "team.updated")
-    assert [e["data"]["payload"]["team"]["name"] for e in mine] == [
-        "Disputas · Equipo Pacífico Sur"
-    ]
+    assert [e["data"]["payload"]["team"]["name"] for e in mine] == ["Equipo Pacífico Sur"]
     (row,) = rows
     assert set(row["data"]["payload"]["staffIds"]) == {
         seed_staff_id(3),
@@ -208,7 +206,7 @@ def test_a_team_rename_updates_each_active_member(client: TestClient, sign_in: S
         TOMAS_ID,
     }  # Pacífico's active analysts
     overview = client.get("/api/v1/supervision/team", headers=bearer(sign_in(SUPERVISOR.email)))
-    assert "Disputas · Equipo Pacífico Sur" in [t["name"] for t in overview.json()["teams"]]
+    assert "Equipo Pacífico Sur" in [t["name"] for t in overview.json()["teams"]]
 
 
 def test_supervision_gets_team_and_queue_signals(client: TestClient, sign_in: SignIn) -> None:

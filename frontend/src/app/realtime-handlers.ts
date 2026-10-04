@@ -1,6 +1,7 @@
 import { registerAdminRealtime } from '@/features/admin/core'
 import { registerCasesRealtime } from '@/features/cases/core'
 import { registerConversationRealtime } from '@/features/conversation/core'
+import { registerHomeRealtime } from '@/features/home/core'
 import { registerSupervisionRealtime } from '@/features/supervision/core'
 import {
   createEnvelopeHandlerRegistry,
@@ -26,6 +27,7 @@ import { registerSessionRealtime } from './session-realtime'
 export const FEATURE_REALTIME_REGISTRATIONS: readonly RealtimeRegistration[] = [
   registerCasesRealtime, // case.updated, case.assigned, case.unassigned, inbox.counts, availability.updated → inbox
   registerConversationRealtime, // turn.created, case.updated, case.assigned → open case
+  registerHomeRealtime, // her inbox, availability and queue signals → "Inicio" (throttled refetch)
   registerSupervisionRealtime, // queue.updated, queue.case_queued, team.updated → team and queues
   registerAdminRealtime, // directory.updated → users and teams
   registerSessionRealtime, // me.updated → the signed-in staff member (roles, team, name)

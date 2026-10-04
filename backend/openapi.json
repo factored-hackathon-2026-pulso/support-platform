@@ -432,6 +432,40 @@
         "title": "AnalystCaseCounts",
         "type": "object"
       },
+      "AnalystHome": {
+        "properties": {
+          "activity": {
+            "$ref": "#/components/schemas/HomeActivity"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          },
+          "since": {
+            "description": "Start of 'Mientras no estabas' (exclusive).",
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          },
+          "sinceSource": {
+            "$ref": "#/components/schemas/SinceSource",
+            "description": "previous_session: her previous session ended then; fallback: now − 8 h."
+          },
+          "teamNow": {
+            "$ref": "#/components/schemas/HomeTeam"
+          }
+        },
+        "required": [
+          "since",
+          "sinceSource",
+          "activity",
+          "teamNow",
+          "serverTime"
+        ],
+        "title": "AnalystHome",
+        "type": "object"
+      },
       "AssignmentOut": {
         "properties": {
           "analystId": {
@@ -1972,6 +2006,276 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "HomeActivity": {
+        "properties": {
+          "items": {
+            "description": "Newest first, at most 10.",
+            "items": {
+              "$ref": "#/components/schemas/HomeActivityItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "description": "Every row after `since` (items is capped).",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "HomeActivity",
+        "type": "object"
+      },
+      "HomeActivityItem": {
+        "properties": {
+          "actorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "assigned_by_supervisor, reassigned_away: the supervisor.",
+            "title": "Actorname"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "caseStatus": {
+            "$ref": "#/components/schemas/CaseStatus",
+            "description": "The case status now."
+          },
+          "customerName": {
+            "title": "Customername",
+            "type": "string"
+          },
+          "firstResponseAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstresponseat"
+          },
+          "inboxStatus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InboxStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its bucket in Casos now."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/HomeActivityKind"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language",
+            "description": "The case language."
+          },
+          "lastCloseReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CloseReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "customer_returned: how the case it continues was closed."
+          },
+          "messageCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "customer_messages: how many.",
+            "title": "Messagecount"
+          },
+          "occurredAt": {
+            "description": "The fact's time (last message for messages).",
+            "format": "date-time",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "previousCasesCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "customer_returned: the customer's cases opened before this one.",
+            "title": "Previouscasescount"
+          },
+          "readOnly": {
+            "description": "The case is not hers now: it opens read-only.",
+            "title": "Readonly",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssignmentReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Assignment rows: why it moved."
+          },
+          "slaDueAt": {
+            "format": "date-time",
+            "title": "Sladueat",
+            "type": "string"
+          },
+          "targetName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "reassigned_away: who has it now.",
+            "title": "Targetname"
+          },
+          "waitedSeconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "assigned_from_queue: the queue wait.",
+            "title": "Waitedseconds"
+          }
+        },
+        "required": [
+          "kind",
+          "caseId",
+          "customerName",
+          "occurredAt",
+          "language",
+          "readOnly",
+          "caseStatus",
+          "inboxStatus",
+          "slaDueAt",
+          "firstResponseAt",
+          "actorName",
+          "targetName",
+          "reason",
+          "waitedSeconds",
+          "previousCasesCount",
+          "lastCloseReason",
+          "messageCount"
+        ],
+        "title": "HomeActivityItem",
+        "type": "object"
+      },
+      "HomeActivityKind": {
+        "description": "One row kind of \"Mientras no estabas\" (each has one fixed template in the frontend).\n\n- ``assigned_on_arrival``: a new case went to her on arrival (rule 3, least loaded).\n- ``assigned_from_queue``: a queued case went to her when she became available.\n- ``assigned_by_supervisor``: a supervisor assigned it to her (from the queue or another\n  analyst).\n- ``reassigned_away``: a supervisor gave one of her cases to someone else (read-only now).\n- ``customer_returned``: the case continues a closed one of the same customer (it\n  replaces the arrival row of that case).\n- ``customer_messages``: the customer wrote in one of her cases (one row per case).",
+        "enum": [
+          "assigned_on_arrival",
+          "assigned_from_queue",
+          "assigned_by_supervisor",
+          "reassigned_away",
+          "customer_returned",
+          "customer_messages"
+        ],
+        "title": "HomeActivityKind",
+        "type": "string"
+      },
+      "HomeQueue": {
+        "properties": {
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "oldestQueuedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldestqueuedat"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "language",
+          "waiting",
+          "oldestQueuedAt"
+        ],
+        "title": "HomeQueue",
+        "type": "object"
+      },
+      "HomeTeam": {
+        "properties": {
+          "analystCount": {
+            "description": "Active analysts of her team (her included).",
+            "title": "Analystcount",
+            "type": "integer"
+          },
+          "availableCount": {
+            "description": "Active analysts of her team now available.",
+            "title": "Availablecount",
+            "type": "integer"
+          },
+          "queues": {
+            "description": "Only the languages she speaks (es, then pt).",
+            "items": {
+              "$ref": "#/components/schemas/HomeQueue"
+            },
+            "title": "Queues",
+            "type": "array"
+          },
+          "teamId": {
+            "title": "Teamid",
+            "type": "string"
+          },
+          "teamName": {
+            "title": "Teamname",
+            "type": "string"
+          }
+        },
+        "required": [
+          "teamId",
+          "teamName",
+          "availableCount",
+          "analystCount",
+          "queues"
+        ],
+        "title": "HomeTeam",
+        "type": "object"
+      },
       "InboxCounts": {
         "properties": {
           "all": {
@@ -3024,6 +3328,15 @@
         ],
         "title": "SetAssigneeRequest",
         "type": "object"
+      },
+      "SinceSource": {
+        "description": "Where ``since`` comes from: her previous session's end, or the 8-hour fallback.",
+        "enum": [
+          "previous_session",
+          "fallback"
+        ],
+        "title": "SinceSource",
+        "type": "string"
       },
       "StaffListResponse": {
         "properties": {
@@ -6700,6 +7013,53 @@
         "summary": "Set my availability (same status = no change, no event)",
         "tags": [
           "availability"
+        ]
+      }
+    },
+    "/api/v1/me/home": {
+      "get": {
+        "description": "`since` is the end of her previous session (the latest ended or expired session other than the current one), or now − 8 h without one (`sinceSource: fallback`). `activity` lists structured rows (no text) built from the event log after `since`: only her cases (held now, or assigned to her or taken away from her), never her own actions, one row per case and kind, newest first, at most 10 (`total` counts them all). `teamNow` counts the available analysts of her team and the cases waiting in the queues of her languages (no names).",
+        "operationId": "home_get_home",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalystHome"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "My home: activity since my previous session and my team's queues now",
+        "tags": [
+          "home"
         ]
       }
     },

@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router'
-import { useRailIndicators } from '@/app/rail-indicators'
+import { useRailIndicators, useRailPresence } from '@/app/rail-indicators'
 import { useCurrentRole } from '@/app/session'
 import { NavigationProgress } from './NavigationProgress'
 import { Rail } from './Rail'
@@ -11,10 +11,11 @@ import { Rail } from './Rail'
 export function AppShell() {
   const role = useCurrentRole()
   const indicators = useRailIndicators(role.id)
+  const presence = useRailPresence(role.id)
   return (
     <div className="flex h-dvh min-h-0 bg-canvas text-ink">
       <NavigationProgress />
-      <Rail role={role} indicators={indicators} />
+      <Rail role={role} indicators={indicators} presence={presence} />
       <div className="flex min-w-0 grow flex-col overflow-hidden">
         <Outlet />
       </div>

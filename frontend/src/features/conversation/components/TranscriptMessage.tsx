@@ -34,8 +34,9 @@ export function TranscriptMessage({ item, onRetry }: TranscriptMessageProps) {
   if (item.variant === 'notice') {
     return (
       <li className="flex justify-center">
-        <p className="m-0 max-w-[80%] text-center text-12 text-muted">
-          <span className="font-semibold">{noticeLabel(item)}</span> · {item.text}
+        <p className="m-0 flex max-w-[80%] flex-col items-center gap-0.5 text-center text-12 text-muted">
+          <span className="font-semibold">{noticeLabel(item)}</span>
+          <span>{item.text}</span>
         </p>
       </li>
     )
@@ -97,8 +98,12 @@ function MessageMeta({ item, onRetry }: TranscriptMessageProps) {
     )
   }
   return (
-    <span className="text-12 text-muted" aria-hidden="true">
-      {item.author} · {formatTime(item.createdAt)}
+    <span className="flex items-center gap-2 text-12 text-muted" aria-hidden="true">
+      <span>{item.author}</span>
+      <span className="inline-flex items-center gap-1">
+        <Clock size={12} aria-hidden="true" />
+        {formatTime(item.createdAt)}
+      </span>
     </span>
   )
 }

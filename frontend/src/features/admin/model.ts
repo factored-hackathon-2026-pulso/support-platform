@@ -6,7 +6,8 @@
  * every problem code and the toasts. No React, no I/O: unit-tested in
  * model.test.ts.
  */
-import { rolesLabel, sortRoles, type RoleId } from '@/app/roles'
+import { sortRoles, type RoleId } from '@/app/roles'
+import type { FactItem } from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
 import { formatTime, joinEs, pluralize } from '@/lib/format'
 import type {
@@ -65,7 +66,7 @@ export function languagesLabel(languages: readonly Language[]): string {
     : '—'
 }
 
-/** "Disputas · Equipo Andes (inactivo)" for options naming an inactive team. */
+/** "Equipo Andes (inactivo)" for options naming an inactive team. */
 export function teamOptionLabel(team: Pick<AdminTeam, 'name' | 'active'>): string {
   return team.active ? team.name : `${team.name} (inactivo)`
 }
@@ -124,9 +125,23 @@ export function openCasesFact(openCases: AdminUser['openCases']): string {
   return [String(openCases.total), ...parts].join(' · ')
 }
 
-/** Aside line: "Analista · español, portugués · Disputas · Equipo Andes". */
-export function userSummaryLine(user: Pick<AdminUser, 'roles' | 'languages' | 'team'>): string {
-  return [rolesLabel(user.roles), languagesLabel(user.languages), user.team.name].join(' · ')
+/**
+ * Aside facts under the name (slice 6 UI rule: structured items, never a
+ * dot-joined line; the roles are chips next to them): [languages] "Español y
+ * portugués", [users] the team.
+ */
+export function userSummaryFacts(user: Pick<AdminUser, 'languages' | 'team'>): FactItem[] {
+  const sorted = LANGUAGES.filter((language) => user.languages.includes(language))
+  const spoken = joinEs(sorted.map((language) => LANGUAGE_IN_SENTENCE[language]))
+  return [
+    {
+      key: 'languages',
+      icon: 'languages',
+      text: spoken ? spoken.charAt(0).toUpperCase() + spoken.slice(1) : 'Sin idiomas',
+      label: 'Idiomas',
+    },
+    { key: 'team', icon: 'users', text: user.team.name, label: 'Equipo' },
+  ]
 }
 
 // ── URL state (frozen, contract §10.11) ──────────────────────────────────────

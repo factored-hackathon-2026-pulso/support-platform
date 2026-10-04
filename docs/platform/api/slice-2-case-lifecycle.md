@@ -580,17 +580,17 @@ The ids are stable (`seed_staff_id(n)`, `seed_customer_id(n)`, `seed_case_id(n)`
 
 | n | Name | Roles | Languages | Team | Availability |
 |---|---|---|---|---|---|
-| 1 | Daniela Ríos | Analista | es, pt | Disputas · Equipo Andes | **available** (slice 3 §9.3: paused since T−12m) |
-| 2 | Julián Ortega | Analista | es | Disputas · Equipo Andes | paused |
-| 3 | Paula Medina | Analista | es | Disputas · Equipo Pacífico | paused |
-| 4 | Sebastián Cárdenas | Analista | es, pt | Disputas · Equipo Pacífico | paused |
-| 5 | Lucía Herrera | Supervisora | es, pt | Disputas · Equipo Andes | — |
-| 6 | Martín Salazar | Supervisora | es | Disputas · Equipo Pacífico | — |
+| 1 | Daniela Ríos | Analista | es, pt | Equipo Andes | **available** (slice 3 §9.3: paused since T−12m) |
+| 2 | Julián Ortega | Analista | es | Equipo Andes | paused |
+| 3 | Paula Medina | Analista | es | Equipo Pacífico | paused |
+| 4 | Sebastián Cárdenas | Analista | es, pt | Equipo Pacífico | paused |
+| 5 | Lucía Herrera | Supervisora | es, pt | Equipo Andes | — |
+| 6 | Martín Salazar | Supervisora | es | Equipo Pacífico | — |
 | 7 | Valeria Quintero | **Administración** (was Automatización + Administración) | es | Administración de la plataforma | — |
-| 8 | Tomás Arango | **Analista** (was Automatización only; kept so his id stays valid) | es, pt | Disputas · Equipo Pacífico | paused |
+| 8 | Tomás Arango | **Analista** (was Automatización only; kept so his id stays valid) | es, pt | Equipo Pacífico | paused |
 | 9 | Carolina Peña | Administración | es | Administración de la plataforma | — |
-| 10 | Renata Villalba | **Supervisora** (was Supervisora + Automatización) | es, pt | Disputas · Equipo Pacífico | — |
-| 11 | Felipe Echeverri | **Analista + Supervisora** (team lead) | es | Disputas · Equipo Andes | paused |
+| 10 | Renata Villalba | **Supervisora** (was Supervisora + Automatización) | es, pt | Equipo Pacífico | — |
+| 11 | Felipe Echeverri | **Analista + Supervisora** (team lead) | es | Equipo Andes | paused |
 
 The team "Automatización" is removed. The role switcher is exercised by Felipe (Casos ↔ Equipo y colas).
 

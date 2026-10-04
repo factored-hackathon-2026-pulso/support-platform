@@ -4,6 +4,7 @@ import {
   type NavItem,
   type RailIndicator,
   type RailIndicators,
+  type RailPresence,
   type RoleDefinition,
 } from '@/app/roles'
 import { CountBadge } from '@/components/ui'
@@ -14,6 +15,8 @@ export interface RailProps {
   role: RoleDefinition
   /** Live badge / dot values by indicator key (app/rail-indicators.ts). Missing → nothing shown. */
   indicators?: RailIndicators
+  /** Presence dot on the avatar (the analyst's availability); null/absent = none. */
+  presence?: RailPresence | null
 }
 
 /** The count and dot of an item, or nothing when its indicator has no value. */
@@ -28,7 +31,7 @@ function navAccessibleName(label: string, { count, dot }: RailIndicator): string
 }
 
 /** Dark 64px left rail: brand mark, the current role's destinations and the role switcher. */
-export function Rail({ role, indicators = {} }: RailProps) {
+export function Rail({ role, indicators = {}, presence = null }: RailProps) {
   const { pathname } = useLocation()
   return (
     <nav
@@ -75,7 +78,7 @@ export function Rail({ role, indicators = {} }: RailProps) {
           )
         })}
       </ul>
-      <RoleSwitcher currentRole={role} />
+      <RoleSwitcher currentRole={role} presence={presence} />
     </nav>
   )
 }

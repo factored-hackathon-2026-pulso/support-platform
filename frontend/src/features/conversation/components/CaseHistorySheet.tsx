@@ -6,15 +6,17 @@ import {
   Callout,
   cardClasses,
   EmptyState,
+  Fact,
   QueryState,
   Sheet,
   Skeleton,
 } from '@/components/ui'
+import { CloseReasonIcon, closeReasonLabel } from '@/features/cases'
 import { cn } from '@/lib/cn'
+import { formatDateTime } from '@/lib/format'
 import {
-  closureLine,
   describeCaseLoadFailure,
-  historyItemLine,
+  historyItemFacts,
   historySheetTitle,
   historyTruncatedNote,
   shortCaseId,
@@ -53,7 +55,6 @@ export function CaseHistorySheet({
   onSelect,
   onClose,
 }: CaseHistorySheetProps) {
-  const previous = usePreviousView(selected)
   return (
     <Sheet
       open
@@ -64,17 +65,49 @@ export function CaseHistorySheet({
       description="Conversaciones que tuvo con el equipo. Solo lectura."
       width={600}
     >
-      {selected === 'lista' ? (
-        <HistoryList caseId={caseId} onSelect={onSelect} returnTo={previous} />
-      ) : (
-        <PastCase
-          key={selected}
-          caseId={selected}
-          focusHeading={previous !== null}
-          onBack={() => onSelect('lista')}
-        />
-      )}
+      <CaseHistoryBrowser caseId={caseId} selected={selected} onSelect={onSelect} />
     </Sheet>
+  )
+}
+
+export interface CaseHistoryBrowserProps {
+  /** The case on screen (its customer's other cases are listed). */
+  caseId: string
+  /** `'lista'` = the list; a case id = that past case's read-only transcript. */
+  selected: 'lista' | string
+  onSelect(selected: 'lista' | string): void
+  /** Heading level of the past case and the empty state (h3 in the sheet, h4 in a panel section). */
+  headingLevel?: 'h3' | 'h4'
+}
+
+/**
+ * The content of "Casos anteriores": the list, or one past case's read-only
+ * transcript with "Todos los casos anteriores" to go back. Shared by the
+ * supervisor's sheet (`CaseHistorySheet`) and the Workspace's "Ficha del
+ * cliente" section (slice 6 §5), so both behave the same (focus included).
+ */
+export function CaseHistoryBrowser({
+  caseId,
+  selected,
+  onSelect,
+  headingLevel = 'h3',
+}: CaseHistoryBrowserProps) {
+  const previous = usePreviousView(selected)
+  return selected === 'lista' ? (
+    <HistoryList
+      caseId={caseId}
+      onSelect={onSelect}
+      returnTo={previous}
+      headingLevel={headingLevel}
+    />
+  ) : (
+    <PastCase
+      key={selected}
+      caseId={selected}
+      focusHeading={previous !== null}
+      onBack={() => onSelect('lista')}
+      headingLevel={headingLevel}
+    />
   )
 }
 
@@ -99,9 +132,10 @@ interface HistoryListProps {
   onSelect(id: string): void
   /** The view the sheet showed before the list (a past case id): its row takes the focus. */
   returnTo: string | null
+  headingLevel: 'h3' | 'h4'
 }
 
-function HistoryList({ caseId, onSelect, returnTo }: HistoryListProps) {
+function HistoryList({ caseId, onSelect, returnTo, headingLevel }: HistoryListProps) {
   const history = useCaseHistory(caseId)
   const rows = useRef(new Map<string, HTMLButtonElement>())
   const pendingFocus = useRef(returnTo)
@@ -123,7 +157,8 @@ function HistoryList({ caseId, onSelect, returnTo }: HistoryListProps) {
         <EmptyState
           icon={<FolderOpen size={36} strokeWidth={1.6} aria-hidden="true" />}
           title="No tiene otros casos."
-          as="h3"
+          as={headingLevel}
+          size={headingLevel === 'h4' ? 'compact' : 'default'}
         />
       }
       errorTitle="No pudimos cargar los casos anteriores"
@@ -151,8 +186,16 @@ function HistoryList({ caseId, onSelect, returnTo }: HistoryListProps) {
                     )}
                   >
                     <span className="flex min-w-0 grow flex-col gap-1">
-                      <span className="text-14 font-semibold text-ink">
-                        {historyItemLine(item)}
+                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {item.status === 'closed' && item.closeReason ? (
+                          <span className="inline-flex items-center gap-1.5 text-13 font-semibold text-ink">
+                            <CloseReasonIcon reason={item.closeReason} />
+                            {closeReasonLabel(item.closeReason)}
+                          </span>
+                        ) : null}
+                        {historyItemFacts(item).map(({ key, ...fact }) => (
+                          <Fact key={key} {...fact} focusable={false} />
+                        ))}
                       </span>
                       <span className="truncate text-13 text-ink-2">
                         {item.preview ?? 'Sin mensajes'}
@@ -176,9 +219,10 @@ interface PastCaseProps {
   /** The sheet switched to this case from the list: its heading takes the focus. */
   focusHeading: boolean
   onBack(): void
+  headingLevel: 'h3' | 'h4'
 }
 
-function PastCase({ caseId, focusHeading, onBack }: PastCaseProps) {
+function PastCase({ caseId, focusHeading, onBack, headingLevel: Heading }: PastCaseProps) {
   const me = useCurrentUser()
   const detail = useCaseDetail(caseId)
   const turns = useCaseTurns(caseId, detail.data?.case.lastSequence)
@@ -196,14 +240,13 @@ function PastCase({ caseId, focusHeading, onBack }: PastCaseProps) {
   const failed = detail.status === 'error' || turns.status === 'error'
   const closure = detail.data?.closure
   const heading = (
-    <h3
+    <Heading
       ref={headingRef}
       tabIndex={-1}
       className="m-0 text-15 font-semibold text-ink focus-visible:outline-offset-4"
     >
       Caso <span className="font-mono text-14">{shortCaseId(caseId)}</span>
-      {detail.data && !failed ? ` · ${closure ? closureLine(closure, me.id) : 'Abierto'}` : null}
-    </h3>
+    </Heading>
   )
 
   const back = (
@@ -249,6 +292,27 @@ function PastCase({ caseId, focusHeading, onBack }: PastCaseProps) {
     <div className="flex flex-col gap-3">
       {back}
       {heading}
+      {detail.data && !failed ? (
+        closure ? (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-1.5 text-13 font-semibold text-ink">
+              <CloseReasonIcon reason={closure.reason} />
+              {closeReasonLabel(closure.reason)}
+            </span>
+            <Fact
+              icon="clock"
+              text={formatDateTime(closure.closedAt, { withYear: false })}
+              label="Cerrado"
+              tooltip="Cerrado"
+            />
+            {closure.closedByName ? (
+              <Fact icon="user" text={closure.closedByName} label="Lo cerró" tooltip="Lo cerró" />
+            ) : null}
+          </span>
+        ) : (
+          <Fact icon="inbox" text="Abierto" tone="accent" />
+        )
+      ) : null}
       {closure?.note ? <p className="m-0 text-13 text-ink-2">Nota: {closure.note}</p> : null}
       {turns.status === 'pending' || detail.status === 'pending' ? (
         <div aria-busy="true" className="flex flex-col gap-3">

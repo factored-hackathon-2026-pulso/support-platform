@@ -99,10 +99,7 @@ describe('Equipo y colas', () => {
 
     const daniela = row(/Daniela Ríos/)
     // "Todos los equipos": the row names the team like the pills, full name in the title.
-    expect(within(daniela).getByText('Equipo Andes')).toHaveAttribute(
-      'title',
-      'Disputas · Equipo Andes',
-    )
+    expect(within(daniela).getByText('Equipo Andes')).toHaveAttribute('title', 'Equipo Andes')
     expect(within(daniela).getByText('Atendiendo')).toBeInTheDocument()
     expect(within(daniela).getByText('· sin sesión abierta')).toHaveAttribute(
       'title',
@@ -135,7 +132,7 @@ describe('Equipo y colas', () => {
     expect(within(row(/Paula Medina/)).getAllByRole('cell')[3]).toHaveTextContent('—')
 
     await user.click(screen.getByRole('radio', { name: 'Equipo Pacífico' }))
-    expect(screen.getByText('Disputas · Equipo Pacífico · 3 analistas')).toBeInTheDocument()
+    expect(screen.getByText('Equipo Pacífico · 3 analistas')).toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: 'En pausa 0' }))
     expect(screen.getByText('Nadie en este estado ahora.')).toBeInTheDocument()
     expect(router.state.location.search).toBe(`?equipo=${PACIFICO.id}&estado=en-pausa`)
@@ -145,7 +142,7 @@ describe('Equipo y colas', () => {
     const { user, router } = renderTeam('/supervision/equipo?estado=en-pausa')
     await user.click(await screen.findByRole('button', { name: 'Julián Ortega' }))
     const sheet = await screen.findByRole('dialog', { name: 'Julián Ortega' })
-    expect(sheet).toHaveAccessibleDescription('En pausa · español · Disputas · Equipo Andes')
+    expect(sheet).toHaveAccessibleDescription('En pausa · español · Equipo Andes')
     expect(router.state.location.search).toBe(`?estado=en-pausa&analista=${JULIAN_ID}`)
     expect(within(sheet).getByText('Esperando al cliente')).toBeInTheDocument()
     expect(within(sheet).getByText('Camila Torres Benavides')).toBeInTheDocument()

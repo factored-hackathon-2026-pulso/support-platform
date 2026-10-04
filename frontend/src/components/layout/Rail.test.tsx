@@ -27,10 +27,11 @@ const supervisionWithQueue: RoleDefinition = {
 }
 
 describe('Rail per role', () => {
-  it('analyst: only Casos', async () => {
+  it('analyst: Inicio, then Casos', async () => {
     const rail = await railFor('/analista?caso=CASE-1', 'Casos')
-    expect(destinations(rail)).toEqual(['Casos'])
+    expect(destinations(rail)).toEqual(['Inicio', 'Casos'])
     expect(rail.getByRole('link', { name: 'Casos' })).toHaveAttribute('aria-current', 'page')
+    expect(rail.getByRole('link', { name: 'Inicio' })).not.toHaveAttribute('aria-current')
   })
 
   it('supervisor: team and audit', async () => {
@@ -49,7 +50,35 @@ describe('Rail per role', () => {
   })
 })
 
+describe('Rail presence dot', () => {
+  it('labels the analyst availability next to the avatar', () => {
+    const { unmount } = renderWithProviders(
+      <Rail role={ROLES.analyst} presence={{ tone: 'warn', label: 'Estado: En pausa' }} />,
+      { route: '/analista/inicio', staff: allRolesStaff },
+    )
+    const nav = within(screen.getByRole('navigation', { name: 'Principal' }))
+    expect(nav.getByText('Estado: En pausa')).toBeInTheDocument()
+    // The switcher keeps its name.
+    expect(nav.getByRole('button', { name: /, cambiar de rol$/ })).toBeInTheDocument()
+    unmount()
+    renderWithProviders(<Rail role={ROLES.supervisor} />, {
+      route: '/supervision/equipo',
+      staff: allRolesStaff,
+    })
+    expect(screen.queryByText(/^Estado:/)).not.toBeInTheDocument()
+  })
+})
+
 describe('Rail indicators', () => {
+  it('shows the Por responder count on Casos', () => {
+    renderWithProviders(<Rail role={ROLES.analyst} indicators={{ toReplyCases: { count: 2 } }} />, {
+      route: '/analista/inicio',
+      staff: allRolesStaff,
+    })
+    expect(screen.getByRole('link', { name: 'Casos, 2 pendientes' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
+  })
+
   it('shows live counts in the badge and in the accessible name', () => {
     renderWithProviders(
       <Rail role={supervisionWithQueue} indicators={{ queuedCases: { count: 4 } }} />,

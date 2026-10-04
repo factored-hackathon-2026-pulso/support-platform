@@ -1,30 +1,27 @@
-import { PanelLeftClose } from 'lucide-react'
-import {
-  FilterTile,
-  FilterTileGroup,
-  IconButton,
-  QueryState,
-  SearchInput,
-  Skeleton,
-} from '@/components/ui'
+import { useMemo } from 'react'
+import { PanelLeftClose, X } from 'lucide-react'
+import { IconButton, QueryState, SearchInput, Skeleton, type Tone } from '@/components/ui'
 import { useDebouncedValue, useNow } from '@/lib/hooks'
 import { useInbox, useInboxLive } from '../hooks'
 import {
-  INBOX_FILTERS,
   SEARCH_MAX_LENGTH,
-  countForFilter,
   emptyListCopy,
+  filterChipLabel,
+  inboxStatusMeta,
   normalizeSearch,
+  sortByUrgency,
 } from '../model'
 import type { InboxResponse, InboxStatus } from '../types'
 import { AvailabilityToggle } from './AvailabilityToggle'
 import { CaseCard } from './CaseCard'
 import { CollapsedCaseRail } from './CollapsedCaseRail'
-import { PausedNotice } from './PausedNotice'
 
 export interface CaseListPanelProps {
   selectedCaseId: string | null
-  /** `null` = Todos (open cases); `closed` = Cerrados (read-only, last 7 days). */
+  /**
+   * `null` = every open case (the default); a status (from Inicio's tiles or the
+   * URL) shows a removable chip; `closed` = Cerrados (read-only, last 7 days).
+   */
   filter: InboxStatus | null
   query: string
   collapsed: boolean
@@ -39,16 +36,29 @@ export interface CaseListPanelProps {
   onCollapsedChange(collapsed: boolean): void
 }
 
+/** Dot of the filter chip, in the status tone (written out for Tailwind). */
+const CHIP_DOT: Record<Tone, string> = {
+  accent: 'bg-accent',
+  warn: 'bg-warn',
+  waiting: 'bg-waiting',
+  closed: 'bg-offline',
+  neutral: 'bg-offline',
+  success: 'bg-success',
+  danger: 'bg-danger',
+}
+
 /** Search waits for a short pause in typing before it hits the API. */
 const SEARCH_DEBOUNCE_MS = 250
 /** SLA countdowns and "hace x" tick every 30 s (contract §4.5). */
 const TICK_MS = 30_000
 
 /**
- * The "Casos" column of the Workspace: availability, the five status counters
- * (which ARE the filters: Todos · Por responder · Nuevos · Esperando al cliente ·
- * Cerrados), search and the case cards; or, collapsed, a rail of initials of the
- * open cases. Owns the inbox query and its live updates.
+ * The "Casos" column of the Workspace (slice 6 §4.3): availability (the control
+ * is also the pause indicator), search, the filter chip when the URL carries a
+ * filter (the status tiles live on Inicio), and one flat list of the open cases
+ * in urgency order (`sortByUrgency`, the same order as Inicio's "Lo primero");
+ * Cerrados keeps the most recent close first. Collapsed: a rail of initials of
+ * the open cases. Owns the inbox query and its live updates.
  */
 export function CaseListPanel({
   selectedCaseId,
@@ -65,8 +75,13 @@ export function CaseListPanel({
   const inbox = useInbox({ status: filter, q })
   useInboxLive(onOpenNotifiedCase ?? onSelectCase, selectedCaseId)
 
-  const items = inbox.data?.items
   const now = useNow(TICK_MS)
+  const data = inbox.data
+  const ordered = useMemo(
+    () => (data && filter !== 'closed' ? { ...data, items: sortByUrgency(data.items, now) } : data),
+    [data, filter, now],
+  )
+  const items = ordered?.items
 
   if (collapsed) {
     return (
@@ -80,8 +95,8 @@ export function CaseListPanel({
     )
   }
 
-  const counts = inbox.data?.counts
   const searching = q !== ''
+  const chip = filterChipLabel(filter)
 
   return (
     <section
@@ -92,7 +107,7 @@ export function CaseListPanel({
         <div className="flex items-center justify-between gap-2">
           <h1 className="m-0 font-display text-20 font-bold">Casos</h1>
           <div className="flex items-center gap-1.5">
-            <AvailabilityToggle />
+            <AvailabilityToggle placement="header" />
             <IconButton
               size="sm"
               aria-label="Contraer la lista"
@@ -103,18 +118,7 @@ export function CaseListPanel({
           </div>
         </div>
 
-        <FilterTileGroup aria-label="Filtrar casos" columns={3}>
-          {INBOX_FILTERS.map((option) => (
-            <FilterTile
-              key={option.label}
-              label={option.label}
-              tone={option.tone}
-              count={counts ? countForFilter(counts, option.status) : '–'}
-              selected={filter === option.status}
-              onSelect={() => onFilterChange(option.status)}
-            />
-          ))}
-        </FilterTileGroup>
+        <AvailabilityToggle placement="banner" />
 
         <SearchInput
           aria-label="Buscar caso"
@@ -124,12 +128,34 @@ export function CaseListPanel({
           onChange={(event) => onQueryChange(event.target.value)}
         />
 
-        <PausedNotice />
+        {filter && chip ? (
+          <div className="flex items-center gap-2">
+            <span className="text-12 text-muted">Filtro:</span>
+            <button
+              type="button"
+              aria-label={`Quitar filtro ${chip}`}
+              onClick={() => onFilterChange(null)}
+              className="inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pr-1.5 pl-2.5 text-13 font-semibold text-ink hover:bg-subtle"
+            >
+              <span
+                aria-hidden="true"
+                className={`size-2 rounded-full ${CHIP_DOT[inboxStatusMeta({ inboxStatus: filter }).tone]}`}
+              />
+              {chip}
+              <X size={14} aria-hidden="true" className="text-muted" />
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="min-h-0 grow scrollbar-thin overflow-y-auto [&>[role=alert]]:mx-4 [&>[role=alert]]:mb-4">
         <QueryState<InboxResponse>
-          query={inbox}
+          query={{
+            status: inbox.status,
+            data: ordered,
+            isFetching: inbox.isFetching,
+            refetch: inbox.refetch,
+          }}
           skeleton={<CaseListSkeleton />}
           isEmpty={(data) => data.items.length === 0}
           empty={

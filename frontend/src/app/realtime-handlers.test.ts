@@ -42,18 +42,19 @@ describe('FEATURE_REALTIME_REGISTRATIONS', () => {
     const registry = createAppEnvelopeHandlers()
     const queryClient = new QueryClient()
     expect(registry.dispatch(at('turn.created'), queryClient)).toBe(1) // conversation
-    expect(registry.dispatch(at('case.updated'), queryClient)).toBe(2) // inbox + conversation
-    expect(registry.dispatch(at('case.assigned'), queryClient)).toBe(2)
-    expect(registry.dispatch(at('inbox.counts'), queryClient)).toBe(1)
-    expect(registry.dispatch(at('availability.updated'), queryClient)).toBe(1)
+    // inbox + conversation + Inicio (slice 6)
+    expect(registry.dispatch(at('case.updated'), queryClient)).toBe(3)
+    expect(registry.dispatch(at('case.assigned'), queryClient)).toBe(3)
+    expect(registry.dispatch(at('inbox.counts'), queryClient)).toBe(2) // inbox + Inicio
+    expect(registry.dispatch(at('availability.updated'), queryClient)).toBe(2)
   })
 
   it('handles the supervision envelopes of slice 3', () => {
     const registry = createAppEnvelopeHandlers()
     const queryClient = new QueryClient()
-    expect(registry.dispatch(at('case.unassigned'), queryClient)).toBe(1) // inbox
-    expect(registry.dispatch(at('queue.updated'), queryClient)).toBe(1)
-    expect(registry.dispatch(at('queue.case_queued'), queryClient)).toBe(1)
+    expect(registry.dispatch(at('case.unassigned'), queryClient)).toBe(2) // inbox + Inicio
+    expect(registry.dispatch(at('queue.updated'), queryClient)).toBe(2) // queues + Inicio
+    expect(registry.dispatch(at('queue.case_queued'), queryClient)).toBe(2)
     expect(registry.dispatch(at('team.updated'), queryClient)).toBe(1)
   })
 

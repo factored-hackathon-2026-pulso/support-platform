@@ -11,6 +11,9 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.domain.shared.errors import ConcurrentUpdateError
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.analyst_home import (
+    SqlAnalystHomeReader,
+)
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import (
     SqlAssignmentRepository,
     SqlCaseRepository,
@@ -57,6 +60,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     assignments: SqlAssignmentRepository
     case_slots: SqlCustomerCaseSlotRepository
     event_log: SqlEventLogRepository
+    analyst_home: SqlAnalystHomeReader
 
     def __init__(
         self,
@@ -86,6 +90,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.assignments = SqlAssignmentRepository(session)
         self.case_slots = SqlCustomerCaseSlotRepository(session, self.track)
         self.event_log = SqlEventLogRepository(session)
+        self.analyst_home = SqlAnalystHomeReader(session)
 
     async def __aexit__(
         self,

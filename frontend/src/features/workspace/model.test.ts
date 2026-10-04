@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   emptyWorkspaceCopy,
   firstSelectableCase,
+  isCustomerFileOpen,
   nextCaseAfterClose,
   parseWorkspaceSearch,
   toWorkspaceSearch,
@@ -13,24 +14,36 @@ const defaults: WorkspaceUrlState = {
   filter: null,
   query: '',
   listCollapsed: false,
+  customerFile: false,
   history: null,
 }
 
 describe('parseWorkspaceSearch', () => {
   it('reads every param', () => {
     const params = new URLSearchParams(
-      'caso=CASE-1&estado=cerrados&q=Marcela&lista=contraida&historial=lista',
+      'caso=CASE-1&estado=cerrados&q=Marcela&lista=contraida&ficha=1&historial=lista',
     )
     expect(parseWorkspaceSearch(params)).toEqual({
       caseId: 'CASE-1',
       filter: 'closed',
       query: 'Marcela',
       listCollapsed: true,
+      customerFile: true,
       history: 'lista',
     })
   })
 
-  it('opens the history sheet on a past case', () => {
+  it('opens "Ficha del cliente" with ficha=1 or an old historial deep link', () => {
+    expect(isCustomerFileOpen(parseWorkspaceSearch(new URLSearchParams('caso=C&ficha=1')))).toBe(
+      true,
+    )
+    expect(
+      isCustomerFileOpen(parseWorkspaceSearch(new URLSearchParams('caso=C&historial=lista'))),
+    ).toBe(true)
+    expect(isCustomerFileOpen(parseWorkspaceSearch(new URLSearchParams('caso=C')))).toBe(false)
+  })
+
+  it('opens "Casos anteriores" on a past case', () => {
     const params = new URLSearchParams('caso=CASE-108&historial=CASE-110')
     expect(parseWorkspaceSearch(params).history).toBe('CASE-110')
   })
@@ -40,7 +53,7 @@ describe('parseWorkspaceSearch', () => {
     expect(
       parseWorkspaceSearch(
         new URLSearchParams(
-          'caso=&estado=por-llamar&lista=1&historial=%20&panel=cliente&apoyo=contraido',
+          'caso=&estado=por-llamar&lista=1&ficha=si&historial=%20&panel=cliente&apoyo=contraido',
         ),
       ),
     ).toEqual(defaults)
@@ -58,9 +71,11 @@ describe('toWorkspaceSearch', () => {
       filter: 'waiting',
       query: 'Joaquín',
       listCollapsed: true,
+      customerFile: true,
       history: 'CASE-00000000000000000000000110',
     }
     const params = toWorkspaceSearch(state)
+    expect(params.get('ficha')).toBe('1')
     expect(params.get('estado')).toBe('esperando')
     expect(params.get('historial')).toBe('CASE-00000000000000000000000110')
     expect(params.has('panel')).toBe(false)

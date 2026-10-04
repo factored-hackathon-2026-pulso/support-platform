@@ -119,7 +119,7 @@ async def test_seeded_team_matches_the_contract() -> None:
     andes, pacifico = team.teams
     assert (andes.id, andes.name, andes.analyst_count) == (
         seed_team_id(1),
-        "Disputas · Equipo Andes",
+        "Equipo Andes",
         3,
     )
     assert (andes.activity.busy, andes.activity.paused, andes.activity.offline) == (0, 1, 2)

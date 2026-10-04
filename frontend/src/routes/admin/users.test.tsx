@@ -82,14 +82,14 @@ describe('Usuarios y roles', () => {
     expect(screen.getByRole('radio', { name: 'Administración 2' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Bloqueadas (1)' })).toBeInTheDocument()
     expect(
-      await screen.findByRole('option', { name: 'Disputas · Equipo Caribe (inactivo)' }),
+      await screen.findByRole('option', { name: 'Equipo Caribe (inactivo)' }),
     ).toBeInTheDocument()
 
     const danielaRow = row(/Daniela Ríos Medina/)
     expect(within(danielaRow).getByText('daniela.rios@latambank.example')).toBeInTheDocument()
     expect(within(danielaRow).getByText('Analista')).toBeInTheDocument()
     expect(within(danielaRow).getByText('español, portugués')).toBeInTheDocument()
-    expect(within(danielaRow).getByText('Disputas · Equipo Andes')).toBeInTheDocument()
+    expect(within(danielaRow).getByText('Equipo Andes')).toBeInTheDocument()
     expect(within(danielaRow).getByText('Activa')).toBeInTheDocument()
     const carolinaRow = row(/Carolina Peña Ruiz/)
     expect(within(carolinaRow).getByText('Supervisora')).toBeInTheDocument()
@@ -169,9 +169,12 @@ describe('Usuarios y roles', () => {
     expect(router.state.historyAction).toBe('PUSH')
     const panel = aside()
     expect(within(panel).getByRole('heading', { name: 'Mariana Duque' })).toBeInTheDocument()
+    // Structured items, not a dot-joined line (slice 6): a role chip, languages, team.
     expect(
-      within(panel).getByText('Supervisora · español · Disputas · Equipo Pacífico'),
+      within(panel).getByText('Supervisora', { selector: 'span.rounded-full' }),
     ).toBeInTheDocument()
+    expect(within(panel).getByText('Idiomas:').parentElement).toHaveTextContent('Español')
+    expect(within(panel).getByText('Equipo:').parentElement).toHaveTextContent('Equipo Pacífico')
     expect(
       within(panel).getByText('Cuenta bloqueada hasta las 11:13 tras 5 intentos fallidos.'),
     ).toBeInTheDocument()

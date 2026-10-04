@@ -14,7 +14,7 @@ export const SEEDED = {
   admin: { name: 'Valeria Quintero', email: 'valeria.quintero@latambank.example' },
 } as const
 
-export const TEAM_ANDES = 'Disputas · Equipo Andes'
+export const TEAM_ANDES = 'Equipo Andes'
 
 export type Language = 'es' | 'pt'
 

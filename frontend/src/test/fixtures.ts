@@ -1,10 +1,10 @@
 import type { Staff } from '@/app/session'
 
 /** Seeded teams (slice 4 §11.1): invented names, `TEAM-…` ids. */
-export const TEAM_ANDES = { id: 'TEAM-00000000000000000000000001', name: 'Disputas · Equipo Andes' }
+export const TEAM_ANDES = { id: 'TEAM-00000000000000000000000001', name: 'Equipo Andes' }
 export const TEAM_PACIFICO = {
   id: 'TEAM-00000000000000000000000002',
-  name: 'Disputas · Equipo Pacífico',
+  name: 'Equipo Pacífico',
 }
 export const TEAM_PLATFORM = {
   id: 'TEAM-00000000000000000000000003',

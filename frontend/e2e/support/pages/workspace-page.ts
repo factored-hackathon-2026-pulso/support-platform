@@ -1,10 +1,19 @@
 import { expect, type Locator, type Page } from '@playwright/test'
-import { escapeRegExp, startsWithName } from '../data'
+import { startsWithName } from '../data'
+import { HomePage, type StatusTileLabel } from './home-page'
 
 export type CloseReasonLabel =
   'Resuelto' | 'El cliente no respondió' | 'Duplicado' | 'Fuera de alcance' | 'Otro'
 
 export type InboxFilter = 'Todos' | 'Por responder' | 'Nuevos' | 'Esperando al cliente' | 'Cerrados'
+
+/** The Inicio tile behind each Casos filter (slice 6: the filters live on Inicio). */
+const TILE_OF: Record<Exclude<InboxFilter, 'Todos'>, StatusTileLabel> = {
+  'Por responder': 'Por responder',
+  Nuevos: 'Nuevos',
+  'Esperando al cliente': 'Esperando al cliente',
+  Cerrados: 'Cerrados',
+}
 
 /** The analyst Workspace (`/analista`): "Casos" list + the conversation. */
 export class WorkspacePage {
@@ -26,7 +35,10 @@ export class WorkspacePage {
     await expect(this.listRegion.getByRole('heading', { level: 1, name: 'Casos' })).toBeVisible()
   }
 
-  /** The "En pausa" / "Disponible" pill next to the title. */
+  /**
+   * The availability control at the top of the list (slice 6: it is the pause
+   * indicator): "En pausa. Volver a disponible" / "Disponible. Pausar casos nuevos".
+   */
   availability(state: 'En pausa' | 'Disponible'): Locator {
     return this.listRegion.getByRole('button', { name: new RegExp(`^${state}\\s*\\.`) })
   }
@@ -36,18 +48,45 @@ export class WorkspacePage {
     await expect(this.availability('Disponible')).toBeVisible()
   }
 
-  filter(label: InboxFilter): Locator {
-    return this.listRegion
-      .getByRole('radiogroup', { name: 'Filtrar casos' })
-      .getByRole('radio', { name: new RegExp(`^\\d+ ${escapeRegExp(label)}$`) })
+  /** The removable chip of the filter in the URL ("Quitar filtro Cerrados"). */
+  filterChip(label?: Exclude<InboxFilter, 'Todos'>): Locator {
+    return this.listRegion.getByRole('button', {
+      name: label ? `Quitar filtro ${label}` : /^Quitar filtro /,
+    })
   }
 
-  /** The tiles are native radios drawn under their count: select one with the keyboard. */
+  /**
+   * Slice 6: the list has no status tiles. A filter is picked on Inicio (its tile
+   * opens Casos with `?estado=`); "Todos" removes the chip.
+   */
   async showFilter(label: InboxFilter): Promise<void> {
-    const radio = this.filter(label)
-    await radio.focus()
-    await radio.press('Space')
-    await expect(radio).toBeChecked()
+    if (label === 'Todos') {
+      await this.filterChip().click()
+      await expect(this.filterChip()).toHaveCount(0)
+      return
+    }
+    await this.page
+      .getByRole('navigation', { name: 'Principal' })
+      .getByRole('link', { name: 'Inicio' })
+      .click()
+    const home = new HomePage(this.page)
+    await home.tile(TILE_OF[label]).click()
+    await expect(this.filterChip(label)).toBeVisible()
+  }
+
+  /**
+   * "Ficha del cliente" (slice 6): the customer's name in the header opens the
+   * right panel; returns it.
+   */
+  async openCustomerFile(customerName: string): Promise<Locator> {
+    const trigger = this.conversation(customerName).getByRole('button', {
+      name: `Ver ficha de ${customerName}`,
+    })
+    await trigger.click()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const panel = this.page.getByRole('complementary', { name: 'Ficha del cliente' })
+    await expect(panel).toBeVisible()
+    return panel
   }
 
   /** A case card of the list (its accessible name starts with the customer name). */
@@ -92,10 +131,14 @@ export class WorkspacePage {
     await this.conversation(customerName).getByRole('button', { name: 'Cerrar caso' }).click()
     const dialog = this.page.getByRole('dialog', { name: 'Cerrar caso' })
     await expect(dialog).toBeVisible()
-    await dialog
-      .getByRole('radiogroup', { name: /Motivo/ })
-      .getByRole('radio', { name: reason })
-      .check()
+    // Slice 6: the reasons are cards (the native radio is visually hidden): click the card.
+    const reasons = dialog.getByRole('radiogroup', { name: /Motivo/ })
+    const radio = reasons.getByRole('radio', { name: reason })
+    await reasons
+      .locator('label')
+      .filter({ has: this.page.getByRole('radio', { name: reason }) })
+      .click()
+    await expect(radio).toBeChecked()
     if (note) await dialog.getByRole('textbox', { name: /Nota interna/ }).fill(note)
     await dialog.getByRole('button', { name: 'Cerrar caso' }).click()
     await expect(dialog).toBeHidden()

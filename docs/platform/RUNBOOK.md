@@ -9,7 +9,11 @@ La plataforma tiene dos aplicaciones:
 - `backend/`: API en FastAPI (Python 3.12, uv). Guarda todo en SQLite y siembra los datos de
   ejemplo al arrancar.
 - `frontend/`: SPA en React (Vite, pnpm). Incluye el Workspace del equipo (`/analista`,
-  `/supervision`, `/administracion`) y el simulador de cliente (`/cliente`).
+  `/supervision`, `/administracion`) y el simulador de cliente (`/cliente`). Una analista entra
+  a **Inicio** (`/analista/inicio`): su disponibilidad ("Empezar a atender"), los contadores por
+  estado (llevan a Casos con el filtro), "Lo primero", "Mientras no estabas" y "Tu equipo ahora".
+  "Casos" (`/analista`) es la lista por urgencia y la conversación, con la "Ficha del cliente" a
+  la derecha al pulsar el nombre.
 
 Todas las personas, clientes y casos son inventados ("Datos de ejemplo").
 
@@ -112,26 +116,32 @@ Frontend (`frontend/.env.local`, plantilla en `frontend/.env.example`):
 
 ## 5. Cuentas sembradas
 
+Al entrar, una analista llega a **Inicio** (`/analista/inicio`); "/" también la lleva ahí. "Mientras
+no estabas" cuenta desde el fin de su sesión anterior; en su primera sesión, desde 8 horas atrás
+(por eso la semilla ya muestra sus casos recientes). Los equipos se llaman "Equipo Andes", "Equipo
+Pacífico" y "Equipo Caribe" desde el slice 6: una base creada antes conserva los nombres viejos
+("Disputas · …"); reiníciala (sección 6) para verlos como en la demo.
+
 Todas usan la contraseña **`demo1234`** y el código de verificación **`000000`**. Correo:
 `nombre.apellido@latambank.example` (sin tildes).
 
 | Persona | Correo | Roles | Idiomas | Equipo | Estado al arrancar |
 |---|---|---|---|---|---|
-| Daniela Ríos | `daniela.rios@` | Analista | español, portugués | Disputas · Equipo Andes | En pausa, sin sesión. 5 casos abiertos y 3 cerrados (ver abajo) |
-| Julián Ortega | `julian.ortega@` | Analista | español | Disputas · Equipo Andes | En pausa **con una sesión sembrada** (aparece "En pausa" en Equipo y colas). 2 casos abiertos |
-| Paula Medina | `paula.medina@` | Analista | español | Disputas · Equipo Pacífico | En pausa, sin casos |
-| Sebastián Cárdenas | `sebastian.cardenas@` | Analista | español, portugués | Disputas · Equipo Pacífico | En pausa, sin casos |
-| Tomás Arango | `tomas.arango@` | Analista | español, portugués | Disputas · Equipo Pacífico | En pausa, sin casos |
-| Felipe Echeverri | `felipe.echeverri@` | Analista + Supervisora | español | Disputas · Equipo Andes | En pausa, sin casos. Usa el selector de rol (Casos ↔ Equipo y colas) |
-| Lucía Herrera | `lucia.herrera@` | Supervisora | español, portugués | Disputas · Equipo Andes | Activa |
-| Martín Salazar | `martin.salazar@` | Supervisora | español | Disputas · Equipo Pacífico | Activa |
-| Renata Villalba | `renata.villalba@` | Supervisora | español, portugués | Disputas · Equipo Pacífico | Activa |
-| Mariana Duque | `mariana.duque@` | Supervisora | español | Disputas · Equipo Pacífico | **Bloqueada** por 5 contraseñas erradas, hasta 13 min después del primer arranque. Una administradora la desbloquea |
+| Daniela Ríos | `daniela.rios@` | Analista | español, portugués | Equipo Andes | En pausa, sin sesión. 5 casos abiertos y 3 cerrados (ver abajo) |
+| Julián Ortega | `julian.ortega@` | Analista | español | Equipo Andes | En pausa **con una sesión sembrada** (aparece "En pausa" en Equipo y colas). 2 casos abiertos |
+| Paula Medina | `paula.medina@` | Analista | español | Equipo Pacífico | En pausa, sin casos |
+| Sebastián Cárdenas | `sebastian.cardenas@` | Analista | español, portugués | Equipo Pacífico | En pausa, sin casos |
+| Tomás Arango | `tomas.arango@` | Analista | español, portugués | Equipo Pacífico | En pausa, sin casos |
+| Felipe Echeverri | `felipe.echeverri@` | Analista + Supervisora | español | Equipo Andes | En pausa, sin casos. Usa el selector de rol (Casos ↔ Equipo y colas) |
+| Lucía Herrera | `lucia.herrera@` | Supervisora | español, portugués | Equipo Andes | Activa |
+| Martín Salazar | `martin.salazar@` | Supervisora | español | Equipo Pacífico | Activa |
+| Renata Villalba | `renata.villalba@` | Supervisora | español, portugués | Equipo Pacífico | Activa |
+| Mariana Duque | `mariana.duque@` | Supervisora | español | Equipo Pacífico | **Bloqueada** por 5 contraseñas erradas, hasta 13 min después del primer arranque. Una administradora la desbloquea |
 | Valeria Quintero | `valeria.quintero@` | Administración | español | Administración de la plataforma | Activa |
 | Carolina Peña | `carolina.pena@` | Administración | español | Administración de la plataforma | Activa |
-| Andrés Villamil | `andres.villamil@` | Analista | español | Disputas · Equipo Andes | **Desactivada** (Carolina la desactivó). No puede entrar |
+| Andrés Villamil | `andres.villamil@` | Analista | español | Equipo Andes | **Desactivada** (Carolina la desactivó). No puede entrar |
 
-Además existe el equipo inactivo "Disputas · Equipo Caribe", sin miembros.
+Además existe el equipo inactivo "Equipo Caribe", sin miembros.
 
 **Nadie empieza disponible.** Las colas sembradas tienen casos que nadie disponible podía tomar
 (regla 3), así que una analista disponible las contradiría. Cuando alguien pasa a "Disponible",

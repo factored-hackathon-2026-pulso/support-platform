@@ -220,6 +220,9 @@ assignments = Table(
     Column("paused_override", Boolean, nullable=False, default=False),
     # "held a case of this customer" (history access) also looks at past assignments.
     Index("ix_assignments_staff_case", "staff_id", "case_id"),
+    # Analyst home (slice 6): cases assigned to her, or taken away from her, since a time.
+    Index("ix_assignments_staff_assigned", "staff_id", "assigned_at"),
+    Index("ix_assignments_previous_staff_assigned", "previous_staff_id", "assigned_at"),
 )
 
 customer_case_slots = Table(

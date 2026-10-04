@@ -1,4 +1,12 @@
-import { MessageSquare, Shield, UserPlus, Users, UsersRound, type LucideIcon } from 'lucide-react'
+import {
+  House,
+  MessageSquare,
+  Shield,
+  UserPlus,
+  Users,
+  UsersRound,
+  type LucideIcon,
+} from 'lucide-react'
 import type { AvatarTone } from '@/components/ui'
 import { joinEs } from '@/lib/format'
 
@@ -14,6 +22,8 @@ export type RailIndicatorKey =
   | 'queuedCases'
   /** Accounts locked now (fed by `useLockedAccountsCount`, admin). */
   | 'lockedAccounts'
+  /** Her open cases "Por responder" (fed by `useToReplyCount`, cases; slice 6). */
+  | 'toReplyCases'
 
 /** Value of one indicator: a count (orange badge) and/or a dot (something new). */
 export interface RailIndicator {
@@ -22,6 +32,23 @@ export interface RailIndicator {
 }
 
 export type RailIndicators = Partial<Record<RailIndicatorKey, RailIndicator>>
+
+/**
+ * Presence dot on the rail avatar (slice 6 §4.4): the analyst's availability on
+ * every analyst screen. Fed by `app/rail-indicators.ts`; absent = no dot.
+ */
+export interface RailPresence {
+  tone: 'warn' | 'success'
+  /** Accessible label of the dot: "Estado: En pausa". */
+  label: string
+}
+
+/** Availability → the avatar dot: orange "En pausa", green "Disponible". */
+export function presenceFor(status: 'available' | 'paused' | undefined): RailPresence | null {
+  if (status === 'paused') return { tone: 'warn', label: 'Estado: En pausa' }
+  if (status === 'available') return { tone: 'success', label: 'Estado: Disponible' }
+  return null
+}
 
 export interface NavItem {
   to: string
@@ -58,9 +85,20 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
     id: 'analyst',
     label: 'Analista de casos',
     basePath: '/analista',
-    home: '/analista',
+    // Slice 6: the analyst lands on "Inicio"; "Casos" is the Workspace.
+    home: '/analista/inicio',
     avatarTone: 'accent',
-    nav: [{ to: '/analista', label: 'Casos', icon: MessageSquare }],
+    nav: [
+      { to: '/analista/inicio', label: 'Inicio', icon: House },
+      // `end`: /analista/inicio must not also mark "Casos" as current.
+      {
+        to: '/analista',
+        label: 'Casos',
+        icon: MessageSquare,
+        indicator: 'toReplyCases',
+        end: true,
+      },
+    ],
   },
   supervisor: {
     id: 'supervisor',
@@ -97,6 +135,21 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
       { to: '/administracion/auditoria', label: 'Auditoría', icon: Shield },
     ],
   },
+}
+
+/**
+ * "Casos" with a filter and/or a case open (slice 6 §4.2): the Workspace URL state
+ * `?caso=&estado=` (`estado` slug from `slugFromInboxStatus`, cases feature).
+ */
+export function workspacePath({
+  caseId,
+  filterSlug,
+}: { caseId?: string | null; filterSlug?: string | null } = {}): string {
+  const params = new URLSearchParams()
+  if (caseId) params.set('caso', caseId)
+  if (filterSlug) params.set('estado', filterSlug)
+  const search = params.toString()
+  return search ? `/analista?${search}` : '/analista'
 }
 
 /** Supervisor read-only view of one case (slice 3 §8.1). */

@@ -129,12 +129,12 @@ def test_team_and_queues(client: TestClient, sign_in: SignIn) -> None:
     assert rows["Daniela Ríos"]["counts"] == {"open": 5, "new": 2, "toReply": 2, "waiting": 1}
     assert rows["Daniela Ríos"]["openCases"][0]["customer"]["displayName"]
     assert [(t["id"], t["name"]) for t in team["teams"]] == [
-        ("TEAM-00000000000000000000000001", "Disputas · Equipo Andes"),
-        ("TEAM-00000000000000000000000002", "Disputas · Equipo Pacífico"),
+        ("TEAM-00000000000000000000000001", "Equipo Andes"),
+        ("TEAM-00000000000000000000000002", "Equipo Pacífico"),
     ]
     assert rows["Daniela Ríos"]["team"] == {
         "id": "TEAM-00000000000000000000000001",
-        "name": "Disputas · Equipo Andes",
+        "name": "Equipo Andes",
     }
     # Signing in as an analyst moves her from Desconectada to En pausa.
     sign_in(JULIAN.email)

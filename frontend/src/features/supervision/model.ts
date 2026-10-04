@@ -134,7 +134,7 @@ export function selectedTeam(
 
 /**
  * Pill labels by team id: the team names without the prefix they all share
- * ("Disputas · Equipo Andes" → "Equipo Andes"), or the full names otherwise.
+ * ("Equipo Andes" → "Equipo Andes"), or the full names otherwise.
  */
 export function teamPillLabels(teams: readonly TeamSummary[]): Record<string, string> {
   const prefixOf = (name: string) => {
@@ -148,7 +148,7 @@ export function teamPillLabels(teams: readonly TeamSummary[]): Record<string, st
   )
 }
 
-/** Header subtitle: "Disputas · Equipo Andes · 3 analistas" / "Todos los equipos · 6 analistas". */
+/** Header subtitle: "Equipo Andes · 3 analistas" / "Todos los equipos · 6 analistas". */
 export function teamSubtitle(team: TeamSummary | null, analystCount: number): string {
   return `${team?.name ?? 'Todos los equipos'} · ${pluralize(analystCount, 'analista')}`
 }
@@ -250,7 +250,7 @@ export function queuedWaitLabel(summary: Pick<CaseSummary, 'openedAt'>, now: Dat
 
 // ── Analyst sheet (contract §8.4) ────────────────────────────────────────────
 
-/** Sheet subtitle: "En pausa · español · Disputas · Equipo Andes". */
+/** Sheet subtitle: "En pausa · español · Equipo Andes". */
 export function analystSheetDescription(analyst: TeamAnalyst): string {
   return [
     ACTIVITY_META[analyst.activity].label,

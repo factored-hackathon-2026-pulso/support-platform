@@ -9,7 +9,7 @@ export interface EmptyStateProps {
   /** Buttons or links. */
   action?: ReactNode
   /** Heading level for the title. Default h2 (h1 when it is the whole page). */
-  as?: 'h1' | 'h2' | 'h3'
+  as?: 'h1' | 'h2' | 'h3' | 'h4'
   /** compact: for panels and lists (smaller title). */
   size?: 'default' | 'compact'
   className?: string

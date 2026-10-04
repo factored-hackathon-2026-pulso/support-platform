@@ -24,7 +24,7 @@ src/
     guards.tsx          RequireSession, RequireRole, GuestOnly, RootRedirect
     redirect.ts         "from" state carried to /login
     roles.ts            role definitions, rail destinations, path helpers (pure, tested)
-    rail-indicators.ts  useRailIndicators: live rail badges/dots fed by features
+    rail-indicators.ts  useRailIndicators: live rail badges/dots fed by features; useRailPresence (slice 6)
     session.tsx         SessionProvider, useSession, useCurrentUser, useCurrentRole
     session-realtime.ts `me.updated` → the session cache (registerSessionRealtime)
     session-live.tsx    SessionLiveSync: `staff:<me>` topic, 4409 → reload /auth/me, roles toast
@@ -72,7 +72,7 @@ transitively (anything it loads imports other features through their `core.ts`).
 route table, and `main.tsx`) imports features only through `core.ts`: an import of
 an `index.ts` there would put every screen of that feature in the entry chunk, since
 the barrel statically depends on them (lazy routes would then be empty shells).
-Today `cases`, `conversation`, `supervision` and `admin` have one. The vocabulary the
+Today `cases`, `conversation`, `supervision`, `admin` and `home` have one. The vocabulary the
 shell itself shows (role names, "Ahora tienes: …") lives in `app/roles.ts`.
 
 Rules:
@@ -135,6 +135,39 @@ Contract: `docs/platform/api/slice-2-case-lifecycle.md` §9. Dependency directio
   late update of an older case is ignored. "Ver conversaciones anteriores (n)"
   loads `GET /customer/conversations` as collapsed blocks (oldest at the top);
   expanding one loads `GET /customer/conversations/{caseId}`.
+
+### Inicio and the Casos adjustments (slice 6)
+
+Contract: `docs/platform/api/slice-6-analyst-home.md`. Dependency direction:
+`routes/analyst/home` → `features/home` → `features/cases` (index) and
+`features/conversation/core` (language names); `app/` composes the rail badge and presence.
+
+- **`home`** (new): "Inicio" (`HomeScreen`): greeting by local time, date + team pill, the
+  availability block ("Empezar a atender" / "Pausar casos nuevos", same mutation as Casos), the
+  four status tiles (links to `/analista?estado=…`), "Lo primero" (open cases by `sortByUrgency`,
+  "Abrir" → `/analista?caso=&estado=`), "Mientras no estabas" (`GET /me/home`; fixed templates per
+  `HomeActivityKind` in `model.ts`; read-only rows open `/analista?caso=` through history access)
+  and "Tu equipo ahora" (counts only). `registerHomeRealtime` refetches `homeKeys.all` on her inbox,
+  availability and queue envelopes (2 s throttle, leading + trailing, per registry); 60 s
+  refetch and after a reconnect.
+- **`cases`** (changed): no status tiles (filter chip "Quitar filtro X" when the URL has one), one
+  flat list in urgency order (`sortByUrgency` / `compareByUrgency` / `urgencyGroup`, the one
+  order), the availability control as the pause indicator (orange full-width "En pausa" /
+  white "Disponible" pill; `PausedNotice` removed), cards built from facts (`caseCardFacts`,
+  `slaFact` = the one SLA level → icon/tone map), close reasons with `CLOSE_REASONS` (label,
+  meaning, tone) + `CLOSE_REASON_ICON` / `CloseReasonIcon`, and the shell hooks
+  `useToReplyCount` (rail badge; keeps `inbox:<me>` subscribed on every analyst screen) and
+  `useAvailabilityPresence` (avatar dot), both in `core.ts`.
+- **`conversation`** (changed): `ConversationPane customerFile={{ open, onToggle }}` slims the
+  Workspace header to the name (button "Ver ficha de …") and the number; `CustomerFile` renders the
+  sections of the ficha (`customerRows`, `caseRows`, `arrivalFacts`, `CaseHistoryBrowser`);
+  `ArrivalNote` and `ReadOnlyFooter` show facts in the Workspace (`arrivalFacts`, `footerFacts`)
+  and keep their lines in the supervisor view; `CloseCaseDialog` uses reason cards
+  (`RadioGroup variant="cards"`). `CaseHistorySheet` (supervision) wraps the same
+  `CaseHistoryBrowser`.
+- **`workspace`** (changed): URL `?ficha=1` (and `?historial=` opens the panel), one
+  `SidePanel` slot with the ficha's sections; auto-selection and "next after close" follow the
+  urgency order.
 
 ### Supervision and audit (slice 3)
 
@@ -228,7 +261,8 @@ route composes `@/features/audit`, and `app/` composes the badge and the session
 | -------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------- |
 | `/`                                                                                    | redirect to the first role home (or `/login`)      | —          |
 | `/login`, `/login/verificacion`, `/login/bloqueada`                                    | login, MFA, lockout                                | GuestOnly  |
-| `/analista?caso=&estado=&q=&lista=&historial=`                                         | Workspace ("Casos")                                | analyst    |
+| `/analista/inicio`                                                                     | Inicio (the analyst's landing, slice 6)            | analyst    |
+| `/analista?caso=&estado=&q=&lista=&ficha=&historial=`                                  | Workspace ("Casos")                                | analyst    |
 | `/supervision/equipo?equipo=&estado=&analista=&asignar=`                               | Equipo y colas                                     | supervisor |
 | `/supervision/casos/:caseId?historial=&asignar=`                                       | supervisor read-only case view (`state.from`)      | supervisor |
 | `/supervision/auditoria?quien=&persona=&caso=&tipo=&desde=&hasta=&q=&cambios=&evento=` | Auditoría                                          | supervisor |
@@ -433,8 +467,16 @@ it with `lazyRoute()` in the right role section. Until it is built, render
 | `Spinner` / `Skeleton`                                         | `label`, `size` / `className`                                                                                                           |                                                                                                                                                                                                                         |
 | `QueryState`                                                   | `query`, `skeleton`, `empty`, `isEmpty`, `errorTitle`, `errorDescription`, `children(data)`                                             | loading / error-with-retry / empty / content for any TanStack query                                                                                                                                                     |
 | `SourceNote`                                                   | `variant` footer·inline                                                                                                                 | where the data comes from                                                                                                                                                                                               |
+| `Fact` / `FactList`                                            | `icon` (`FactIcon`), `text`, `tone`, `label`, `tag`, `iconOnly`, `tooltip`, `focusable` / `items`, `size`                               | slice 6: one short fact (icon + 1–3 words); icon-only facts keep the text for screen readers; never a dot-joined line                                                                                                   |
+| `Tooltip`                                                      | `content`, `focusable`                                                                                                                  | visual bubble on hover and `:focus-visible` (`aria-hidden`; the trigger carries the text); not focusable inside buttons/links                                                                                           |
 
-Layout (`@/components/layout`): `AppShell` (rail + outlet), `Rail` (role
+`RadioGroup` also has `variant="cards"` + `columns` (slice 6: options with `icon`, `tone`,
+`wide`; the native radio is visually hidden, the card shows focus and the checked tone).
+`EmptyState` accepts `as="h4"`.
+
+Layout (`@/components/layout`): `SidePanel` / `SidePanelSection` (slice 6: the 360 px right
+panel slot of the Workspace, sections, close button + Escape, focus in on open and back to the
+trigger), `AppShell` (rail + outlet), `Rail` (role
 destinations from `ROLES`, `aria-current`, live badges/dots from the `indicators`
 prop: nav items name an `indicator` key and `app/rail-indicators.ts` maps feature
 counts to it; no count means no badge, never a constant), `RoleSwitcher` (avatar menu:
@@ -478,7 +520,9 @@ is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
 (`test-results/`; the CI HTML report goes to `playwright-report/`; both git-ignored).
 `pnpm e2e --ui`, `--headed` and `-g "<title>"` work as usual.
 
-- **Scenarios** (brief §8 S5): `chat.spec.ts` (two-window chat, live both ways, order
+- **Scenarios** (brief §8 S5, S6): `home.spec.ts` (slice 6: lands on Inicio, "Empezar a
+  atender", a queued case arrives, "Abrir" from "Lo primero" lands in Casos with it open),
+  `chat.spec.ts` (two-window chat, live both ways, order
   after a reload; close with a reason → the customer notice, a new linked case,
   "Casos anteriores" in both windows), `supervision.spec.ts` (queue and drain under
   rule 3; a supervisor assigns a queued case and reassigns it while the analyst watches

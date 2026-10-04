@@ -94,3 +94,48 @@ describe('RadioGroup', () => {
     expect(julian).toHaveAccessibleDescription('No habla portugués (regla 3)')
   })
 })
+
+describe('RadioGroup · cards', () => {
+  function Cards() {
+    const [value, setValue] = useState<'a' | 'b' | 'c' | null>(null)
+    return (
+      <RadioGroup<'a' | 'b' | 'c'>
+        label="Motivo"
+        variant="cards"
+        columns={2}
+        value={value}
+        onValueChange={setValue}
+        options={[
+          { value: 'a', label: 'Uno', description: 'El primero.', tone: 'success', icon: <i>1</i> },
+          { value: 'b', label: 'Dos', description: 'El segundo.', tone: 'accent' },
+          { value: 'c', label: 'Tres', description: 'Ocupa la fila.', wide: true },
+        ]}
+      />
+    )
+  }
+
+  it('draws selectable cards with a hidden native radio, in two columns', async () => {
+    const user = userEvent.setup()
+    render(<Cards />)
+    const one = screen.getByRole('radio', { name: 'Uno' })
+    expect(one).toHaveAccessibleDescription('El primero.')
+    expect(one).toHaveClass('sr-only')
+    expect(one.closest('label')).toHaveClass('has-focus-visible:outline-2')
+    expect(one.closest('label')).toHaveTextContent('1UnoEl primero.')
+    expect(screen.getByRole('radio', { name: 'Tres' }).closest('label')).toHaveClass('col-span-2')
+    expect(one.closest('div')).toHaveClass('grid-cols-2')
+
+    await user.click(screen.getByText('Dos'))
+    const two = screen.getByRole('radio', { name: 'Dos' })
+    expect(two).toBeChecked()
+    expect(two.closest('label')).toHaveClass('border-accent-strong', 'bg-accent-soft')
+    // Arrow keys move and select, like the list.
+    two.focus()
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getByRole('radio', { name: 'Tres' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Tres' }).closest('label')).toHaveClass(
+      'border-muted',
+      'bg-canvas',
+    )
+  })
+})

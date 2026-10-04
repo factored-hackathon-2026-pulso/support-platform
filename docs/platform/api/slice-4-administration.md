@@ -438,7 +438,7 @@ New family **`administration`** ("Administración" in the UI). `{P}` = the targe
 
 | `event_type` | Family | Description (Spanish) |
 |---|---|---|
-| `staff.created` | administration | "Creó la cuenta de {P} · {roles} · {equipo}" (e.g. "Creó la cuenta de Ana Gil · Analista · Disputas · Equipo Andes") |
+| `staff.created` | administration | "Creó la cuenta de {P} · {roles} · {equipo}" (e.g. "Creó la cuenta de Ana Gil · Analista · Equipo Andes") |
 | `staff.profile_updated` | administration | name only "Cambió el nombre de {from_name} a {to_name}" · email only "Cambió el correo de {P}" · both "Cambió el nombre y el correo de {P} (antes {from_name})" |
 | `staff.roles_changed` | administration | added only "Le dio a {P} el rol de {added}" · removed only "Le quitó a {P} el rol de {removed}" · both "Cambió los roles de {P}: le dio {added} y le quitó {removed}" (`joinEs` of labels) |
 | `staff.languages_changed` | administration | "Cambió los idiomas de {P}: ahora habla {to_languages}" (lower-case names; empty → "Cambió los idiomas de {P}: ya no tiene idiomas") |
@@ -710,10 +710,10 @@ Same rules as slices 2–3: stable ids, times relative to the first seed (`T`), 
 
 | n | Id | Name | State |
 |---|---|---|---|
-| 1 | `TEAM-0…01` | Disputas · Equipo Andes | active |
-| 2 | `TEAM-0…02` | Disputas · Equipo Pacífico | active |
+| 1 | `TEAM-0…01` | Equipo Andes | active |
+| 2 | `TEAM-0…02` | Equipo Pacífico | active |
 | 3 | `TEAM-0…03` | Administración de la plataforma | active |
-| 4 | `TEAM-0…04` | Disputas · Equipo Caribe | **inactive**, no members: created by Valeria at T−3d (`team.created`), deactivated by Valeria at T−1d (`team.deactivated`) |
+| 4 | `TEAM-0…04` | Equipo Caribe | **inactive**, no members: created by Valeria at T−3d (`team.created`), deactivated by Valeria at T−1d (`team.deactivated`) |
 
 (`make_id(IdPrefix.TEAM, str(n).zfill(26))`.) Teams 1–3 have no creation event (they existed before the log); `created_at` = T−30d.
 
@@ -736,9 +736,9 @@ Admin story in the log: Valeria gave Felipe the Supervisora role at T−5d (`sta
 | Usuarios (Activas) | 12 people; pills Todas 12 · Analistas 6 · Supervisoras 5 · Administración 2; Cuenta select "Bloqueadas (1)"; Mariana "Bloqueada" |
 | Usuarios (Desactivadas) | Andrés Villamil |
 | Valeria's own aside | Administración card disabled "No puedes quitarte tu propio rol de Administración."; "Desactivar cuenta" disabled |
-| Daniela's aside | Analista · español, portugués · Disputas · Equipo Andes; Casos abiertos "5 · 4 en español · 1 en portugués" (her seeded inbox); unchecking Portugués → the IDIOMAS error; "Desactivar cuenta" → the open-cases block |
-| Equipos (Activos 3 · Inactivos 1 · Todos 4) | Administración de la plataforma: 2 personas, 0 analistas (Valeria, Carolina) · Disputas · Equipo Andes: 4 personas, 3 analistas (Daniela, Felipe, Julián, Lucía) + 1 desactivada (Andrés) · Disputas · Equipo Pacífico: 6 personas, 3 analistas (Mariana, Martín, Paula, Renata, Sebastián, Tomás). Inactivos: Disputas · Equipo Caribe (0) |
-| Auditoría (admin) · Tipo "Administración" | "Desactivó el equipo Disputas · Equipo Caribe", "Desactivó la cuenta de Andrés Villamil", "Creó el equipo Disputas · Equipo Caribe", "Le dio a Felipe Echeverri el rol de Supervisora"; Mariana's lock under Accesos; "Ver la conversación" hidden for Valeria |
+| Daniela's aside | Analista · español, portugués · Equipo Andes; Casos abiertos "5 · 4 en español · 1 en portugués" (her seeded inbox); unchecking Portugués → the IDIOMAS error; "Desactivar cuenta" → the open-cases block |
+| Equipos (Activos 3 · Inactivos 1 · Todos 4) | Administración de la plataforma: 2 personas, 0 analistas (Valeria, Carolina) · Equipo Andes: 4 personas, 3 analistas (Daniela, Felipe, Julián, Lucía) + 1 desactivada (Andrés) · Equipo Pacífico: 6 personas, 3 analistas (Mariana, Martín, Paula, Renata, Sebastián, Tomás). Inactivos: Equipo Caribe (0) |
+| Auditoría (admin) · Tipo "Administración" | "Desactivó el equipo Equipo Caribe", "Desactivó la cuenta de Andrés Villamil", "Creó el equipo Equipo Caribe", "Le dio a Felipe Echeverri el rol de Supervisora"; Mariana's lock under Accesos; "Ver la conversación" hidden for Valeria |
 | Equipo y colas (Lucía) | unchanged from slice 3 §9.4 (pills now keyed by team id) |
 
 Update `backend/README.md`: accounts table (Mariana locked, Andrés inactive, teams), the administration endpoints, temporary passwords, the "delete `cc_platform.db`" note.
@@ -769,7 +769,7 @@ Update `backend/README.md`: accounts table (Mariana locked, Andrés inactive, te
 - she removes Felipe's Supervisora role while he is on "Equipo y colas": his socket reconnects, the toast says "Ahora tienes: Analista.", he lands on "Casos"; she gives it back and the role switcher shows it again without signing in;
 - she tries to deactivate Daniela → blocked by 5 open cases; Felipe (Supervisora again) reassigns them (the pt case to Sebastián or Tomás, rule 3), then the deactivation works, Daniela's window goes to `/login`, and her login answers "El correo o la contraseña no coinciden.";
 - she cannot uncheck her own Administración or deactivate herself; two windows editing the same person → the second gets the `version_conflict` message with fresh data;
-- she renames "Disputas · Equipo Pacífico" → "Disputas · Equipo Pacífico Sur": the supervision pill and the summary of its members (role switcher) update; deactivating "Disputas · Equipo Andes" is refused (`team_not_empty`); a new empty team can be created, deactivated and reactivated;
+- she renames "Equipo Pacífico" → "Equipo Pacífico Sur": the supervision pill and the summary of its members (role switcher) update; deactivating "Equipo Andes" is refused (`team_not_empty`); a new empty team can be created, deactivated and reactivated;
 - `/administracion/auditoria` and `/supervision/auditoria` show every step with Spanish descriptions under "Administración"; nothing breaks at 1280 px; no console errors.
 
 ## 13. Known gaps and seams (do not build now)

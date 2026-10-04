@@ -8,6 +8,7 @@ from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryAdminRosterRepository,
     InMemoryAnalystAvailabilityRepository,
+    InMemoryAnalystHomeReader,
     InMemoryAssignmentRepository,
     InMemoryCaseRepository,
     InMemoryCustomerCaseSlotRepository,
@@ -38,6 +39,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     assignments: InMemoryAssignmentRepository
     case_slots: InMemoryCustomerCaseSlotRepository
     event_log: InMemoryEventLogRepository
+    analyst_home: InMemoryAnalystHomeReader
 
     def __init__(
         self, store: InMemoryStore, *, bus: EventBus, ids: IdGenerator, clock: Clock
@@ -60,6 +62,9 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.assignments = InMemoryAssignmentRepository(store.assignments)
         self.case_slots = InMemoryCustomerCaseSlotRepository(store.case_slots, track)
         self.event_log = InMemoryEventLogRepository(store.events)
+        self.analyst_home = InMemoryAnalystHomeReader(
+            store.sessions, store.cases, store.assignments, store.events
+        )
 
     def _repositories(
         self,

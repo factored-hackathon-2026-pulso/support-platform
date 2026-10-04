@@ -95,34 +95,62 @@ afterEach(() => {
 })
 
 describe('CaseListPanel', () => {
-  it('renders the title, the five counters as filters and one card per open case', async () => {
+  it('renders the title and one flat list of the open cases in urgency order, no tiles', async () => {
     renderPanel()
     expect(screen.getByRole('heading', { level: 1, name: 'Casos' })).toBeInTheDocument()
-    const filters = screen.getByRole('radiogroup', { name: 'Filtrar casos' })
-    await within(filters).findByRole('radio', { name: '5 Todos' })
-    expect(
-      within(filters)
-        .getAllByRole('radio')
-        .map((radio) => radio.parentElement?.textContent),
-    ).toEqual(['5 Todos', '2 Por responder', '2 Nuevos', '1 Esperando al cliente', '3 Cerrados'])
-    expect(within(filters).getByRole('radio', { name: '5 Todos' })).toBeChecked()
+    await screen.findByRole('list', { name: 'Casos' })
+    expect(screen.queryByRole('radiogroup', { name: 'Filtrar casos' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Quitar filtro/ })).not.toBeInTheDocument()
 
-    expect(within(caseList()).getAllByRole('button')).toHaveLength(5)
-    expect(card(/Marcela Quintana Pardo, Por responder/)).toHaveAttribute('title', 'Por responder')
-    expect(card(/Larissa Monteiro Alves, Nuevo/)).toHaveTextContent('SLA 13 min')
-    expect(card(/Joaquín Ferreyra Paz, Esperando al cliente/)).toHaveTextContent(
-      'Prioridad media · App',
-    )
+    // SLA at risk (Beatriz), the nearest SLA (Patricia, then Larissa), answered and
+    // waiting for her (Marcela), waiting for the customer last (Joaquín).
+    expect(
+      within(caseList())
+        .getAllByRole('button')
+        .map((button) => button.querySelector('span span')?.textContent),
+    ).toEqual([
+      'Beatriz Salcedo Prieto',
+      'Patricia Lozano Vega',
+      'Larissa Monteiro Alves',
+      'Marcela Quintana Pardo',
+      'Joaquín Ferreyra Paz',
+    ])
+    // Separate elements, never a dot-joined line: the status pill, the channel
+    // (icon-only, its name for screen readers), the time.
+    const marcela = card(/Marcela Quintana Pardo/)
+    expect(marcela).toHaveAttribute('title', 'Por responder')
+    expect(within(marcela).getByText('Por responder')).toHaveClass('bg-warn-soft')
+    expect(within(marcela).getByText('Canal: Web')).toHaveClass('sr-only')
+    expect(marcela).toHaveTextContent('Última actividad: hace 2 min')
+    expect(marcela.textContent).not.toContain('·')
+    expect(marcela).not.toHaveTextContent('Prioridad media') // only a high priority shows
+    expect(card(/Larissa Monteiro Alves/)).toHaveTextContent('SLA de primera respuesta: 13 min')
+    expect(within(card(/Larissa Monteiro Alves/)).getByText('Nuevo')).toHaveClass('bg-accent-soft')
+    expect(
+      within(card(/Joaquín Ferreyra Paz/)).getByText('Esperando al cliente'),
+    ).toBeInTheDocument()
+    expect(within(card(/Joaquín Ferreyra Paz/)).getByText('Canal: App')).toBeInTheDocument()
   })
 
   it('shows the first-response SLA only while the first reply is pending', async () => {
     renderPanel()
     const beatriz = await screen.findByRole('button', { name: /Beatriz Salcedo Prieto/ })
-    expect(within(beatriz).getByText('SLA 3 min')).toHaveClass('text-warn')
-    expect(within(card(/Larissa Monteiro Alves/)).getByText('SLA 13 min')).toHaveClass('text-ink-2')
+    // The shared SLA levels: at risk = flame in warn, running = clock in muted; the
+    // value stays visible, "SLA" is in the accessible text and the tooltip.
+    const atRisk = within(beatriz).getByText('3 min', { selector: 'span.truncate' })
+    expect(atRisk.parentElement).toHaveClass('text-warn')
+    expect(atRisk.parentElement?.querySelector('svg')).toHaveClass('lucide-flame')
+    expect(beatriz).toHaveTextContent('SLA de primera respuesta: 3 min')
+    expect(beatriz).toHaveTextContent('Vence en 3 min') // tooltip
+    const running = within(card(/Larissa Monteiro Alves/)).getByText('13 min', {
+      selector: 'span.truncate',
+    })
+    expect(running.parentElement).toHaveClass('text-muted')
+    expect(running.parentElement?.querySelector('svg')).toHaveClass('lucide-clock')
     // Marcela and Joaquín already got a first answer: no SLA tag.
     expect(card(/Marcela Quintana Pardo/)).not.toHaveTextContent(/SLA/)
     expect(card(/Joaquín Ferreyra Paz/)).not.toHaveTextContent(/SLA/)
+    expect(card(/Marcela Quintana Pardo/).querySelector('.lucide-flame')).toBeNull()
   })
 
   it('draws the status stripe with tokens and tags a customer who wrote again', async () => {
@@ -131,36 +159,39 @@ describe('CaseListPanel', () => {
     expect(marcela).toHaveClass('border-l-warn')
     expect(card(/Larissa Monteiro Alves/)).toHaveClass('border-l-accent')
     expect(card(/Joaquín Ferreyra Paz/)).toHaveClass('border-l-waiting')
-    expect(marcela).toHaveTextContent('Prioridad media · Web')
     expect(marcela).toHaveTextContent('hace 2 min')
 
+    // "Volvió a escribir": icon-only with a tooltip, its text for screen readers.
     const patricia = card(/Patricia Lozano Vega/)
-    const tag = within(patricia).getByText('Volvió a escribir')
-    expect(tag).toHaveAttribute(
-      'title',
-      'Escribió de nuevo después de que se cerró su caso anterior',
-    )
-    expect(marcela).not.toHaveTextContent('Volvió a escribir')
+    expect(
+      within(patricia).getByText('Volvió a escribir', { selector: '.sr-only' }),
+    ).toBeInTheDocument()
+    expect(patricia).toHaveAccessibleName(/Volvió a escribir/)
+    expect(within(marcela).queryAllByText('Volvió a escribir')).toHaveLength(0)
   })
 
-  it('lists the closed cases of the last 7 days in Cerrados', async () => {
+  it('lists the closed cases of the last 7 days in Cerrados (from Inicio or the URL)', async () => {
     vi.mocked(fetchInbox).mockImplementation(async ({ status }) =>
       status === 'closed' ? makeInbox(closedInbox) : makeInbox(),
     )
-    const { user } = renderPanel()
-    await user.click(await screen.findByRole('radio', { name: '3 Cerrados' }))
-    expect(onFilterChange).toHaveBeenCalledWith('closed')
+    renderPanel({ filter: 'closed' })
+    await screen.findByRole('list', { name: 'Casos' })
     const hector = await within(caseList()).findByRole('button', {
-      name: /Héctor Villarreal Garza, Cerrado/,
+      name: /Héctor Villarreal Garza/,
     })
+    expect(hector).toHaveAttribute('title', 'Cerrado')
+    // The most recent close first (server order), not the urgency order.
+    expect(within(caseList()).getAllByRole('button')[0]).toBe(hector)
     expect(within(caseList()).getAllByRole('button')).toHaveLength(3)
     expect(hector).toHaveClass('border-l-offline')
-    expect(hector).toHaveTextContent('Cerrado hace 3 h')
+    expect(hector).toHaveTextContent('Cerrado: hace 3 h')
+    expect(within(hector).getByText('Cerrado')).toHaveClass('bg-panel')
     expect(hector).toHaveTextContent('Fuera de alcance')
+    expect(hector.querySelector('[data-reason="out_of_scope"]')).toHaveClass('bg-warn-soft')
     expect(hector).not.toHaveTextContent(/SLA/)
     expect(card(/Claudia Restrepo Varela/)).toHaveTextContent('El cliente no respondió')
     expect(card(/Patricia Lozano Vega/)).toHaveTextContent('Resuelto')
-    expect(card(/Patricia Lozano Vega/)).toHaveTextContent('Cerrado hace 2 días')
+    expect(card(/Patricia Lozano Vega/)).toHaveTextContent('hace 2 días')
   })
 
   it('says when no case was closed in the last 7 days', async () => {
@@ -179,14 +210,30 @@ describe('CaseListPanel', () => {
     expect(marcela).not.toHaveAttribute('aria-current')
   })
 
-  it('filters with the counters', async () => {
-    const { user } = renderPanel()
-    await user.click(await screen.findByRole('radio', { name: '1 Esperando al cliente' }))
-    expect(onFilterChange).toHaveBeenCalledWith('waiting')
+  it('shows the filter of the URL as a removable chip; removing it shows every open case', async () => {
+    vi.mocked(fetchInbox).mockImplementation(async ({ status }) =>
+      makeInbox(status ? seededInbox.filter((item) => item.inboxStatus === status) : seededInbox),
+    )
+    const { user } = renderPanel({ filter: 'waiting' })
     await waitFor(() =>
       expect(fetchInbox).toHaveBeenCalledWith({ status: 'waiting', q: '' }, expect.anything()),
     )
-    expect(screen.getByRole('radio', { name: '1 Esperando al cliente' })).toBeChecked()
+    await screen.findByRole('list', { name: 'Casos' })
+    expect(within(caseList()).getAllByRole('button')).toHaveLength(1)
+    const chip = screen.getByRole('button', { name: 'Quitar filtro Esperando al cliente' })
+    expect(chip).toHaveTextContent('Esperando al cliente')
+    await user.click(chip)
+    expect(onFilterChange).toHaveBeenCalledWith(null)
+    expect(screen.queryByRole('button', { name: /^Quitar filtro/ })).not.toBeInTheDocument()
+    await waitFor(() => expect(within(caseList()).getAllByRole('button')).toHaveLength(5))
+  })
+
+  it('names each filter chip', async () => {
+    const { unmount } = renderPanel({ filter: 'closed' })
+    expect(screen.getByRole('button', { name: 'Quitar filtro Cerrados' })).toBeInTheDocument()
+    unmount()
+    renderPanel({ filter: 'to_reply' })
+    expect(screen.getByRole('button', { name: 'Quitar filtro Por responder' })).toBeInTheDocument()
   })
 
   it('searches by customer or case number after a pause in typing', async () => {
@@ -207,8 +254,6 @@ describe('CaseListPanel', () => {
     vi.mocked(fetchInbox).mockResolvedValue(emptyInbox)
     renderPanel()
     expect(await screen.findByText('Nada pendiente.')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: '0 Todos' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: '0 Cerrados' })).toBeInTheDocument()
   })
 
   it('says when a search matches nothing', async () => {
@@ -219,11 +264,10 @@ describe('CaseListPanel', () => {
     expect(await screen.findByText('Ningún caso coincide con tu búsqueda.')).toBeInTheDocument()
   })
 
-  it('shows skeletons and placeholder counters while loading', async () => {
+  it('shows skeletons while loading', async () => {
     vi.mocked(fetchInbox).mockReturnValue(new Promise(() => {}))
     const { container } = renderPanel()
     expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: '– Todos' })).toBeInTheDocument()
     expect(screen.queryByRole('list', { name: 'Casos' })).not.toBeInTheDocument()
   })
 
@@ -237,27 +281,31 @@ describe('CaseListPanel', () => {
     expect(await screen.findByRole('list', { name: 'Casos' })).toBeInTheDocument()
   })
 
-  it('pauses from the availability pill', async () => {
+  it('pauses from the availability pill, which then becomes the orange paused control', async () => {
     const { user } = renderPanel()
-    const pill = await screen.findByRole('button', { name: /^Disponible/ })
-    expect(screen.queryByText('En pausa · no te llegan casos nuevos')).not.toBeInTheDocument()
+    const pill = await screen.findByRole('button', { name: 'Disponible. Pausar casos nuevos' })
+    expect(pill).toHaveTextContent('Disponible')
+    expect(screen.queryByText('No te llegan casos nuevos')).not.toBeInTheDocument()
     await user.click(pill)
     expect(updateAvailability).toHaveBeenCalledWith('paused')
-    expect(await screen.findByRole('button', { name: /^En pausa/ })).toBeInTheDocument()
-    expect(screen.getByText('En pausa · no te llegan casos nuevos')).toBeInTheDocument()
+    const control = await screen.findByRole('button', { name: 'En pausa. Volver a disponible' })
+    expect(control).toHaveClass('bg-warn')
+    expect(control).toHaveTextContent('En pausaNo te llegan casos nuevos')
+    expect(screen.queryByRole('button', { name: /^Disponible/ })).not.toBeInTheDocument()
   })
 
-  it('shows the paused banner and goes back to available', async () => {
+  it('shows no separate paused banner: the control itself goes back to available', async () => {
     vi.mocked(fetchAvailability).mockResolvedValue(paused)
     const { user } = renderPanel()
-    expect(await screen.findByText('En pausa · no te llegan casos nuevos')).toBeInTheDocument()
-    expect(screen.getByText('Los que ya tienes siguen contigo.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Volver a disponible' }))
+    const control = await screen.findByRole('button', { name: 'En pausa. Volver a disponible' })
+    expect(screen.queryByText('Los que ya tienes siguen contigo.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Volver a disponible' })).not.toBeInTheDocument()
+    await user.click(control)
     expect(updateAvailability).toHaveBeenCalledWith('available')
-    await waitFor(() =>
-      expect(screen.queryByText('En pausa · no te llegan casos nuevos')).not.toBeInTheDocument(),
-    )
-    expect(screen.getByRole('button', { name: /^Disponible/ })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: 'Disponible. Pausar casos nuevos' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No te llegan casos nuevos')).not.toBeInTheDocument()
   })
 
   it('rolls the pill back and tells the analyst when the change fails', async () => {
@@ -457,7 +505,9 @@ describe('CaseListPanel', () => {
       })
     })
     expect(await screen.findByText('Te asignaron un caso')).toBeInTheDocument()
-    expect(screen.getByText('Camila Torres Benavides · desde supervisión')).toBeInTheDocument()
+    const toasts = screen.getByRole('region', { name: 'Notificaciones' })
+    expect(within(toasts).getByText('Camila Torres Benavides')).toBeInTheDocument()
+    expect(within(toasts).getByText('Supervisión')).toBeInTheDocument()
   })
 
   it('toasts once when supervision reassigns one of her cases away', async () => {

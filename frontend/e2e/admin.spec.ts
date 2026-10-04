@@ -2,6 +2,7 @@ import { CUSTOMERS, firstName, inventPerson, SEEDED, TEAM_ANDES, uniqueText } fr
 import { expect, test } from './support/fixtures'
 import { LoginPage } from './support/pages/login-page'
 import { UsersPage } from './support/pages/users-page'
+import { HomePage } from './support/pages/home-page'
 import { WorkspacePage } from './support/pages/workspace-page'
 
 test.describe('Administración', () => {
@@ -33,10 +34,12 @@ test.describe('Administración', () => {
       languages: ['es'],
     })
 
-    // She signs in (temporary password + MFA), lands on "Casos" and starts "En pausa".
+    // She signs in (temporary password + MFA), lands on "Inicio" and starts "En pausa".
     const signedIn = await actors.signedIn('analista nueva', analyst)
-    await expect(signedIn.page).toHaveURL(/\/analista/)
+    await expect(signedIn.page).toHaveURL(/\/analista\/inicio$/)
+    await expect(new HomePage(signedIn.page).availability).toContainText('Estás en pausa')
     const workspace = new WorkspacePage(signedIn.page)
+    await workspace.goto()
     await expect(workspace.availability('En pausa')).toBeVisible()
     await workspace.becomeAvailable()
 

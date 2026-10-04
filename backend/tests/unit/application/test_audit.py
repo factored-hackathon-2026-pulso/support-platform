@@ -168,7 +168,7 @@ async def emit_administration(container: Container) -> None:
     """Every administration event (slice 4 §2.4) through the real use cases."""
     admin = container.use_cases.administration
     valeria = actor_for(ADMIN_ONLY)
-    team = await admin.create_team.execute(valeria, "Disputas · Equipo Sur")
+    team = await admin.create_team.execute(valeria, "Equipo Sur")
     created = await admin.create_user.execute(
         valeria,
         CreateUserCommand(
@@ -193,7 +193,7 @@ async def emit_administration(container: Container) -> None:
     )
     current = await admin.get_team.execute(valeria, team.team.id)  # moves in/out touched it
     renamed = await admin.rename_team.execute(
-        valeria, team.team.id, current.team.version, "Disputas · Equipo Austral"
+        valeria, team.team.id, current.team.version, "Equipo Austral"
     )
     deactivated = await admin.deactivate_team.execute(valeria, team.team.id, renamed.team.version)
     await admin.reactivate_team.execute(valeria, team.team.id, deactivated.team.version)

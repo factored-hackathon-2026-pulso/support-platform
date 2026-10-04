@@ -4,6 +4,9 @@ import { sessionToken } from '@/lib/session-token'
 import { adminStaff, analystStaff, supervisorAdminStaff, supervisorStaff } from '@/test/fixtures'
 import { renderRoute } from '@/test/render'
 
+/** The analyst home "Inicio" greets by the time of day (slice 6). */
+const GREETING = /^(Buenos días|Buenas tardes|Buenas noches), /
+
 describe('route guards', () => {
   it('sends anonymous users to /login and remembers where they were going', async () => {
     const { router } = renderRoute('/supervision/auditoria?filtro=cierres')
@@ -14,8 +17,8 @@ describe('route guards', () => {
 
   it('redirects a role section the user does not hold to their first role home', async () => {
     const { router } = renderRoute('/administracion/usuarios', { staff: analystStaff })
-    expect(await screen.findByRole('heading', { level: 1, name: 'Casos' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/analista')
+    expect(await screen.findByRole('heading', { level: 1, name: GREETING })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/analista/inicio')
   })
 
   it('opens the sections of every role the user holds', async () => {
@@ -29,8 +32,8 @@ describe('route guards', () => {
   it('sends "/" to the home of the first role', async () => {
     const { router } = renderRoute('/', { staff: supervisorStaff })
     // supervisorStaff holds supervisor + analyst: analyst comes first in canonical order.
-    expect(await screen.findByRole('heading', { level: 1, name: 'Casos' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/analista')
+    expect(await screen.findByRole('heading', { level: 1, name: GREETING })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/analista/inicio')
   })
 
   it('redirects role roots to their first section', async () => {
@@ -110,8 +113,8 @@ describe('route guards', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Equipos' })).toBeInTheDocument()
     unmount()
     const { router } = renderRoute('/administracion/auditoria', { staff: supervisorStaff })
-    expect(await screen.findByRole('heading', { level: 1, name: 'Casos' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/analista')
+    expect(await screen.findByRole('heading', { level: 1, name: GREETING })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/analista/inicio')
   })
 
   it('renders the customer simulator without the staff shell or a session', async () => {

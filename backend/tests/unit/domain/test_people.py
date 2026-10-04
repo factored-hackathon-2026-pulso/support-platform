@@ -63,7 +63,7 @@ def test_staff_normalises_email_and_exposes_roles() -> None:
         {"email": "not-an-email"},
         {"name": " "},
         {"name": " D "},
-        {"team_id": "Disputas · Equipo Andes"},
+        {"team_id": "Equipo Andes"},
         {"id": "CASE-" + "0" * 26},
     ],
 )

@@ -10,7 +10,12 @@ import copy
 from collections.abc import Callable, Collection, Iterable, Sequence
 from datetime import datetime
 
-from cc_platform.application.cases.ports import AssigneeLoad, CaseRef, OpenCaseRef
+from cc_platform.application.cases.ports import (
+    AssigneeLoad,
+    CaseRef,
+    CustomerCaseFact,
+    OpenCaseRef,
+)
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
 from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.cases.assignment import Assignment
@@ -393,6 +398,10 @@ class InMemoryCaseRepository(_StagedRepository[Case]):
     async def get(self, case_id: str) -> Case | None:
         return await self._get(case_id)
 
+    async def get_many(self, case_ids: Collection[str]) -> dict[str, Case]:
+        wanted = set(case_ids)
+        return {case.id: case for case in self._tracked(c for c in self._all() if c.id in wanted)}
+
     def _tracked(self, cases: Iterable[Case]) -> list[Case]:
         found = list(cases)
         for case in found:
@@ -604,3 +613,75 @@ class InMemoryCustomerRepository(_AppendOnlyRepository[Customer]):
 
     async def list(self) -> list[Customer]:
         return sorted(self._all(), key=lambda customer: customer.id)
+
+
+# ----------------------------------------------------------------------------- analyst home
+class InMemoryAnalystHomeReader:
+    """Same answers as ``SqlAnalystHomeReader``, over the committed store (read-only)."""
+
+    def __init__(
+        self,
+        sessions: dict[str, StaffSession],
+        cases: dict[str, Case],
+        assignments: dict[str, Assignment],
+        events: list[StoredEvent],
+    ) -> None:
+        self._sessions = sessions
+        self._cases = cases
+        self._assignments = assignments
+        self._events = events
+
+    async def previous_session_end(
+        self, staff_id: str, *, current_session_id: str, now: datetime
+    ) -> datetime | None:
+        ends = [
+            session.ended_at or session.expires_at
+            for session in self._sessions.values()
+            if session.staff_id == staff_id
+            and session.id != current_session_id
+            and (session.ended_at is not None or session.expires_at <= now)
+        ]
+        return max(ends, default=None)
+
+    async def touched_case_ids(self, staff_id: str, since: datetime) -> set[str]:
+        held = {
+            case.id
+            for case in self._cases.values()
+            if case.assigned_analyst_id == staff_id
+            and (
+                case.status in OPEN_ASSIGNED_STATUSES
+                or (case.closed_at is not None and case.closed_at > since)
+            )
+        }
+        moved = {
+            a.case_id
+            for a in self._assignments.values()
+            if a.assigned_at > since and staff_id in (a.staff_id, a.previous_staff_id)
+        }
+        return held | moved
+
+    async def case_events(
+        self, case_ids: Collection[str], *, since: datetime, event_types: Collection[str]
+    ) -> list[StoredEvent]:
+        wanted, types = set(case_ids), set(event_types)
+        return [
+            event
+            for event in self._events
+            if event.case_id in wanted and event.event_time > since and event.event_type in types
+        ]
+
+    async def customer_cases(
+        self, customer_ids: Collection[str]
+    ) -> dict[str, list[CustomerCaseFact]]:
+        wanted = set(customer_ids)
+        facts: dict[str, list[CustomerCaseFact]] = {}
+        for case in self._cases.values():
+            if case.customer_id in wanted:
+                facts.setdefault(case.customer_id, []).append(
+                    CustomerCaseFact(
+                        case_id=case.id,
+                        opened_at=case.opened_at,
+                        close_reason=case.closure.reason if case.closure else None,
+                    )
+                )
+        return facts

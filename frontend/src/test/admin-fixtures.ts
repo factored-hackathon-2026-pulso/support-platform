@@ -17,7 +17,7 @@ import {
 
 export const TEAM_CARIBE = {
   id: 'TEAM-00000000000000000000000004',
-  name: 'Disputas · Equipo Caribe',
+  name: 'Equipo Caribe',
 }
 
 export const MARIANA_ID = 'STF-SUP0000007'

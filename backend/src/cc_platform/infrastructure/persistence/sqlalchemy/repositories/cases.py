@@ -137,6 +137,12 @@ class SqlCaseRepository(VersionedRepository[Case]):
                 found.append(case)
         return found
 
+    async def get_many(self, case_ids: Collection[str]) -> dict[str, Case]:
+        if not case_ids:
+            return {}
+        found = await self._list(self.table.c.id.in_(sorted(set(case_ids))))
+        return {case.id: case for case in found}
+
     async def list_for_assignee(
         self, staff_id: str, statuses: Collection[CaseStatus]
     ) -> list[Case]:

@@ -35,8 +35,8 @@ def test_seed_staff_roles_follow_the_contract() -> None:
     }
     assert [seed.name for seed in DEMO_STAFF if not seed.active] == ["Andrés Villamil"]
     assert {seed.team.name for seed in DEMO_STAFF} == {
-        "Disputas · Equipo Andes",
-        "Disputas · Equipo Pacífico",
+        "Equipo Andes",
+        "Equipo Pacífico",
         "Administración de la plataforma",
     }
 
@@ -65,13 +65,13 @@ async def test_admin_story_and_directory_of_a_fresh_start() -> None:
         andres_availability = await uow.availability.get(seed_staff_id(13))
         events = (await uow.event_log.page(limit=1000)).items
     assert {name: (team.id, team.active) for name, team in teams.items()} == {
-        "Disputas · Equipo Andes": (seed_team_id(1), True),
-        "Disputas · Equipo Pacífico": (seed_team_id(2), True),
+        "Equipo Andes": (seed_team_id(1), True),
+        "Equipo Pacífico": (seed_team_id(2), True),
         "Administración de la plataforma": (seed_team_id(3), True),
-        "Disputas · Equipo Caribe": (seed_team_id(4), False),
+        "Equipo Caribe": (seed_team_id(4), False),
     }
-    assert teams["Disputas · Equipo Andes"].created_at == now - timedelta(days=30)
-    assert teams["Disputas · Equipo Caribe"].created_at == now - timedelta(days=3)
+    assert teams["Equipo Andes"].created_at == now - timedelta(days=30)
+    assert teams["Equipo Caribe"].created_at == now - timedelta(days=3)
     assert roster is not None
     assert roster.admin_ids == {seed_staff_id(7), seed_staff_id(9)}
     assert mariana is not None

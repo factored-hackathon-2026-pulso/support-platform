@@ -56,9 +56,7 @@ A, S, AD = StaffRole.ANALYST, StaffRole.SUPERVISOR, StaffRole.ADMIN
 ES, PT = Language.SPANISH, Language.PORTUGUESE
 
 
-def team(
-    team_id: str = TEAM_A, name: str = "Disputas · Equipo Andes", *, active: bool = True
-) -> Team:
+def team(team_id: str = TEAM_A, name: str = "Equipo Andes", *, active: bool = True) -> Team:
     return Team(id=team_id, name=name, active=active, created_at=NOW)
 
 
@@ -89,9 +87,7 @@ def test_names_are_trimmed_collapsed_and_bounded() -> None:
 
 
 def test_team_name_key_ignores_case_accents_and_spaces() -> None:
-    assert team_name_key("Disputas · Equipo Pacífico") == team_name_key(
-        "disputas ·  equipo PACIFICO"
-    )
+    assert team_name_key("Equipo Pacífico") == team_name_key("equipo  PACIFICO")
     assert fold("Ñandú") == "nandu"
 
 
@@ -163,7 +159,7 @@ def test_create_records_the_canonical_payload() -> None:
         "roles": ["analyst", "admin"],
         "languages": ["es", "pt"],
         "team_id": TEAM_A,
-        "team_name": "Disputas · Equipo Andes",
+        "team_name": "Equipo Andes",
     }
     assert (staff.email, staff.creation_key, staff.created_at) == (
         "ana.gil@latambank.example",
@@ -196,7 +192,7 @@ def test_each_setter_records_one_event_and_a_no_op_records_nothing() -> None:
     assert staff.set_roles({A, S}, now=NOW, actor=ADMIN)
     assert not staff.set_languages({PT, ES}, now=NOW, actor=ADMIN)
     assert staff.set_languages({PT}, now=NOW, actor=ADMIN)
-    assert staff.move_to(team(TEAM_B, "Disputas · Equipo Pacífico"), from_team_name="Andes",
+    assert staff.move_to(team(TEAM_B, "Equipo Pacífico"), from_team_name="Andes",
                          now=NOW, actor=ADMIN)  # fmt: skip
     events = staff.pull_events()
     assert [type(e) for e in events] == [
@@ -233,7 +229,7 @@ def test_each_setter_records_one_event_and_a_no_op_records_nothing() -> None:
         "from_team_id": TEAM_A,
         "from_team_name": "Andes",
         "to_team_id": TEAM_B,
-        "to_team_name": "Disputas · Equipo Pacífico",
+        "to_team_name": "Equipo Pacífico",
     }
 
 

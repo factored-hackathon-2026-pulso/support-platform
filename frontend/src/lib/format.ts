@@ -182,6 +182,34 @@ export function localDayKey(value: DateInput, { timeZone }: TimeZoneOptions = {}
   return `${year}-${pad2(month)}-${pad2(day)}`
 }
 
+const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'] as const
+const MONTHS_LONG = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+] as const
+
+/** "Sábado 3 de octubre" (in the viewer's zone): page headers that name the day. */
+export function formatLongDate(value: DateInput, { timeZone }: TimeZoneOptions = {}): string {
+  const { year, month, day } = zonedParts(toDate(value), timeZone)
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+  return `${WEEKDAYS[weekday]} ${day} de ${MONTHS_LONG[month - 1]}`
+}
+
+/** Hour of the day 0–23 of an instant in the viewer's zone (greetings). */
+export function localHour(value: DateInput, { timeZone }: TimeZoneOptions = {}): number {
+  return zonedParts(toDate(value), timeZone).hour
+}
+
 /** "5 mar 2025, 11:02". */
 export function formatDateTime(value: DateInput, options: FormatDateOptions = {}): string {
   return `${formatDate(value, options)}, ${formatTime(value, options)}`

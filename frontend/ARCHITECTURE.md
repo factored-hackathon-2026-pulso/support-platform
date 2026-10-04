@@ -712,6 +712,17 @@ right role section; its query string goes in the feature's `url.ts`. Until it is
 `wide`; the native radio is visually hidden, the card shows focus and the checked tone).
 `EmptyState` accepts `as="h4"`.
 
+Languages (`LanguageMark.tsx`, names and codes in `language.ts`): a language is shown as a
+mark, flag + code ("ES", "PT"), never the flag alone and never an emoji; the flag stands for
+the language (ES = Spain's flag, PT = Portugal's, also for pt-BR). Where a name is shown it is
+only the language's own name ("Español", "Português"). Dense rows and headers use
+`LanguageMarks` (`languages`, `focusable`: the group's name, "Español y Português", is its
+tooltip and its screen-reader text); an "Idioma" value uses `LanguageName` (mark + own name);
+form and filter options use `LanguageOptionLabel` (21 px flag + own name, also through
+`FilterOption.language`); a fact takes `FactItem.languages` (marks after its text, or in place
+of the icon when the text is empty). The flags are inline SVGs from the Figma "Flags icons"
+community file: artwork colors, not tokens, and no ids, so they repeat on a page.
+
 Layout (`@/components/layout`): `SidePanel` / `SidePanelSection` (slice 6: the 360 px right
 panel slot of the Workspace, sections, close button + Escape, focus in on open and back to the
 trigger), `AppShell` (rail + outlet), `Rail` (role

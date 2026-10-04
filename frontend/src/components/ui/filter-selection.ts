@@ -1,4 +1,5 @@
 /** Pure helpers and types of the "Filtros" dropdown (FilterMenu.tsx). */
+import type { LanguageCode } from './language'
 
 /** One checkbox of a filter group: "Por responder", with how many rows it would show. */
 export interface FilterOption {
@@ -6,6 +7,11 @@ export interface FilterOption {
   label: string
   /** How many rows match this option (with the other groups applied); absent = no count. */
   count?: number
+  /**
+   * A language option: the row shows the flag and the language's own name, the chip
+   * its mark; `label` is then that name ("Português").
+   */
+  language?: LanguageCode
 }
 
 /** One group of the dropdown ("Estado", "Prioridad", "Analista"): any of its options. */
@@ -20,6 +26,8 @@ export interface ActiveFilterChip {
   groupKey: string
   value: string
   label: string
+  /** A language chip shows its mark (flag + code); `label` names it. */
+  language?: LanguageCode
 }
 
 /** The checked values per group key. */
@@ -38,7 +46,12 @@ export function activeFilterChips(
   return groups.flatMap((group) =>
     group.options
       .filter((option) => selection[group.key]?.includes(option.value))
-      .map((option) => ({ groupKey: group.key, value: option.value, label: option.label })),
+      .map((option) => ({
+        groupKey: group.key,
+        value: option.value,
+        label: option.label,
+        ...(option.language ? { language: option.language } : {}),
+      })),
   )
 }
 

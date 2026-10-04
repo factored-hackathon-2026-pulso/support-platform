@@ -35,6 +35,24 @@ describe('Fact / FactList', () => {
     expect(button).toHaveTextContent('Última actividad')
   })
 
+  it('draws language marks after the text, or in place of the icon without text', () => {
+    const { container } = render(
+      <FactList
+        items={[
+          { key: 'a', icon: 'languages', text: 'Hablas', languages: ['pt'], tag: 'Regla 3' },
+          { key: 'b', icon: 'languages', text: '', label: 'Idiomas', languages: ['es', 'pt'] },
+        ]}
+      />,
+    )
+    const [spoken, marks] = screen.getAllByRole('listitem')
+    // Text, the marks' name (screen readers), the code, the tooltip bubble, the tag.
+    expect(spoken).toHaveTextContent('HablasPortuguêsPTPortuguêsRegla 3')
+    expect(spoken!.querySelectorAll('svg')).toHaveLength(2) // the icon and the flag
+    expect(marks).toHaveTextContent('Idiomas: Español y PortuguêsESPTEspañol y Português')
+    expect(marks!.querySelectorAll('svg')).toHaveLength(2) // two flags, no icon
+    expect(container.querySelectorAll('svg[data-language]')).toHaveLength(3)
+  })
+
   it('lists facts as list items and renders nothing for none', () => {
     const { container, rerender } = render(
       <FactList

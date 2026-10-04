@@ -34,6 +34,7 @@ import {
   Users,
   type LucideProps,
 } from 'lucide-react'
+import type { LanguageCode } from './language'
 import { PriorityIcon } from './PriorityIcon'
 import type { PriorityLevel } from './priority-levels'
 
@@ -125,4 +126,9 @@ export interface FactItem {
   iconOnly?: boolean
   /** A tooltip with more context than the visible text (e.g. "Última actividad" on a time). */
   tooltip?: string
+  /**
+   * Languages as marks (flag + code) after the text ("Hablas [PT]"). With an empty
+   * text the marks stand in for the icon ("Idiomas: [ES] [PT]").
+   */
+  languages?: readonly LanguageCode[]
 }

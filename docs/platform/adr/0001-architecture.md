@@ -22,7 +22,7 @@ The platform must (1) let an analyst and a customer talk by chat end to end, thr
 whole case lifecycle (assignment, conversation, close, a new case when the customer writes
 again); (2) record every state change with its actor and time (messages, assignments,
 status changes, closes) in an append-only log, using the event envelope of
-`contracts/synthetic-sample/platform_history.json`, for supervision and audit; (3) enforce the product rules
+`pulso-data/contracts/synthetic-sample/platform_history.json`, for supervision and audit; (3) enforce the product rules
 (language-based assignment, one open case per customer, only the assignee writes, a close
 needs a reason) in code, never in prose; (4) let supervision (queues, manual assignment,
 audit) and administration (users, roles, languages, teams) be added later without

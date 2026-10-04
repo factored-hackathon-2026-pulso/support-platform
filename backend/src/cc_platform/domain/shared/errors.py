@@ -68,7 +68,7 @@ class InvalidTransitionError(DomainError):
 
 
 class PolicyViolationError(DomainError):
-    """A product policy (docs/policies.md) forbids the operation."""
+    """A product policy (pulso-data/docs/policies.md) forbids the operation."""
 
     code = "policy_violation"
     default_message = "La política del banco no permite esta operación."

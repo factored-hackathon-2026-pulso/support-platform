@@ -1,6 +1,6 @@
 """Event log port: the append-only history.
 
-Shaped after ``contracts/synthetic-sample/platform_history.json``.
+Shaped after ``pulso-data/contracts/synthetic-sample/platform_history.json``.
 """
 
 from __future__ import annotations

@@ -141,6 +141,7 @@ earlier assistant turns stay in the transcript.
   "Asistente virtual"` (staff view: Spanish), and staff-only banners (`kind: "routing"`) saying how the case
   left the assistant (escalated with a handoff reference, ended, failed with a code, taken by Supervisión,
   asked for by the customer). The customer's messages written before the hand-over are **unread** for her.
+- **Priority**: when the assistant escalates, the case takes the priority agent-core saw in its handoff packet (`low`..`critical`; a stolen card arrives `critical`), set by the system in the background right after the hand-over (`case.priority_changed`, actor `system`). Best effort: if agent-core does not answer, the case keeps priority `none`. The card's priority glyph and the supervisor's menu already show it.
 - **The handoff packet**: `GET /cases/{caseId}/handoff` → `{ "packet": { … } }`. Only the case's assignee
   (`403 case_not_assigned` for anyone else, `403 forbidden` without the Analista role) and only when the case
   came from an escalation (`404 handoff_unavailable`). `packet` is agent-core's `HandoffPacket` **as it
@@ -284,7 +285,7 @@ Things that are easy to get wrong:
    `serve --port 8001`.
 2. A links file, e.g. `{ "CUS-00000000000000000000002001": "<a customer_id of the dataset>" }`.
 3. Platform: `CC_AGENT_CORE_URL=http://127.0.0.1:8001 CC_AGENT_KEYS_FILE=… CC_BANK_CUSTOMER_LINKS_FILE=… uv run cc-api`.
-4. `/customer` as Natalia Guzmán (linked, Spanish): she talks to the assistant. An analyst who is available
+4. `/cliente` as Natalia Guzmán (linked, Spanish): she talks to the assistant. An analyst who is available
    receives the case when it escalates.
 
 The backend tests need no agent-core: `InMemoryAgentRuntime` (`infrastructure/ai/memory_runtime.py`) is a

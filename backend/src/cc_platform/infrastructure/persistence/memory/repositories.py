@@ -20,6 +20,7 @@ from cc_platform.application.cases.ports import (
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
 from cc_platform.application.notifications.ports import NotificationCursor
 from cc_platform.application.ports.event_log import AuditFilters
+from cc_platform.domain.ai.copilot import CopilotThread
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.call import Call
@@ -787,6 +788,26 @@ class InMemoryAssistantSessionRepository(_StagedRepository[AssistantSession]):
         if not found:
             return None
         return await self._get(found[0].id)
+
+
+class InMemoryCopilotThreadRepository(_StagedRepository[CopilotThread]):
+    """ADR 0003. Same answers as ``SqlCopilotThreadRepository`` (a thread per case and analyst)."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, CopilotThread], track: Tracker) -> None:
+        super().__init__(committed, lambda thread: thread.id, track)
+
+    def _unique_violation(
+        self, aggregate: CopilotThread, other: CopilotThread
+    ) -> DomainError | None:
+        if (aggregate.case_id, aggregate.analyst_id) == (other.case_id, other.analyst_id):
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    async def get_for(self, case_id: str, analyst_id: str) -> CopilotThread | None:
+        found = [t for t in self._all() if (t.case_id, t.analyst_id) == (case_id, analyst_id)]
+        return await self._get(found[0].id) if found else None
 
 
 class InMemoryBankCustomerLinks:

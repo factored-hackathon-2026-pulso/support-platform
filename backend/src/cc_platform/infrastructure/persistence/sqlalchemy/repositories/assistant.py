@@ -9,6 +9,7 @@ from typing import Any, Literal, cast
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cc_platform.domain.ai.copilot import CopilotMessage, CopilotThread
 from cc_platform.domain.ai.session import (
     AgentInput,
     AssistantSession,
@@ -148,6 +149,71 @@ class SqlAssistantSessionRepository(VersionedRepository[AssistantSession]):
 
     async def get_by_case(self, case_id: str) -> AssistantSession | None:
         return await self._get_where(self.table.c.case_id == case_id)
+
+
+def _message_to_json(m: CopilotMessage) -> dict[str, Any]:
+    return {
+        "id": m.id,
+        "role": m.role,
+        "text": m.text,
+        "created_at": iso_utc(m.created_at),
+        "client_message_id": m.client_message_id,
+        "answers": m.answers,
+    }
+
+
+def _message_from_json(raw: dict[str, Any]) -> CopilotMessage:
+    return CopilotMessage(
+        id=raw["id"],
+        role=cast("Literal['analyst', 'copilot']", raw["role"]),
+        text=raw["text"],
+        created_at=datetime.fromisoformat(raw["created_at"]),
+        client_message_id=raw.get("client_message_id"),
+        answers=raw.get("answers"),
+    )
+
+
+class SqlCopilotThreadRepository(VersionedRepository[CopilotThread]):
+    table = tables.copilot_threads
+    #: ``(case_id, analyst_id)`` is unique: two first questions racing means retry.
+    insert_race_is_retryable = True
+
+    def _key(self, aggregate: CopilotThread) -> str:
+        return aggregate.id
+
+    def _to_row(self, aggregate: CopilotThread) -> dict[str, Any]:
+        return {
+            "id": aggregate.id,
+            "case_id": aggregate.case_id,
+            "analyst_id": aggregate.analyst_id,
+            "agent": aggregate.agent,
+            "agent_session_id": aggregate.agent_session_id,
+            "run_id": aggregate.run_id,
+            "runs": aggregate.runs,
+            "messages": [_message_to_json(m) for m in aggregate.messages],
+            "last_trace_id": aggregate.last_trace_id,
+            "created_at": aggregate.created_at,
+            "updated_at": aggregate.updated_at,
+        }
+
+    def _from_row(self, row: Row) -> CopilotThread:
+        return CopilotThread(
+            id=row["id"],
+            case_id=row["case_id"],
+            analyst_id=row["analyst_id"],
+            agent=row["agent"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            agent_session_id=row["agent_session_id"],
+            run_id=row["run_id"],
+            runs=row["runs"],
+            messages=tuple(_message_from_json(m) for m in row["messages"]),
+            last_trace_id=row["last_trace_id"],
+        )
+
+    async def get_for(self, case_id: str, analyst_id: str) -> CopilotThread | None:
+        c = self.table.c
+        return await self._get_where(c.case_id == case_id, c.analyst_id == analyst_id)
 
 
 class SqlBankCustomerLinks:

@@ -68,6 +68,8 @@ RESPONSE_SCHEMAS = (
     "CustomerCallLineResponse", "CustomerEmail", "CustomerEmailThread", "SendEmailResponse",
     # ADR 0003: the assistant
     "AssistantConfirmation", "AssistantStepUp", "AssistantState", "CaseHandoff",
+    # slice 15: the copilot
+    "CopilotMessage", "CopilotThread", "CopilotExchange",
 )  # fmt: skip
 
 
@@ -119,6 +121,7 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "assistant_disabled", "assistant_not_active", "assistant_active", "assistant_busy",
         "confirmation_not_pending", "confirmation_expired", "step_up_not_pending",
         "invalid_step_up_code", "handoff_unavailable", "agent_core_unavailable",
+        "copilot_unavailable", "copilot_busy",
         "agent_core_rejected",
     }  # fmt: skip
     for removed in ("CreatedUser", "PasswordResetResult"):  # part 4: no temporary passwords

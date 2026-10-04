@@ -612,6 +612,34 @@
         "title": "AnswerConfirmationRequest",
         "type": "object"
       },
+      "AskCopilotRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "clientMessageId": {
+            "description": "Client-generated id (UUID v4); also the Idempotency-Key header.",
+            "examples": [
+              "0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10"
+            ],
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Clientmessageid",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "clientMessageId"
+        ],
+        "title": "AskCopilotRequest",
+        "type": "object"
+      },
       "AssignmentOut": {
         "properties": {
           "analystId": {
@@ -2060,6 +2088,107 @@
         ],
         "title": "CloseReason",
         "type": "string"
+      },
+      "CopilotExchange": {
+        "properties": {
+          "answers": {
+            "description": "What the copilot answered (one or more messages); empty if it said nothing.",
+            "items": {
+              "$ref": "#/components/schemas/CopilotMessage"
+            },
+            "title": "Answers",
+            "type": "array"
+          },
+          "question": {
+            "$ref": "#/components/schemas/CopilotMessage"
+          },
+          "replayed": {
+            "description": "A retry of a question that was already asked.",
+            "title": "Replayed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "question",
+          "answers",
+          "replayed"
+        ],
+        "title": "CopilotExchange",
+        "type": "object"
+      },
+      "CopilotMessage": {
+        "properties": {
+          "answers": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On a copilot message: the `id` of the analyst's question it answers.",
+            "title": "Answers"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "analyst",
+              "copilot"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "text",
+          "createdAt",
+          "answers"
+        ],
+        "title": "CopilotMessage",
+        "type": "object"
+      },
+      "CopilotThread": {
+        "properties": {
+          "available": {
+            "description": "False while agent-core is not configured or the customer is not linked to the dataset: hide the copilot panel.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "messages": {
+            "description": "The analyst's thread for this case, oldest first (the newest 200).",
+            "items": {
+              "$ref": "#/components/schemas/CopilotMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "caseId",
+          "available",
+          "messages"
+        ],
+        "title": "CopilotThread",
+        "type": "object"
       },
       "CountryCode": {
         "enum": [
@@ -4914,6 +5043,8 @@
           "step_up_not_pending",
           "invalid_step_up_code",
           "handoff_unavailable",
+          "copilot_unavailable",
+          "copilot_busy",
           "agent_core_unavailable",
           "agent_core_rejected",
           "analyst_not_eligible",
@@ -9636,6 +9767,233 @@
           }
         ],
         "summary": "Close the case with a reason; the customer is told the conversation ended",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/copilot": {
+      "get": {
+        "description": "Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` (with no messages) while agent-core is not configured or the customer is not linked to the dataset: hide the panel, it is not an error.",
+        "operationId": "cases_get_copilot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopilotThread"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The analyst's conversation with the copilot about this case",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/copilot/messages": {
+      "post": {
+        "description": "Slice 15 (ADR 0003). The copilot reads and calculates (it suggests what to look up and never acts) and answers as the analyst: agent-core decides what she may see. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; 404 `assistant_disabled` without agent-core; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the question stays in the thread: ask again with the same `clientMessageId`).",
+        "operationId": "cases_ask_copilot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskCopilotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopilotExchange"
+                }
+              }
+            },
+            "description": "Replay of a question already answered"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopilotExchange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Ask the copilot something about this case",
         "tags": [
           "cases"
         ]

@@ -17,12 +17,14 @@ from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
 from cc_platform.application.ai.config import AssistantConfig, AssistantGate
+from cc_platform.application.ai.copilot import AskCopilot, GetCopilotThread
 from cc_platform.application.ai.customer import (
     AnswerAssistantConfirmation,
     RequestPerson,
     VerifyAssistantStepUp,
 )
 from cc_platform.application.ai.engine import AssistantEngine, AssistantHandover
+from cc_platform.application.ai.priority import ApplyHandoffPriority, HandoffPriorityProcess
 from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
 from cc_platform.application.ai.staff import (
     GetCaseHandoff,
@@ -188,6 +190,7 @@ from cc_platform.application.realtime.projector import (
 from cc_platform.application.realtime.topics import TopicAccessPolicy
 from cc_platform.application.use_cases import UseCases
 from cc_platform.bootstrap.settings import Settings
+from cc_platform.domain.ai.events import AssistantEnded
 from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
@@ -439,6 +442,15 @@ def _build_assistant(
         config=config,
     )
     bus.subscribe(AssistantTurnProcess(background, engine), event_types=ASSISTANT_PROCESS_EVENTS)
+    bus.subscribe(
+        HandoffPriorityProcess(
+            background,
+            ApplyHandoffPriority(
+                uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+            ),
+        ),
+        event_types=[AssistantEnded],
+    )
     use_cases = AssistantUseCases(
         confirm=AnswerAssistantConfirmation(uow=uow, clock=clock, ids=ids),
         verify_step_up=VerifyAssistantStepUp(
@@ -449,6 +461,15 @@ def _build_assistant(
             uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
         ),
         release=ReleaseAssistantCase(uow=uow, clock=clock, handover=handover),
+        copilot_thread=GetCopilotThread(uow=uow),
+        ask_copilot=AskCopilot(
+            uow=uow,
+            clock=clock,
+            ids=ids,
+            runtime=agent_core.runtime,
+            issuer=agent_core.issuer,
+            agent=settings.copilot_agent,
+        ),
     )
     return _AssistantParts(
         gate=AssistantGate(config),

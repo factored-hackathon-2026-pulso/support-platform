@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cc_platform.application.ai.copilot import AskCopilot, GetCopilotThread
 from cc_platform.application.ai.customer import (
     AnswerAssistantConfirmation,
     RequestPerson,
@@ -23,3 +24,6 @@ class AssistantUseCases:
     # the staff side
     handoff: GetCaseHandoff
     release: ReleaseAssistantCase
+    # the analyst's copilot (slice 15)
+    copilot_thread: GetCopilotThread
+    ask_copilot: AskCopilot

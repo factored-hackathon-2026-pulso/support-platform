@@ -14,6 +14,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryBankCustomerLinks,
     InMemoryCallRepository,
     InMemoryCaseRepository,
+    InMemoryCopilotThreadRepository,
     InMemoryCustomerCaseSlotRepository,
     InMemoryCustomerRepository,
     InMemoryEscalationRepository,
@@ -51,6 +52,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     calls: InMemoryCallRepository
     notifications: InMemoryNotificationRepository
     assistant_sessions: InMemoryAssistantSessionRepository
+    copilot_threads: InMemoryCopilotThreadRepository
     bank_links: InMemoryBankCustomerLinks
     event_log: InMemoryEventLogRepository
     analyst_home: InMemoryAnalystHomeReader
@@ -83,6 +85,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.assistant_sessions = InMemoryAssistantSessionRepository(
             store.assistant_sessions, track
         )
+        self.copilot_threads = InMemoryCopilotThreadRepository(store.copilot_threads, track)
         self.bank_links = InMemoryBankCustomerLinks(store.bank_links)
         self.event_log = InMemoryEventLogRepository(store.events)
         self.analyst_home = InMemoryAnalystHomeReader(
@@ -110,6 +113,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryCallRepository
         | InMemoryNotificationRepository
         | InMemoryAssistantSessionRepository
+        | InMemoryCopilotThreadRepository
         | InMemoryBankCustomerLinks
         | InMemoryEventLogRepository,
         ...,
@@ -130,6 +134,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.escalations,
             self.calls,
             self.assistant_sessions,
+            self.copilot_threads,
             self.bank_links,
             self.notifications,
             self.customers,

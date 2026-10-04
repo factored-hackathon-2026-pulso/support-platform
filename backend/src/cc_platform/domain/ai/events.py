@@ -81,6 +81,37 @@ class AssistantEnded(DomainEvent):
     code: str | None
 
 
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotQueryAsked(DomainEvent):
+    """An analyst asked the copilot something about a case. The text stays in the thread: the log
+    carries its size only."""
+
+    event_type = "copilot.query_asked"
+    entity = "copilot"
+
+    question_id: str
+    question_length: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotAnswered(DomainEvent):
+    """agent-core answered the analyst's question (``trace_id`` correlates with its traces)."""
+
+    event_type = "copilot.answered"
+    entity = "copilot"
+
+    question_id: str
+    agent: str
+    run_id: str | None
+    trace_id: str
+    status: str
+    messages: int
+
+
+#: Every copilot event: audited, never sent on a socket (the thread is the analyst's alone).
+COPILOT_EVENTS: tuple[type[DomainEvent], ...] = (CopilotQueryAsked, CopilotAnswered)
+
+
 #: Every assistant event (the realtime projection owns them).
 ASSISTANT_EVENTS: tuple[type[DomainEvent], ...] = (
     AssistantSessionStarted,

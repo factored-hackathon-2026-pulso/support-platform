@@ -6,3 +6,5 @@ __pycache__/
 *.db
 *.db-*
 .env
+# Private signing seeds for agent-core credentials (scripts/gen_agent_keys)
+.agent-keys/

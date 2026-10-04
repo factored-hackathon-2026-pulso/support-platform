@@ -27,6 +27,7 @@ from cc_platform.domain.cases.rating import CaseRating
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
     OPEN_ASSIGNED_STATUSES,
+    OPEN_STATUSES,
     AssignmentReason,
     CaseChannel,
     CasePriority,
@@ -309,7 +310,7 @@ class SqlCaseRepository(VersionedRepository[Case]):
 
     async def list_open_by_language(self, language: Language) -> list[Case]:
         c = self.table.c
-        open_statuses = [CaseStatus.QUEUED.value, *(s.value for s in OPEN_ASSIGNED_STATUSES)]
+        open_statuses = [s.value for s in OPEN_STATUSES]
         return await self._list(c.language == language.value, c.status.in_(open_statuses))
 
 

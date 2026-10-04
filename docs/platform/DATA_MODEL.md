@@ -345,7 +345,7 @@ not (answering the call already was the reply).
 | `channel` | text | how it opened (slice 12): `chat_app`, `chat_web`, `phone_inbound` (the customer called), `phone_outbound` (an analyst opened it to call the customer; sample data only), `email`. Formerly `app_chat` / `web_chat` |
 | `language` | text | `es`, `pt` |
 | `priority` | text | `none` (on open), `low`, `medium`, `high`, `critical` (slice 8); changed by the assigned analyst or Supervisión |
-| `status` | text | `queued`, `assigned`, `in_progress`, `closed` |
+| `status` | text | `queued`, `assigned`, `in_progress`, `closed`, and (ADR 0003) `with_assistant`: the agent handles the case, nobody holds it and it is in no queue or inbox |
 | `opened_at` | date | |
 | `sla_due_at` | date | first-response deadline |
 | `first_response_at` | date, null | the analyst's first message |
@@ -469,6 +469,31 @@ starting and ending a call also saves the case, so its concurrency control order
 a close or against another call.
 
 **`customer_case_slots`** · guarantees a single open case per customer (`customer_id` PK, `open_case_id`, `version`).
+
+### The assistant (ADR 0003, slice 14)
+
+`assistant_sessions` — one row per case that opened in the agent's hands (`case_id` unique). Optimistic
+locking like every aggregate. No message text is stored here (it lives in `turns`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | text, PK | `AST-…` |
+| `case_id` | FK → cases, unique | |
+| `customer_id` | FK → customers | |
+| `entry_agent` / `agent` | text | the agent the session started with / the one that answered last (`id@version`) |
+| `agent_session_id` / `run_id` | text | agent-core's session and current run |
+| `state` | text | `active`, `resolved`, `escalated`, `ended`, `failed`, `released` |
+| `awaiting` | text | what agent-core waits for: `none`, `slot`, `confirmation`, `step_up`, `input` |
+| `confirmation` / `step_up` | JSON | the pending confirmation (token, summary, expiry) / second factor (reason, simulated) |
+| `step_up_verified_at`, `step_up_attempts` | | the simulated second factor |
+| `processed_sequence` | int | the last customer message sent to the agent |
+| `claim`, `claimed_at`, `queued`, `blocked`, `resend_blocked` | JSON/… | the input bookkeeping: one input in flight, a queued confirmation answer, an input blocked at a step-up |
+| `handoff_ref`, `handoff_resolved_at` | | the escalation's handoff and when its label was sent |
+| `failure_code`, `last_trace_id` | | why it ended; the agent-core trace id |
+| `created_at`, `updated_at`, `version` | | |
+
+`bank_customer_links` (`customer_id` PK → customers, `bank_customer_id`) — which dataset customer each
+platform customer is; filled at startup from a private file.
 
 ### Notifications (slice 10)
 

@@ -9,7 +9,7 @@ Read first: `docs/platform/ENGINEERING_BRIEF.md` (scope, rules, conventions),
 (slice 2 case life cycle, slice 3 supervision, slice 4 administration, slice 6 analyst home,
 slice 7 customer rating, slice 8 case priority, slice 9 supervision v2: Colas and escalations,
 slice 10 notification center, slice 11 secure onboarding by email invitation, slice 12
-simulated phone and email channels; a later slice wins).
+simulated phone and email channels, slice 14 the assistant (agent-core); a later slice wins).
 Operating the app (accounts, reset, troubleshooting) is in `docs/platform/RUNBOOK.md`.
 
 ## Run
@@ -73,6 +73,7 @@ re-read on every request.
 | Calls, email, notes (slice 12) | `GET\|POST /cases/{id}/calls` (`{reason}` + `Idempotency-Key`), `POST /cases/{id}/calls/{callId}/answer\|hold\|resume\|mute\|hangup\|transcript`, `POST /cases/{id}/notes`, `GET\|POST /cases/{id}/emails` (reply framed with greeting and signature) | the assignee analyst writes; reads like the case |
 | Customer calls and email (slice 12) | `GET /customer/call`, `POST /customer/calls` (+ `Idempotency-Key`), `POST /customer/calls/{callId}/answer\|reject\|hangup\|transcript`, `GET\|POST /customer/emails` | customer token |
 | Customer simulator | `GET /customer/demo-customers`, `POST /customer/sessions`, `GET /customer/conversation`, `POST /customer/conversation/turns`, `GET /customer/conversations`, `GET /customer/conversations/{id}`, `POST /customer/conversations/{id}/rating` (slice 7: `{score 1–4, comment?}` + `Idempotency-Key`) | customer token |
+| Assistant (slice 14, ADR 0003) | `POST /customer/conversation/confirmation` `{token, answer}`, `POST /customer/conversation/step-up` `{code}`, `POST /customer/conversation/human`; `GET /cases/{id}/handoff`; `POST /supervision/cases/{id}/assistant/release`; `POST /cases/{id}/close` also takes `handoffQuality`. Without agent-core they answer `404 assistant_disabled` | customer token · the assignee analyst · supervisor |
 | Supervision | `GET /supervision/team`, `GET /supervision/queues`, `PUT /supervision/cases/{id}/assignee` (`{analystId, expectedAnalystId, confirmPaused}`; ends an open escalation as `reassigned`) | supervisor |
 | Colas (slice 9) | `GET /supervision/open-cases?language=es\|pt`: every open case of a language and who holds it | supervisor |
 | Escalations (slice 9) | `POST /cases/{id}/escalations` (`{motive}` + `Idempotency-Key`), `POST /cases/{id}/escalations/{escId}/withdraw`, `POST /cases/{id}/escalations/{escId}/acknowledge` | analyst (the assignee; acknowledge: who escalated) |
@@ -121,6 +122,7 @@ Product rules enforced in the service layer (brief §4.3):
   the first email reply) is the first response; the transcript is `transcript` turns, emails are
   `email` turns with a subject, internal notes are staff-only `note` turns. Contract:
   `docs/platform/api/slice-12-channels.md`.
+- Slice 14 (the assistant, `agent-core`): with `CC_AGENT_CORE_URL` set, a new **chat** case of a customer linked to a dataset customer, in a language of `CC_ASSISTANT_LANGUAGES`, opens `with_assistant`: nobody holds it, it is in no queue or inbox and no first-response SLA runs. The agent's answers are `assistant` turns produced in the background (`AssistantTurnProcess` → `AssistantEngine`; no Unit of Work spans a call to agent-core). It ends by resolving (`closed`) or by handing the case to people (escalation, run ended, agent-core failure, the 3rd wrong second-factor code, the customer's request, or Supervisión): `queued` and then `AssignCase` places it like an arrival (rule 3, reason `assistant_handoff`), the SLA starts then. Calls and emails cannot join an assistant conversation (`409 assistant_active`). Contract and hand-over for the frontend: `docs/platform/api/slice-14-assistant.md`.
 - Only the assignee writes; a closed case is read-only. A close needs a reason from a fixed
   list; the customer sees a notice, never the reason. Staff banners never reach customers.
 - Administration guard rails: nobody removes their own Administración, deactivates themself or
@@ -163,7 +165,7 @@ signal changes: REST and the event log stay the source of truth.
 |---|---|---|
 | `case:<caseId>` | assignee, supervisors | `turn.created`, `case.updated`, `escalation.updated`, `call.updated` (slice 12) |
 | `inbox:<staffId>` | that analyst | `case.updated`, `case.assigned`, `case.unassigned`, `inbox.counts`, `availability.updated`, `escalation.updated` (her escalations), `call.updated` (her calls) |
-| `customer:<customerId>` | that customer | `turn.created`, `conversation.updated`, `call.updated` (`CustomerCall`) |
+| `customer:<customerId>` | that customer | `turn.created`, `conversation.updated`, `call.updated` (`CustomerCall`); slice 14: the assistant's replies are `turn.created` too (`authorRole: assistant`) and every `conversation.updated` carries `assistant {working, confirmation, stepUp}` |
 | `supervision:queues`, `supervision:team`, `supervision:escalations` | supervisors | `queue.updated`, `queue.case_queued`, `team.updated`, `escalation.updated` |
 | `admin:directory` | admins | `directory.updated` |
 | `staff:<staffId>` | that person | `me.updated`, `notification.created` (`{notification, unreadCount}`), `notifications.read` (`{notificationIds \| null, unreadCount}`) |
@@ -219,6 +221,8 @@ uv run python -m cc_platform.scripts.export_openapi --check  # fails if stale
 Regenerate after every API change, then run `pnpm gen:api` in `frontend/`.
 
 ## Known gaps
+
+- **The assistant (slice 14):** the second factor is simulated; agent-core's `grant_active` is not answered yet (delegations live 10 minutes); a background job lost with its process is only recovered when the customer writes again (no sweep yet); only `CC_ASSISTANT_LANGUAGES` start with the assistant; links to dataset customers come from a startup file (no endpoint). Details: `docs/platform/api/slice-14-assistant.md` §10.
 
 - **No migrations.** `metadata.create_all` runs at startup. A database created by an older
   build fails fast with `OutdatedSchemaError` (it names the missing tables or columns): delete

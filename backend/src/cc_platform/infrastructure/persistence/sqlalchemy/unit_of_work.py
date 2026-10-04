@@ -14,6 +14,10 @@ from cc_platform.domain.shared.errors import ConcurrentUpdateError
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.analyst_home import (
     SqlAnalystHomeReader,
 )
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.assistant import (
+    SqlAssistantSessionRepository,
+    SqlBankCustomerLinks,
+)
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import (
     SqlAssignmentRepository,
     SqlCallRepository,
@@ -71,6 +75,8 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     escalations: SqlEscalationRepository
     calls: SqlCallRepository
     notifications: SqlNotificationRepository
+    assistant_sessions: SqlAssistantSessionRepository
+    bank_links: SqlBankCustomerLinks
     event_log: SqlEventLogRepository
     analyst_home: SqlAnalystHomeReader
 
@@ -106,6 +112,8 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.escalations = SqlEscalationRepository(session, self.track)
         self.calls = SqlCallRepository(session, self.track)
         self.notifications = SqlNotificationRepository(session, self.track)
+        self.assistant_sessions = SqlAssistantSessionRepository(session, self.track)
+        self.bank_links = SqlBankCustomerLinks(session)
         self.event_log = SqlEventLogRepository(session)
         self.analyst_home = SqlAnalystHomeReader(session)
 

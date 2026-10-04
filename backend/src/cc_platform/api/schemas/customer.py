@@ -10,6 +10,7 @@ from pydantic import Field, StringConstraints, field_validator
 from cc_platform.api.schemas.cases import CaseRating, ClientMessageId, TurnText
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.application.cases.dto import (
+    AssistantStateView,
     CustomerConversationDetailView,
     CustomerConversationResult,
     CustomerConversationSummaryView,
@@ -119,6 +120,53 @@ class CustomerSessionResponse(ApiModel):
         )
 
 
+class AssistantConfirmation(ApiModel):
+    summary: str = Field(description="What the assistant is about to do, in the case language.")
+    token: str = Field(description="Goes back in `POST /customer/conversation/confirmation`.")
+    expires_at: datetime
+
+
+class AssistantStepUp(ApiModel):
+    reason: str
+    simulated: bool = Field(description="True while the second factor is a development stand-in.")
+
+
+class AssistantState(ApiModel):
+    """ADR 0003: what the customer's app needs while the assistant handles the conversation."""
+
+    working: bool = Field(description='An answer is on its way (show "escribiendo…").')
+    confirmation: AssistantConfirmation | None = Field(
+        description="The assistant waits for a yes or no (at most one of confirmation/stepUp)."
+    )
+    step_up: AssistantStepUp | None = Field(
+        description="The assistant needs the second factor first."
+    )
+
+    @classmethod
+    def from_view(cls, view: AssistantStateView | None) -> AssistantState | None:
+        if view is None:
+            return None
+        confirmation = view.confirmation
+        step_up = view.step_up
+        return cls(
+            working=view.working,
+            confirmation=(
+                None
+                if confirmation is None
+                else AssistantConfirmation(
+                    summary=confirmation.summary,
+                    token=confirmation.token,
+                    expires_at=confirmation.expires_at,
+                )
+            ),
+            step_up=(
+                None
+                if step_up is None
+                else AssistantStepUp(reason=step_up.reason, simulated=step_up.simulated)
+            ),
+        )
+
+
 class CustomerConversation(ApiModel):
     case_id: str
     status: CustomerConversationStatus
@@ -127,12 +175,16 @@ class CustomerConversation(ApiModel):
     opened_at: datetime
     closed_at: datetime | None
     agent_name: str | None = Field(
-        description="Assignee first name while with_agent; on a closed case, who attended it."
+        description="Assignee first name while with_agent; 'Asistente virtual' while "
+        "with_assistant; on a closed case, who attended it."
     )
     last_sequence: int = Field(description="Highest sequence among customer-visible turns.")
     previous_case_id: str | None = Field(description="The closed case this one continues.")
     rating: CaseRating | None = Field(
         description="The customer's own rating (slice 7); null until rated (or while open)."
+    )
+    assistant: AssistantState | None = Field(
+        description="ADR 0003: set only while `status` is `with_assistant`, else null.",
     )
 
     @classmethod
@@ -148,6 +200,7 @@ class CustomerConversation(ApiModel):
             last_sequence=view.last_sequence,
             previous_case_id=view.previous_case_id,
             rating=CaseRating.from_view(view.rating),
+            assistant=AssistantState.from_view(view.assistant),
         )
 
 
@@ -266,6 +319,22 @@ class PostCustomerTurnResponse(ApiModel):
             conversation=CustomerConversation.from_view(result.conversation),
             case_created=result.case_created,
         )
+
+
+# ----------------------------------------------------------------------------- assistant (ADR 0003)
+class AnswerConfirmationRequest(RequestModel):
+    token: str = Field(
+        min_length=1, max_length=200, description="The `token` of the pending confirmation."
+    )
+    answer: Literal["yes", "no"]
+
+
+class VerifyStepUpRequest(RequestModel):
+    code: str = Field(
+        min_length=1,
+        max_length=16,
+        description="The second-factor code. Simulated while `stepUp.simulated` is true.",
+    )
 
 
 # ----------------------------------------------------------------------------- rating (slice 7)

@@ -90,7 +90,8 @@
           "supervisor",
           "admin",
           "customer",
-          "system"
+          "system",
+          "assistant"
         ],
         "title": "ActorRole",
         "type": "string"
@@ -585,6 +586,32 @@
         "title": "AnalystHome",
         "type": "object"
       },
+      "AnswerConfirmationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "enum": [
+              "yes",
+              "no"
+            ],
+            "title": "Answer",
+            "type": "string"
+          },
+          "token": {
+            "description": "The `token` of the pending confirmation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "answer"
+        ],
+        "title": "AnswerConfirmationRequest",
+        "type": "object"
+      },
       "AssignmentOut": {
         "properties": {
           "analystId": {
@@ -705,7 +732,8 @@
           "language_least_loaded",
           "queue_drained",
           "manual",
-          "outbound_call"
+          "outbound_call",
+          "assistant_handoff"
         ],
         "title": "AssignmentReason",
         "type": "string"
@@ -730,6 +758,90 @@
           "assignment"
         ],
         "title": "AssignmentResult",
+        "type": "object"
+      },
+      "AssistantConfirmation": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "summary": {
+            "description": "What the assistant is about to do, in the case language.",
+            "title": "Summary",
+            "type": "string"
+          },
+          "token": {
+            "description": "Goes back in `POST /customer/conversation/confirmation`.",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "token",
+          "expiresAt"
+        ],
+        "title": "AssistantConfirmation",
+        "type": "object"
+      },
+      "AssistantState": {
+        "description": "ADR 0003: what the customer's app needs while the assistant handles the conversation.",
+        "properties": {
+          "confirmation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantConfirmation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The assistant waits for a yes or no (at most one of confirmation/stepUp)."
+          },
+          "stepUp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantStepUp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The assistant needs the second factor first."
+          },
+          "working": {
+            "description": "An answer is on its way (show \"escribiendo…\").",
+            "title": "Working",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "working",
+          "confirmation",
+          "stepUp"
+        ],
+        "title": "AssistantState",
+        "type": "object"
+      },
+      "AssistantStepUp": {
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "simulated": {
+            "description": "True while the second factor is a development stand-in.",
+            "title": "Simulated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reason",
+          "simulated"
+        ],
+        "title": "AssistantStepUp",
         "type": "object"
       },
       "AuditActor": {
@@ -1457,6 +1569,22 @@
         "title": "CaseDetail",
         "type": "object"
       },
+      "CaseHandoff": {
+        "description": "The packet the assistant built when it escalated the case.",
+        "properties": {
+          "packet": {
+            "additionalProperties": true,
+            "description": "agent-core's `HandoffPacket` as it publishes it (snake_case keys), rendered for the caller's permissions: request summary, verified facts, claimed-but-unverified slots, actions taken, open questions, evidence references and the transcript reference.",
+            "title": "Packet",
+            "type": "object"
+          }
+        },
+        "required": [
+          "packet"
+        ],
+        "title": "CaseHandoff",
+        "type": "object"
+      },
       "CaseHistory": {
         "properties": {
           "items": {
@@ -1653,7 +1781,8 @@
           "queued",
           "assigned",
           "in_progress",
-          "closed"
+          "closed",
+          "with_assistant"
         ],
         "title": "CaseStatus",
         "type": "string"
@@ -1879,6 +2008,23 @@
       "CloseCaseRequest": {
         "additionalProperties": false,
         "properties": {
+          "handoffQuality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "useful",
+                  "incomplete",
+                  "unnecessary"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR 0003: only for a case that came from the assistant. How useful its handoff was (`useful`, `incomplete`, `unnecessary`); sent to agent-core as the label of that handoff. Left out, nothing is sent.",
+            "title": "Handoffquality"
+          },
           "note": {
             "anyOf": [
               {
@@ -2192,8 +2338,19 @@
                 "type": "null"
               }
             ],
-            "description": "Assignee first name while with_agent; on a closed case, who attended it.",
+            "description": "Assignee first name while with_agent; 'Asistente virtual' while with_assistant; on a closed case, who attended it.",
             "title": "Agentname"
+          },
+          "assistant": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR 0003: set only while `status` is `with_assistant`, else null."
           },
           "caseId": {
             "title": "Caseid",
@@ -2264,7 +2421,8 @@
           "agentName",
           "lastSequence",
           "previousCaseId",
-          "rating"
+          "rating",
+          "assistant"
         ],
         "title": "CustomerConversation",
         "type": "object"
@@ -2345,6 +2503,7 @@
         "enum": [
           "waiting_agent",
           "with_agent",
+          "with_assistant",
           "closed"
         ],
         "title": "CustomerConversationStatus",
@@ -2694,7 +2853,8 @@
         "enum": [
           "customer",
           "analyst",
-          "system"
+          "system",
+          "assistant"
         ],
         "title": "CustomerTurnAuthor",
         "type": "string"
@@ -4745,6 +4905,17 @@
           "escalation_not_open",
           "call_in_progress",
           "call_not_active",
+          "assistant_disabled",
+          "assistant_not_active",
+          "assistant_active",
+          "assistant_busy",
+          "confirmation_not_pending",
+          "confirmation_expired",
+          "step_up_not_pending",
+          "invalid_step_up_code",
+          "handoff_unavailable",
+          "agent_core_unavailable",
+          "agent_core_rejected",
           "analyst_not_eligible",
           "language_mismatch",
           "analyst_paused",
@@ -4791,6 +4962,32 @@
             ],
             "default": null,
             "description": "self_change_forbidden: which change on her own account."
+          },
+          "agentCoreCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "agent_core_rejected: the stable problem code agent-core answered with.",
+            "title": "Agentcorecode"
+          },
+          "agentCoreStatus": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "agent_core_rejected: the HTTP status agent-core answered with.",
+            "title": "Agentcorestatus"
           },
           "analystId": {
             "anyOf": [
@@ -5980,7 +6177,8 @@
         "enum": [
           "customer",
           "analyst",
-          "system"
+          "system",
+          "assistant"
         ],
         "title": "TurnAuthorRole",
         "type": "string"
@@ -6200,6 +6398,23 @@
           "type"
         ],
         "title": "ValidationIssue",
+        "type": "object"
+      },
+      "VerifyStepUpRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The second-factor code. Simulated while `stepUp.simulated` is true.",
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "VerifyStepUpRequest",
         "type": "object"
       },
       "VersionRequest": {
@@ -9965,6 +10180,108 @@
         ]
       }
     },
+    "/api/v1/cases/{caseId}/handoff": {
+      "get": {
+        "description": "ADR 0003. Only the case's assignee analyst (403 `case_not_assigned` otherwise), and only for a case that came from an assistant escalation (404 `handoff_unavailable`). The platform asks agent-core with the analyst's own delegation on this customer, so what she sees in clear is decided there. 404 `assistant_disabled` while agent-core is not configured; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer or refuses.",
+        "operationId": "cases_get_handoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseHandoff"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The packet the assistant built when it escalated this case (assignee only)",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
     "/api/v1/cases/{caseId}/history": {
       "get": {
         "description": "Any status, excluding `caseId`, newest `openedAt` first, at most 20 (`total` is the full count). Whoever may read `caseId` may read every listed case (read-only).",
@@ -11155,6 +11472,217 @@
           }
         ],
         "summary": "My current conversation (open case, else the last closed one) and its turns",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/conversation/confirmation": {
+      "post": {
+        "description": "ADR 0003. While `conversation.assistant.confirmation` is set, the assistant waits for a yes or no with its `token`. The answer is queued and the assistant's reply arrives as a turn over the socket (`turn.created` on `customer:<id>`); this call answers right away with the conversation. 409 `confirmation_not_pending` (wrong or already-answered token), `confirmation_expired`, `assistant_not_active` (people have the case now) or `assistant_busy`. 404 `assistant_disabled` while agent-core is not configured.",
+        "operationId": "customer_answer_confirmation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerConfirmationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Answer the assistant's confirmation (yes or no)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/conversation/human": {
+      "post": {
+        "description": "ADR 0003. The case leaves the assistant, goes to its language queue and is placed like any new arrival (rule 3): `status` becomes `waiting_agent`, then `with_agent`. 409 `assistant_not_active` when people already have it.",
+        "operationId": "customer_request_person",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Ask to talk to a person instead of the assistant",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/conversation/step-up": {
+      "post": {
+        "description": "ADR 0003. While `conversation.assistant.stepUp` is set. The second factor is simulated for now (`stepUp.simulated`): the development code is `CC_ASSISTANT_STEP_UP_CODE`. A wrong code is 422 `invalid_step_up_code` with `remainingAttempts`; the third wrong code hands the case to people. After a right one the assistant carries on by itself (its reply arrives over the socket). 409 `step_up_not_pending` / `assistant_not_active`.",
+        "operationId": "customer_verify_step_up",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyStepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Pass the second factor the assistant asked for",
         "tags": [
           "customer"
         ]
@@ -12642,6 +13170,98 @@
           }
         ],
         "summary": "Assign a queued case, or reassign an open case, to an analyst",
+        "tags": [
+          "supervision"
+        ]
+      }
+    },
+    "/api/v1/supervision/cases/{caseId}/assistant/release": {
+      "post": {
+        "description": "ADR 0003. For a case in `with_assistant`: the assistant stops, the case becomes `queued` and `AssignCase` places it like any arrival (rule 3), with a staff banner. 409 `assistant_not_active` when the assistant does not hold it. 404 `assistant_disabled` while agent-core is not configured.",
+        "operationId": "supervision_release_assistant_case",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Take a case from the assistant: it goes to the language queue",
         "tags": [
           "supervision"
         ]

@@ -155,6 +155,33 @@ class CasePriorityChanged(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CaseAssistantStarted(DomainEvent):
+    """ADR 0003: the case opened in the hands of the agent (``with_assistant``): nobody holds
+    it and it is in no queue."""
+
+    event_type = "case.assistant_started"
+    entity = "case"
+
+    assistant_session_id: str
+    agent: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CaseAssistantReleased(DomainEvent):
+    """ADR 0003: the agent stopped handling the case and it went to the language queue, where
+    ``AssignCase`` places it like a new arrival. ``reason``: ``escalated`` (the agent decided,
+    ``handoff_ref`` set), ``ended`` (its run ended without resolving), ``failed`` (agent-core
+    did not answer) or ``supervision`` (a supervisor took the case from the agent)."""
+
+    event_type = "case.assistant_released"
+    entity = "case"
+
+    reason: str
+    handoff_ref: str | None
+    sla_due_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CaseViewed(DomainEvent):
     """A supervisor opened a case she does not hold (supervision view, read-only).
 
@@ -357,6 +384,8 @@ CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseClosed,
     CaseRated,
     CasePriorityChanged,
+    CaseAssistantStarted,
+    CaseAssistantReleased,
     *ESCALATION_EVENTS,
     *CALL_EVENTS,
 )

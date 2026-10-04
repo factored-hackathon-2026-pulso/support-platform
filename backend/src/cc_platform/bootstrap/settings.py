@@ -69,6 +69,24 @@ class Settings(BaseSettings):
     # first response ("Caso por vencer sin respuesta"); 0 turns it off (tests).
     notification_sweep_seconds: float = Field(default=30.0, ge=0)
 
+    # agent-core (ADR 0003). Unset ``agent_core_url`` = the platform runs people-only, as before.
+    #: Base URL of agent-core's runtime API (``agentcore serve``), e.g. ``http://localhost:8001``.
+    agent_core_url: str | None = None
+    #: A turn takes as long as the model; past this the case falls back to a person.
+    agent_core_timeout_seconds: float = Field(default=60.0, gt=0)
+    #: Private signing keys for agent-core credentials (see ``scripts/gen_agent_keys``); secret.
+    agent_keys_file: Path | None = None
+    #: The agent a conversation starts with (``id``, ``id@alias`` or ``id@X.Y.Z``).
+    assistant_agent: str = "recepcion@prod"
+    #: Case languages the assistant handles; other languages go straight to people (policy
+    #: ``H1``: a person serves Portuguese until the agent's language switch is real).
+    assistant_languages: list[str] = ["es"]
+    #: The simulated second factor (development stand-in; a real one replaces it).
+    assistant_step_up_code: str = "000000"
+    #: Private JSON ``{platform customer id: dataset customer id}``; never committed. Only linked
+    #: customers can talk to the assistant (agent-core's customer principal is the dataset id).
+    bank_customer_links_file: Path | None = None
+
     # Logging
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"
@@ -84,6 +102,8 @@ class Settings(BaseSettings):
                 raise ValueError("CC_DEV_MAILBOX is a development tool: never in production")
             if self.totp_secret_key is None:
                 raise ValueError("CC_TOTP_SECRET_KEY must be set in production")
+        if (self.agent_core_url is None) != (self.agent_keys_file is None):
+            raise ValueError("CC_AGENT_CORE_URL and CC_AGENT_KEYS_FILE go together or not at all")
         return self
 
     @property

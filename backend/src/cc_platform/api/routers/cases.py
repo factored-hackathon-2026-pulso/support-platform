@@ -16,8 +16,10 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from fastapi.exceptions import RequestValidationError
 
 from cc_platform.api.dependencies import ApiContextDep, require_roles
+from cc_platform.api.routers._assistant import assistant_use_cases
 from cc_platform.api.schemas.cases import (
     CaseDetail,
+    CaseHandoff,
     CaseHistory,
     CasePriorityResult,
     CaseSummary,
@@ -247,9 +249,28 @@ async def close_case(
     detail = await api.use_cases.cases.close.execute(
         actor,
         case_id,
-        CloseCaseCommand(reason=body.reason, note=body.note),
+        CloseCaseCommand(reason=body.reason, note=body.note, handoff_quality=body.handoff_quality),
     )
     return CaseDetail.from_view(detail)
+
+
+@router.get(
+    "/{caseId}/handoff",
+    response_model=CaseHandoff,
+    summary="The packet the assistant built when it escalated this case (assignee only)",
+    description=(
+        "ADR 0003. Only the case's assignee analyst (403 `case_not_assigned` otherwise), and "
+        "only for a case that came from an assistant escalation (404 `handoff_unavailable`). "
+        "The platform asks agent-core with the analyst's own delegation on this customer, so "
+        "what she sees in clear is decided there. 404 `assistant_disabled` while agent-core is "
+        "not configured; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does "
+        "not answer or refuses."
+    ),
+    responses=problem_responses(401, 403, 404, 502, 503),
+)
+async def get_handoff(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> CaseHandoff:
+    packet = await assistant_use_cases(api).handoff.execute(actor, case_id)
+    return CaseHandoff(packet=dict(packet))
 
 
 @router.put(

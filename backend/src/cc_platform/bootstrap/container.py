@@ -6,13 +6,31 @@ event-bus consumers. Tests pass their own clock/id generator to get deterministi
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+import httpx
 import structlog
 
 from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
+from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
+from cc_platform.application.ai.config import AssistantConfig, AssistantGate
+from cc_platform.application.ai.customer import (
+    AnswerAssistantConfirmation,
+    RequestPerson,
+    VerifyAssistantStepUp,
+)
+from cc_platform.application.ai.engine import AssistantEngine, AssistantHandover
+from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
+from cc_platform.application.ai.staff import (
+    GetCaseHandoff,
+    LinkBankCustomers,
+    RecordHandoffResolution,
+    ReleaseAssistantCase,
+)
+from cc_platform.application.ai.use_cases import AssistantUseCases
 from cc_platform.application.audit.queries import GetAuditEvent, ListAuditEvents
 from cc_platform.application.audit.use_cases import AuditUseCases
 from cc_platform.application.cases.analyst_home import GetAnalystHome
@@ -173,6 +191,10 @@ from cc_platform.bootstrap.settings import Settings
 from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
+from cc_platform.domain.people.staff import Language
+from cc_platform.infrastructure.ai.ed25519_issuer import Ed25519AgentCredentialIssuer
+from cc_platform.infrastructure.ai.http_runtime import HttpAgentRuntime
+from cc_platform.infrastructure.ai.keys import AgentSigningKeys
 from cc_platform.infrastructure.background import AsyncioBackgroundTasks, PeriodicTask
 from cc_platform.infrastructure.clock import SystemClock
 from cc_platform.infrastructure.email.dev_mailbox import (
@@ -229,6 +251,9 @@ class Container:
     database: Database | None = None
     health_probes: Sequence[HealthProbe] = field(default_factory=tuple)
     sla_sweep: PeriodicTask | None = None
+    #: ADR 0003: ``None`` while ``CC_AGENT_CORE_URL`` is unset (the platform stays people-only).
+    agent_core: AgentCoreServices | None = None
+    assistant_engine: AssistantEngine | None = None
 
     def api_context(self) -> ApiContext:
         """The narrow view the HTTP/WebSocket layer gets (no adapters, no Unit of Work)."""
@@ -256,12 +281,30 @@ class Container:
             await self.seed_demo_data()
         # Slice 4 §2.3: the admin roster exists from the start (idempotent).
         await ensure_admin_roster(self.uow)
+        await self._link_bank_customers()
         # No startup drain (contract §3.2): the queue drains when an analyst becomes
         # available (``QueueDrainer``) and, in slice 3, by hand.
         if self.sla_sweep is not None:
             # Slice 10: cases already at risk get their notification now, then every tick.
             await self.use_cases.notifications.sweep_sla_risk.execute()
             self.sla_sweep.start()
+
+    async def _link_bank_customers(self) -> None:
+        """ADR 0003: apply the private ``{platform customer id: dataset customer id}`` file."""
+        path = self.settings.bank_customer_links_file
+        if path is None:
+            return
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            _log.error("bank_customer_links_unreadable", file=path.name)  # never the contents
+            return
+        if not isinstance(raw, dict):
+            _log.error("bank_customer_links_invalid", file=path.name)
+            return
+        links = {str(k): str(v) for k, v in raw.items()}
+        changed, skipped = await LinkBankCustomers(self.uow).execute(links)
+        _log.info("bank_customer_links", changed=changed, skipped=skipped)
 
     async def seed_demo_data(self) -> None:
         """ "Datos de ejemplo": invented staff, customers, availability and the seeded cases."""
@@ -294,8 +337,127 @@ class Container:
         if self.sla_sweep is not None:
             await self.sla_sweep.stop()
         await self.background.drain()
+        if self.agent_core is not None and self.agent_core.http_client is not None:
+            await self.agent_core.http_client.aclose()
         if self.database is not None:
             await self.database.dispose()
+
+
+@dataclass(frozen=True, slots=True)
+class AgentCoreServices:
+    """The platform's side of the contract with agent-core (ADR 0003 §1-2)."""
+
+    issuer: AgentCredentialIssuer
+    runtime: AgentRuntime
+    http_client: httpx.AsyncClient | None = None
+    """Closed on shutdown; ``None`` for a test double that owns no connection."""
+
+
+def _agent_core_services(settings: Settings, clock: Clock) -> AgentCoreServices | None:
+    if settings.agent_core_url is None or settings.agent_keys_file is None:
+        return None
+    keys = AgentSigningKeys.from_file(settings.agent_keys_file)
+    client = httpx.AsyncClient(
+        base_url=settings.agent_core_url, timeout=settings.agent_core_timeout_seconds
+    )
+    return AgentCoreServices(
+        issuer=Ed25519AgentCredentialIssuer(keys, clock),
+        runtime=HttpAgentRuntime(client),
+        http_client=client,
+    )
+
+
+def _wire_realtime(
+    settings: Settings,
+    bus: EventBus,
+    *,
+    uow: UnitOfWorkFactory,
+    clock: Clock,
+    background: AsyncioBackgroundTasks,
+    drain_queue: DrainQueue,
+) -> tuple[InMemoryRealtimeHub, TopicMapper]:
+    """The hub and every bus subscriber that projects events onto sockets or drains the queue."""
+    hub = InMemoryRealtimeHub(queue_size=settings.realtime_queue_size)
+    mapper = TopicMapper()
+    mapper.suppress(*OWNED_EVENTS)  # the cases projection publishes their envelopes
+    mapper.suppress(*SILENT_EVENTS)  # audited reads (case.viewed): never on a socket
+    mapper.suppress(*ADMIN_OWNED_EVENTS)  # the administration projection signals them
+    bus.subscribe(RealtimeProjector(hub, mapper))
+    bus.subscribe(SessionTerminator(hub), event_types=[SessionEnded])
+    bus.subscribe(AccessTerminator(hub), event_types=[StaffRolesChanged])
+    bus.subscribe(
+        AdministrationRealtimeProjector(hub, uow, SchemaRealtimePresenter()),
+        event_types=ADMIN_REALTIME_EVENTS,
+    )
+    bus.subscribe(
+        CaseRealtimeProjector(hub, uow, SchemaRealtimePresenter(), clock),
+        event_types=OWNED_EVENTS,
+    )
+    bus.subscribe(
+        SupervisionRealtimeProjector(hub, uow, SchemaRealtimePresenter(), clock),
+        event_types=SUPERVISION_EVENTS,
+    )
+    bus.subscribe(QueueDrainer(background, drain_queue), event_types=QUEUE_DRAINER_EVENTS)
+    return hub, mapper
+
+
+@dataclass(frozen=True, slots=True)
+class _AssistantParts:
+    gate: AssistantGate
+    engine: AssistantEngine
+    resolution: RecordHandoffResolution
+    use_cases: AssistantUseCases
+
+
+def _build_assistant(
+    settings: Settings,
+    agent_core: AgentCoreServices,
+    *,
+    uow: UnitOfWorkFactory,
+    clock: Clock,
+    ids: IdGenerator,
+    bus: EventBus,
+    background: AsyncioBackgroundTasks,
+    assign_case: AssignCase,
+) -> _AssistantParts:
+    """Wire the assistant: engine, the bus process that keeps it answering, and the use cases."""
+    config = AssistantConfig(
+        entry_agent=settings.assistant_agent,
+        languages=frozenset(Language(code) for code in settings.assistant_languages),
+        step_up_code=settings.assistant_step_up_code,
+    )
+    handover = AssistantHandover(
+        clock=clock, ids=ids, sla=FirstResponseSlaPolicy(), assign_case=assign_case
+    )
+    engine = AssistantEngine(
+        uow=uow,
+        clock=clock,
+        ids=ids,
+        runtime=agent_core.runtime,
+        issuer=agent_core.issuer,
+        handover=handover,
+        config=config,
+    )
+    bus.subscribe(AssistantTurnProcess(background, engine), event_types=ASSISTANT_PROCESS_EVENTS)
+    use_cases = AssistantUseCases(
+        confirm=AnswerAssistantConfirmation(uow=uow, clock=clock, ids=ids),
+        verify_step_up=VerifyAssistantStepUp(
+            uow=uow, clock=clock, ids=ids, handover=handover, config=config
+        ),
+        request_person=RequestPerson(uow=uow, clock=clock, handover=handover),
+        handoff=GetCaseHandoff(
+            uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+        ),
+        release=ReleaseAssistantCase(uow=uow, clock=clock, handover=handover),
+    )
+    return _AssistantParts(
+        gate=AssistantGate(config),
+        engine=engine,
+        resolution=RecordHandoffResolution(
+            uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+        ),
+        use_cases=use_cases,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,7 +512,10 @@ def build_container(
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
     one_time_tokens: OneTimeTokens | None = None,
+    agent_core: AgentCoreServices | None = None,
 ) -> Container:
+    """``agent_core`` is a seam for tests (a fake runtime); otherwise it is built from the
+    settings (``CC_AGENT_CORE_URL``), or absent when they leave it unset."""
     if settings.env == "prod":
         # Fail fast: there is no production email adapter yet (part 4: the dev mailbox only),
         # so nobody could receive an invitation or a reset link.
@@ -406,27 +571,9 @@ def build_container(
     )
     drain_queue = DrainQueue(uow=uow, assign_case=assign_case)
 
-    hub = InMemoryRealtimeHub(queue_size=settings.realtime_queue_size)
-    mapper = TopicMapper()
-    mapper.suppress(*OWNED_EVENTS)  # the cases projection publishes their envelopes
-    mapper.suppress(*SILENT_EVENTS)  # audited reads (case.viewed): never on a socket
-    mapper.suppress(*ADMIN_OWNED_EVENTS)  # the administration projection signals them
-    bus.subscribe(RealtimeProjector(hub, mapper))
-    bus.subscribe(SessionTerminator(hub), event_types=[SessionEnded])
-    bus.subscribe(AccessTerminator(hub), event_types=[StaffRolesChanged])
-    bus.subscribe(
-        AdministrationRealtimeProjector(hub, uow, SchemaRealtimePresenter()),
-        event_types=ADMIN_REALTIME_EVENTS,
+    hub, mapper = _wire_realtime(
+        settings, bus, uow=uow, clock=clock, background=background, drain_queue=drain_queue
     )
-    bus.subscribe(
-        CaseRealtimeProjector(hub, uow, SchemaRealtimePresenter(), clock),
-        event_types=OWNED_EVENTS,
-    )
-    bus.subscribe(
-        SupervisionRealtimeProjector(hub, uow, SchemaRealtimePresenter(), clock),
-        event_types=SUPERVISION_EVENTS,
-    )
-    bus.subscribe(QueueDrainer(background, drain_queue), event_types=QUEUE_DRAINER_EVENTS)
 
     # Slice 10: notifications are derived from committed events (and the SLA sweep).
     notification_signals = NotificationSignals(hub, SchemaRealtimePresenter(), ids)
@@ -434,6 +581,26 @@ def build_container(
     bus.subscribe(NotificationProjector(uow, notification_writer))
     sweep_sla_risk = SweepSlaRisk(uow=uow, clock=clock, writer=notification_writer)
 
+    # ADR 0003: the assistant (agent-core). It exists only when agent-core is configured.
+    agent_core = agent_core or _agent_core_services(settings, clock)
+    assistant = (
+        None
+        if agent_core is None
+        else _build_assistant(
+            settings,
+            agent_core,
+            uow=uow,
+            clock=clock,
+            ids=ids,
+            bus=bus,
+            background=background,
+            assign_case=assign_case,
+        )
+    )
+    assistant_gate = assistant.gate if assistant else None
+    assistant_use_cases = assistant.use_cases if assistant else None
+    assistant_engine = assistant.engine if assistant else None
+    handoff_resolution = assistant.resolution if assistant else None
     lockout = LockoutPolicy(
         max_failed_attempts=settings.lockout_max_attempts,
         lock_duration=settings.lockout_duration,
@@ -474,7 +641,9 @@ def build_container(
             turns=ListCaseTurns(uow=uow),
             post_analyst_turn=PostAnalystTurn(uow=uow, clock=clock, ids=ids),
             mark_read=MarkCaseRead(uow=uow, clock=clock),
-            close=CloseCase(uow=uow, clock=clock, ids=ids),
+            close=CloseCase(
+                uow=uow, clock=clock, ids=ids, tasks=background, resolution=handoff_resolution
+            ),
             customer_conversation=GetCustomerConversation(uow=uow),
             post_customer_turn=PostCustomerTurn(
                 uow=uow,
@@ -482,6 +651,7 @@ def build_container(
                 ids=ids,
                 sla=FirstResponseSlaPolicy(),
                 assign_case=assign_case,
+                assistant=assistant_gate,
             ),
             past_conversations=ListPastConversations(uow=uow),
             past_conversation=GetPastConversation(uow=uow),
@@ -610,6 +780,7 @@ def build_container(
             ),
             dev_mailbox=ListDevMailbox(kit.dev_mailbox),
         ),
+        assistant=assistant_use_cases,
     )
     sla_sweep = (
         PeriodicTask("sla_sweep", settings.notification_sweep_seconds, sweep_sla_risk.execute)
@@ -640,4 +811,6 @@ def build_container(
         database=database,
         health_probes=tuple(probes),
         sla_sweep=sla_sweep,
+        agent_core=agent_core,
+        assistant_engine=assistant_engine,
     )

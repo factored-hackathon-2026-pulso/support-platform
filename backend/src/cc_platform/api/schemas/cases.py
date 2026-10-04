@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, StringConstraints, field_validator
 
@@ -549,11 +549,28 @@ CloseNote = Annotated[
 class CloseCaseRequest(RequestModel):
     reason: CloseReason
     note: CloseNote | None
+    handoff_quality: Literal["useful", "incomplete", "unnecessary"] | None = Field(
+        default=None,
+        description="ADR 0003: only for a case that came from the assistant. How useful its "
+        "handoff was (`useful`, `incomplete`, `unnecessary`); sent to agent-core as the label "
+        "of that handoff. Left out, nothing is sent.",
+    )
 
     @field_validator("note")
     @classmethod
     def _blank_note_is_null(cls, note: str | None) -> str | None:
         return note or None
+
+
+# ----------------------------------------------------------------------------- assistant (ADR 0003)
+class CaseHandoff(ApiModel):
+    """The packet the assistant built when it escalated the case."""
+
+    packet: dict[str, Any] = Field(
+        description="agent-core's `HandoffPacket` as it publishes it (snake_case keys), rendered "
+        "for the caller's permissions: request summary, verified facts, claimed-but-unverified "
+        "slots, actions taken, open questions, evidence references and the transcript reference."
+    )
 
 
 # ----------------------------------------------------------------------------- priority (slice 8)

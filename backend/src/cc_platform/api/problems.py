@@ -46,6 +46,18 @@ class ProblemCode(StrEnum):
     # calls (slice 12)
     CALL_IN_PROGRESS = "call_in_progress"
     CALL_NOT_ACTIVE = "call_not_active"
+    # the assistant (ADR 0003)
+    ASSISTANT_DISABLED = "assistant_disabled"
+    ASSISTANT_NOT_ACTIVE = "assistant_not_active"
+    ASSISTANT_ACTIVE = "assistant_active"
+    ASSISTANT_BUSY = "assistant_busy"
+    CONFIRMATION_NOT_PENDING = "confirmation_not_pending"
+    CONFIRMATION_EXPIRED = "confirmation_expired"
+    STEP_UP_NOT_PENDING = "step_up_not_pending"
+    INVALID_STEP_UP_CODE = "invalid_step_up_code"
+    HANDOFF_UNAVAILABLE = "handoff_unavailable"
+    AGENT_CORE_UNAVAILABLE = "agent_core_unavailable"
+    AGENT_CORE_REJECTED = "agent_core_rejected"
     # supervision (manual assignment)
     ANALYST_NOT_ELIGIBLE = "analyst_not_eligible"
     LANGUAGE_MISMATCH = "language_mismatch"
@@ -126,6 +138,41 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
         409, "Call in progress", "Este caso tiene una llamada en curso."
     ),
     P.CALL_NOT_ACTIVE: ProblemSpec(409, "Call not active", "Esta llamada ya terminó."),
+    P.ASSISTANT_DISABLED: ProblemSpec(
+        404, "Assistant disabled", "El asistente no está activo en esta plataforma."
+    ),
+    P.ASSISTANT_NOT_ACTIVE: ProblemSpec(
+        409, "Assistant not active", "El asistente ya no está atendiendo esta conversación."
+    ),
+    P.ASSISTANT_ACTIVE: ProblemSpec(
+        409,
+        "Assistant active",
+        "Ahora te atiende el asistente por el chat. Escríbele ahí o pide hablar con una persona.",
+    ),
+    P.ASSISTANT_BUSY: ProblemSpec(
+        409, "Assistant busy", "El asistente todavía está respondiendo. Espera un momento."
+    ),
+    P.CONFIRMATION_NOT_PENDING: ProblemSpec(
+        409, "Confirmation not pending", "No hay ninguna confirmación pendiente con ese código."
+    ),
+    P.CONFIRMATION_EXPIRED: ProblemSpec(
+        409, "Confirmation expired", "La confirmación venció. Cuéntanos de nuevo qué necesitas."
+    ),
+    P.STEP_UP_NOT_PENDING: ProblemSpec(
+        409, "Step-up not pending", "No hace falta una verificación adicional ahora."
+    ),
+    P.INVALID_STEP_UP_CODE: ProblemSpec(422, "Invalid step-up code", "El código no es correcto."),
+    P.HANDOFF_UNAVAILABLE: ProblemSpec(
+        404, "Handoff unavailable", "Este caso no viene de un traspaso del asistente."
+    ),
+    P.AGENT_CORE_UNAVAILABLE: ProblemSpec(
+        503,
+        "Assistant service unavailable",
+        "No pudimos comunicarnos con el asistente. Intenta de nuevo en un momento.",
+    ),
+    P.AGENT_CORE_REJECTED: ProblemSpec(
+        502, "Assistant service refused", "El asistente no pudo atender esta solicitud."
+    ),
     P.ANALYST_NOT_ELIGIBLE: ProblemSpec(
         422, "Analyst not eligible", "Esa persona no puede recibir casos."
     ),

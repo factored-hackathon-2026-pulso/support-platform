@@ -255,9 +255,44 @@ class PostTurnResult:
 class CloseCaseCommand:
     reason: CloseReason
     note: str | None = None
+    handoff_quality: str | None = None
+    """ADR 0003: how useful the assistant's handoff was (``useful``, ``incomplete`` or
+    ``unnecessary``). Only meaningful for a case that came from one; sent to agent-core as the
+    label of that handoff. Left out, nothing is sent (the platform never guesses a label)."""
 
 
 # ----------------------------------------------------------------------------- customer side
+@dataclass(frozen=True, slots=True)
+class AssistantConfirmationView:
+    """The agent asks the customer to confirm an action. ``token`` goes back in
+    ``POST /customer/conversation/confirmation``."""
+
+    summary: str
+    token: str
+    expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AssistantStepUpView:
+    """The agent needs a second factor first (``POST /customer/conversation/step-up``).
+    ``simulated`` is true while the second factor is a development stand-in."""
+
+    reason: str
+    simulated: bool
+
+
+@dataclass(frozen=True, slots=True)
+class AssistantStateView:
+    """What the customer's app needs while the assistant handles the conversation (ADR 0003).
+
+    ``working`` is true while an answer is on its way ("escribiendo…"); ``confirmation`` and
+    ``step_up`` are what the assistant waits for (at most one of them)."""
+
+    working: bool
+    confirmation: AssistantConfirmationView | None
+    step_up: AssistantStepUpView | None
+
+
 @dataclass(frozen=True, slots=True)
 class CustomerConversationView:
     case_id: str
@@ -270,6 +305,8 @@ class CustomerConversationView:
     last_sequence: int
     previous_case_id: str | None
     rating: CaseRatingView | None
+    assistant: AssistantStateView | None = None
+    """Set only while ``status`` is ``with_assistant`` (ADR 0003)."""
 
 
 @dataclass(frozen=True, slots=True)

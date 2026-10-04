@@ -3,6 +3,9 @@
 - Status: **Superseded — AI is out of the platform scope (2026-10-03)**
 - Date: 2026-10-02 (superseded 2026-10-03)
 
+> **Update 2026-10-04.** AI came back into scope through `agent-core`, in a new ADR that starts
+> from the current architecture and does not revive this one: `0003-agent-core-integration.md`.
+>
 > **Superseded.** On 2026-10-03 the product scope was cut to a chat-only support platform:
 > support staff and customers talk by chat, and there is no copilot, no AI agent, no tool
 > catalog and no automated routing tier. Nothing in this ADR is built or planned. No

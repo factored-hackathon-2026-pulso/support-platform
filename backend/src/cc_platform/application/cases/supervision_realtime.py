@@ -77,7 +77,9 @@ from cc_platform.domain.people.events import (
     TeamRenamed,
 )
 from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.shared.actor import ActorRole
 from cc_platform.domain.shared.events import DomainEvent
+from cc_platform.domain.shared.ids import IdPrefix, is_valid_id
 from cc_platform.domain.shared.json import JsonObject
 
 #: Team events that change "Equipo y colas" (the team pills and names).
@@ -130,7 +132,8 @@ def team_rows_of(event: DomainEvent, case: Case) -> list[str]:
     if isinstance(event, _ASSIGNEE_ROW_EVENTS):
         return _unique([case.assigned_analyst_id])
     if isinstance(event, CaseRated):
-        return _unique([event.analyst_id])
+        # the assistant can close a case too: its id is not a staff row
+        return _unique([event.analyst_id] if is_valid_id(event.analyst_id, IdPrefix.STAFF) else [])
     if isinstance(event, ESCALATION_EVENTS) and not isinstance(event, EscalationAcknowledged):
         return _unique([case.assigned_analyst_id])  # slice 9: the "Escalado" marker
     return []
@@ -148,6 +151,11 @@ def left_queue(event: DomainEvent) -> bool:
         and event.previous_analyst_id is None
         and event.reason in _FROM_QUEUE_REASONS
     )
+
+
+def _assistant_closed(event: DomainEvent) -> bool:
+    """The assistant resolved a case: it leaves "Colas" without ever being queued."""
+    return isinstance(event, CaseClosed) and event.closed_by_role == ActorRole.ASSISTANT.value
 
 
 class SupervisionRealtimeProjector:
@@ -186,7 +194,12 @@ class SupervisionRealtimeProjector:
             if isinstance(event, CaseQueued):
                 summary = await CaseReader(uow).summary(case)
                 await self._queues(record, "queue.case_queued", self._present.case_summary(summary))
-            if case.status is CaseStatus.QUEUED or left_queue(event):
+            if (
+                case.status is CaseStatus.QUEUED
+                or left_queue(event)
+                or case.is_with_assistant  # ADR 0003: "Colas" lists the assistant's cases too
+                or _assistant_closed(event)
+            ):
                 counts = await queue_counts(uow, self._clock.now())
                 await self._queues(record, "queue.updated", self._present.queue_counts(counts))
         await self._team(record, team_rows_of(event, case))

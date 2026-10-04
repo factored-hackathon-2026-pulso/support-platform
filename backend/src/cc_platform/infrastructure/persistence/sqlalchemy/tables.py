@@ -351,6 +351,52 @@ calls = Table(
     Index("ix_calls_case_started", "case_id", "started_at"),
 )
 
+# ADR 0003: the conversation a case holds with the agent (agent-core). One per case that
+# opened in the agent's hands. ``claim``, ``queued`` and ``blocked`` are the inputs of
+# ``AgentInput`` (JSON: ``{kind, turn_id, sequence, token, answer, attempt}``); ``confirmation``
+# and ``step_up`` are what the agent waits for. No message text is stored here.
+assistant_sessions = Table(
+    "assistant_sessions",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("case_id", String(ID), ForeignKey("cases.id"), nullable=False, unique=True),
+    Column("customer_id", String(ID), ForeignKey("customers.id"), nullable=False),
+    Column("entry_agent", String(120), nullable=False),
+    Column("state", String(12), nullable=False),
+    Column("agent", String(120), nullable=True),
+    Column("agent_session_id", String(120), nullable=True),
+    Column("run_id", String(120), nullable=True),
+    Column("awaiting", String(20), nullable=False),
+    Column("confirmation", JSON, nullable=True),
+    Column("step_up", JSON, nullable=True),
+    Column("step_up_verified_at", UtcDateTime, nullable=True),
+    Column("step_up_attempts", Integer, nullable=False, default=0),
+    Column("processed_sequence", Integer, nullable=False, default=0),
+    Column("claim", JSON, nullable=True),
+    Column("claimed_at", UtcDateTime, nullable=True),
+    Column("queued", JSON, nullable=True),
+    Column("blocked", JSON, nullable=True),
+    Column("resend_blocked", Boolean, nullable=False, default=False),
+    Column("handoff_ref", String(120), nullable=True),
+    Column("handoff_resolved_at", UtcDateTime, nullable=True),
+    Column("failure_code", String(60), nullable=True),
+    Column("last_trace_id", String(120), nullable=True),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=False),
+    _version(),
+    Index("ix_assistant_sessions_state_updated", "state", "updated_at"),
+)
+
+# ADR 0003: which dataset customer (``customers.customer_id`` of the challenge's data) a
+# platform customer is. agent-core's customer principal carries that id, never ours. Filled at
+# runtime from a private file (``CC_BANK_CUSTOMER_LINKS_FILE``); never committed.
+bank_customer_links = Table(
+    "bank_customer_links",
+    metadata,
+    Column("customer_id", String(ID), ForeignKey("customers.id"), primary_key=True),
+    Column("bank_customer_id", String(60), nullable=False),
+)
+
 # Slice 10: each staff member's notifications (a projection of facts already in the event
 # log, never part of it). ``source_key`` (the source event id, or ``sla:<case id>``) is unique
 # per recipient: a fact never notifies the same person twice. Only the newest 200 per person

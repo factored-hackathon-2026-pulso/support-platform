@@ -54,6 +54,11 @@ from cc_platform.domain.shared.ids import IdPrefix
 
 RULE_PORTUGUESE_SPEAKER = LANGUAGE_RULE_ID
 REASON_NO_ANALYST = "no_available_analyst"
+#: Reasons that place a case like a new arrival: it never jumps its language queue (ADR 0003:
+#: a case the assistant hands over arrives like any other).
+_ARRIVAL_REASONS = frozenset(
+    {AssignmentReason.LANGUAGE_LEAST_LOADED, AssignmentReason.ASSISTANT_HANDOFF}
+)
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
@@ -162,7 +167,7 @@ class AssignCase:
         cases of that language waiting there are assigned first (``queue_drained``, same
         Unit of Work), so the queue stays first in, first out (brief §4.3)."""
         candidates = await self.directory.candidates(uow)
-        if reason is AssignmentReason.LANGUAGE_LEAST_LOADED:
+        if reason in _ARRIVAL_REASONS:
             candidates = await self._serve_queue_first(uow, case, candidates)
         return await self._place(uow, case, reason, candidates) is not None
 
@@ -233,6 +238,8 @@ class AssignCase:
         if waited is not None:
             label = case.queue_label or copy.QUEUE_LABEL[case.language]
             text = copy.assigned_from_queue(chosen.name, copy.queue_wait_minutes(waited), label)
+        elif reason is AssignmentReason.ASSISTANT_HANDOFF:
+            text = copy.assigned_from_assistant(chosen.name, case.language)
         else:
             text = copy.assigned_on_arrival(chosen.name, case.language)
         await self._banner(uow, case, text, now)

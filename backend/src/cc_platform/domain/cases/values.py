@@ -55,7 +55,21 @@ class CaseStatus(StrEnum):
     ASSIGNED = "assigned"
     IN_PROGRESS = "in_progress"
     CLOSED = "closed"
+    WITH_ASSISTANT = "with_assistant"
+    """ADR 0003: the agent (agent-core) is handling the conversation. Nobody holds the case, it
+    is in no queue and in no inbox, and no first-response SLA runs. It leaves this state when
+    the agent resolves it (``closed``) or hands it to people (``queued``)."""
 
+
+#: Statuses in which a case is open and not yet closed, whoever holds it (an agent included).
+OPEN_STATUSES: frozenset[CaseStatus] = frozenset(
+    {
+        CaseStatus.QUEUED,
+        CaseStatus.WITH_ASSISTANT,
+        CaseStatus.ASSIGNED,
+        CaseStatus.IN_PROGRESS,
+    }
+)
 
 #: Statuses in which a case sits in its analyst's open inbox (counted as her open load).
 OPEN_ASSIGNED_STATUSES: frozenset[CaseStatus] = frozenset(
@@ -84,6 +98,9 @@ class TurnAuthorRole(StrEnum):
     CUSTOMER = "customer"
     ANALYST = "analyst"
     SYSTEM = "system"
+    ASSISTANT = "assistant"
+    """ADR 0003: the agent (agent-core). Its turns are public; ``author_id`` is the agent that
+    answered (``id@version``). Never a first response of the SLA, which is a person's."""
 
     @property
     def actor_role(self) -> ActorRole:
@@ -135,6 +152,8 @@ class AssignmentReason(StrEnum):
     MANUAL = "manual"
     OUTBOUND_CALL = "outbound_call"
     """Slice 12: the analyst opened the case herself to call the customer (a follow-up)."""
+    ASSISTANT_HANDOFF = "assistant_handoff"
+    """ADR 0003: the agent escalated (or failed) and the case was placed like a new arrival."""
 
 
 #: Policy id of rule 3 (data-lab/docs/policies.md): a case only goes to an analyst who speaks its
@@ -157,6 +176,9 @@ class CustomerConversationStatus(StrEnum):
 
     WAITING_AGENT = "waiting_agent"
     WITH_AGENT = "with_agent"
+    WITH_ASSISTANT = "with_assistant"
+    """ADR 0003: the automated assistant answers. Here "agent" keeps meaning a person
+    (``with_agent``); the assistant has its own value."""
     CLOSED = "closed"
 
     @classmethod
@@ -165,6 +187,8 @@ class CustomerConversationStatus(StrEnum):
             return cls.CLOSED
         if status is CaseStatus.QUEUED:
             return cls.WAITING_AGENT
+        if status is CaseStatus.WITH_ASSISTANT:
+            return cls.WITH_ASSISTANT
         return cls.WITH_AGENT
 
 
@@ -174,6 +198,7 @@ class CustomerTurnAuthor(StrEnum):
     CUSTOMER = "customer"
     ANALYST = "analyst"
     SYSTEM = "system"
+    ASSISTANT = "assistant"
 
     @classmethod
     def of(cls, role: TurnAuthorRole) -> CustomerTurnAuthor:

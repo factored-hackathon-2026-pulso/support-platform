@@ -17,7 +17,9 @@ Roles combine (one person can hold several and switch between them):
 | Every role | The bell in the rail: her notifications ("Nuevas" / "Anteriores"), live toasts with "Más tarde" (slice 10) |
 | Administración | "Usuarios y roles", "Equipos", "Auditoría" |
 
-Out of scope and not built anywhere: AI of any kind, a tool catalog or actions on bank systems,
+AI returns through `agent-core` (ADR 0003, 2026-10-04): an agent-handled customer chat that escalates to an analyst, an analyst copilot and agent building for supervisors. It is planned, not built yet.
+
+Out of scope and not built anywhere: AI other than through `agent-core`, an analyst-facing action catalog or actions on bank systems,
 customer or bank data, identity checks, approvals, automation, calls, email, analyst-to-analyst
 transfers, the customer mobile app (only the simulator exists), core-banking integration and
 CSAT. The full list is in the brief §1.
@@ -33,6 +35,8 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | [DATA_MODEL.md](./DATA_MODEL.md) | English | Tables, case life cycle, event log, and how the platform differs from the synthetic sample contract. |
 | [adr/0001-architecture.md](./adr/0001-architecture.md) | English | Hexagonal + DDD-lite + CQRS-lite with an append-only event log; patterns, alternatives, consequences (amended 2026-10-03 for the scope cut). |
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | English | **Superseded (2026-10-03).** Kept only as a record; do not implement it. |
+| [adr/0003-agent-core-integration.md](./adr/0003-agent-core-integration.md) | English | AI returns through `agent-core`: agent-handled chat and escalation, analyst copilot, agent builder, identity issuer, tools over HTTP, slice plan S13–S17. |
+| [api/slice-14-assistant.md](./api/slice-14-assistant.md) | English | **Hand-over for the frontend.** Slice 14 (ADR 0003): the assistant (agent-core) handles chats first: the `with_assistant` case state, confirmation and step-up endpoints, ask-for-a-person, the analyst's handoff packet and its label, supervision release, realtime, the contract changes to regenerate types from, error codes, configuration. |
 | [api/slice-1-cases.md](./api/slice-1-cases.md) | English | Slice 1 contract (live chat, inbox, simulator). **Partly superseded** by slice 2; kept as the record. |
 | [api/slice-2-case-lifecycle.md](./api/slice-2-case-lifecycle.md) | English | Slice 2: the scope-cut removal list and the case life cycle (statuses, close with a reason, linked case after a close, case history, first-response SLA, `AssignCase`), seed. |
 | [api/slice-3-supervision.md](./api/slice-3-supervision.md) | English | Slice 3: team and queues, manual assignment and reassignment (rule 3, paused confirmation), supervisor case view, audit queries, supervision realtime topics. |
@@ -52,7 +56,7 @@ Other sources of truth: the design boards in `warehouse/design/source/project/*.
 `data-lab/docs/policies.md`, and the event envelope of `data-lab/contracts/synthetic-sample/platform_history.json` (read-only). The
 other rules of `data-lab/docs/policies.md` and `data-lab/docs/security_questions.md` do not apply to the platform.
 
-New architecture decisions go in `adr/NNNN-title.md` (next number: 0003).
+New architecture decisions go in `adr/NNNN-title.md` (next number: 0004).
 
 ## Quick start
 

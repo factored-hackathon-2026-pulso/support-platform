@@ -68,6 +68,8 @@ type Rule = Callable[[UnitOfWork, EventRecord], Awaitable[list[NotificationDraft
 _ARRIVAL_KIND: dict[str, NotificationKind] = {
     AssignmentReason.LANGUAGE_LEAST_LOADED.value: NotificationKind.ASSIGNED_ON_ARRIVAL,
     AssignmentReason.QUEUE_DRAINED.value: NotificationKind.ASSIGNED_FROM_QUEUE,
+    # ADR 0003: a case the assistant handed over arrives like any other (no new kind)
+    AssignmentReason.ASSISTANT_HANDOFF.value: NotificationKind.ASSIGNED_ON_ARRIVAL,
 }
 
 #: Escalation endings that move the case: the analyst hears it through the escalation kind.

@@ -19,6 +19,8 @@ class ActorRole(StrEnum):
     ADMIN = "admin"
     CUSTOMER = "customer"
     SYSTEM = "system"
+    ASSISTANT = "assistant"
+    """ADR 0003: the agent (agent-core) acting on a case; ``actor_id`` is ``id@version``."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -114,7 +114,9 @@ async def test_no_bot_turns_anywhere() -> None:
             for number, _ in DEMO_STORIES
             for turn in await uow.turns.page(seed_case_id(number), limit=50)
         }
-    assert roles == set(TurnAuthorRole)
+    # The assistant (ADR 0003) is not part of the people-only seed: its turns come from
+    # agent-core, never from a story (``test_assistant.py`` covers them).
+    assert roles == set(TurnAuthorRole) - {TurnAuthorRole.ASSISTANT}
 
 
 async def test_slice_3_seed_people_state_and_assignment_chain() -> None:

@@ -27,6 +27,7 @@ from cc_platform.domain.shared.events import DomainEvent
 if TYPE_CHECKING:
     # Annotations only: importing the context packages at runtime would be circular
     # (their use cases import this module).
+    from cc_platform.application.ai.ports import AssistantSessionRepository, BankCustomerLinks
     from cc_platform.application.cases.ports import (
         AnalystHomeReader,
         AssignmentRepository,
@@ -106,6 +107,16 @@ class UnitOfWork(Protocol):
     @property
     def calls(self) -> CallRepository:
         """Simulated phone calls of the cases (slice 12)."""
+        ...
+
+    @property
+    def assistant_sessions(self) -> AssistantSessionRepository:
+        """ADR 0003: the conversation each assistant-handled case holds with agent-core."""
+        ...
+
+    @property
+    def bank_links(self) -> BankCustomerLinks:
+        """ADR 0003: platform customer → dataset customer (agent-core's customer principal)."""
         ...
 
     @property

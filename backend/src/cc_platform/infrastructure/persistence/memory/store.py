@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cc_platform.application.events import StoredEvent
+from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.call import Call
 from cc_platform.domain.cases.case import Case
@@ -43,4 +44,6 @@ class InMemoryStore:
     escalations: dict[str, Escalation] = field(default_factory=dict)
     calls: dict[str, Call] = field(default_factory=dict)
     notifications: dict[str, Notification] = field(default_factory=dict)
+    assistant_sessions: dict[str, AssistantSession] = field(default_factory=dict)
+    bank_links: dict[str, str] = field(default_factory=dict)
     events: list[StoredEvent] = field(default_factory=list)

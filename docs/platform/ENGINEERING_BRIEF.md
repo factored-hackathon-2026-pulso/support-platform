@@ -47,14 +47,14 @@ In scope:
 
 The chat must work for real in two browser windows: the analyst Workspace and the customer simulator.
 
-**Amendment 2026-10-04 (user decision, ADR 0003).** AI is back in scope, only through `agent-core`: customers talk with an agent and escalate to an analyst with a handoff packet, analysts get a read-and-suggest copilot, supervisors build agents through the registry. Slices S13–S17 and the tool backend (track T) in §8. Everything below that ADR 0003 does not touch still stands.
+**Amendment 2026-10-04 (user decision, ADR 0003).** AI is back in scope, only through `agent-core`: customers talk with an agent and escalate to an analyst with a handoff packet, analysts get a read-and-suggest copilot, supervisors build agents through the registry (they propose, evaluate, approve and publish a change themselves; Administración also revokes). Slices S13–S17 and the tool backend (track T) in §8. Everything below that ADR 0003 does not touch still stands.
 
 **Out of scope, and not built anywhere** (no ports, seams or placeholders):
 - AI other than through `agent-core` (ADR 0003): no in-process judge, decision tree, automated routing tiers or drafts of our own;
 - an analyst-facing action catalog or any action the analyst runs on bank systems (blocks, abonos, claims). The tools `agent-core` calls to read data are served by the platform (ADR 0003 §8) and are not an analyst feature;
 - customer or bank data panels (customer file, products, movements, complaints, "who saw what");
 - identity verification and security questions;
-- approvals and four-eyes;
+- approvals and four-eyes of anything on bank data. The one approval that exists is a proposal to change an agent, in agent-core's registry (ADR 0003 §7, slice 16): the person who approves acts herself, with a fresh authenticator code, and nobody else has to co-sign;
 - the Automatización role and its screens;
 - calls, outbound calls, email, WhatsApp (as **support channels**; the platform's own account
   emails of part 4 — invitations and reset links — are not a channel);

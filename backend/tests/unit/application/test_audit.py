@@ -49,7 +49,7 @@ from cc_platform.domain.cases import CloseReason
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.errors import AccountLockedError
 from cc_platform.domain.people.staff import Language, StaffRole
-from cc_platform.domain.shared.actor import ActorRef, ActorRole
+from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
 from cc_platform.domain.shared.events import DomainEvent
 from cc_platform.infrastructure.clock import FixedClock
@@ -406,7 +406,7 @@ async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
         uow.record(
             BuilderProposalCreated(
                 occurred_at=T,
-                actor=ActorRef(ActorRole.SUPERVISOR, LUCIA_ID),
+                actor=ActorRef.system(),  # no staff actor: the person filters stay as they were
                 entity_id="00000000-0000-7000-8000-000000000001",
                 agent_id="disputas",
                 origin="manual",

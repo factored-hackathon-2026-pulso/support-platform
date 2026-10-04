@@ -176,7 +176,7 @@ describe('Usuarios y roles', () => {
     expect(within(panel).getByText('Idiomas:').parentElement).toHaveTextContent('Español')
     expect(within(panel).getByText('Equipo:').parentElement).toHaveTextContent('Equipo Pacífico')
     expect(
-      within(panel).getByText('Cuenta bloqueada hasta las 11:13 tras 5 intentos fallidos.'),
+      within(panel).getByText('5 intentos fallidos. Se desbloquea sola a las 11:13.'),
     ).toBeInTheDocument()
     await user.click(within(panel).getByRole('button', { name: 'Desbloquear' }))
     expect(unlockUser).toHaveBeenCalledWith(mariana.id)
@@ -184,7 +184,7 @@ describe('Usuarios y roles', () => {
     expect(
       screen.getByText('Mariana Duque ya puede volver a intentar ingresar.'),
     ).toBeInTheDocument()
-    expect(within(aside()).queryByText(/Cuenta bloqueada hasta/)).not.toBeInTheDocument()
+    expect(within(aside()).queryByText(/Se desbloquea sola/)).not.toBeInTheDocument()
   })
 
   it('fetches an inactive person outside the list and reactivates her', async () => {
@@ -196,9 +196,7 @@ describe('Usuarios y roles', () => {
     })
     const { user } = renderUsers(`/administracion/usuarios?persona=${andres.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
-    expect(
-      await within(panel).findByText('Cuenta desactivada. No puede ingresar.'),
-    ).toBeInTheDocument()
+    expect(await within(panel).findByText('No puede ingresar.')).toBeInTheDocument()
     expect(fetchAdminUser).toHaveBeenCalledWith(andres.id, expect.anything())
     expect(within(panel).getByText('Nunca')).toBeInTheDocument()
     expect(
@@ -513,14 +511,10 @@ describe('Usuarios y roles', () => {
     })
     expect(within(dialog).getByText('Deja de recibir casos y queda En pausa.')).toBeInTheDocument()
     expect(
-      within(dialog).getByText(
-        'Tiene 5 casos abiertos. Supervisión tiene que reasignarlos antes de desactivar la cuenta.',
-      ),
+      within(dialog).getByText('Tiene 5 casos abiertos. Supervisión los reasigna desde Equipo.'),
     ).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Desactivar cuenta' })).toBeDisabled()
-    expect(
-      within(dialog).queryByRole('link', { name: 'Abrir en Equipo y colas' }),
-    ).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('link', { name: 'Ver en Equipo' })).not.toBeInTheDocument()
     unmount()
 
     vi.mocked(fetchAdminUsers).mockResolvedValue(
@@ -535,7 +529,7 @@ describe('Usuarios y roles', () => {
     dialog = await screen.findByRole('dialog', {
       name: `¿Desactivar la cuenta de ${daniela.name}?`,
     })
-    expect(within(dialog).getByRole('link', { name: 'Abrir en Equipo y colas' })).toHaveAttribute(
+    expect(within(dialog).getByRole('link', { name: 'Ver en Equipo' })).toHaveAttribute(
       'href',
       `/supervision/equipo?analista=${daniela.id}`,
     )
@@ -581,7 +575,7 @@ describe('Usuarios y roles', () => {
     })
     await user.click(within(dialog).getByRole('button', { name: 'Desactivar cuenta' }))
     expect(deactivateUser).toHaveBeenCalledWith(mariana.id, mariana.version)
-    expect(await screen.findByText('Cuenta desactivada')).toBeInTheDocument()
+    expect(await screen.findAllByText('Cuenta desactivada')).toHaveLength(2) // toast title and the panel callout
     expect(
       screen.getByText('Mariana Duque ya no puede ingresar. Se cerraron sus 2 sesiones.'),
     ).toBeInTheDocument()

@@ -114,12 +114,14 @@ describe('accountStatusAt', () => {
   it('builds the status callout of the aside', () => {
     expect(statusCallout(mariana, NOW)).toEqual({
       tone: 'warn',
-      text: 'Cuenta bloqueada hasta las 11:13 tras 5 intentos fallidos.',
+      title: 'Cuenta bloqueada',
+      text: '5 intentos fallidos. Se desbloquea sola a las 11:13.',
       action: 'unlock',
     })
     expect(statusCallout(andres, NOW)).toEqual({
       tone: 'neutral',
-      text: 'Cuenta desactivada. No puede ingresar.',
+      title: 'Cuenta desactivada',
+      text: 'No puede ingresar.',
       action: 'reactivate',
     })
     expect(statusCallout(daniela, NOW)).toBeNull()

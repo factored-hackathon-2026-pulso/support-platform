@@ -290,7 +290,7 @@ function UserDetail({ user, teams, now, canOpenSupervision, onPasswordReset }: U
           {callout ? (
             <Callout
               tone={callout.tone}
-              icon
+              title={callout.title}
               actions={
                 callout.action === 'unlock' ? (
                   <Button

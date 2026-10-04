@@ -16,7 +16,7 @@ export interface DeactivateUserDialogProps {
 /**
  * "¿Desactivar la cuenta de …?" (contract §10.3). Open cases block it until
  * supervision reassigns them (§3.6): the confirm is disabled and, for a
- * supervisor-admin, "Abrir en Equipo y colas" opens her analyst sheet. The
+ * supervisor-admin, "Ver en Equipo" opens her analyst sheet. The
  * person is re-read on open, so a count supervision already cleared never
  * keeps the block: the confirm waits for that read.
  */
@@ -72,16 +72,16 @@ export function DeactivateUserDialog({
       {blocked ? (
         <Callout
           tone="warn"
-          icon
+          title={deactivateBlockedCopy(user.openCases.total).title}
           actions={
             canOpenSupervision ? (
               <LinkButton size="sm" variant="secondary" to={supervisionAnalystPath(user.id)}>
-                Abrir en Equipo y colas
+                Ver en Equipo
               </LinkButton>
             ) : null
           }
         >
-          {deactivateBlockedCopy(user.openCases.total)}
+          {deactivateBlockedCopy(user.openCases.total).text}
         </Callout>
       ) : null}
       {error ? <Callout tone="danger">{error}</Callout> : null}

@@ -101,17 +101,28 @@ export function lockedUntilTitle(lockedUntil: string): string {
 export function statusCallout(
   user: Pick<AdminUser, 'status' | 'lockedUntil' | 'failedAttempts'>,
   now: DateInput,
-): { tone: 'warn' | 'neutral'; text: string; action: 'unlock' | 'reactivate' } | null {
+): {
+  tone: 'warn' | 'neutral'
+  title: string
+  text: string
+  action: 'unlock' | 'reactivate'
+} | null {
   const status = accountStatusAt(user, now)
   if (status === 'locked' && user.lockedUntil) {
     return {
       tone: 'warn',
-      text: `Cuenta bloqueada hasta las ${formatTime(user.lockedUntil)} tras ${pluralize(user.failedAttempts, 'intento fallido', 'intentos fallidos')}.`,
+      title: 'Cuenta bloqueada',
+      text: `${pluralize(user.failedAttempts, 'intento fallido', 'intentos fallidos')}. Se desbloquea sola a las ${formatTime(user.lockedUntil)}.`,
       action: 'unlock',
     }
   }
   if (status === 'inactive') {
-    return { tone: 'neutral', text: 'Cuenta desactivada. No puede ingresar.', action: 'reactivate' }
+    return {
+      tone: 'neutral',
+      title: 'Cuenta desactivada',
+      text: 'No puede ingresar.',
+      action: 'reactivate',
+    }
   }
   return null
 }
@@ -482,8 +493,12 @@ export function removeLanguageBlockedCopy(count: number, language: Language): st
   return `${openCasesPrefix(count)} en ${LANGUAGE_IN_SENTENCE[language]}: supervisión tiene que reasignarlos antes de quitarle ese idioma.`
 }
 
-export function deactivateBlockedCopy(count: number): string {
-  return `${openCasesPrefix(count)}. Supervisión tiene que reasignarlos antes de desactivar la cuenta.`
+/** Title and detail of the "can't deactivate yet" callout. */
+export function deactivateBlockedCopy(count: number): { title: string; text: string } {
+  return {
+    title: 'Primero hay que reasignar sus casos',
+    text: `${openCasesPrefix(count)}. Supervisión los reasigna desde Equipo.`,
+  }
 }
 
 /**
@@ -588,7 +603,10 @@ export function describeAdminFailure(error: unknown, context: AdminFailureContex
           action: 'refetch',
         }
       }
-      return { message: deactivateBlockedCopy(count), action: 'refetch' }
+      return {
+        message: `${openCasesPrefix(count)}. Supervisión tiene que reasignarlos antes de desactivar la cuenta.`,
+        action: 'refetch',
+      }
     }
     case 'team_not_empty':
       return {

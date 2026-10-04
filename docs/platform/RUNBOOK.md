@@ -1,298 +1,297 @@
-# Runbook · plataforma de soporte
+# Runbook · support platform
 
-Cómo instalar, correr, reiniciar y verificar la plataforma en una máquina de desarrollo. Todos
-los comandos de este archivo se probaron en macOS con las versiones de la tabla de requisitos.
-Para la demo con jurados, ver [DEMO.md](./DEMO.md).
+How to install, run, reset and verify the platform on a development machine. Every command in
+this file was tested on macOS with the versions in the requirements table.
 
-La plataforma tiene dos aplicaciones:
+The platform has two applications:
 
-- `backend/`: API en FastAPI (Python 3.12, uv). Guarda todo en SQLite y siembra los datos de
-  ejemplo al arrancar.
-- `frontend/`: SPA en React (Vite, pnpm). Incluye el Workspace del equipo (`/analista`,
-  `/supervision`, `/administracion`) y el simulador de cliente (`/cliente`). Una analista entra
-  a **Inicio** (`/analista/inicio`): su disponibilidad ("Empezar a atender"), los contadores por
-  estado (llevan a Casos con el filtro), "Lo primero", "Mientras no estabas" y "Tu equipo ahora".
-  "Casos" (`/analista`) es la lista por urgencia y la conversación, con la "Ficha del cliente" a
-  la derecha al pulsar el nombre.
+- `backend/`: FastAPI API (Python 3.12, uv). It stores everything in SQLite and seeds the sample
+  data on startup.
+- `frontend/`: React SPA (Vite, pnpm). It holds the staff Workspace (`/analista`,
+  `/supervision`, `/administracion`) and the customer simulator (`/cliente`). An analyst lands on
+  **Inicio** (`/analista/inicio`): her availability ("Empezar a atender"), the counters per status
+  (they open Casos with that filter), "Lo primero", "Mientras no estabas" and "Tu equipo ahora".
+  "Casos" (`/analista`) is the list by urgency plus the conversation, with the "Ficha del
+  cliente" on the right when the name is clicked.
 
-Todas las personas, clientes y casos son inventados ("Datos de ejemplo").
+Every person, customer and case is made up ("Datos de ejemplo").
 
-## 1. Requisitos
+## 1. Requirements
 
-| Herramienta | Versión probada | Para qué |
+| Tool | Tested version | What for |
 |---|---|---|
-| [uv](https://docs.astral.sh/uv/) | 0.9 | Instala Python 3.12 (fijado en `backend/.python-version`) y las dependencias del backend |
+| [uv](https://docs.astral.sh/uv/) | 0.9 | Installs Python 3.12 (pinned in `backend/.python-version`) and the backend dependencies |
 | Node.js | 22 | Frontend |
 | pnpm | 10 | Frontend |
-| Chromium de Playwright | lo instala `pnpm e2e:install` | Solo para la suite e2e |
+| Playwright's Chromium | installed by `pnpm e2e:install` | Only for the e2e suite |
 
-No hace falta Docker ni una base de datos externa.
+No Docker and no external database are needed.
 
-## 2. Instalar
+## 2. Install
 
 ```bash
 cd backend
-uv sync                         # crea backend/.venv con las dependencias de ejecución y desarrollo
+uv sync                         # creates backend/.venv with the runtime and dev dependencies
 
 cd ../frontend
-pnpm install                    # usa pnpm-lock.yaml
+pnpm install                    # uses pnpm-lock.yaml
 ```
 
-Ningún archivo `.env` es obligatorio: todas las variables tienen un valor seguro para desarrollo.
+No `.env` file is required: every variable has a safe development default.
 
-## 3. Correr backend y frontend juntos
+## 3. Run backend and frontend together
 
-Dos terminales, desde la raíz del repositorio:
+Two terminals, from the repository root:
 
 ```bash
-# terminal 1 · API en http://127.0.0.1:8000
+# terminal 1 · API on http://127.0.0.1:8000
 cd backend
 uv run cc-api
 
-# terminal 2 · SPA en http://localhost:5173
+# terminal 2 · SPA on http://localhost:5173
 cd frontend
 pnpm dev
 ```
 
-- La primera vez, el backend crea `backend/cc_platform.db` y siembra los datos de ejemplo. Los
-  tiempos de la historia sembrada (esperas, SLA, bloqueos) se calculan desde ese primer arranque.
-- Con `CC_ENV=dev` (el valor por defecto) el backend se recarga solo al cambiar el código.
-- Comprobar que todo responde:
+- On first start, the backend creates `backend/cc_platform.db` and seeds the sample data. The
+  times of the seeded story (waits, SLA, lockouts) are computed from that first start.
+- With `CC_ENV=dev` (the default) the backend reloads itself when the code changes.
+- Check that everything answers:
   - `curl -s http://127.0.0.1:8000/api/v1/health` → `{"status":"ok","checks":{"database":"ok"}}`
   - Swagger: http://127.0.0.1:8000/api/v1/docs
-  - Ingreso del equipo: http://localhost:5173/login
-  - Simulador de cliente: http://localhost:5173/cliente
+  - Staff sign-in: http://localhost:5173/login
+  - Customer simulator: http://localhost:5173/cliente
 
-Para entrar: cualquier cuenta de la [sección 5](#5-cuentas-sembradas), contraseña `demo1234`,
-código de verificación `000000` (solo las cuentas sembradas sin app de autenticación; ver la
-[sección 5.1](#51-invitaciones-correos-de-desarrollo-y-verificación-en-dos-pasos)).
+To sign in: any account from [section 5](#5-seeded-accounts), password `demo1234`, verification
+code `000000` (only the seeded accounts without an authenticator app; see
+[section 5.1](#51-invitations-dev-emails-and-two-step-verification)).
 
-**Varias personas a la vez.** La sesión vive en el `sessionStorage` de cada pestaña, así que
-cada pestaña o ventana nueva (abierta escribiendo la URL) puede tener a otra persona del equipo
-o a otro cliente del simulador. No uses "Duplicar pestaña": copia la sesión de la original.
+**Several people at once.** The session lives in each tab's `sessionStorage`, so every new tab or
+window (opened by typing the URL) can hold another staff member or another simulator customer.
+Do not use "Duplicate tab": it copies the original tab's session.
 
-### Otros puertos
+### Other ports
 
 ```bash
-# API en 8100 y SPA en 5180 (el origen de la SPA tiene que estar en CC_CORS_ORIGINS)
+# API on 8100 and SPA on 5180 (the SPA origin must be in CC_CORS_ORIGINS)
 cd backend  && CC_PORT=8100 CC_CORS_ORIGINS='["http://localhost:5180"]' uv run cc-api
 cd frontend && VITE_API_URL=http://localhost:8100 pnpm dev --port 5180 --strictPort
 ```
 
-## 4. Variables de entorno
+## 4. Environment variables
 
-El backend lee variables con prefijo `CC_`, o un archivo `.env` en el directorio desde donde se
-arranca (corre `uv run cc-api` dentro de `backend/`). Plantilla: `backend/.env.example`. Fuente
-de verdad: `backend/src/cc_platform/bootstrap/settings.py`.
+The backend reads variables prefixed with `CC_`, or a `.env` file in the directory it starts from
+(run `uv run cc-api` inside `backend/`). Template: `backend/.env.example`. Source of truth:
+`backend/src/cc_platform/bootstrap/settings.py`.
 
-| Variable | Por defecto | Qué hace |
+| Variable | Default | What it does |
 |---|---|---|
-| `CC_ENV` | `dev` | `dev` recarga el código y enciende el buzón de desarrollo; `test` no recarga; `prod` se niega a arrancar (falta un adaptador real de correo; además exige `CC_SESSION_SECRET` y `CC_TOTP_SECRET_KEY` propios, `CC_SEED_DEMO_DATA=false` y nada de buzón de desarrollo) |
-| `CC_BUILD` | `dev` | Identificador de la build que muestra `GET /api/v1/meta` |
-| `CC_PERSISTENCE` | `sqlalchemy` | `memory` corre sin base de datos (todo se pierde al parar) |
-| `CC_DATABASE_URL` | `sqlite+aiosqlite:///<repo>/backend/cc_platform.db` | Otra base SQLite (ruta absoluta: `sqlite+aiosqlite:////tmp/demo.db`) |
-| `CC_DATABASE_ECHO` | `false` | Imprime el SQL |
-| `CC_SEED_DEMO_DATA` | `true` | Siembra personas, clientes y casos de ejemplo si faltan |
-| `CC_SESSION_SECRET` | secreto de desarrollo | Firma HMAC de los tokens de sesión |
-| `CC_SESSION_TTL_MINUTES` | `480` | Duración de una sesión del equipo |
-| `CC_CUSTOMER_SESSION_TTL_MINUTES` | `480` | Duración de una sesión del simulador |
-| `CC_LOCKOUT_MAX_ATTEMPTS` | `5` | Intentos fallidos antes de bloquear la cuenta |
-| `CC_LOCKOUT_MINUTES` | `15` | Duración del bloqueo |
-| `CC_MFA_TTL_SECONDS` | `300` | Vigencia del paso de verificación |
-| `CC_MFA_MAX_ATTEMPTS` | `3` | Códigos erróneos por verificación |
-| `CC_DEV_MFA_CODE` | `000000` | Código de verificación de desarrollo: **solo** para las cuentas sembradas que no tienen app de autenticación (parte 4) |
-| `CC_PUBLIC_APP_URL` | `http://localhost:5173` | Parte 4: origen de la SPA en los enlaces de los correos (`/activar?token=…`, `/restablecer?token=…`). Si la SPA corre en otro puerto, cámbialo |
-| `CC_INVITATION_TTL_HOURS` | `48` | Vigencia de un enlace de invitación (desde el último envío) |
-| `CC_PASSWORD_RESET_TTL_MINUTES` | `60` | Vigencia de un enlace para restablecer la contraseña |
-| `CC_DEV_MAILBOX` | sin definir (= encendido solo con `CC_ENV=dev`) | Buzón de desarrollo: guarda los correos que "envía" la plataforma y los muestra en `GET /api/v1/dev/mailbox` y en `/dev/correos`. La suite e2e lo enciende con `CC_ENV=test`. Prohibido en producción |
-| `CC_TOTP_ISSUER` | `LATAM Bank CC` | Nombre que muestra la app de autenticación |
-| `CC_TOTP_SECRET_KEY` | derivada de `CC_SESSION_SECRET` | Clave Fernet que sella las claves TOTP guardadas. En desarrollo se deriva del secreto de sesión (si cambias ese secreto, las cuentas con app ya no pueden entrar: reinicia la base); producción debe definirla |
-| `CC_ARGON2_TIME_COST`, `CC_ARGON2_MEMORY_COST`, `CC_ARGON2_PARALLELISM` | `3`, `65536`, `4` | Costo del hash de contraseñas |
-| `CC_CORS_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` | Orígenes de la SPA permitidos (lista JSON) |
-| `CC_HOST`, `CC_PORT` | `127.0.0.1`, `8000` | Dirección de `uv run cc-api` |
-| `CC_REALTIME_QUEUE_SIZE` | `256` | Mensajes en cola por conexión WebSocket |
-| `CC_REALTIME_EXPIRY_CHECK_SECONDS` | `30` | Cada cuánto un socket inactivo revisa si su sesión venció |
-| `CC_NOTIFICATION_SWEEP_SECONDS` | `30` | Slice 10: cada cuánto se buscan casos por vencer sin primera respuesta (notificación "Caso por vencer sin respuesta" para Supervisión); también corre al arrancar. `0` lo apaga |
-| `CC_LOG_LEVEL` | `INFO` | Nivel de log |
-| `CC_LOG_FORMAT` | `json` | `console` para leer los logs en la terminal |
+| `CC_ENV` | `dev` | `dev` reloads the code and turns on the dev mailbox; `test` does not reload; `prod` refuses to start (a real email adapter is missing; it also requires its own `CC_SESSION_SECRET` and `CC_TOTP_SECRET_KEY`, `CC_SEED_DEMO_DATA=false` and no dev mailbox) |
+| `CC_BUILD` | `dev` | Build identifier shown by `GET /api/v1/meta` |
+| `CC_PERSISTENCE` | `sqlalchemy` | `memory` runs without a database (everything is lost on stop) |
+| `CC_DATABASE_URL` | `sqlite+aiosqlite:///<repo>/backend/cc_platform.db` | Another SQLite database (absolute path: `sqlite+aiosqlite:////tmp/demo.db`) |
+| `CC_DATABASE_ECHO` | `false` | Prints the SQL |
+| `CC_SEED_DEMO_DATA` | `true` | Seeds sample people, customers and cases if they are missing |
+| `CC_SESSION_SECRET` | development secret | HMAC signature of the session tokens |
+| `CC_SESSION_TTL_MINUTES` | `480` | Length of a staff session |
+| `CC_CUSTOMER_SESSION_TTL_MINUTES` | `480` | Length of a simulator session |
+| `CC_LOCKOUT_MAX_ATTEMPTS` | `5` | Failed attempts before the account locks |
+| `CC_LOCKOUT_MINUTES` | `15` | Length of the lockout |
+| `CC_MFA_TTL_SECONDS` | `300` | Validity of the verification step |
+| `CC_MFA_MAX_ATTEMPTS` | `3` | Wrong codes per verification |
+| `CC_DEV_MFA_CODE` | `000000` | Development verification code: **only** for the seeded accounts without an authenticator app (part 4) |
+| `CC_PUBLIC_APP_URL` | `http://localhost:5173` | Part 4: SPA origin used in the email links (`/activar?token=…`, `/restablecer?token=…`). Change it if the SPA runs on another port |
+| `CC_INVITATION_TTL_HOURS` | `48` | Validity of an invitation link (from the last send) |
+| `CC_PASSWORD_RESET_TTL_MINUTES` | `60` | Validity of a password reset link |
+| `CC_DEV_MAILBOX` | unset (= on only with `CC_ENV=dev`) | Dev mailbox: keeps the emails the platform "sends" and shows them at `GET /api/v1/dev/mailbox` and `/dev/correos`. The e2e suite turns it on with `CC_ENV=test`. Forbidden in production |
+| `CC_TOTP_ISSUER` | `LATAM Bank CC` | Name shown by the authenticator app |
+| `CC_TOTP_SECRET_KEY` | derived from `CC_SESSION_SECRET` | Fernet key that seals the stored TOTP keys. In development it is derived from the session secret (if you change that secret, accounts with an app can no longer sign in: reset the database); production must set it |
+| `CC_ARGON2_TIME_COST`, `CC_ARGON2_MEMORY_COST`, `CC_ARGON2_PARALLELISM` | `3`, `65536`, `4` | Password hash cost |
+| `CC_CORS_ORIGINS` | `["http://localhost:5173","http://127.0.0.1:5173"]` | Allowed SPA origins (JSON list) |
+| `CC_HOST`, `CC_PORT` | `127.0.0.1`, `8000` | Address of `uv run cc-api` |
+| `CC_REALTIME_QUEUE_SIZE` | `256` | Queued messages per WebSocket connection |
+| `CC_REALTIME_EXPIRY_CHECK_SECONDS` | `30` | How often an idle socket checks whether its session expired |
+| `CC_NOTIFICATION_SWEEP_SECONDS` | `30` | Slice 10: how often to look for cases about to miss their first response (the "Caso por vencer sin respuesta" notification for Supervisión); it also runs on startup. `0` turns it off |
+| `CC_LOG_LEVEL` | `INFO` | Log level |
+| `CC_LOG_FORMAT` | `json` | `console` to read the logs in the terminal |
 
-Frontend (`frontend/.env.local`, plantilla en `frontend/.env.example`):
+Frontend (`frontend/.env.local`, template in `frontend/.env.example`):
 
-| Variable | Por defecto | Qué hace |
+| Variable | Default | What it does |
 |---|---|---|
-| `VITE_API_URL` | `http://localhost:8000` | URL de la API. El WebSocket usa el mismo origen (`ws://…/api/v1/ws`) |
+| `VITE_API_URL` | `http://localhost:8000` | API URL. The WebSocket uses the same origin (`ws://…/api/v1/ws`) |
 
-## 5. Cuentas sembradas
+## 5. Seeded accounts
 
-Al entrar, una analista llega a **Inicio** (`/analista/inicio`); "/" también la lleva ahí. "Mientras
-no estabas" cuenta desde el fin de su sesión anterior; en su primera sesión, desde 8 horas atrás
-(por eso la semilla ya muestra sus casos recientes). Los equipos se llaman "Equipo Andes", "Equipo
-Pacífico" y "Equipo Caribe" desde el slice 6: una base creada antes conserva los nombres viejos
-("Disputas · …"); reiníciala (sección 6) para verlos como en la demo.
+On sign-in, an analyst lands on **Inicio** (`/analista/inicio`); "/" also takes her there.
+"Mientras no estabas" counts from the end of her previous session; on her first session, from 8
+hours back (that is why the seed already shows her recent cases). The teams are called "Equipo
+Andes", "Equipo Pacífico" and "Equipo Caribe" since slice 6: a database created earlier keeps the
+old names ("Disputas · …"); reset it (section 6) to see them as in the demo.
 
-Todas usan la contraseña **`demo1234`**. Las cuentas sembradas usan el código de verificación de
-desarrollo **`000000`**, salvo Tatiana Rojas, que entró por invitación y usa su app de
-autenticación (ver abajo). Correo: `nombre.apellido@latambank.example` (sin tildes).
+All of them use the password **`demo1234`**. The seeded accounts use the development
+verification code **`000000`**, except Tatiana Rojas, who joined by invitation and uses her
+authenticator app (see below). Email: `nombre.apellido@latambank.example` (no accents).
 
-| Persona | Correo | Roles | Idiomas | Equipo | Estado al arrancar |
+| Person | Email | Roles | Languages | Team | State on startup |
 |---|---|---|---|---|---|
-| Daniela Ríos | `daniela.rios@` | Analista | español, portugués | Equipo Andes | En pausa, sin sesión. 5 casos abiertos y 3 cerrados (ver abajo) |
-| Julián Ortega | `julian.ortega@` | Analista | español | Equipo Andes | En pausa **con una sesión sembrada** (aparece "En pausa" en Equipo). 2 casos abiertos |
-| Paula Medina | `paula.medina@` | Analista | español | Equipo Pacífico | En pausa, sin casos |
-| Sebastián Cárdenas | `sebastian.cardenas@` | Analista | español, portugués | Equipo Pacífico | En pausa, sin casos |
-| Tomás Arango | `tomas.arango@` | Analista | español, portugués | Equipo Pacífico | En pausa, sin casos |
-| Felipe Echeverri | `felipe.echeverri@` | Analista + Supervisión | español | Equipo Andes | En pausa, sin casos. Usa el selector de rol (Casos ↔ Colas). Como también es Analista, en "Escalados" puede **"Tomar el caso"** de un caso en español |
-| Lucía Herrera | `lucia.herrera@` | Supervisión | español, portugués | Equipo Andes | Activa |
-| Martín Salazar | `martin.salazar@` | Supervisión | español | Equipo Pacífico | Activa |
-| Renata Villalba | `renata.villalba@` | Supervisión | español, portugués | Equipo Pacífico | Activa |
-| Mariana Duque | `mariana.duque@` | Supervisión | español | Equipo Pacífico | **Bloqueada** por 5 contraseñas erradas, hasta 13 min después del primer arranque. Una administradora la desbloquea |
-| Valeria Quintero | `valeria.quintero@` | Administración | español | Administración de la plataforma | Activa |
-| Carolina Peña | `carolina.pena@` | Administración | español | Administración de la plataforma | Activa |
-| Andrés Villamil | `andres.villamil@` | Analista | español | Equipo Andes | **Desactivada** (Carolina la desactivó). No puede entrar |
-| Tatiana Rojas | `tatiana.rojas@` | Analista | español | Equipo Andes | Parte 4: **aceptó su invitación** una hora antes del primer arranque. Contraseña `demo1234` y **código de su app** (clave `JBSWY3DPEHPK3PXP`); el código `000000` no le sirve. En pausa, sin casos |
-| Bruna Esteves | `bruna.esteves@` | Analista | portugués | Equipo Andes | Parte 4: **invitación pendiente** (Valeria la invitó 3 h antes del primer arranque; vence 45 h después). No puede entrar hasta activar su cuenta con el enlace del correo (en `/dev/correos`) |
+| Daniela Ríos | `daniela.rios@` | Analista | Spanish, Portuguese | Equipo Andes | Paused, no session. 5 open and 3 closed cases (see below) |
+| Julián Ortega | `julian.ortega@` | Analista | Spanish | Equipo Andes | Paused **with a seeded session** (shows as "En pausa" in Equipo). 2 open cases |
+| Paula Medina | `paula.medina@` | Analista | Spanish | Equipo Pacífico | Paused, no cases |
+| Sebastián Cárdenas | `sebastian.cardenas@` | Analista | Spanish, Portuguese | Equipo Pacífico | Paused, no cases |
+| Tomás Arango | `tomas.arango@` | Analista | Spanish, Portuguese | Equipo Pacífico | Paused, no cases |
+| Felipe Echeverri | `felipe.echeverri@` | Analista + Supervisión | Spanish | Equipo Andes | Paused, no cases. Uses the role switcher (Casos ↔ Colas). Since he is also an Analista, in "Escalados" he can **"Tomar el caso"** on a Spanish case |
+| Lucía Herrera | `lucia.herrera@` | Supervisión | Spanish, Portuguese | Equipo Andes | Active |
+| Martín Salazar | `martin.salazar@` | Supervisión | Spanish | Equipo Pacífico | Active |
+| Renata Villalba | `renata.villalba@` | Supervisión | Spanish, Portuguese | Equipo Pacífico | Active |
+| Mariana Duque | `mariana.duque@` | Supervisión | Spanish | Equipo Pacífico | **Locked** after 5 wrong passwords, until 13 min after the first start. An admin unlocks her |
+| Valeria Quintero | `valeria.quintero@` | Administración | Spanish | Administración de la plataforma | Active |
+| Carolina Peña | `carolina.pena@` | Administración | Spanish | Administración de la plataforma | Active |
+| Andrés Villamil | `andres.villamil@` | Analista | Spanish | Equipo Andes | **Deactivated** (Carolina deactivated the account). Cannot sign in |
+| Tatiana Rojas | `tatiana.rojas@` | Analista | Spanish | Equipo Andes | Part 4: **accepted her invitation** one hour before the first start. Password `demo1234` and **the code from her app** (key `JBSWY3DPEHPK3PXP`); the code `000000` does not work for her. Paused, no cases |
+| Bruna Esteves | `bruna.esteves@` | Analista | Portuguese | Equipo Andes | Part 4: **pending invitation** (Valeria invited her 3 h before the first start; it expires 45 h later). She cannot sign in until she activates her account with the email link (in `/dev/correos`) |
 
-Además existe el equipo inactivo "Equipo Caribe", sin miembros.
+There is also the inactive team "Equipo Caribe", with no members.
 
-### 5.1 Invitaciones, correos de desarrollo y verificación en dos pasos
+### 5.1 Invitations, dev emails and two-step verification
 
-Parte 4 (`api/slice-11-invitations.md`): Administración **nunca ve ni entrega una contraseña**.
+Part 4 (`api/slice-11-invitations.md`): Administración **never sees or hands out a password**.
 
-- **Dar de alta a alguien.** "Usuarios y roles" → "Nuevo usuario" → "Enviar invitación". La
-  persona queda en "Invitación pendiente" y le llega un correo con un enlace de un solo uso que
-  vence en 48 horas. Desde su ficha: "Reenviar invitación" (enlace nuevo; el anterior deja de
-  servir) o "Cancelar invitación" (desaparece del directorio; invitar el mismo correo otra vez
-  reutiliza su registro).
-- **Ver los correos en desarrollo.** No hay servidor de correo: el **buzón de desarrollo** guarda
-  lo que la plataforma "envía". Ábrelo en http://localhost:5173/dev/correos (enlace "Correos de
-  desarrollo" al pie del ingreso, solo si está encendido) o por API:
-  `curl -s localhost:8000/api/v1/dev/mailbox | python -m json.tool`. "Abrir enlace" lleva a
-  `/activar?token=…` o `/restablecer?token=…`. Con `CC_ENV=dev` está encendido; nunca existe en
-  producción.
-- **Activar la cuenta** (`/activar`): 1) crear la contraseña (al menos 12 caracteres, sin el
-  nombre ni el correo, no una contraseña común; las reglas se marcan en vivo), 2) configurar la
-  verificación en dos pasos: escanear el QR con una app de autenticación (Google Authenticator,
-  Microsoft Authenticator, 1Password…) o escribir la clave manual, y escribir el código de 6
-  dígitos. Queda activa y En pausa. Desde entonces entra con correo, contraseña y el código de su
-  app.
-- **Sin teléfono a mano** (demo o pruebas), el código sale de la clave:
+- **Onboarding someone.** "Usuarios y roles" → "Nuevo usuario" → "Enviar invitación". The person
+  shows as "Invitación pendiente" and gets an email with a single-use link that expires in 48
+  hours. From her profile: "Reenviar invitación" (a new link; the previous one stops working) or
+  "Cancelar invitación" (she disappears from the directory; inviting the same email again reuses
+  her record).
+- **Seeing the emails in development.** There is no mail server: the **dev mailbox** keeps what
+  the platform "sends". Open it at http://localhost:5173/dev/correos (the "Correos de desarrollo"
+  link at the foot of the sign-in, only when it is on) or through the API:
+  `curl -s localhost:8000/api/v1/dev/mailbox | python -m json.tool`. "Abrir enlace" goes to
+  `/activar?token=…` or `/restablecer?token=…`. It is on with `CC_ENV=dev`; it never exists in
+  production.
+- **Activating the account** (`/activar`): 1) create the password (at least 12 characters,
+  without the name or the email, not a common password; the rules are checked live), 2) set up
+  two-step verification: scan the QR with an authenticator app (Google Authenticator, Microsoft
+  Authenticator, 1Password…) or type the manual key, and type the 6-digit code. The account is
+  then active and paused ("En pausa"). From then on she signs in with email, password and the
+  code from her app.
+- **No phone at hand** (demo or tests): the code comes from the key:
   ```bash
   cd backend && uv run python -c "import pyotp; print(pyotp.TOTP('JBSWY3DPEHPK3PXP').now())"
-  # o: oathtool --totp -b JBSWY3DPEHPK3PXP
+  # or: oathtool --totp -b JBSWY3DPEHPK3PXP
   ```
-  (cambia la clave por la que mostró el paso 2; la de arriba es la de Tatiana Rojas).
-- **Olvidó la contraseña.** Administración pulsa "Enviar enlace para restablecer" en su ficha: le
-  llega un enlace que vence en 1 hora, sus sesiones se cierran en ese momento y la cuenta se
-  desbloquea si estaba bloqueada. Con el enlace (`/restablecer`) crea la contraseña nueva; su
-  verificación en dos pasos no cambia. Nadie puede restablecer su propia contraseña desde
-  "Usuarios y roles"; tampoco hay "Olvidé mi contraseña" de autoservicio.
+  (replace the key with the one shown in step 2; the one above is Tatiana Rojas's).
+- **Forgotten password.** Administración clicks "Enviar enlace para restablecer" on her profile:
+  she gets a link that expires in 1 hour, her sessions are closed at that moment and the account
+  is unlocked if it was locked. With the link (`/restablecer`) she creates the new password; her
+  two-step verification does not change. Nobody can reset their own password from "Usuarios y
+  roles"; there is no self-service "Olvidé mi contraseña" either.
 
-**Notificaciones sembradas (slice 10).** La historia de la semilla ya notificó a la gente: la
-campana de Daniela trae casos que le llegaron, "El cliente volvió a escribir", "Supervisión
-respondió tu escalamiento" (107) y calificaciones; la de cada persona de Supervisión, los
-escalamientos (101, 113 y los atendidos), "Un caso espera en la cola" (español y portugués) y
-"Caso por vencer sin respuesta" (al arrancar se revisan los casos a 5 minutos o menos de vencer);
-la de Valeria y Carolina, "Cuenta bloqueada: Mariana Duque" y, ya leída, "Invitación aceptada: Tatiana Rojas" (parte 4). Lo que pasó hace más de 30 minutos
-empieza leído ("Anteriores"); lo más reciente, sin leer ("Nuevas").
+**Seeded notifications (slice 10).** The seed story has already notified people: Daniela's bell
+holds cases that reached her, "El cliente volvió a escribir", "Supervisión respondió tu
+escalamiento" (107) and ratings; each Supervisión person's holds the escalations (101, 113 and
+the handled ones), "Un caso espera en la cola" (Spanish and Portuguese) and "Caso por vencer sin
+respuesta" (on startup, cases 5 minutes or less from their deadline are checked); Valeria's and
+Carolina's hold "Cuenta bloqueada: Mariana Duque" and, already read, "Invitación aceptada:
+Tatiana Rojas" (part 4). Anything older than 30 minutes starts read ("Anteriores"); the most
+recent, unread ("Nuevas").
 
-**Nadie empieza disponible.** Las colas sembradas tienen casos que nadie disponible podía tomar
-(regla 3), así que una analista disponible las contradiría. Cuando alguien pasa a "Disponible",
-las colas de sus idiomas se vacían hacia ella (el caso más antiguo primero) y los chats nuevos le
-llegan.
+**Nobody starts available.** The seeded queues hold cases nobody available could take (rule 3),
+so an available analyst would contradict them. When someone switches to "Disponible", the queues
+of her languages drain to her (oldest case first) and new chats reach her.
 
-### Casos sembrados
+### Seeded cases
 
-Prioridad (slice 8): todo caso abre "Sin prioridad"; la historia sembrada la cambia por el dominio
-(`case.priority_changed`), así que la auditoría muestra quién la puso.
+Priority (slice 8): every case opens as "Sin prioridad"; the seeded story changes it through the
+domain (`case.priority_changed`), so the audit shows who set it.
 
-| Caso | Cliente | Dónde está |
+| Case | Customer | Where it is |
 |---|---|---|
-| 101 | Marcela Quintana Pardo (es-CO) | Daniela · Por responder, prioridad crítica, **escalado** (abierto, hace 6 min) |
-| 102 | Beatriz Salcedo Prieto (es-CO) | Daniela · Por responder, SLA en riesgo, prioridad alta |
-| 103 | Larissa Monteiro Alves (pt-BR) | Daniela · Nuevo, en portugués |
-| 108 | Patricia Lozano Vega (es-MX) | Daniela · Nuevo, "Volvió a escribir" (casos anteriores 104 y 110) |
-| 107 | Joaquín Ferreyra Paz (es-AR) | Daniela · Esperando al cliente, prioridad media; Lucía **respondió** su escalamiento (Daniela ve la tarjeta hasta "Entendido") |
-| 117 | Ignacio Bustos Lagos (es-AR, Córdoba) | Daniela · Por responder, **correo** (slice 12): su correo, la respuesta de Daniela con saludo y firma, y su contestación |
-| 104, 105, 106 | Patricia, Claudia, Héctor | Daniela · Cerrados en los últimos 7 días (media, sin prioridad, baja) |
-| 115 | Natalia Rendón Úsuga (es-CO, Medellín) | Daniela · Cerrado ayer: **llamada entrante** (slice 12) atendida, en espera una vez, nota interna |
-| 116 | Claudia | Daniela · Cerrado: **llamada saliente** de seguimiento de su chat 105 (slice 12) |
-| 110 | Patricia | Cerrado por Julián hace 20 días (fuera de la ventana de 7 días) |
-| 113 | Camila Torres Benavides (es-CO) | Julián · Por responder, SLA vencido, prioridad media, **escalado** (abierto, hace 21 min) |
-| 114 | Esteban Morales Quiroga (es-CO) | Julián · Esperando al cliente (Paula lo escaló y Lucía se lo reasignó: escalamiento "Reasignado"), prioridad baja |
-| 111 | Rosa Elena Ibarra Méndez (es-MX) | Colas → Español, sin asignar, SLA en riesgo |
-| 112 | Mauricio Achával Ríos (es-AR) | Colas → Español, sin asignar, prioridad alta (la puso Lucía), SLA en 7 min |
-| 109 | Gabriela Duarte Melo (pt-BR) | Colas → Portugués, sin asignar |
+| 101 | Marcela Quintana Pardo (es-CO) | Daniela · Por responder, critical priority, **escalated** (open, 6 min ago) |
+| 102 | Beatriz Salcedo Prieto (es-CO) | Daniela · Por responder, SLA at risk, high priority |
+| 103 | Larissa Monteiro Alves (pt-BR) | Daniela · Nuevo, in Portuguese |
+| 108 | Patricia Lozano Vega (es-MX) | Daniela · Nuevo, "Volvió a escribir" (previous cases 104 and 110) |
+| 107 | Joaquín Ferreyra Paz (es-AR) | Daniela · Esperando al cliente, medium priority; Lucía **answered** her escalation (Daniela sees the card until "Entendido") |
+| 117 | Ignacio Bustos Lagos (es-AR, Córdoba) | Daniela · Por responder, **email** (slice 12): his email, Daniela's reply with greeting and signature, and his answer |
+| 104, 105, 106 | Patricia, Claudia, Héctor | Daniela · Cerrados in the last 7 days (medium, no priority, low) |
+| 115 | Natalia Rendón Úsuga (es-CO, Medellín) | Daniela · closed yesterday: **inbound call** (slice 12) answered, put on hold once, internal note |
+| 116 | Claudia | Daniela · closed: **outbound call** following up her chat 105 (slice 12) |
+| 110 | Patricia | Closed by Julián 20 days ago (outside the 7-day window) |
+| 113 | Camila Torres Benavides (es-CO) | Julián · Por responder, SLA overdue, medium priority, **escalated** (open, 21 min ago) |
+| 114 | Esteban Morales Quiroga (es-CO) | Julián · Esperando al cliente (Paula escalated it and Lucía reassigned it to him: escalation "Reasignado"), low priority |
+| 111 | Rosa Elena Ibarra Méndez (es-MX) | Colas → Español, unassigned, SLA at risk |
+| 112 | Mauricio Achával Ríos (es-AR) | Colas → Español, unassigned, high priority (set by Lucía), SLA in 7 min |
+| 109 | Gabriela Duarte Melo (pt-BR) | Colas → Portugués, unassigned |
 
-Escalamientos sembrados (slice 9, motivos inventados y neutros): "Escalados" muestra 2 abiertos
-(Julián con Camila, Daniela con Marcela) y en "Atendidos hoy" el de Paula (reasignado) y el de
-Daniela con Joaquín (respondido). No hay tipos, montos, niveles ni plazos: el dataset solo dice si
-un caso fue escalado.
+Seeded escalations (slice 9, made-up and neutral motives): "Escalados" shows 2 open (Julián with
+Camila, Daniela with Marcela) and, under "Atendidos hoy", Paula's (reassigned) and Daniela's with
+Joaquín (answered). There are no types, amounts, levels or deadlines: the dataset only says
+whether a case was escalated.
 
-Los ids completos son `CASE-` seguido del número relleno con ceros hasta 26 dígitos (por ejemplo
-`CASE-00000000000000000000000109`). Valores generados por el equipo (no vienen del dataset): SLA de
-primera respuesta (15 min para todos los casos desde el slice 8; ya no depende de la prioridad), la
-ventana de 7 días de Cerrados, los nombres de las colas y los motivos de cierre. Los niveles de
-prioridad sí siguen el dataset (`complaints.priority`), más "Sin prioridad".
+Full ids are `CASE-` followed by the number zero-padded to 26 digits (for example
+`CASE-00000000000000000000000109`). Team-generated values (not from the dataset): the
+first-response SLA (15 min for every case since slice 8; it no longer depends on the priority),
+the 7-day window of Cerrados, the queue names and the close reasons. The priority levels do
+follow the dataset (`complaints.priority`), plus "Sin prioridad".
 
-Después de actualizar a slice 8, borra `backend/cc_platform.db`: la siembra solo agrega casos
-que faltan, así que una base anterior conserva las prioridades y los plazos viejos. Slice 9 agrega
-la tabla `escalations` y la columna `cases.open_escalation_id`: una base anterior no arranca
-(`OutdatedSchemaError`) hasta borrarla.
+After updating to slice 8, delete `backend/cc_platform.db`: the seed only adds missing cases, so
+an older database keeps the old priorities and deadlines. Slice 9 adds the `escalations` table
+and the `cases.open_escalation_id` column: an older database does not start
+(`OutdatedSchemaError`) until it is deleted.
 
-### Clientes del simulador
+### Simulator customers
 
-En `/cliente` se elige un cliente y se escribe como él, sin contraseña. Los clientes nuevos
-abren un caso con su primer mensaje:
+At `/cliente` you pick a customer and write as them, with no password. New customers open a case
+with their first message:
 
-| Cliente | Idioma del simulador | Ciudad |
+| Customer | Simulator language | City |
 |---|---|---|
-| Natalia Guzmán Rincón | español de Colombia | Bogotá |
-| Ximena Robles Treviño | español de México | Ciudad de México |
-| Lucas Benítez Sosa | español de Argentina | Córdoba |
-| Rafael Nogueira Costa | portugués de Brasil | Buenos Aires |
-| Andrés Felipe Cardona | español de Colombia | Medellín |
+| Natalia Guzmán Rincón | Colombian Spanish | Bogotá |
+| Ximena Robles Treviño | Mexican Spanish | Mexico City |
+| Lucas Benítez Sosa | Argentine Spanish | Córdoba |
+| Rafael Nogueira Costa | Brazilian Portuguese | Buenos Aires |
+| Andrés Felipe Cardona | Colombian Spanish | Medellín |
 
-También aparecen los clientes de los casos sembrados: con "Conversación abierta" se continúa su
-caso; Claudia y Héctor tienen una conversación cerrada, y si escriben se abre un caso nuevo
-vinculado al anterior. Calificaciones sembradas (slice 7): Héctor ya calificó su caso
-("¡Gracias! Calificaste: Bien"); a Claudia el simulador le muestra la encuesta (o "Ahora no").
-Patricia calificó sus casos anteriores 104 (Excelente, con comentario) y 110 (Bien).
+The customers of the seeded cases are listed too: "Conversación abierta" continues their case;
+Claudia and Héctor have a closed conversation, and if they write, a new case opens linked to the
+previous one. Seeded ratings (slice 7): Héctor already rated his case ("¡Gracias! Calificaste:
+Bien"); the simulator shows Claudia the survey (or "Ahora no"). Patricia rated her previous cases
+104 (Excelente, with a comment) and 110 (Bien).
 
-## 6. Reiniciar la base de datos
+## 6. Reset the database
 
-No hay migraciones: el esquema se crea al arrancar. Para volver al estado inicial (y re-anclar
-los tiempos de la historia sembrada):
+There are no migrations: the schema is created on startup. To return to the initial state (and
+re-anchor the times of the seeded story):
 
 ```bash
-# detén el backend (Ctrl+C) y luego
+# stop the backend (Ctrl+C), then
 rm backend/cc_platform.db
-cd backend && uv run cc-api      # crea la base y siembra de nuevo
+cd backend && uv run cc-api      # creates the database and seeds again
 ```
 
-- Alternativa sin archivo: `CC_PERSISTENCE=memory uv run cc-api` (cada arranque empieza de cero).
-- El sembrado nunca reescribe filas existentes: reiniciar el backend sin borrar la base conserva
-  todo lo que se hizo.
-- Después de traer cambios que tocan el esquema hay que borrar la base (ver
-  [OutdatedSchemaError](#la-api-no-arranca-outdatedschemaerror)).
-- Las pestañas del equipo abiertas antes del reinicio tienen sesiones que ya no existen: vuelven al
-  ingreso y hay que entrar de nuevo.
+- Without a file: `CC_PERSISTENCE=memory uv run cc-api` (every start begins from scratch).
+- The seed never rewrites existing rows: restarting the backend without deleting the database
+  keeps everything that was done.
+- After pulling changes that touch the schema, the database must be deleted (see
+  [OutdatedSchemaError](#the-api-does-not-start-outdatedschemaerror)).
+- Staff tabs opened before the reset hold sessions that no longer exist: they go back to the
+  sign-in and you have to sign in again.
 
-## 7. Regenerar los tipos de la API
+## 7. Regenerate the API types
 
-OpenAPI es el contrato entre las dos aplicaciones. Después de cualquier cambio en la API:
+OpenAPI is the contract between the two applications. After any API change:
 
 ```bash
-cd backend  && uv run python -m cc_platform.scripts.export_openapi   # escribe backend/openapi.json
-cd frontend && pnpm gen:api                                          # escribe src/lib/api/schema.gen.ts
+cd backend  && uv run python -m cc_platform.scripts.export_openapi   # writes backend/openapi.json
+cd frontend && pnpm gen:api                                          # writes src/lib/api/schema.gen.ts
 ```
 
-Comprobación sin escribir: `uv run python -m cc_platform.scripts.export_openapi --check` y
-`pnpm check:api`. Las dos fallan si el archivo está desactualizado; la del backend también corre
-dentro de `pytest`.
+Check without writing: `uv run python -m cc_platform.scripts.export_openapi --check` and
+`pnpm check:api`. Both fail if the file is out of date; the backend one also runs inside
+`pytest`.
 
-## 8. Verificaciones (quality gates)
+## 8. Quality gates
 
-Todas deben pasar antes de dar un cambio por terminado (brief §6):
+All of them must pass before a change is considered done (brief §6):
 
 ```bash
 cd backend
@@ -310,114 +309,115 @@ pnpm format:check
 pnpm check:api
 ```
 
-`pytest` tarda alrededor de un minuto y medio; `pnpm test`, unos diez segundos.
+`pytest` takes about a minute and a half; `pnpm test`, about ten seconds.
 
-## 9. Suite e2e (Playwright)
+## 9. e2e suite (Playwright)
 
 ```bash
 cd frontend
-pnpm e2e:install     # una vez: descarga Chromium para Playwright
-pnpm e2e             # corre los escenarios en el navegador
+pnpm e2e:install     # once: downloads Chromium for Playwright
+pnpm e2e             # runs the scenarios in the browser
 ```
 
-La suite levanta su propio backend sobre una base SQLite temporal y nueva, y su propio Vite, en
-puertos libres. No usa ni modifica `backend/cc_platform.db` y no necesita que la app esté
-corriendo. Los escenarios están en `frontend/e2e/` y la configuración en
+The suite starts its own backend on a fresh temporary SQLite database, and its own Vite, on free
+ports. It neither uses nor modifies `backend/cc_platform.db` and does not need the app to be
+running. The scenarios live in `frontend/e2e/` and the configuration in
 `frontend/playwright.config.ts`.
 
-Para correr una parte: `pnpm e2e e2e/auth.spec.ts` (un archivo) o `pnpm e2e -g "Casos anteriores"`
-(por título). Qué cubre cada escenario, las reglas de aislamiento y los huecos conocidos están en
+To run a part: `pnpm e2e e2e/auth.spec.ts` (one file) or `pnpm e2e -g "Casos anteriores"` (by
+title). What each scenario covers, the isolation rules and the known gaps are in
 [api/slice-5-e2e.md](./api/slice-5-e2e.md).
 
-## 10. Problemas frecuentes
+## 10. Troubleshooting
 
-### Puerto en uso
+### Port in use
 
-Síntomas: el backend termina con `[Errno 48] error while attempting to bind on address
-('127.0.0.1', 8000): address already in use`; Vite con `--strictPort` dice `Port 5173 is already
-in use`. Sin `--strictPort`, Vite toma otro puerto (5174…) y la SPA no puede hablar con la API
-porque ese origen no está en `CC_CORS_ORIGINS`.
+Symptoms: the backend exits with `[Errno 48] error while attempting to bind on address
+('127.0.0.1', 8000): address already in use`; Vite with `--strictPort` says `Port 5173 is already
+in use`. Without `--strictPort`, Vite takes another port (5174…) and the SPA cannot talk to the
+API because that origin is not in `CC_CORS_ORIGINS`.
 
 ```bash
-lsof -nP -iTCP:8000 -sTCP:LISTEN     # quién usa el puerto (igual con 5173)
+lsof -nP -iTCP:8000 -sTCP:LISTEN     # who holds the port (same for 5173)
 kill <PID>
 ```
 
-O usa otros puertos (sección 3, "Otros puertos").
+Or use other ports (section 3, "Other ports").
 
-### La API no arranca: `OutdatedSchemaError`
+### The API does not start: `OutdatedSchemaError`
 
 ```
 OutdatedSchemaError: The database schema is older than the code (missing tables: admin_roster).
 Delete the local database (e.g. backend/cc_platform.db) and restart; there are no migrations yet.
 ```
 
-La base fue creada por una versión anterior. Borra `backend/cc_platform.db` y arranca de nuevo
-(sección 6). Se pierden los datos locales; el sembrado los recrea.
+The database was created by an older version. Delete `backend/cc_platform.db` and start again
+(section 6). The local data is lost; the seed recreates it.
 
-### "No hay conexión con el servidor" al entrar
+### "No hay conexión con el servidor" on sign-in
 
-La SPA no alcanza la API. Revisa que el backend esté corriendo (`/api/v1/health`), que
-`VITE_API_URL` apunte a él (reinicia `pnpm dev` después de cambiarla) y que el origen exacto de
-la SPA (`http://localhost:5173` no es lo mismo que `http://127.0.0.1:5173` ni que otro puerto)
-esté en `CC_CORS_ORIGINS`.
+The SPA cannot reach the API. Check that the backend is running (`/api/v1/health`), that
+`VITE_API_URL` points to it (restart `pnpm dev` after changing it) and that the exact SPA origin
+(`http://localhost:5173` is not the same as `http://127.0.0.1:5173` nor another port) is in
+`CC_CORS_ORIGINS`.
 
-### La campana no cambia
+### The bell does not change
 
-Las notificaciones llegan por el mismo WebSocket (tema `staff:<id>`) y la lista se vuelve a pedir
-cada 60 s y al reconectarse. Si una acción no generó la notificación esperada, recuerda las
-reglas (`api/slice-10-notifications.md` §3): nadie recibe la de su propia acción; "Un caso espera
-en la cola" llega una vez por idioma mientras quede un caso más antiguo esperando; los avisos
-emergentes solo salen en las pantallas del rol (la campana guarda todos) y no salen cuando la
-pantalla ya muestra el caso. Con `CC_NOTIFICATION_SWEEP_SECONDS=0` no llegan las de "Caso por
-vencer sin respuesta".
+Notifications arrive through the same WebSocket (topic `staff:<id>`) and the list is fetched
+again every 60 s and on reconnect. If an action did not produce the expected notification,
+remember the rules (`api/slice-10-notifications.md` §3): nobody gets one for their own action;
+"Un caso espera en la cola" arrives once per language while an older case is still waiting;
+toasts only show on the role's screens (the bell keeps them all) and not when the screen already
+shows the case. With `CC_NOTIFICATION_SWEEP_SECONDS=0`, the "Caso por vencer sin respuesta" ones
+never arrive.
 
-### Cuenta bloqueada
+### Locked account
 
-Cinco intentos fallidos (contraseñas o códigos de verificación) bloquean la cuenta 15 minutos y la
-pantalla muestra "Tu cuenta está bloqueada por 15 minutos". Opciones:
+Five failed attempts (passwords or verification codes) lock the account for 15 minutes and the
+screen shows "Tu cuenta está bloqueada por 15 minutos". Options:
 
-- Una administradora (Valeria o Carolina) abre **Usuarios y roles**, elige a la persona y pulsa
-  **Desbloquear**. Por API:
-  `curl -s -X POST localhost:8000/api/v1/admin/users/<STF-…>/unlock -H 'Authorization: Bearer <token de administración>'`.
-- Esperar los 15 minutos.
-- Reiniciar la base (sección 6). Mariana Duque empieza bloqueada a propósito.
+- An admin (Valeria or Carolina) opens **Usuarios y roles**, picks the person and clicks
+  **Desbloquear**. Through the API:
+  `curl -s -X POST localhost:8000/api/v1/admin/users/<STF-…>/unlock -H 'Authorization: Bearer <admin token>'`.
+- Wait the 15 minutes.
+- Reset the database (section 6). Mariana Duque starts locked on purpose.
 
 ### "El enlace venció o ya se usó"
 
-La pantalla de `/activar` o `/restablecer` dice eso para cualquier enlace que no sirve: vencido
-(48 h la invitación, 1 h el de restablecer), ya usado, reemplazado por uno más nuevo (reenviar
-invalida el anterior) o cancelado. Abre el correo más reciente en `/dev/correos` o pide a
-administración que lo reenvíe. Si dice "Demasiados intentos", este navegador abrió 10 enlaces
-inválidos seguidos: espera 15 minutos (o reinicia el backend en desarrollo: el contador vive en
-memoria).
+The `/activar` or `/restablecer` screen says this for any link that does not work: expired (48 h
+for the invitation, 1 h for the reset), already used, replaced by a newer one (resending
+invalidates the previous one) or cancelled. Open the most recent email in `/dev/correos` or ask
+administration to resend it. If it says "Demasiados intentos", this browser opened 10 invalid
+links in a row: wait 15 minutes (or restart the backend in development: the counter lives in
+memory).
 
-### El código de la app no sirve
+### The app code does not work
 
-- Cuentas que entraron por invitación (y Tatiana Rojas): el código `000000` **no** sirve; usa el
-  de la app (o calcúlalo con `pyotp`, sección 5.1).
-- El código cambia cada 30 segundos y se acepta un paso de desfase: si la hora del teléfono o de
-  la máquina está muy corrida, sincronízala.
-- Cinco códigos erróneos bloquean la cuenta (al entrar) o la activación (en `/activar`) 15
-  minutos.
-- Si cambiaste `CC_SESSION_SECRET` sin definir `CC_TOTP_SECRET_KEY`, las claves guardadas ya no
-  se pueden abrir: reinicia la base (sección 6).
+- Accounts that joined by invitation (and Tatiana Rojas): the code `000000` does **not** work;
+  use the one from the app (or compute it with `pyotp`, section 5.1).
+- The code changes every 30 seconds and one step of drift is accepted: if the phone's or the
+  machine's clock is far off, sync it.
+- Five wrong codes lock the account (on sign-in) or the activation (on `/activar`) for 15
+  minutes.
+- If you changed `CC_SESSION_SECRET` without setting `CC_TOTP_SECRET_KEY`, the stored keys can no
+  longer be opened: reset the database (section 6).
 
-### El chat no se actualiza en vivo (WebSocket)
+### The chat does not update live (WebSocket)
 
-Los cambios llegan por un único WebSocket por pestaña, `ws://<API>/api/v1/ws?token=…`. Si los
-mensajes solo aparecen al recargar:
+Changes arrive through a single WebSocket per tab, `ws://<API>/api/v1/ws?token=…`. If messages
+only show up after a reload:
 
-1. En las herramientas del navegador, pestaña Red, filtra por `ws` y mira el estado y el código
-   de cierre de la conexión.
-2. `4401`: el token ya no vale (cerraste sesión, venció, la cuenta se desactivó, administración
-   envió un enlace para restablecer la contraseña o se reinició la base). La SPA vuelve al ingreso; entra de nuevo.
-3. `4409`: una administradora cambió los roles de esa persona. El cliente se reconecta solo y
-   recarga el menú; no hace falta nada.
-4. Sin conexión o reintentos continuos: el backend no está corriendo, `VITE_API_URL` apunta a
-   otro lado o hay un proxy que no deja pasar WebSockets. El cliente reintenta con espera
-   creciente y vuelve a pedir los datos al reconectarse.
-5. Pestaña duplicada o dos personas en la misma pestaña: abre una pestaña nueva por persona.
+1. In the browser dev tools, Network tab, filter by `ws` and look at the connection's state and
+   close code.
+2. `4401`: the token is no longer valid (you signed out, it expired, the account was deactivated,
+   administration sent a password reset link or the database was reset). The SPA goes back to the
+   sign-in; sign in again.
+3. `4409`: an admin changed that person's roles. The client reconnects on its own and reloads the
+   menu; nothing to do.
+4. No connection or endless retries: the backend is not running, `VITE_API_URL` points elsewhere
+   or a proxy does not let WebSockets through. The client retries with growing backoff and
+   fetches the data again on reconnect.
+5. Duplicated tab or two people in the same tab: open a new tab per person.
 
-Notas: el hub de tiempo real vive en el proceso del backend (un solo worker). Si corres la API
-con varios workers, los mensajes en vivo no cruzan entre ellos.
+Notes: the realtime hub lives in the backend process (a single worker). If you run the API with
+several workers, live messages do not cross between them.

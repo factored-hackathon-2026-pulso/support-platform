@@ -3,7 +3,7 @@ import { expect, test } from './support/fixtures'
 import { LoginPage } from './support/pages/login-page'
 import { UsersPage } from './support/pages/users-page'
 
-test.describe('Ingreso', () => {
+test.describe('Sign-in', () => {
   test('five wrong passwords lock the account until an admin unlocks it', async ({
     actors,
     people,

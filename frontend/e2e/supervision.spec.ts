@@ -4,7 +4,7 @@ import { HomePage } from './support/pages/home-page'
 import { EscalationsPage, QueuesPage, SupervisorCasePage } from './support/pages/supervision-pages'
 import { WorkspacePage } from './support/pages/workspace-page'
 
-test.describe('Colas y supervisión', () => {
+test.describe('Queues and supervision', () => {
   test('a case nobody eligible can take waits in Colas and drains to the first eligible analyst', async ({
     actors,
     people,

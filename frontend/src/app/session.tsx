@@ -206,14 +206,14 @@ export function useSessionToken(): string | null {
 
 export function useSession(): SessionContextValue {
   const ctx = use(SessionContext)
-  if (!ctx) throw new Error('useSession debe usarse dentro de <SessionProvider>.')
+  if (!ctx) throw new Error('useSession must be used inside <SessionProvider>.')
   return ctx
 }
 
 /** Signed-in user; only call it under the authenticated shell. */
 export function useCurrentUser(): SessionUser {
   const { user } = useSession()
-  if (!user) throw new Error('useCurrentUser requiere una sesión activa.')
+  if (!user) throw new Error('useCurrentUser requires an active session.')
   return user
 }
 

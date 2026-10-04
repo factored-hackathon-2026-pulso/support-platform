@@ -1,4 +1,4 @@
-# Slice 10 contract · Centro de notificaciones
+# Slice 10 contract · notification center ("Centro de notificaciones")
 
 **Status:** implemented (2026-10-04). Final check in `../ENGINEERING_BRIEF.md` §8.
 **Date:** 2026-10-04.

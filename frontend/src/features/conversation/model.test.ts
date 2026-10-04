@@ -360,7 +360,7 @@ describe('header', () => {
   })
 })
 
-describe('arrival facts (Cómo llegó a ti / Quién lo atiende)', () => {
+describe('arrival facts ("Cómo llegó a ti" / "Quién lo atiende")', () => {
   const texts = (facts: { text: string }[] | undefined) => facts?.map((fact) => fact.text)
 
   it('a language assignment: available + the language, and "Regla 3" for Portuguese', () => {

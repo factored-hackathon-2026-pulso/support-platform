@@ -73,7 +73,7 @@ const connected = (id: string, name: string, open: number) =>
     counts: { open, new: 0, toReply: 0, waiting: 0 },
   })
 
-describe('Equipo', () => {
+describe('team screen ("Equipo")', () => {
   it('lists every analyst in one table, without team tabs', async () => {
     renderTeam()
     expect(await screen.findByRole('heading', { level: 1, name: 'Equipo' })).toBeInTheDocument()
@@ -192,7 +192,7 @@ describe('Equipo', () => {
   })
 })
 
-describe('Reasignar caso', () => {
+describe('reassign dialog ("Reasignar caso")', () => {
   const people = [
     connected('STF-A', 'Ana Ruiz', 3),
     connected('STF-B', 'Bruno Díaz', 1),

@@ -77,7 +77,7 @@ export function AccordionItem({
   children,
 }: AccordionItemProps) {
   const ctx = use(AccordionContext)
-  if (!ctx) throw new Error('<AccordionItem> debe usarse dentro de <Accordion>.')
+  if (!ctx) throw new Error('<AccordionItem> must be used inside <Accordion>.')
   const open = ctx.openValue === value
   const baseId = useId()
   const triggerId = `${baseId}-trigger`

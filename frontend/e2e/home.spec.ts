@@ -3,7 +3,7 @@ import { expect, test } from './support/fixtures'
 import { HomePage } from './support/pages/home-page'
 import { WorkspacePage } from './support/pages/workspace-page'
 
-test.describe('Inicio de la analista', () => {
+test.describe('Analyst home ("Inicio")', () => {
   test('she lands on Inicio, starts working, a queued case arrives and she opens it from "Lo primero"', async ({
     actors,
     people,

@@ -137,9 +137,9 @@ describe('CustomerFile ("Ficha del cliente")', () => {
     expect(list.querySelectorAll('[data-reason="resolved"]')).toHaveLength(2)
     // …and how the customer rated it (slice 7).
     // Slice 8: the face alone, named "Calificación: …" (tooltip and accessible text).
-    const danielas = within(list).getByRole('button', { name: /Daniela Ríos/ })
-    expect(danielas).toHaveAccessibleName(/Calificación: Excelente/)
-    expect(danielas).not.toHaveTextContent(/Calificó/)
+    const danielaCase = within(list).getByRole('button', { name: /Daniela Ríos/ })
+    expect(danielaCase).toHaveAccessibleName(/Calificación: Excelente/)
+    expect(danielaCase).not.toHaveTextContent(/Calificó/)
     expect(within(list).getByRole('button', { name: /Julián Ortega/ })).toHaveAccessibleName(
       /Calificación: Bien/,
     )

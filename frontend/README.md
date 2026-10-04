@@ -1,4 +1,4 @@
-# Plataforma de soporte · frontend
+# Support platform · frontend
 
 React SPA of the LATAM Bank support platform: the staff Workspace (Analista, Supervisión,
 Administración, combinable roles with a role switcher) that talks with customers by chat, plus

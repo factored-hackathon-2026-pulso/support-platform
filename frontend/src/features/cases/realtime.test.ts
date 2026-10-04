@@ -91,12 +91,12 @@ describe('registerCasesRealtime', () => {
 
   it('case.assigned refetches only the inboxes the new case belongs to', () => {
     const { registry, queryClient, todos, toReply } = setup()
-    const nuevos = caseKeys.inbox({ status: 'new', q: '' })
-    queryClient.setQueryData(nuevos, makeInbox([]))
+    const newInbox = caseKeys.inbox({ status: 'new', q: '' })
+    queryClient.setQueryData(newInbox, makeInbox([]))
     const fresh = makeCaseSummary({ id: 'CASE-NEW', status: 'assigned', inboxStatus: 'new' })
     registry.dispatch(envelope('case.assigned', fresh), queryClient)
     expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
-    expect(queryClient.getQueryState(nuevos)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(newInbox)?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(toReply)?.isInvalidated).toBe(false)
   })
 
@@ -110,10 +110,10 @@ describe('registerCasesRealtime', () => {
 
   it('a close moves the card out of the open inboxes and into Cerrados', () => {
     const { registry, queryClient, todos, toReply } = setup()
-    const cerrados = caseKeys.inbox({ status: 'closed', q: '' })
-    const nuevos = caseKeys.inbox({ status: 'new', q: '' })
-    queryClient.setQueryData(cerrados, makeInbox([]))
-    queryClient.setQueryData(nuevos, makeInbox([]))
+    const closedInbox = caseKeys.inbox({ status: 'closed', q: '' })
+    const newInbox = caseKeys.inbox({ status: 'new', q: '' })
+    queryClient.setQueryData(closedInbox, makeInbox([]))
+    queryClient.setQueryData(newInbox, makeInbox([]))
     const closed = makeCaseSummary({
       version: 9,
       status: 'closed',
@@ -124,8 +124,8 @@ describe('registerCasesRealtime', () => {
     registry.dispatch(envelope('case.updated', closed), queryClient)
     expect(queryClient.getQueryState(todos)?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(toReply)?.isInvalidated).toBe(true)
-    expect(queryClient.getQueryState(cerrados)?.isInvalidated).toBe(true)
-    expect(queryClient.getQueryState(nuevos)?.isInvalidated).toBe(false)
+    expect(queryClient.getQueryState(closedInbox)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(newInbox)?.isInvalidated).toBe(false)
   })
 
   it('refetches when the last interaction moves (the order changes), not on a new SLA stop', () => {

@@ -2,7 +2,7 @@ import { CUSTOMERS, firstName, uniqueText } from './support/data'
 import { expect, test } from './support/fixtures'
 import { WorkspacePage } from './support/pages/workspace-page'
 
-test.describe('Canales simulados · llamada y correo (slice 12)', () => {
+test.describe('Simulated channels · call and email (slice 12)', () => {
   test('the customer calls, the analyst answers, both talk, hold, hang up and close', async ({
     actors,
     people,

@@ -1,4 +1,4 @@
-# Slice 11 contract · Altas seguras por invitación (parte 4)
+# Slice 11 contract · secure onboarding by invitation (part 4)
 
 **Status:** implemented (2026-10-04). Final check in `../ENGINEERING_BRIEF.md` §8.
 **Date:** 2026-10-04.

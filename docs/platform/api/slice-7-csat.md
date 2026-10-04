@@ -1,4 +1,4 @@
-# Slice 7 contract · Calificación del cliente (CSAT)
+# Slice 7 contract · customer rating (CSAT)
 
 **Status:** implemented (2026-10-03). Final check in `../ENGINEERING_BRIEF.md` §8.
 **Date:** 2026-10-03.

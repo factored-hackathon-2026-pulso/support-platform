@@ -1,4 +1,4 @@
-# Slice 12 contract · Canales simulados: teléfono y correo (backend)
+# Slice 12 contract · simulated channels: phone and email (backend)
 
 **Status:** implemented in the backend (2026-10-04); no frontend yet.
 **Date:** 2026-10-04.

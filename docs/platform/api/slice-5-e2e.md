@@ -6,7 +6,7 @@
 **Scope.** The last slice of a **people-only** chat support platform (brief §8, S5):
 
 1. **Browser e2e**: Playwright scenarios in Chromium over the real stack (FastAPI backend on a fresh database + the Vite dev server), several browser windows per scenario, one per person. They cover the seven flows the brief names, plus two live admin effects.
-2. **Hand-over docs**: final `backend/README.md`, `frontend/README.md` + `frontend/ARCHITECTURE.md` §10, `../RUNBOOK.md` (Spanish run book) and `../DEMO.md` (Spanish demo script for judges).
+2. **Hand-over docs**: final `backend/README.md`, `frontend/README.md` + `frontend/ARCHITECTURE.md` §10, and `../RUNBOOK.md` (run book).
 
 This slice adds no endpoint, schema, event, table or screen. `openapi.json` and `schema.gen.ts` are unchanged. The only app change is the bug fix the suite exposed (§6).
 
@@ -105,8 +105,7 @@ The backend is shared by the whole run, and assignment depends on **who is avail
 
 | Document | Content |
 |---|---|
-| `../RUNBOOK.md` (es) | Requirements, install, run both apps, other ports, environment variables, seeded accounts, cases and simulator customers, database reset, API type regeneration, gates, e2e, troubleshooting (ports, `OutdatedSchemaError`, no connection, locked account, WebSocket 4401/4409). |
-| `../DEMO.md` (es) | 7–10 minute script for judges (three windows + a tab for the new person), what to say and what to point at, recovery table. |
+| `../RUNBOOK.md` | Requirements, install, run both apps, other ports, environment variables, seeded accounts, cases and simulator customers, database reset, API type regeneration, gates, e2e, troubleshooting (ports, `OutdatedSchemaError`, no connection, locked account, WebSocket 4401/4409). |
 | `backend/README.md`, `frontend/README.md`, `frontend/ARCHITECTURE.md` §10 | Run, layout, gates, e2e harness and rules. |
 | `../README.md` | Index of every document (this contract included). |
 
@@ -115,7 +114,6 @@ The backend is shared by the whole run, and assignment depends on **who is avail
 - All brief §6 gates pass (backend and frontend), and `pnpm e2e` passes: 8/8 on a fresh database.
 - The suite passes with `--repeat-each=2` (16/16 on one database), and file or title subsets pass on their own.
 - No uncaught page error in any window.
-- DEMO.md was rehearsed end to end on a fresh database. Step 9.3 (lockout and unlock) locks Martín Salazar live, because Mariana Duque's seeded lock can end before the script reaches it.
 
 ## 9. Known gaps (do not build now)
 

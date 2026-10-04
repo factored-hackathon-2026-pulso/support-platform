@@ -69,7 +69,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('Escalar a supervisión (slice 9)', () => {
+describe('escalating to supervision (slice 9)', () => {
   it('is offered only when the case can be escalated', async () => {
     setup(makeCaseDetail())
     await screen.findByRole('button', { name: 'Cerrar caso' })

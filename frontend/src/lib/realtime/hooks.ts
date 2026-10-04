@@ -5,7 +5,7 @@ import type { ConnectionStatus, RealtimeTopic } from './types'
 
 export function useRealtimeClient(): RealtimeClient {
   const client = use(RealtimeContext)
-  if (!client) throw new Error('useRealtimeClient debe usarse dentro de <RealtimeProvider>.')
+  if (!client) throw new Error('useRealtimeClient must be used inside <RealtimeProvider>.')
   return client
 }
 

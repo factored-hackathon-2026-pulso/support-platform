@@ -1,4 +1,4 @@
-# Slice 8 contract · Prioridad del caso (parte 1)
+# Slice 8 contract · case priority (part 1)
 
 **Status:** implemented (2026-10-04). Final check in `../ENGINEERING_BRIEF.md` §8.
 **Date:** 2026-10-04.

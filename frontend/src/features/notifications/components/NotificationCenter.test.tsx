@@ -143,7 +143,7 @@ describe('NotificationCenter: the bell', () => {
     expect(screen.queryByRole('region', { name: 'Notificaciones' })).toBeNull()
   })
 
-  it('says "Estás al día" when nothing is unread (notificacionesVacia)', async () => {
+  it('says "Estás al día" when nothing is unread (canvas `notificacionesVacia`)', async () => {
     vi.mocked(fetchNotifications).mockResolvedValue(
       makeNotificationPage(analystNotifications.map((n) => ({ ...n, readAt: minutesFrom(-1) }))),
     )

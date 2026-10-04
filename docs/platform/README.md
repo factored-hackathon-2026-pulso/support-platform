@@ -29,9 +29,8 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | Document | Language | What it is for |
 |---|---|---|
 | [ENGINEERING_BRIEF.md](./ENGINEERING_BRIEF.md) | English | Start here. Scope, stack, layout, patterns, product rules, API conventions, slice plan, quality gates, hygiene. Every slice and review follows it. |
-| [RUNBOOK.md](./RUNBOOK.md) | Spanish | Install, run backend + frontend, environment variables, seeded accounts and simulator customers, database reset, API type regeneration, gates, e2e, troubleshooting. |
-| [DEMO.md](./DEMO.md) | Spanish | 7–10 minute demo script for judges (three browser windows), with recovery steps. |
-| [DATA_MODEL.md](./DATA_MODEL.md) | Spanish | Tables, case life cycle, event log, and how the platform differs from the synthetic sample contract. |
+| [RUNBOOK.md](./RUNBOOK.md) | English | Install, run backend + frontend, environment variables, seeded accounts and simulator customers, database reset, API type regeneration, gates, e2e, troubleshooting. |
+| [DATA_MODEL.md](./DATA_MODEL.md) | English | Tables, case life cycle, event log, and how the platform differs from the synthetic sample contract. |
 | [adr/0001-architecture.md](./adr/0001-architecture.md) | English | Hexagonal + DDD-lite + CQRS-lite with an append-only event log; patterns, alternatives, consequences (amended 2026-10-03 for the scope cut). |
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | English | **Superseded (2026-10-03).** Kept only as a record; do not implement it. |
 | [api/slice-1-cases.md](./api/slice-1-cases.md) | English | Slice 1 contract (live chat, inbox, simulator). **Partly superseded** by slice 2; kept as the record. |

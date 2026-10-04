@@ -8,7 +8,7 @@ import { UsersPage } from './support/pages/users-page'
 import { HomePage } from './support/pages/home-page'
 import { WorkspacePage } from './support/pages/workspace-page'
 
-test.describe('Administración', () => {
+test.describe('Administration', () => {
   test('an admin invites an analyst who activates the account from the email, signs in with her authenticator and receives a case', async ({
     actors,
     people,

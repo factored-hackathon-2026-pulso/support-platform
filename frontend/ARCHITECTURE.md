@@ -1,4 +1,4 @@
-# Frontend architecture · plataforma de soporte (CC)
+# Frontend architecture · support platform (CC)
 
 The rules in `docs/platform/ENGINEERING_BRIEF.md` win over this file. This file
 explains how the SPA is put together and the conventions every slice follows.

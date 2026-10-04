@@ -53,7 +53,7 @@ beforeEach(() => {
   vi.mocked(fetchAdminUsers).mockResolvedValue(makeUserList())
 })
 
-describe('Auditoría (administración)', () => {
+describe('audit (administration)', () => {
   it('reuses the audit screen in the admin section, searching an id from the URL', async () => {
     renderRoute(`/administracion/auditoria?q=${ANDRES_V_ID}&tipo=administracion`, {
       staff: adminStaff,

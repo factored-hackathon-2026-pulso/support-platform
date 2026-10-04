@@ -8,7 +8,7 @@ import '@/styles/index.css'
 const router = createAppRouter()
 
 const container = document.getElementById('root')
-if (!container) throw new Error('No se encontró el elemento #root.')
+if (!container) throw new Error('The #root element was not found.')
 
 createRoot(container).render(
   <StrictMode>

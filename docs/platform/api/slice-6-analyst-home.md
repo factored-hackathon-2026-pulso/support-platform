@@ -1,4 +1,4 @@
-# Slice 6 contract · Inicio de la analista y ajustes de Casos
+# Slice 6 contract · the analyst home ("Inicio") and Casos adjustments
 
 **Status:** implemented (2026-10-03). Final check in `../ENGINEERING_BRIEF.md` §8.
 **Date:** 2026-10-03.

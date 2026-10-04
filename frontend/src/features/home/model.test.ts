@@ -217,7 +217,7 @@ describe('Lo primero', () => {
   })
 })
 
-describe('Mientras no estabas · templates', () => {
+describe('"Mientras no estabas" · templates', () => {
   const template = (overrides: Parameters<typeof makeActivityItem>[0]) =>
     activityTemplate(makeActivityItem(overrides), NOW)
 
@@ -356,7 +356,7 @@ describe('Mientras no estabas · templates', () => {
   })
 })
 
-describe('Mientras no estabas · rows', () => {
+describe('"Mientras no estabas" · rows', () => {
   it('builds the canvas rows: icon, customer, phrase, time and link', () => {
     const rows = canvasFeed.map((item) => activityRow(item, NOW))
     expect(
@@ -450,7 +450,7 @@ describe('Mientras no estabas · rows', () => {
   })
 })
 
-describe('Tu equipo ahora', () => {
+describe('"Tu equipo ahora"', () => {
   const team = makeHome().teamNow
 
   it('counts the available analysts of her team, tagging her when she is one', () => {

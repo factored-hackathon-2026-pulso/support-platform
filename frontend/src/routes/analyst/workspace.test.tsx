@@ -236,7 +236,7 @@ describe('/analista (Workspace)', () => {
     expect(screen.getByRole('searchbox', { name: 'Buscar caso' })).toHaveValue('Héctor')
   })
 
-  it('shows the empty state when the analyst has no cases (vacia)', async () => {
+  it('shows the empty state when the analyst has no cases (canvas `vacia`)', async () => {
     vi.mocked(fetchInbox).mockResolvedValue(emptyInbox)
     const { router } = renderWorkspace()
     expect(

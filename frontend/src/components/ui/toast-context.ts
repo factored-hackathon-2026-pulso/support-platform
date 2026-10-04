@@ -40,6 +40,6 @@ export const ToastContext = createContext<ToastContextValue | null>(null)
 /** Show and dismiss toasts from anywhere under <ToastProvider>. */
 export function useToast(): ToastContextValue {
   const ctx = use(ToastContext)
-  if (!ctx) throw new Error('useToast debe usarse dentro de <ToastProvider>.')
+  if (!ctx) throw new Error('useToast must be used inside <ToastProvider>.')
   return ctx
 }

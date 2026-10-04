@@ -57,7 +57,7 @@ function renderQueues(path = '/supervision/colas') {
 const table = () => screen.getByRole('table', { name: 'Casos abiertos en español' })
 const row = (name: RegExp) => within(table()).getByRole('row', { name })
 
-describe('Colas', () => {
+describe('queues screen ("Colas")', () => {
   it('lists every open case of the language, with no "Asignar" anywhere', async () => {
     renderQueues()
     expect(await screen.findByRole('heading', { level: 1, name: 'Colas' })).toBeInTheDocument()

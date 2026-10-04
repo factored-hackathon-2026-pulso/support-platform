@@ -104,7 +104,7 @@ function renderEscalations(path = '/supervision/escalados') {
 
 const list = () => screen.getByRole('region', { name: 'Escalamientos' })
 
-describe('Escalados', () => {
+describe('escalations screen ("Escalados")', () => {
   it('lists open escalations first, the longest waiting first, then the ones attended today', async () => {
     renderEscalations()
     expect(await screen.findByRole('heading', { level: 1, name: 'Escalados' })).toBeInTheDocument()

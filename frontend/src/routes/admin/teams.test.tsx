@@ -75,7 +75,7 @@ function renderTeams(path = '/administracion/equipos') {
 const table = () => screen.getByRole('table', { name: 'Equipos' })
 const aside = () => screen.getByRole('complementary', { name: 'Equipo seleccionado' })
 
-describe('Equipos', () => {
+describe('teams screen ("Equipos")', () => {
   it('lists the active teams with their people, the Filtros dropdown and the rail', async () => {
     const { user } = renderTeams()
     expect(await screen.findByRole('heading', { level: 1, name: 'Equipos' })).toBeInTheDocument()

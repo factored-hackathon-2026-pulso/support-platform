@@ -56,7 +56,7 @@ function renderAudit(path = '/supervision/auditoria') {
 const log = () => screen.getByRole('table', { name: 'Eventos' })
 const aside = () => screen.getByRole('complementary', { name: 'Detalle del registro' })
 
-describe('Auditoría', () => {
+describe('audit (supervision)', () => {
   it('lists the events newest first under day separators', async () => {
     renderAudit()
     expect(await screen.findByRole('heading', { level: 1, name: 'Auditoría' })).toBeInTheDocument()

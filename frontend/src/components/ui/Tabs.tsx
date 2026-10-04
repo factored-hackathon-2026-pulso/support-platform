@@ -22,7 +22,7 @@ const TabsContext = createContext<TabsContextValue | null>(null)
 
 function useTabsContext(component: string): TabsContextValue {
   const ctx = use(TabsContext)
-  if (!ctx) throw new Error(`<${component}> debe usarse dentro de <Tabs>.`)
+  if (!ctx) throw new Error(`<${component}> must be used inside <Tabs>.`)
   return ctx
 }
 

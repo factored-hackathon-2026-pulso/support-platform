@@ -197,7 +197,7 @@ describe('/analista/inicio (Inicio)', () => {
     expect(team.querySelector('dl')?.textContent).not.toContain('·')
   })
 
-  it('says she has no open cases (vacía)', async () => {
+  it('says she has no open cases (canvas `vacía`)', async () => {
     vi.mocked(fetchInbox).mockResolvedValue(emptyInbox)
     renderHome()
     const section = await screen.findByRole('region', { name: 'Lo primero' })

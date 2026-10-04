@@ -70,7 +70,7 @@ const aside = () => screen.getByRole('complementary', { name: 'Persona seleccion
 const search = (router: { state: { location: { search: string } } }) =>
   new URLSearchParams(router.state.location.search)
 
-describe('Usuarios y roles', () => {
+describe('users and roles screen ("Usuarios y roles")', () => {
   it('lists people with their roles, languages, team and account, the filters and the badge', async () => {
     renderUsers()
     expect(

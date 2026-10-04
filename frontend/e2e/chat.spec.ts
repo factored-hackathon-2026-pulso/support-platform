@@ -5,7 +5,7 @@ import { WorkspacePage } from './support/pages/workspace-page'
 const CLOSED_NOTICE_ES =
   'La conversación terminó. Si necesitas algo más, escríbenos y te atendemos en una nueva conversación.'
 
-test.describe('Chat en vivo · analista ↔ cliente', () => {
+test.describe('Live chat · analyst ↔ customer', () => {
   test('two windows talk live both ways and a reload keeps the order', async ({
     actors,
     people,

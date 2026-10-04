@@ -1,4 +1,4 @@
-# Slice 9 contract · Supervisión v2 (Colas, Equipo, Escalados)
+# Slice 9 contract · supervision v2 ("Colas", "Equipo", "Escalados")
 
 **Status:** implemented (2026-10-04). Final check in `../ENGINEERING_BRIEF.md` §8.
 **Date:** 2026-10-04.

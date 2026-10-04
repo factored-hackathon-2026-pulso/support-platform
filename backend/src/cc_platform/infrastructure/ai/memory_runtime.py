@@ -22,6 +22,7 @@ from cc_platform.application.ai.runtime import (
     HandoffResolutionResult,
     SessionLineage,
 )
+from cc_platform.infrastructure.ai.keys import read_jws
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +42,9 @@ class InMemoryAgentRuntime:
     script: list[AgentTurn | Exception] = field(default_factory=list)
     greeting: str = "Hola, ¿en qué te ayudo?"
     unavailable: bool = False
+    principal_kid: str | None = None
+    """When set, the credential must be signed with this key id: the runtime verifies
+    principals against the **identity** keys, so another key is ``credentials_invalid``."""
     handoffs: dict[str, dict[str, object]] = field(default_factory=dict)
     """Packets ``get_handoff`` answers by reference (default: just the reference)."""
     _runs: int = 0
@@ -48,6 +52,11 @@ class InMemoryAgentRuntime:
 
     def _record(self, operation: str, credentials: AgentCredentials, **arguments: object) -> None:
         self.calls.append(RecordedCall(operation, arguments, credentials))
+        if (
+            self.principal_kid is not None
+            and read_jws(credentials.authorization)[0].get("kid") != self.principal_kid
+        ):
+            raise AgentRuntimeError(status=401, code="credentials_invalid")
         if self.unavailable:
             raise AgentRuntimeUnavailableError("scripted outage")
 

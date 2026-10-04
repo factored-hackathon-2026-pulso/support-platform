@@ -12,6 +12,8 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryAssignmentRepository,
     InMemoryAssistantSessionRepository,
     InMemoryBankCustomerLinks,
+    InMemoryBuilderProposalRepository,
+    InMemoryBuilderThreadRepository,
     InMemoryCallRepository,
     InMemoryCaseRepository,
     InMemoryCopilotThreadRepository,
@@ -53,6 +55,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     notifications: InMemoryNotificationRepository
     assistant_sessions: InMemoryAssistantSessionRepository
     copilot_threads: InMemoryCopilotThreadRepository
+    builder_threads: InMemoryBuilderThreadRepository
+    builder_proposals: InMemoryBuilderProposalRepository
     bank_links: InMemoryBankCustomerLinks
     event_log: InMemoryEventLogRepository
     analyst_home: InMemoryAnalystHomeReader
@@ -86,6 +90,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             store.assistant_sessions, track
         )
         self.copilot_threads = InMemoryCopilotThreadRepository(store.copilot_threads, track)
+        self.builder_threads = InMemoryBuilderThreadRepository(store.builder_threads, track)
+        self.builder_proposals = InMemoryBuilderProposalRepository(store.builder_proposals, track)
         self.bank_links = InMemoryBankCustomerLinks(store.bank_links)
         self.event_log = InMemoryEventLogRepository(store.events)
         self.analyst_home = InMemoryAnalystHomeReader(
@@ -114,6 +120,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryNotificationRepository
         | InMemoryAssistantSessionRepository
         | InMemoryCopilotThreadRepository
+        | InMemoryBuilderThreadRepository
+        | InMemoryBuilderProposalRepository
         | InMemoryBankCustomerLinks
         | InMemoryEventLogRepository,
         ...,
@@ -135,6 +143,8 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.calls,
             self.assistant_sessions,
             self.copilot_threads,
+            self.builder_threads,
+            self.builder_proposals,
             self.bank_links,
             self.notifications,
             self.customers,

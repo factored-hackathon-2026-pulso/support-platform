@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from cc_platform.application.ai.ports import (
         AssistantSessionRepository,
         BankCustomerLinks,
+        BuilderProposalRepository,
+        BuilderThreadRepository,
         CopilotThreadRepository,
     )
     from cc_platform.application.cases.ports import (
@@ -121,6 +123,16 @@ class UnitOfWork(Protocol):
     @property
     def copilot_threads(self) -> CopilotThreadRepository:
         """ADR 0003: each analyst's conversation with the copilot about a case."""
+        ...
+
+    @property
+    def builder_threads(self) -> BuilderThreadRepository:
+        """ADR 0003 (slice 16): each supervisor's conversation with the builder agent."""
+        ...
+
+    @property
+    def builder_proposals(self) -> BuilderProposalRepository:
+        """ADR 0003 (slice 16): the platform's index of agent-core's proposals."""
         ...
 
     @property

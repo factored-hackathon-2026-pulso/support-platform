@@ -53,6 +53,8 @@ class IdPrefix(StrEnum):
     ASSISTANT_SESSION = "AST"
     COPILOT_THREAD = "CPT"
     COPILOT_MESSAGE = "CPM"
+    BUILDER_THREAD = "BLT"
+    BUILDER_MESSAGE = "BLM"
 
 
 def encode_body(timestamp_ms: int, randomness: int) -> str:

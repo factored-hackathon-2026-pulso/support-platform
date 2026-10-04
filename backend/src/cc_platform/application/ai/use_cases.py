@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cc_platform.application.ai.builder import AgentBuilder
+from cc_platform.application.ai.builder_chat import AskBuilder, GetBuilderThread
 from cc_platform.application.ai.copilot import AskCopilot, GetCopilotThread
 from cc_platform.application.ai.customer import (
     AnswerAssistantConfirmation,
@@ -14,6 +16,15 @@ from cc_platform.application.ai.customer import (
 )
 from cc_platform.application.ai.grants import GetGrantStatus
 from cc_platform.application.ai.staff import GetCaseHandoff, ReleaseAssistantCase
+
+
+@dataclass(frozen=True, slots=True)
+class BuilderUseCases:
+    """The agent builder (slice 16): the registry operations and the chat with the builder agent."""
+
+    registry: AgentBuilder
+    thread: GetBuilderThread
+    ask: AskBuilder
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,3 +41,5 @@ class AssistantUseCases:
     ask_copilot: AskCopilot
     # service-to-service: agent-core's ``grant_active`` check
     grant_status: GetGrantStatus
+    # the agent builder for supervisors (slice 16): ``None`` when the registry is not wired
+    builder: BuilderUseCases | None = None

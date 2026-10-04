@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     assistant_languages: list[str] = ["es"]
     #: The analyst's copilot agent (``id``, ``id@alias`` or ``id@X.Y.Z``).
     copilot_agent: str = "copiloto-asesor@prod"
+    #: The builder agent supervisors chat with (slice 16; ``id``, ``id@alias`` or ``id@X.Y.Z``).
+    builder_agent: str = "constructor-chat@prod"
     #: Shared secret of the service-to-service routes (``/api/v1/internal``): agent-core's
     #: ``grant_active`` check. Unset = those routes do not exist.
     internal_service_token: SecretStr | None = None

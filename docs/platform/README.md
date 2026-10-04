@@ -62,5 +62,5 @@ cd frontend && pnpm install && pnpm dev        # SPA on http://localhost:5173
 ```
 
 Sign in at http://localhost:5173/login as `daniela.rios@latambank.example` / `demo1234`, MFA
-code `000000`; the customer simulator is at http://localhost:5173/cliente. Everything else
+code `000000`; the customer simulator is at http://localhost:5173/customer. Everything else
 (other accounts, reset, gates, e2e, troubleshooting) is in [RUNBOOK.md](./RUNBOOK.md).

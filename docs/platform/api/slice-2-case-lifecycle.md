@@ -95,7 +95,7 @@ The paths are relative to `backend/src/cc_platform/`, `backend/tests/` and `fron
 | # | Path · symbols | Action | Replaced by |
 |---|---|---|---|
 | F1 | `features/workspace/components/SupportPanel.tsx`, `CopilotPlaceholder.tsx`, `ToolsPlaceholder.tsx`, `ClientPlaceholder.tsx` | Delete | Nothing. The conversation takes the width (§9.2). |
-| F2 | `features/workspace/model.ts`: `SupportPanelTab`, `SUPPORT_PANEL_TABS`, `DEFAULT_PANEL_TAB`, `isPanelTab`, `WorkspaceUrlState.panelTab/panelCollapsed`, the `panel`/`apoyo` URL params, `CustomerHeaderSource`, `formatMonthYear`, `customerHeaderLine`, `customerHeaderId`; `emptyWorkspaceCopy` text "Cuando un agente escale un contacto…" | Remove / change | `WorkspaceUrlState.history` (`?historial=`) and new empty copy (§9.2). `features/workspace/index.ts` stops exporting `SupportPanelTab`. |
+| F2 | `features/workspace/model.ts`: `SupportPanelTab`, `SUPPORT_PANEL_TABS`, `DEFAULT_PANEL_TAB`, `isPanelTab`, `WorkspaceUrlState.panelTab/panelCollapsed`, the `panel`/`apoyo` URL params, `CustomerHeaderSource`, `formatMonthYear`, `customerHeaderLine`, `customerHeaderId`; `emptyWorkspaceCopy` text "Cuando un agente escale un contacto…" | Remove / change | `WorkspaceUrlState.history` (`?previous=`) and new empty copy (§9.2). `features/workspace/index.ts` stops exporting `SupportPanelTab`. |
 | F3 | `features/conversation/components/CallBar.tsx`, `CallTranscript.tsx`, `EmailThread.tsx`, `RoutingSummary.tsx` (+ `RoutingSummary.test.tsx`) | Delete | `ArrivalNote` (one line, §9.3) and `CaseHistorySheet` (§9.4). |
 | F4 | `features/conversation/model.ts`: `ConversationLayout`, `conversationLayout`, `CallBarState`, `callBarState`, `callOffset`, `emailSnippet`, `routeLine`, `RouteStepView`, `routeSteps`, `inputsSentence`, input-name copy, `CONTACT_REASON_OPTIONS`, `FOLLOW_UP_OPTIONS`, `RESOLUTION_OPTIONS`, the old `CloseCaseForm`/`INITIAL_CLOSE_FORM`/`validateCloseForm`/`toCloseRequest`; `TranscriptVariant 'bot'` and its author copy; `REPLY_BLOCKED_COPY.channel_not_supported` | Remove / rewrite | `arrivalLine`, `closureLine`, the new close form (§9.5), `historyItemLine`. `formatWait` and `joinSpanish` stay if still used. |
 | F5 | `features/conversation/index.ts`: `RoutingSummary`, `RoutingSummaryProps`, `RouteStop`, `RoutingSummaryData`, `CustomerProfile` type exports | Remove | §9.7 public API. |
@@ -130,7 +130,7 @@ grep -rniE "copilot|copiloto|responder|routing_step|RoutingStep|ToolRegistry|Too
 ```
 
 (`schema.gen.ts` and `openapi.json` are regenerated, so they pass too. The filters keep text this slice requires: `responder` alone is meant to catch the removed `Responder` chain.
-- the status label "Por responder" and its slug `por-responder`;
+- the status label "Por responder";
 - the pt opened notice of §3.3 ("…vai te responder.");
 - `backend/tests/test_architecture.py`, which names the deleted packages on purpose to check that they stay deleted (§10).)
 
@@ -658,16 +658,16 @@ One agent owns all of `frontend/`. It may extend `components/ui` and `styles/ind
 
 - **Filters (`INBOX_FILTERS`, canvas order):**
 
-  | Label | Status | Slug (`?estado=`) | Tone |
-  |---|---|---|---|
-  | Todos | `null` | none | `neutral` |
-  | Por responder | `to_reply` | `por-responder` | `warn` |
-  | Nuevos | `new` | `nuevos` | `accent` |
-  | Esperando al cliente | `waiting` | `esperando` | `waiting` |
-  | Cerrados | `closed` | `cerrados` | `closed` |
+  | Label | Status (`?status=`) | Tone |
+  |---|---|---|
+  | Todos | `null` (no param) | `neutral` |
+  | Por responder | `to_reply` | `warn` |
+  | Nuevos | `new` | `accent` |
+  | Esperando al cliente | `waiting` | `waiting` |
+  | Cerrados | `closed` | `closed` |
 
   - A grid of 3 columns, two rows. The tile labels may wrap to two lines.
-  - Unknown slugs (including the old `en-curso`, `por-llamar`, `en-espera`) fall back to Todos.
+  - Unknown values fall back to Todos.
   - `countForFilter` maps `closed → counts.closed`.
 - **New tone `closed`** in `components/ui/tones.ts`, using **existing** tokens only:
 
@@ -718,18 +718,18 @@ One agent owns all of `frontend/`. It may extend `components/ui` and `styles/ind
 ### 9.2 `features/workspace`
 
 - **Layout:** **two columns**: `CaseListPanel` (fixed width, collapsible to the rail) and `ConversationPane`, which fills the rest. The transcript content keeps a readable max width (bubbles at most 70% of the column). The `SupportPanel` and its icon rail are removed.
-- **URL state:** `?caso=&estado=&q=&lista=&historial=`.
-  - `historial=lista` opens the "Casos anteriores" sheet on its list;
-  - `historial=<CASE-id>` opens it on that transcript.
+- **URL state:** `?case=&status=&q=&list=&previous=`.
+  - `previous=list` opens the "Casos anteriores" sheet on its list;
+  - `previous=<CASE-id>` opens it on that transcript.
   - `panel` and `apoyo` are ignored.
 
   ```ts
   export interface WorkspaceUrlState {
     caseId: string | null; filter: InboxStatus | null; query: string; listCollapsed: boolean
-    history: 'lista' | string | null      // null = sheet closed
+    history: 'list' | string | null      // null = sheet closed
   }
   ```
-- **Auto-select:** the first case of the current filter when `caso` is missing (unchanged, also in Cerrados), once per loaded list (the screen opening, or the analyst picking another filter). Never for a case that arrives over the socket afterwards (slice 3 review fix): opening it would mark it read and record an open the analyst never made, and the "Te asignaron un caso" / "Te llegó un caso nuevo" toast with "Ver caso" is how she opens it.
+- **Auto-select:** the first case of the current filter when `case` is missing (unchanged, also in Cerrados), once per loaded list (the screen opening, or the analyst picking another filter). Never for a case that arrives over the socket afterwards (slice 3 review fix): opening it would mark it read and record an open the analyst never made, and the "Te asignaron un caso" / "Te llegó un caso nuevo" toast with "Ver caso" is how she opens it.
 - **After a close:** the case moves to Cerrados, and the Workspace selects the next open case as today (`nextCaseAfterClose`).
 - **Empty state (`emptyWorkspaceCopy`):**
   - Available: "No tienes casos abiertos" / "Estás disponible. Cuando un cliente escriba y te corresponda, aparece aquí."
@@ -739,7 +739,7 @@ One agent owns all of `frontend/`. It may extend `components/ui` and `styles/ind
 
 - **Header.**
   - Content: name; the short id (copy button); meta "{país} · {ciudad} · {channelPhrase} · {prioridad x | 'en portugués' when `pt`}" (`caseHeaderMeta`); `SampleDataTag`.
-  - When `previousCaseCount > 0`: a secondary button **"Casos anteriores ({n})"** that sets `history: 'lista'`.
+  - When `previousCaseCount > 0`: a secondary button **"Casos anteriores ({n})"** that sets `history: 'list'`.
   - "Cerrar caso" when `capabilities.canClose`.
   - A closed case shows a `Badge` "Cerrado" (tone `closed`) instead of "Cerrar caso".
 - **`ArrivalNote`.** One muted line under the header, labelled "Cómo llegó a ti", built by `arrivalLine(detail, meId)` from `assignment` only:
@@ -762,7 +762,7 @@ One agent owns all of `frontend/`. It may extend `components/ui` and `styles/ind
 ### 9.4 `features/conversation` · `CaseHistorySheet`
 
 - **Container:** the existing `Sheet` primitive (right side), title "Casos anteriores de {primer nombre}". Subtitle: "Conversaciones que tuvo con el equipo. Solo lectura."
-- **List** (`history: 'lista'`, `useCaseHistory(caseId)` → `GET /cases/{id}/history`). One row per item:
+- **List** (`history: 'list'`, `useCaseHistory(caseId)` → `GET /cases/{id}/history`). One row per item:
   - "{fecha de apertura} · {closeReasonLabel | 'Abierto'} · {analystName | 'Sin asignar'}";
   - the preview line;
   - the whole row is a button that sets `history: item.id`.
@@ -836,8 +836,8 @@ export { ConversationPane } from './components/ConversationPane'   // + prop onO
 export { CaseHistorySheet } from './components/CaseHistorySheet'
 export interface CaseHistorySheetProps {
   caseId: string; customerName: string
-  selected: 'lista' | string               // list or a past case id
-  onSelect(selected: 'lista' | string): void
+  selected: 'list' | string               // list or a past case id
+  onSelect(selected: 'list' | string): void
   onClose(): void
 }
 export { useCaseDetail } from './hooks/use-case-detail'
@@ -858,15 +858,15 @@ export type { WorkspaceStateChangeOptions, WorkspaceUrlState } from './model'   
 ### 9.8 App shell, roles, routes
 
 - **`ROLES`:**
-  - `analyst` (`/analista`, nav "Casos");
+  - `analyst` (`/analyst/cases`, nav "Casos");
   - `supervisor` (`/supervision`, nav "Equipo y colas", "Auditoría"; both stay `ScreenPlaceholder`s until slice 3);
-  - `admin` (`/administracion`, nav "Usuarios y roles"; a placeholder until slice 4).
+  - `admin` (`/admin`, nav "Usuarios y roles"; a placeholder until slice 4).
 - **Order:** `ROLE_ORDER = ['analyst', 'supervisor', 'admin']`.
 - **Routes:**
-  - `/` redirect; `/login` (+ `verificacion`, `bloqueada`); `/cliente`;
-  - `/analista`;
-  - `/supervision` → `equipo` | `auditoria`;
-  - `/administracion` → `usuarios`;
+  - `/` redirect; `/login` (+ `verify`, `locked`); `/customer`;
+  - `/analyst/cases`;
+  - `/supervision` → `team` | `audit`;
+  - `/admin` → `users`;
   - `*` → not found.
   - Old automation, approvals, tools, rules and retention URLs fall to the role's not-found page (or the global one for `/automatizacion`).
 - **Realtime types:** `KnownRealtimeEventType` = `turn.created | case.updated | case.assigned | inbox.counts | availability.updated | conversation.updated`. `RealtimeTopic` = `` `case:${string}` | `inbox:${string}` | `customer:${string}` ``.
@@ -908,7 +908,7 @@ export type { WorkspaceStateChangeOptions, WorkspaceUrlState } from './model'   
 
 - **`model.test.ts` (cases):** filters, slugs (old slugs → Todos), `countForFilter`, `inboxStatusMeta`, `formatSla` (null after the first response, at risk ≤ 5 min, vencido), `closeReasonLabel`.
 - **`model.test.ts` (conversation):** `arrivalLine` (each reason, someone else's case), `closureLine`, `validateCloseForm`/`toCloseRequest`, `CLOSED_NOTICE` texts, `turnVariant` (no bot).
-- **`model.test.ts` (workspace):** URL parse/serialize with `historial` and without `panel`/`apoyo`.
+- **`model.test.ts` (workspace):** URL parse/serialize with `previous` and without `panel`/`apoyo`.
 - **`model.test.ts` (customer-chat):** conversation switch on a new `caseId`, past blocks, status lines.
 - **Render tests:**
   - Workspace: two columns, no support panel, the five tiles with counts, a Cerrados card, the empty states;

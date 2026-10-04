@@ -8,7 +8,7 @@ Scope decision of **2026-10-03**. It overrides every earlier doc, canvas note an
 
 ## 1. Product and scope
 
-LATAM Bank **support platform**. Support staff and customers talk **by chat**, end to end. A customer writes from the app or the web (the customer simulator stands in for both). The case goes to an available analyst who speaks the customer's language. The two talk until the analyst closes the case with a reason. If the customer writes again, a new case opens, linked to the previous one.
+LATAM Bank **support platform**. Support staff and customers talk **by chat, by phone and by email**, end to end. Calls and email are **simulated** (slice 12): no telephony and no mail server; the customer simulator stands in for the app, the web, the phone and the mailbox. The case goes to an available analyst who speaks the customer's language. The two talk until the analyst closes the case with a reason. If the customer writes again, a new case opens, linked to the previous one.
 
 Roles. They combine: one person can hold several, and the role switcher moves between them.
 - **Analista**: lands on "Inicio" (slice 6) and works her cases in the Workspace ("Casos").
@@ -44,6 +44,13 @@ In scope:
   "no tiene sentido si somos una empresa segura"): invitations by email with a single-use link,
   the person sets her own password and enrolls an authenticator app (TOTP), password resets by an
   email link, TOTP at sign-in, the dev mailbox. No temporary passwords anywhere.
+- simulated channels (done, slice 12; user decision of 2026-10-04): every case has a channel
+  (`chat_app`, `chat_web`, `phone_inbound`, `phone_outbound`, `email`); calls have a state
+  (ringing, in call, on hold, ended) and a transcript made of what each side types; the analyst
+  answers, holds, mutes, hangs up, adds internal notes and can call the customer back on an open
+  case; email is a thread per case with the greeting and signature added automatically.
+  Assignment, queues, first response, ratings, escalations, notifications and audit work the same
+  for every channel.
 
 The chat must work for real in two browser windows: the analyst Workspace and the customer simulator.
 
@@ -54,22 +61,20 @@ The chat must work for real in two browser windows: the analyst Workspace and th
 - identity verification and security questions;
 - approvals and four-eyes;
 - the Automatización role and its screens;
-- calls, outbound calls, email, WhatsApp (as **support channels**; the platform's own account
-  emails of part 4 — invitations and reset links — are not a channel);
+- real telephony, speech-to-text, a real mail server and WhatsApp (calls and email are simulated;
+  the account emails of part 4, invitations and reset links, go to the dev mailbox);
 - analyst-to-analyst transfers;
-- the customer mobile app (only the minimal **customer chat simulator** exists, as a dev/demo tool);
+- the customer mobile app (only the **customer simulator** exists, as a dev tool: chat, call and email);
 - core-banking integration;
 - CSAT beyond slice 7 (no automatic surveys by email or WhatsApp, no sentiment, no averages for
   analysts).
 
 ## 2. Sources of truth
 
-- **Visual design:** the Claude Design canvas. A local copy lives in `warehouse/design/source/project/*.dc.html`, with `canvas.json` for board titles and pages. Read the `.dc.html` of the screen you build:
+- **Visual design:** the Claude Design canvas "Plataforma de Contact Center" (https://claude.ai/artifact/ASnUw7wFmaY5EULgTbCUud), pages Flujo, Cliente, Acceso, Analista, Supervisión and Administración; the "Archivo" page is out of scope. Read the `.dc.html` of the screen you build:
   - its markup holds the layout, spacing and copy;
   - its `renderVals()` script holds the states and sample data;
-  - the wrapper boards (`An*`, `Su*`, `Ad*`) set a `view`/`section` prop, and each one is a **state** the real screen must support.
-
-  Only boards for things still in scope apply: the Workspace list and conversation, login/MFA/lockout, the customer chat (`AppSupportChat`), supervision team and queues, audit, and admin users. Ignore every copilot, tools, client-file, identity, approval, call, email and automation board, and every board element of that kind (the support panel, "Siguiente paso", action cards). Where this brief changes a canvas decision (§5.4), the brief wins.
+  - the wrapper boards (`An*`, `Su*`, `Ad*`, `Sim*`, `Bo*`) set a `view`/`section` prop, and each one is a **state** the real screen must support.
 - **Design tokens:** `frontend/src/styles/index.css` (`@theme`). Never hard-code colors. If a token is missing, add it.
 - **Data contracts:** `data-lab/contracts/synthetic-sample/platform_history.json`, for the event-log envelope only (`event_id, event_type, entity, entity_id, case_id, actor_role, actor_id, event_time, ingested_at, payload`). Its AI entities (`routing_step`, `tool_call`, `copilot_query`, `component`, …) are not produced. `data-lab/contracts/synthetic-sample/evaluation.json` is not used by the platform.
 - **Policies:** from `data-lab/docs/policies.md`, only **rule 3 (language, policy id `H1`)** applies. `data-lab/docs/security_questions.md` and the identity, abono, approval, verified-action, regulator and automation rules no longer apply.
@@ -79,13 +84,16 @@ The chat must work for real in two browser windows: the analyst Workspace and th
 ## 3. Repository layout
 
 ```
-hackaton/
-  backend/            Python API (own pyproject, uv)
-  frontend/           React SPA (pnpm)
-  docs/               product docs (existing) + docs/platform/ (this brief, ADRs, API contracts)
-  docs/platform/adr/  one Markdown file per architecture decision (NNNN-title.md)
-  docs/platform/api/  one contract per slice (slice-N-title.md)
+support-platform/        github.com/pulso-factored/support-platform (private)
+  backend/               Python API (own pyproject, uv)
+  frontend/              React SPA (pnpm)
+  docs/platform/         this brief, data model, run book
+  docs/platform/adr/     one Markdown file per architecture decision (NNNN-title.md)
+  docs/platform/api/     one contract per slice (slice-N-title.md)
+  docker-compose.yml     API + web app together
 ```
+
+The data side (dataset ingestion and quality, contracts, the synthetic sample for the AI team, the business policies) lives in the sibling repo `data-lab` (github.com/pulso-factored/data-lab).
 
 ## 4. Backend
 
@@ -183,7 +191,7 @@ Keep it pragmatic: add no abstraction without a second caller or a named seam in
 
 ### 4.7 Seed data
 - **Labeling:** everything is fictitious; the UI does not label it (the user removed the "Datos de ejemplo" tags). Names, ids and contact data are **invented**. Never copy customer or staff records from the dataset into committed files.
-- **Cases:** chat only (`app_chat`, `web_chat`). Together they cover every inbox status:
+- **Cases:** every channel (chat in the app and on the web, an inbound call, an outbound follow-up call, an email thread). Together they cover every inbox status:
   - Nuevos, Por responder and Esperando al cliente;
   - a few Cerrados, inside and outside the 7-day window;
   - a case that reopened after a close;
@@ -225,7 +233,7 @@ Rules:
 ### 5.4 Design decisions (user decisions, 2026-10-03)
 - **List title.** The analyst list title is **"Casos"**, never "Mis contactos" or "Te toca".
 - **Analyst home (slice 6).** An analyst lands on **"Inicio"** (`/analista/inicio`): availability, the four status tiles (links to Casos with the filter), "Lo primero" (open cases by urgency), "Mientras no estabas" (event-log facts with fixed templates, never a summary) and "Tu equipo ahora" (counts only). Contract: `api/slice-6-analyst-home.md`.
-- **Case statuses.** There are four, chat only. "Por llamar", "En curso" and "En espera" are gone.
+- **Case statuses.** There are four, the same for every channel. "Por llamar", "En curso" and "En espera" as inbox statuses are gone (a call's own state lives in its call bar). Statuses render Linear-style: a status glyph + plain label (`Status`/`StatusIcon`), never a tinted pill.
 
   | Tile | Meaning | Tone token |
   |---|---|---|
@@ -237,12 +245,12 @@ Rules:
   - Slice 6 (user decision, 2026-10-03): the status tiles live on **Inicio** and open Casos with the filter in the URL; the Casos list shows a removable filter chip, no tiles, and one flat list in urgency order (`sortByUrgency`). Cerrados is reached from its tile (or the URL).
   - A case nobody can take yet waits in a queue that only supervision sees (slice 3). It is in no analyst's list.
 - **Case card.**
-  - A left color stripe shows the status, and a status pill repeats it.
+  - A left color stripe shows the status, and the status glyph + label repeats it.
   - Top right shows the first-response SLA level (clock, orange flame ≤ 5 min, filled red flame "Vencido"; slice 6 `slaFact`), only while the first reply is pending. A closed card shows when it closed (clock) instead.
   - The second line is the last message.
   - The bottom line shows short facts, never a dot-joined line: the channel (icon), the priority glyph only when high or critical (slice 8, Linear-style `PriorityIcon`, icon-only with "Prioridad alta/crítica"), "Volvió a escribir" (icon), and the time since the last interaction (clock).
-- **Metadata rule (slice 6).** Facts are separate short items (icon + 1–3 words, `Fact`); status is a pill; times have a clock; secondary facts may be icon-only with a tooltip. No "·"-joined strings or wrapping sentences in the analyst UI.
-- **Workspace: two columns.** The case list (collapsible to a rail) and the conversation. The conversation takes the full remaining width. There is no Copiloto, Herramientas or tool/action cards, no identity card, no call bar, no email layout. Slice 6 (user decision): one on-demand right panel, **"Ficha del cliente"** (`?ficha=1`), opened from the customer's name, with only platform data: Cliente, Este caso, Cómo llegó a ti, Casos anteriores. No bank data.
+- **Metadata rule (slice 6).** Facts are separate short items (icon + 1–3 words, `Fact`); status is a glyph + label; times have a clock; secondary facts may be icon-only with a tooltip. No "·"-joined strings or wrapping sentences in the analyst UI.
+- **Workspace: two columns.** The case list (collapsible to a rail) and the conversation. The conversation takes the full remaining width. There is no Copiloto, Herramientas or tool/action cards and no identity card. Slice 12: the central panel changes by channel (call bar, live transcript, "Lo que dices" and "Nota interna" for calls; thread and reply composer for email). Slice 6 (user decision): one on-demand right panel, **"Ficha del cliente"** (`?ficha=1`), opened from the customer's name, with only platform data: Cliente, Este caso, Cómo llegó a ti, Casos anteriores. No bank data.
 - **Conversation header.**
   - Content (slice 6): the customer name (it opens "Ficha del cliente"), the short case id under the name (copyable) and "Cerrar caso". The place, channel and priority are in the ficha; slice 8: the ficha's "Prioridad" value is a menu button (five levels with their glyphs), and the supervisor view has the same menu in its header.
   - A **"Cómo llegó a ti"** row explains the people-based assignment only, as short facts: available + language (rule 3) + queue wait or the supervisor.
@@ -251,14 +259,13 @@ Rules:
   - A required reason from a fixed list, shown as cards with an icon, a tone and a one-line meaning (slice 6): Resuelto, El cliente no respondió, Duplicado, Fuera de alcance, Otro.
   - An optional internal note.
   - A preview of the notice the customer will see.
-- **Customer simulator.** It shows the current conversation, its state ("Buscando a una persona del equipo…", "Te atiende {nombre}", "Conversación terminada") and, on demand, the customer's previous closed conversations. Writing after a close starts a new conversation. Slice 7: a closed, unrated conversation shows the satisfaction survey ("¿Cómo te atendió {nombre}?", four faces, optional comment, "Ahora no") in place of the composer.
+- **Customer simulator.** It shows the current conversation, its state ("Buscando a una persona del equipo…", "Te atiende {nombre}", "Conversación terminada") and, on demand, the customer's previous closed conversations. Writing after a close starts a new conversation. Slice 7: a closed, unrated conversation shows the satisfaction survey ("¿Cómo te atendió {nombre}?", four faces, optional comment, "Ahora no") in place of the composer. Slice 12: after picking a customer, the simulator offers "Chat", "Llamar" and "Escribir un correo", and shows an incoming call from the bank ("LATAM Bank te está llamando").
 - **Removed and staying removed:**
   - every automation screen; "Por aprobar"; "Herramientas y permisos"; "Políticas y reglas"; "Retención de datos";
   - "Mi rendimiento";
   - analyst-to-analyst transfers;
   - "acceso a datos ocultos";
-  - any branch/sucursal channel;
-  - the call and email modes.
+  - any branch/sucursal channel.
 
   The 7-day Cerrados filter is not the old "Mis casos cerrados" screen: it is a read-only filter of the same list.
 - **Supervisión v2 (slice 9, user decision 2026-10-04).** Contract: `api/slice-9-supervision-v2.md`.
@@ -305,7 +312,7 @@ Test coverage required:
 
 ## 7. Repo hygiene
 - Never commit `data/`, `warehouse/`, `guides/`, `.env`, credentials or dataset-derived customer records.
-- Commits: imperative English subject, no co-author trailers. Agents never commit: the user does.
+- Git workflow: one branch per feature, small commits with an imperative English subject (no co-author trailers), a pull request to `main` with every gate green. Never push directly to `main`.
 - Data-side material (contracts, sample generator, reports, policies) lives in the sibling repo `data-lab`; read it, do not copy it here.
 
 ## 8. Slice plan
@@ -324,3 +331,5 @@ Test coverage required:
 | S9 | **Supervision v2 + escalations.** Rail Colas / Equipo / Escalados / Auditoría (landing `/supervision/colas`); "Colas" lists every open case of a language (`GET /supervision/open-cases`), no manual "Asignar"; "Equipo" one table with one "Filtros" dropdown (no team tabs) and the redesigned reassign dialog (only speakers, 3 suggestions, search, "+N más", paused people on demand); escalations as their own aggregate (`escalations`, one open per case through `cases.open_escalation_id`): escalate / withdraw / "Entendido" (analyst), answer / take / reassign (supervision), `escalation.*` events with motive and note redacted in the audit, `escalation.updated` on `case:`, `inbox:` and the new `supervision:escalations`; gender-neutral "Supervisión"; admin users list with search + "Filtros" + chips, "Nuevo usuario", language pills. | `api/slice-9-supervision-v2.md` | done. Gates 2026-10-04: backend `ruff check`, `ruff format --check` (250 files), `mypy src` (177 files), `pytest` 857 passed, `export_openapi --check` clean; frontend `typecheck`, `lint`, `test` 783 passed in 76 files, `build` (screen copy only in lazy chunks), `format:check`, `check:api`; `pnpm e2e` 11/11 twice in a row (new: an analyst escalates, supervision answers from Escalados and she sees it live). |
 | S10 | **Notification center.** `Notification` aggregate + `notifications` table (`NTF-…`, structured data, `source_key` unique per person, newest 200 kept), `NotificationProjector` on the bus (assigned on arrival / from the queue / by supervision, reassigned away, customer returned, escalation answered / taken / reassigned, case rated; case escalated, queued (once per language while it waits); account locked; invitation accepted, defined for part 4), `SweepSlaRisk` (once at startup, then every 30 s), `GET /me/notifications`, `POST /me/notifications/{id}/read`, `POST /me/notifications/read-all`, `notification.created` / `notifications.read` on `staff:<id>`. SPA: `features/notifications` (bell + panel in the rail through `routes/staff-shell.tsx`, toasts from the stream on every screen of the role with "Más tarde"), the restyled toast ("Avisos"), the ad-hoc toasts of Casos and supervision removed. Part-2 leftovers: "Escalado" in "Lo primero", no " · " in the audit detail and the closed footer, Equipos with `Status` and "Filtros". | `api/slice-10-notifications.md` | done. Gates 2026-10-04: backend `ruff check`, `ruff format --check` (266 files), `mypy src` (190 files), `pytest` 911 passed, `export_openapi --check` clean; frontend `typecheck`, `lint`, `test` 811 passed in 79 files, `build` (the bell's copy is in the entry chunk on purpose: it is on every staff screen), `format:check`, `check:api`; `pnpm e2e` 12/12 twice in a row (new: supervision opens an escalation from the bell, the answer reaches the analyst's bell). |
 | S11 | **Secure onboarding by invitation (part 4).** No temporary passwords anywhere: `POST /admin/users` invites (person `invited`, `Invitation` `INV-…` with a single-use 48 h link, only its SHA-256 stored, one per person; resend replaces the token, cancel withdraws her and the same email can be invited again); public `POST /onboarding/invitations/{check,password,activate}` (password policy ≥ 12 / not her email name or name / not common; Argon2id; TOTP enrollment with `pyotp`, QR + manual key shown once, secret sealed with Fernet; `staff.mfa_enrolled` + `staff.invitation_accepted`, which notifies administration) and `POST /onboarding/password-resets/{check,complete}` (`PasswordReset` `PWR-…`, 1 h; "Enviar enlace para restablecer" ends her sessions now); one 410 `link_invalid` for any unusable token, 429 `rate_limited` per client, 423 after 5 wrong enrollment codes; TOTP at sign-in (dev code only for seeded accounts); `EmailSender` port + dev mailbox (`GET /dev/mailbox`, `/dev/correos`, `CC_DEV_MAILBOX`, never in prod); audit texts; seed Tatiana (accepted, TOTP) and Bruna (pending). SPA: "Enviar invitación", "Invitación enviada", "Invitación pendiente" with Reenviar / Cancelar, the reset-link dialog, `/activar` and `/restablecer`, `/dev/correos`. | `api/slice-11-invitations.md` | done. Gates 2026-10-04: see the slice report. |
+| S12 | **Simulated channels.** `CaseChannel` = chat_app · chat_web · phone_inbound · phone_outbound · email; `Call` aggregate (`CALL-…`, ringing → in call ⇄ on hold → ended, one active per case, close refused while a call is live), transcript and internal-note turns, email turns with subject and automatic greeting/signature; analyst call bar and email composer; simulator channel picker, call and mailbox views. | `api/slice-12-channels.md` | done |
+| — | **Housekeeping (2026-10-04).** Implementation in English; demo script removed; repo split into `support-platform` and `data-lab`; Linear-style statuses; Callout alerts. | — | done |

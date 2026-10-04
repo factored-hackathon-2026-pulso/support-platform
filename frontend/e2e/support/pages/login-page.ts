@@ -2,7 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test'
 import { DEMO_PASSWORD, DEV_MFA_CODE } from '../data'
 import { totpCode } from '../totp'
 
-/** `/login` → `/login/verificacion` (MFA) → the first role home; `/login/bloqueada`. */
+/** `/login` → `/login/verify` (MFA) → the first role home; `/login/locked`. */
 export class LoginPage {
   readonly email: Locator
   readonly password: Locator

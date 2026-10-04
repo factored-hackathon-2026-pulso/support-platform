@@ -480,12 +480,12 @@ One agent owns all of `frontend/`. It may extend `components/ui`, `components/la
 
 | Path | Screen | Guard |
 |---|---|---|
-| `/supervision/equipo?equipo=&estado=&analista=&asignar=` | Team and queues | supervisor |
-| `/supervision/casos/:caseId?historial=&asignar=` | **New:** supervisor read-only case view | supervisor |
-| `/supervision/auditoria?quien=&persona=&caso=&tipo=&desde=&hasta=&q=&cambios=&evento=` | Audit | supervisor |
+| `/supervision/team?team=&status=&analyst=&reassign=` | Team and queues | supervisor |
+| `/supervision/cases/:caseId?previous=&reassign=` | **New:** supervisor read-only case view | supervisor |
+| `/supervision/audit?actor=&person=&case=&type=&from=&to=&q=&changes=&event=` | Audit | supervisor |
 
 - `/supervision/aprobaciones` is already gone (slice 2 F12); keep the test that it falls to the role's not-found page.
-- `app/roles.ts`: the "Equipo y colas" item gets `indicator: 'queuedCases'` and `alsoActiveOn: ['/supervision/casos']`; add the path helper `supervisionCasePath(caseId: string): string` (`/supervision/casos/${caseId}`).
+- `app/roles.ts`: the "Equipo y colas" item gets `indicator: 'queuedCases'` and `alsoActiveOn: ['/supervision/cases']`; add the path helper `supervisionCasePath(caseId: string): string` (`/supervision/cases/${caseId}`).
 - `app/rail-indicators.ts`: `useQueuedCasesCount({ enabled: role === 'supervisor' })` from `@/features/supervision` → `queuedCases: { count }` when `count > 0` (the rail names it "Equipo y colas, 3 pendientes"). Felipe in the analyst role sees no badge and fetches nothing.
 - Back navigation from the case view uses router `state.from` (one-shot hand-off with the full return URL, filters included); without it, "Volver a Equipo y colas".
 - Felipe (Analista + Supervisora): the role switcher already lists both; nothing new beyond the badge rule. In supervision mode his own cases are read-only too (§8.5).
@@ -519,23 +519,23 @@ Layout (canvas SuTeam, 1440×900, must not break at 1280):
 - **Left column (440 px) "Colas"**, heading aside "{total} en espera". One card per `LanguageQueue` (border `warn-border` when `atRisk > 0`):
   - name (`label`), risk text top right: "{n} en riesgo de SLA" (warn) or "Sin riesgo" (muted);
   - three figures: `{waiting}` "en espera" · oldest wait "el más antiguo" (`formatWait(now − oldestQueuedAt)`, warn when at risk, "—" when empty) · `{availableSpeakers}` "disponibles que hablan {idioma}" (canvas "atendiéndola");
-  - the queued cases (all of them): customer name, "Espera {formatWait}", `formatSla` tag, preview, and a secondary "Asignar" button (`?asignar=<id>`); the row name links to the case view. Empty: "Sin casos en espera.".
+  - the queued cases (all of them): customer name, "Espera {formatWait}", `formatSla` tag, preview, and a secondary "Asignar" button (`?reassign=<id>`); the row name links to the case view. Empty: "Sin casos en espera.".
 - **Right "Analistas"** (white card): filter pills = native radios (`SegmentedControl` pills, canvas `role=tablist` replaced): "Conectadas {n}" (busy + available) · "En pausa {n}" · "Desconectadas {n}" (plural pills, "personas"; the per-person label is "Sin conexión", §2.2), counts after the team filter; heading aside "{open} casos abiertos · {atRisk} en riesgo de SLA".
   - `Table` columns (tighter side padding; the three long numeric headers wrap to two lines so all seven fit at 1280 without a horizontal scroll): **Nombre** (+ the team in muted text when "Todos los equipos", short like its pill, "Equipo Andes", full name in `title`) · **Ahora** (`StatusDot` + label of §2.2; available without session adds "sin sesión abierta" in muted, `title` "Le siguen llegando casos aunque no haya iniciado sesión.") · **Idiomas** ("español, portugués"; Portuguese speakers in `accent` semibold as in the canvas) · **Abiertos** (number; `Badge` warn "Carga alta" when ≥ 5; "—" when offline with 0) · **Por responder** (`new + toReply`) · **Espera más larga** (`formatWait(now − oldestWaitingSince)` or "—") · **SLA en riesgo** (count, warn when > 0, else "—").
-  - Row select (`TRowSelect`) sets `?analista=`. Empty filter: "Nadie en este estado ahora.".
+  - Row select (`TRowSelect`) sets `?analyst=`. Empty filter: "Nadie en este estado ahora.".
   - Footer `SourceNote`: "Personas, idiomas y equipos: directorio del equipo. Estado, colas y casos: datos de ejemplo."
-- **Analyst sheet** (`Sheet` 600, `?analista=`): title the name; description "{Ahora} · {idiomas} · {equipo}"; four `Stat`s (Abiertos · Nuevos · Por responder · Esperando al cliente); her `openCases` as rows (left stripe = `inboxStatusMeta` tone, customer, `formatSla`, preview, "{prioridad} · {App|Web} · {idioma}", last interaction relative) with "Ver conversación" (link to the case view, `state.from`) and "Reasignar" (`?asignar=<id>`). Empty: "No tiene casos abiertos.". An unknown `analista` id closes the sheet.
+- **Analyst sheet** (`Sheet` 600, `?analyst=`): title the name; description "{Ahora} · {idiomas} · {equipo}"; four `Stat`s (Abiertos · Nuevos · Por responder · Esperando al cliente); her `openCases` as rows (left stripe = `inboxStatusMeta` tone, customer, `formatSla`, preview, "{prioridad} · {App|Web} · {idioma}", last interaction relative) with "Ver conversación" (link to the case view, `state.from`) and "Reasignar" (`?reassign=<id>`). Empty: "No tiene casos abiertos.". An unknown `analyst` id closes the sheet.
 - **States:** both queries through `QueryState` (skeleton cards/rows; danger `Callout` + "Reintentar"); team and queues load and fail independently.
 
 ### 8.5 `features/supervision` · case view (`SupervisorCaseScreen`)
 
 - Top bar: back link ("Volver a Equipo y colas" | "Volver a Auditoría", from `state.from`), `Badge` neutral "Vista de supervisión · solo lectura", an `sr-only` h1 "Conversación de {cliente} (supervisión)", `DocumentTitle` "Caso {shortId} · Supervisión".
-- Body: `ConversationPane mode="supervision"` with `headerActions` = primary "Asignar" (queued) or secondary "Reasignar" (open) when `capabilities.canAssign`, and `onOpenHistory` → `?historial=lista`; `CaseHistorySheet` exactly as the Workspace (`historial=lista|<id>`). Errors: `describeCaseLoadFailure`.
-- `?asignar=1` opens the assign dialog for this case; success → toast "Listo · El caso de {cliente} pasó a {Analista}" and the pane refetches.
+- Body: `ConversationPane mode="supervision"` with `headerActions` = primary "Asignar" (queued) or secondary "Reasignar" (open) when `capabilities.canAssign`, and `onOpenHistory` → `?previous=list`; `CaseHistorySheet` exactly as the Workspace (`previous=list|<id>`). Errors: `describeCaseLoadFailure`.
+- `?reassign=1` opens the assign dialog for this case; success → toast "Listo · El caso de {cliente} pasó a {Analista}" and the pane refetches.
 
 ### 8.6 `features/supervision` · assign dialog (`AssignCaseDialog`)
 
-- Opened from a queue row, the analyst sheet, the case view or the notice toast (`?asignar=`). Input: the `CaseSummary` (from the cached overview or detail) and the team overview's analysts.
+- Opened from a queue row, the analyst sheet, the case view or the notice toast (`?reassign=`). Input: the `CaseSummary` (from the cached overview or detail) and the team overview's analysts.
 - Title "Asignar caso" (queued) / "Reasignar caso" (open). Subtitle "{cliente} · {shortId} · {español | portugués} · {Espera {x} en la cola | Lo atiende {Analista}}".
 - **"¿A quién?"** (`RadioGroup`, required): every listed analyst except the current assignee, ordered: speaks the language first; then `available`, `busy`, `paused`, `offline`; then fewer open cases; then name. Label = name; `description` (new optional `RadioOption.description`, extend the primitive + test) = "{Ahora} · {n} abiertos · {idiomas}". Non-speakers are **disabled** with the description "No habla portugués (regla 3)". The current assignee is not an option.
 - **Paused or offline choice:** a warn `Callout` "{Nombre} está en pausa: no recibe casos nuevos. Si lo asignas igual, le llega a su lista." (offline adds " Tampoco tiene una sesión abierta.") and a required `Checkbox` "Asignar aunque esté en pausa" → `confirmPaused: true`.
@@ -562,15 +562,15 @@ Layout (canvas SuTeam, 1440×900, must not break at 1280):
   - `queue.updated` → patch `counts` in the cached `QueueOverview` when `computedAt` is newer, then invalidate `supervisionKeys.queues()`;
   - `queue.case_queued` → invalidate `supervisionKeys.queues()`;
   - `team.updated` → invalidate `supervisionKeys.team()`, throttled (at most once per 2 s, trailing; the throttle lives in the registration closure).
-- **Supervisor notice** (canvas SuAvisoNueva, adapted): `useQueueNotices()` is called on the three supervision screens (by `TeamScreen` and `SupervisorCaseScreen`, and by the `routes/supervision/audit.tsx` module for the audit, so `features/audit` keeps its import rule). On `queue.case_queued` (once per envelope id): toast with tag "{cola}", title "Un caso espera en la {cola en minúscula}", description "{cliente} · nadie disponible habla {idioma}", actions "Asignar" (navigate to `/supervision/equipo?asignar=<id>`) and "Más tarde" (dismiss). No AI/approval wording.
+- **Supervisor notice** (canvas SuAvisoNueva, adapted): `useQueueNotices()` is called on the three supervision screens (by `TeamScreen` and `SupervisorCaseScreen`, and by the `routes/supervision/audit.tsx` module for the audit, so `features/audit` keeps its import rule). On `queue.case_queued` (once per envelope id): toast with tag "{cola}", title "Un caso espera en la {cola en minúscula}", description "{cliente} · nadie disponible habla {idioma}", actions "Asignar" (navigate to `/supervision/team?reassign=<id>`) and "Más tarde" (dismiss). No AI/approval wording.
 
 ### 8.8 `features/audit` · audit screen (`AuditScreen`)
 
 Layout (canvas SuAudit):
 - **PageHeader** "Auditoría", subtitle "Quién hizo qué, en qué caso y cuándo · Datos de ejemplo"; right: `SearchInput` (label "Buscar", placeholder "Buscar por id de caso, cliente o persona", ≤ 80, debounced 300 ms → `q`). No "Exportar".
 - **Toolbar:** "Quién" pills (`SegmentedControl`): "Todos" · "Equipo" · "Clientes" · "Plataforma"; `Select` "Tipo": "Todos los tipos" · "Conversación" · "Asignación" · "Ciclo del caso" · "Disponibilidad" · "Accesos" · "Otros"; `Select` "Persona" (from `GET /staff`, shown when Quién is Todos or Equipo); "Desde" / "Hasta" (`Input type="date"`, viewer's zone; `from` = local start of Desde, `to` = local start of the day after Hasta, both sent as UTC; Hasta < Desde → inline field error, no request); `Checkbox` "Solo acciones que cambian algo"; when `caso` is set, a removable chip "Caso {shortId}"; ghost "Limpiar filtros" when any filter is set.
-- **Log** (`section aria-label="Registro"`, native `Table`, sticky header, day separators "Hoy" / "Ayer" / "{d mmm}"): **Hora** (`HH:mm:ss`, viewer zone) · **Quién** (kind `Badge`: "Analista" / "Supervisora" / "Administración" / "Cliente" / "Plataforma", then the name, or "Plataforma") · **Qué hizo** (`description` + "CAMBIO" in warn when `changesState`) · **Caso** (mono `shortCaseId`, "—" without case). Row select (`TRowSelect`) sets `?evento=`. "Cargar más" at the bottom while `nextCursor` (TanStack `useInfiniteQuery`), with "Mostrando {n} eventos".
-- **Detail aside** (380 px, `aside aria-label="Detalle del registro"`): kicker "{hora} · {TIPO EN MAYÚSCULAS}", the description, "{nombre} · {rol}"; `KeyValueList`: Evento (id, mono), Tipo (`type`, mono), Caso (id mono + customer name), Quién (actor id, mono), Ocurrió, Registrado; an `Accordion` "Datos del evento" with the payload as key/value lines (mono, JSON for nested values); when `redactedFields` includes `text`: muted note "El texto del mensaje no se muestra aquí: está en la conversación." Footer: "Ver la conversación" (link to `supervisionCasePath`, `state.from` = the current audit URL) and "Filtrar por este caso" (sets `caso`). With `?evento=` not in the loaded pages, the aside loads `GET /audit/events/{id}`; 404 → "No encontramos ese evento.". Nothing selected: "Elige un evento para ver el detalle.".
+- **Log** (`section aria-label="Registro"`, native `Table`, sticky header, day separators "Hoy" / "Ayer" / "{d mmm}"): **Hora** (`HH:mm:ss`, viewer zone) · **Quién** (kind `Badge`: "Analista" / "Supervisora" / "Administración" / "Cliente" / "Plataforma", then the name, or "Plataforma") · **Qué hizo** (`description` + "CAMBIO" in warn when `changesState`) · **Caso** (mono `shortCaseId`, "—" without case). Row select (`TRowSelect`) sets `?event=`. "Cargar más" at the bottom while `nextCursor` (TanStack `useInfiniteQuery`), with "Mostrando {n} eventos".
+- **Detail aside** (380 px, `aside aria-label="Detalle del registro"`): kicker "{hora} · {TIPO EN MAYÚSCULAS}", the description, "{nombre} · {rol}"; `KeyValueList`: Evento (id, mono), Tipo (`type`, mono), Caso (id mono + customer name), Quién (actor id, mono), Ocurrió, Registrado; an `Accordion` "Datos del evento" with the payload as key/value lines (mono, JSON for nested values); when `redactedFields` includes `text`: muted note "El texto del mensaje no se muestra aquí: está en la conversación." Footer: "Ver la conversación" (link to `supervisionCasePath`, `state.from` = the current audit URL) and "Filtrar por este caso" (sets `case`). With `?event=` not in the loaded pages, the aside loads `GET /audit/events/{id}`; 404 → "No encontramos ese evento.". Nothing selected: "Elige un evento para ver el detalle.".
 - **States:** skeleton rows; empty without filters "Todavía no hay eventos."; empty with filters "Ningún evento coincide con estos filtros." + "Limpiar filtros"; error danger `Callout` + "Reintentar". No realtime (the log is read on demand; "Actualizar" ghost button refetches).
 
 ### 8.9 URL state (frozen)
@@ -578,26 +578,26 @@ Layout (canvas SuAudit):
 ```ts
 // features/supervision/model.ts
 export interface TeamUrlState {
-  team: string | null                              // ?equipo=<TeamSummary.key>; unknown → null (all)
-  activity: 'connected' | 'paused' | 'offline'     // ?estado=conectadas|en-pausa|desconectadas (default conectadas)
-  analystId: string | null                         // ?analista=STF-…
-  assignCaseId: string | null                      // ?asignar=CASE-…
+  team: string | null                              // ?team=<TeamSummary.key>; unknown → null (all)
+  activity: 'connected' | 'paused' | 'offline'     // ?status=connected|paused|offline (default connected)
+  analystId: string | null                         // ?analyst=STF-…
+  assignCaseId: string | null                      // ?reassign=CASE-…
 }
 export interface CaseViewUrlState {
-  history: 'lista' | string | null                 // ?historial=lista|CASE-…
-  assign: boolean                                  // ?asignar=1
+  history: 'list' | string | null                 // ?previous=list|CASE-…
+  assign: boolean                                  // ?reassign=1
 }
 // features/audit/model.ts
 export interface AuditUrlState {
-  actorKind: AuditActorKind | null                 // ?quien=equipo|clientes|plataforma
-  actorId: string | null                           // ?persona=
-  caseId: string | null                            // ?caso=
-  family: AuditFamily | null                       // ?tipo=conversacion|asignacion|ciclo|disponibilidad|accesos|otros
-  fromDate: string | null                          // ?desde=YYYY-MM-DD (viewer's zone)
-  toDate: string | null                            // ?hasta=YYYY-MM-DD (inclusive day)
+  actorKind: AuditActorKind | null                 // ?actor=staff|customer|system
+  actorId: string | null                           // ?person=
+  caseId: string | null                            // ?case=
+  family: AuditFamily | null                       // ?type=conversation|assignment|lifecycle|availability|access|other
+  fromDate: string | null                          // ?from=YYYY-MM-DD (viewer's zone)
+  toDate: string | null                            // ?to=YYYY-MM-DD (inclusive day)
   query: string                                    // ?q=
-  changesOnly: boolean                             // ?cambios=1
-  eventId: string | null                           // ?evento=EVT-…
+  changesOnly: boolean                             // ?changes=1
+  eventId: string | null                           // ?event=EVT-…
 }
 ```
 
@@ -706,7 +706,7 @@ Update `backend/README.md` (accounts table: Julián's seeded session; seeded cas
 
 **Frontend.** Every gate passes, including `check:api` after `gen:api`, plus:
 - **`model.test.ts` (supervision):** activity labels/tones; filter counts per team; at-risk and longest-wait from rows at a pinned `now`; high-load flag; candidate ordering and disabling (rule 3) in the assign dialog; `describeAssignFailure` per code; `REASSIGNED_NOTICE` and `QUEUE_LABEL` pinned to the backend texts; result-strip copy; URL parse/serialize (unknown values fall back).
-- **`model.test.ts` (audit):** URL parse/serialize; `auditFiltersOf` date conversion (viewer zone pinned to `America/Bogota`, `hasta` inclusive); kind badge labels; day-separator labels.
+- **`model.test.ts` (audit):** URL parse/serialize; `auditFiltersOf` date conversion (viewer zone pinned to `America/Bogota`, `to` inclusive); kind badge labels; day-separator labels.
 - **`model.test.ts` (conversation, cases):** `arrivalLine` for `manual` (queue and reassignment); `supervisionArrivalLine`; `supervisionFooter`; `unassignedToastCopy`; supervisor toast copy on `case.assigned`.
 - **Realtime:** `queue.updated` patches counts only when newer; `team.updated` throttled; `case.unassigned` patches inboxes and toasts once.
 - **Render tests:** team screen (queues with cases and the empty queue, the three filters with counts, "Carga alta", the analyst sheet, loading/error per query); assign dialog (pt case: es-only analysts disabled with "(regla 3)"; paused target requires the checkbox; `assignment_changed` message; success strip); case view (read-only, no composer even for an assignee with both roles, "Reasignar" shown, history sheet); audit (rows, CAMBIO tag, detail aside with redaction note, "Cargar más", empty with filters + "Limpiar filtros", error); rail badge "Equipo y colas, 3 pendientes" for a supervisor and nothing in the analyst role; the notice toast with "Asignar".

@@ -60,6 +60,13 @@ import type {
 /** Page size used when catching up after a reconnect or a sequence gap. */
 export const CATCH_UP_PAGE_SIZE = 200
 
+/**
+ * "Casos anteriores" on its list (`?previous=list`, in the Workspace and the supervisor case
+ * view); any other value is the id of the past case whose transcript is open.
+ */
+export const PREVIOUS_CASES_LIST = 'list'
+export type PreviousCasesSelection = typeof PREVIOUS_CASES_LIST | (string & {})
+
 export function emptyTranscript(): TranscriptCache {
   return { turns: [], olderCursor: null, contiguousSequence: 0, pending: [] }
 }

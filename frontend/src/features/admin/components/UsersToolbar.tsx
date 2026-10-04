@@ -14,9 +14,8 @@ import {
   userFilterSelection,
   usersPatchOfSelection,
   usersShownLabel,
-  type UrlStateChangeOptions,
-  type UsersUrlState,
 } from '../model'
+import type { UrlStateChangeOptions, UsersUrlState } from '../url'
 
 /** Typing in "Buscar persona" updates the URL (and the request) once it pauses this long. */
 export const USER_SEARCH_DEBOUNCE_MS = 300

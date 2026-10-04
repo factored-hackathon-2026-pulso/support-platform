@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
-import { supervisionCasePath } from '@/app/roles'
+import { supervisionCasePath } from '@/app/paths'
 import {
   QueuesScreen,
   parseQueuesSearch,
@@ -10,8 +10,8 @@ import {
 } from '@/features/supervision'
 
 /**
- * /supervision/colas — "Colas" (slice 9), the landing of the Supervisión role. The queue
- * and its filters live in the URL (`?idioma=&estado=&prioridad=&analista=`); opening a
+ * /supervision/queues — "Colas" (slice 9), the landing of the Supervisión role. The queue
+ * and its filters live in the URL (`?language=&status=&priority=&analyst=`); opening a
  * case hands the full return URL to the case view.
  */
 export default function QueuesRoute() {

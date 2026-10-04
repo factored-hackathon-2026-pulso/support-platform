@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 import { AuthLayout } from '@/components/layout'
 import StaffShell from '@/routes/staff-shell'
 import { GuestOnly, RequireRole, RequireSession, RootRedirect } from './guards'
+import { PATHS } from './paths'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { RouteFallback } from './RouteFallback'
 import type { RoleId } from './roles'
@@ -25,7 +26,7 @@ function lazyRoute(path: string | undefined, load: () => Promise<RouteModule>): 
   }
 }
 
-/** Role root without a screen of its own (/supervision → /supervision/colas). */
+/** Role root without a screen of its own (/supervision → /supervision/queues). */
 function indexRedirect(to: string): RouteObject {
   return { index: true, element: <Navigate to={to} replace /> }
 }
@@ -36,7 +37,8 @@ function roleSection(role: RoleId, path: string, children: RouteObject[]): Route
 }
 
 /**
- * Route table (Spanish paths, brief §5). To add a screen: create a module in
+ * Route table (English paths from ./paths, brief §5). Child paths are absolute (they start
+ * with their parent's). To add a screen: add its path to PATHS, create a module in
  * src/routes/<area>/ and register it here (ARCHITECTURE.md › Routing).
  */
 export const routes: RouteObject[] = [
@@ -44,7 +46,7 @@ export const routes: RouteObject[] = [
 
   // Login steps (no rail). Authenticated users are sent to their home.
   {
-    path: '/login',
+    path: PATHS.login,
     element: <GuestOnly />,
     ErrorBoundary: RouteErrorBoundary,
     children: [
@@ -52,8 +54,8 @@ export const routes: RouteObject[] = [
         Component: AuthLayout,
         children: [
           lazyRoute(undefined, () => import('@/routes/auth/login')),
-          lazyRoute('verificacion', () => import('@/routes/auth/mfa')),
-          lazyRoute('bloqueada', () => import('@/routes/auth/locked')),
+          lazyRoute(PATHS.loginVerify, () => import('@/routes/auth/mfa')),
+          lazyRoute(PATHS.loginLocked, () => import('@/routes/auth/locked')),
         ],
       },
     ],
@@ -65,16 +67,16 @@ export const routes: RouteObject[] = [
     Component: AuthLayout,
     ErrorBoundary: RouteErrorBoundary,
     children: [
-      lazyRoute('/activar', () => import('@/routes/onboarding/activate')),
-      lazyRoute('/restablecer', () => import('@/routes/onboarding/reset')),
+      lazyRoute(PATHS.activate, () => import('@/routes/onboarding/activate')),
+      lazyRoute(PATHS.resetPassword, () => import('@/routes/onboarding/reset')),
     ],
   },
 
   // Development mailbox (part 4): only meaningful when the backend runs it.
-  lazyRoute('/dev/correos', () => import('@/routes/dev/mailbox')),
+  lazyRoute(PATHS.devMailbox, () => import('@/routes/dev/mailbox')),
 
   // Customer chat simulator: dev/demo tool outside the staff shell.
-  lazyRoute('/cliente', () => import('@/routes/customer/simulator')),
+  lazyRoute(PATHS.customer, () => import('@/routes/customer/simulator')),
 
   // Staff area: session required, then one guard per role section.
   {
@@ -85,25 +87,32 @@ export const routes: RouteObject[] = [
         Component: StaffShell,
         ErrorBoundary: RouteErrorBoundary,
         children: [
-          roleSection('analyst', '/analista', [
-            lazyRoute(undefined, () => import('@/routes/analyst/workspace')),
-            lazyRoute('inicio', () => import('@/routes/analyst/home')),
+          roleSection('analyst', PATHS.analyst.root, [
+            indexRedirect(PATHS.analyst.home),
+            lazyRoute(PATHS.analyst.home, () => import('@/routes/analyst/home')),
+            lazyRoute(PATHS.analyst.cases, () => import('@/routes/analyst/workspace')),
             lazyRoute('*', () => import('@/routes/not-found')),
           ]),
-          roleSection('supervisor', '/supervision', [
-            indexRedirect('colas'),
-            lazyRoute('colas', () => import('@/routes/supervision/queues')),
-            lazyRoute('equipo', () => import('@/routes/supervision/team')),
-            lazyRoute('escalados', () => import('@/routes/supervision/escalations')),
-            lazyRoute('casos/:caseId', () => import('@/routes/supervision/case')),
-            lazyRoute('auditoria', () => import('@/routes/supervision/audit')),
+          roleSection('supervisor', PATHS.supervision.root, [
+            indexRedirect(PATHS.supervision.queues),
+            lazyRoute(PATHS.supervision.queues, () => import('@/routes/supervision/queues')),
+            lazyRoute(PATHS.supervision.team, () => import('@/routes/supervision/team')),
+            lazyRoute(
+              PATHS.supervision.escalations,
+              () => import('@/routes/supervision/escalations'),
+            ),
+            lazyRoute(
+              `${PATHS.supervision.cases}/:caseId`,
+              () => import('@/routes/supervision/case'),
+            ),
+            lazyRoute(PATHS.supervision.audit, () => import('@/routes/supervision/audit')),
             lazyRoute('*', () => import('@/routes/not-found')),
           ]),
-          roleSection('admin', '/administracion', [
-            indexRedirect('usuarios'),
-            lazyRoute('usuarios', () => import('@/routes/admin/users')),
-            lazyRoute('equipos', () => import('@/routes/admin/teams')),
-            lazyRoute('auditoria', () => import('@/routes/admin/audit')),
+          roleSection('admin', PATHS.admin.root, [
+            indexRedirect(PATHS.admin.users),
+            lazyRoute(PATHS.admin.users, () => import('@/routes/admin/users')),
+            lazyRoute(PATHS.admin.teams, () => import('@/routes/admin/teams')),
+            lazyRoute(PATHS.admin.audit, () => import('@/routes/admin/audit')),
             lazyRoute('*', () => import('@/routes/not-found')),
           ]),
           lazyRoute('*', () => import('@/routes/not-found')),

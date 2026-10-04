@@ -7,11 +7,11 @@ The platform has two applications:
 
 - `backend/`: FastAPI API (Python 3.12, uv). It stores everything in SQLite and seeds the sample
   data on startup.
-- `frontend/`: React SPA (Vite, pnpm). It holds the staff Workspace (`/analista`,
-  `/supervision`, `/administracion`) and the customer simulator (`/cliente`). An analyst lands on
-  **Inicio** (`/analista/inicio`): her availability ("Empezar a atender"), the counters per status
+- `frontend/`: React SPA (Vite, pnpm). It holds the staff Workspace (`/analyst/cases`,
+  `/supervision`, `/admin`) and the customer simulator (`/customer`). An analyst lands on
+  **Inicio** (`/analyst/home`): her availability ("Empezar a atender"), the counters per status
   (they open Casos with that filter), "Lo primero", "Mientras no estabas" and "Tu equipo ahora".
-  "Casos" (`/analista`) is the list by urgency plus the conversation, with the "Ficha del
+  "Casos" (`/analyst/cases`) is the list by urgency plus the conversation, with the "Ficha del
   cliente" on the right when the name is clicked.
 
 Every person, customer and case is made up ("Datos de ejemplo").
@@ -60,7 +60,7 @@ pnpm dev
   - `curl -s http://127.0.0.1:8000/api/v1/health` → `{"status":"ok","checks":{"database":"ok"}}`
   - Swagger: http://127.0.0.1:8000/api/v1/docs
   - Staff sign-in: http://localhost:5173/login
-  - Customer simulator: http://localhost:5173/cliente
+  - Customer simulator: http://localhost:5173/customer
 
 To sign in: any account from [section 5](#5-seeded-accounts), password `demo1234`, verification
 code `000000` (only the seeded accounts without an authenticator app; see
@@ -100,10 +100,10 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_MFA_TTL_SECONDS` | `300` | Validity of the verification step |
 | `CC_MFA_MAX_ATTEMPTS` | `3` | Wrong codes per verification |
 | `CC_DEV_MFA_CODE` | `000000` | Development verification code: **only** for the seeded accounts without an authenticator app (part 4) |
-| `CC_PUBLIC_APP_URL` | `http://localhost:5173` | Part 4: SPA origin used in the email links (`/activar?token=…`, `/restablecer?token=…`). Change it if the SPA runs on another port |
+| `CC_PUBLIC_APP_URL` | `http://localhost:5173` | Part 4: SPA origin used in the email links (`/activate?token=…`, `/reset-password?token=…`). Change it if the SPA runs on another port |
 | `CC_INVITATION_TTL_HOURS` | `48` | Validity of an invitation link (from the last send) |
 | `CC_PASSWORD_RESET_TTL_MINUTES` | `60` | Validity of a password reset link |
-| `CC_DEV_MAILBOX` | unset (= on only with `CC_ENV=dev`) | Dev mailbox: keeps the emails the platform "sends" and shows them at `GET /api/v1/dev/mailbox` and `/dev/correos`. The e2e suite turns it on with `CC_ENV=test`. Forbidden in production |
+| `CC_DEV_MAILBOX` | unset (= on only with `CC_ENV=dev`) | Dev mailbox: keeps the emails the platform "sends" and shows them at `GET /api/v1/dev/mailbox` and `/dev/mailbox`. The e2e suite turns it on with `CC_ENV=test`. Forbidden in production |
 | `CC_TOTP_ISSUER` | `LATAM Bank CC` | Name shown by the authenticator app |
 | `CC_TOTP_SECRET_KEY` | derived from `CC_SESSION_SECRET` | Fernet key that seals the stored TOTP keys. In development it is derived from the session secret (if you change that secret, accounts with an app can no longer sign in: reset the database); production must set it |
 | `CC_ARGON2_TIME_COST`, `CC_ARGON2_MEMORY_COST`, `CC_ARGON2_PARALLELISM` | `3`, `65536`, `4` | Password hash cost |
@@ -156,7 +156,7 @@ Frontend (`frontend/.env.local`, template in `frontend/.env.example`):
 
 ## 5. Seeded accounts
 
-On sign-in, an analyst lands on **Inicio** (`/analista/inicio`); "/" also takes her there.
+On sign-in, an analyst lands on **Inicio** (`/analyst/home`); "/" also takes her there.
 "Mientras no estabas" counts from the end of her previous session; on her first session, from 8
 hours back (that is why the seed already shows her recent cases). The teams are called "Equipo
 Andes", "Equipo Pacífico" and "Equipo Caribe" since slice 6: a database created earlier keeps the
@@ -182,7 +182,7 @@ authenticator app (see below). Email: `nombre.apellido@latambank.example` (no ac
 | Carolina Peña | `carolina.pena@` | Administración | Spanish | Administración de la plataforma | Active |
 | Andrés Villamil | `andres.villamil@` | Analista | Spanish | Equipo Andes | **Deactivated** (Carolina deactivated the account). Cannot sign in |
 | Tatiana Rojas | `tatiana.rojas@` | Analista | Spanish | Equipo Andes | Part 4: **accepted her invitation** one hour before the first start. Password `demo1234` and **the code from her app** (key `JBSWY3DPEHPK3PXP`); the code `000000` does not work for her. Paused, no cases |
-| Bruna Esteves | `bruna.esteves@` | Analista | Portuguese | Equipo Andes | Part 4: **pending invitation** (Valeria invited her 3 h before the first start; it expires 45 h later). She cannot sign in until she activates her account with the email link (in `/dev/correos`) |
+| Bruna Esteves | `bruna.esteves@` | Analista | Portuguese | Equipo Andes | Part 4: **pending invitation** (Valeria invited her 3 h before the first start; it expires 45 h later). She cannot sign in until she activates her account with the email link (in `/dev/mailbox`) |
 
 There is also the inactive team "Equipo Caribe", with no members.
 
@@ -196,12 +196,12 @@ Part 4 (`api/slice-11-invitations.md`): Administración **never sees or hands ou
   "Cancelar invitación" (she disappears from the directory; inviting the same email again reuses
   her record).
 - **Seeing the emails in development.** There is no mail server: the **dev mailbox** keeps what
-  the platform "sends". Open it at http://localhost:5173/dev/correos (the "Correos de desarrollo"
+  the platform "sends". Open it at http://localhost:5173/dev/mailbox (the "Correos de desarrollo"
   link at the foot of the sign-in, only when it is on) or through the API:
   `curl -s localhost:8000/api/v1/dev/mailbox | python -m json.tool`. "Abrir enlace" goes to
-  `/activar?token=…` or `/restablecer?token=…`. It is on with `CC_ENV=dev`; it never exists in
+  `/activate?token=…` or `/reset-password?token=…`. It is on with `CC_ENV=dev`; it never exists in
   production.
-- **Activating the account** (`/activar`): 1) create the password (at least 12 characters,
+- **Activating the account** (`/activate`): 1) create the password (at least 12 characters,
   without the name or the email, not a common password; the rules are checked live), 2) set up
   two-step verification: scan the QR with an authenticator app (Google Authenticator, Microsoft
   Authenticator, 1Password…) or type the manual key, and type the 6-digit code. The account is
@@ -215,7 +215,7 @@ Part 4 (`api/slice-11-invitations.md`): Administración **never sees or hands ou
   (replace the key with the one shown in step 2; the one above is Tatiana Rojas's).
 - **Forgotten password.** Administración clicks "Enviar enlace para restablecer" on her profile:
   she gets a link that expires in 1 hour, her sessions are closed at that moment and the account
-  is unlocked if it was locked. With the link (`/restablecer`) she creates the new password; her
+  is unlocked if it was locked. With the link (`/reset-password`) she creates the new password; her
   two-step verification does not change. Nobody can reset their own password from "Usuarios y
   roles"; there is no self-service "Olvidé mi contraseña" either.
 
@@ -273,7 +273,7 @@ and the `cases.open_escalation_id` column: an older database does not start
 
 ### Simulator customers
 
-At `/cliente` you pick a customer and write as them, with no password. New customers open a case
+At `/customer` you pick a customer and write as them, with no password. New customers open a case
 with their first message:
 
 | Customer | Simulator language | City |
@@ -417,9 +417,9 @@ screen shows "Tu cuenta está bloqueada por 15 minutos". Options:
 
 ### "El enlace venció o ya se usó"
 
-The `/activar` or `/restablecer` screen says this for any link that does not work: expired (48 h
+The `/activate` or `/reset-password` screen says this for any link that does not work: expired (48 h
 for the invitation, 1 h for the reset), already used, replaced by a newer one (resending
-invalidates the previous one) or cancelled. Open the most recent email in `/dev/correos` or ask
+invalidates the previous one) or cancelled. Open the most recent email in `/dev/mailbox` or ask
 administration to resend it. If it says "Demasiados intentos", this browser opened 10 invalid
 links in a row: wait 15 minutes (or restart the backend in development: the counter lives in
 memory).
@@ -430,7 +430,7 @@ memory).
   use the one from the app (or compute it with `pyotp`, section 5.1).
 - The code changes every 30 seconds and one step of drift is accepted: if the phone's or the
   machine's clock is far off, sync it.
-- Five wrong codes lock the account (on sign-in) or the activation (on `/activar`) for 15
+- Five wrong codes lock the account (on sign-in) or the activation (on `/activate`) for 15
   minutes.
 - If you changed `CC_SESSION_SECRET` without setting `CC_TOTP_SECRET_KEY`, the stored keys can no
   longer be opened: reset the database (section 6).

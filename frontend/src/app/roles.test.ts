@@ -10,15 +10,10 @@ import {
   rolesLabel,
   rolesNowCopy,
   sortRoles,
-  adminAuditPath,
-  adminTeamPath,
-  adminUserPath,
-  supervisionAnalystPath,
-  supervisionCasePath,
   presenceFor,
-  workspacePath,
   type NavItem,
 } from './roles'
+import { adminTeamPath, supervisionCasePath } from './paths'
 
 describe('roles', () => {
   it('has exactly three roles, in canonical order', () => {
@@ -28,19 +23,19 @@ describe('roles', () => {
 
   it('lists the destinations of each role', () => {
     expect(ROLES.analyst.nav.map((item) => item.label)).toEqual(['Inicio', 'Casos'])
-    expect(ROLES.analyst.home).toBe('/analista/inicio')
+    expect(ROLES.analyst.home).toBe('/analyst/home')
     expect(ROLES.analyst.nav[1]?.indicator).toBe('toReplyCases')
     // Slice 9: Colas (the landing, badge = cases nobody holds), Equipo, Escalados (badge =
     // open escalations), Auditoría; no team tabs anywhere.
     expect(ROLES.supervisor.label).toBe('Supervisión')
-    expect(ROLES.supervisor.home).toBe('/supervision/colas')
+    expect(ROLES.supervisor.home).toBe('/supervision/queues')
     expect(ROLES.supervisor.nav.map((item) => [item.label, item.to, item.indicator])).toEqual([
-      ['Colas', '/supervision/colas', 'queuedCases'],
-      ['Equipo', '/supervision/equipo', undefined],
-      ['Escalados', '/supervision/escalados', 'openEscalations'],
-      ['Auditoría', '/supervision/auditoria', undefined],
+      ['Colas', '/supervision/queues', 'queuedCases'],
+      ['Equipo', '/supervision/team', undefined],
+      ['Escalados', '/supervision/escalations', 'openEscalations'],
+      ['Auditoría', '/supervision/audit', undefined],
     ])
-    expect(ROLES.supervisor.nav[0]?.alsoActiveOn).toEqual(['/supervision/casos'])
+    expect(ROLES.supervisor.nav[0]?.alsoActiveOn).toEqual(['/supervision/cases'])
     expect(ROLES.admin.nav.map((item) => item.label)).toEqual([
       'Usuarios y roles',
       'Equipos',
@@ -50,17 +45,17 @@ describe('roles', () => {
   })
 
   it('maps paths to the owning role', () => {
-    expect(roleFromPath('/analista')).toBe('analyst')
-    expect(roleFromPath('/supervision/auditoria')).toBe('supervisor')
-    expect(roleFromPath('/administracion')).toBe('admin')
-    expect(roleFromPath('/analistas')).toBeNull()
-    expect(roleFromPath('/cliente')).toBeNull()
+    expect(roleFromPath('/analyst/cases')).toBe('analyst')
+    expect(roleFromPath('/supervision/audit')).toBe('supervisor')
+    expect(roleFromPath('/admin')).toBe('admin')
+    expect(roleFromPath('/analysts')).toBeNull()
+    expect(roleFromPath('/customer')).toBeNull()
   })
 
   it('orders roles canonically and finds the first home', () => {
     expect(sortRoles(['admin', 'ghost', 'analyst'])).toEqual(['analyst', 'admin'])
     expect(sortRoles(['ghost', 'admin'])).toEqual(['admin'])
-    expect(firstRoleHome(['admin', 'supervisor'])).toBe('/supervision/colas')
+    expect(firstRoleHome(['admin', 'supervisor'])).toBe('/supervision/queues')
     expect(firstRoleHome([])).toBeNull()
   })
 
@@ -79,29 +74,20 @@ describe('roles', () => {
 
   it('marks an item active on its path, an `end` item only on the exact path', () => {
     const team: NavItem = ROLES.supervisor.nav[0]!
-    expect(isNavItemActive(team, '/supervision/colas')).toBe(true)
-    expect(isNavItemActive(team, '/supervision/auditoria')).toBe(false)
+    expect(isNavItemActive(team, '/supervision/queues')).toBe(true)
+    expect(isNavItemActive(team, '/supervision/audit')).toBe(false)
     const exact: NavItem = { ...team, end: true }
-    expect(isNavItemActive(exact, '/supervision/colas/detalle')).toBe(false)
-    expect(isNavItemActive(team, '/supervision/casos/CASE-1')).toBe(true)
+    expect(isNavItemActive(exact, '/supervision/queues/detail')).toBe(false)
+    expect(isNavItemActive(team, '/supervision/cases/CASE-1')).toBe(true)
     expect(team.indicator).toBe('queuedCases')
   })
 
-  it('marks only Inicio on /analista/inicio and only Casos on /analista', () => {
+  it('marks only Inicio on /analyst/home and only Casos on /analyst/cases', () => {
     const [home, cases] = ROLES.analyst.nav
-    expect(isNavItemActive(home!, '/analista/inicio')).toBe(true)
-    expect(isNavItemActive(cases!, '/analista/inicio')).toBe(false)
-    expect(isNavItemActive(cases!, '/analista')).toBe(true)
-    expect(isNavItemActive(home!, '/analista')).toBe(false)
-  })
-
-  it('builds the Workspace path with a case and a filter', () => {
-    expect(workspacePath()).toBe('/analista')
-    expect(workspacePath({ filterSlug: 'cerrados' })).toBe('/analista?estado=cerrados')
-    expect(workspacePath({ caseId: 'CASE-1', filterSlug: 'por-responder' })).toBe(
-      '/analista?caso=CASE-1&estado=por-responder',
-    )
-    expect(workspacePath({ caseId: 'CASE-1', filterSlug: null })).toBe('/analista?caso=CASE-1')
+    expect(isNavItemActive(home!, '/analyst/home')).toBe(true)
+    expect(isNavItemActive(cases!, '/analyst/home')).toBe(false)
+    expect(isNavItemActive(cases!, '/analyst/cases')).toBe(true)
+    expect(isNavItemActive(home!, '/analyst/cases')).toBe(false)
   })
 
   it('maps availability to the presence dot of the rail avatar', () => {
@@ -110,29 +96,21 @@ describe('roles', () => {
     expect(presenceFor(undefined)).toBeNull()
   })
 
-  it('builds the supervisor case path', () => {
-    expect(supervisionCasePath('CASE-1')).toBe('/supervision/casos/CASE-1')
+  it('maps the built paths to their role', () => {
     expect(roleFromPath(supervisionCasePath('CASE-1'))).toBe('supervisor')
-  })
-
-  it('builds the administration paths', () => {
-    expect(adminUserPath('STF-1')).toBe('/administracion/usuarios?persona=STF-1')
-    expect(adminTeamPath('TEAM-1')).toBe('/administracion/equipos?equipo=TEAM-1')
-    expect(adminAuditPath('STF-1')).toBe('/administracion/auditoria?q=STF-1')
-    expect(supervisionAnalystPath('STF-1')).toBe('/supervision/equipo?analista=STF-1')
     expect(roleFromPath(adminTeamPath('TEAM-1').split('?')[0]!)).toBe('admin')
   })
 
   it('returns to the requested page only when the user may open it', () => {
-    expect(resolvePostLoginPath(['supervisor'], '/supervision/auditoria?x=1')).toBe(
-      '/supervision/auditoria?x=1',
+    expect(resolvePostLoginPath(['supervisor'], '/supervision/audit?x=1')).toBe(
+      '/supervision/audit?x=1',
     )
-    expect(resolvePostLoginPath(['supervisor'], '/administracion/usuarios')).toBe(
-      '/supervision/colas',
+    expect(resolvePostLoginPath(['supervisor'], '/admin/users')).toBe('/supervision/queues')
+    expect(resolvePostLoginPath(['analyst'], '//evil.example')).toBe('/analyst/home')
+    expect(resolvePostLoginPath(['analyst'], null)).toBe('/analyst/home')
+    expect(resolvePostLoginPath(['analyst'], '/analyst/cases?case=CASE-1')).toBe(
+      '/analyst/cases?case=CASE-1',
     )
-    expect(resolvePostLoginPath(['analyst'], '//evil.example')).toBe('/analista/inicio')
-    expect(resolvePostLoginPath(['analyst'], null)).toBe('/analista/inicio')
-    expect(resolvePostLoginPath(['analyst'], '/analista?caso=CASE-1')).toBe('/analista?caso=CASE-1')
-    expect(resolvePostLoginPath([], '/analista')).toBeNull()
+    expect(resolvePostLoginPath([], '/analyst/cases')).toBeNull()
   })
 })

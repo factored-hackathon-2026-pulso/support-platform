@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { UserPlus, UsersRound } from 'lucide-react'
-import { adminAuditPath, adminUserPath } from '@/app/roles'
+import { adminAuditPath, adminUserPath } from '@/app/paths'
 import {
   Button,
   Callout,
@@ -33,7 +33,7 @@ import { DeactivateTeamDialog } from './DeactivateTeamDialog'
 import { RoleChips } from './RoleChips'
 
 export interface TeamPanelProps {
-  /** `?equipo=`; null = nothing selected. */
+  /** `?team=`; null = nothing selected. */
   teamId: string | null
 }
 

@@ -36,7 +36,7 @@ export async function fetchAuditEvents(
   )
 }
 
-/** GET /audit/events/{eventId}: an event that is not in the loaded pages (`?evento=`). */
+/** GET /audit/events/{eventId}: an event that is not in the loaded pages (`?event=`). */
 export async function fetchAuditEvent(eventId: string, signal?: AbortSignal): Promise<AuditEvent> {
   return unwrap(
     api.GET('/api/v1/audit/events/{eventId}', { params: { path: { eventId } }, signal }),

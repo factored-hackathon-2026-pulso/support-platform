@@ -38,13 +38,11 @@ import {
   normalizeName,
   openCaseBlocks,
   openCasesFact,
-  parseTeamsSearch,
   teamFilterGroups,
   teamFilterSelection,
   teamsPatchOfSelection,
   teamsQueryStatus,
   teamsShownLabel,
-  parseUsersSearch,
   reactivatedToast,
   readAdminTeam,
   readAdminUser,
@@ -64,8 +62,6 @@ import {
   resetLinkCopy,
   resetLinkSentToast,
   secondFactorLabel,
-  toTeamsSearch,
-  toUsersSearch,
   toggleValue,
   unlockedToast,
   userChanges,
@@ -177,70 +173,7 @@ describe('accountStatusAt', () => {
   })
 })
 
-describe('URL state', () => {
-  it('parses and serializes the users screen with several values per group', () => {
-    const params = new URLSearchParams(
-      'rol=analistas,supervision&estado=bloqueadas,pendientes,desactivadas&equipo=TEAM-1,TEAM-2&idioma=pt&q=mar&persona=STF-1&nueva=1',
-    )
-    const state = parseUsersSearch(params)
-    expect(state).toEqual({
-      roles: ['analyst', 'supervisor'],
-      statuses: ['locked', 'invited', 'inactive'],
-      teamIds: ['TEAM-1', 'TEAM-2'],
-      languages: ['pt'],
-      query: 'mar',
-      staffId: 'STF-1',
-      create: true,
-    })
-    expect(toUsersSearch(state).toString()).toBe(params.toString())
-  })
-
-  it('keeps old single-value links and drops unknown values', () => {
-    expect(
-      parseUsersSearch(new URLSearchParams('rol=supervisoras&estado=activas&idioma=es')),
-    ).toEqual({
-      ...EMPTY_USERS_STATE,
-      roles: ['supervisor'],
-      statuses: ['active'],
-      languages: ['es'],
-    })
-    const state = parseUsersSearch(
-      new URLSearchParams(
-        'rol=automatizacion&estado=vacaciones,todas&idioma=en&equipo=,%20&persona=%20&nueva=si',
-      ),
-    )
-    expect(state).toEqual(EMPTY_USERS_STATE)
-    expect(toUsersSearch(state).toString()).toBe('')
-    expect(parseUsersSearch(new URLSearchParams('idioma=pt,es,pt')).languages).toEqual(['es', 'pt'])
-    expect(parseUsersSearch(new URLSearchParams(`q=${'x'.repeat(100)}`)).query).toHaveLength(80)
-  })
-
-  it('parses and serializes the teams screen', () => {
-    const state = parseTeamsSearch(new URLSearchParams('estado=inactivos&equipo=TEAM-4&nuevo=1'))
-    expect(state).toEqual({ statuses: ['inactive'], teamId: 'TEAM-4', create: true })
-    expect(toTeamsSearch(state).toString()).toBe('estado=inactivos&equipo=TEAM-4&nuevo=1')
-    // Unknown → the default (only the active teams); "todos" → nothing checked.
-    expect(parseTeamsSearch(new URLSearchParams('estado=archivados'))).toEqual({
-      statuses: ['active'],
-      teamId: null,
-      create: false,
-    })
-    expect(parseTeamsSearch(new URLSearchParams('estado=todos')).statuses).toEqual([])
-    expect(parseTeamsSearch(new URLSearchParams('estado=inactivos,activos')).statuses).toEqual([
-      'active',
-      'inactive',
-    ])
-    expect(toTeamsSearch({ statuses: ['active'], teamId: null, create: false }).toString()).toBe('')
-    expect(toTeamsSearch({ statuses: [], teamId: null, create: false }).toString()).toBe(
-      'estado=todos',
-    )
-    expect(
-      toTeamsSearch({ statuses: ['inactive', 'active'], teamId: null, create: false }).get(
-        'estado',
-      ),
-    ).toBe('activos,inactivos')
-  })
-
+describe('screen state', () => {
   it('maps the Equipos "Filtros" to the API status and back', () => {
     expect(teamsQueryStatus(['active'])).toBe('active')
     expect(teamsQueryStatus(['inactive'])).toBe('inactive')

@@ -17,7 +17,7 @@
 2. **Teams become records**: create, rename, deactivate and reactivate, membership. Slice 3 team slugs become team ids end to end (supervision keeps working).
 3. **Guard rails**: nobody removes their own Administración role or deactivates themself; there is always at least one active admin; open cases block changes that would leave them without an eligible assignee; role changes take effect on the next request and close the person's sockets.
 4. **Optimistic concurrency**: every edit carries `expectedVersion`; a stale one is `409 version_conflict` with the current data.
-5. **Audit**: every change is an event with a readable Spanish description in the slice 3 catalog (new family "Administración"), visible in `/supervision/auditoria` and in a new admin entry point, `/administracion/auditoria` (the same audit feature).
+5. **Audit**: every change is an event with a readable Spanish description in the slice 3 catalog (new family "Administración"), visible in `/supervision/audit` and in a new admin entry point, `/admin/audit` (the same audit feature).
 6. **Realtime**: directory changes for admins; the person's own profile and roles for every staff member (the role switcher updates without signing in again).
 
 Not in this slice (and not built anywhere): AI, agents, copilot, automation and the Automatización role, four-eyes or any approval of a change, tools and permissions, policies and rules, data retention, levels ("Nivel", "Límite de abono"), "Vacaciones"/"Licencia", customer or bank data, identity checks, calls, email, deleting people or teams, a forced password change at first sign-in, a password policy screen, per-person MFA settings, bulk actions, CSV import/export, pausing an analyst on her behalf (the only automatic pause is the side effect of §3.4/§3.3), reassigning cases from administration (that is supervision's job).
@@ -265,7 +265,7 @@ Why not send the cases back to the queue automatically:
 - **Accountability stays readable in the audit.** Each move is a `case.assigned` (`manual`) by a named supervisor with the banner and the customer notice of slice 3 §3.5, not a side effect of an account change.
 - **Admins and supervisors are different roles.** An admin who is not a supervisor cannot see the cases (no `case.viewed` path); handing her a bulk move would bypass that boundary.
 
-The cost is one extra step, and the UI makes it explicit: the dialog says how many open cases block the change and, when the admin also holds Supervisora, links to "Equipo y colas" with the analyst sheet open (`/supervision/equipo?analista=<id>`). Changes that do not touch case eligibility (name, email, team, adding roles or languages, `supervisor`/`admin` changes) are never blocked by cases.
+The cost is one extra step, and the UI makes it explicit: the dialog says how many open cases block the change and, when the admin also holds Supervisora, links to "Equipo y colas" with the analyst sheet open (`/supervision/team?analyst=<id>`). Changes that do not touch case eligibility (name, email, team, adding roles or languages, `supervisor`/`admin` changes) are never blocked by cases.
 
 **Sessions:** deactivation and password reset end every active session in the same Unit of Work (events → `SessionTerminator` closes the sockets). In the same Unit of Work they also **cancel every pending MFA challenge** of that person (`MfaChallenge.cancel(now)` → status `cancelled`, saved with CAS, no event: the reset or deactivation is the audited fact). A pending challenge proves a password step that is no longer valid (the old, maybe leaked, password after a reset; any sign-in started before a deactivation, even if she is reactivated within the 5-minute challenge TTL), so `POST /auth/mfa` on it answers 401 `mfa_challenge_invalid` and grants no session. A `VerifyMfa` racing the command loses its challenge (or login account) save, retries, and finds the challenge cancelled; if it committed first, its new session is among those the command ends. Role changes do **not** end sessions: the token stays valid, roles are re-read per request, and the sockets are closed with 4409 so they reconnect with the new roles (§9.3).
 
@@ -433,7 +433,7 @@ Request bodies reject unknown fields (`RequestModel`), as in every slice.
 
 - `team_key()` is deleted. `TeamRef` and `TeamSummary` carry **`id`** (the `TEAM-…` id) instead of `key`; `name` is the team's current name.
 - `GetTeamOverview` loads the teams of the listed analysts (`uow.teams.get_many`). `teams` = the active teams with at least one active analyst, by name. Unchanged otherwise (analysts = active staff holding `analyst`).
-- Frontend: `TeamUrlState.team` holds the team id (`?equipo=TEAM-…`). An old slug URL is an unknown id → "Todos los equipos" (the existing fallback). `filterByTeam`, `selectedTeam`, `teamPillLabels` key by `id`.
+- Frontend: `TeamUrlState.team` holds the team id (`?team=TEAM-…`). An old slug URL is an unknown id → "Todos los equipos" (the existing fallback). `filterByTeam`, `selectedTeam`, `teamPillLabels` key by `id`.
 - Supervision realtime gets more signals (§9.2); no new envelope.
 
 ---
@@ -467,12 +467,12 @@ New family **`administration`** ("Administración" in the UI). `{P}` = the targe
 
 ### 7.2 Admin entry point: reuse the audit feature
 
-**Decision: `/administracion/auditoria` renders the same `AuditScreen` (same URL state, same API) in the admin section**, not a link to `/supervision/auditoria`, because an admin who is not a supervisor cannot open the supervision section (the guard sends her home). Differences, through props only:
+**Decision: `/admin/audit` renders the same `AuditScreen` (same URL state, same API) in the admin section**, not a link to `/supervision/audit`, because an admin who is not a supervisor cannot open the supervision section (the guard sends her home). Differences, through props only:
 - `canOpenCases` (new prop, default `true`): the route passes `hasRole('supervisor')`. When `false`, the detail aside hides "Ver la conversación" (the case view is supervision-only) and keeps "Filtrar por este caso".
 - The admin route does not mount `useQueueNotices()` (no supervision toasts in admin mode).
-- From a user's aside, "Ver en auditoría" opens `/administracion/auditoria?q=<STF-id>` (`q` matches `actor_id` and `entity_id`, so it lists what she did and what was done to her account). From a team's aside: `?q=<TEAM-id>`.
+- From a user's aside, "Ver en auditoría" opens `/admin/audit?q=<STF-id>` (`q` matches `actor_id` and `entity_id`, so it lists what she did and what was done to her account). From a team's aside: `?q=<TEAM-id>`.
 
-`/supervision/auditoria` is unchanged apart from the new family and texts.
+`/supervision/audit` is unchanged apart from the new family and texts.
 
 ---
 
@@ -543,25 +543,25 @@ One agent owns all of `frontend/`. It may extend `components/ui`, `components/la
 
 | Path | Screen | Guard |
 |---|---|---|
-| `/administracion/usuarios?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=` | Usuarios y roles | admin |
-| `/administracion/equipos?estado=&equipo=&nuevo=` | Equipos | admin |
-| `/administracion/auditoria?…` (the slice 3 audit params) | Auditoría (§7.2) | admin |
+| `/admin/users?role=&status=&team=&language=&q=&person=&new=` | Usuarios y roles | admin |
+| `/admin/teams?status=&team=&new=` | Equipos | admin |
+| `/admin/audit?…` (the slice 3 audit params) | Auditoría (§7.2) | admin |
 
 - `app/roles.ts` admin `nav`: "Usuarios y roles" (`UserPlus`, `indicator: 'lockedAccounts'`), "Equipos" (`UsersRound`), "Auditoría" (`Shield`). `RailIndicatorKey` += `'lockedAccounts'`.
 - `app/rail-indicators.ts`: `useLockedAccountsCount({ enabled: role === 'admin' })` from `@/features/admin/core` → `lockedAccounts: { count }` when `> 0` (the rail names it "Usuarios y roles, 1 pendiente").
-- `/administracion/herramientas`, `/reglas`, `/retencion` (and the automation URLs) stay removed: keep the guards test that `/administracion/reglas` shows the not-found page, and add `/administracion/herramientas` and `/administracion/retencion` to it.
-- Path helpers in `app/roles.ts`: `adminUserPath(staffId)` (`/administracion/usuarios?persona=<id>`), `adminTeamPath(teamId)`, `adminAuditPath(q)`.
+- `/admin/tools`, `/admin/rules`, `/admin/retention` (and the automation URLs) stay removed: keep the guards test that `/admin/rules` shows the not-found page, and add `/admin/tools` and `/admin/retention` to it.
+- Path helpers in `app/roles.ts`: `adminUserPath(staffId)` (`/admin/users?person=<id>`), `adminTeamPath(teamId)`, `adminAuditPath(q)`.
 
 ### 10.2 `UsersScreen` (canvas Admin `usuarios`)
 
 Layout: `section aria-label="Personas"` (table) + `aside aria-label="Persona seleccionada"` (400 px, white), must not break at 1280.
-- **PageHeader** "Usuarios y roles"; subtitle "Quién puede hacer qué en la plataforma · {n} personas" (n = `statusCounts.all`); actions: primary "Nueva persona" (`?nueva=1`) and `SampleDataTag`.
+- **PageHeader** "Usuarios y roles"; subtitle "Quién puede hacer qué en la plataforma · {n} personas" (n = `statusCounts.all`); actions: primary "Nueva persona" (`?new=1`) and `SampleDataTag`.
 - **Toolbar:** role pills (`SegmentedControl` pills, native radios; canvas `tablist` replaced) "Todas {all}" · "Analistas {analyst}" · "Supervisoras {supervisor}" · "Administración {admin}"; `Select` "Cuenta": "Activas" · "Bloqueadas ({locked})" · "Desactivadas" · "Todas"; `Select` "Equipo" ("Todos los equipos" + active and inactive teams); `Select` "Idioma" ("Todos" · "Español" · "Portugués"); `SearchInput` (label "Buscar persona", placeholder "Buscar por nombre, correo o id", ≤ 80, debounced 300 ms); ghost "Limpiar filtros" when any is set.
-- **Table** (`Table`, sticky header, `TRowSelect` → `?persona=`): **Persona** (name; email in muted second line) · **Roles** (role chips: Analista `bg-panel text-ink-2`, Supervisora `bg-peach text-warn-strong`, Administración `bg-success-tint text-success-ink`; a feature-local `RoleChips`) · **Idiomas** ("español, portugués" or "—") · **Equipo** (name, truncated with `title`) · **Cuenta** ("Activa" ink-2; "Bloqueada" warn with a lock icon and `title` "Hasta las {hora}"; "Desactivada" muted). The status is recomputed with `useNow` from `lockedUntil` (an expired lock reads "Activa").
+- **Table** (`Table`, sticky header, `TRowSelect` → `?person=`): **Persona** (name; email in muted second line) · **Roles** (role chips: Analista `bg-panel text-ink-2`, Supervisora `bg-peach text-warn-strong`, Administración `bg-success-tint text-success-ink`; a feature-local `RoleChips`) · **Idiomas** ("español, portugués" or "—") · **Equipo** (name, truncated with `title`) · **Cuenta** ("Activa" ink-2; "Bloqueada" warn with a lock icon and `title` "Hasta las {hora}"; "Desactivada" muted). The status is recomputed with `useNow` from `lockedUntil` (an expired lock reads "Activa").
 - Footer `SourceNote`: "Personas, roles, idiomas y equipos: directorio de la plataforma (datos de ejemplo)."
 - **States** (`QueryState`): skeleton rows; empty with filters "Nadie coincide con estos filtros." + "Limpiar filtros"; error danger `Callout` + "Reintentar".
 
-**Aside** (`UserPanel`; nothing selected: "Elige una persona para ver y editar su cuenta."; unknown `persona` → `GET /admin/users/{id}`; 404 → "No encontramos a esa persona."):
+**Aside** (`UserPanel`; nothing selected: "Elige una persona para ver y editar su cuenta."; unknown `person` → `GET /admin/users/{id}`; 404 → "No encontramos a esa persona."):
 - Header: name (18 px semibold), "{roles} · {idiomas} · {equipo}", id (mono, copyable).
 - **Status callout** (when not active): locked → warn "Cuenta bloqueada hasta las {hora} tras {n} intentos fallidos." + secondary "Desbloquear"; inactive → neutral "Cuenta desactivada. No puede ingresar." + secondary "Reactivar cuenta".
 - **Edit form** (`UserForm`, shared with the create dialog): "Nombre completo", "Correo", fieldset **ROLES** (three checkbox cards with label + `ROLE_DESCRIPTION`, canvas look), fieldset **IDIOMAS** (Español, Portugués; hint "Quien atiende casos necesita al menos un idioma. Los casos en portugués solo llegan a quien lo habla (regla 3)."), `Select` "Equipo" (active teams; the current team even if inactive, marked "(inactivo)"). Note under roles: "Los cambios de rol se aplican de inmediato: la persona ve su menú actualizado sin volver a ingresar."
@@ -580,10 +580,10 @@ Layout: `section aria-label="Personas"` (table) + `aside aria-label="Persona sel
 
 ### 10.3 Dialogs (`features/admin`)
 
-- **Create** (`CreateUserDialog`, `?nueva=1`, `Dialog` md): title "Nueva persona", the `UserForm` (empty; Equipo preselected when `?equipo=` filters one active team), footer "Cancelar" + primary "Crear cuenta". The mutation sends an `Idempotency-Key` (one UUID per open dialog). Success → closes and opens **`TemporaryPasswordDialog`**, selects the new person (`?persona=`).
+- **Create** (`CreateUserDialog`, `?new=1`, `Dialog` md): title "Nueva persona", the `UserForm` (empty; Equipo preselected when `?team=` filters one active team), footer "Cancelar" + primary "Crear cuenta". The mutation sends an `Idempotency-Key` (one UUID per open dialog). Success → closes and opens **`TemporaryPasswordDialog`**, selects the new person (`?person=`).
 - **`TemporaryPasswordDialog`** (created or reset): title "Cuenta creada" / "Contraseña restablecida"; text "{Nombre} ya puede ingresar con su correo y esta contraseña temporal. Cópiala ahora: no la volveremos a mostrar."; the password (mono, 20 px, selectable) + "Copiar" (`navigator.clipboard`, label → "Copiada"); muted footnote "En desarrollo, el código de verificación es 000000."; primary "Listo". The password lives only in component state (never in the URL, the query cache or storage). On a replay (`temporaryPassword: null`): "La contraseña temporal se mostró al crear la cuenta. Si no la tienes, restablécela." + "Restablecer contraseña".
 - **Reset** (`ResetPasswordDialog`, `Dialog` sm): "¿Restablecer la contraseña de {Nombre}?"; "Se genera una contraseña temporal nueva, se cierran sus sesiones abiertas y se desbloquea la cuenta si estaba bloqueada." → "Restablecer" → `TemporaryPasswordDialog`.
-- **Deactivate** (`DeactivateUserDialog`, `Dialog` sm): "¿Desactivar la cuenta de {Nombre}?"; list: "No podrá ingresar." · "Se cierran sus sesiones abiertas ahora." · "Deja de recibir casos y queda En pausa." · "Su historial y la auditoría se conservan."; danger "Desactivar cuenta". With `openCases.total > 0`: warn `Callout` "Tiene {n} casos abiertos. Supervisión tiene que reasignarlos antes de desactivar la cuenta." + (viewer holds Supervisora) link "Abrir en Equipo y colas" → `/supervision/equipo?analista=<id>`; the confirm button is disabled. The dialog re-reads the person when it opens (`useRecheckAdminUser`) and decides the block on that fresh record (the confirm stays disabled while it reads), so a count supervision already cleared never keeps it blocked. Success toast "Cuenta desactivada" / "{Nombre} ya no puede ingresar.{ Se cerró su sesión.| Se cerraron sus {n} sesiones.}".
+- **Deactivate** (`DeactivateUserDialog`, `Dialog` sm): "¿Desactivar la cuenta de {Nombre}?"; list: "No podrá ingresar." · "Se cierran sus sesiones abiertas ahora." · "Deja de recibir casos y queda En pausa." · "Su historial y la auditoría se conservan."; danger "Desactivar cuenta". With `openCases.total > 0`: warn `Callout` "Tiene {n} casos abiertos. Supervisión tiene que reasignarlos antes de desactivar la cuenta." + (viewer holds Supervisora) link "Abrir en Equipo y colas" → `/supervision/team?analyst=<id>`; the confirm button is disabled. The dialog re-reads the person when it opens (`useRecheckAdminUser`) and decides the block on that fresh record (the confirm stays disabled while it reads), so a count supervision already cleared never keeps it blocked. Success toast "Cuenta desactivada" / "{Nombre} ya no puede ingresar.{ Se cerró su sesión.| Se cerraron sus {n} sesiones.}".
 - **Reactivate** (from the callout, no dialog): toast "Cuenta reactivada" / "{Nombre} puede volver a ingresar con su contraseña. Empieza En pausa."
 - **Unlock** (no dialog): toast "Cuenta desbloqueada" / "{Nombre} ya puede volver a intentar ingresar."; `changed: false` → info toast "La cuenta ya no estaba bloqueada."
 - **Save** success: toast "Cambios guardados"; `changed: false` → nothing (the button was disabled).
@@ -609,15 +609,15 @@ Client validation (`validateUserDraft`, `validateTeamName`), run before any requ
 ### 10.5 `TeamsScreen`
 
 Same two-column layout (`section aria-label="Equipos"` + `aside aria-label="Equipo seleccionado"` 400 px).
-- PageHeader "Equipos"; subtitle "Cómo se agrupan las personas en la plataforma · {n} equipos"; actions primary "Nuevo equipo" (`?nuevo=1`) + `SampleDataTag`.
-- Pills "Activos {active}" · "Inactivos {inactive}" · "Todos {all}". Table: **Equipo** · **Personas** (`memberCount`) · **Analistas** (`analystCount`) · **Estado** ("Activo" / "Inactivo" muted). Row select → `?equipo=`. Empty: "No hay equipos en este estado.".
+- PageHeader "Equipos"; subtitle "Cómo se agrupan las personas en la plataforma · {n} equipos"; actions primary "Nuevo equipo" (`?new=1`) + `SampleDataTag`.
+- Pills "Activos {active}" · "Inactivos {inactive}" · "Todos {all}". Table: **Equipo** · **Personas** (`memberCount`) · **Analistas** (`analystCount`) · **Estado** ("Activo" / "Inactivo" muted). Row select → `?team=`. Empty: "No hay equipos en este estado.".
 - **Aside**: name, id (mono), "Creado el {fecha}"; inline rename (`Field` "Nombre del equipo" + "Guardar nombre", `expectedVersion`); members (`AdminTeamMember` rows: name as a link to `adminUserPath`, role chips, languages, inactive ones muted with "Desactivada"); "Agregar persona" (active team only); footer danger-ghost "Desactivar equipo" (disabled when `memberCount > 0`, hint "Para desactivarlo, primero mueve a sus {n} personas a otro equipo.") or secondary "Reactivar equipo"; link "Ver en auditoría". Empty members: "Este equipo no tiene personas.".
 - **`AddMemberDialog`**: "Agregar a {equipo}"; `Select` "Persona" of active people **not** in this team ("{nombre} · {equipo actual}"); line "Pasa de {equipo actual} a {equipo}."; primary "Mover a {equipo}" → `PATCH /admin/users/{id}` `{expectedVersion: person.version, teamId}` (the person rows come from `GET /admin/users?status=active`). Errors through §10.4.
-- **`CreateTeamDialog`** (`?nuevo=1`): "Nuevo equipo", `Field` "Nombre", "Crear equipo" (with `Idempotency-Key`); success selects it. Deactivate/reactivate: confirm `Dialog` sm "¿Desactivar el equipo {nombre}?" / "Ya no se podrá mover a nadie a este equipo. Su historial se conserva."; toasts "Equipo desactivado" / "Equipo reactivado".
+- **`CreateTeamDialog`** (`?new=1`): "Nuevo equipo", `Field` "Nombre", "Crear equipo" (with `Idempotency-Key`); success selects it. Deactivate/reactivate: confirm `Dialog` sm "¿Desactivar el equipo {nombre}?" / "Ya no se podrá mover a nadie a este equipo. Su historial se conserva."; toasts "Equipo desactivado" / "Equipo reactivado".
 
 ### 10.6 Admin audit route
 
-`routes/admin/audit.tsx`: parses the audit URL with `parseAuditSearch`, renders `AuditScreen` with `canOpenCases={hasRole('supervisor')}`. The audit feature gains: the `canOpenCases` prop; `AuditFamily` option "Administración" (`?tipo=administracion`); kind/entity handling for `team`; the "Persona" select uses `GET /staff?includeInactive=true` and marks inactive people "(desactivada)".
+`routes/admin/audit.tsx`: parses the audit URL with `parseAuditSearch`, renders `AuditScreen` with `canOpenCases={hasRole('supervisor')}`. The audit feature gains: the `canOpenCases` prop; `AuditFamily` option "Administración" (`?type=administration`); kind/entity handling for `team`; the "Persona" select uses `GET /staff?includeInactive=true` and marks inactive people "(desactivada)".
 
 ### 10.7 Session live sync and the role switcher (app)
 
@@ -648,18 +648,18 @@ Same two-column layout (`section aria-label="Equipos"` + `aside aria-label="Equi
 ```ts
 // features/admin/model.ts
 export interface UsersUrlState {
-  role: RoleId | null                      // ?rol=analistas|supervisoras|administracion
-  status: UserStatusFilter                 // ?estado=activas|bloqueadas|desactivadas|todas (default activas)
-  teamId: string | null                    // ?equipo=TEAM-…
-  language: Language | null                // ?idioma=es|pt
+  role: RoleId | null                      // ?role=analyst|supervisor|admin
+  status: UserStatusFilter                 // ?status=active|locked|inactive|all (default active)
+  teamId: string | null                    // ?team=TEAM-…
+  language: Language | null                // ?language=es|pt
   query: string                            // ?q=
-  staffId: string | null                   // ?persona=STF-…
-  create: boolean                          // ?nueva=1
+  staffId: string | null                   // ?person=STF-…
+  create: boolean                          // ?new=1
 }
 export interface TeamsUrlState {
-  status: TeamStatusFilter                 // ?estado=activos|inactivos|todos (default activos)
-  teamId: string | null                    // ?equipo=TEAM-…
-  create: boolean                          // ?nuevo=1
+  status: TeamStatusFilter                 // ?status=active|inactive|all (default active)
+  teamId: string | null                    // ?team=TEAM-…
+  create: boolean                          // ?new=1
 }
 ```
 
@@ -778,7 +778,7 @@ Update `backend/README.md`: accounts table (Mariana locked, Andrés inactive, te
 - she tries to deactivate Daniela → blocked by 5 open cases; Felipe (Supervisora again) reassigns them (the pt case to Sebastián or Tomás, rule 3), then the deactivation works, Daniela's window goes to `/login`, and her login answers "El correo o la contraseña no coinciden.";
 - she cannot uncheck her own Administración or deactivate herself; two windows editing the same person → the second gets the `version_conflict` message with fresh data;
 - she renames "Equipo Pacífico" → "Equipo Pacífico Sur": the supervision pill and the summary of its members (role switcher) update; deactivating "Equipo Andes" is refused (`team_not_empty`); a new empty team can be created, deactivated and reactivated;
-- `/administracion/auditoria` and `/supervision/auditoria` show every step with Spanish descriptions under "Administración"; nothing breaks at 1280 px; no console errors.
+- `/admin/audit` and `/supervision/audit` show every step with Spanish descriptions under "Administración"; nothing breaks at 1280 px; no console errors.
 
 ## 13. Known gaps and seams (do not build now)
 

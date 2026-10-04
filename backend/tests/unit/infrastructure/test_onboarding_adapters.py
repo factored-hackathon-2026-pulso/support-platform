@@ -222,7 +222,7 @@ def message(number: int) -> EmailMessage:
         to=f"persona{number}@latambank.example",
         subject="Te invitaron",
         text="Hola",
-        link=f"http://localhost:5173/activar?token=t{number}",
+        link=f"http://localhost:5173/activate?token=t{number}",
     )
 
 

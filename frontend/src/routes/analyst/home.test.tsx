@@ -42,9 +42,9 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const renderHome = (entry = '/analista/inicio') => renderRoute(entry, { staff: analystStaff })
+const renderHome = (entry = '/analyst/home') => renderRoute(entry, { staff: analystStaff })
 
-describe('/analista/inicio (Inicio)', () => {
+describe('/analyst/home (Inicio)', () => {
   it('greets her and names the day and her team', async () => {
     renderHome()
     // NOW is 11:00 in Bogotá (the tests' zone).
@@ -68,7 +68,7 @@ describe('/analista/inicio (Inicio)', () => {
     expect(await within(block).findByText('5 casos abiertos')).toBeInTheDocument()
     expect(within(block).getByRole('link', { name: 'Ir a Casos' })).toHaveAttribute(
       'href',
-      '/analista',
+      '/analyst/cases',
     )
     await user.click(within(block).getByRole('button', { name: 'Empezar a atender' }))
     expect(updateAvailability).toHaveBeenCalledWith('available')
@@ -87,15 +87,15 @@ describe('/analista/inicio (Inicio)', () => {
         .getAllByRole('link')
         .map((link) => [link.getAttribute('aria-label'), link.getAttribute('href')]),
     ).toEqual([
-      ['2 Por responder. Ver en Casos', '/analista?estado=por-responder'],
-      ['2 Nuevos. Ver en Casos', '/analista?estado=nuevos'],
-      ['1 Esperando al cliente. Ver en Casos', '/analista?estado=esperando'],
-      ['3 Cerrados, últimos 7 días. Ver en Casos', '/analista?estado=cerrados'],
+      ['2 Por responder. Ver en Casos', '/analyst/cases?status=to_reply'],
+      ['2 Nuevos. Ver en Casos', '/analyst/cases?status=new'],
+      ['1 Esperando al cliente. Ver en Casos', '/analyst/cases?status=waiting'],
+      ['3 Cerrados, últimos 7 días. Ver en Casos', '/analyst/cases?status=closed'],
     ])
     expect(within(tiles).getByRole('link', { name: /Por responder/ })).toHaveClass('border-l-warn')
     await user.click(within(tiles).getByRole('link', { name: /Cerrados/ }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/analista'))
-    expect(router.state.location.search).toBe('?estado=cerrados')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/analyst/cases'))
+    expect(router.state.location.search).toBe('?status=closed')
     expect(
       await screen.findByRole('button', { name: 'Quitar filtro Cerrados' }),
     ).toBeInTheDocument()
@@ -128,7 +128,7 @@ describe('/analista/inicio (Inicio)', () => {
     ).not.toContain('·')
     expect(
       within(list).getByRole('link', { name: 'Abrir el caso de Beatriz Salcedo Prieto' }),
-    ).toHaveAttribute('href', '/analista?caso=CASE-00000000000000000000000102&estado=por-responder')
+    ).toHaveAttribute('href', '/analyst/cases?case=CASE-00000000000000000000000102&status=to_reply')
   })
 
   it('marks an escalated case in "Lo primero" with "Escalado" (glyph + word)', async () => {
@@ -154,7 +154,7 @@ describe('/analista/inicio (Inicio)', () => {
     const list = within(feed).getByRole('list', { name: 'Mientras no estabas' })
     expect(within(list).getAllByRole('link')).toHaveLength(4)
     const away = within(list).getByRole('link', { name: /^Marcela Quintana Pardo: Ya no es tuyo/ })
-    expect(away).toHaveAttribute('href', '/analista?caso=CASE-00000000000000000000000101')
+    expect(away).toHaveAttribute('href', '/analyst/cases?case=CASE-00000000000000000000000101')
     expect(away).toHaveAccessibleName(
       'Marcela Quintana Pardo: Ya no es tuyo. Lo reasignó: Lucía Herrera, Ahora lo atiende: Sebastián Cárdenas, Solo lectura, hace 6 min. Abrir en solo lectura',
     )
@@ -294,6 +294,6 @@ describe('/analista/inicio (Inicio)', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Buenos días, Daniela' }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/analista/inicio')
+    expect(router.state.location.pathname).toBe('/analyst/home')
   })
 })

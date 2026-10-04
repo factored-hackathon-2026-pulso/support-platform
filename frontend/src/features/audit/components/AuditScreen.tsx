@@ -1,14 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import { Page, PageBody } from '@/components/layout'
 import { PageHeader } from '@/components/ui'
-import {
-  auditFiltersOf,
-  clearAuditFilters,
-  dateRangeError,
-  hasAuditFilters,
-  type AuditStateChangeOptions,
-  type AuditUrlState,
-} from '../model'
+import { auditFiltersOf, clearAuditFilters, dateRangeError, hasAuditFilters } from '../model'
+import type { AuditStateChangeOptions, AuditUrlState } from '../url'
 import { useNow } from '@/lib/hooks'
 import { useAuditEvent, useAuditEvents } from '../hooks'
 import { AuditDetail } from './AuditDetail'
@@ -32,7 +26,7 @@ export interface AuditScreenProps {
 /**
  * Auditoría (SuAudit.dc.html, contract §8.8): who did what, on which case and
  * when, from the event log. Filters, the search and the selected event live in
- * the URL (`?quien=&persona=&caso=&tipo=&desde=&hasta=&q=&cambios=&evento=`).
+ * the URL (`?actor=&person=&case=&type=&from=&to=&q=&changes=&event=`).
  * Read on demand: no realtime ("Actualizar" refetches). No export. The queue
  * notice of the supervision screens is mounted by the route (features/audit
  * does not import features/supervision).

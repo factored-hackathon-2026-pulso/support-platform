@@ -156,12 +156,12 @@ const RULES: Rule[] = [
       ['src/app', 'src/features', 'src/routes', 'src/components'].some((dir) => inDir(target, dir)),
   },
   {
-    name: 'features use only the session and role helpers of src/app',
+    name: 'features use only the session, role and path helpers of src/app',
     violates: ({ from, target }) =>
       inDir(from, 'src/features') &&
       !isTestFile(from) &&
       inDir(target, 'src/app') &&
-      !['src/app/session', 'src/app/roles'].includes(target),
+      !['src/app/session', 'src/app/roles', 'src/app/paths'].includes(target),
   },
   {
     name: 'test helpers (src/test) are used by tests only',
@@ -181,6 +181,24 @@ describe('import boundaries', () => {
     const offending = edges
       .filter((edge) => rule.violates(edge))
       .map(({ from, specifier }) => `${from} → ${specifier}`)
+    expect(offending).toEqual([])
+  })
+})
+
+/** Where the SPA's paths are written (ARCHITECTURE.md §4): nowhere else in the source. */
+const PATHS_MODULE = 'src/app/paths.ts'
+
+/** A string literal that starts with one of the SPA's top-level path segments. */
+const APP_PATH_LITERAL =
+  /['"`]\/(?:analyst|supervision|admin|customer|login|activate|reset-password|dev)(?:[/?'"`]|$)/m
+
+describe('route paths', () => {
+  it(`are written only in ${PATHS_MODULE}`, () => {
+    const offending = Object.entries(SOURCES)
+      .map(([key, source]) => [key.replace(/^\//, ''), stripComments(source)] as const)
+      .filter(([file]) => file !== PATHS_MODULE && !isTestFile(file))
+      .filter(([, source]) => APP_PATH_LITERAL.test(source))
+      .map(([file]) => file)
     expect(offending).toEqual([])
   })
 })

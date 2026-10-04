@@ -37,10 +37,9 @@ import {
   queuesStateFromSelection,
   shownCasesLabel,
   type QueueNavFigures,
-  type QueuesUrlState,
-  type UrlStateChangeOptions,
   withoutKey,
 } from '../model'
+import type { QueuesUrlState, UrlStateChangeOptions } from '../url'
 import { useOpenCases, useQueueOverview, useSupervisionLive } from '../hooks'
 import type { Language, LanguageOpenCases, OpenCaseRow } from '../types'
 import { CaseCustomerCell, CaseStatusCell } from './CaseCells'

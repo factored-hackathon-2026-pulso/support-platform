@@ -54,7 +54,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderTeam(path = '/supervision/equipo') {
+function renderTeam(path = '/supervision/team') {
   return renderRoute(path, { staff: supervisorStaff })
 }
 
@@ -117,7 +117,7 @@ describe('team screen ("Equipo")', () => {
         name: 'Portugués 3',
       }),
     )
-    expect(router.state.location.search).toBe('?idioma=pt')
+    expect(router.state.location.search).toBe('?language=pt')
     expect(await screen.findByText('3 de 6 analistas')).toBeInTheDocument()
     expect(within(analystsTable()).getAllByRole('row')).toHaveLength(4)
     await user.click(
@@ -125,17 +125,17 @@ describe('team screen ("Equipo")', () => {
         name: 'Equipo Andes 1',
       }),
     )
-    expect(router.state.location.search).toBe(`?idioma=pt&equipo=${ANDES.id}`)
+    expect(router.state.location.search).toBe(`?language=pt&team=${ANDES.id}`)
     await user.click(screen.getByRole('button', { name: 'Listo' }))
     const chips = screen.getByRole('group', { name: 'Filtros activos' })
     await user.click(within(chips).getByRole('button', { name: 'Quitar filtro Portugués' }))
-    expect(router.state.location.search).toBe(`?equipo=${ANDES.id}`)
+    expect(router.state.location.search).toBe(`?team=${ANDES.id}`)
     await user.click(within(chips).getByRole('button', { name: 'Limpiar filtros' }))
     expect(router.state.location.search).toBe('')
   })
 
   it('says when nobody matches and clears the filters', async () => {
-    const { user, router } = renderTeam('/supervision/equipo?estado=disponible')
+    const { user, router } = renderTeam('/supervision/team?status=available')
     expect(await screen.findByText('Nadie coincide con los filtros.')).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: 'Limpiar filtros' }).at(-1)!)
     await waitFor(() => expect(router.state.location.search).toBe(''))
@@ -159,26 +159,26 @@ describe('team screen ("Equipo")', () => {
     const { user, router } = renderTeam()
     await user.click(await screen.findByRole('button', { name: 'Julián Ortega' }))
     const sheet = await screen.findByRole('dialog', { name: 'Julián Ortega' })
-    expect(router.state.location.search).toBe(`?analista=${JULIAN_ID}`)
+    expect(router.state.location.search).toBe(`?analyst=${JULIAN_ID}`)
     expect(within(sheet).getByText('Equipo Andes')).toBeInTheDocument()
     expect(within(sheet).getByText('2,5')).toBeInTheDocument()
     expect(within(sheet).getByText('Escalado')).toBeInTheDocument()
     expect(
       within(sheet).getByRole('link', { name: 'Ver conversación de Camila Torres Benavides' }),
-    ).toHaveAttribute('href', `/supervision/casos/${julianCamila.id}`)
+    ).toHaveAttribute('href', `/supervision/cases/${julianCamila.id}`)
     await user.click(
       within(sheet).getByRole('link', { name: 'Ver conversación de Camila Torres Benavides' }),
     )
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe(`/supervision/casos/${julianCamila.id}`),
+      expect(router.state.location.pathname).toBe(`/supervision/cases/${julianCamila.id}`),
     )
     expect(router.state.location.state).toEqual({
-      from: `/supervision/equipo?analista=${JULIAN_ID}`,
+      from: `/supervision/team?analyst=${JULIAN_ID}`,
     })
   })
 
   it('closes the sheet of an analyst who is not listed', async () => {
-    const { router } = renderTeam('/supervision/equipo?analista=STF-NADIE')
+    const { router } = renderTeam('/supervision/team?analyst=STF-NADIE')
     await screen.findByRole('table', { name: 'Analistas' })
     await waitFor(() => expect(router.state.location.search).toBe(''))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -205,7 +205,7 @@ describe('reassign dialog ("Reasignar caso")', () => {
     vi.mocked(fetchTeamOverview).mockResolvedValue(
       makeTeamOverview({ analysts: [...seededAnalysts, ...people] }),
     )
-    const { user } = renderTeam(`/supervision/equipo?reasignar=${julianCamila.id}`)
+    const { user } = renderTeam(`/supervision/team?reassign=${julianCamila.id}`)
     const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
     expect(within(dialog).getByText('Lo atiende Julián Ortega')).toBeInTheDocument()
     expect(within(dialog).getByText('Sugeridos')).toBeInTheDocument()
@@ -244,7 +244,7 @@ describe('reassign dialog ("Reasignar caso")', () => {
         extensions: { currentAnalystId: DANIELA_ID },
       }),
     )
-    const { user } = renderTeam(`/supervision/equipo?reasignar=${julianCamila.id}`)
+    const { user } = renderTeam(`/supervision/team?reassign=${julianCamila.id}`)
     const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
     await user.click(
       within(dialog).getByRole('checkbox', {
@@ -281,7 +281,7 @@ describe('reassign dialog ("Reasignar caso")', () => {
       case: makeCaseSummary({ ...julianCamila, assignedAnalystId: DANIELA_ID }),
       assignment: { ...makeCaseDetail().assignment!, reason: 'manual' },
     })
-    const { user } = renderTeam(`/supervision/equipo?reasignar=${julianCamila.id}`)
+    const { user } = renderTeam(`/supervision/team?reassign=${julianCamila.id}`)
     const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
     await user.click(within(dialog).getByRole('radio', { name: /^Daniela Ríos/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Daniela' }))
@@ -292,8 +292,8 @@ describe('reassign dialog ("Reasignar caso")', () => {
     ).toBeInTheDocument()
   })
 
-  it('drops ?reasignar= for a case that is not open any more', async () => {
-    const { router } = renderTeam('/supervision/equipo?reasignar=CASE-NADA')
+  it('drops ?reassign= for a case that is not open any more', async () => {
+    const { router } = renderTeam('/supervision/team?reassign=CASE-NADA')
     await screen.findByRole('table', { name: 'Analistas' })
     await waitFor(() => expect(router.state.location.search).toBe(''))
   })
@@ -325,8 +325,8 @@ describe('notices', () => {
     expect(await within(toasts).findByText('Julián Ortega escaló un caso')).toBeInTheDocument()
     expect(within(toasts).getAllByText('Julián Ortega escaló un caso')).toHaveLength(1)
     await user.click(within(toasts).getByRole('button', { name: 'Revisar' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/escalados'))
-    expect(router.state.location.search).toBe(`?escalamiento=${camilaEscalation.escalation.id}`)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/escalations'))
+    expect(router.state.location.search).toBe(`?escalation=${camilaEscalation.escalation.id}`)
   })
 
   it('subscribes to the supervision topics', async () => {
@@ -343,7 +343,7 @@ describe('notices', () => {
 describe('supervision routes', () => {
   it('lands on Colas and keeps the removed approvals URL on the not-found page', async () => {
     const { router } = renderTeam('/supervision')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/colas'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/queues'))
     renderTeam('/supervision/aprobaciones')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Página no encontrada' }),

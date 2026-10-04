@@ -26,7 +26,7 @@ export interface CustomerSimulatorScreenProps {
   /** Tests only: fake socket for the customer realtime client. The route passes nothing. */
   createSocket?: WebSocketFactory
   /**
-   * The channel the customer uses (`?canal=` in the route); null = the channel picker.
+   * The channel the customer uses (`?channel=` in the route); null = the channel picker.
    * Without `onChannelChange` the screen keeps it itself, starting at `channel`.
    */
   channel?: SimChannel | null
@@ -34,7 +34,7 @@ export interface CustomerSimulatorScreenProps {
 }
 
 /**
- * /cliente — customer simulator, a dev/demo tool outside the staff shell: pick a seeded
+ * /customer — customer simulator, a dev/demo tool outside the staff shell: pick a seeded
  * customer, then how they reach the bank (chat, a call, an email; slice 12), and answer from
  * the Workspace in another window. It runs its own customer session, API client and socket,
  * apart from any staff session in the same tab.

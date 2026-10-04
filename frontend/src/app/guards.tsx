@@ -3,11 +3,12 @@ import { CloudOff, UserX } from 'lucide-react'
 import { FullScreenStatus } from '@/components/layout'
 import { Button, DocumentTitle, EmptyState } from '@/components/ui'
 import { firstRoleHome, resolvePostLoginPath, type RoleId } from './roles'
+import { PATHS } from './paths'
 import { readRedirectFrom, type LoginRedirectState } from './redirect'
 import { useSession } from './session'
 
 /** Any staff URL: RequireSession renders the "no role" screen there. */
-const STAFF_FALLBACK = '/analista'
+const STAFF_FALLBACK = PATHS.analyst.root
 
 /**
  * The session could not be restored for a transient reason (API down, 5xx): the
@@ -47,7 +48,7 @@ export function RequireSession() {
   if (status === 'error') return <SessionUnavailable />
   if (!user) {
     const state: LoginRedirectState = { from: `${location.pathname}${location.search}` }
-    return <Navigate to="/login" replace state={state} />
+    return <Navigate to={PATHS.login} replace state={state} />
   }
   if (user.roleIds.length === 0) {
     return (
@@ -70,11 +71,11 @@ export function RequireSession() {
   return <Outlet />
 }
 
-/** Role section (/analista, /supervision…): users without the role go to their own home. */
+/** Role section (/analyst, /supervision…): users without the role go to their own home. */
 export function RequireRole({ role }: { role: RoleId }) {
   const { user, hasRole } = useSession()
-  if (!user) return <Navigate to="/login" replace />
-  if (!hasRole(role)) return <Navigate to={firstRoleHome(user.roleIds) ?? '/login'} replace />
+  if (!user) return <Navigate to={PATHS.login} replace />
+  if (!hasRole(role)) return <Navigate to={firstRoleHome(user.roleIds) ?? PATHS.login} replace />
   return <Outlet />
 }
 
@@ -101,6 +102,6 @@ export function RootRedirect() {
   const { status, user } = useSession()
   if (status === 'loading') return <FullScreenStatus label="Cargando tu sesión" />
   if (status === 'error') return <SessionUnavailable />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to={PATHS.login} replace />
   return <Navigate to={firstRoleHome(user.roleIds) ?? STAFF_FALLBACK} replace />
 }

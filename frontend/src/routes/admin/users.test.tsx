@@ -60,7 +60,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderUsers(path = '/administracion/usuarios', staff = adminStaff) {
+function renderUsers(path = '/admin/users', staff = adminStaff) {
   return renderRoute(path, { staff })
 }
 
@@ -133,7 +133,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     expect(within(panel).getByRole('checkbox', { name: 'Portugués 1' })).toBeInTheDocument()
 
     await user.click(within(panel).getByRole('checkbox', { name: 'Supervisión 2' }))
-    expect(router.state.location.search).toBe('?rol=supervision')
+    expect(router.state.location.search).toBe('?role=supervisor')
     expect(router.state.historyAction).toBe('REPLACE')
     expect(within(table()).queryByRole('row', { name: /Daniela Ríos Medina/ })).toBeNull()
     expect(row(/Carolina Peña Ruiz/)).toBeInTheDocument()
@@ -141,13 +141,13 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     // The other groups count only supervisors now.
     expect(within(panel).getByRole('checkbox', { name: 'Activa 1' })).toBeInTheDocument()
     await user.click(within(panel).getByRole('checkbox', { name: 'Bloqueada 1' }))
-    expect(search(router).get('estado')).toBe('bloqueadas')
+    expect(search(router).get('status')).toBe('locked')
     expect(within(table()).getAllByRole('row')).toHaveLength(2) // header + Mariana
     await user.keyboard('{Escape}')
     expect(screen.getByRole('button', { name: 'Filtros 2 activos' })).toHaveFocus()
 
     await user.click(screen.getByRole('button', { name: 'Quitar filtro Supervisión' }))
-    expect(router.state.location.search).toBe('?estado=bloqueadas')
+    expect(router.state.location.search).toBe('?status=locked')
     await user.type(screen.getByRole('searchbox', { name: 'Buscar persona' }), 'Duque')
     await waitFor(() => expect(search(router).get('q')).toBe('Duque'))
     await waitFor(() =>
@@ -163,7 +163,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
 
   it('offers "Limpiar filtros" when nobody matches, and retries after an error', async () => {
     vi.mocked(fetchAdminUsers).mockResolvedValue(makeUserList([]))
-    const { user, router } = renderUsers('/administracion/usuarios?estado=bloqueadas&idioma=pt')
+    const { user, router } = renderUsers('/admin/users?status=locked&language=pt')
     expect(
       await screen.findByRole('heading', { name: 'Nadie coincide con estos filtros.' }),
     ).toBeInTheDocument()
@@ -189,7 +189,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     })
     const { user, router } = renderUsers()
     await user.click(await screen.findByRole('button', { name: 'Mariana Duque' }))
-    expect(search(router).get('persona')).toBe(mariana.id)
+    expect(search(router).get('person')).toBe(mariana.id)
     expect(router.state.historyAction).toBe('PUSH')
     const panel = aside()
     expect(within(panel).getByRole('heading', { name: 'Mariana Duque' })).toBeInTheDocument()
@@ -218,7 +218,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       user: { ...andres, status: 'active', version: 4 },
       revokedSessions: 0,
     })
-    const { user } = renderUsers(`/administracion/usuarios?persona=${andres.id}`)
+    const { user } = renderUsers(`/admin/users?person=${andres.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     expect(await within(panel).findByText('No puede ingresar.')).toBeInTheDocument()
     expect(fetchAdminUser).toHaveBeenCalledWith(andres.id, expect.anything())
@@ -237,12 +237,12 @@ describe('users and roles screen ("Usuarios y roles")', () => {
   })
 
   it('says when the linked person does not exist', async () => {
-    renderUsers('/administracion/usuarios?persona=STF-NADIE')
+    renderUsers('/admin/users?person=STF-NADIE')
     expect(await screen.findByText('No encontramos a esa persona.')).toBeInTheDocument()
   })
 
   it('protects the admin herself: her own Administración, deactivation and password', async () => {
-    renderUsers(`/administracion/usuarios?persona=${selfAdmin.id}`)
+    renderUsers(`/admin/users?person=${selfAdmin.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     const adminCard = await within(panel).findByRole('checkbox', { name: /^Administración/ })
     expect(adminCard).toBeChecked()
@@ -264,12 +264,12 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     ).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: 'Ver en auditoría' })).toHaveAttribute(
       'href',
-      `/administracion/auditoria?q=${selfAdmin.id}`,
+      `/admin/audit?q=${selfAdmin.id}`,
     )
   })
 
   it('blocks removing a language or Analista while she holds open cases (no request)', async () => {
-    const { user } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
+    const { user } = renderUsers(`/admin/users?person=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await within(panel).findByRole('heading', { name: daniela.name })
     expect(within(panel).getByText('5 (4 en español y 1 en portugués)')).toBeInTheDocument()
@@ -309,7 +309,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       user: { ...daniela, languages: ['es'], openCases: { total: 4, es: 4, pt: 0 }, version: 6 },
       revokedSessions: 0,
     })
-    const { user } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
+    const { user } = renderUsers(`/admin/users?person=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await within(panel).findByRole('heading', { name: daniela.name })
     // Supervision moved her Portuguese case away; this screen did not hear about it.
@@ -334,7 +334,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       user: { ...daniela, roles: ['analyst', 'supervisor'], version: 8 },
       revokedSessions: 0,
     })
-    const { user } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
+    const { user } = renderUsers(`/admin/users?person=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await user.click(await within(panel).findByRole('checkbox', { name: /^Supervisión/ }))
     expect(
@@ -358,7 +358,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
         extensions: { currentVersion: 9, current },
       }),
     )
-    const { user } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
+    const { user } = renderUsers(`/admin/users?person=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     const name = await within(panel).findByRole('textbox', { name: 'Nombre completo' })
     await user.clear(name)
@@ -376,7 +376,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
   })
 
   it('warns when someone else changes the person while she has a draft', async () => {
-    const { user, queryClient } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
+    const { user, queryClient } = renderUsers(`/admin/users?person=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await user.click(await within(panel).findByRole('checkbox', { name: /^Supervisión/ }))
     const { adminKeys } = await import('@/features/admin')
@@ -409,7 +409,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     const { user, router } = renderUsers()
     await screen.findByRole('table', { name: 'Personas' })
     await user.click(screen.getByRole('button', { name: 'Nuevo usuario' }))
-    expect(search(router).get('nueva')).toBe('1')
+    expect(search(router).get('new')).toBe('1')
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo usuario' })
     expect(within(dialog).getByText('Le llega una invitación por correo')).toBeInTheDocument()
     expect(
@@ -469,8 +469,8 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       expect(within(sent).getByText(line)).toBeInTheDocument()
     }
     expect(within(sent).queryByText(/contraseña temporal|000000/)).not.toBeInTheDocument()
-    expect(search(router).get('persona')).toBe(ana.id)
-    expect(search(router).get('nueva')).toBeNull()
+    expect(search(router).get('person')).toBe(ana.id)
+    expect(search(router).get('new')).toBeNull()
     await user.click(within(sent).getByRole('button', { name: 'Listo' }))
     expect(screen.queryByRole('dialog', { name: 'Invitación enviada' })).not.toBeInTheDocument()
     // Her aside: "Invitación pendiente", the invitation facts and its actions.
@@ -482,7 +482,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
   it('shows the same "Invitación enviada" on an idempotent replay', async () => {
     vi.mocked(createUser).mockResolvedValue({ user: bruna })
     vi.mocked(fetchAdminUser).mockResolvedValue(bruna)
-    const { user } = renderUsers('/administracion/usuarios?nueva=1')
+    const { user } = renderUsers('/admin/users?new=1')
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo usuario' })
     await user.type(within(dialog).getByRole('textbox', { name: 'Nombre completo' }), bruna.name)
     await user.type(within(dialog).getByRole('textbox', { name: 'Correo' }), bruna.email)
@@ -502,7 +502,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     vi.mocked(createUser).mockRejectedValue(
       new ApiProblem({ status: 409, code: 'email_taken', extensions: { field: 'email' } }),
     )
-    const { user } = renderUsers('/administracion/usuarios?nueva=1')
+    const { user } = renderUsers('/admin/users?new=1')
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo usuario' })
     await user.type(within(dialog).getByRole('textbox', { name: 'Nombre completo' }), 'Ana Gil')
     await user.type(within(dialog).getByRole('textbox', { name: 'Correo' }), daniela.email)
@@ -532,7 +532,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       user: { ...bruna, status: 'cancelled', invitation: null, version: 5 },
       revokedSessions: 0,
     })
-    const { user, router } = renderUsers(`/administracion/usuarios?persona=${bruna.id}`)
+    const { user, router } = renderUsers(`/admin/users?person=${bruna.id}`)
     await screen.findByRole('table', { name: 'Personas' })
     expect(row(/Bruna Esteves/)).toHaveTextContent('Invitación pendiente')
     const panel = aside()
@@ -569,7 +569,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     expect(
       screen.getByText('El enlace que recibió Bruna Esteves ya no funciona.'),
     ).toBeInTheDocument()
-    await waitFor(() => expect(search(router).get('persona')).toBeNull())
+    await waitFor(() => expect(search(router).get('person')).toBeNull())
   })
 
   it('says when an invitation expired', async () => {
@@ -583,7 +583,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       },
     }
     vi.mocked(fetchAdminUser).mockResolvedValue(expired)
-    renderUsers(`/administracion/usuarios?persona=${bruna.id}`)
+    renderUsers(`/admin/users?person=${bruna.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     expect(await within(panel).findByText('La invitación venció')).toBeInTheDocument()
     expect(within(panel).getByText('Venció')).toBeInTheDocument()
@@ -596,7 +596,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       revokedSessions: 1,
       expiresAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
     })
-    const { user } = renderUsers(`/administracion/usuarios?persona=${mariana.id}`)
+    const { user } = renderUsers(`/admin/users?person=${mariana.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await user.click(
       await within(panel).findByRole('button', { name: 'Enviar enlace para restablecer' }),
@@ -624,7 +624,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
   })
 
   it('blocks deactivating someone with open cases; only a supervisor-admin gets the link', async () => {
-    const { user, unmount } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
+    const { user, unmount } = renderUsers(`/admin/users?person=${daniela.id}`)
     let panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await user.click(await within(panel).findByRole('button', { name: 'Desactivar cuenta' }))
     let dialog = await screen.findByRole('dialog', {
@@ -641,10 +641,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     vi.mocked(fetchAdminUsers).mockResolvedValue(
       makeUserList([{ ...carolina, guards: { isSelf: true, lastActiveAdmin: false } }, daniela]),
     )
-    const second = renderUsers(
-      `/administracion/usuarios?persona=${daniela.id}`,
-      supervisorAdminStaff,
-    )
+    const second = renderUsers(`/admin/users?person=${daniela.id}`, supervisorAdminStaff)
     panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await second.user.click(await within(panel).findByRole('button', { name: 'Desactivar cuenta' }))
     dialog = await screen.findByRole('dialog', {
@@ -652,7 +649,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     })
     expect(within(dialog).getByRole('link', { name: 'Ver en Equipo' })).toHaveAttribute(
       'href',
-      `/supervision/equipo?analista=${daniela.id}`,
+      `/supervision/team?analyst=${daniela.id}`,
     )
   })
 
@@ -662,7 +659,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       user: { ...daniela, status: 'inactive', openCases: { total: 0, es: 0, pt: 0 } },
       revokedSessions: 1,
     })
-    const { user } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
+    const { user } = renderUsers(`/admin/users?person=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     expect(fetchAdminUser).not.toHaveBeenCalled() // the cached record still says 5
     // Supervision reassigned her 5 cases; no signal reached this screen.
@@ -688,7 +685,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       user: { ...mariana, status: 'inactive', version: 4 },
       revokedSessions: 2,
     })
-    const { user } = renderUsers(`/administracion/usuarios?persona=${mariana.id}`)
+    const { user } = renderUsers(`/admin/users?person=${mariana.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
     await user.click(await within(panel).findByRole('button', { name: 'Desactivar cuenta' }))
     const dialog = await screen.findByRole('dialog', {

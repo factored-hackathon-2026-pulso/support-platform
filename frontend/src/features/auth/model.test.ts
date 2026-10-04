@@ -91,9 +91,9 @@ describe('auth model', () => {
         challengeId: 'CH-1',
         email: 'a@b.co',
         methods: ['totp', 'sms'],
-        from: '/analista',
+        from: '/analyst/cases',
       }),
-    ).toEqual({ challengeId: 'CH-1', email: 'a@b.co', from: '/analista' })
+    ).toEqual({ challengeId: 'CH-1', email: 'a@b.co', from: '/analyst/cases' })
     expect(readMfaState({ email: 'a@b.co' })).toBeNull()
     expect(readMfaState(null)).toBeNull()
     expect(readLockedState({ email: 'a@b.co', unlockAt: 'not a date' })).toEqual({

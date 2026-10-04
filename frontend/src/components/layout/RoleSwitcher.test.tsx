@@ -5,7 +5,7 @@ import { renderRoute } from '@/test/render'
 
 describe('RoleSwitcher', () => {
   it('lists only the roles the user holds, marking the current one', async () => {
-    const { user } = renderRoute('/administracion/usuarios', { staff: supervisorAdminStaff })
+    const { user } = renderRoute('/admin/users', { staff: supervisorAdminStaff })
     await screen.findByRole('heading', { level: 1, name: 'Usuarios y roles' })
 
     const trigger = screen.getByRole('button', { name: 'Carolina Peña Ruiz, cambiar de rol' })
@@ -24,17 +24,17 @@ describe('RoleSwitcher', () => {
   })
 
   it('switches role and lands on its home', async () => {
-    const { user, router } = renderRoute('/analista', { staff: supervisorStaff })
+    const { user, router } = renderRoute('/analyst/cases', { staff: supervisorStaff })
     await screen.findByRole('heading', { level: 1, name: 'Casos' })
     await user.click(screen.getByRole('button', { name: /cambiar de rol/ }))
     await user.click(screen.getByRole('link', { name: 'Supervisión' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Colas' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/supervision/colas')
+    expect(router.state.location.pathname).toBe('/supervision/queues')
     expect(screen.queryByRole('list', { name: 'Cambiar de rol' })).not.toBeInTheDocument()
   })
 
   it('closes with Escape and returns focus to the avatar', async () => {
-    const { user } = renderRoute('/analista', { staff: supervisorStaff })
+    const { user } = renderRoute('/analyst/cases', { staff: supervisorStaff })
     await screen.findByRole('heading', { level: 1, name: 'Casos' })
     const trigger = screen.getByRole('button', { name: /cambiar de rol/ })
     await user.click(trigger)
@@ -44,7 +44,7 @@ describe('RoleSwitcher', () => {
   })
 
   it('signs out back to the login', async () => {
-    const { user, router } = renderRoute('/analista', { staff: supervisorStaff })
+    const { user, router } = renderRoute('/analyst/cases', { staff: supervisorStaff })
     await screen.findByRole('heading', { level: 1, name: 'Casos' })
     await user.click(screen.getByRole('button', { name: /cambiar de rol/ }))
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))

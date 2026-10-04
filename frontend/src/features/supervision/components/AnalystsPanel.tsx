@@ -47,7 +47,7 @@ export interface AnalystsPanelProps {
 /**
  * "Analistas" (SuTeam, slice 9): one table of every analyst, whatever the team (the team
  * is a filter, never a tab): what each one is doing now, her languages and her load.
- * Selecting a row opens her sheet (`?analista=`).
+ * Selecting a row opens her sheet (`?analyst=`).
  */
 export function AnalystsPanel({
   query,

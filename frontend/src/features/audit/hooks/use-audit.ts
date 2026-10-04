@@ -39,7 +39,7 @@ export function useAuditEvents(
   })
 }
 
-/** GET /audit/events/{id}: only for a `?evento=` that is not in the loaded pages. */
+/** GET /audit/events/{id}: only for a `?event=` that is not in the loaded pages. */
 export function useAuditEvent(
   eventId: string | null,
   enabled: boolean,

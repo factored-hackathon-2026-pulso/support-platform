@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Check, Copy, Mail, Smartphone } from 'lucide-react'
+import { PATHS } from '@/app/paths'
 import {
   Badge,
   Button,
@@ -404,7 +405,7 @@ function AccountReady({ email }: { email: string }) {
           Empiezas En pausa: pasa a Disponible cuando quieras recibir casos
         </li>
       </ul>
-      <LinkButton to="/login" variant="primary" size="lg" block>
+      <LinkButton to={PATHS.login} variant="primary" size="lg" block>
         Entrar
       </LinkButton>
     </>

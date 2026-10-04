@@ -28,8 +28,8 @@ vi.mock('../api', async (importOriginal) => {
 
 const onClose = vi.fn<() => void>()
 
-/** Controlled like the Workspace does it through `?historial=`. */
-function Harness({ initial = 'lista' }: { initial?: string }) {
+/** Controlled like the Workspace does it through `?previous=`. */
+function Harness({ initial = 'list' }: { initial?: string }) {
   const [selected, setSelected] = useState(initial)
   return (
     <CaseHistorySheet
@@ -47,7 +47,7 @@ function TriggerHarness() {
   const [selected, setSelected] = useState<string | null>(null)
   return (
     <>
-      <button type="button" onClick={() => setSelected('lista')}>
+      <button type="button" onClick={() => setSelected('list')}>
         Casos anteriores (2)
       </button>
       {selected ? (
@@ -114,7 +114,7 @@ describe('CaseHistorySheet', () => {
     expect(await within(sheet).findByRole('list', { name: 'Casos anteriores' })).toBeInTheDocument()
   })
 
-  it('opens straight on a past case (?historial=<id>)', async () => {
+  it('opens straight on a past case (?previous=<id>)', async () => {
     renderSheet(JULIAN_CASE_ID)
     expect(await screen.findByText(/Soy Julián, de LATAM Bank/)).toBeInTheDocument()
     expect(api.fetchCaseHistory).not.toHaveBeenCalled()

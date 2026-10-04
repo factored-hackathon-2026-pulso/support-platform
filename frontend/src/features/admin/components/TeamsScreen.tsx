@@ -28,9 +28,8 @@ import {
   teamsQueryStatus,
   teamsShownLabel,
   teamsSubtitle,
-  type TeamsUrlState,
-  type UrlStateChangeOptions,
 } from '../model'
+import type { TeamsUrlState, UrlStateChangeOptions } from '../url'
 import { useAdminLive, useAdminTeams } from '../hooks'
 import type { AdminTeam } from '../types'
 import { CreateTeamDialog } from './CreateTeamDialog'
@@ -47,7 +46,7 @@ export interface TeamsScreenProps {
  * reactivate). One "Filtros" dropdown (Estado: Activos, Inactivos, with counts)
  * and its removable chips, never a row of pills (slice 9 rule); states are glyph +
  * word (`Status`). The URL holds the checked states, the selection and the create
- * dialog (`?estado=&equipo=&nuevo=`).
+ * dialog (`?status=&team=&new=`).
  */
 export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
   useAdminLive()

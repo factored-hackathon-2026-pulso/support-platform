@@ -15,7 +15,7 @@ const TILE_OF: Record<Exclude<InboxFilter, 'Todos'>, StatusTileLabel> = {
   Cerrados: 'Cerrados',
 }
 
-/** The analyst Workspace (`/analista`): "Casos" list + the conversation. */
+/** The analyst Workspace (`/analyst/cases`): "Casos" list + the conversation. */
 export class WorkspacePage {
   readonly listRegion: Locator
   readonly caseList: Locator
@@ -31,7 +31,7 @@ export class WorkspacePage {
   }
 
   async goto(): Promise<void> {
-    await this.page.goto('/analista')
+    await this.page.goto('/analyst/cases')
     await expect(this.listRegion.getByRole('heading', { level: 1, name: 'Casos' })).toBeVisible()
   }
 
@@ -57,7 +57,7 @@ export class WorkspacePage {
 
   /**
    * Slice 6: the list has no status tiles. A filter is picked on Inicio (its tile
-   * opens Casos with `?estado=`); "Todos" removes the chip.
+   * opens Casos with `?status=`); "Todos" removes the chip.
    */
   async showFilter(label: InboxFilter): Promise<void> {
     if (label === 'Todos') {

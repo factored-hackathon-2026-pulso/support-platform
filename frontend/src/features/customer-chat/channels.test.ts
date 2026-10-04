@@ -4,7 +4,6 @@ import { makeCustomerCall } from '@/test/channel-fixtures'
 import { makeCustomerConversation, makeCustomerTurn } from '@/test/conversation-fixtures'
 import {
   CHANNEL_OPTIONS,
-  channelFromSlug,
   chatTurns,
   customerCallLines,
   customerCallPhase,
@@ -19,25 +18,17 @@ import {
   isIncomingCall,
   isNewerCustomerCall,
   mailComposeMode,
-  slugFromChannel,
   validateCustomerEmail,
 } from './channels'
 import { emptyChat } from './model'
 
 describe('the channel picked', () => {
-  it('maps the three cards to ?canal= and back', () => {
-    expect(CHANNEL_OPTIONS.map((option) => option.title)).toEqual([
-      'Chat',
-      'Llamar',
-      'Escribir un correo',
+  it('offers the three cards', () => {
+    expect(CHANNEL_OPTIONS.map((option) => [option.value, option.title])).toEqual([
+      ['chat', 'Chat'],
+      ['call', 'Llamar'],
+      ['email', 'Escribir un correo'],
     ])
-    expect(slugFromChannel('call')).toBe('llamada')
-    expect(slugFromChannel('mail')).toBe('correo')
-    expect(channelFromSlug('chat')).toBe('chat')
-    expect(channelFromSlug('llamada')).toBe('call')
-    expect(channelFromSlug('correo')).toBe('mail')
-    expect(channelFromSlug('fax')).toBeNull()
-    expect(channelFromSlug(null)).toBeNull()
   })
 
   it('keeps call lines and emails out of the chat view', () => {

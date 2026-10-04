@@ -284,7 +284,7 @@ Things that are easy to get wrong:
    `serve --port 8001`.
 2. A links file, e.g. `{ "CUS-00000000000000000000002001": "<a customer_id of the dataset>" }`.
 3. Platform: `CC_AGENT_CORE_URL=http://127.0.0.1:8001 CC_AGENT_KEYS_FILE=… CC_BANK_CUSTOMER_LINKS_FILE=… uv run cc-api`.
-4. `/cliente` as Natalia Guzmán (linked, Spanish): she talks to the assistant. An analyst who is available
+4. `/customer` as Natalia Guzmán (linked, Spanish): she talks to the assistant. An analyst who is available
    receives the case when it escalates.
 
 The backend tests need no agent-core: `InMemoryAgentRuntime` (`infrastructure/ai/memory_runtime.py`) is a

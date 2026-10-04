@@ -3,7 +3,6 @@ import { ApiProblem } from '@/lib/api'
 import { NOW, minutesFrom, seededInbox } from '@/test/case-fixtures'
 import {
   ANDES,
-  DANIELA_ID,
   JULIAN_ID,
   LUCIA_ID,
   PACIFICO,
@@ -58,16 +57,11 @@ import {
   openCaseStatus,
   openCasesCell,
   openEscalationsLabel,
-  parseCaseViewSearch,
-  parseEscalationsSearch,
-  parseQueuesSearch,
-  parseTeamSearch,
   pausedWarning,
   presenceTone,
   queueFiguresFromRows,
   queueFilterGroups,
   queueNavLabels,
-  queuesPath,
   queuesStateFromSelection,
   reassignList,
   reassignPool,
@@ -81,16 +75,11 @@ import {
   teamFilterGroups,
   teamStateFromSelection,
   teamSubtitle,
-  toCaseViewSearch,
-  toEscalationsSearch,
-  toQueuesSearch,
   toReplyCount,
-  toTeamSearch,
   unchangedToastTitle,
   waitSince,
-  type QueuesUrlState,
-  type TeamUrlState,
 } from './model'
+import type { QueuesUrlState, TeamUrlState } from './url'
 
 const QUEUES: QueuesUrlState = { language: 'es', statuses: [], priorities: [], analysts: [] }
 const TEAM: TeamUrlState = {
@@ -228,23 +217,9 @@ describe('"Colas"', () => {
     expect(analysts.find((o) => o.value === JULIAN_ID)?.count).toBe(2)
   })
 
-  it('keeps the queue and filters in the URL', () => {
-    const state: QueuesUrlState = {
-      language: 'pt',
-      statuses: ['queued', 'to_reply'],
-      priorities: ['critical'],
-      analysts: [DANIELA_ID],
-    }
-    const search = toQueuesSearch(state)
-    expect(search.toString()).toBe(
-      'idioma=pt&estado=sin-asignar%2Cpor-responder&prioridad=critica&analista=STF-ANA0000001',
-    )
-    expect(parseQueuesSearch(search)).toEqual(state)
-    expect(parseQueuesSearch(new URLSearchParams('idioma=en&estado=nada'))).toEqual(QUEUES)
-    expect(queuesPath('pt')).toBe('/supervision/colas?idioma=pt')
-    expect(queuesPath('es')).toBe('/supervision/colas')
+  it('maps the "Filtros" selection back to the URL state', () => {
     expect(
-      queuesStateFromSelection(QUEUES, { estado: ['new', 'bogus'], prioridad: ['low'] }),
+      queuesStateFromSelection(QUEUES, { status: ['new', 'bogus'], priority: ['low'] }),
     ).toEqual({ ...QUEUES, statuses: ['new'], priorities: ['low'] })
   })
 })
@@ -280,23 +255,9 @@ describe('"Equipo"', () => {
     expect(teamSubtitle(6, 6, false)).toBe('6 analistas')
   })
 
-  it('keeps the filters, the sheet and the dialog in the URL (slice 3 URLs still work)', () => {
-    const state: TeamUrlState = {
-      activities: ['busy', 'paused'],
-      languages: ['pt'],
-      teams: [ANDES.id],
-      analystId: JULIAN_ID,
-      reassignCaseId: julianCamila.id,
-    }
-    expect(parseTeamSearch(toTeamSearch(state))).toEqual(state)
-    expect(toTeamSearch(TEAM).toString()).toBe('')
-    expect(parseTeamSearch(new URLSearchParams('estado=conectadas&asignar=CASE-1'))).toEqual({
-      ...TEAM,
-      activities: ['busy', 'available'],
-      reassignCaseId: 'CASE-1',
-    })
+  it('maps the "Filtros" selection back to the URL state and finds an open case', () => {
     expect(
-      teamStateFromSelection(TEAM, { estado: ['offline', 'x'], idioma: ['pt', 'en'] }),
+      teamStateFromSelection(TEAM, { status: ['offline', 'x'], language: ['pt', 'en'] }),
     ).toEqual({ ...TEAM, activities: ['offline'], languages: ['pt'] })
     expect(findOpenCase(julianCamila.id, overview)?.id).toBe(julianCamila.id)
     expect(findOpenCase(queuedRosa.id, overview)).toBeNull()
@@ -507,26 +468,15 @@ describe('"Escalados"', () => {
       describeEscalationFailure(problem('language_mismatch'), { caseLanguage: 'pt' }).message,
     ).toBe('Ese caso es en portugués y no lo hablas (regla 3).')
   })
-
-  it('keeps the selection in the URL', () => {
-    const state = { escalationId: 'ESC-1', reassign: true }
-    expect(parseEscalationsSearch(toEscalationsSearch(state))).toEqual(state)
-    expect(toEscalationsSearch({ escalationId: null, reassign: true }).toString()).toBe('')
-  })
 })
 
 describe('the case view', () => {
-  it('names "Volver" after the screen it came from and keeps the dialog in the URL', () => {
+  it('names "Volver" after the screen it came from', () => {
     expect(backLabelFor(null)).toBe('Volver a Colas')
-    expect(backLabelFor('/supervision/colas?idioma=pt')).toBe('Volver a Colas')
-    expect(backLabelFor('/supervision/equipo?analista=x')).toBe('Volver a Equipo')
-    expect(backLabelFor('/supervision/escalados')).toBe('Volver a Escalados')
-    expect(backLabelFor('/supervision/auditoria?caso=x')).toBe('Volver a Auditoría')
-    expect(parseCaseViewSearch(new URLSearchParams('historial=lista&asignar=1'))).toEqual({
-      history: 'lista',
-      reassign: true,
-    })
-    expect(toCaseViewSearch({ history: null, reassign: true }).toString()).toBe('reasignar=1')
+    expect(backLabelFor('/supervision/queues?language=pt')).toBe('Volver a Colas')
+    expect(backLabelFor('/supervision/team?analyst=x')).toBe('Volver a Equipo')
+    expect(backLabelFor('/supervision/escalations')).toBe('Volver a Escalados')
+    expect(backLabelFor('/supervision/audit?case=x')).toBe('Volver a Auditoría')
   })
 })
 

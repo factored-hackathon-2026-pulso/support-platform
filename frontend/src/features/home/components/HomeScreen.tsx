@@ -1,5 +1,5 @@
 import { useCurrentUser } from '@/app/session'
-import { Badge, DocumentTitle, SampleDataTag } from '@/components/ui'
+import { Badge, DocumentTitle } from '@/components/ui'
 import { useAvailability, useInbox } from '@/features/cases'
 import { useNow } from '@/lib/hooks'
 import { useHome } from '../hooks'
@@ -48,7 +48,6 @@ export function HomeScreen() {
             {greeting(user.name, now)}
           </h1>
         </div>
-        <SampleDataTag />
       </header>
 
       <AvailabilityBlock openCases={inbox.data?.counts.all ?? null} />

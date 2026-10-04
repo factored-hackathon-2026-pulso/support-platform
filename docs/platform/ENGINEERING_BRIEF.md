@@ -147,7 +147,7 @@ Keep it pragmatic: add no abstraction without a second caller or a named seam in
 - **No tiers.** There is no judge, tree, agent, `Responder`, routing step or background routing job. Slice 2 deletes them (`api/slice-2-case-lifecycle.md` §1).
 
 ### 4.7 Seed data
-- **Labeling:** everything is fictitious and clearly labeled "Datos de ejemplo". Names, ids and contact data are **invented**. Never copy customer or staff records from the dataset into committed files.
+- **Labeling:** everything is fictitious; the UI does not label it (the user removed the "Datos de ejemplo" tags). Names, ids and contact data are **invented**. Never copy customer or staff records from the dataset into committed files.
 - **Cases:** chat only (`app_chat`, `web_chat`). Together they cover every inbox status:
   - Nuevos, Por responder and Esperando al cliente;
   - a few Cerrados, inside and outside the 7-day window;
@@ -209,7 +209,7 @@ Rules:
 - **Metadata rule (slice 6).** Facts are separate short items (icon + 1–3 words, `Fact`); status is a pill; times have a clock; secondary facts may be icon-only with a tooltip. No "·"-joined strings or wrapping sentences in the analyst UI.
 - **Workspace: two columns.** The case list (collapsible to a rail) and the conversation. The conversation takes the full remaining width. There is no Copiloto, Herramientas or tool/action cards, no identity card, no call bar, no email layout. Slice 6 (user decision): one on-demand right panel, **"Ficha del cliente"** (`?ficha=1`), opened from the customer's name, with only platform data: Cliente, Este caso, Cómo llegó a ti, Casos anteriores. No bank data.
 - **Conversation header.**
-  - Content (slice 6): the customer name (it opens "Ficha del cliente"), the short case id (copyable), "Datos de ejemplo" and "Cerrar caso". The place, channel and priority are in the ficha.
+  - Content (slice 6): the customer name (it opens "Ficha del cliente"), the short case id under the name (copyable) and "Cerrar caso". The place, channel and priority are in the ficha.
   - A **"Cómo llegó a ti"** row explains the people-based assignment only, as short facts: available + language (rule 3) + queue wait or the supervisor.
   - **"Casos anteriores (n)"** is a section of the ficha: this customer's previous conversations and their read-only transcripts. This is conversation history, not bank data. The supervisor view keeps its sheet.
 - **Close dialog.**

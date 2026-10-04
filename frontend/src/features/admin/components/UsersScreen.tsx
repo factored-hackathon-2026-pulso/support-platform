@@ -86,7 +86,6 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
         <PageHeader
           title="Usuarios y roles"
           subtitle={usersSubtitle(users.data?.statusCounts.all)}
-          sampleData
           actions={
             <Button
               variant="primary"

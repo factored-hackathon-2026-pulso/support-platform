@@ -136,7 +136,6 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
         <PageHeader
           title="Equipo y colas"
           subtitle={subtitle}
-          sampleData
           actions={
             teams.length > 0 ? (
               <SegmentedControl

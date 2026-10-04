@@ -1,13 +1,5 @@
 import { UserRound } from 'lucide-react'
-import {
-  Badge,
-  Callout,
-  cardClasses,
-  EmptyState,
-  QueryState,
-  SampleDataTag,
-  Skeleton,
-} from '@/components/ui'
+import { Badge, Callout, cardClasses, EmptyState, QueryState, Skeleton } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { closedConversationsLine, localeLabel, pickerBadge, placeLabel } from '../model'
 import { useDemoCustomers } from '../hooks'
@@ -38,7 +30,6 @@ export function DemoCustomerPicker({ startingId, error, onPick }: DemoCustomerPi
             Escribe como ese cliente. El caso llega a una analista disponible que hable su idioma.
           </p>
         </div>
-        <SampleDataTag />
       </div>
       {error ? (
         <Callout tone="danger" title="No se abrió la sesión">

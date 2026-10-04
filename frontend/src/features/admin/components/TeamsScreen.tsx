@@ -51,7 +51,6 @@ export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
         <PageHeader
           title="Equipos"
           subtitle={teamsSubtitle(total)}
-          sampleData
           actions={
             <Button
               variant="primary"

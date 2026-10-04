@@ -52,7 +52,7 @@ export interface ConversationPaneProps {
    * no read cursor, no "Cerrar caso"; the supervision arrival line and footer.
    */
   mode?: ConversationMode
-  /** Rendered in the header before "Datos de ejemplo" (the supervisor's "Asignar" / "Reasignar"). */
+  /** Rendered in the header actions (the supervisor's "Asignar" / "Reasignar"). */
   headerActions?: ReactNode
   /**
    * The Workspace's "Ficha del cliente" (slice 6 §5): the header slims down to

@@ -86,7 +86,7 @@ describe('ConversationPane · chat', () => {
     expect(
       screen.getByText(/· Colombia · Barranquilla · chat web · prioridad media/),
     ).toBeInTheDocument()
-    expect(screen.getByText('Datos de ejemplo')).toBeInTheDocument()
+    expect(screen.queryByText('Datos de ejemplo')).not.toBeInTheDocument()
     // Short facts, never a sentence (slice 6 UI rule).
     const arrival = screen.getByText('Cómo llegó a ti').parentElement!
     expect(

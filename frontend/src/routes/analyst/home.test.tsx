@@ -55,7 +55,7 @@ describe('/analista/inicio (Inicio)', () => {
     expect(screen.getByText('Equipo Andes', { selector: 'header span' })).toHaveClass(
       'rounded-full',
     )
-    expect(screen.getByText('Datos de ejemplo')).toBeInTheDocument()
+    expect(screen.queryByText('Datos de ejemplo')).not.toBeInTheDocument()
     expect(document.title).toBe('Inicio · LATAM Bank Soporte')
     expect(screen.getByRole('main')).toBeInTheDocument()
   })

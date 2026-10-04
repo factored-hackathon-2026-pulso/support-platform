@@ -72,7 +72,7 @@ describe('CustomerSimulatorScreen · picker', () => {
     expect(screen.getByRole('heading', { name: 'Simulador de cliente' })).toBeInTheDocument()
     expect(screen.getByText('Herramienta de desarrollo')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Elige un cliente de ejemplo' })).toBeInTheDocument()
-    expect(screen.getByText('Datos de ejemplo')).toBeInTheDocument()
+    expect(screen.queryByText('Datos de ejemplo')).not.toBeInTheDocument()
     const joaquin = await screen.findByRole('button', { name: /Joaquín Ferreyra Paz/ })
     expect(within(joaquin).getByText('Conversación abierta')).toBeInTheDocument()
     const rafael = screen.getByRole('button', { name: /Rafael Nogueira Costa/ })

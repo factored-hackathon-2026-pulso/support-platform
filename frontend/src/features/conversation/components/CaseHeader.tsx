@@ -1,6 +1,6 @@
 import type { ReactNode, Ref } from 'react'
 import { Copy, History } from 'lucide-react'
-import { Badge, Button, IconButton, SampleDataTag, useToast } from '@/components/ui'
+import { Badge, Button, IconButton, useToast } from '@/components/ui'
 import {
   CUSTOMER_FILE_PANEL_ID,
   CUSTOMER_FILE_TRIGGER_ID,
@@ -18,7 +18,7 @@ export interface CaseHeaderProps {
   onOpenHistory?: () => void
   /** The customer-name heading (focusable with `tabIndex=-1`): the Workspace moves focus here on a programmatic case switch. */
   headingRef?: Ref<HTMLHeadingElement>
-  /** Extra actions before "Datos de ejemplo" (the supervisor's "Asignar" / "Reasignar"). */
+  /** Extra actions in the header (the supervisor's "Asignar" / "Reasignar"). */
   actions?: ReactNode
   /** Hide "Cerrar caso" even for the assignee (supervision mode never closes). */
   hideClose?: boolean
@@ -32,7 +32,7 @@ export interface CaseHeaderProps {
 
 /**
  * Case header (contract §9.3): name; short id (copyable) · "{país} · {ciudad} ·
- * {canal} · {prioridad | en portugués}"; "Datos de ejemplo"; "Casos anteriores
+ * {canal} · {prioridad | en portugués}"; "Casos anteriores
  * (n)" when the customer has other cases; "Cerrar caso" for the assignee, or the
  * "Cerrado" badge on a closed case. The supervisor view adds its "Asignar" /
  * "Reasignar" (`actions`) and never offers "Cerrar caso". The meta line wraps instead of being
@@ -81,7 +81,6 @@ export function CaseHeader({
     <div className="flex shrink-0 items-center gap-2">
       {closed ? <Badge tone="closed">Cerrado</Badge> : null}
       {actions}
-      <SampleDataTag />
       {historyLabel && onOpenHistory && !customerFile ? (
         <Button
           variant="secondary"
@@ -103,7 +102,7 @@ export function CaseHeader({
     const name = summary.customer.displayName
     return (
       <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-6 py-3.5">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
           {/* The heading keeps the plain name (the button inside says what it does). */}
           <h2
             ref={headingRef}
@@ -123,7 +122,7 @@ export function CaseHeader({
               {name}
             </button>
           </h2>
-          <p className="m-0 flex shrink-0 items-center gap-x-1 text-13 text-ink-2">{caseNumber}</p>
+          <p className="m-0 flex items-center gap-x-1 text-13 text-ink-2">{caseNumber}</p>
         </div>
         {rightSide}
       </header>

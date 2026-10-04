@@ -374,7 +374,7 @@ export function sortByUrgency<T extends UrgencyFields>(items: readonly T[], now:
 export interface AvailabilityControlCopy {
   label: string
   /** Second line while paused. */
-  detail: string | null
+  detail: string
   /** Accessible name: the state, then the action a click performs. */
   accessibleName: string
 }
@@ -386,7 +386,11 @@ export function availabilityControlCopy(status: 'available' | 'paused'): Availab
         detail: 'No te llegan casos nuevos',
         accessibleName: 'En pausa. Volver a disponible',
       }
-    : { label: 'Disponible', detail: null, accessibleName: 'Disponible. Pausar casos nuevos' }
+    : {
+        label: 'Disponible',
+        detail: 'Te llegan casos nuevos',
+        accessibleName: 'Disponible. Pausar casos nuevos',
+      }
 }
 
 // ─── Filter chip (the Casos list filter now lives on Inicio, slice 6 §4.3) ───

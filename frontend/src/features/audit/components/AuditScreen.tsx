@@ -59,7 +59,7 @@ export function AuditScreen({ state, onStateChange, canOpenCases = true }: Audit
       header={
         <PageHeader
           title="Auditoría"
-          subtitle="Quién hizo qué, en qué caso y cuándo · Datos de ejemplo"
+          subtitle="Quién hizo qué, en qué caso y cuándo"
           actions={<AuditSearch value={state.query} onChange={onQueryChange} />}
         />
       }

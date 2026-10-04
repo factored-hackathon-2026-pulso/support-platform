@@ -60,9 +60,7 @@ describe('Auditoría', () => {
   it('lists the events newest first under day separators', async () => {
     renderAudit()
     expect(await screen.findByRole('heading', { level: 1, name: 'Auditoría' })).toBeInTheDocument()
-    expect(
-      screen.getByText('Quién hizo qué, en qué caso y cuándo · Datos de ejemplo'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Quién hizo qué, en qué caso y cuándo')).toBeInTheDocument()
     await screen.findByRole('table', { name: 'Eventos' })
     expect(within(log()).getByRole('columnheader', { name: 'Hoy' })).toBeInTheDocument()
     expect(within(log()).getByRole('columnheader', { name: 'Ayer' })).toBeInTheDocument()

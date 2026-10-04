@@ -2,7 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test'
 import type { Language } from '../data'
 import type { RoleLabel } from './app-shell'
 
-/** A language option is named by the language's own name (next to its flag). */
+/** A language option is named by the language's own name (its only label). */
 const LANGUAGE_NAME: Record<Language, string> = { es: 'Español', pt: 'Português' }
 
 /** "Usuarios y roles" (`/admin/users`): table + the "Persona seleccionada" aside. */

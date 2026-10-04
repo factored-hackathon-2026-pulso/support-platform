@@ -1,0 +1,35 @@
+# Support platform: API on http://localhost:8000, web app on http://localhost:5173.
+# Demo data is seeded on the first start; `docker compose down -v` resets it.
+services:
+  api:
+    build: ./backend
+    environment:
+      CC_ENV: dev
+      CC_SEED_DEMO_DATA: "true"
+      CC_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      CC_LOG_FORMAT: console
+      CC_DEV_MAILBOX: "true"
+      CC_PUBLIC_APP_URL: http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - api-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  api-data:

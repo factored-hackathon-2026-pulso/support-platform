@@ -42,7 +42,7 @@ names, so the frontend reads them as `Schemas['CaseSummary']` after `pnpm gen:ap
 
 ## 1. Domain
 
-### 1.1 Enums (shared vocabulary, aligned with `contracts/platform_history.json`)
+### 1.1 Enums (shared vocabulary, aligned with `contracts/synthetic-sample/platform_history.json`)
 
 | Enum (Python / OpenAPI name) | Values | Notes |
 |---|---|---|

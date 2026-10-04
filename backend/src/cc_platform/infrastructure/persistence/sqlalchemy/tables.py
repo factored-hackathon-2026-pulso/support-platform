@@ -388,8 +388,9 @@ customer_case_slots = Table(
     _version(),
 )
 
-# Append-only history shaped after contracts/platform_history.json. ``sequence`` gives a
-# total ingestion order for cursor pagination and export; rows are never updated.
+# Append-only history shaped after contracts/synthetic-sample/platform_history.json.
+# ``sequence`` gives a total ingestion order for cursor pagination and export; rows are
+# never updated.
 event_log = Table(
     "event_log",
     metadata,

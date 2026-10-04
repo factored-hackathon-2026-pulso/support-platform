@@ -50,7 +50,7 @@ Where contracts disagree, the later slice wins, and the brief wins over all of t
 
 Other sources of truth: the design boards in `warehouse/design/source/project/*.dc.html`
 (read-only; only the screens still in scope apply, brief §2), rule 3 (language, policy `H1`) in
-`docs/policies.md`, and the event envelope of `contracts/platform_history.json` (read-only). The
+`docs/policies.md`, and the event envelope of `contracts/synthetic-sample/platform_history.json` (read-only). The
 other rules of `docs/policies.md` and `docs/security_questions.md` do not apply to the platform.
 
 New architecture decisions go in `adr/NNNN-title.md` (next number: 0003).

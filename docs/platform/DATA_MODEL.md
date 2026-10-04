@@ -576,7 +576,7 @@ Tipos de evento:
   al arrancar (`OutdatedSchemaError`) hasta borrarla.
 - Pendiente conocido: no hay migraciones. Cualquier cambio futuro de esquema exige borrar `backend/cc_platform.db` hasta que se agreguen.
 
-## Diferencias con `contracts/platform_history.json`
+## Diferencias con `contracts/synthetic-sample/platform_history.json`
 
 Ese contrato (v0.5.1) describe la muestra sintética que compartimos para el equipo de IA, que incluía la plataforma completa con IA. La plataforma construida es un subconjunto:
 

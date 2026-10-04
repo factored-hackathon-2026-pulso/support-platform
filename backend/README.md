@@ -196,7 +196,7 @@ re-check their rules on fresh state. New aggregates get this by extending
 `VersionedRepository` / `_StagedRepository`.
 
 **Event log.** Every state change emits a domain event, stored in `event_log` (the
-`contracts/platform_history.json` envelope) in the same transaction, then published in-process
+`contracts/synthetic-sample/platform_history.json` envelope) in the same transaction, then published in-process
 to the realtime projectors and process managers. The seed writes its story through the domain,
 in story-time order (`infrastructure/seed/`).
 

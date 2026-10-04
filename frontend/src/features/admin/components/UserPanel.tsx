@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Copy, Mail, UserRound } from 'lucide-react'
-import { adminAuditPath } from '@/app/roles'
+import { adminAuditPath } from '@/app/paths'
 import {
   Button,
   Callout,
@@ -56,7 +56,7 @@ import { ResetPasswordDialog } from './ResetPasswordDialog'
 import { UserForm, type UserFormControls } from './UserForm'
 
 export interface UserPanelProps {
-  /** `?persona=`; null = nothing selected. */
+  /** `?person=`; null = nothing selected. */
   staffId: string | null
   teams: readonly AdminTeam[]
   now: number

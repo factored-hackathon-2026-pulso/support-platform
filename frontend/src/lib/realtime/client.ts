@@ -258,7 +258,7 @@ export class RealtimeClient {
  * Closes a socket we no longer want. One that is still connecting is closed as
  * soon as it opens: closing it mid-handshake makes browsers log "WebSocket is
  * closed before the connection is established" (e.g. React StrictMode's dev
- * remount of a provider that already holds a token, like the /cliente simulator).
+ * remount of a provider that already holds a token, like the /customer simulator).
  */
 function closeWhenSettled(socket: WebSocketLike): void {
   if (socket.readyState === CONNECTING) {

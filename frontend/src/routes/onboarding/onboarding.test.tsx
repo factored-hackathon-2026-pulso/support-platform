@@ -69,7 +69,7 @@ const passwordInput = () => screen.getByLabelText('Contraseña nueva')
 const confirmInput = () => screen.getByLabelText('Repite la contraseña')
 const rules = () => screen.getByRole('list', { name: 'Requisitos de la contraseña' })
 
-describe('/activar (BoActivar)', () => {
+describe('/activate (BoActivar)', () => {
   it('walks the three steps: password, two-step setup, account ready', async () => {
     vi.mocked(checkInvitation).mockResolvedValue(invitation)
     vi.mocked(setInvitationPassword).mockResolvedValue(enrollment)
@@ -77,7 +77,7 @@ describe('/activar (BoActivar)', () => {
       name: invitation.name,
       email: invitation.email,
     })
-    const { user } = renderRoute('/activar?token=tok-123')
+    const { user } = renderRoute('/activate?token=tok-123')
 
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Activa tu cuenta' }),
@@ -165,7 +165,7 @@ describe('/activar (BoActivar)', () => {
 
   it('shows "El enlace venció o ya se usó" for an unusable or missing link', async () => {
     vi.mocked(checkInvitation).mockRejectedValue(linkInvalid())
-    const { unmount } = renderRoute('/activar?token=old')
+    const { unmount } = renderRoute('/activate?token=old')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'El enlace venció o ya se usó' }),
     ).toBeInTheDocument()
@@ -179,7 +179,7 @@ describe('/activar (BoActivar)', () => {
     )
     unmount()
 
-    renderRoute('/activar')
+    renderRoute('/activate')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'El enlace venció o ya se usó' }),
     ).toBeInTheDocument()
@@ -194,7 +194,7 @@ describe('/activar (BoActivar)', () => {
         extensions: { unlockAt: '2026-10-03T16:30:00Z' },
       }),
     )
-    renderRoute('/activar?token=tok')
+    renderRoute('/activate?token=tok')
     expect(
       await screen.findByText('Demasiados intentos. Vuelve a intentarlo a las 11:30.'),
     ).toBeInTheDocument()
@@ -213,7 +213,7 @@ describe('/activar (BoActivar)', () => {
         }),
       )
       .mockRejectedValueOnce(linkInvalid())
-    const { user } = renderRoute('/activar?token=tok')
+    const { user } = renderRoute('/activate?token=tok')
     await screen.findByRole('heading', { level: 1, name: 'Activa tu cuenta' })
     await user.type(passwordInput(), 'Verde-Andes-27')
     await user.type(confirmInput(), 'Verde-Andes-27')
@@ -243,7 +243,7 @@ describe('/activar (BoActivar)', () => {
         extensions: { reasons: ['common'] },
       }),
     )
-    const { user } = renderRoute('/activar?token=tok')
+    const { user } = renderRoute('/activate?token=tok')
     await screen.findByRole('heading', { level: 1, name: 'Activa tu cuenta' })
     await user.type(passwordInput(), 'Verde-Andes-27')
     await user.type(confirmInput(), 'Verde-Andes-27')
@@ -256,14 +256,14 @@ describe('/activar (BoActivar)', () => {
 
   it('opens for a signed-in person too (outside GuestOnly)', async () => {
     vi.mocked(checkInvitation).mockResolvedValue(invitation)
-    renderRoute('/activar?token=tok', { staff: adminStaff })
+    renderRoute('/activate?token=tok', { staff: adminStaff })
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Activa tu cuenta' }),
     ).toBeInTheDocument()
   })
 })
 
-describe('/restablecer', () => {
+describe('/reset-password', () => {
   it('sets a new password once', async () => {
     vi.mocked(checkPasswordReset).mockResolvedValue({
       name: 'Tomás Arango',
@@ -275,7 +275,7 @@ describe('/restablecer', () => {
       email: 'tomas.arango@latambank.example',
       revokedSessions: 0,
     })
-    const { user } = renderRoute('/restablecer?token=rst')
+    const { user } = renderRoute('/reset-password?token=rst')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Crea una contraseña nueva' }),
     ).toBeInTheDocument()
@@ -293,7 +293,7 @@ describe('/restablecer', () => {
 
   it('shows the invalid screen for a used or expired link', async () => {
     vi.mocked(checkPasswordReset).mockRejectedValue(linkInvalid())
-    renderRoute('/restablecer?token=used')
+    renderRoute('/reset-password?token=used')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'El enlace venció o ya se usó' }),
     ).toBeInTheDocument()
@@ -306,7 +306,7 @@ describe('/restablecer', () => {
   })
 })
 
-describe('/dev/correos', () => {
+describe('/dev/mailbox', () => {
   it('lists the emails with an in-app link, clearly marked as a development tool', async () => {
     vi.mocked(fetchDevMailbox).mockResolvedValue({
       items: [
@@ -316,13 +316,13 @@ describe('/dev/correos', () => {
           to: invitation.email,
           subject: 'Te invitaron a la Plataforma CC de LATAM Bank',
           text: 'Hola, Bruna.\n\nAbre este enlace.',
-          link: 'http://localhost:5173/activar?token=tok-xyz',
+          link: 'http://localhost:5173/activate?token=tok-xyz',
           sentAt: new Date().toISOString(),
         },
       ],
     })
     vi.mocked(checkInvitation).mockResolvedValue(invitation)
-    const { user, router } = renderRoute('/dev/correos')
+    const { user, router } = renderRoute('/dev/mailbox')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Correos de desarrollo' }),
     ).toBeInTheDocument()
@@ -333,7 +333,7 @@ describe('/dev/correos', () => {
     expect(within(item).getByText('Invitación')).toBeInTheDocument()
     expect(within(item).getByText(invitation.email)).toBeInTheDocument()
     await user.click(within(item).getByRole('link', { name: /Abrir enlace/ }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/activar'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/activate'))
     expect(router.state.location.search).toBe('?token=tok-xyz')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Activa tu cuenta' }),
@@ -342,7 +342,7 @@ describe('/dev/correos', () => {
 
   it('says when there are no emails yet', async () => {
     vi.mocked(fetchDevMailbox).mockResolvedValue({ items: [] })
-    renderRoute('/dev/correos')
+    renderRoute('/dev/mailbox')
     expect(await screen.findByText('Todavía no hay correos')).toBeInTheDocument()
   })
 
@@ -355,7 +355,7 @@ describe('/dev/correos', () => {
       apiVersion: 'v1',
       devMailbox: false,
     })
-    renderRoute('/dev/correos')
+    renderRoute('/dev/mailbox')
     expect(await screen.findByRole('heading', { name: 'No disponible' })).toBeInTheDocument()
     expect(fetchDevMailbox).not.toHaveBeenCalled()
   })
@@ -364,7 +364,7 @@ describe('/dev/correos', () => {
     const { unmount } = renderRoute('/login')
     expect(await screen.findByRole('link', { name: 'Correos de desarrollo' })).toHaveAttribute(
       'href',
-      '/dev/correos',
+      '/dev/mailbox',
     )
     unmount()
     vi.mocked(fetchMeta).mockResolvedValue({

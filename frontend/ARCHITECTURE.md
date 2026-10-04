@@ -23,7 +23,8 @@ src/
     router.tsx          route table (lazy route modules, guards)
     guards.tsx          RequireSession, RequireRole, GuestOnly, RootRedirect
     redirect.ts         "from" state carried to /login
-    roles.ts            role definitions, rail destinations, path helpers (pure, tested)
+    paths.ts            every path of the SPA (PATHS) and the link builders (pure, tested; §4)
+    roles.ts            role definitions, rail destinations (pure, tested)
     rail-indicators.ts  useRailIndicators: live rail badges/dots fed by features; useRailPresence (slice 6)
     session.tsx         SessionProvider, useSession, useCurrentUser, useCurrentRole
     session-realtime.ts `me.updated` → the session cache (registerSessionRealtime)
@@ -47,7 +48,7 @@ src/
     hooks.ts            generic React hooks shared by features: useDebouncedValue, useNow
   styles/index.css      tokens (@theme) and base styles
   test/                 render helpers, fixtures (invented people), fake socket,
-                        architecture.test.ts (import boundaries)
+                        architecture.test.ts (import boundaries, path literals)
 ```
 
 ## 3. Feature slices
@@ -56,6 +57,7 @@ src/
 features/<name>/
   api.ts         typed calls through `api` + `unwrap`, query/mutation key factory
   model.ts       pure business rules and copy mapping (unit-tested, no React, no I/O)
+  url.ts         the screen's query string: parse + serialize, English names (when it has one; §4)
   types.ts       UI-side types when the API schema is not enough (optional)
   hooks/         TanStack Query hooks and small UI-state hooks
   components/    presentational pieces + the screen component(s)
@@ -99,7 +101,7 @@ Rules:
   no business rules there.
 - Business rules live in `model.ts` and are unit-tested. Components stay small and
   presentational; data fetching lives in hooks.
-- Shareable state lives in the URL (selected case `?caso=`, filters, open tab).
+- Shareable state lives in the URL (selected case `?case=`, filters, open tab).
   Router `state` is only for one-shot hand-offs (MFA challenge, lockout time).
 - No global store. If a real cross-cutting need appears, write an ADR first.
 
@@ -128,7 +130,7 @@ Contract: `docs/platform/api/slice-2-case-lifecycle.md` §9. Dependency directio
   customer's other cases and their read-only transcripts, through
   `GET /cases/{id}/history`; no composer, read cursor or `case:` subscription).
 - **`workspace`**: two columns, list + conversation (no right panel), and the URL
-  state `?caso=&estado=&q=&lista=&historial=` (`historial=lista` or a case id
+  state `?case=&status=&q=&list=&previous=` (`previous=list` or a case id
   opens the sheet; picking another case closes it; `panel`/`apoyo` are ignored).
 - **`customer-chat`** (simulator): the closed conversation keeps the input
   enabled ("Escribe para empezar una nueva conversación"); a post opens a new case.
@@ -142,13 +144,13 @@ Contract: `docs/platform/api/slice-2-case-lifecycle.md` §9. Dependency directio
 
 Contract: `docs/platform/api/slice-6-analyst-home.md`. Dependency direction:
 `routes/analyst/home` → `features/home` → `features/cases` (index) and
-`features/conversation/core` (language names); `app/` composes the rail badge and presence.
+`features/conversation/core` (types); `app/` composes the rail badge and presence.
 
 - **`home`** (new): "Inicio" (`HomeScreen`): greeting by local time, date + team pill, the
   availability block ("Empezar a atender" / "Pausar casos nuevos", same mutation as Casos), the
-  four status tiles (links to `/analista?estado=…`), "Lo primero" (open cases by `sortByUrgency`,
-  "Abrir" → `/analista?caso=&estado=`), "Mientras no estabas" (`GET /me/home`; fixed templates per
-  `HomeActivityKind` in `model.ts`; read-only rows open `/analista?caso=` through history access)
+  four status tiles (links to `/analyst/cases?status=…`), "Lo primero" (open cases by `sortByUrgency`,
+  "Abrir" → `/analyst/cases?case=&status=`), "Mientras no estabas" (`GET /me/home`; fixed templates per
+  `HomeActivityKind` in `model.ts`; read-only rows open `/analyst/cases?case=` through history access)
   and "Tu equipo ahora" (counts only). `registerHomeRealtime` refetches `homeKeys.all` on her inbox,
   availability and queue envelopes (2 s throttle, leading + trailing, per registry); 60 s
   refetch and after a reconnect.
@@ -167,7 +169,7 @@ Contract: `docs/platform/api/slice-6-analyst-home.md`. Dependency direction:
   and keep their lines in the supervisor view; `CloseCaseDialog` uses reason cards
   (`RadioGroup variant="cards"`). `CaseHistorySheet` (supervision) wraps the same
   `CaseHistoryBrowser`.
-- **`workspace`** (changed): URL `?ficha=1` (and `?historial=` opens the panel), one
+- **`workspace`** (changed): URL `?panel=customer` (and `?previous=` opens the panel), one
   `SidePanel` slot with the ficha's sections; auto-selection and "next after close" follow the
   urgency order.
 
@@ -245,12 +247,12 @@ direction unchanged (`routes/supervision/*` → `features/supervision` → `feat
   column, team pills and `AssignCaseDialog` are gone.
 - **`audit`**: the "Escalamientos" family and its redaction notes; role badge "Supervisión".
 - **`admin`**: the users list filters with `FilterMenu` (multi-value URL), "Nuevo usuario",
-  language pill toggles.
+  language option cards (only the language's own name).
 
 ### Notification center (slice 10)
 
 Contract: `docs/platform/api/slice-10-notifications.md`. New feature `notifications`, which imports
-only `@/features/cases/core` (rating words, the Cerrados slug) and `@/features/conversation/core`
+only `@/features/cases/core` (rating words, the inbox statuses) and `@/features/conversation/core`
 (language names), plus `@/app/roles` (paths, `roleFromPath`).
 
 - **Composition:** `routes/staff-shell.tsx` is the layout route of the staff area (the route table
@@ -322,7 +324,7 @@ direction. Everything is simulated (no telephony, no mail server): people type w
   are not optimistic: the box keeps the text until the server answers; a retry re-sends the same
   `clientMessageId`; they share the case's send scope). `call.updated` patches the calls list and
   `detail.activeCall`; `case.updated` refetches the detail when `activeCallId` changes.
-- **`customer-chat`**: `channels.ts` (pure): `?canal=` (`chat` | `llamada` | `correo`),
+- **`customer-chat`**: `url.ts`: `?channel=` (`chat` | `call` | `email`); `channels.ts` (pure):
   `customerCallPhase` (dialing, incoming, live, hold, ended), titles and copy in es / pt,
   `customerCallLines` (the conversation's `transcript` turns inside the call window),
   `customerMailItems` ("Nuevo" = the bank's emails after the customer's last one),
@@ -333,7 +335,7 @@ direction. Everything is simulated (no telephony, no mail server): people type w
   `CustomerMailView` (thread + "Escribe tu correo" / "Responder"), `IncomingCallBanner` ("LATAM
   Bank te está llamando", Contestar / Rechazar, over any channel) and `ConversationSurvey` (the
   rating after a close, in the call and email views too). The route `routes/customer/simulator.tsx`
-  owns `?canal=`; the screen also works uncontrolled (tests). `call.updated` on `customer:<id>`
+  owns `?channel=` (through `url.ts`); the screen also works uncontrolled (tests). `call.updated` on `customer:<id>`
   updates the call cache (`isNewerCustomerCall`: an ended call is final).
 - **No " · " joins** (UI rule): the supervisor header meta became facts (`caseHeaderFacts`), the
   simulator lines ("Te atiende Daniela, de LATAM Bank", past blocks with title + byline), admin
@@ -370,7 +372,7 @@ mode="supervision"` + "Asignar"/"Reasignar" + "Casos anteriores"), the assign
   request), "Solo acciones que cambian algo", the case chip, the debounced id
   search, the log with day separators and "Cargar más" (`useInfiniteQuery` over
   `nextCursor`), and the detail aside (payload accordion, redaction note, "Ver la
-  conversación" with `state.from`, "Filtrar por este caso"; a `?evento=` outside the
+  conversación" with `state.from`, "Filtrar por este caso"; a `?event=` outside the
   loaded pages is fetched by id). No realtime: "Actualizar" refetches.
 - **Changes to slice 2 features**: `ConversationPane` takes `mode` (`workspace` |
   `supervision`: never a composer, read cursor or "Cerrar caso") and
@@ -380,8 +382,8 @@ mode="supervision"` + "Asignar"/"Reasignar" + "Casos anteriores"), the assign
   (refetch + toast "Supervisión reasignó un caso") and says "Te asignaron un caso ·
   desde supervisión" when the envelope actor is a supervisor (`envelopeActor`).
 - **Back navigation**: screens open the case view with router `state.from` (the
-  full return URL); the case route keeps that state across its own `?historial=` /
-  `?asignar=` changes and names the link "Volver a Auditoría" or "Volver a Equipo y
+  full return URL); the case route keeps that state across its own `?previous=` /
+  `?reassign=` changes and names the link "Volver a Auditoría" or "Volver a Equipo y
   colas".
 
 ### Onboarding (part 4: invitations and reset links)
@@ -390,7 +392,7 @@ Contract: `docs/platform/api/slice-11-invitations.md`. New feature `onboarding`,
 other feature (only `@/app/roles` for role labels, `@/components/*`, `@/lib/*`).
 
 - **Public routes** under `AuthLayout` but outside `GuestOnly` (a signed-in person opening a link
-  still sees it): `/activar?token=` (`ActivationScreen`) and `/restablecer?token=`
+  still sees it): `/activate?token=` (`ActivationScreen`) and `/reset-password?token=`
   (`PasswordResetScreen`). The token lives in the URL and component state only; the API receives
   it in JSON bodies. A missing or unusable token (410 `link_invalid`, one answer for unknown,
   expired, used or cancelled) shows `LinkInvalid` ("El enlace venció o ya se usó").
@@ -408,7 +410,7 @@ other feature (only `@/app/roles` for role labels, `@/components/*`, `@/lib/*`).
   `describeOnboardingFailure` (link_invalid → invalid screen, rate_limited → "Vuelve a intentarlo a
   las {hora}", password_rejected → the password field, totp_invalid / account_locked → the code,
   invalid_transition → back to step 1), `groupKey`, `activationSteps`, `inAppPath`.
-- **Dev mailbox** (`/dev/correos`, `DevMailboxScreen`): only when `GET /meta` says `devMailbox`
+- **Dev mailbox** (`/dev/mailbox`, `DevMailboxScreen`): only when `GET /meta` says `devMailbox`
   (else "No disponible"); a development tool (warn Callout) listing the newest emails with "Abrir
   enlace" (navigates inside the SPA). The login route shows a "Correos de desarrollo" link
   through `LoginScreen showDevMailbox`, fed by `useDevMailboxEnabled` from `onboarding/core.ts`
@@ -427,7 +429,7 @@ route composes `@/features/audit`, and `app/` composes the badge and the session
   rename, members, "Agregar persona", deactivate / reactivate). One `UserForm` serves
   the aside and `CreateUserDialog`. Role names (`ROLE_LABEL`, pinned to the backend,
   `rolesLabel`, `rolesNowCopy`) live in `app/roles.ts`, shared with the session toast.
-  Rules live in `model.ts`: labels, `accountStatusAt`, URL state, the draft diff (`userChanges`
+  Rules live in `model.ts` (the URL state in `url.ts`): labels, `accountStatusAt`, the draft diff (`userChanges`
   sends only what changed, with the `expectedVersion` the admin saw), client
   validation, guard rails (`userGuardState`: own Administración / deactivation /
   password; last active admin) and open-case blocks (`openCaseBlocks`, checked at
@@ -455,34 +457,43 @@ route composes `@/features/audit`, and `app/` composes the badge and the session
   `useLockedAccountsCount` (rail badge, Administración role only) shares the default
   list cache and refetches every 60 s (locks expire on their own).
 - **Supervision migration**: teams are records; `TeamRef.id` / `TeamSummary.id`
-  (`TEAM-…`) replace the slice 3 slugs, `?equipo=` holds the id (an old slug URL falls
+  (`TEAM-…`) replace the slice 3 slugs, `?team=` holds the id (an old slug URL falls
   back to "Todos los equipos").
-- **Audit**: `/administracion/auditoria` renders the same `AuditScreen` with
+- **Audit**: `/admin/audit` renders the same `AuditScreen` with
   `canOpenCases={hasRole('supervisor')}` (no "Ver la conversación" for an admin without
   Supervisora) and without the queue notices; the "Tipo" select gains
   "Administración"; the "Persona" select lists inactive people "(desactivada)".
 
 ## 4. Routing
 
-`src/app/router.tsx` holds the table. Paths are Spanish:
+`src/app/router.tsx` holds the table. Paths and query parameters are English (brief, Language
+rule); only the copy is Spanish. Every path is written once, in `src/app/paths.ts` (`PATHS` and
+the link builders: `workspacePath`, `supervisionCasePath`, `adminUserPath`, …); the router, the
+rail (`roles.ts`) and the features import it, and `src/test/architecture.test.ts` fails on a
+path literal anywhere else. Each screen's query string is parsed and serialized in its
+feature's `url.ts` (`features/workspace/url.ts`, `features/supervision/url.ts`,
+`features/admin/url.ts`, `features/audit/url.ts`, `features/customer-chat/url.ts`,
+`features/onboarding/url.ts`), pure and round-trip tested. Values are the API enums and ids
+(`?status=to_reply`, `?role=analyst`, `?type=assignment`); multi-value filters are
+comma-separated. Unknown values (old Spanish links included) fall back to the defaults:
 
-| Path                                                                                   | Screen                                             | Guard      |
-| -------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------- |
-| `/`                                                                                    | redirect to the first role home (or `/login`)      | —          |
-| `/login`, `/login/verificacion`, `/login/bloqueada`                                    | login, MFA, lockout                                | GuestOnly  |
-| `/activar?token=`, `/restablecer?token=`                                               | invitation and password-reset links (part 4)       | —          |
-| `/dev/correos`                                                                         | dev mailbox (only with the backend's dev mailbox)  | —          |
-| `/analista/inicio`                                                                     | Inicio (the analyst's landing, slice 6)            | analyst    |
-| `/analista?caso=&estado=&q=&lista=&ficha=&historial=`                                  | Workspace ("Casos")                                | analyst    |
-| `/supervision/colas?idioma=&estado=&prioridad=&analista=`                              | Colas (the landing of Supervisión, slice 9)        | supervisor |
-| `/supervision/equipo?estado=&idioma=&equipo=&analista=&reasignar=`                     | Equipo (slice 9)                                   | supervisor |
-| `/supervision/escalados?escalamiento=&reasignar=`                                      | Escalados (slice 9)                                | supervisor |
-| `/supervision/casos/:caseId?historial=&reasignar=`                                     | supervisor read-only case view (`state.from`)      | supervisor |
-| `/supervision/auditoria?quien=&persona=&caso=&tipo=&desde=&hasta=&q=&cambios=&evento=` | Auditoría                                          | supervisor |
-| `/administracion/usuarios?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=`             | Usuarios y roles                                   | admin      |
-| `/administracion/equipos?estado=&equipo=&nuevo=`                                       | Equipos                                            | admin      |
-| `/administracion/auditoria?…` (the supervision audit params)                           | Auditoría (same screen, `canOpenCases`)            | admin      |
-| `/cliente?canal=`                                                                      | customer simulator: chat, call or email (dev tool) | —          |
+| Path                                                                         | Screen                                             | Guard      |
+| ---------------------------------------------------------------------------- | -------------------------------------------------- | ---------- |
+| `/`                                                                          | redirect to the first role home (or `/login`)      | —          |
+| `/login`, `/login/verify`, `/login/locked`                                   | login, MFA, lockout                                | GuestOnly  |
+| `/activate?token=`, `/reset-password?token=`                                 | invitation and password-reset links (part 4)       | —          |
+| `/dev/mailbox`                                                               | dev mailbox (only with the backend's dev mailbox)  | —          |
+| `/analyst` → `/analyst/home`                                                 | Inicio (the analyst's landing, slice 6)            | analyst    |
+| `/analyst/cases?case=&status=&q=&list=&panel=&previous=`                     | Workspace ("Casos")                                | analyst    |
+| `/supervision/queues?language=&status=&priority=&analyst=`                   | Colas (the landing of Supervisión, slice 9)        | supervisor |
+| `/supervision/team?status=&language=&team=&analyst=&reassign=`               | Equipo (slice 9)                                   | supervisor |
+| `/supervision/escalations?escalation=&reassign=`                             | Escalados (slice 9)                                | supervisor |
+| `/supervision/cases/:caseId?previous=&reassign=`                             | supervisor read-only case view (`state.from`)      | supervisor |
+| `/supervision/audit?actor=&person=&case=&type=&from=&to=&q=&changes=&event=` | Auditoría                                          | supervisor |
+| `/admin/users?role=&status=&team=&language=&q=&person=&new=`                 | Usuarios y roles                                   | admin      |
+| `/admin/teams?status=&team=&new=`                                            | Equipos                                            | admin      |
+| `/admin/audit?…` (the supervision audit params)                              | Auditoría (same screen, `canOpenCases`)            | admin      |
+| `/customer?channel=`                                                         | customer simulator: chat, call or email (dev tool) | —          |
 
 Any other path inside a role section shows that role's not-found page; any other
 path at all (including the removed automation, approvals, tools, rules and
@@ -500,8 +511,9 @@ Guards (`app/guards.tsx`):
 The rail role comes from the URL (`roleFromPath`); the role order
 (analyst → supervisor → admin; they combine) decides the "first role home".
 
-Adding a screen: create `src/routes/<area>/<screen>.tsx` (default export), register
-it with `lazyRoute()` in the right role section. Until it is built, render
+Adding a screen: add its path to `PATHS` (`src/app/paths.ts`), create
+`src/routes/<area>/<screen>.tsx` (default export) and register it with `lazyRoute()` in the
+right role section; its query string goes in the feature's `url.ts`. Until it is built, render
 `<ScreenPlaceholder title subtitle description />`.
 
 ## 5. Data layer
@@ -700,6 +712,23 @@ it with `lazyRoute()` in the right role section. Until it is built, render
 `wide`; the native radio is visually hidden, the card shows focus and the checked tone).
 `EmptyState` accepts `as="h4"`.
 
+Languages (`LanguageMark.tsx`, names and codes in `language.ts`): a language is shown as a
+mark, lucide's `Globe` + code ("ES", "PT"), one globe per group ("ES PT" for someone who speaks
+both), never the globe alone and never an emoji or a flag; a pt-BR customer shows PT. The globe
+is stroked and `text-muted` like the other UI icons, 14 px with 12 px codes (`size="sm"`) or
+16 px with 16 px codes (`size="lg"`: the "Colas" queue cards and title). Where a name is shown
+it is only the language's own name ("Español", "Português"). Dense rows and headers use
+`LanguageMarks` (`languages`, `focusable`, `name`, `size`: the group's name, "Español y
+Português", is its tooltip and its screen-reader text); `LanguageMark` is the same mark,
+decorative, for a control that names itself (the language filter chip); an "Idioma" value uses
+`LanguageName` (globe + own name, no code); form and filter options show only the own name, no
+icon (`FilterOption.language` sets its `lang`); a fact takes `FactItem.languages` (the mark
+after its text, or in place of the icon when the text is empty) or `FactItem.language` (the
+text is that language's own name: the globe stands in for the icon); `spokenFact` says a fact
+for a control's accessible name. Marks carry `data-languages` ("es pt") and names
+`data-language` for tests. Sentences keep the Spanish word ("Cola en portugués", "Nadie con ese
+nombre habla portugués.").
+
 Layout (`@/components/layout`): `SidePanel` / `SidePanelSection` (slice 6: the 360 px right
 panel slot of the Workspace, sections, close button + Escape, focus in on open and back to the
 trigger), `AppShell` (rail + outlet), `Rail` (role
@@ -755,7 +784,7 @@ is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
   "Casos anteriores" in both windows), `supervision.spec.ts` (queue and drain under
   rule 3; a supervisor assigns a queued case and reassigns it while the analyst watches
   it leave her list, rule 3 in the dialog), `admin.spec.ts` (part 4: an admin invites an
-  analyst, who opens the link from `/dev/correos`, sets her password, enrolls her
+  analyst, who opens the link from `/dev/mailbox`, sets her password, enrolls her
   authenticator (the test computes the TOTP code from the key on screen, `support/totp.ts`),
   signs in with password + code and gets a case; a role change reaches the role switcher live
   and back; deactivation signs the other window out),

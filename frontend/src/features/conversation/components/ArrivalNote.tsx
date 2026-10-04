@@ -13,7 +13,7 @@ export interface ArrivalNoteProps {
  * The arrival note under the case header: the people-based assignment only.
  * In the Workspace (slice 6 UI rule) it is one row of short facts — the heading
  * ("Cómo llegó a ti", or "Quién lo atiende" for someone else's case), each fact
- * an icon + 1–3 words ([check] Estabas disponible, [languages] Hablas portugués
+ * an icon + 1–3 words ([check] Estabas disponible, [languages] Hablas [PT]
  * "Regla 3"…) and the time with a clock; never a sentence. The supervisor view
  * (slice 3 §8.3) keeps its "Cómo llegó" line, with the time as a separate clock fact (slice
  * 9: no " · " joins). Nothing while there is nothing to

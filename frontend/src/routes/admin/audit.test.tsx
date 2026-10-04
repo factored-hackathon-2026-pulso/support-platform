@@ -55,7 +55,7 @@ beforeEach(() => {
 
 describe('audit (administration)', () => {
   it('reuses the audit screen in the admin section, searching an id from the URL', async () => {
-    renderRoute(`/administracion/auditoria?q=${ANDRES_V_ID}&tipo=administracion`, {
+    renderRoute(`/admin/audit?q=${ANDRES_V_ID}&type=administration`, {
       staff: adminStaff,
     })
     expect(await screen.findByRole('heading', { level: 1, name: 'Auditoría' })).toBeInTheDocument()
@@ -82,7 +82,7 @@ describe('audit (administration)', () => {
   })
 
   it('hides "Ver la conversación" from an admin without Supervisión', async () => {
-    const { user } = renderRoute(`/administracion/auditoria?evento=${assigned.id}`, {
+    const { user } = renderRoute(`/admin/audit?event=${assigned.id}`, {
       staff: adminStaff,
     })
     const detail = await screen.findByRole('complementary', { name: 'Detalle del registro' })
@@ -103,10 +103,10 @@ describe('audit (administration)', () => {
   })
 
   it('keeps "Ver la conversación" for a supervisor-admin', async () => {
-    renderRoute(`/administracion/auditoria?evento=${assigned.id}`, { staff: supervisorAdminStaff })
+    renderRoute(`/admin/audit?event=${assigned.id}`, { staff: supervisorAdminStaff })
     const detail = await screen.findByRole('complementary', { name: 'Detalle del registro' })
     expect(
       await within(detail).findByRole('link', { name: 'Ver la conversación' }),
-    ).toHaveAttribute('href', `/supervision/casos/${assigned.caseRef?.id}`)
+    ).toHaveAttribute('href', `/supervision/cases/${assigned.caseRef?.id}`)
   })
 })

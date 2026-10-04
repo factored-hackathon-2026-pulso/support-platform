@@ -3,7 +3,7 @@ import { escapeRegExp } from '../data'
 
 export type QueueLanguage = 'Español' | 'Portugués'
 
-/** "Colas" (`/supervision/colas`): every open case of a language. */
+/** "Colas" (`/supervision/queues`): every open case of a language. */
 export class QueuesPage {
   readonly page: Page
 
@@ -12,7 +12,7 @@ export class QueuesPage {
   }
 
   async goto(language: QueueLanguage = 'Español'): Promise<void> {
-    await this.page.goto(`/supervision/colas${language === 'Portugués' ? '?idioma=pt' : ''}`)
+    await this.page.goto(`/supervision/queues${language === 'Portugués' ? '?language=pt' : ''}`)
     await expect(this.page.getByRole('heading', { level: 1, name: 'Colas' })).toBeVisible()
   }
 
@@ -28,7 +28,7 @@ export class QueuesPage {
   }
 }
 
-/** "Escalados" (`/supervision/escalados`). */
+/** "Escalados" (`/supervision/escalations`). */
 export class EscalationsPage {
   readonly page: Page
 
@@ -37,7 +37,7 @@ export class EscalationsPage {
   }
 
   async goto(): Promise<void> {
-    await this.page.goto('/supervision/escalados')
+    await this.page.goto('/supervision/escalations')
     await expect(this.page.getByRole('heading', { level: 1, name: 'Escalados' })).toBeVisible()
   }
 
@@ -62,7 +62,7 @@ export class EscalationsPage {
   }
 }
 
-/** The supervisor's read-only case view (`/supervision/casos/:caseId`). */
+/** The supervisor's read-only case view (`/supervision/cases/:caseId`). */
 export class SupervisorCasePage {
   readonly page: Page
 
@@ -71,7 +71,7 @@ export class SupervisorCasePage {
   }
 
   async goto(caseId: string, customerName: string): Promise<void> {
-    await this.page.goto(`/supervision/casos/${caseId}`)
+    await this.page.goto(`/supervision/cases/${caseId}`)
     await expect(
       this.page.getByRole('heading', {
         level: 1,
@@ -134,10 +134,10 @@ export class ReassignDialog {
     }
   }
 
-  /** "Reasignar a {nombre}"; closed for good (`?reasignar=` gone too). */
+  /** "Reasignar a {nombre}"; closed for good (`?reassign=` gone too). */
   async submit(label: RegExp): Promise<void> {
     await this.root.getByRole('button', { name: label }).click()
     await expect(this.root).toBeHidden()
-    await expect(this.page).not.toHaveURL(/[?&]reasignar=/)
+    await expect(this.page).not.toHaveURL(/[?&]reassign=/)
   }
 }

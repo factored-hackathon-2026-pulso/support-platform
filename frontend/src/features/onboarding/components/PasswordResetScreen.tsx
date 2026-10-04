@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Check } from 'lucide-react'
+import { PATHS } from '@/app/paths'
 import { Button, Callout, DocumentTitle, Fact, LinkButton } from '@/components/ui'
 import {
   describeOnboardingFailure,
@@ -147,7 +148,7 @@ function PasswordUpdated() {
           Ya puedes entrar con tu contraseña nueva y el código de tu app.
         </p>
       </div>
-      <LinkButton to="/login" variant="primary" size="lg" block>
+      <LinkButton to={PATHS.login} variant="primary" size="lg" block>
         Entrar
       </LinkButton>
     </>

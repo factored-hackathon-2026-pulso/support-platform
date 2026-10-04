@@ -115,6 +115,8 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_AGENT_CORE_URL`, `CC_AGENT_KEYS_FILE` | unset | ADR 0003: agent-core's runtime URL and the private signing keys of the credentials the platform issues to it. They go together or not at all; unset, the platform is people-only (§4.1) |
 | `CC_AGENT_CORE_TIMEOUT_SECONDS` | `60` | How long a turn may take before the case falls back to a person |
 | `CC_ASSISTANT_AGENT` | `recepcion@prod` | Slice 14: the agent a conversation starts with (`id`, `id@alias` or `id@X.Y.Z`) |
+| `CC_ASSISTANT_SWEEP_SECONDS` | `30` | S17: how often a sweep re-runs assistant work lost with its process (sessions quiet for 20 s); `0` turns it off |
+| `CC_INTERNAL_SERVICE_TOKEN` | unset | S17: shared secret of `/api/v1/internal/*` (agent-core's `grant_active` check, bearer, constant-time compare). Unset = those routes answer 404. A long random value; never commit it |
 | `CC_COPILOT_AGENT` | `copiloto-asesor@prod` | Slice 15: the agent the analyst's copilot asks |
 | `CC_BUILDER_AGENT` | `constructor-chat@prod` | Slice 16: the builder agent supervisors chat with (`id`, `id@alias` or `id@X.Y.Z`) |
 | `CC_ASSISTANT_LANGUAGES` | `["es"]` | Slice 14: case languages the assistant serves (JSON list); others go straight to people (policy `H1`) |

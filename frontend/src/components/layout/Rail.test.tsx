@@ -28,20 +28,20 @@ const supervisionWithQueue: RoleDefinition = {
 
 describe('Rail per role', () => {
   it('analyst: Inicio, then Casos', async () => {
-    const rail = await railFor('/analista?caso=CASE-1', 'Casos')
+    const rail = await railFor('/analyst/cases?case=CASE-1', 'Casos')
     expect(destinations(rail)).toEqual(['Inicio', 'Casos'])
     expect(rail.getByRole('link', { name: 'Casos' })).toHaveAttribute('aria-current', 'page')
     expect(rail.getByRole('link', { name: 'Inicio' })).not.toHaveAttribute('aria-current')
   })
 
   it('supervisor: queues, team, escalations and audit', async () => {
-    const rail = await railFor('/supervision/auditoria', 'Auditoría')
+    const rail = await railFor('/supervision/audit', 'Auditoría')
     expect(destinations(rail)).toEqual(['Colas', 'Equipo', 'Escalados', 'Auditoría'])
     expect(rail.getByRole('link', { name: 'Auditoría' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('admin: users and roles, teams and audit', async () => {
-    const rail = await railFor('/administracion/usuarios', 'Usuarios y roles')
+    const rail = await railFor('/admin/users', 'Usuarios y roles')
     expect(destinations(rail)).toEqual(['Usuarios y roles', 'Equipos', 'Auditoría'])
     expect(rail.getByRole('link', { name: 'Usuarios y roles' })).toHaveAttribute(
       'aria-current',
@@ -54,7 +54,7 @@ describe('Rail presence dot', () => {
   it('labels the analyst availability next to the avatar', () => {
     const { unmount } = renderWithProviders(
       <Rail role={ROLES.analyst} presence={{ tone: 'warn', label: 'Estado: En pausa' }} />,
-      { route: '/analista/inicio', staff: allRolesStaff },
+      { route: '/analyst/home', staff: allRolesStaff },
     )
     const nav = within(screen.getByRole('navigation', { name: 'Principal' }))
     expect(nav.getByText('Estado: En pausa')).toBeInTheDocument()
@@ -62,7 +62,7 @@ describe('Rail presence dot', () => {
     expect(nav.getByRole('button', { name: /, cambiar de rol$/ })).toBeInTheDocument()
     unmount()
     renderWithProviders(<Rail role={ROLES.supervisor} />, {
-      route: '/supervision/equipo',
+      route: '/supervision/team',
       staff: allRolesStaff,
     })
     expect(screen.queryByText(/^Estado:/)).not.toBeInTheDocument()
@@ -72,7 +72,7 @@ describe('Rail presence dot', () => {
 describe('Rail indicators', () => {
   it('shows the Por responder count on Casos', () => {
     renderWithProviders(<Rail role={ROLES.analyst} indicators={{ toReplyCases: { count: 2 } }} />, {
-      route: '/analista/inicio',
+      route: '/analyst/home',
       staff: allRolesStaff,
     })
     expect(screen.getByRole('link', { name: 'Casos, 2 pendientes' })).toBeInTheDocument()
@@ -82,7 +82,7 @@ describe('Rail indicators', () => {
   it('shows live counts in the badge and in the accessible name', () => {
     renderWithProviders(
       <Rail role={supervisionWithQueue} indicators={{ queuedCases: { count: 4 } }} />,
-      { route: '/supervision/equipo', staff: allRolesStaff },
+      { route: '/supervision/team', staff: allRolesStaff },
     )
     const link = screen.getByRole('link', { name: 'Cola, 4 pendientes' })
     expect(within(link).getByText('4')).toBeInTheDocument()
@@ -113,7 +113,7 @@ describe('Rail notifications slot (slice 10)', () => {
   it('puts the bell above the avatar, for every role', () => {
     renderWithProviders(
       <Rail role={ROLES.admin} notifications={<button type="button">Notificaciones</button>} />,
-      { route: '/administracion/usuarios', staff: allRolesStaff },
+      { route: '/admin/users', staff: allRolesStaff },
     )
     const nav = within(screen.getByRole('navigation', { name: 'Principal' }))
     const bell = nav.getByRole('button', { name: 'Notificaciones' })
@@ -123,9 +123,9 @@ describe('Rail notifications slot (slice 10)', () => {
 
   it('the staff shell composes the bell into the rail of every role', async () => {
     for (const [path, heading] of [
-      ['/analista?caso=CASE-1', 'Casos'],
-      ['/supervision/auditoria', 'Auditoría'],
-      ['/administracion/usuarios', 'Usuarios y roles'],
+      ['/analyst/cases?case=CASE-1', 'Casos'],
+      ['/supervision/audit', 'Auditoría'],
+      ['/admin/users', 'Usuarios y roles'],
     ] as const) {
       const { unmount } = renderRoute(path, { staff: allRolesStaff })
       await screen.findByRole('heading', { level: 1, name: heading })

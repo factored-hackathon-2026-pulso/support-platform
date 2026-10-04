@@ -16,6 +16,7 @@ from cc_platform.api.routers import (
     customer,
     dev,
     home,
+    internal,
     notifications,
     onboarding,
     people,
@@ -46,6 +47,7 @@ def build_api_router() -> APIRouter:
     router.include_router(channels.customer_router)
     router.include_router(realtime.router)
     router.include_router(dev.router)
+    router.include_router(internal.router)
     return router
 
 

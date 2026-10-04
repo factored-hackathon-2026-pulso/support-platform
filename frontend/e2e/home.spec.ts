@@ -21,7 +21,7 @@ test.describe('Analyst home ("Inicio")', () => {
 
     // She signs in and lands on "Inicio", paused.
     const { page } = await actors.signedIn('analista', analyst)
-    await expect(page).toHaveURL(/\/analista\/inicio$/)
+    await expect(page).toHaveURL(/\/analyst\/home$/)
     const home = new HomePage(page)
     await expect(home.greeting(firstName(analyst.name))).toBeVisible()
     await expect(home.availability).toContainText('Estás en pausa')
@@ -30,7 +30,9 @@ test.describe('Analyst home ("Inicio")', () => {
     await expect(rail.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
     await expect(rail.getByText('Estado: En pausa')).toBeAttached()
     await expect(home.firstCase(customer.name)).toHaveCount(0)
-    await expect(home.team).toContainText('Cola en español')
+    // Her language queue, as its mark (named "Español" for screen readers).
+    await expect(home.team).toContainText('Esperan en la cola')
+    await expect(home.team.getByText('Español', { exact: true }).first()).toBeAttached()
 
     // "Empezar a atender": the queue drains to her, live.
     await home.startWorking()
@@ -43,7 +45,7 @@ test.describe('Analyst home ("Inicio")', () => {
 
     // "Abrir": Casos with that case open and its card highlighted under its filter.
     await home.openFirstCase(customer.name)
-    await expect(page).toHaveURL(/\/analista\?caso=CASE-[^&]+&estado=nuevos$/)
+    await expect(page).toHaveURL(/\/analyst\/cases\?case=CASE-[^&]+&status=new$/)
     const workspace = new WorkspacePage(page)
     await expect(workspace.filterChip('Nuevos')).toBeVisible()
     await expect(workspace.caseCard(customer.name)).toHaveAttribute('aria-current', 'true')

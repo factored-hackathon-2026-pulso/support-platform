@@ -10,12 +10,14 @@
  */
 import {
   adminUserPath,
+  PATHS,
+  supervisionCasePath,
   supervisionEscalationPath,
   supervisionQueuesPath,
   workspacePath,
-  type RoleId,
-} from '@/app/roles'
-import { ratingOption, slugFromInboxStatus } from '@/features/cases/core'
+} from '@/app/paths'
+import type { RoleId } from '@/app/roles'
+import { ratingOption } from '@/features/cases/core'
 import { LANGUAGE_NAMES } from '@/features/conversation/core'
 import { formatDate } from '@/lib/format'
 import type {
@@ -129,7 +131,7 @@ export function notificationCopy(n: Notification, now: number): NotificationCopy
       return copy(
         `El cliente calificó tu atención: ${ratingOption(n.score ?? 1).label}`,
         customer,
-        workspacePath({ caseId: n.caseId, filterSlug: slugFromInboxStatus('closed') }),
+        workspacePath({ caseId: n.caseId, status: 'closed' }),
       )
     case 'case_escalated':
       return copy(`${actor} escaló un caso`, customer, supervisionEscalationPath(n.escalationId))
@@ -149,13 +151,13 @@ export function notificationCopy(n: Notification, now: number): NotificationCopy
       return copy(
         `Cuenta bloqueada: ${target}`,
         `${n.failedAttempts ?? 5} intentos fallidos al entrar`,
-        n.targetId ? adminUserPath(n.targetId) : '/administracion/usuarios',
+        n.targetId ? adminUserPath(n.targetId) : PATHS.admin.users,
       )
     case 'invitation_accepted':
       return copy(
         `Invitación aceptada: ${target}`,
         'Ya puede entrar a la plataforma',
-        n.targetId ? adminUserPath(n.targetId) : '/administracion/usuarios',
+        n.targetId ? adminUserPath(n.targetId) : PATHS.admin.users,
       )
   }
 }
@@ -229,16 +231,16 @@ export function isOnScreen(n: Notification, { pathname, search }: ScreenLocation
   if (n.role === 'analyst') {
     return (
       SHOWN_IN_THE_CASE.has(n.kind) &&
-      pathname === '/analista' &&
+      pathname === PATHS.analyst.cases &&
       n.caseId !== null &&
-      params.get('caso') === n.caseId
+      params.get('case') === n.caseId
     )
   }
   if (n.role === 'supervisor') {
-    if (n.kind === 'case_escalated' && pathname === '/supervision/escalados') return true
-    return n.caseId !== null && pathname === `/supervision/casos/${n.caseId}`
+    if (n.kind === 'case_escalated' && pathname === PATHS.supervision.escalations) return true
+    return n.caseId !== null && pathname === supervisionCasePath(n.caseId)
   }
-  return pathname === '/administracion/usuarios' && params.get('persona') === n.targetId
+  return pathname === PATHS.admin.users && params.get('person') === n.targetId
 }
 
 /**

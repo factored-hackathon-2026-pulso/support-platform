@@ -33,7 +33,7 @@ import { ReassignDialog } from './ReassignDialog'
 export interface EscalationPanelProps {
   item: EscalationItem
   now: number
-  /** `?reasignar=1`: the reassign dialog is open. */
+  /** `?reassign=1`: the reassign dialog is open. */
   reassigning: boolean
   onReassign(open: boolean): void
   onClose(): void

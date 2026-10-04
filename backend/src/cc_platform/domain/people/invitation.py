@@ -2,7 +2,7 @@
 
 Administration never sees or hands out a password. Creating a person creates her ``Staff``
 record in the ``invited`` setup (inactive: she cannot sign in) and one ``Invitation``: a
-high-entropy, single-use token sent by email as a link (``/activar?token=…``). Only the
+high-entropy, single-use token sent by email as a link (``/activate?token=…``). Only the
 SHA-256 hash of the token is stored. With the link she
 
 1. sets her own password (``start_enrollment``: the hash and a fresh TOTP secret, sealed,

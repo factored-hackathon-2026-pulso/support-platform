@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 import { escapeRegExp } from '../data'
 
-/** "Correos de desarrollo" (`/dev/correos`): the dev mailbox (part 4). */
+/** "Correos de desarrollo" (`/dev/mailbox`): the dev mailbox (part 4). */
 export class DevMailboxPage {
   readonly page: Page
 
@@ -10,7 +10,7 @@ export class DevMailboxPage {
   }
 
   async goto(): Promise<void> {
-    await this.page.goto('/dev/correos')
+    await this.page.goto('/dev/mailbox')
     await expect(
       this.page.getByRole('heading', { level: 1, name: 'Correos de desarrollo' }),
     ).toBeVisible()
@@ -31,7 +31,7 @@ export class DevMailboxPage {
   }
 }
 
-/** "Activa tu cuenta" (`/activar?token=`): password, two-step setup, account ready. */
+/** "Activa tu cuenta" (`/activate?token=`): password, two-step setup, account ready. */
 export class ActivationPage {
   readonly page: Page
 

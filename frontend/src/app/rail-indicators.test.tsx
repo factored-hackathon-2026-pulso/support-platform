@@ -60,7 +60,7 @@ describe('useRailIndicators', () => {
   it('shows the unassigned cases on "Colas" and the open escalations in the Supervisión role, live', async () => {
     const { sockets } = renderWithProviders(<RailFor roleId="supervisor" />, {
       staff: supervisorStaff,
-      route: '/supervision/auditoria',
+      route: '/supervision/audit',
     })
     expect(await screen.findByRole('link', { name: 'Colas, 3 sin asignar' })).toBeInTheDocument()
     expect(await screen.findByRole('link', { name: 'Escalados, 2 abiertos' })).toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('useRailIndicators', () => {
   it('shows Por responder on Casos and her presence in the analyst role, never the queues', async () => {
     const { sockets } = renderWithProviders(<RailFor roleId="analyst" />, {
       staff: supervisorStaff,
-      route: '/analista',
+      route: '/analyst/cases',
     })
     expect(await screen.findByRole('link', { name: 'Casos, 2 pendientes' })).toBeInTheDocument()
     expect(await screen.findByText('Estado: En pausa')).toBeInTheDocument()
@@ -131,7 +131,7 @@ describe('useRailIndicators', () => {
   it('asks nothing of the cases outside the analyst role, and shows no dot', async () => {
     renderWithProviders(<RailFor roleId="supervisor" />, {
       staff: supervisorStaff,
-      route: '/supervision/equipo',
+      route: '/supervision/team',
     })
     await screen.findByRole('link', { name: 'Colas, 3 sin asignar' })
     expect(fetchInbox).not.toHaveBeenCalled()
@@ -145,7 +145,7 @@ describe('useRailIndicators', () => {
     )
     renderWithProviders(<RailFor roleId="supervisor" />, {
       staff: supervisorStaff,
-      route: '/supervision/equipo',
+      route: '/supervision/team',
     })
     await vi.waitFor(() => expect(fetchQueueOverview).toHaveBeenCalled())
     expect(screen.getByRole('link', { name: 'Colas' })).toBeInTheDocument()
@@ -154,7 +154,7 @@ describe('useRailIndicators', () => {
   it('shows the locked accounts on "Usuarios y roles" in the Administración role, live', async () => {
     const { sockets } = renderWithProviders(<RailFor roleId="admin" />, {
       staff: adminStaff,
-      route: '/administracion/equipos',
+      route: '/admin/teams',
     })
     expect(
       await screen.findByRole('link', { name: 'Usuarios y roles, 1 pendiente' }),
@@ -193,7 +193,7 @@ describe('useRailIndicators', () => {
   it('does not ask for the directory outside the Administración role', async () => {
     renderWithProviders(<RailFor roleId="supervisor" />, {
       staff: supervisorStaff,
-      route: '/supervision/equipo',
+      route: '/supervision/team',
     })
     await screen.findByRole('link', { name: 'Colas, 3 sin asignar' })
     expect(fetchAdminUsers).not.toHaveBeenCalled()

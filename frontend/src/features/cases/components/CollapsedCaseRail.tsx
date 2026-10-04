@@ -15,7 +15,7 @@ export interface CollapsedCaseRailProps {
   onExpand: () => void
 }
 
-/** `contraida` state: 64px rail with the cases as round initials (ring = status). */
+/** Collapsed list (`?list=collapsed`, canvas state `contraida`): 64px rail with the cases as round initials (ring = status). */
 export function CollapsedCaseRail({
   items,
   toReplyCount,

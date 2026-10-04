@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { ArrowLeftRight, Languages, LogOut } from 'lucide-react'
+import { ArrowLeftRight, LogOut } from 'lucide-react'
 import { Page, PageBody } from '@/components/layout'
-import { Badge, Button, PageHeader } from '@/components/ui'
+import { Badge, Button, LanguageMarks, PageHeader } from '@/components/ui'
 import { RealtimeProvider, type WebSocketFactory } from '@/lib/realtime'
 import { describeCustomerCallFailure, isCustomerCallActive, type SimChannel } from '../channels'
 import { describeStartFailure, localeLabel } from '../model'
@@ -26,7 +26,7 @@ export interface CustomerSimulatorScreenProps {
   /** Tests only: fake socket for the customer realtime client. The route passes nothing. */
   createSocket?: WebSocketFactory
   /**
-   * The channel the customer uses (`?canal=` in the route); null = the channel picker.
+   * The channel the customer uses (`?channel=` in the route); null = the channel picker.
    * Without `onChannelChange` the screen keeps it itself, starting at `channel`.
    */
   channel?: SimChannel | null
@@ -34,7 +34,7 @@ export interface CustomerSimulatorScreenProps {
 }
 
 /**
- * /cliente — customer simulator, a dev/demo tool outside the staff shell: pick a seeded
+ * /customer — customer simulator, a dev/demo tool outside the staff shell: pick a seeded
  * customer, then how they reach the bank (chat, a call, an email; slice 12), and answer from
  * the Workspace in another window. It runs its own customer session, API client and socket,
  * apart from any staff session in the same tab.
@@ -153,12 +153,7 @@ function SimulatorBody({
               {me?.displayName ?? 'cliente de ejemplo'}
             </span>
           </p>
-          {me ? (
-            <span className="inline-flex items-center gap-1 text-13">
-              <Languages size={13} aria-hidden="true" />
-              {localeLabel(me.locale)}
-            </span>
-          ) : null}
+          {me ? <LanguageMarks languages={[me.language]} name={localeLabel(me.locale)} /> : null}
           <span className="font-mono text-12 text-muted">{customerId}</span>
         </div>
         <div className="flex gap-2">

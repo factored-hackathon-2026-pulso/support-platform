@@ -15,6 +15,7 @@ from cc_platform.application.cases.ports import AssigneeLoad, CaseRef, OpenCaseR
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case, CaseClosure
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
+from cc_platform.domain.cases.escalation import Escalation, EscalationState
 from cc_platform.domain.cases.rating import CaseRating
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
@@ -93,6 +94,7 @@ class SqlCaseRepository(VersionedRepository[Case]):
             "rating_comment": rating.comment if rating else None,
             "rated_at": rating.rated_at if rating else None,
             "rating_key": rating.key if rating else None,
+            "open_escalation_id": aggregate.open_escalation_id,
         }
 
     def _from_row(self, row: Row) -> Case:
@@ -140,6 +142,7 @@ class SqlCaseRepository(VersionedRepository[Case]):
             unread_sequences=tuple(int(s) for s in row["unread_sequences"]),
             closure=closure,
             rating=rating,
+            open_escalation_id=row["open_escalation_id"],
         )
 
     async def _list(self, *criteria: Any, order: tuple[Any, ...] = ()) -> list[Case]:
@@ -293,6 +296,81 @@ class SqlCaseRepository(VersionedRepository[Case]):
             )
             for row in rows
         }
+
+    async def list_open_by_language(self, language: Language) -> list[Case]:
+        c = self.table.c
+        open_statuses = [CaseStatus.QUEUED.value, *(s.value for s in OPEN_ASSIGNED_STATUSES)]
+        return await self._list(c.language == language.value, c.status.in_(open_statuses))
+
+
+# ----------------------------------------------------------------------------- escalations
+class SqlEscalationRepository(VersionedRepository[Escalation]):
+    table = tables.escalations
+    #: A duplicate ``creation_key`` = the same request racing itself: retry and replay.
+    insert_race_is_retryable = True
+
+    def _key(self, aggregate: Escalation) -> str:
+        return aggregate.id
+
+    def _to_row(self, aggregate: Escalation) -> dict[str, Any]:
+        return {
+            "id": aggregate.id,
+            "case_id": aggregate.case_id,
+            "state": aggregate.state.value,
+            "motive": aggregate.motive,
+            "escalated_by_id": aggregate.escalated_by_id,
+            "escalated_at": aggregate.escalated_at,
+            "resolved_at": aggregate.resolved_at,
+            "resolved_by_id": aggregate.resolved_by_id,
+            "note": aggregate.note,
+            "reassigned_to_id": aggregate.reassigned_to_id,
+            "acknowledged_at": aggregate.acknowledged_at,
+            "creation_key": aggregate.creation_key,
+        }
+
+    def _from_row(self, row: Row) -> Escalation:
+        return Escalation(
+            id=row["id"],
+            case_id=row["case_id"],
+            motive=row["motive"],
+            escalated_by_id=row["escalated_by_id"],
+            escalated_at=row["escalated_at"],
+            state=EscalationState(row["state"]),
+            resolved_at=row["resolved_at"],
+            resolved_by_id=row["resolved_by_id"],
+            note=row["note"],
+            reassigned_to_id=row["reassigned_to_id"],
+            acknowledged_at=row["acknowledged_at"],
+            creation_key=row["creation_key"],
+        )
+
+    async def _list(self, *criteria: Any, order: tuple[Any, ...] = ()) -> list[Escalation]:
+        result = await self._session.execute(select(self.table).where(*criteria).order_by(*order))
+        found: list[Escalation] = []
+        for row in result.mappings():
+            escalation = self._load(row)
+            if escalation is not None:
+                found.append(escalation)
+        return found
+
+    async def get_by_creation_key(self, key: str) -> Escalation | None:
+        return await self._get_where(self.table.c.creation_key == key)
+
+    async def latest_for_case(self, case_id: str) -> Escalation | None:
+        c = self.table.c
+        result = await self._session.execute(
+            select(self.table)
+            .where(c.case_id == case_id)
+            .order_by(c.escalated_at.desc(), c.id.desc())
+            .limit(1)
+        )
+        return self._load(result.mappings().first())
+
+    async def list_open_or_resolved_since(self, resolved_since: datetime) -> list[Escalation]:
+        c = self.table.c
+        return await self._list(
+            or_(c.state == EscalationState.OPEN.value, c.resolved_at >= resolved_since)
+        )
 
 
 class SqlCustomerCaseSlotRepository(VersionedRepository[CustomerCaseSlot]):

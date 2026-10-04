@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from cc_platform.domain.cases.escalation import EscalationState
 from cc_platform.domain.cases.values import (
     AssignmentReason,
     CaseChannel,
@@ -71,6 +72,8 @@ class CaseSummaryView:
     closed_at: datetime | None
     close_reason: CloseReason | None
     rating: CaseRatingView | None
+    escalated: bool
+    """An escalation to supervision is open (slice 9: the "Escalado" marker)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +143,29 @@ class CaseCapabilitiesView:
     """The caller holds ``supervisor`` and the case is not closed ("Asignar"/"Reasignar")."""
     can_change_priority: bool
     """The caller is the assignee analyst or holds ``supervisor``, and the case is open."""
+    can_escalate: bool
+    """Slice 9: the caller is the assignee analyst, the case is open and not escalated."""
+
+
+@dataclass(frozen=True, slots=True)
+class EscalationView:
+    """An escalation to supervision (slice 9) as staff see it (never the customer)."""
+
+    id: str
+    case_id: str
+    customer_name: str
+    state: EscalationState
+    motive: str
+    escalated_at: datetime
+    escalated_by_id: str
+    escalated_by_name: str | None
+    resolved_at: datetime | None
+    resolved_by_id: str | None
+    resolved_by_name: str | None
+    note: str | None
+    reassigned_to_id: str | None
+    reassigned_to_name: str | None
+    acknowledged_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +176,8 @@ class CaseDetailView:
     closure: CaseClosureView | None
     capabilities: CaseCapabilitiesView
     previous_case_count: int
+    escalation: EscalationView | None
+    """The case's latest escalation (any state; slice 9), or ``None``."""
 
 
 @dataclass(frozen=True, slots=True)

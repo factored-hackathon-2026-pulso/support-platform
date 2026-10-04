@@ -1,6 +1,6 @@
 # Modelo de datos de la plataforma
 
-Versión: slices 0 a 8 (slice 7: calificación del cliente; slice 8: prioridad del caso). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
+Versión: slices 0 a 9 (slice 7: calificación del cliente; slice 8: prioridad del caso; slice 9: escalamientos a supervisión). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
 
 La plataforma es solo para personas: clientes y equipo de soporte conversan por chat. Guarda las conversaciones, quién atiende cada caso, las cuentas del equipo y el registro de eventos; nada más (la [última sección](#diferencias-con-contractsplatform_historyjson) compara este modelo con la muestra sintética).
 
@@ -8,7 +8,7 @@ La plataforma es solo para personas: clientes y equipo de soporte conversan por 
 
 - Base de datos SQLite por defecto, escrita con SQL portable para pasar a Postgres sin cambios.
 - **No hay migraciones todavía**: el esquema se crea al arrancar. Si cambia, se borra `backend/cc_platform.db` y se vuelve a crear con los datos de ejemplo.
-- Ids de texto con prefijo: `CASE-…`, `TRN-…` (mensaje), `ASG-…` (asignación), `CUS-…` (cliente), `STF-…` (persona del equipo), `SES-…` (sesión), `MFA-…`, `TEAM-…` (equipo), `EVT-…` (evento), `CSN-…` (sesión de cliente).
+- Ids de texto con prefijo: `CASE-…`, `TRN-…` (mensaje), `ASG-…` (asignación), `CUS-…` (cliente), `STF-…` (persona del equipo), `SES-…` (sesión), `MFA-…`, `TEAM-…` (equipo), `EVT-…` (evento), `CSN-…` (sesión de cliente), `ESC-…` (escalamiento).
 - Fechas en UTC (ISO-8601).
 - Las tablas con columna `version` usan control de concurrencia optimista: si dos personas cambian lo mismo a la vez, la segunda escritura se rechaza y se reintenta sobre datos frescos.
 - `turns` y `event_log` son de solo agregar: nunca se editan ni se borran filas.
@@ -30,6 +30,8 @@ erDiagram
     staff ||--o{ staff_sessions : "sesiones"
     staff ||--o| analyst_availability : "disponible / en pausa"
     cases ||--o{ event_log : "case_id"
+    cases ||--o{ escalations : "escalamientos (uno abierto a la vez)"
+    staff ||--o{ escalations : "escalated_by_id"
 
     customers {
         string id PK "CUS-…"
@@ -61,6 +63,22 @@ erDiagram
         string rating_comment
         datetime rated_at
         string rating_key
+        string open_escalation_id "slice 9"
+        int version
+    }
+    escalations {
+        string id PK "ESC-…"
+        string case_id FK
+        string state "open answered taken reassigned withdrawn closed"
+        string motive "hasta 500"
+        string escalated_by_id FK
+        datetime escalated_at
+        datetime resolved_at
+        string resolved_by_id
+        string note "respuesta de supervisión"
+        string reassigned_to_id
+        datetime acknowledged_at
+        string creation_key
         int version
     }
     turns {
@@ -165,14 +183,16 @@ erDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> queued: el cliente escribe
-    queued --> assigned: hay alguien disponible que habla el idioma,\nse libera alguien, o la supervisora lo asigna
+    queued --> assigned: hay alguien disponible que habla el idioma,\nse libera alguien, o supervisión lo asigna
     assigned --> in_progress: el analista lo abre o responde
-    assigned --> assigned: la supervisora lo reasigna
-    in_progress --> assigned: la supervisora lo reasigna
+    assigned --> assigned: supervisión lo reasigna
+    in_progress --> assigned: supervisión lo reasigna
     assigned --> closed: el analista lo cierra con motivo
     in_progress --> closed: el analista lo cierra con motivo
     closed --> closed: el cliente lo califica (una vez, slice 7)
     assigned --> assigned: la analista o supervisión cambia la prioridad (slice 8)
+    assigned --> assigned: la analista escala a supervisión (slice 9; el caso sigue con ella)
+    in_progress --> in_progress: la analista escala a supervisión (slice 9)
     in_progress --> in_progress: la analista o supervisión cambia la prioridad (slice 8)
     closed --> [*]
 ```
@@ -189,6 +209,24 @@ stateDiagram-v2
   (con el rol Analista) o Supervisión (cualquier caso abierto, también en cola); nunca en un caso
   cerrado. No cambia el estado ni el plazo de primera respuesta. Los niveles siguen
   `complaints.priority` del dataset (Low, Medium, High, Critical) más `none`.
+
+- Escalamiento a supervisión (slice 9): solo dice que el caso se escaló y por qué (el dataset solo
+  tiene `was_escalated` sí/no: no hay tipos, montos, límites, niveles ni plazos). Lo escala quien
+  lo atiende, uno abierto a la vez (`cases.open_escalation_id`); supervisión responde, toma el caso
+  (si también es Analista y habla el idioma) o lo reasigna; cerrar el caso lo termina.
+
+```mermaid
+stateDiagram-v2
+    [*] --> open: la analista escala con un motivo
+    open --> withdrawn: la analista lo retira
+    open --> answered: supervisión responde con una nota
+    open --> taken: supervisión toma el caso
+    open --> reassigned: supervisión reasigna el caso
+    open --> closed: se cierra el caso
+    answered --> answered: "Entendido" (acknowledged_at, una vez)
+    taken --> taken: "Entendido"
+    reassigned --> reassigned: "Entendido"
+```
 
 **Estado en la bandeja del analista** (se calcula, no se guarda):
 
@@ -244,7 +282,8 @@ stateDiagram-v2
 | `rating_comment` | texto(500), nulo | comentario opcional del cliente (sin espacios sobrantes; vacío = nulo) |
 | `rated_at` | fecha, nula | cuándo calificó |
 | `rating_key` | texto(64), nulo | `Idempotency-Key` de la solicitud: un reintento con la misma respuesta no califica dos veces |
-| `version` | entero | concurrencia optimista (una calificación o un cambio de prioridad sube la versión: dos a la vez, gana una; el cambio de prioridad además exige la versión que vio quien lo pide, `expectedVersion`) |
+| `open_escalation_id` | texto, nulo | escalamiento abierto ahora (slice 9); a lo sumo uno por caso |
+| `version` | entero | concurrencia optimista (una calificación, un cambio de prioridad o un escalamiento sube la versión: dos a la vez, gana una; el cambio de prioridad además exige la versión que vio quien lo pide, `expectedVersion`) |
 
 Índice de "Calificación 7 días" (slice 7): `ix_cases_closer_closed` (`closed_by_id`, `closed_at`).
 La supervisión agrupa por quien cerró los casos calificados con `closed_at` en los últimos 7 días
@@ -253,6 +292,33 @@ La supervisión agrupa por quien cerró los casos calificados con `closed_at` en
 **Por qué en `cases` y no en una tabla aparte.** La calificación es un dato del cierre, una por
 caso y escrita una sola vez; guardarla en el mismo agregado reutiliza su control de concurrencia
 (`version`) y su registro de eventos, sin otra tabla ni otra regla de unicidad.
+
+**`escalations`** · escalamientos a supervisión (slice 9). Una fila por escalamiento: un caso puede
+escalarse otra vez cuando el anterior terminó.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | texto, PK | `ESC-…` |
+| `case_id` | FK → cases | |
+| `state` | texto | `open`, `answered`, `taken`, `reassigned`, `withdrawn`, `closed` |
+| `motive` | texto(500) | por qué escaló (texto del equipo; la auditoría muestra solo su largo) |
+| `escalated_by_id`, `escalated_at` | FK → staff, fecha | quién escaló (quien atendía el caso) y cuándo |
+| `resolved_at`, `resolved_by_id` | fecha, texto, nulos | cuándo y quién lo terminó |
+| `note` | texto(500), nulo | respuesta de supervisión (`answered`; la auditoría muestra solo su largo) |
+| `reassigned_to_id` | texto, nulo | quién tiene el caso ahora (`taken`: quien lo tomó desde supervisión; `reassigned`) |
+| `acknowledged_at` | fecha, nula | la analista leyó lo que hizo supervisión ("Entendido") |
+| `creation_key` | texto(64), único, nulo | `Idempotency-Key` del pedido que lo abrió |
+| `version` | entero | concurrencia optimista |
+
+Índices: `(case_id, escalated_at)`, `(state, escalated_at)` y `(resolved_at)` ("Escalados": los
+abiertos y los atendidos desde una hora). "Colas" (slice 9) usa `ix_cases_language_status`
+(`language`, `status`) para leer todos los casos abiertos de un idioma.
+
+**Por qué un agregado propio y no columnas en `cases`.** Un caso puede escalarse más de una vez y
+supervisión lista escalamientos, no casos. La regla "uno abierto por caso" vive en el caso
+(`open_escalation_id`): cada comando que abre o termina un escalamiento guarda también el caso
+(escribe un aviso para el equipo en la conversación), así que el control de concurrencia del caso
+los ordena.
 
 **`turns`** · cada mensaje o aviso del chat. Solo se agregan filas.
 
@@ -280,11 +346,11 @@ propia: se lee de `event_log`, `assignments` y `cases`.
 | `id` | texto, PK | `ASG-…` |
 | `case_id` | FK → cases | |
 | `staff_id` | FK → staff | analista que lo recibe |
-| `reason` | texto | `language_least_loaded` (al llegar), `queue_drained` (desde la cola), `manual` (lo eligió una supervisora) |
+| `reason` | texto | `language_least_loaded` (al llegar), `queue_drained` (desde la cola), `manual` (lo eligió supervisión) |
 | `policy_rule_id` | texto, nulo | `H1` (regla 3, idioma) |
 | `open_cases_at_assignment` | entero | carga del analista en ese momento |
 | `strategy` | texto | estrategia de asignación usada |
-| `assigned_by_role`, `assigned_by_id` | texto | sistema o supervisora |
+| `assigned_by_role`, `assigned_by_id` | texto | sistema o supervisión |
 | `waited_seconds` | entero, nulo | tiempo en cola |
 | `previous_staff_id` | texto, nulo | quién lo tenía antes (reasignación) |
 | `paused_override` | booleano | se asignó a alguien en pausa con confirmación |
@@ -324,7 +390,8 @@ Tipos de evento:
 
 | Familia | Eventos |
 |---|---|
-| Casos | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.rated` (el cliente calificó; `payload`: `score`, `comment`, `analyst_id`; la auditoría muestra solo el largo del comentario), `case.priority_changed` (slice 8; `payload`: `from`, `to`; auditoría: "Cambió la prioridad a Alta"), `case.viewed` (una supervisora abrió el caso) |
+| Casos | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.rated` (el cliente calificó; `payload`: `score`, `comment`, `analyst_id`; la auditoría muestra solo el largo del comentario), `case.priority_changed` (slice 8; `payload`: `from`, `to`; auditoría: "Cambió la prioridad a Alta"), `case.viewed` (supervisión abrió el caso) |
+| Escalamientos (slice 9) | `escalation.opened` (`motive`, `analyst_id`; auditoría: "Escaló el caso a supervisión", solo el largo del motivo), `escalation.withdrawn`, `escalation.answered` (`note`; solo su largo), `escalation.taken`, `escalation.reassigned` (`previous_analyst_id`, `analyst_id`), `escalation.closed`, `escalation.acknowledged` |
 | Mensajes | `turn.created` |
 | Equipo | `staff.availability_changed` |
 | Administración | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `staff.password_reset`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated` |
@@ -337,6 +404,8 @@ Tipos de evento:
 - Slice 8 no agrega columnas, pero cambia los valores de `priority`, el plazo de primera
   respuesta y la historia sembrada: borra `backend/cc_platform.db` para verlos (una base anterior
   arranca, con `medium` en sus casos y los plazos viejos).
+- Slice 9 agrega la tabla `escalations` y la columna `cases.open_escalation_id`: una base anterior
+  falla al arrancar (`OutdatedSchemaError`) hasta borrarla.
 - Pendiente conocido: no hay migraciones. Cualquier cambio futuro de esquema exige borrar `backend/cc_platform.db` hasta que se agreguen.
 
 ## Diferencias con `contracts/platform_history.json`
@@ -347,6 +416,7 @@ Ese contrato (v0.5.1) describe la muestra sintética que compartimos para el equ
 |---|---|
 | `case`, `turn` | sí (`cases`, `turns`); faltan `origin`, `topic`, `complaint_id` en el caso y `from_suggestion_id`, `evidence_ids` en el mensaje |
 | `case_close` (`resolved`, `contact_reason`, `resolution_code`, `followup_at`, `csat`) | distinto: dentro de `cases`, `close_reason` y `close_note`; `csat` (misma escala 1 a 4) es `rating_score` + `rating_comment`, que pone el cliente después del cierre (slice 7) |
+| `was_escalated` (sí/no) | sí, como `escalations`: el motivo y lo que hizo supervisión; sin tipos, montos, niveles ni plazos |
 | `routing_step` (juez, árbol, agente, humano) | no: el caso va directo a una persona; quién lo recibió y por qué queda en `assignments`, que es nuevo |
 | canales `phone`, `email`; origen `regulator`, `branch` | no: solo `app_chat` y `web_chat` |
 | tema del caso (`topic`) | no existe (lo asignaba el juez) |

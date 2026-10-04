@@ -1,4 +1,5 @@
 import type { CaseDetail, CaseHistory, CaseHistoryItem, Turn } from '@/features/conversation'
+import type { Escalation } from '@/features/cases'
 import type {
   CustomerConversation,
   CustomerConversationSummary,
@@ -117,8 +118,10 @@ export function makeCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail 
       canClose: true,
       canAssign: false,
       canChangePriority: true,
+      canEscalate: false,
     },
     previousCaseCount: 0,
+    escalation: null,
     ...overrides,
   }
 }
@@ -149,6 +152,7 @@ export function makeClosedDetail(overrides: Partial<CaseDetail> = {}): CaseDetai
       canClose: false,
       canAssign: false,
       canChangePriority: false,
+      canEscalate: false,
     },
     ...overrides,
   }
@@ -247,8 +251,10 @@ export function makeJulianDetail(): CaseDetail {
       canClose: false,
       canAssign: false,
       canChangePriority: false,
+      canEscalate: false,
     },
     previousCaseCount: 2,
+    escalation: null,
   }
 }
 
@@ -297,6 +303,43 @@ export function envelope(type: string, payload: unknown, caseId = CASE_ID): Real
       payload,
     },
   }
+}
+
+// ── Escalations (slice 9) ───────────────────────────────────────────────────
+
+/** Daniela escalated Marcela's 101 six minutes before NOW (open). */
+export function makeEscalation(overrides: Partial<Escalation> = {}): Escalation {
+  return {
+    id: 'ESC-00000000000000000000000101',
+    caseId: CASE_ID,
+    customerName: 'Marcela Quintana Pardo',
+    state: 'open',
+    motive:
+      'La clienta pide hablar con supervisión: no reconoce un retiro en cajero y no quiere esperar el proceso normal.',
+    escalatedAt: '2026-03-05T15:54:00Z',
+    escalatedById: ME,
+    escalatedByName: 'Daniela Ríos',
+    resolvedAt: null,
+    resolvedById: null,
+    resolvedByName: null,
+    note: null,
+    reassignedToId: null,
+    reassignedToName: null,
+    acknowledgedAt: null,
+    ...overrides,
+  }
+}
+
+/** Lucía answered it one minute before NOW. */
+export function makeAnsweredEscalation(overrides: Partial<Escalation> = {}): Escalation {
+  return makeEscalation({
+    state: 'answered',
+    resolvedAt: '2026-03-05T15:59:00Z',
+    resolvedById: 'STF-SUP0000001',
+    resolvedByName: 'Lucía Herrera',
+    note: 'Ya hablé con ella por aquí. Sigue tú con el caso.',
+    ...overrides,
+  })
 }
 
 // ── Customer simulator ──────────────────────────────────────────────────────

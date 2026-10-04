@@ -1,5 +1,6 @@
 import { Fact, ListItemButton, Status } from '@/components/ui'
 import {
+  ESCALATED_MARKER,
   caseCardFacts,
   caseStatus,
   closeReasonLabel,
@@ -24,7 +25,8 @@ export interface CaseCardProps {
  * dot-joined line). Open: left stripe = status, the name and the first-response
  * "SLA x" (clock, only while the first reply is pending) on top, the last
  * message, then the status (glyph + word), the channel, the priority glyph when high or
- * critical (slice 8) and "Volvió a escribir", and the time since the last interaction
+ * critical (slice 8), "Escalado" while an escalation to supervision is open (slice 9) and
+ * "Volvió a escribir", and the time since the last interaction
  * (clock). Closed (Cerrados): when it closed, the last message, the "Cerrado" status, the
  * reason with its icon and, once the customer rated it (slice 7), the face alone (tooltip
  * and accessible text "Calificación: Bien").
@@ -73,6 +75,7 @@ export function CaseCard({ summary, selected, now, onSelect }: CaseCardProps) {
       <span className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
           <Status {...caseStatus(summary.inboxStatus)} />
+          {!closed && summary.escalated ? <Status {...ESCALATED_MARKER} /> : null}
           {closed ? (
             <>
               <span className="flex min-w-0 items-center gap-1.5 text-12 text-ink-2">

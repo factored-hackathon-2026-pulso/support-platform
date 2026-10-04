@@ -10,8 +10,8 @@ import {
 } from '@/features/supervision'
 
 /**
- * /supervision/equipo — Equipo y colas. Shareable state lives in the URL:
- * `?equipo=&estado=&analista=&asignar=` (slice-3-supervision.md §8.9). Opening a
+ * /supervision/equipo — "Equipo". Shareable state lives in the URL:
+ * `?estado=&idioma=&equipo=&analista=&reasignar=` (slice 9). Opening a
  * case hands the full return URL (filters included) to the case view.
  */
 export default function TeamRoute() {

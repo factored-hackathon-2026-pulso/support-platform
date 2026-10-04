@@ -11,7 +11,14 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import { envelopePayload, type RealtimeEnvelope, type RealtimeRegistration } from '@/lib/realtime'
 import { availabilityKeys, caseKeys } from './api'
 import { isNewerCounts, patchInbox } from './model'
-import type { Availability, CaseSummary, InboxCounts, InboxResponse, InboxStatus } from './types'
+import type {
+  Availability,
+  CaseSummary,
+  Escalation,
+  InboxCounts,
+  InboxResponse,
+  InboxStatus,
+} from './types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -25,6 +32,23 @@ export function readCaseSummary(envelope: RealtimeEnvelope): CaseSummary | null 
   const payload = envelopePayload(envelope)
   if (!payload || typeof payload.id !== 'string' || typeof payload.version !== 'number') return null
   return payload as unknown as CaseSummary
+}
+
+/**
+ * `Escalation` payload of `escalation.updated` (slice 9), or null when malformed. The one
+ * reader of this payload: the conversation and supervision features use it too.
+ */
+export function readEscalation(envelope: RealtimeEnvelope): Escalation | null {
+  const payload = envelopePayload(envelope)
+  if (
+    !payload ||
+    typeof payload.id !== 'string' ||
+    typeof payload.caseId !== 'string' ||
+    typeof payload.state !== 'string' ||
+    typeof payload.escalatedAt !== 'string'
+  )
+    return null
+  return payload as unknown as Escalation
 }
 
 function readCounts(envelope: RealtimeEnvelope): InboxCounts | null {

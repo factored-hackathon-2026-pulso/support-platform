@@ -36,6 +36,15 @@ export { Fact, FactList } from './Fact'
 export type { FactListProps, FactProps } from './Fact'
 export { FACT_ICONS } from './fact-icons'
 export type { FactIcon, FactItem, FactTone } from './fact-icons'
+export { FilterChips, FilterMenu } from './FilterMenu'
+export type { FilterChipsProps, FilterMenuProps } from './FilterMenu'
+export { activeFilterChips, countSelected, toggleFilter } from './filter-selection'
+export type {
+  ActiveFilterChip,
+  FilterGroup,
+  FilterOption,
+  FilterSelection,
+} from './filter-selection'
 export { FilterTile, FilterTileGroup } from './FilterTile'
 export type { FilterTileGroupProps, FilterTileProps } from './FilterTile'
 export { IconButton } from './IconButton'

@@ -9,9 +9,16 @@ import {
   makeJulianDetail,
   makeTurn,
   seededTurns,
+  makeAnsweredEscalation,
+  makeEscalation,
 } from '@/test/conversation-fixtures'
 import { analystStaff } from '@/test/fixtures'
 import {
+  canEscalate,
+  describeEscalationFailure,
+  escalationCardOf,
+  motiveCounter,
+  validateMotive,
   addPending,
   applySummary,
   arrivalFacts,
@@ -480,20 +487,22 @@ describe('supervision view (slice 3 §8.3)', () => {
   }
 
   it('says which queue a queued case waits in, and since when', () => {
-    expect(supervisionArrivalLine(queued())).toBe(
-      'Espera en la cola en español desde las 10:47: nadie disponible habla español',
-    )
+    expect(supervisionArrivalLine(queued())).toEqual({
+      line: 'Sin asignar desde las 10:47: nadie disponible habla español',
+      time: null,
+    })
     expect(supervisionFooter(queued(), ME)).toEqual([
-      'Vista de supervisión · El caso espera en la cola en español. Asígnalo para que alguien le responda.',
+      'Sin asignar: le llega automáticamente a la primera persona disponible que hable español.',
     ])
   })
 
   it('says who holds an open case and how it reached her', () => {
     const pt = makeCaseDetail()
     pt.case = { ...pt.case, language: 'pt' }
-    expect(supervisionArrivalLine(pt)).toBe(
-      'Lo atiende Daniela Ríos: le llegó al estar disponible y hablar portugués (regla 3) · 5 mar, 10:46',
-    )
+    expect(supervisionArrivalLine(pt)).toEqual({
+      line: 'Lo atiende Daniela Ríos: le llegó al estar disponible y hablar portugués (regla 3)',
+      time: '5 mar, 10:46',
+    })
     const base = makeCaseDetail().assignment!
     expect(
       supervisionArrivalLine(
@@ -506,23 +515,30 @@ describe('supervision view (slice 3 §8.3)', () => {
           },
         }),
       ),
-    ).toBe('Lo atiende Daniela Ríos: le llegó desde la cola en portugués tras 6 min · 5 mar, 10:46')
+    ).toEqual({
+      line: 'Lo atiende Daniela Ríos: le llegó desde la cola en portugués tras 6 min',
+      time: '5 mar, 10:46',
+    })
     const manual = { ...base, reason: 'manual' as const, assignedByName: 'Lucía Herrera' }
-    expect(supervisionArrivalLine(makeCaseDetail({ assignment: manual }))).toBe(
-      'Lo atiende Daniela Ríos: se lo asignó Lucía Herrera · 5 mar, 10:46',
-    )
+    expect(supervisionArrivalLine(makeCaseDetail({ assignment: manual }))).toEqual({
+      line: 'Lo atiende Daniela Ríos: se lo asignó Lucía Herrera',
+      time: '5 mar, 10:46',
+    })
     expect(
       supervisionArrivalLine(
         makeCaseDetail({ assignment: { ...manual, previousAnalystId: 'STF-2' } }),
       ),
-    ).toBe('Lo atiende Daniela Ríos: se lo pasó Lucía Herrera · 5 mar, 10:46')
+    ).toEqual({ line: 'Lo atiende Daniela Ríos: se lo pasó Lucía Herrera', time: '5 mar, 10:46' })
     expect(supervisionFooter(makeCaseDetail(), ME)).toEqual([
-      'Vista de supervisión · Solo lectura. Lo atiende Daniela Ríos.',
+      'Solo lectura: lo atiende Daniela Ríos.',
     ])
   })
 
   it('shows who attended a closed case and its closure', () => {
-    expect(supervisionArrivalLine(makeJulianDetail())).toBe('Lo atendió Julián Ortega')
+    expect(supervisionArrivalLine(makeJulianDetail())).toEqual({
+      line: 'Lo atendió Julián Ortega',
+      time: null,
+    })
     expect(supervisionFooter(makeJulianDetail(), 'STF-SUP')).toEqual([
       'Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto',
     ])
@@ -575,6 +591,7 @@ describe('closure and the read-only footer', () => {
         canClose: false,
         canAssign: false,
         canChangePriority: false,
+        canEscalate: false,
       },
       assignment: {
         ...makeCaseDetail().assignment!,
@@ -846,5 +863,153 @@ describe('"Ficha del cliente" rows (slice 6 §5)', () => {
   it('titles the section of previous cases', () => {
     expect(previousCasesSectionTitle(2)).toBe('Casos anteriores (2)')
     expect(previousCasesSectionTitle(0)).toBe('Casos anteriores (0)')
+  })
+})
+
+describe('escalation to supervision (slice 9)', () => {
+  const me = analystStaff.id
+  const open = makeEscalation()
+
+  it('counts and checks the motive', () => {
+    expect(motiveCounter('  Hola  ')).toBe('4/500')
+    expect(validateMotive('   ')).toBe('Escribe el motivo.')
+    expect(validateMotive('x'.repeat(501))).toBe('El motivo puede tener hasta 500 caracteres.')
+    expect(validateMotive('Pide supervisión')).toBeNull()
+  })
+
+  it('offers "Escalar a supervisión" only to the assignee of an open, not escalated case', () => {
+    const detail = makeCaseDetail()
+    expect(
+      canEscalate({ ...detail, capabilities: { ...detail.capabilities, canEscalate: true } }),
+    ).toBe(true)
+    expect(canEscalate(detail)).toBe(false)
+    const escalated = { ...detail, case: { ...detail.case, escalated: true } }
+    expect(
+      canEscalate({ ...escalated, capabilities: { ...detail.capabilities, canEscalate: true } }),
+    ).toBe(false)
+  })
+
+  it('describes every failure in one line', () => {
+    const problem = (code: string, extensions = {}) =>
+      new ApiProblem({ status: 409, code: code as never, extensions })
+    expect(describeEscalationFailure(problem('escalation_open'), 'escalate')).toBe(
+      'Este caso ya está escalado a supervisión.',
+    )
+    expect(
+      describeEscalationFailure(
+        problem('escalation_not_open', { currentState: 'answered' }),
+        'withdraw',
+      ),
+    ).toBe('Supervisión ya atendió este escalamiento.')
+    expect(
+      describeEscalationFailure(
+        problem('escalation_not_open', { currentState: 'withdrawn' }),
+        'withdraw',
+      ),
+    ).toBe('Este escalamiento ya se retiró.')
+    expect(describeEscalationFailure(problem('case_closed'), 'escalate')).toBe(
+      'Este caso ya se cerró.',
+    )
+    expect(describeEscalationFailure(problem('case_not_assigned'), 'escalate')).toBe(
+      'Ya no puedes escalarlo: el caso pasó a otra persona.',
+    )
+    expect(describeEscalationFailure(problem('validation_error'), 'escalate')).toBe(
+      'Escribe el motivo (hasta 500 caracteres).',
+    )
+    expect(describeEscalationFailure(problem('network_error'), 'escalate')).toBe(
+      'Revisa tu conexión e inténtalo de nuevo.',
+    )
+    expect(describeEscalationFailure(new Error('x'), 'escalate')).toBe(
+      'No pudimos escalar el caso. Inténtalo de nuevo.',
+    )
+  })
+
+  it('shows her open escalation with "Retirar" in the Workspace', () => {
+    const card = escalationCardOf(makeCaseDetail({ escalation: open }), me, 'workspace', NOW)
+    expect(card).toMatchObject({
+      kind: 'open',
+      title: 'Escalado a supervisión',
+      byName: null,
+      since: 'hace 6 min',
+      sinceTooltip: 'Escalaste hace 6 min',
+      canWithdraw: true,
+    })
+    // Someone else's case (history access): no card.
+    expect(
+      escalationCardOf(makeCaseDetail({ escalation: open }), 'STF-OTHER', 'workspace', NOW),
+    ).toBeNull()
+  })
+
+  it('shows what supervision did until she says "Entendido"', () => {
+    const answered = makeAnsweredEscalation()
+    expect(
+      escalationCardOf(makeCaseDetail({ escalation: answered }), me, 'workspace', NOW),
+    ).toMatchObject({
+      kind: 'attended',
+      title: 'Lucía Herrera respondió',
+      note: 'Ya hablé con ella por aquí. Sigue tú con el caso.',
+      since: 'hace 1 min',
+      sinceTooltip: 'Respondió hace 1 min',
+    })
+    const taken = makeAnsweredEscalation({
+      state: 'taken',
+      note: null,
+      resolvedByName: 'Felipe Echeverri',
+    })
+    // The case is no longer hers, she still reads it.
+    const notMine = makeCaseDetail({ escalation: taken })
+    notMine.case = { ...notMine.case, assignedAnalystId: 'STF-FEL' }
+    expect(escalationCardOf(notMine, me, 'workspace', NOW)).toMatchObject({
+      title: 'Felipe Echeverri tomó el caso',
+      note: null,
+    })
+    const moved = makeAnsweredEscalation({
+      state: 'reassigned',
+      note: null,
+      reassignedToName: 'Tomás Arango',
+    })
+    expect(
+      escalationCardOf(makeCaseDetail({ escalation: moved }), me, 'workspace', NOW)?.title,
+    ).toBe('Lucía Herrera lo reasignó a Tomás Arango')
+    const read = makeAnsweredEscalation({ acknowledgedAt: '2026-03-05T15:59:30Z' })
+    expect(escalationCardOf(makeCaseDetail({ escalation: read }), me, 'workspace', NOW)).toBeNull()
+    expect(
+      escalationCardOf(makeCaseDetail({ escalation: answered }), 'STF-OTHER', 'workspace', NOW),
+    ).toBeNull()
+  })
+
+  it('hides ended, withdrawn and closed-case escalations', () => {
+    for (const state of ['withdrawn', 'closed'] as const) {
+      const escalation = makeEscalation({ state, resolvedAt: '2026-03-05T15:58:00Z' })
+      expect(escalationCardOf(makeCaseDetail({ escalation }), me, 'workspace', NOW)).toBeNull()
+    }
+    expect(
+      escalationCardOf(
+        makeClosedDetail({ escalation: makeAnsweredEscalation() }),
+        me,
+        'workspace',
+        NOW,
+      ),
+    ).toBeNull()
+    expect(escalationCardOf(makeCaseDetail(), me, 'workspace', NOW)).toBeNull()
+  })
+
+  it('shows supervision the open escalation, read-only', () => {
+    expect(
+      escalationCardOf(makeCaseDetail({ escalation: open }), 'STF-SUP', 'supervision', NOW),
+    ).toMatchObject({
+      kind: 'open',
+      byName: 'Daniela Ríos',
+      sinceTooltip: 'Escaló hace 6 min',
+      canWithdraw: false,
+    })
+    expect(
+      escalationCardOf(
+        makeCaseDetail({ escalation: makeAnsweredEscalation() }),
+        me,
+        'supervision',
+        NOW,
+      ),
+    ).toBeNull()
   })
 })

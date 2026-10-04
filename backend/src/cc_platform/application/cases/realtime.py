@@ -20,6 +20,10 @@ schemas the REST endpoints return), so socket and REST cannot drift.
 - ``inbox.counts`` → ``inbox:<assignee>`` (``InboxCounts``, incl. ``closed`` in the 7-day
   window), with each inbox ``case.updated``.
 - ``availability.updated`` → ``inbox:<staff>`` (``Availability``).
+- Slice 9, escalations: every ``escalation.*`` event sends ``case.updated`` like above (the
+  "Escalado" marker, ``CaseSummary.escalated``) and ``escalation.updated`` (``Escalation``)
+  to ``case:<id>``, ``inbox:<who escalated>`` (she sees supervision's answer live, even
+  after the case left her) and ``supervision:escalations``. Never to the customer.
 - ``conversation.updated`` → ``customer:<cus>`` (``CustomerConversation``), after
   case.opened, case.queued, case.assigned, case.status_changed, case.closed, case.rated
   (the simulator stops asking for a rating in every open tab). A new case
@@ -40,6 +44,7 @@ from cc_platform.application.cases.dto import (
     CaseSummaryView,
     CustomerConversationView,
     CustomerTurnView,
+    EscalationView,
     InboxCountsView,
     TurnView,
 )
@@ -55,6 +60,7 @@ from cc_platform.application.realtime.topics import Topic
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.events import (
     CASE_EVENTS,
+    ESCALATION_EVENTS,
     CaseAssigned,
     CaseClosed,
     CaseFirstResponded,
@@ -101,6 +107,7 @@ _CASE_UPDATING = (
     CaseClosed,
     CaseRated,
     CasePriorityChanged,
+    *ESCALATION_EVENTS,
 )
 _CONVERSATION_UPDATING = (
     CaseOpened,
@@ -126,6 +133,8 @@ class CaseRealtimePresenter(Protocol):
     def inbox_counts(self, view: InboxCountsView) -> JsonObject: ...
 
     def availability(self, view: AvailabilityView) -> JsonObject: ...
+
+    def escalation(self, view: EscalationView) -> JsonObject: ...
 
 
 def turn_from_event(event: TurnCreated) -> Turn:
@@ -217,6 +226,8 @@ class CaseRealtimeProjector:
             if previous is not None:
                 await self._send(record, Topic.inbox(previous), "case.unassigned", summary)
                 await self._send_counts(record, reader, previous)
+        if isinstance(event, ESCALATION_EVENTS):
+            await self._escalation(uow, reader, record, event, case)
         if isinstance(event, _CONVERSATION_UPDATING):
             conversation = await reader.conversation(case)
             await self._send(
@@ -226,6 +237,25 @@ class CaseRealtimeProjector:
                 self._present.conversation(conversation),
                 customer_id=case.customer_id,
             )
+
+    async def _escalation(
+        self,
+        uow: UnitOfWork,
+        reader: CaseReader,
+        record: EventRecord,
+        event: DomainEvent,
+        case: Case,
+    ) -> None:
+        escalation = await uow.escalations.get(event.entity_id)
+        if escalation is None:
+            return
+        payload = self._present.escalation(await reader.escalation_view(escalation, case))
+        topics = (
+            Topic.case(case.id),
+            Topic.inbox(escalation.escalated_by_id),
+            Topic.supervision_escalations(),
+        )
+        await self._send(record, topics, "escalation.updated", payload)
 
     async def _send_counts(self, record: EventRecord, reader: CaseReader, staff_id: str) -> None:
         now = self._clock.now()

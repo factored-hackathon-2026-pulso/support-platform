@@ -30,13 +30,14 @@ pantalla.
    |---|---|---|---|
    | **A · Cliente** | http://localhost:5173/cliente | el simulador de cliente | Deja visible "Elige un cliente de ejemplo" |
    | **B · Analista** | http://localhost:5173/login | Felipe Echeverri, `felipe.echeverri@latambank.example` | Entra (contraseña `demo1234`, código `000000`). Llega a **"Inicio"** ("Estás en pausa"). No lo pongas disponible todavía |
-   | **C · Supervisión y administración** | http://localhost:5173/login | Lucía Herrera, `lucia.herrera@latambank.example` | Entra. Queda en "Equipo y colas" |
+   | **C · Supervisión y administración** | http://localhost:5173/login | Lucía Herrera, `lucia.herrera@latambank.example` | Entra. Queda en **"Colas"** |
 
    Durante la demo abrirás una cuarta pestaña para la persona nueva que crea administración.
-3. Comprueba en C que la "Cola en portugués" tiene a Gabriela Duarte Melo y que la "Cola en
-   español" tiene a Rosa y a Mauricio. Si no, reinicia la base (paso 1).
+3. Comprueba en C que en **"Colas"**, Portugués, Gabriela Duarte Melo está **"Sin asignar"**, que
+   en Español Rosa y Mauricio están "Sin asignar" y que el menú muestra **"Escalados"** con 2
+   abiertos (Daniela con Marcela, Julián con Camila). Si no, reinicia la base (paso 1).
 
-Por qué Felipe: habla solo español y tiene los roles Analista y Supervisora. Eso hace visible la
+Por qué Felipe: habla solo español y tiene los roles Analista y Supervisión. Eso hace visible la
 regla del idioma (regla 3) y que los roles se combinan.
 
 ## Guion
@@ -45,7 +46,8 @@ regla del idioma (regla 3) y que los roles se combinan.
 
 **Decir:** "Es la plataforma de soporte de LATAM Bank. Clientes y equipo conversan por chat, de
 principio a fin, entre personas. Hay tres roles que se combinan: Analista atiende casos,
-Supervisora reparte el trabajo y revisa la auditoría, Administración gestiona cuentas, roles,
+Supervisión mira las colas y el equipo, atiende los escalamientos, reasigna cuando hace falta y
+revisa la auditoría, Administración gestiona cuentas, roles,
 idiomas y equipos. A la izquierda está el simulador que reemplaza la app del cliente; al centro,
 un analista; a la derecha, supervisión."
 
@@ -131,7 +133,7 @@ tiene la fila **"Calificación"**.
 
 **Decir:** "La calificación es de 1 a 4, como la encuesta del banco; solo se califica una
 conversación cerrada, una vez, y cuenta para quien la cerró. El analista no ve promedios: la
-supervisora ve en Equipo y colas la columna 'Calificación 7 días'."
+supervisión ve en Equipo la columna 'Calificación 7 días'."
 
 ### 5. La clienta vuelve: caso nuevo vinculado (4:00 – 5:00)
 
@@ -149,42 +151,57 @@ lectura, con su motivo de cierre. Cierra la ficha.
 abre un caso nuevo, enlazado al anterior, y se asigna con las mismas reglas. El historial es de
 conversaciones, no de datos bancarios."
 
-### 6. Supervisión: asignar respetando el idioma y reasignar (5:00 – 6:30)
+### 6. Supervisión: colas, un escalamiento y una reasignación (5:00 – 6:30)
 
-**C (Lucía, "Equipo y colas"):** señala las dos colas (en espera, el más antiguo, cuántas
-personas disponibles hablan ese idioma) y la tabla de analistas (estado ahora, idiomas, abiertos,
-por responder, espera más larga, SLA en riesgo). En el menú, "Equipo y colas" marca 1 pendiente:
-el caso en cola.
+**C (Lucía, "Colas"):** a la izquierda, Español y Portugués con sus cifras (abiertos, sin asignar,
+en riesgo). Elige **Portugués**: Gabriela Duarte Melo está **"Sin asignar"**. Señala la línea de
+arriba: "La asignación es automática…". No hay botón "Asignar": le llega sola a la primera persona
+disponible que hable portugués (regla 3). En Español se ven **todos** los casos abiertos, quién
+los tiene, cuánto llevan abiertos y la primera respuesta (reloj, llama naranja, llama roja
+"Vencida"). Abre **"Filtros"**, marca **Estado → Por responder**: aparece el chip; quítalo.
 
-**Asignar el caso en portugués (regla 3):**
+**Escalar (B, Felipe):** abre el caso de **Mauricio Achával Ríos** y pulsa **"Escalar a
+supervisión"** (al lado de "Cerrar caso"). Motivo: "Le cobraron dos veces la misma compra y está
+muy molesto; quiere que alguien con más autoridad le responda." → **"Escalar"**. Aparece la tarjeta
+"Escalado a supervisión" (solo el equipo la ve) con "Retirar escalamiento"; la tarjeta de la lista
+dice "Escalado". El caso sigue con Felipe: puede seguir escribiendo.
 
-1. En "Cola en portugués", pulsa **"Asignar"** en el caso de Gabriela Duarte Melo.
-2. Señala que Felipe, Julián y Paula aparecen deshabilitados con **"No habla portugués
-   (regla 3)"**, aunque Felipe esté disponible.
-3. Elige **Daniela Ríos** (español, portugués). Aparece "Daniela está en pausa: no recibe casos
-   nuevos. Si lo asignas igual, le llega a su lista."
-4. Marca **"Asignar aunque esté en pausa"** y pulsa **"Asignar a Daniela"**.
+**Responder (C):** llega el aviso "Felipe Echeverri escaló un caso" → **"Revisar"**. En
+**"Escalados"** (badge 3 abiertos) se ve la fila de Mauricio: el motivo, cuánto espera (reloj; llama
+naranja después de 15 min, roja después de 30: solo énfasis, no hay plazos). El panel muestra el
+motivo, el caso y los últimos mensajes ("Ver caso completo"). Pulsa **"Responder"**, escribe "Ya lo
+revisé: el segundo cobro se reversa. Sigue tú con él." → **"Enviar respuesta"**.
 
-**Decir:** "La misma regla del idioma aplica cuando una supervisora asigna a mano. Y asignarle a
-alguien en pausa exige confirmarlo explícitamente."
+**Se ve en B:** el aviso "Lucía Herrera respondió tu escalamiento" y, en el caso, la tarjeta con su
+respuesta. Felipe pulsa **"Entendido"**.
 
-**Reasignar un caso abierto:**
+**Decir:** "El escalamiento existe en el dataset como sí o no: aquí es una persona pidiendo ayuda
+con un motivo, y supervisión responde, toma el caso o lo reasigna. Lucía no puede tomarlo porque no
+tiene el rol de Analista."
 
-1. En "Analistas", cambia el filtro a **"En pausa"** y pulsa **Julián Ortega**.
-2. En su ficha, el caso de Camila Torres Benavides tiene el SLA vencido. Pulsa **"Reasignar"**.
-3. Elige **Felipe Echeverri** (Atendiendo). Señala "El cliente verá: Ahora te atiende Felipe, de
-   nuestro equipo." Pulsa **"Reasignar a Felipe"**.
+**Reasignar (la excepción):**
 
-**Se ve en B:** el aviso "Te asignaron un caso · Camila Torres Benavides · desde supervisión" y
-la tarjeta de Camila en la lista.
+1. En **"Equipo"** (una sola tabla, sin pestañas de equipo), abre **"Filtros"** → **Estado → En
+   pausa** y pulsa **Julián Ortega**.
+2. En su ficha, Camila Torres Benavides tiene la marca **"Escalado"** y la primera respuesta
+   vencida. Pulsa **"Reasignar"**.
+3. El diálogo sugiere tres personas que hablan español (las disponibles y con menos carga
+   primero); el buscador llega al resto y "Incluir a quienes están en pausa o desconectados" las
+   suma. Elige **Felipe Echeverri**. Señala "El cliente verá: Ahora te atiende Felipe, de nuestro
+   equipo." Pulsa **"Reasignar a Felipe"**.
+
+**Se ve en B:** el aviso "Te asignaron un caso · Camila Torres Benavides · Supervisión". En
+"Escalados", el escalamiento de Camila pasa a "Atendidos hoy" como **"Reasignado"**.
 
 ### 7. Auditoría (6:30 – 7:15)
 
 **C:** en el menú de la izquierda, **"Auditoría"**. En **"Tipo"** elige **"Asignación"**.
 
-**Se ve:** "Reasignó el caso de Julián Ortega a Felipe Echeverri", "Asignó el caso a Daniela Ríos
-desde la cola en portugués (Daniela Ríos estaba en pausa)", "Asignó el caso a Felipe Echeverri:
-estaba disponible y habla español" y "… desde la cola en español después de N min".
+**Se ve:** "Reasignó el caso de Julián Ortega a Felipe Echeverri", "Asignó el caso a Felipe
+Echeverri: estaba disponible y habla español" y "… desde la cola en español después de N min".
+Cambia **"Tipo"** a **"Escalamientos"**: "Escaló el caso a supervisión" (Felipe), "Respondió el
+escalamiento" (Lucía) y "Reasignó el caso escalado de Julián Ortega a Felipe Echeverri". El motivo y
+la respuesta no aparecen en la auditoría (solo su largo), como el texto de los mensajes.
 
 **Decir:** "Cada cambio de estado es un evento que se guarda en la misma transacción, y nunca se
 edita ni se borra. Aquí se ve quién hizo qué, en qué caso y cuándo. Hay filtros por persona,
@@ -241,15 +258,15 @@ En **C** (Valeria, "Usuarios y roles"):
    **Decir:** "Cinco intentos fallidos bloquean la cuenta 15 minutos. Administración ve el bloqueo
    al momento, lo levanta, y queda en auditoría."
 
-**Si sobra tiempo:** en la ficha de **Bruna Esteves**, marca también **Supervisora** y pulsa
+**Si sobra tiempo:** en la ficha de **Bruna Esteves**, marca también **Supervisión** y pulsa
 **"Guardar cambios"**. En la pestaña de Bruna aparece el aviso "Cambiaron tus roles" ("Ahora
-tienes: Analista y Supervisora.") y su selector de rol ya ofrece "Supervisora", sin volver a
+tienes: Analista y Supervisión.") y su selector de rol ya ofrece "Supervisión", sin volver a
 entrar.
 
 ### 10. Cierre (9:45 – 10:00)
 
 **Decir:** "Chat en vivo entre personas, ciclo de vida completo del caso, la regla del idioma
-aplicada por el sistema y por supervisión, auditoría de todo y administración con barandas.
+aplicada por el sistema, escalamientos a supervisión, auditoría de todo y administración con barandas.
 Todo pensado para el trabajo diario del equipo de soporte."
 
 ## Si algo sale mal
@@ -259,7 +276,8 @@ Todo pensado para el trabajo diario del equipo de soporte."
 | Un mensaje no aparece en la otra ventana | Recarga esa ventana (Cmd+R). La sesión sobrevive a la recarga y los datos vienen del servidor. Ver "El chat no se actualiza en vivo" en el [RUNBOOK](./RUNBOOK.md#el-chat-no-se-actualiza-en-vivo-websocket) |
 | "No hay conexión con el servidor" al entrar | El backend no está corriendo o cambió de puerto. Revisa la terminal 1 y `curl -s http://127.0.0.1:8000/api/v1/health` |
 | A Felipe no le llegaron Rosa y Mauricio | No está "Disponible": pulsa "Empezar a atender" en Inicio (o el control naranja "En pausa" arriba de la lista de Casos) |
-| La cola en portugués ya estaba vacía | Alguien que habla portugués estaba disponible (por ejemplo, Daniela entró y se puso disponible). Reinicia la base, o muestra la regla 3 con Rafael: con las personas que hablan portugués en pausa, su caso queda en "Cola en portugués" y lo asignas a mano |
+| Gabriela ya no estaba "Sin asignar" en Portugués | Alguien que habla portugués estaba disponible (por ejemplo, Daniela entró y se puso disponible). Reinicia la base, o muestra la regla 3 con Rafael: con las personas que hablan portugués en pausa, su caso queda "Sin asignar" en Colas → Portugués hasta que una se pone disponible |
+| No aparece "Escalar a supervisión" | El caso no es de quien mira, está cerrado o ya está escalado (la tarjeta "Escalado a supervisión" está arriba). Retíralo con "Retirar escalamiento" para volver a escalarlo |
 | Martín ya estaba bloqueado antes del paso 9.3 (quedó de un ensayo) | Desbloquéalo igual desde su ficha y repite los 5 intentos, o reinicia la base |
 | Martín no queda bloqueado al quinto intento | Revisa que el correo sea exactamente `martin.salazar@latambank.example`: los intentos se cuentan por cuenta |
 | Se perdió la contraseña temporal de Bruna | Ficha de Bruna → "Restablecer contraseña": da una nueva, también una sola vez |

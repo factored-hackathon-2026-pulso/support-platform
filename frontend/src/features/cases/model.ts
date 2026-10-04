@@ -13,6 +13,8 @@ import type {
   CaseSummary,
   CloseReason,
   CountryCode,
+  Escalation,
+  EscalationState,
   InboxCounts,
   InboxResponse,
   InboxStatus,
@@ -677,6 +679,35 @@ export function unassignedToastCopy(summary: Pick<CaseSummary, 'customer'>): Toa
   }
 }
 
+/**
+ * Toast when supervision acts on HER escalation (slice 9, `escalation.updated` on her inbox):
+ * answered → "Lucía Herrera respondió tu escalamiento"; taken → "Felipe Echeverri tomó tu
+ * caso". `null` otherwise: a reassignment already has the "Supervisión reasignó un caso" toast
+ * (`case.unassigned`), and nothing else needs one.
+ */
+export function escalationToastCopy(
+  escalation: Pick<Escalation, 'state' | 'escalatedById' | 'resolvedByName' | 'customerName'>,
+  meId: string,
+): ToastCopy | null {
+  if (escalation.escalatedById !== meId) return null
+  const name = escalation.resolvedByName ?? 'Supervisión'
+  if (escalation.state === 'answered') {
+    return {
+      title: `${name} respondió tu escalamiento`,
+      description: escalation.customerName,
+      tag: 'Supervisión',
+    }
+  }
+  if (escalation.state === 'taken') {
+    return {
+      title: `${name} tomó tu caso`,
+      description: escalation.customerName,
+      tag: 'Supervisión',
+    }
+  }
+  return null
+}
+
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 /** Max length the API accepts for `q`. */
@@ -759,4 +790,104 @@ export function patchInbox(
   const items = inbox.items.slice()
   items[index] = summary
   return { inbox: { ...inbox, items }, refetch: changesInboxPlacement(cached, summary) }
+}
+
+// ─── Escalations to supervision (slice 9) ────────────────────────────────────
+// Grounded in the dataset's `was_escalated` (yes/no) only: a motive and what supervision did.
+
+/** The motive and the answer: at most this many characters (the backend's `MAX_ESCALATION_TEXT`). */
+export const MAX_ESCALATION_TEXT = 500
+
+/**
+ * The "Escalado" marker next to a case's status (cards, Colas, the analyst sheet, the
+ * supervisor header): a ring with an up arrow, orange. A marker, not a status: the case keeps
+ * its own status.
+ */
+export const ESCALATED_MARKER: StatusAppearance = { shape: 'up', tone: 'warn', label: 'Escalado' }
+
+/** What became of an escalation, as glyph + word (Linear-style; "Escalados"). */
+export const ESCALATION_STATE: Readonly<Record<EscalationState, StatusAppearance>> = {
+  open: { shape: 'ring', tone: 'warn', label: 'Abierto', strong: true },
+  answered: { shape: 'check', tone: 'success', label: 'Respondido' },
+  taken: { shape: 'pie-50', tone: 'accent', label: 'Tomado' },
+  reassigned: { shape: 'forward', tone: 'neutral', label: 'Reasignado' },
+  withdrawn: { shape: 'cross', tone: 'closed', label: 'Retirado' },
+  closed: { shape: 'check', tone: 'closed', label: 'Caso cerrado' },
+}
+
+/** Supervision did something about it (answered, took or reassigned the case). */
+export function isAttendedEscalation(state: EscalationState): boolean {
+  return state === 'answered' || state === 'taken' || state === 'reassigned'
+}
+
+/**
+ * Team-generated visual emphasis only (no deadline, no SLA): an open escalation waiting more
+ * than 15 minutes shows an orange flame, more than 30 a filled red one.
+ */
+export const ESCALATION_WAIT_RISK_MS = 15 * MINUTE
+export const ESCALATION_WAIT_LONG_MS = 30 * MINUTE
+
+/** "6 min", "1 h 05 min": how long, in whole minutes (never seconds). */
+function minutesText(ms: number): string {
+  const minutes = Math.max(0, Math.floor(ms / MINUTE))
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest ? `${hours} h ${String(rest).padStart(2, '0')} min` : `${hours} h`
+}
+
+/**
+ * "Esperando" of an escalation: open → time since it was escalated (clock; orange flame
+ * > 15 min; filled red flame > 30 min); ended → how long it waited (clock, muted).
+ */
+export function escalationWaitFact(
+  escalation: { escalatedAt: string; resolvedAt: string | null; state: EscalationState },
+  now: DateInput,
+): FactItem & { level: 'normal' | 'risk' | 'long' } {
+  const end = escalation.state === 'open' ? toMs(now) : toMs(escalation.resolvedAt ?? now)
+  const waited = end - toMs(escalation.escalatedAt)
+  const text = minutesText(waited)
+  if (escalation.state !== 'open') {
+    return {
+      key: 'wait',
+      level: 'normal',
+      icon: 'clock',
+      tone: 'muted',
+      text,
+      label: 'Esperó',
+      tooltip: `Esperó ${text}`,
+    }
+  }
+  const tooltip = `Espera desde hace ${text}`
+  if (waited > ESCALATION_WAIT_LONG_MS) {
+    return {
+      key: 'wait',
+      level: 'long',
+      icon: 'flame-filled',
+      tone: 'danger',
+      text,
+      label: 'Espera',
+      tooltip,
+    }
+  }
+  if (waited > ESCALATION_WAIT_RISK_MS) {
+    return {
+      key: 'wait',
+      level: 'risk',
+      icon: 'flame',
+      tone: 'warn',
+      text,
+      label: 'Espera',
+      tooltip,
+    }
+  }
+  return {
+    key: 'wait',
+    level: 'normal',
+    icon: 'clock',
+    tone: 'default',
+    text,
+    label: 'Espera',
+    tooltip,
+  }
 }

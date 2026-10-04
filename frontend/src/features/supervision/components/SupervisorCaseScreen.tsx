@@ -1,15 +1,16 @@
 import { useCallback, useEffect } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Eye } from 'lucide-react'
 import {
-  Badge,
   Button,
   Callout,
   Dialog,
   DocumentTitle,
   LinkButton,
   Spinner,
+  Status,
   useToast,
 } from '@/components/ui'
+import { ESCALATED_MARKER } from '@/features/cases'
 import {
   CaseHistorySheet,
   CasePriorityControl,
@@ -17,12 +18,10 @@ import {
   shortCaseId,
   useCaseDetail,
 } from '@/features/conversation'
-import { useNow } from '@/lib/hooks'
-import { assignedToastTitle, type CaseViewUrlState, type UrlStateChangeOptions } from '../model'
-import { useQueueNotices, useTeamOverview } from '../hooks'
+import { reassignedToastTitle, type CaseViewUrlState, type UrlStateChangeOptions } from '../model'
+import { useSupervisionNotices, useTeamOverview } from '../hooks'
 import type { CaseSummary } from '../types'
-import { AssignCaseDialog } from './AssignCaseDialog'
-import { TEAM_TICK_MS } from './TeamScreen'
+import { ReassignDialog } from './ReassignDialog'
 
 export interface SupervisorCaseScreenProps {
   caseId: string
@@ -30,15 +29,17 @@ export interface SupervisorCaseScreenProps {
   onStateChange(patch: Partial<CaseViewUrlState>, options?: UrlStateChangeOptions): void
   /** Where "Volver" goes: the screen the supervisor came from (filters included). */
   backTo: string
-  /** "Volver a Equipo y colas" / "Volver a Auditoría". */
+  /** "Volver a Colas" / "Volver a Equipo" / "Volver a Escalados" / "Volver a Auditoría". */
   backLabel: string
 }
 
 /**
- * The supervisor's read-only view of any case (contract §8.5): the Workspace
- * conversation in supervision mode (never a composer, a read cursor or "Cerrar
- * caso", even on her own case), "Casos anteriores", the priority menu (slice 8) and
- * "Asignar" / "Reasignar" while the case is open. Opening it is audited by the server (`case.viewed`).
+ * The supervisor's read-only view of any case (SuCaso.dc.html): the Workspace conversation
+ * in supervision mode (never a composer, a read cursor or "Cerrar caso", even on her own
+ * case), "Casos anteriores", the "Escalado" marker, the priority menu (slice 8) and
+ * "Reasignar" while someone holds it (the exception: assignment is automatic, so a case
+ * nobody holds explains that instead of offering a button). Opening it is audited by the
+ * server (`case.viewed`).
  */
 export function SupervisorCaseScreen({
   caseId,
@@ -47,44 +48,37 @@ export function SupervisorCaseScreen({
   backTo,
   backLabel,
 }: SupervisorCaseScreenProps) {
-  useQueueNotices()
+  useSupervisionNotices()
   const detail = useCaseDetail(caseId)
   const { toast } = useToast()
-  const now = useNow(TEAM_TICK_MS)
   const customerName = detail.data?.customer.displayName ?? null
   const summary = detail.data?.case
-  const canAssign = detail.data?.capabilities.canAssign ?? false
+  const held = summary !== undefined && summary.status !== 'queued' && summary.status !== 'closed'
+  const canReassign = held && (detail.data?.capabilities.canAssign ?? false)
 
-  // ?asignar=1 on a case that cannot be assigned (closed, or not a supervisor any more).
-  const cannotAssign = state.assign && detail.status === 'success' && !canAssign
+  // ?reasignar=1 on a case that cannot be reassigned (queued, closed, not a supervisor).
+  const cannotReassign = state.reassign && detail.status === 'success' && !canReassign
   useEffect(() => {
-    if (cannotAssign) onStateChange({ assign: false }, { replace: true })
-  }, [cannotAssign, onStateChange])
+    if (cannotReassign) onStateChange({ reassign: false }, { replace: true })
+  }, [cannotReassign, onStateChange])
 
-  const openAssign = useCallback(() => onStateChange({ assign: true }), [onStateChange])
-  const closeAssign = useCallback(
-    () => onStateChange({ assign: false }, { replace: true }),
+  const openReassign = useCallback(() => onStateChange({ reassign: true }), [onStateChange])
+  const closeReassign = useCallback(
+    () => onStateChange({ reassign: false }, { replace: true }),
     [onStateChange],
   )
 
-  const assignAction =
-    summary && canAssign ? (
-      summary.status === 'queued' ? (
-        <Button variant="primary" onClick={openAssign}>
-          Asignar
-        </Button>
-      ) : (
-        <Button variant="secondary" onClick={openAssign}>
-          Reasignar
-        </Button>
-      )
-    ) : null
   // Slice 8: supervision sets the priority of any open case from here (the menu), and
   // reads it on a closed one (glyph + word).
   const headerActions = detail.data ? (
     <>
+      {summary?.escalated ? <Status {...ESCALATED_MARKER} className="mr-1" /> : null}
       <CasePriorityControl detail={detail.data} align="end" className="mr-1" />
-      {assignAction}
+      {canReassign ? (
+        <Button variant="secondary" onClick={openReassign}>
+          Reasignar
+        </Button>
+      ) : null}
     </>
   ) : null
 
@@ -100,7 +94,10 @@ export function SupervisorCaseScreen({
         >
           {backLabel}
         </LinkButton>
-        <Badge tone="neutral">Vista de supervisión · solo lectura</Badge>
+        <span className="inline-flex items-center gap-1.5 text-13 text-ink-2">
+          <Eye size={14} aria-hidden="true" className="text-muted" />
+          Solo lectura
+        </span>
         <h1 className="sr-only">
           {customerName
             ? `Conversación de ${customerName} (supervisión)`
@@ -126,14 +123,13 @@ export function SupervisorCaseScreen({
         />
       ) : null}
 
-      {state.assign && summary && canAssign ? (
-        <AssignLoader
+      {state.reassign && summary && canReassign ? (
+        <ReassignLoader
           summary={summary}
           holderName={detail.data?.assignment?.analystName ?? null}
-          now={now}
-          onClose={closeAssign}
-          onAssigned={(analystName) =>
-            toast({ title: assignedToastTitle(summary.customer.displayName, analystName) })
+          onClose={closeReassign}
+          onReassigned={(analystName) =>
+            toast({ title: reassignedToastTitle(summary.customer.displayName, analystName) })
           }
         />
       ) : null}
@@ -141,26 +137,24 @@ export function SupervisorCaseScreen({
   )
 }
 
-interface AssignLoaderProps {
+interface ReassignLoaderProps {
   summary: CaseSummary
   holderName: string | null
-  now: number
   onClose(): void
-  onAssigned(analystName: string): void
+  onReassigned(analystName: string): void
 }
 
-/** The assign dialog once the team (the candidates) is loaded; loading and error inside a dialog. */
-function AssignLoader({ summary, holderName, now, onClose, onAssigned }: AssignLoaderProps) {
+/** The reassign dialog once the team (the candidates) is loaded; loading and error inside a dialog. */
+function ReassignLoader({ summary, holderName, onClose, onReassigned }: ReassignLoaderProps) {
   const team = useTeamOverview()
   if (team.data) {
     return (
-      <AssignCaseDialog
+      <ReassignDialog
         summary={summary}
         analysts={team.data.analysts}
-        holderName={summary.status === 'queued' ? null : holderName}
-        now={now}
+        holderName={holderName}
         onClose={onClose}
-        onAssigned={(_result, analyst) => onAssigned(analyst.name)}
+        onReassigned={(_result, analyst) => onReassigned(analyst.name)}
       />
     )
   }
@@ -170,7 +164,7 @@ function AssignLoader({ summary, holderName, now, onClose, onAssigned }: AssignL
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title={summary.assignedAnalystId ? 'Reasignar caso' : 'Asignar caso'}
+      title="Reasignar caso"
     >
       {team.status === 'error' ? (
         <Callout

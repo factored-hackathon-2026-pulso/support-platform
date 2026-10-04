@@ -14,8 +14,17 @@ from cc_platform.domain.cases.errors import (
     AlreadyRatedError,
     CaseClosedError,
     CaseNotClosedError,
+    EscalationNotOpenError,
+    EscalationOpenError,
     IdempotencyConflictError,
     LanguageMismatchError,
+)
+from cc_platform.domain.cases.escalation import (
+    ATTENDED_STATES,
+    MAX_ESCALATION_TEXT,
+    Escalation,
+    EscalationState,
+    normalize_escalation_text,
 )
 from cc_platform.domain.cases.events import (
     CASE_EVENTS,
@@ -29,6 +38,13 @@ from cc_platform.domain.cases.events import (
     CaseRead,
     CaseStatusChanged,
     CaseViewed,
+    EscalationAcknowledged,
+    EscalationAnswered,
+    EscalationClosed,
+    EscalationOpened,
+    EscalationReassigned,
+    EscalationTaken,
+    EscalationWithdrawn,
     TurnCreated,
 )
 from cc_platform.domain.cases.rating import (
@@ -57,10 +73,12 @@ from cc_platform.domain.cases.values import (
 )
 
 __all__ = [
+    "ATTENDED_STATES",
     "CASE_EVENTS",
     "CLOSABLE_STATUSES",
     "LANGUAGE_RULE_ID",
     "MAX_CLOSE_NOTE",
+    "MAX_ESCALATION_TEXT",
     "MAX_RATING_COMMENT",
     "MAX_TURN_TEXT",
     "OPEN_ASSIGNED_STATUSES",
@@ -90,6 +108,17 @@ __all__ = [
     "CustomerCaseSlot",
     "CustomerConversationStatus",
     "CustomerTurnAuthor",
+    "Escalation",
+    "EscalationAcknowledged",
+    "EscalationAnswered",
+    "EscalationClosed",
+    "EscalationNotOpenError",
+    "EscalationOpenError",
+    "EscalationOpened",
+    "EscalationReassigned",
+    "EscalationState",
+    "EscalationTaken",
+    "EscalationWithdrawn",
     "IdempotencyConflictError",
     "InboxStatus",
     "LanguageMismatchError",
@@ -100,6 +129,7 @@ __all__ = [
     "TurnKind",
     "ensure_speaks_case_language",
     "normalize_close_note",
+    "normalize_escalation_text",
     "normalize_rating_comment",
     "normalize_rating_score",
     "normalize_turn_text",

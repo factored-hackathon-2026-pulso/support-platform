@@ -52,6 +52,26 @@ class LanguageMismatchError(DomainError):
         )
 
 
+class EscalationOpenError(ConflictError):
+    """The case already has an open escalation: one at a time (409, slice 9)."""
+
+    code = "escalation_open"
+    default_message = "Este caso ya está escalado a supervisión."
+
+    def __init__(self, escalation_id: str) -> None:
+        super().__init__(None, escalationId=escalation_id)
+
+
+class EscalationNotOpenError(ConflictError):
+    """The escalation was already withdrawn, answered or otherwise ended (409, slice 9)."""
+
+    code = "escalation_not_open"
+    default_message = "Este escalamiento ya no está abierto."
+
+    def __init__(self, current_state: str) -> None:
+        super().__init__(None, currentState=current_state)
+
+
 def invalid_case_transition(current: CaseStatus, target: str) -> InvalidTransitionError:
     return InvalidTransitionError(
         f"Un caso en estado {current.value} no puede pasar a {target}.",

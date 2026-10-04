@@ -179,6 +179,8 @@ cases = Table(
     Column("rating_comment", String(500), nullable=True),
     Column("rated_at", UtcDateTime, nullable=True),
     Column("rating_key", String(64), nullable=True),
+    # slice 9: the escalation to supervision that is open now (one per case at a time)
+    Column("open_escalation_id", String(ID), nullable=True),
     _version(),
     Index("ix_cases_assignee_status", "assigned_analyst_id", "status"),
     Index("ix_cases_assignee_closed", "assigned_analyst_id", "closed_at"),
@@ -186,6 +188,8 @@ cases = Table(
     Index("ix_cases_customer_opened", "customer_id", "opened_at"),
     # "Calificación 7 días" (slice 7): the rated cases each analyst closed since a time.
     Index("ix_cases_closer_closed", "closed_by_id", "closed_at"),
+    # "Colas" (slice 9): every open case of one language.
+    Index("ix_cases_language_status", "language", "status"),
 )
 
 # Append-only transcript. (case_id, sequence) is gap-free per case (the case CAS
@@ -230,6 +234,30 @@ assignments = Table(
     # Analyst home (slice 6): cases assigned to her, or taken away from her, since a time.
     Index("ix_assignments_staff_assigned", "staff_id", "assigned_at"),
     Index("ix_assignments_previous_staff_assigned", "previous_staff_id", "assigned_at"),
+)
+
+# Slice 9: escalations to supervision. One row per escalation (a case may be escalated again
+# after one ends); the open one is also pointed to by ``cases.open_escalation_id``.
+escalations = Table(
+    "escalations",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("case_id", String(ID), ForeignKey("cases.id"), nullable=False),
+    Column("state", String(20), nullable=False),
+    Column("motive", String(500), nullable=False),
+    Column("escalated_by_id", String(ID), ForeignKey("staff.id"), nullable=False),
+    Column("escalated_at", UtcDateTime, nullable=False),
+    Column("resolved_at", UtcDateTime, nullable=True),
+    Column("resolved_by_id", String(ID), nullable=True),
+    Column("note", String(500), nullable=True),
+    Column("reassigned_to_id", String(ID), nullable=True),
+    Column("acknowledged_at", UtcDateTime, nullable=True),
+    Column("creation_key", String(64), nullable=True, unique=True),
+    _version(),
+    Index("ix_escalations_case_escalated", "case_id", "escalated_at"),
+    # "Escalados": the open ones, and the ones attended since a time.
+    Index("ix_escalations_state_escalated", "state", "escalated_at"),
+    Index("ix_escalations_resolved", "resolved_at"),
 )
 
 customer_case_slots = Table(

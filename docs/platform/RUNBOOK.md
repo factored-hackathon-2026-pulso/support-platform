@@ -128,15 +128,15 @@ Todas usan la contraseña **`demo1234`** y el código de verificación **`000000
 | Persona | Correo | Roles | Idiomas | Equipo | Estado al arrancar |
 |---|---|---|---|---|---|
 | Daniela Ríos | `daniela.rios@` | Analista | español, portugués | Equipo Andes | En pausa, sin sesión. 5 casos abiertos y 3 cerrados (ver abajo) |
-| Julián Ortega | `julian.ortega@` | Analista | español | Equipo Andes | En pausa **con una sesión sembrada** (aparece "En pausa" en Equipo y colas). 2 casos abiertos |
+| Julián Ortega | `julian.ortega@` | Analista | español | Equipo Andes | En pausa **con una sesión sembrada** (aparece "En pausa" en Equipo). 2 casos abiertos |
 | Paula Medina | `paula.medina@` | Analista | español | Equipo Pacífico | En pausa, sin casos |
 | Sebastián Cárdenas | `sebastian.cardenas@` | Analista | español, portugués | Equipo Pacífico | En pausa, sin casos |
 | Tomás Arango | `tomas.arango@` | Analista | español, portugués | Equipo Pacífico | En pausa, sin casos |
-| Felipe Echeverri | `felipe.echeverri@` | Analista + Supervisora | español | Equipo Andes | En pausa, sin casos. Usa el selector de rol (Casos ↔ Equipo y colas) |
-| Lucía Herrera | `lucia.herrera@` | Supervisora | español, portugués | Equipo Andes | Activa |
-| Martín Salazar | `martin.salazar@` | Supervisora | español | Equipo Pacífico | Activa |
-| Renata Villalba | `renata.villalba@` | Supervisora | español, portugués | Equipo Pacífico | Activa |
-| Mariana Duque | `mariana.duque@` | Supervisora | español | Equipo Pacífico | **Bloqueada** por 5 contraseñas erradas, hasta 13 min después del primer arranque. Una administradora la desbloquea |
+| Felipe Echeverri | `felipe.echeverri@` | Analista + Supervisión | español | Equipo Andes | En pausa, sin casos. Usa el selector de rol (Casos ↔ Colas). Como también es Analista, en "Escalados" puede **"Tomar el caso"** de un caso en español |
+| Lucía Herrera | `lucia.herrera@` | Supervisión | español, portugués | Equipo Andes | Activa |
+| Martín Salazar | `martin.salazar@` | Supervisión | español | Equipo Pacífico | Activa |
+| Renata Villalba | `renata.villalba@` | Supervisión | español, portugués | Equipo Pacífico | Activa |
+| Mariana Duque | `mariana.duque@` | Supervisión | español | Equipo Pacífico | **Bloqueada** por 5 contraseñas erradas, hasta 13 min después del primer arranque. Una administradora la desbloquea |
 | Valeria Quintero | `valeria.quintero@` | Administración | español | Administración de la plataforma | Activa |
 | Carolina Peña | `carolina.pena@` | Administración | español | Administración de la plataforma | Activa |
 | Andrés Villamil | `andres.villamil@` | Analista | español | Equipo Andes | **Desactivada** (Carolina la desactivó). No puede entrar |
@@ -155,18 +155,23 @@ Prioridad (slice 8): todo caso abre "Sin prioridad"; la historia sembrada la cam
 
 | Caso | Cliente | Dónde está |
 |---|---|---|
-| 101 | Marcela Quintana Pardo (es-CO) | Daniela · Por responder, prioridad crítica |
+| 101 | Marcela Quintana Pardo (es-CO) | Daniela · Por responder, prioridad crítica, **escalado** (abierto, hace 6 min) |
 | 102 | Beatriz Salcedo Prieto (es-CO) | Daniela · Por responder, SLA en riesgo, prioridad alta |
 | 103 | Larissa Monteiro Alves (pt-BR) | Daniela · Nuevo, en portugués |
 | 108 | Patricia Lozano Vega (es-MX) | Daniela · Nuevo, "Volvió a escribir" (casos anteriores 104 y 110) |
-| 107 | Joaquín Ferreyra Paz (es-AR) | Daniela · Esperando al cliente, prioridad media |
+| 107 | Joaquín Ferreyra Paz (es-AR) | Daniela · Esperando al cliente, prioridad media; Lucía **respondió** su escalamiento (Daniela ve la tarjeta hasta "Entendido") |
 | 104, 105, 106 | Patricia, Claudia, Héctor | Daniela · Cerrados en los últimos 7 días (media, sin prioridad, baja) |
 | 110 | Patricia | Cerrado por Julián hace 20 días (fuera de la ventana de 7 días) |
-| 113 | Camila Torres Benavides (es-CO) | Julián · Por responder, SLA vencido, prioridad media |
-| 114 | Esteban Morales Quiroga (es-CO) | Julián · Esperando al cliente (Lucía se lo reasignó desde Paula), prioridad baja |
-| 111 | Rosa Elena Ibarra Méndez (es-MX) | Cola en español, SLA en riesgo |
-| 112 | Mauricio Achával Ríos (es-AR) | Cola en español, prioridad alta (la puso Lucía), SLA en 7 min |
-| 109 | Gabriela Duarte Melo (pt-BR) | Cola en portugués |
+| 113 | Camila Torres Benavides (es-CO) | Julián · Por responder, SLA vencido, prioridad media, **escalado** (abierto, hace 21 min) |
+| 114 | Esteban Morales Quiroga (es-CO) | Julián · Esperando al cliente (Paula lo escaló y Lucía se lo reasignó: escalamiento "Reasignado"), prioridad baja |
+| 111 | Rosa Elena Ibarra Méndez (es-MX) | Colas → Español, sin asignar, SLA en riesgo |
+| 112 | Mauricio Achával Ríos (es-AR) | Colas → Español, sin asignar, prioridad alta (la puso Lucía), SLA en 7 min |
+| 109 | Gabriela Duarte Melo (pt-BR) | Colas → Portugués, sin asignar |
+
+Escalamientos sembrados (slice 9, motivos inventados y neutros): "Escalados" muestra 2 abiertos
+(Julián con Camila, Daniela con Marcela) y en "Atendidos hoy" el de Paula (reasignado) y el de
+Daniela con Joaquín (respondido). No hay tipos, montos, niveles ni plazos: el dataset solo dice si
+un caso fue escalado.
 
 Los ids completos son `CASE-` seguido del número relleno con ceros hasta 26 dígitos (por ejemplo
 `CASE-00000000000000000000000109`). Valores generados por el equipo (no vienen del dataset): SLA de
@@ -175,7 +180,9 @@ ventana de 7 días de Cerrados, los nombres de las colas y los motivos de cierre
 prioridad sí siguen el dataset (`complaints.priority`), más "Sin prioridad".
 
 Después de actualizar a slice 8, borra `backend/cc_platform.db`: la siembra solo agrega casos
-que faltan, así que una base anterior conserva las prioridades y los plazos viejos.
+que faltan, así que una base anterior conserva las prioridades y los plazos viejos. Slice 9 agrega
+la tabla `escalations` y la columna `cases.open_escalation_id`: una base anterior no arranca
+(`OutdatedSchemaError`) hasta borrarla.
 
 ### Clientes del simulador
 

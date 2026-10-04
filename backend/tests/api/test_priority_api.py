@@ -92,7 +92,7 @@ def test_supervision_changes_any_open_case(client: TestClient, sign_in: SignIn) 
         )
         assert response.status_code == 200, response.text
         assert response.json()["case"]["priority"] == priority
-    felipe = sign_in(TEAM_LEAD.email)  # Analista + Supervisora, not the assignee
+    felipe = sign_in(TEAM_LEAD.email)  # Analista + Supervisión, not the assignee
     response = put_priority(
         client,
         felipe,

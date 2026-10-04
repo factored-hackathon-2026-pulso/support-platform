@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useSession } from '@/app/session'
 import { useToast } from '@/components/ui'
 import { envelopeActor, useOnReconnect, useRealtimeClient } from '@/lib/realtime'
 import { availabilityKeys, caseKeys } from '../api'
-import { assignedToastCopy, unassignedToastCopy } from '../model'
-import { readCaseSummary } from '../realtime'
+import { assignedToastCopy, escalationToastCopy, unassignedToastCopy } from '../model'
+import { readCaseSummary, readEscalation } from '../realtime'
 
 /** Time on screen of the new-case toast (paused while hovered or focused). */
 export const ASSIGNED_TOAST_MS = 6000
@@ -20,6 +21,9 @@ export const ASSIGNED_TOAST_MS = 6000
  *   that is already selected;
  * - `case.unassigned` → toast "Supervisión reasignó un caso" (once per envelope
  *   id; the cache handler drops the case from her lists);
+ * - `escalation.updated` of HER escalation (slice 9) → toast "{Nombre} respondió tu
+ *   escalamiento" / "{Nombre} tomó tu caso" with "Ver caso" (once per envelope id; a
+ *   reassignment keeps only the `case.unassigned` toast);
  * - socket back from `reconnecting` → refetch the inbox and the availability,
  *   since envelopes may have been missed while it was down (contract §5.3).
  */
@@ -30,6 +34,11 @@ export function useInboxLive(
   const client = useRealtimeClient()
   const queryClient = useQueryClient()
   const { toast, dismiss } = useToast()
+  const meId = useSession().user?.id ?? null
+  const me = useRef(meId)
+  useEffect(() => {
+    me.current = meId
+  }, [meId])
 
   const openCase = useRef(onOpenCase)
   useEffect(() => {
@@ -61,6 +70,22 @@ export function useInboxLive(
         if (envelope.type === 'case.updated') {
           const summary = readCaseSummary(envelope)
           if (summary?.status === 'closed') dismissFor(summary.id)
+          return
+        }
+        if (envelope.type === 'escalation.updated') {
+          if (seen.current.has(envelope.id) || !me.current) return
+          const escalation = readEscalation(envelope)
+          const copy = escalation ? escalationToastCopy(escalation, me.current) : null
+          if (!escalation || !copy) return
+          seen.current.add(envelope.id)
+          toast({
+            ...copy,
+            duration: ASSIGNED_TOAST_MS,
+            actions:
+              escalation.caseId === selected.current
+                ? undefined
+                : [{ label: 'Ver caso', onClick: () => openCase.current(escalation.caseId) }],
+          })
           return
         }
         if (envelope.type === 'case.unassigned') {

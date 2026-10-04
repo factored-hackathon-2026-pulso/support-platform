@@ -55,7 +55,12 @@ import {
   userChanges,
   userGuardState,
   userSummaryFacts,
+  filterUsers,
+  userFilterGroups,
+  userFilterSelection,
+  usersPatchOfSelection,
   usersQueryOf,
+  usersShownLabel,
   usersSubtitle,
   validateTeamName,
   validateUserDraft,
@@ -70,6 +75,9 @@ describe('labels', () => {
   it('pins the role descriptions and the account status labels', () => {
     expect(ROLE_DESCRIPTION.analyst).toBe('Atiende casos por chat con los clientes.')
     expect(ROLE_DESCRIPTION.admin).toBe('Crea y edita cuentas, roles, idiomas y equipos.')
+    expect(ROLE_DESCRIPTION.supervisor).toBe(
+      'Ve las colas y el equipo, atiende escalamientos, reasigna casos y revisa la auditoría.',
+    )
     expect(ACCOUNT_STATUS_LABEL).toEqual({
       active: 'Activa',
       locked: 'Bloqueada',
@@ -147,16 +155,16 @@ describe('accountStatusAt', () => {
 })
 
 describe('URL state', () => {
-  it('parses and serializes the users screen', () => {
+  it('parses and serializes the users screen with several values per group', () => {
     const params = new URLSearchParams(
-      'rol=supervisoras&estado=bloqueadas&equipo=TEAM-1&idioma=pt&q=mar&persona=STF-1&nueva=1',
+      'rol=analistas,supervision&estado=bloqueadas,desactivadas&equipo=TEAM-1,TEAM-2&idioma=pt&q=mar&persona=STF-1&nueva=1',
     )
     const state = parseUsersSearch(params)
     expect(state).toEqual({
-      role: 'supervisor',
-      status: 'locked',
-      teamId: 'TEAM-1',
-      language: 'pt',
+      roles: ['analyst', 'supervisor'],
+      statuses: ['locked', 'inactive'],
+      teamIds: ['TEAM-1', 'TEAM-2'],
+      languages: ['pt'],
       query: 'mar',
       staffId: 'STF-1',
       create: true,
@@ -164,12 +172,23 @@ describe('URL state', () => {
     expect(toUsersSearch(state).toString()).toBe(params.toString())
   })
 
-  it('falls back to the defaults for unknown values', () => {
+  it('keeps old single-value links and drops unknown values', () => {
+    expect(
+      parseUsersSearch(new URLSearchParams('rol=supervisoras&estado=activas&idioma=es')),
+    ).toEqual({
+      ...EMPTY_USERS_STATE,
+      roles: ['supervisor'],
+      statuses: ['active'],
+      languages: ['es'],
+    })
     const state = parseUsersSearch(
-      new URLSearchParams('rol=automatizacion&estado=vacaciones&idioma=en&persona=%20&nueva=si'),
+      new URLSearchParams(
+        'rol=automatizacion&estado=vacaciones,todas&idioma=en&equipo=,%20&persona=%20&nueva=si',
+      ),
     )
     expect(state).toEqual(EMPTY_USERS_STATE)
     expect(toUsersSearch(state).toString()).toBe('')
+    expect(parseUsersSearch(new URLSearchParams('idioma=pt,es,pt')).languages).toEqual(['es', 'pt'])
     expect(parseUsersSearch(new URLSearchParams(`q=${'x'.repeat(100)}`)).query).toHaveLength(80)
   })
 
@@ -185,27 +204,93 @@ describe('URL state', () => {
     expect(toTeamsSearch({ status: 'active', teamId: null, create: false }).toString()).toBe('')
   })
 
-  it('turns the URL into the list filters, defaults left out', () => {
-    expect(usersQueryOf(EMPTY_USERS_STATE)).toEqual({})
+  it('asks the server for everyone (the search only); the groups filter here', () => {
+    expect(usersQueryOf(EMPTY_USERS_STATE)).toEqual({ status: 'all' })
     expect(
       usersQueryOf({
         ...EMPTY_USERS_STATE,
-        role: 'admin',
-        status: 'all',
-        teamId: 'TEAM-1',
-        language: 'es',
+        roles: ['admin'],
+        statuses: ['inactive'],
+        teamIds: ['TEAM-1'],
+        languages: ['es'],
         query: '  Duque ',
         staffId: 'STF-1',
       }),
-    ).toEqual({ role: 'admin', status: 'all', teamId: 'TEAM-1', language: 'es', q: 'Duque' })
+    ).toEqual({ status: 'all', q: 'Duque' })
   })
 
   it('knows when filters are set and clears them keeping the selection', () => {
     expect(hasUserFilters(EMPTY_USERS_STATE)).toBe(false)
     expect(hasUserFilters({ ...EMPTY_USERS_STATE, staffId: 'STF-1', create: true })).toBe(false)
-    const filtered = { ...EMPTY_USERS_STATE, status: 'inactive' as const, staffId: 'STF-1' }
+    const filtered = { ...EMPTY_USERS_STATE, statuses: ['inactive' as const], staffId: 'STF-1' }
     expect(hasUserFilters(filtered)).toBe(true)
+    expect(hasUserFilters({ ...EMPTY_USERS_STATE, query: 'ana' })).toBe(true)
     expect(clearUserFilters(filtered)).toEqual({ ...EMPTY_USERS_STATE, staffId: 'STF-1' })
+  })
+})
+
+describe('"Filtros" of the directory (slice 9)', () => {
+  const people = [selfAdmin, carolina, daniela, mariana, andres]
+  const teams = [
+    makeAdminTeam({ id: 'TEAM-00000000000000000000000002', name: 'Equipo Pacífico' }),
+    makeAdminTeam({ id: 'TEAM-00000000000000000000000004', name: 'Equipo Caribe', active: false }),
+    makeAdminTeam(),
+  ]
+  const ids = (users: readonly { id: string }[]) => users.map((user) => user.id)
+
+  it('round-trips the selection with the URL state', () => {
+    const state = { ...EMPTY_USERS_STATE, roles: ['admin' as const], languages: ['pt' as const] }
+    const selection = userFilterSelection(state)
+    expect(selection).toEqual({ role: ['admin'], status: [], team: [], language: ['pt'] })
+    expect(usersPatchOfSelection({ ...selection, status: ['locked', 'bogus'] })).toEqual({
+      roles: ['admin'],
+      statuses: ['locked'],
+      teamIds: [],
+      languages: ['pt'],
+    })
+  })
+
+  it('ORs the values of one group and ANDs the groups (the status at the clock)', () => {
+    expect(ids(filterUsers(people, { role: ['supervisor', 'analyst'] }, NOW))).toEqual(
+      ids([carolina, daniela, mariana, andres]),
+    )
+    expect(ids(filterUsers(people, { role: ['supervisor'], status: ['locked'] }, NOW))).toEqual([
+      mariana.id,
+    ])
+    // Mariana's lock ends at T+13m: then she is "Activa".
+    expect(filterUsers(people, { status: ['locked'] }, minutesFrom(20))).toEqual([])
+    expect(ids(filterUsers(people, { language: ['pt'] }, NOW))).toEqual([daniela.id])
+    expect(filterUsers(people, {}, NOW)).toHaveLength(people.length)
+  })
+
+  it('counts each option with every other group applied (faceted)', () => {
+    const groups = userFilterGroups(people, teams, { role: ['supervisor'] }, NOW)
+    expect(groups.map((group) => group.legend)).toEqual(['Rol', 'Estado', 'Equipo', 'Idioma'])
+    const counts = (key: string) =>
+      Object.fromEntries(
+        groups.find((group) => group.key === key)!.options.map((o) => [o.label, o.count]),
+      )
+    // The role group ignores its own selection.
+    expect(counts('role')).toEqual({ Analista: 2, Supervisión: 2, Administración: 2 })
+    // The others count only supervisors.
+    expect(counts('status')).toEqual({ Activa: 1, Bloqueada: 1, Desactivada: 0 })
+    expect(counts('language')).toEqual({ Español: 1, Portugués: 0 })
+    expect(groups[2]!.options.map((option) => option.label)).toEqual([
+      'Equipo Andes',
+      'Equipo Pacífico',
+      'Equipo Caribe (inactivo)',
+    ])
+  })
+
+  it('keeps an unknown team of the URL as an option, by its id', () => {
+    const [, , team] = userFilterGroups(people, teams, { team: ['TEAM-ZZ'] }, NOW)
+    expect(team!.options.at(-1)).toEqual({ value: 'TEAM-ZZ', label: 'TEAM-ZZ', count: 0 })
+  })
+
+  it('says how many are shown', () => {
+    expect(usersShownLabel(13, 13)).toBe('13 personas')
+    expect(usersShownLabel(4, 13)).toBe('4 de 13 personas')
+    expect(usersShownLabel(1, 1)).toBe('1 persona')
   })
 })
 

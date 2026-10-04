@@ -1,11 +1,14 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
 import { Page, PageBody } from '@/components/layout'
 import { Button, PageHeader } from '@/components/ui'
 import { useNow } from '@/lib/hooks'
 import {
   clearUserFilters,
+  filterUsers,
   hasUserFilters,
+  userFilterGroups,
+  userFilterSelection,
   usersQueryOf,
   usersSubtitle,
   type UrlStateChangeOptions,
@@ -26,7 +29,7 @@ export const USERS_TICK_MS = 15_000
 export interface UsersScreenProps {
   state: UsersUrlState
   onStateChange(patch: Partial<UsersUrlState>, options?: UrlStateChangeOptions): void
-  /** The viewer also holds Supervisora: open-case blocks link to "Equipo y colas". */
+  /** The viewer also holds Supervisión: open-case blocks link to supervision. */
   canOpenSupervision: boolean
 }
 
@@ -43,7 +46,25 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
   const filters = useMemo(() => usersQueryOf(state), [state])
   const users = useAdminUsers(filters)
   const teamsQuery = useAdminTeams('all')
-  const teams = teamsQuery.data?.items ?? []
+  const teams = useMemo(() => teamsQuery.data?.items ?? [], [teamsQuery.data])
+  // The groups filter here, over the people the search found (`usersQueryOf`).
+  const selection = useMemo(() => userFilterSelection(state), [state])
+  const found = users.data?.items
+  const groups = useMemo(
+    () => userFilterGroups(found ?? [], teams, selection, now),
+    [found, teams, selection, now],
+  )
+  const shown = useMemo(
+    () => (found ? filterUsers(found, selection, now) : undefined),
+    [found, selection, now],
+  )
+  const listQuery = useMemo(
+    () => ({
+      ...users,
+      data: users.data && shown ? { ...users.data, items: shown } : users.data,
+    }),
+    [users, shown],
+  )
   const [password, setPassword] = useState<(TemporaryPasswordResult & { staffId: string }) | null>(
     null,
   )
@@ -54,8 +75,9 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
     [onStateChange],
   )
 
-  // "Nueva persona" with the list filtered by one active team: that team is preselected.
-  const filteredTeam = state.teamId ? teams.find((team) => team.id === state.teamId) : undefined
+  // "Nuevo usuario" with the list filtered by one active team: that team is preselected.
+  const onlyTeam = state.teamIds.length === 1 ? state.teamIds[0] : undefined
+  const filteredTeam = onlyTeam ? teams.find((team) => team.id === onlyTeam) : undefined
   const initialTeamId = filteredTeam?.active ? filteredTeam.id : null
 
   function onCreated(result: CreatedUser) {
@@ -89,10 +111,10 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
           actions={
             <Button
               variant="primary"
-              icon={<Plus size={16} aria-hidden="true" />}
+              icon={<UserPlus size={16} aria-hidden="true" />}
               onClick={() => onStateChange({ create: true })}
             >
-              Nueva persona
+              Nuevo usuario
             </Button>
           }
         />
@@ -101,15 +123,15 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
         <UsersToolbar
           state={state}
           onStateChange={onStateChange}
-          roleCounts={users.data?.roleCounts}
-          statusCounts={users.data?.statusCounts}
-          teams={teams}
+          groups={groups}
+          shown={shown?.length}
+          total={found?.length}
         />
       }
     >
       <PageBody scroll={false} padded={false} className="flex">
         <UsersTable
-          query={users}
+          query={listQuery}
           selectedId={state.staffId}
           filtered={hasUserFilters(state)}
           now={now}

@@ -14,6 +14,8 @@ import {
   countryName,
   isNewerCase,
   casePriority,
+  isAttendedEscalation,
+  MAX_ESCALATION_TEXT,
   ratingFact,
   ratingOption,
   slaFact,
@@ -22,13 +24,20 @@ import {
   type CloseReason,
 } from '@/features/cases/core'
 import { isApiProblem } from '@/lib/api'
-import { formatDate, formatDateTime, formatDuration, formatTime } from '@/lib/format'
+import {
+  formatDate,
+  formatDateTime,
+  formatDuration,
+  formatRelativeTime,
+  formatTime,
+} from '@/lib/format'
 import type {
   CaseClosure,
   CaseDetail,
   CaseHistoryItem,
   CaseSummary,
   CloseCaseRequest,
+  Escalation,
   Language,
   PendingMessage,
   TranscriptCache,
@@ -350,41 +359,49 @@ export function queueInSentence(queueLabel: string | null): string {
 }
 
 /**
- * The arrival line of the supervisor's read-only case view (slice 3 §8.3):
- * - queued: "Espera en la cola en español desde las 10:47: nadie disponible habla español";
- * - `language_least_loaded`: "Lo atiende Daniela Ríos: le llegó al estar
- *   disponible y hablar portugués (regla 3) · 5 mar, 10:58";
- * - `queue_drained`: "Lo atiende Daniela Ríos: le llegó desde la cola en
- *   portugués tras 6 min · 5 mar, 10:58";
- * - `manual`: "Lo atiende Julián Ortega: se lo pasó Lucía Herrera · 5 mar, 10:58"
- *   ("se lo asignó" from the queue);
+ * The arrival note of the supervisor's read-only case view (slice 3 §8.3; slice 9: no
+ * " · " joins, the time is its own clock fact):
+ * - queued: "Sin asignar desde las 10:47: nadie disponible habla español" (no time fact);
+ * - `language_least_loaded`: "Lo atiende Daniela Ríos: le llegó al estar disponible y hablar
+ *   portugués (regla 3)";
+ * - `queue_drained`: "Lo atiende Daniela Ríos: le llegó desde la cola en portugués tras 6 min";
+ * - `manual`: "Lo atiende Julián Ortega: se lo pasó Lucía Herrera" ("se lo asignó" from the
+ *   queue);
  * - closed: "Lo atendió Julián Ortega".
+ * `time` is when it was assigned ("5 mar, 10:58"), shown next to the line with a clock.
  */
 export function supervisionArrivalLine(
   detail: Pick<CaseDetail, 'assignment' | 'case'>,
-): string | null {
+): { line: string; time: string | null } | null {
   const { assignment, case: summary } = detail
   const language = LANGUAGE_NAMES[summary.language]
   if (summary.status === 'queued') {
-    return `Espera en ${queueInSentence(QUEUE_LABEL[summary.language])} desde las ${formatTime(summary.openedAt)}: nadie disponible habla ${language}`
+    return {
+      line: `Sin asignar desde las ${formatTime(summary.openedAt)}: nadie disponible habla ${language}`,
+      time: null,
+    }
   }
   if (!assignment) return null
-  if (summary.status === 'closed') return `Lo atendió ${assignment.analystName}`
-  const when = formatDateTime(assignment.assignedAt, { withYear: false })
+  if (summary.status === 'closed')
+    return { line: `Lo atendió ${assignment.analystName}`, time: null }
+  const time = formatDateTime(assignment.assignedAt, { withYear: false })
   const who = `Lo atiende ${assignment.analystName}`
   switch (assignment.reason) {
     case 'queue_drained': {
       const waited =
         assignment.waitedSeconds !== null ? ` tras ${formatWait(assignment.waitedSeconds)}` : ''
-      return `${who}: le llegó desde ${queueInSentence(assignment.queueLabel ?? QUEUE_LABEL[summary.language])}${waited} · ${when}`
+      return {
+        line: `${who}: le llegó desde ${queueInSentence(assignment.queueLabel ?? QUEUE_LABEL[summary.language])}${waited}`,
+        time,
+      }
     }
     case 'manual': {
       const verb = assignment.previousAnalystId === null ? 'se lo asignó' : 'se lo pasó'
-      return `${who}: ${verb} ${assignment.assignedByName ?? 'supervisión'} · ${when}`
+      return { line: `${who}: ${verb} ${assignment.assignedByName ?? 'supervisión'}`, time }
     }
     default: {
       const rule = summary.language === 'pt' ? ' (regla 3)' : ''
-      return `${who}: le llegó al estar disponible y hablar ${language}${rule} · ${when}`
+      return { line: `${who}: le llegó al estar disponible y hablar ${language}${rule}`, time }
     }
   }
 }
@@ -414,10 +431,10 @@ export function closureNote(closure: Pick<CaseClosure, 'note'>): string | null {
 }
 
 /**
- * Footer of the supervisor's read-only case view (slice 3 §8.3), which never
- * has a composer: queued "Vista de supervisión · El caso espera en la cola en
- * español. Asígnalo para que alguien le responda."; open "Vista de supervisión
- * · Solo lectura. Lo atiende {analista}."; closed: the closure line (+ "Nota: …").
+ * Footer of the supervisor's read-only case view (slice 3 §8.3), which never has a
+ * composer. Slice 9 (assignment is automatic; supervision no longer assigns a queued case):
+ * queued "Sin asignar: le llega automáticamente a la primera persona disponible que hable
+ * español."; open "Solo lectura: lo atiende {analista}."; closed: the closure line (+ "Nota: …").
  */
 export function supervisionFooter(
   detail: Pick<CaseDetail, 'case' | 'closure' | 'assignment'>,
@@ -430,10 +447,10 @@ export function supervisionFooter(
   }
   if (summary.status === 'queued' || !assignment) {
     return [
-      `Vista de supervisión · El caso espera en ${queueInSentence(QUEUE_LABEL[summary.language])}. Asígnalo para que alguien le responda.`,
+      `Sin asignar: le llega automáticamente a la primera persona disponible que hable ${LANGUAGE_NAMES[summary.language]}.`,
     ]
   }
-  return [`Vista de supervisión · Solo lectura. Lo atiende ${assignment.analystName}.`]
+  return [`Solo lectura: lo atiende ${assignment.analystName}.`]
 }
 
 // ── Composer ────────────────────────────────────────────────────────────────
@@ -479,8 +496,7 @@ export function describeCaseLoadFailure(error: unknown): { title: string; descri
   if (isApiProblem(error, 'case_not_assigned') || isApiProblem(error, 'forbidden')) {
     return {
       title: 'No tienes acceso a este caso',
-      description:
-        'Lo ven la persona asignada, las supervisoras y quien atendió antes a este cliente.',
+      description: 'Lo ven la persona asignada, supervisión y quien atendió antes a este cliente.',
     }
   }
   if (isApiProblem(error, 'not_found')) {
@@ -928,4 +944,168 @@ export function describeCloseFailure(error: unknown): string {
   }
   if (isApiProblem(error, 'validation_error')) return 'Revisa el motivo y la nota.'
   return 'No pudimos cerrar el caso. Inténtalo de nuevo.'
+}
+
+// ── Escalation to supervision (slice 9) ──────────────────────────────────────
+
+/** "Motivo" counter of the escalate dialog: "37/500" (trimmed, like the server). */
+export function motiveCounter(motive: string): string {
+  return `${motive.trim().length}/${MAX_ESCALATION_TEXT}`
+}
+
+/** Client check of the motive before the request: required, at most 500 characters. */
+export function validateMotive(motive: string): string | null {
+  const length = motive.trim().length
+  if (length === 0) return 'Escribe el motivo.'
+  if (length > MAX_ESCALATION_TEXT) {
+    return `El motivo puede tener hasta ${MAX_ESCALATION_TEXT} caracteres.`
+  }
+  return null
+}
+
+/** Whether "Escalar a supervisión" shows: the assignee of an open case not escalated yet. */
+export function canEscalate(detail: Pick<CaseDetail, 'case' | 'capabilities'>): boolean {
+  return (
+    detail.capabilities.canEscalate &&
+    !detail.case.escalated &&
+    detail.case.status !== 'closed' &&
+    detail.case.status !== 'queued'
+  )
+}
+
+export type EscalationAction = 'escalate' | 'withdraw' | 'acknowledge'
+
+/** One Spanish line per failure of the escalation commands (branch on the code, never the text). */
+export function describeEscalationFailure(error: unknown, action: EscalationAction): string {
+  const fallback: Record<EscalationAction, string> = {
+    escalate: 'No pudimos escalar el caso. Inténtalo de nuevo.',
+    withdraw: 'No pudimos retirar el escalamiento. Inténtalo de nuevo.',
+    acknowledge: 'No pudimos marcarlo como leído. Inténtalo de nuevo.',
+  }
+  if (!isApiProblem(error)) return fallback[action]
+  switch (error.code) {
+    case 'escalation_open':
+      return 'Este caso ya está escalado a supervisión.'
+    case 'escalation_not_open':
+      return error.stringExtension('currentState') === 'withdrawn'
+        ? 'Este escalamiento ya se retiró.'
+        : 'Supervisión ya atendió este escalamiento.'
+    case 'case_closed':
+      return 'Este caso ya se cerró.'
+    case 'case_not_assigned':
+      return action === 'escalate'
+        ? 'Ya no puedes escalarlo: el caso pasó a otra persona.'
+        : 'Ya no puedes cambiar este escalamiento.'
+    case 'validation_error':
+    case 'invalid_value':
+      return 'Escribe el motivo (hasta 500 caracteres).'
+    case 'network_error':
+      return 'Revisa tu conexión e inténtalo de nuevo.'
+    default:
+      return fallback[action]
+  }
+}
+
+/** What the staff-only card under the header shows (or nothing). */
+export type EscalationCard =
+  | {
+      kind: 'open'
+      escalation: Escalation
+      title: string
+      /** Who escalated, shown in supervision ("Daniela Ríos"); null for her own card. */
+      byName: string | null
+      since: string
+      sinceTooltip: string
+      /** "Retirar escalamiento": the assignee in the Workspace. */
+      canWithdraw: boolean
+    }
+  | {
+      kind: 'attended'
+      escalation: Escalation
+      title: string
+      resolverName: string
+      /** Supervision's answer (answered only). */
+      note: string | null
+      since: string
+      sinceTooltip: string
+    }
+
+type DateInput = Date | string | number
+
+function attendedTitle(escalation: Escalation, name: string): { title: string; verb: string } {
+  switch (escalation.state) {
+    case 'taken':
+      return { title: `${name} tomó el caso`, verb: 'Tomó el caso' }
+    case 'reassigned':
+      return {
+        title: `${name} lo reasignó a ${escalation.reassignedToName ?? 'otra persona del equipo'}`,
+        verb: 'Lo reasignó',
+      }
+    default:
+      return { title: `${name} respondió`, verb: 'Respondió' }
+  }
+}
+
+/**
+ * The escalation card of a case (Workspace.dc.html "escalado" / "respondido"):
+ * - Workspace, the assignee, an open escalation → her card with "Retirar escalamiento";
+ * - Workspace, who escalated, supervision answered / took / reassigned it and she has not
+ *   said "Entendido" → what supervision did (also when the case left her: she still reads it);
+ * - supervision view → the open escalation, read-only;
+ * - anything else (none, withdrawn, ended with the case, a closed case) → null.
+ */
+export function escalationCardOf(
+  detail: Pick<CaseDetail, 'case' | 'escalation'>,
+  meId: string,
+  mode: ConversationMode,
+  now: DateInput,
+): EscalationCard | null {
+  const escalation = detail.escalation
+  if (!escalation || detail.case.status === 'closed') return null
+  if (escalation.state === 'open') {
+    if (mode === 'supervision') {
+      const by = escalation.escalatedByName ?? 'Alguien del equipo'
+      const since = formatRelativeTime(escalation.escalatedAt, now)
+      return {
+        kind: 'open',
+        escalation,
+        title: 'Escalado a supervisión',
+        byName: by,
+        since,
+        sinceTooltip: `Escaló ${since}`,
+        canWithdraw: false,
+      }
+    }
+    if (detail.case.assignedAnalystId !== meId) return null
+    const since = formatRelativeTime(escalation.escalatedAt, now)
+    return {
+      kind: 'open',
+      escalation,
+      title: 'Escalado a supervisión',
+      byName: null,
+      since,
+      sinceTooltip: `Escalaste ${since}`,
+      canWithdraw: true,
+    }
+  }
+  if (
+    mode !== 'workspace' ||
+    !isAttendedEscalation(escalation.state) ||
+    escalation.acknowledgedAt !== null ||
+    escalation.escalatedById !== meId
+  ) {
+    return null
+  }
+  const name = escalation.resolvedByName ?? 'Supervisión'
+  const { title, verb } = attendedTitle(escalation, name)
+  const since = formatRelativeTime(escalation.resolvedAt ?? escalation.escalatedAt, now)
+  return {
+    kind: 'attended',
+    escalation,
+    title,
+    resolverName: name,
+    note: escalation.state === 'answered' ? escalation.note : null,
+    since,
+    sinceTooltip: `${verb} ${since}`,
+  }
 }

@@ -812,6 +812,7 @@
           "availability",
           "access",
           "administration",
+          "escalation",
           "other"
         ],
         "title": "AuditFamily",
@@ -859,6 +860,11 @@
             "title": "Canclose",
             "type": "boolean"
           },
+          "canEscalate": {
+            "description": "Slice 9: the caller is the assignee analyst, the case is open and has no open escalation (POST /cases/{caseId}/escalations).",
+            "title": "Canescalate",
+            "type": "boolean"
+          },
           "canReply": {
             "title": "Canreply",
             "type": "boolean"
@@ -879,7 +885,8 @@
           "replyBlockedReason",
           "canClose",
           "canAssign",
-          "canChangePriority"
+          "canChangePriority",
+          "canEscalate"
         ],
         "title": "CaseCapabilities",
         "type": "object"
@@ -1009,6 +1016,17 @@
           "customer": {
             "$ref": "#/components/schemas/CaseCustomer"
           },
+          "escalation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Escalation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 9: the case's latest escalation (any state), or null."
+          },
           "previousCaseCount": {
             "description": "Other cases of this customer (any status).",
             "title": "Previouscasecount",
@@ -1021,7 +1039,8 @@
           "assignment",
           "closure",
           "capabilities",
-          "previousCaseCount"
+          "previousCaseCount",
+          "escalation"
         ],
         "title": "CaseDetail",
         "type": "object"
@@ -1268,6 +1287,11 @@
           "customer": {
             "$ref": "#/components/schemas/CustomerRef"
           },
+          "escalated": {
+            "description": "Slice 9: an escalation to supervision is open (\"Escalado\").",
+            "title": "Escalated",
+            "type": "boolean"
+          },
           "firstResponseAt": {
             "anyOf": [
               {
@@ -1401,7 +1425,8 @@
           "previousCaseId",
           "closedAt",
           "closeReason",
-          "rating"
+          "rating",
+          "escalated"
         ],
         "title": "CaseSummary",
         "type": "object"
@@ -2096,6 +2121,263 @@
         "title": "DemoCustomerList",
         "type": "object"
       },
+      "EscalateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "motive": {
+            "description": "Why (required, trimmed, at most 500).",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Motive",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motive"
+        ],
+        "title": "EscalateRequest",
+        "type": "object"
+      },
+      "Escalation": {
+        "description": "An escalation to supervision (slice 9). Staff only: the customer never sees it.",
+        "properties": {
+          "acknowledgedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The analyst read what supervision did (\"Entendido\").",
+            "title": "Acknowledgedat"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "customerName": {
+            "title": "Customername",
+            "type": "string"
+          },
+          "escalatedAt": {
+            "format": "date-time",
+            "title": "Escalatedat",
+            "type": "string"
+          },
+          "escalatedById": {
+            "title": "Escalatedbyid",
+            "type": "string"
+          },
+          "escalatedByName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalatedbyname"
+          },
+          "id": {
+            "description": "ESC-…",
+            "title": "Id",
+            "type": "string"
+          },
+          "motive": {
+            "description": "Why the analyst escalated (staff text, at most 500).",
+            "title": "Motive",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Supervision's answer (answered only).",
+            "title": "Note"
+          },
+          "reassignedToId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who holds the case now (taken: the supervisor; reassigned).",
+            "title": "Reassignedtoid"
+          },
+          "reassignedToName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reassignedtoname"
+          },
+          "resolvedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it stopped being open.",
+            "title": "Resolvedat"
+          },
+          "resolvedById": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolvedbyid"
+          },
+          "resolvedByName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolvedbyname"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EscalationState",
+            "description": "open · answered · taken · reassigned · withdrawn · closed (the case closed while it was open)."
+          }
+        },
+        "required": [
+          "id",
+          "caseId",
+          "customerName",
+          "state",
+          "motive",
+          "escalatedAt",
+          "escalatedById",
+          "escalatedByName",
+          "resolvedAt",
+          "resolvedById",
+          "resolvedByName",
+          "note",
+          "reassignedToId",
+          "reassignedToName",
+          "acknowledgedAt"
+        ],
+        "title": "Escalation",
+        "type": "object"
+      },
+      "EscalationItem": {
+        "properties": {
+          "assigneeName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who holds the case now.",
+            "title": "Assigneename"
+          },
+          "canTake": {
+            "description": "The caller may take the case herself (she also holds Analista, speaks its language, it is open and someone else's).",
+            "title": "Cantake",
+            "type": "boolean"
+          },
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "escalation": {
+            "$ref": "#/components/schemas/Escalation"
+          }
+        },
+        "required": [
+          "escalation",
+          "case",
+          "assigneeName",
+          "canTake"
+        ],
+        "title": "EscalationItem",
+        "type": "object"
+      },
+      "EscalationOverview": {
+        "properties": {
+          "items": {
+            "description": "Open first (the longest waiting first), then the ones supervision attended in the last 24 hours (the most recent first).",
+            "items": {
+              "$ref": "#/components/schemas/EscalationItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "openCount": {
+            "title": "Opencount",
+            "type": "integer"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "openCount",
+          "serverTime"
+        ],
+        "title": "EscalationOverview",
+        "type": "object"
+      },
+      "EscalationResult": {
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "escalation": {
+            "$ref": "#/components/schemas/Escalation"
+          }
+        },
+        "required": [
+          "escalation",
+          "case"
+        ],
+        "title": "EscalationResult",
+        "type": "object"
+      },
+      "EscalationState": {
+        "enum": [
+          "open",
+          "answered",
+          "taken",
+          "reassigned",
+          "withdrawn",
+          "closed"
+        ],
+        "title": "EscalationState",
+        "type": "string"
+      },
       "HealthResponse": {
         "properties": {
           "checks": {
@@ -2482,6 +2764,41 @@
         "title": "Language",
         "type": "string"
       },
+      "LanguageOpenCases": {
+        "properties": {
+          "cases": {
+            "description": "Every open case of the language: nobody's first (oldest first), then the held ones in open-inbox order.",
+            "items": {
+              "$ref": "#/components/schemas/OpenCaseRow"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "label": {
+            "examples": [
+              "Cola en español"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "language",
+          "label",
+          "cases",
+          "serverTime"
+        ],
+        "title": "LanguageOpenCases",
+        "type": "object"
+      },
       "LanguageQueue": {
         "properties": {
           "atRisk": {
@@ -2524,6 +2841,16 @@
             ],
             "title": "Oldestqueuedat"
           },
+          "openAtRisk": {
+            "description": "Slice 9: open cases at first-response risk, at serverTime.",
+            "title": "Openatrisk",
+            "type": "integer"
+          },
+          "openCases": {
+            "description": "Slice 9: every open case of the language (queued too).",
+            "title": "Opencases",
+            "type": "integer"
+          },
           "speakers": {
             "description": "Active analysts who speak it (any availability).",
             "title": "Speakers",
@@ -2542,7 +2869,9 @@
           "atRisk",
           "availableSpeakers",
           "speakers",
-          "cases"
+          "cases",
+          "openCases",
+          "openAtRisk"
         ],
         "title": "LanguageQueue",
         "type": "object"
@@ -2734,6 +3063,31 @@
         "title": "OpenCaseCounts",
         "type": "object"
       },
+      "OpenCaseRow": {
+        "properties": {
+          "assigneeName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who holds it; null = nobody (queued).",
+            "title": "Assigneename"
+          },
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          }
+        },
+        "required": [
+          "case",
+          "assigneeName"
+        ],
+        "title": "OpenCaseRow",
+        "type": "object"
+      },
       "OpenCasesBlock": {
         "description": "Extension ``blockReason`` of ``staff_has_open_cases``.",
         "enum": [
@@ -2879,6 +3233,8 @@
           "idempotency_conflict",
           "case_not_closed",
           "already_rated",
+          "escalation_open",
+          "escalation_not_open",
           "analyst_not_eligible",
           "language_mismatch",
           "analyst_paused",
@@ -3004,6 +3360,18 @@
             "description": "assignment_changed: who holds the case now (null = it is queued).",
             "title": "Currentanalystid"
           },
+          "currentState": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EscalationState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "escalation_not_open: the escalation's state now (slice 9)."
+          },
           "currentStatus": {
             "anyOf": [
               {
@@ -3056,6 +3424,19 @@
             "default": null,
             "description": "validation_error: one entry per invalid field.",
             "title": "Errors"
+          },
+          "escalationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "escalation_open: the case's open escalation (slice 9).",
+            "title": "Escalationid"
           },
           "field": {
             "anyOf": [
@@ -3387,6 +3768,23 @@
         ],
         "title": "ReplyBlockedReason",
         "type": "string"
+      },
+      "RespondEscalationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "description": "The answer for the analyst (required, trimmed, at most 500).",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "RespondEscalationRequest",
+        "type": "object"
       },
       "RoleCounts": {
         "properties": {
@@ -6297,6 +6695,341 @@
         ]
       }
     },
+    "/api/v1/cases/{caseId}/escalations": {
+      "post": {
+        "description": "Slice 9. The assignee analyst only (403 `case_not_assigned`), on an open assigned case (409 `case_closed` / `invalid_transition`) without an open escalation (409 `escalation_open`). The motive is required (trimmed, at most 500). The case stays with her; a staff banner records it in the transcript; supervision is told live.",
+        "operationId": "cases_escalate_case",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "One key per escalation the caller means to open: a retry with it replays the escalation it created (200 + `Idempotent-Replayed: true`).",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "One key per escalation the caller means to open: a retry with it replays the escalation it created (200 + `Idempotent-Replayed: true`).",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscalateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResult"
+                }
+              }
+            },
+            "description": "Replay of the same Idempotency-Key"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Escalate the case to supervision (the assignee, with a motive)",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/escalations/{escalationId}/acknowledge": {
+      "post": {
+        "description": "Slice 9. Only who escalated (403 `case_not_assigned`), once supervision answered, took or reassigned the case (409 `invalid_transition` before). Repeating it changes nothing.",
+        "operationId": "cases_acknowledge_escalation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "escalationId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "ESC-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Escalationid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "\"Entendido\": the analyst who escalated read what supervision did",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/escalations/{escalationId}/withdraw": {
+      "post": {
+        "description": "Slice 9. The assignee analyst only, while it is open (409 `escalation_not_open` with `currentState` once supervision acted).",
+        "operationId": "cases_withdraw_escalation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "escalationId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "ESC-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Escalationid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Withdraw the open escalation (the assignee)",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
     "/api/v1/cases/{caseId}/history": {
       "get": {
         "description": "Any status, excluding `caseId`, newest `openedAt` first, at most 20 (`total` is the full count). Whoever may read `caseId` may read every listed case (read-only).",
@@ -7668,6 +8401,315 @@
           }
         ],
         "summary": "Assign a queued case, or reassign an open case, to an analyst",
+        "tags": [
+          "supervision"
+        ]
+      }
+    },
+    "/api/v1/supervision/escalations": {
+      "get": {
+        "operationId": "supervision_get_escalations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "\"Escalados\": open escalations and the ones attended in the last 24 hours",
+        "tags": [
+          "supervision"
+        ]
+      }
+    },
+    "/api/v1/supervision/escalations/{escalationId}/response": {
+      "post": {
+        "description": "Slice 9. 404 unknown escalation · 409 `escalation_not_open` (`currentState`) · 422 empty or longer than 500. The analyst sees the answer live in the case.",
+        "operationId": "supervision_respond_escalation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "escalationId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "ESC-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Escalationid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondEscalationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Answer an open escalation with a note (the case stays with the analyst)",
+        "tags": [
+          "supervision"
+        ]
+      }
+    },
+    "/api/v1/supervision/escalations/{escalationId}/take": {
+      "post": {
+        "description": "Slice 9. A reassignment to the caller: she must be an active analyst too (422 `analyst_not_eligible`) who speaks the case language (rule 3, 422 `language_mismatch`), and the escalation open (409 `escalation_not_open`). The customer is told who attends them now.",
+        "operationId": "supervision_take_escalated_case",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "escalationId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "ESC-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Escalationid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Take the escalated case yourself (supervisors who also hold Analista)",
+        "tags": [
+          "supervision"
+        ]
+      }
+    },
+    "/api/v1/supervision/open-cases": {
+      "get": {
+        "description": "Slice 9. Queued, assigned and in-progress cases of `language` (one indexed query): the ones nobody holds first (oldest first), then the held ones in open-inbox order. Assignment stays automatic: this is a view.",
+        "operationId": "supervision_get_open_cases",
+        "parameters": [
+          {
+            "description": "es | pt",
+            "in": "query",
+            "name": "language",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Language",
+              "description": "es | pt"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguageOpenCases"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "\"Colas\": every open case of one language and who holds it",
         "tags": [
           "supervision"
         ]

@@ -1,28 +1,51 @@
 /**
- * Pure rules and copy of supervision (SuTeam.dc.html, SuAvisoNueva.dc.html;
- * contract docs/platform/api/slice-3-supervision.md §2, §8.4–§8.9): the "Ahora"
- * states, the team filters, the queue and analyst figures (time-dependent ones
- * take `now`), the assign dialog (candidates, rule 3, the pause confirmation,
- * what the customer sees, failures), the result copy, the queue notice and the
- * URL state. No React, no I/O: unit-tested in model.test.ts.
+ * Pure rules and copy of supervision (canvas SuColas, SuTeam, SuEscalados, SuCaso;
+ * contracts docs/platform/api/slice-3-supervision.md and slice-9-supervision-v2.md):
+ * the "Ahora" states, "Colas" (every open case of a language, its filters and cells),
+ * "Equipo" (the analysts, their filters and figures), the reassign dialog (suggestions,
+ * search, rule 3, the pause confirmation, what the customer sees, failures),
+ * "Escalados" (groups, outcomes, failures), the notices and the URL state.
+ * Time-dependent figures take `now`. No React, no I/O: unit-tested in model.test.ts.
+ *
+ * Assignment is automatic (rule 3, the least loaded first): supervision never assigns
+ * a queued case by hand any more; "Reasignar" stays as the exception.
  */
-import type { FactIcon, FactItem, FactTone, StatusAppearance } from '@/components/ui'
-import { channelFact, formatSla, priorityFact, ratingOption } from '@/features/cases'
+import type {
+  FactIcon,
+  FactItem,
+  FactTone,
+  FilterGroup,
+  FilterSelection,
+  StatusAppearance,
+} from '@/components/ui'
+import {
+  CASE_PRIORITY,
+  CASE_STATUS,
+  PRIORITY_OPTIONS,
+  channelFact,
+  countryName,
+  formatSla,
+  priorityFact,
+  ratingOption,
+  slaFact,
+  type CasePriority,
+} from '@/features/cases'
 import {
   LANGUAGE_NAMES,
   QUEUE_LABEL,
   formatWait,
-  queueInSentence,
   shortCaseId,
+  type CaseCustomer,
 } from '@/features/conversation'
 import { isApiProblem } from '@/lib/api'
-import { pluralize } from '@/lib/format'
+import { formatRelativeTime, localDayKey, pluralize } from '@/lib/format'
 import type {
   AnalystActivity,
   CaseSummary,
+  Escalation,
+  EscalationItem,
   Language,
-  LanguageQueue,
-  QueueOverview,
+  OpenCaseRow,
   RatingStats,
   TeamAnalyst,
   TeamOverview,
@@ -31,8 +54,11 @@ import type {
 
 export { QUEUE_LABEL }
 
-/** "Carga alta" from this many open cases (team-generated, contract §1.2). */
+/** "Carga alta" from this many open cases (team-generated, slice 3 §1.2). */
 export const HIGH_LOAD_OPEN_CASES = 5
+
+/** Queues are global, one per language, always in this order. */
+export const QUEUE_LANGUAGES: readonly Language[] = ['es', 'pt']
 
 type DateInput = Date | string | number
 
@@ -44,25 +70,51 @@ export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name
 }
 
+/** Accent- and case-insensitive text for search ("julian" finds "Julián"). */
+export function foldText(text: string): string {
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+
 function byName(a: { name: string }, b: { name: string }): number {
   return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
 }
 
-// ── "Ahora" (contract §2.2) ──────────────────────────────────────────────────
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/** "Español" / "Portugués". */
+export function languageWord(language: Language): string {
+  return capitalize(LANGUAGE_NAMES[language])
+}
+
+// ── "Ahora" (slice 3 §2.2) ───────────────────────────────────────────────────
 
 /** What an analyst is doing now, as glyph + word (Status). */
 export type ActivityMeta = StatusAppearance
 
 /**
- * The one availability map (the dot language, Linear-style): filled dot =
- * attending cases, ring = free to take one, pause glyph = paused, grey ring =
- * not connected.
+ * The one availability map (the dot language, Linear-style): filled dot = attending
+ * cases, ring = free to take one, pause glyph = paused, grey ring = not connected.
+ * Per-person labels are gender-neutral ("Sin conexión").
  */
 export const ACTIVITY_META: Readonly<Record<AnalystActivity, ActivityMeta>> = {
   busy: { shape: 'dot', tone: 'success', label: 'Atendiendo' },
   available: { shape: 'ring', tone: 'success', label: 'Disponible' },
   paused: { shape: 'pause', tone: 'warn', label: 'En pausa' },
   offline: { shape: 'ring', tone: 'neutral', label: 'Sin conexión' },
+}
+
+/** Order of the activities ("Equipo" rows, the filter options). */
+export const ACTIVITY_ORDER: readonly AnalystActivity[] = ['busy', 'available', 'paused', 'offline']
+
+/** Presence dot on an avatar (the reassign dialog): green connected, orange paused, grey off. */
+export type PresenceTone = 'success' | 'warn' | 'offline'
+
+export function presenceTone(activity: AnalystActivity): PresenceTone {
+  if (activity === 'paused') return 'warn'
+  if (activity === 'offline') return 'offline'
+  return 'success'
 }
 
 /** Hint of an available analyst without a session: cases keep landing on her. */
@@ -75,101 +127,6 @@ export function showsNoSessionHint(analyst: Pick<TeamAnalyst, 'activity' | 'sign
   return (analyst.activity === 'busy' || analyst.activity === 'available') && !analyst.signedIn
 }
 
-// ── Team and activity filters (contract §8.4) ─────────────────────────────────
-
-export type ActivityFilter = 'connected' | 'paused' | 'offline'
-
-export interface ActivityFilterOption {
-  value: ActivityFilter
-  label: string
-  /** `?estado=` slug. */
-  slug: string
-}
-
-/**
- * Canvas pills: "Conectadas" (Atendiendo + Disponible) · "En pausa" ·
- * "Desconectadas". Plural, implying "personas"; a person's own state is the
- * gender-neutral "Sin conexión" (ACTIVITY_META).
- */
-export const ACTIVITY_FILTERS: readonly ActivityFilterOption[] = [
-  { value: 'connected', label: 'Conectadas', slug: 'conectadas' },
-  { value: 'paused', label: 'En pausa', slug: 'en-pausa' },
-  { value: 'offline', label: 'Desconectadas', slug: 'desconectadas' },
-]
-
-export function activityFilterOf(activity: AnalystActivity): ActivityFilter {
-  if (activity === 'paused') return 'paused'
-  if (activity === 'offline') return 'offline'
-  return 'connected'
-}
-
-/** The analysts of one team (`null` = every team). */
-export function analystsOfTeam(
-  analysts: readonly TeamAnalyst[],
-  teamId: string | null,
-): TeamAnalyst[] {
-  return teamId ? analysts.filter((a) => a.team.id === teamId) : analysts.slice()
-}
-
-export function analystsInFilter(
-  analysts: readonly TeamAnalyst[],
-  filter: ActivityFilter,
-): TeamAnalyst[] {
-  return analysts.filter((a) => activityFilterOf(a.activity) === filter)
-}
-
-/** Pill counts (after the team filter). */
-export function countByFilter(analysts: readonly TeamAnalyst[]): Record<ActivityFilter, number> {
-  const counts: Record<ActivityFilter, number> = { connected: 0, paused: 0, offline: 0 }
-  for (const analyst of analysts) counts[activityFilterOf(analyst.activity)] += 1
-  return counts
-}
-
-/**
- * The team of `?equipo=` (a `TEAM-…` id), or null for "Todos los equipos"
- * (unknown ids too, e.g. an old slice 3 slug URL).
- */
-export function selectedTeam(
-  teams: readonly TeamSummary[],
-  teamId: string | null,
-): TeamSummary | null {
-  return teamId ? (teams.find((team) => team.id === teamId) ?? null) : null
-}
-
-/**
- * Pill labels by team id: the team names without the prefix they all share
- * ("Equipo Andes" → "Equipo Andes"), or the full names otherwise.
- */
-export function teamPillLabels(teams: readonly TeamSummary[]): Record<string, string> {
-  const prefixOf = (name: string) => {
-    const at = name.indexOf(' · ')
-    return at > 0 ? name.slice(0, at + 3) : null
-  }
-  const first = teams[0] ? prefixOf(teams[0].name) : null
-  const shared = first !== null && teams.every((team) => team.name.startsWith(first))
-  return Object.fromEntries(
-    teams.map((team) => [team.id, shared ? team.name.slice(first.length) : team.name]),
-  )
-}
-
-/** Header subtitle: "Equipo Andes · 3 analistas" / "Todos los equipos · 6 analistas". */
-export function teamSubtitle(team: TeamSummary | null, analystCount: number): string {
-  return `${team?.name ?? 'Todos los equipos'} · ${pluralize(analystCount, 'analista')}`
-}
-
-// ── Languages ───────────────────────────────────────────────────────────────
-
-/** "cola en portugués": the queue label inside a sentence. */
-export function queueNameInSentence(language: Language): string {
-  const label = QUEUE_LABEL[language]
-  return `${label.charAt(0).toLowerCase()}${label.slice(1)}`
-}
-
-/** "español, portugués". */
-export function languagesLabel(languages: readonly Language[]): string {
-  return languages.map((language) => LANGUAGE_NAMES[language]).join(', ')
-}
-
 export function speaksLanguage(
   analyst: Pick<TeamAnalyst, 'languages'>,
   language: Language,
@@ -177,12 +134,16 @@ export function speaksLanguage(
   return analyst.languages.includes(language)
 }
 
-// ── Time-dependent figures (recomputed with the ticking clock, §2.3) ─────────
+/** "español, portugués". */
+export function languagesLabel(languages: readonly Language[]): string {
+  return languages.map((language) => LANGUAGE_NAMES[language]).join(', ')
+}
+
+// ── Time-dependent figures (recomputed with the ticking clock) ───────────────
 
 /**
  * Time since `since`: seconds under a minute, whole minutes above ("4 min",
- * "1 h 05 min"), so a clock that ticks every few seconds does not make the
- * figure jitter.
+ * "1 h 05 min"), so a clock that ticks every few seconds does not make the figure jitter.
  */
 export function waitSince(since: DateInput, now: DateInput): string {
   const seconds = Math.max(0, (toMs(now) - toMs(since)) / 1000)
@@ -218,87 +179,481 @@ export function toReplyCount(analyst: Pick<TeamAnalyst, 'counts'>): number {
   return analyst.counts.new + analyst.counts.toReply
 }
 
-/** "Analistas" heading aside: "7 casos abiertos · 2 en riesgo de SLA". */
-export function analystsSummary(analysts: readonly TeamAnalyst[], now: DateInput): string {
-  const open = analysts.reduce((sum, analyst) => sum + analyst.counts.open, 0)
-  const atRisk = analysts.reduce((sum, analyst) => sum + atRiskCount(analyst.openCases, now), 0)
-  return `${pluralize(open, 'caso abierto', 'casos abiertos')} · ${atRisk} en riesgo de SLA`
-}
-
-// ── Queues (contract §8.4) ───────────────────────────────────────────────────
-
-/** "1 en riesgo de SLA" / "Sin riesgo". */
-export function queueRiskText(atRisk: number): string {
-  return atRisk > 0 ? `${atRisk} en riesgo de SLA` : 'Sin riesgo'
-}
-
-/** "el más antiguo": the oldest wait, or "—" for an empty queue. */
-export function queueOldestWait(
-  queue: Pick<LanguageQueue, 'oldestQueuedAt'>,
-  now: DateInput,
-): string {
-  return queue.oldestQueuedAt ? waitSince(queue.oldestQueuedAt, now) : '—'
-}
-
-/** Caption under the available speakers: "disponibles que hablan portugués". */
-export function speakersCaption(count: number, language: Language): string {
-  return count === 1
-    ? `disponible que habla ${LANGUAGE_NAMES[language]}`
-    : `disponibles que hablan ${LANGUAGE_NAMES[language]}`
-}
-
-/** "Espera 13 min" on a queued case (it waits since it opened). */
-export function queuedWaitLabel(summary: Pick<CaseSummary, 'openedAt'>, now: DateInput): string {
-  return `Espera ${waitSince(summary.openedAt, now)}`
-}
-
-// ── Analyst sheet (contract §8.4) ────────────────────────────────────────────
-
-/** Sheet subtitle: "En pausa · español · Equipo Andes". */
-export function analystSheetDescription(analyst: TeamAnalyst): string {
-  return [
-    ACTIVITY_META[analyst.activity].label,
-    languagesLabel(analyst.languages),
-    analyst.team.name,
-  ].join(' · ')
-}
+// ── Case cells shared by Colas, the analyst sheet and Escalados ──────────────
 
 /**
- * The priority in a supervision case row (slice 8): every level, icon-only (the glyph,
- * the tooltip and accessible text "Prioridad alta" / "Sin prioridad"), in the status cell.
+ * The priority in a supervision row (slice 8): every level, icon-only (the glyph, the
+ * tooltip and accessible text "Prioridad alta" / "Sin prioridad").
  */
 export function casePriorityFact(summary: Pick<CaseSummary, 'priority'>): Omit<FactItem, 'key'> {
   const { key: _key, ...fact } = priorityFact(summary.priority, { onlyUrgent: false }) as FactItem
   return fact
 }
 
+/** The facts after the status of an analyst's case row: the channel (icon-only). */
+export function caseRowFacts(summary: Pick<CaseSummary, 'channel'>): FactItem[] {
+  return [channelFact(summary.channel)]
+}
+
 /**
- * The facts after the status of an analyst's case row (slice 8: no dot-joined line): the
- * channel (icon-only) and the language ("Español").
+ * "Primera respuesta" (Colas): overdue → filled red flame "Vencida"; ≤ 5 min → orange
+ * flame "4 min"; running → clock "14 min"; answered → check "Respondida" (muted).
  */
-export function caseRowFacts(summary: Pick<CaseSummary, 'channel' | 'language'>): FactItem[] {
-  const language = LANGUAGE_NAMES[summary.language]
+export function firstResponseFact(
+  summary: Pick<CaseSummary, 'status' | 'slaDueAt' | 'firstResponseAt'>,
+  now: DateInput,
+): FactItem {
+  const sla = slaFact(summary, now)
+  if (!sla) {
+    return {
+      key: 'first-response',
+      icon: 'check',
+      tone: 'muted',
+      text: 'Respondida',
+      label: 'Primera respuesta',
+      tooltip: 'Primera respuesta enviada',
+    }
+  }
+  if (sla.level === 'overdue') {
+    return {
+      key: 'first-response',
+      icon: 'flame-filled',
+      tone: 'danger',
+      text: 'Vencida',
+      label: 'Primera respuesta',
+      tooltip: 'Primera respuesta vencida',
+    }
+  }
+  return {
+    key: 'first-response',
+    icon: sla.icon,
+    tone: sla.level === 'at_risk' ? 'warn' : 'default',
+    text: sla.text,
+    label: 'Primera respuesta: vence en',
+    tooltip: `Primera respuesta: vence en ${sla.text}`,
+  }
+}
+
+/** Status of an open case for supervision: "Sin asignar" while nobody holds it. */
+export function openCaseStatus(summary: Pick<CaseSummary, 'inboxStatus'>): StatusAppearance {
+  const config = CASE_STATUS[summary.inboxStatus ?? 'queued']
+  return config.strong
+    ? { shape: config.shape, tone: config.tone, label: config.label, strong: true }
+    : { shape: config.shape, tone: config.tone, label: config.label }
+}
+
+/** "11 min" since it opened ("Abierto" column; "Abierto hace" fact). */
+export function openForText(summary: Pick<CaseSummary, 'openedAt'>, now: DateInput): string {
+  return waitSince(summary.openedAt, now)
+}
+
+// ── "Colas" (slice 9) ────────────────────────────────────────────────────────
+
+/** A queue in the left list: "11 abiertos", "2 sin asignar", "3 en riesgo". */
+export interface QueueNavFigures {
+  open: number
+  unassigned: number
+  atRisk: number
+}
+
+/** The figures of one language from its rows (the selected queue, with the live clock). */
+export function queueFiguresFromRows(
+  rows: readonly OpenCaseRow[],
+  now: DateInput,
+): QueueNavFigures {
+  return {
+    open: rows.length,
+    unassigned: rows.filter((row) => row.case.status === 'queued').length,
+    atRisk: atRiskCount(
+      rows.map((row) => row.case),
+      now,
+    ),
+  }
+}
+
+export function queueNavLabels(figures: QueueNavFigures): {
+  open: string
+  unassigned: string
+  atRisk: string
+} {
+  return {
+    open: pluralize(figures.open, 'abierto'),
+    unassigned: `${figures.unassigned} sin asignar`,
+    atRisk: `${figures.atRisk} en riesgo`,
+  }
+}
+
+/** Header copy of "Colas": assignment is automatic (rule 3). */
+export const AUTOMATIC_ASSIGNMENT_NOTE =
+  'La asignación es automática: cada caso le llega a la primera persona disponible que habla su idioma.'
+
+/** "11 casos abiertos" / "3 de 11 casos abiertos" under the queue title. */
+export function shownCasesLabel(shown: number, total: number, filtered: boolean): string {
+  const all = pluralize(total, 'caso abierto', 'casos abiertos')
+  return filtered ? `${shown} de ${all}` : all
+}
+
+export function emptyQueueTitle(language: Language): string {
+  return `No hay casos abiertos en ${LANGUAGE_NAMES[language]}`
+}
+
+/** Status options of "Colas" (the statuses an open case can have, `queued` = Sin asignar). */
+export type OpenCaseStatusKey = 'queued' | 'new' | 'to_reply' | 'waiting'
+
+export const OPEN_CASE_STATUS_KEYS: readonly OpenCaseStatusKey[] = [
+  'queued',
+  'new',
+  'to_reply',
+  'waiting',
+]
+
+const STATUS_SLUG: Record<OpenCaseStatusKey, string> = {
+  queued: 'sin-asignar',
+  new: 'nuevo',
+  to_reply: 'por-responder',
+  waiting: 'esperando',
+}
+
+const PRIORITY_SLUG: Record<CasePriority, string> = {
+  none: 'sin-prioridad',
+  low: 'baja',
+  medium: 'media',
+  high: 'alta',
+  critical: 'critica',
+}
+
+function statusKeyOf(summary: Pick<CaseSummary, 'inboxStatus'>): OpenCaseStatusKey {
+  const status = summary.inboxStatus
+  return status === 'new' || status === 'to_reply' || status === 'waiting' ? status : 'queued'
+}
+
+export interface QueuesUrlState {
+  /** `?idioma=es|pt` (default `es`). */
+  language: Language
+  /** `?estado=sin-asignar,nuevo,por-responder,esperando`. */
+  statuses: OpenCaseStatusKey[]
+  /** `?prioridad=sin-prioridad,baja,media,alta,critica`. */
+  priorities: CasePriority[]
+  /** `?analista=STF-…,STF-…`: who holds the case. */
+  analysts: string[]
+}
+
+export const QUEUE_FILTER_KEYS = { status: 'estado', priority: 'prioridad', analyst: 'analista' }
+
+/** The checked filters of "Colas" as a `FilterSelection` (the FilterMenu's input). */
+export function queuesSelection(state: QueuesUrlState): FilterSelection {
+  return {
+    estado: state.statuses,
+    prioridad: state.priorities,
+    analista: state.analysts,
+  }
+}
+
+/** A `FilterSelection` back into the URL state (unknown values dropped). */
+export function queuesStateFromSelection(
+  state: QueuesUrlState,
+  selection: FilterSelection,
+): QueuesUrlState {
+  return {
+    ...state,
+    statuses: (selection.estado ?? []).filter((v): v is OpenCaseStatusKey =>
+      (OPEN_CASE_STATUS_KEYS as readonly string[]).includes(v),
+    ),
+    priorities: (selection.prioridad ?? []).filter((v): v is CasePriority => v in CASE_PRIORITY),
+    analysts: [...(selection.analista ?? [])],
+  }
+}
+
+type RowTest = (row: OpenCaseRow, value: string) => boolean
+
+const QUEUE_TESTS: Record<'estado' | 'prioridad' | 'analista', RowTest> = {
+  estado: (row, value) => statusKeyOf(row.case) === value,
+  prioridad: (row, value) => row.case.priority === value,
+  analista: (row, value) => row.case.assignedAnalystId === value,
+}
+
+function passesGroup(row: OpenCaseRow, key: keyof typeof QUEUE_TESTS, values: readonly string[]) {
+  return values.length === 0 || values.some((value) => QUEUE_TESTS[key](row, value))
+}
+
+/** Rows that pass every group (OR inside a group, AND across groups); `except` skips one. */
+function filterRows(
+  rows: readonly OpenCaseRow[],
+  selection: FilterSelection,
+  except?: keyof typeof QUEUE_TESTS,
+): OpenCaseRow[] {
+  const keys = Object.keys(QUEUE_TESTS) as (keyof typeof QUEUE_TESTS)[]
+  return rows.filter((row) =>
+    keys.every((key) => key === except || passesGroup(row, key, selection[key] ?? [])),
+  )
+}
+
+export function filterOpenCases(
+  rows: readonly OpenCaseRow[],
+  state: QueuesUrlState,
+): OpenCaseRow[] {
+  return filterRows(rows, queuesSelection(state))
+}
+
+/**
+ * The "Filtros" groups of "Colas": Estado, Prioridad and Analista (who holds cases of
+ * this language), each option with a faceted count (rows that pass the other groups).
+ */
+export function queueFilterGroups(
+  rows: readonly OpenCaseRow[],
+  state: QueuesUrlState,
+): FilterGroup[] {
+  const selection = queuesSelection(state)
+  const count = (key: keyof typeof QUEUE_TESTS, value: string) =>
+    filterRows(rows, selection, key).filter((row) => QUEUE_TESTS[key](row, value)).length
+  const holders = new Map<string, string>()
+  for (const row of rows) {
+    const id = row.case.assignedAnalystId
+    if (id) holders.set(id, row.assigneeName ?? id)
+  }
+  for (const id of state.analysts) if (!holders.has(id)) holders.set(id, id)
   return [
-    channelFact(summary.channel),
     {
-      key: 'language',
-      icon: 'languages',
-      text: language.charAt(0).toUpperCase() + language.slice(1),
-      label: 'Idioma',
+      key: 'estado',
+      legend: 'Estado',
+      options: OPEN_CASE_STATUS_KEYS.map((key) => ({
+        value: key,
+        label: CASE_STATUS[key].label,
+        count: count('estado', key),
+      })),
+    },
+    {
+      key: 'prioridad',
+      legend: 'Prioridad',
+      options: PRIORITY_OPTIONS.map((config) => ({
+        value: config.value,
+        label: config.label,
+        count: count('prioridad', config.value),
+      })),
+    },
+    {
+      key: 'analista',
+      legend: 'Analista',
+      options: [...holders.entries()]
+        .sort((a, b) => a[1].localeCompare(b[1], 'es', { sensitivity: 'base' }))
+        .map(([id, name]) => ({ value: id, label: name, count: count('analista', id) })),
     },
   ]
 }
 
-/** The `CaseSummary` of `caseId` in the cached overviews (queued or someone's open case). */
-export function findCaseSummary(
-  caseId: string,
-  team: TeamOverview | undefined,
-  queues: QueueOverview | undefined,
-): CaseSummary | null {
-  for (const queue of queues?.queues ?? []) {
-    const found = queue.cases.find((summary) => summary.id === caseId)
-    if (found) return found
+export function parseQueuesSearch(params: URLSearchParams): QueuesUrlState {
+  const language = params.get('idioma') === 'pt' ? 'pt' : 'es'
+  const list = (key: string) =>
+    (params.get(key) ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+  const fromSlug = <K extends string>(slugs: Record<K, string>, values: string[]): K[] => {
+    const keys = Object.keys(slugs) as K[]
+    return keys.filter((key) => values.includes(slugs[key]))
   }
+  return {
+    language,
+    statuses: fromSlug(STATUS_SLUG, list('estado')),
+    priorities: fromSlug(PRIORITY_SLUG, list('prioridad')),
+    analysts: [...new Set(list('analista'))],
+  }
+}
+
+export function toQueuesSearch(state: QueuesUrlState): URLSearchParams {
+  const params = new URLSearchParams()
+  if (state.language !== 'es') params.set('idioma', state.language)
+  if (state.statuses.length) {
+    params.set('estado', state.statuses.map((key) => STATUS_SLUG[key]).join(','))
+  }
+  if (state.priorities.length) {
+    params.set('prioridad', state.priorities.map((key) => PRIORITY_SLUG[key]).join(','))
+  }
+  if (state.analysts.length) params.set('analista', state.analysts.join(','))
+  return params
+}
+
+/** "Colas" of one language, as a link (the queue notice, "Ver en la cola"). */
+export function queuesPath(language: Language): string {
+  const search = toQueuesSearch({ language, statuses: [], priorities: [], analysts: [] })
+  const query = search.toString()
+  return query ? `/supervision/colas?${query}` : '/supervision/colas'
+}
+
+// ── "Equipo" (slice 9: one table, no team tabs) ──────────────────────────────
+
+export interface TeamUrlState {
+  /** `?estado=atendiendo,disponible,en-pausa,sin-conexion`. */
+  activities: AnalystActivity[]
+  /** `?idioma=es,pt`. */
+  languages: Language[]
+  /** `?equipo=TEAM-…,TEAM-…`. */
+  teams: string[]
+  /** `?analista=STF-…`: the analyst sheet. */
+  analystId: string | null
+  /** `?reasignar=CASE-…`: the reassign dialog. */
+  reassignCaseId: string | null
+}
+
+const ACTIVITY_SLUG: Record<AnalystActivity, string> = {
+  busy: 'atendiendo',
+  available: 'disponible',
+  paused: 'en-pausa',
+  offline: 'sin-conexion',
+}
+
+/** Slice 3 URLs (`?estado=conectadas` …) still open the right analysts. */
+const LEGACY_ACTIVITY_SLUGS: Record<string, AnalystActivity[]> = {
+  conectadas: ['busy', 'available'],
+  desconectadas: ['offline'],
+}
+
+type AnalystTest = (analyst: TeamAnalyst, value: string) => boolean
+
+const TEAM_TESTS: Record<'estado' | 'idioma' | 'equipo', AnalystTest> = {
+  estado: (analyst, value) => analyst.activity === value,
+  idioma: (analyst, value) => analyst.languages.includes(value as Language),
+  equipo: (analyst, value) => analyst.team.id === value,
+}
+
+export function teamSelection(state: TeamUrlState): FilterSelection {
+  return { estado: state.activities, idioma: state.languages, equipo: state.teams }
+}
+
+export function teamStateFromSelection(
+  state: TeamUrlState,
+  selection: FilterSelection,
+): TeamUrlState {
+  return {
+    ...state,
+    activities: (selection.estado ?? []).filter((v): v is AnalystActivity =>
+      (ACTIVITY_ORDER as readonly string[]).includes(v),
+    ),
+    languages: (selection.idioma ?? []).filter((v): v is Language => v === 'es' || v === 'pt'),
+    teams: [...(selection.equipo ?? [])],
+  }
+}
+
+function filterAnalystsBy(
+  analysts: readonly TeamAnalyst[],
+  selection: FilterSelection,
+  except?: keyof typeof TEAM_TESTS,
+): TeamAnalyst[] {
+  const keys = Object.keys(TEAM_TESTS) as (keyof typeof TEAM_TESTS)[]
+  return analysts.filter((analyst) =>
+    keys.every((key) => {
+      const values = selection[key] ?? []
+      return (
+        key === except || values.length === 0 || values.some((v) => TEAM_TESTS[key](analyst, v))
+      )
+    }),
+  )
+}
+
+/** The analysts that pass the filters, in the server's order (activity, then name). */
+export function filterAnalysts(
+  analysts: readonly TeamAnalyst[],
+  state: TeamUrlState,
+): TeamAnalyst[] {
+  return filterAnalystsBy(analysts, teamSelection(state))
+}
+
+/** The "Filtros" groups of "Equipo": Estado, Idioma, Equipo, with faceted counts. */
+export function teamFilterGroups(
+  overview: Pick<TeamOverview, 'analysts' | 'teams'>,
+  state: TeamUrlState,
+): FilterGroup[] {
+  const selection = teamSelection(state)
+  const count = (key: keyof typeof TEAM_TESTS, value: string) =>
+    filterAnalystsBy(overview.analysts, selection, key).filter((a) => TEAM_TESTS[key](a, value))
+      .length
+  const teams = new Map<string, string>(overview.teams.map((team) => [team.id, team.name]))
+  for (const analyst of overview.analysts) {
+    if (!teams.has(analyst.team.id)) teams.set(analyst.team.id, analyst.team.name)
+  }
+  return [
+    {
+      key: 'estado',
+      legend: 'Estado',
+      options: ACTIVITY_ORDER.map((activity) => ({
+        value: activity,
+        label: ACTIVITY_META[activity].label,
+        count: count('estado', activity),
+      })),
+    },
+    {
+      key: 'idioma',
+      legend: 'Idioma',
+      options: QUEUE_LANGUAGES.map((language) => ({
+        value: language,
+        label: languageWord(language),
+        count: count('idioma', language),
+      })),
+    },
+    {
+      key: 'equipo',
+      legend: 'Equipo',
+      options: [...teams.entries()]
+        .sort((a, b) => a[1].localeCompare(b[1], 'es', { sensitivity: 'base' }))
+        .map(([id, name]) => ({ value: id, label: name, count: count('equipo', id) })),
+    },
+  ]
+}
+
+/** Header subtitle: "6 analistas" / "3 de 6 analistas". */
+export function teamSubtitle(shown: number, total: number, filtered: boolean): string {
+  const all = pluralize(total, 'analista')
+  return filtered ? `${shown} de ${all}` : all
+}
+
+/** "Analistas" heading aside: "7 casos abiertos" and the risk ("2 en riesgo"). */
+export function analystsFigures(
+  analysts: readonly TeamAnalyst[],
+  now: DateInput,
+): { open: string; atRisk: number } {
+  const open = analysts.reduce((sum, analyst) => sum + analyst.counts.open, 0)
+  const atRisk = analysts.reduce((sum, analyst) => sum + atRiskCount(analyst.openCases, now), 0)
+  return { open: pluralize(open, 'caso abierto', 'casos abiertos'), atRisk }
+}
+
+export function parseTeamSearch(params: URLSearchParams): TeamUrlState {
+  const list = (key: string) =>
+    (params.get(key) ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+  const estado = list('estado')
+  const activities = new Set<AnalystActivity>()
+  for (const slug of estado) {
+    for (const legacy of LEGACY_ACTIVITY_SLUGS[slug] ?? []) activities.add(legacy)
+    const found = ACTIVITY_ORDER.find((activity) => ACTIVITY_SLUG[activity] === slug)
+    if (found) activities.add(found)
+  }
+  const trimmed = (value: string | null) => value?.trim() || null
+  return {
+    activities: ACTIVITY_ORDER.filter((activity) => activities.has(activity)),
+    languages: QUEUE_LANGUAGES.filter((language) => list('idioma').includes(language)),
+    teams: [...new Set(list('equipo'))],
+    analystId: trimmed(params.get('analista')),
+    // `?asignar=` was the slice 3 name of the dialog.
+    reassignCaseId: trimmed(params.get('reasignar')) ?? trimmed(params.get('asignar')),
+  }
+}
+
+export function toTeamSearch(state: TeamUrlState): URLSearchParams {
+  const params = new URLSearchParams()
+  if (state.activities.length) {
+    params.set('estado', state.activities.map((activity) => ACTIVITY_SLUG[activity]).join(','))
+  }
+  if (state.languages.length) params.set('idioma', state.languages.join(','))
+  if (state.teams.length) params.set('equipo', state.teams.join(','))
+  if (state.analystId) params.set('analista', state.analystId)
+  if (state.reassignCaseId) params.set('reasignar', state.reassignCaseId)
+  return params
+}
+
+/** The `CaseSummary` of `caseId` among the analysts' open cases, or null. */
+export function findOpenCase(caseId: string, team: TeamOverview | undefined): CaseSummary | null {
   for (const analyst of team?.analysts ?? []) {
     const found = analyst.openCases.find((summary) => summary.id === caseId)
     if (found) return found
@@ -306,152 +661,136 @@ export function findCaseSummary(
   return null
 }
 
-// ── Assign dialog (contract §8.6) ────────────────────────────────────────────
+// ── Reassign dialog (SuTeam, slice 9) ────────────────────────────────────────
 
-/** Queued (nobody holds it) → "Asignar"; held → "Reasignar". */
-export function isReassignment(summary: Pick<CaseSummary, 'assignedAnalystId'>): boolean {
-  return summary.assignedAnalystId !== null
-}
+/** Suggestions with no search; results when searching (team-generated: scales to big teams). */
+export const SUGGESTIONS_LIMIT = 3
+export const SEARCH_RESULTS_LIMIT = 6
 
-export function assignDialogTitle(summary: Pick<CaseSummary, 'assignedAnalystId'>): string {
-  return isReassignment(summary) ? 'Reasignar caso' : 'Asignar caso'
-}
-
-/**
- * "Rosa Elena Ibarra Méndez · CASE-…0111 · español · Espera 13 min en la cola" /
- * "… · Lo atiende Julián Ortega".
- */
-export function assignDialogSubtitle(
-  summary: Pick<CaseSummary, 'id' | 'customer' | 'language' | 'openedAt' | 'assignedAnalystId'>,
-  holderName: string | null,
-  now: DateInput,
-): string {
-  const state = isReassignment(summary)
-    ? `Lo atiende ${holderName ?? 'otra persona del equipo'}`
-    : `Espera ${waitSince(summary.openedAt, now)} en la cola`
-  return [
-    summary.customer.displayName,
-    shortCaseId(summary.id),
-    LANGUAGE_NAMES[summary.language],
-    state,
-  ].join(' · ')
-}
-
-/** Order of the "¿A quién?" options by activity: who can answer now first. */
-const CANDIDATE_ACTIVITY_ORDER: Record<AnalystActivity, number> = {
+const ACTIVITY_RANK: Record<AnalystActivity, number> = {
   available: 0,
   busy: 1,
   paused: 2,
   offline: 3,
 }
 
-export interface AssignCandidate {
-  value: string
-  label: string
-  description: string
-  /** Does not speak the case language (rule 3): listed, but not selectable. */
-  disabled: boolean
-  analyst: TeamAnalyst
-}
-
-/** "En pausa · 2 abiertos · español", or "No habla portugués (regla 3)". */
-export function candidateDescription(analyst: TeamAnalyst, language: Language): string {
-  if (!speaksLanguage(analyst, language)) {
-    return `No habla ${LANGUAGE_NAMES[language]} (regla 3)`
-  }
-  return [
-    ACTIVITY_META[analyst.activity].label,
-    pluralize(analyst.counts.open, 'abierto'),
-    languagesLabel(analyst.languages),
-  ].join(' · ')
-}
-
-/**
- * "¿A quién?": every listed analyst except the current assignee; speakers of
- * the case language first, then available, busy, paused, offline, then fewer
- * open cases, then name. Non-speakers stay listed but disabled (rule 3).
- */
-export function assignCandidates(
-  analysts: readonly TeamAnalyst[],
-  summary: Pick<CaseSummary, 'language' | 'assignedAnalystId'>,
-): AssignCandidate[] {
-  const language = summary.language
-  return analysts
-    .filter((analyst) => analyst.id !== summary.assignedAnalystId)
-    .sort((a, b) => {
-      const speaks = Number(speaksLanguage(b, language)) - Number(speaksLanguage(a, language))
-      if (speaks !== 0) return speaks
-      const activity = CANDIDATE_ACTIVITY_ORDER[a.activity] - CANDIDATE_ACTIVITY_ORDER[b.activity]
-      if (activity !== 0) return activity
-      const load = a.counts.open - b.counts.open
-      return load !== 0 ? load : byName(a, b) || a.id.localeCompare(b.id)
-    })
-    .map((analyst) => ({
-      value: analyst.id,
-      label: analyst.name,
-      description: candidateDescription(analyst, language),
-      disabled: !speaksLanguage(analyst, language),
-      analyst,
-    }))
-}
-
-/** A paused or offline target needs "Asignar aunque esté en pausa" (rule 8 of §3.3). */
-export function needsPauseConfirmation(analyst: Pick<TeamAnalyst, 'activity'>): boolean {
+/** Paused or offline: no new cases arrive (the dialog asks to confirm). */
+export function isAway(analyst: Pick<TeamAnalyst, 'activity'>): boolean {
   return analyst.activity === 'paused' || analyst.activity === 'offline'
 }
 
-export const CONFIRM_PAUSED_LABEL = 'Asignar aunque esté en pausa'
+/**
+ * Who may get the case (rule 3): only people who speak its language, never the current
+ * holder; connected ones (available, then busy) unless `includeAway`; the least loaded
+ * first, then the name.
+ */
+export function reassignPool(
+  analysts: readonly TeamAnalyst[],
+  summary: Pick<CaseSummary, 'language' | 'assignedAnalystId'>,
+  { includeAway }: { includeAway: boolean },
+): TeamAnalyst[] {
+  return analysts
+    .filter((analyst) => analyst.id !== summary.assignedAnalystId)
+    .filter((analyst) => speaksLanguage(analyst, summary.language))
+    .filter((analyst) => includeAway || !isAway(analyst))
+    .sort((a, b) => {
+      const away = Number(isAway(a)) - Number(isAway(b))
+      if (away !== 0) return away
+      const load = a.counts.open - b.counts.open
+      if (load !== 0) return load
+      const rank = ACTIVITY_RANK[a.activity] - ACTIVITY_RANK[b.activity]
+      return rank !== 0 ? rank : byName(a, b) || a.id.localeCompare(b.id)
+    })
+}
 
-/** Warning shown when the chosen analyst is paused (offline adds the missing session). */
+export interface ReassignList {
+  /** "Sugeridos" (no search) or "Resultados". */
+  title: string
+  shown: TeamAnalyst[]
+  /** How many more match: "+2 más: escribe un nombre para encontrarlos". */
+  hidden: number
+}
+
+/**
+ * What the list shows: 3 suggestions, or up to 6 results for a search (accent- and
+ * case-insensitive, by name). The chosen person always stays visible.
+ */
+export function reassignList(
+  pool: readonly TeamAnalyst[],
+  query: string,
+  chosenId: string | null,
+): ReassignList {
+  const needle = foldText(query.trim())
+  const matches = needle ? pool.filter((a) => foldText(a.name).includes(needle)) : pool.slice()
+  const limit = needle ? SEARCH_RESULTS_LIMIT : SUGGESTIONS_LIMIT
+  const shown = matches.slice(0, limit)
+  const chosen = chosenId ? matches.find((a) => a.id === chosenId) : undefined
+  if (chosen && !shown.includes(chosen)) shown.push(chosen)
+  return {
+    title: needle ? 'Resultados' : 'Sugeridos',
+    shown,
+    hidden: matches.length - shown.length,
+  }
+}
+
+export function moreResultsLabel(hidden: number): string | null {
+  return hidden > 0 ? `+${hidden} más: escribe un nombre para encontrarlos` : null
+}
+
+export function noMatchCopy(language: Language): string {
+  return `Nadie con ese nombre habla ${LANGUAGE_NAMES[language]}.`
+}
+
+export function onlySpeakersCopy(language: Language): string {
+  return `Solo quienes hablan ${LANGUAGE_NAMES[language]}`
+}
+
+export const INCLUDE_AWAY_LABEL = 'Incluir a quienes están en pausa o desconectados'
+
+/** "2 abiertos". */
+export function openCountLabel(analyst: Pick<TeamAnalyst, 'counts'>): string {
+  return pluralize(analyst.counts.open, 'abierto')
+}
+
+/** A paused or offline choice needs "Pasarlo aunque esté en pausa" (slice 3 rule 8). */
+export function needsPauseConfirmation(analyst: Pick<TeamAnalyst, 'activity'>): boolean {
+  return isAway(analyst)
+}
+
+export const CONFIRM_PAUSED_LABEL = 'Pasarlo aunque esté en pausa'
+
+/** Warning shown when the chosen person is paused (offline adds the missing session). */
 export function pausedWarning(analyst: Pick<TeamAnalyst, 'name' | 'activity'>): string {
-  const base = `${firstName(analyst.name)} está en pausa: no recibe casos nuevos. Si lo asignas igual, le llega a su lista.`
+  const base = `${firstName(analyst.name)} está en pausa: no recibe casos nuevos. Si se lo pasas igual, le llega a su lista.`
   return analyst.activity === 'offline' ? `${base} Tampoco tiene una sesión abierta.` : base
 }
 
 /**
- * The notice the customer gets on a reassignment, in the case language. It must
- * stay identical to the backend text (contract §3.5); a model test pins it.
+ * The notice the customer gets on a reassignment, in the case language. It must stay
+ * identical to the backend text (slice 3 §3.5); a model test pins it.
  */
 export const REASSIGNED_NOTICE: Record<Language, (firstName: string) => string> = {
   es: (name) => `Ahora te atiende ${name}, de nuestro equipo.`,
   pt: (name) => `Agora quem te atende é ${name}, da nossa equipe.`,
 }
 
-/** "El cliente verá": the header change (from the queue) or the reassignment notice. */
 export function customerSeesCopy(
-  summary: Pick<CaseSummary, 'language' | 'assignedAnalystId'>,
+  summary: Pick<CaseSummary, 'language'>,
   analyst: Pick<TeamAnalyst, 'name'>,
 ): string {
-  const name = firstName(analyst.name)
-  return isReassignment(summary)
-    ? REASSIGNED_NOTICE[summary.language](name)
-    : `Que ya lo atiende ${name}.`
+  return REASSIGNED_NOTICE[summary.language](firstName(analyst.name))
 }
 
-/** Primary button: "Asignar a Daniela" / "Reasignar a Daniela" ("Asignar" with nobody chosen). */
-export function assignSubmitLabel(
-  summary: Pick<CaseSummary, 'assignedAnalystId'>,
-  analyst: Pick<TeamAnalyst, 'name'> | null,
-): string {
-  const verb = isReassignment(summary) ? 'Reasignar' : 'Asignar'
-  return analyst ? `${verb} a ${firstName(analyst.name)}` : verb
+/** Primary button: "Reasignar a Daniela" ("Reasignar" with nobody chosen). */
+export function reassignSubmitLabel(analyst: Pick<TeamAnalyst, 'name'> | null): string {
+  return analyst ? `Reasignar a ${firstName(analyst.name)}` : 'Reasignar'
 }
 
-export const PICK_ANALYST_ERROR = 'Elige a quién asignarlo.'
-export const CONFIRM_PAUSED_ERROR = 'Confirma que quieres asignarlo aunque esté en pausa.'
+export const PICK_ANALYST_ERROR = 'Elige a quién pasarlo.'
+export const CONFIRM_PAUSED_ERROR = 'Confirma que quieres pasarlo aunque esté en pausa.'
 
-/** What the dialog does after a failure (contract §8.6). */
-export type AssignFailureAction =
-  /** Nothing else: the message is enough. */
-  | 'none'
-  /** Show the pause checkbox and focus it. */
-  | 'confirm_paused'
-  /** Refetch team, queues and the case; keep the dialog open with fresh data. */
-  | 'refetch'
-  /** Close the dialog and refetch. */
-  | 'close'
-  /** Refetch the team (the analyst list changed). */
-  | 'refetch_team'
+/** What the dialog does after a failure. */
+export type AssignFailureAction = 'none' | 'confirm_paused' | 'refetch' | 'close' | 'refetch_team'
 
 export interface AssignFailure {
   message: string
@@ -493,33 +832,24 @@ export function describeAssignFailure(
         break
     }
   }
-  return { message: 'No pudimos asignar el caso. Inténtalo de nuevo.', action: 'none' }
+  return { message: 'No pudimos reasignar el caso. Inténtalo de nuevo.', action: 'none' }
 }
 
-// ── After a successful assignment (contract §8.4–§8.6) ──────────────────────
-
-export interface AssignResultInput {
+/** The "Listo ·" strip after a reassignment. */
+export function reassignResultCopy(input: {
   customerName: string
-  analystName: string
-  /** Who held it before; null when it came from the queue. */
   previousAnalystName: string | null
-  /** The queue it left (from the queue only). */
-  queueLanguage: Language
-  /** Cases left in that queue. */
-  queueRemaining: number
-}
-
-/** The "Listo ·" strip of the team screen. */
-export function assignResultCopy(input: AssignResultInput): { prefix: string; message: string } {
+  analystName: string
+}): { prefix: string; message: string } {
   const message = input.previousAnalystName
     ? `El caso de ${input.customerName} pasó de ${input.previousAnalystName} a ${input.analystName}.`
-    : `El caso de ${input.customerName} pasó a ${input.analystName}. La ${queueNameInSentence(input.queueLanguage)} quedó en ${input.queueRemaining}.`
-  return { prefix: 'Listo ·', message }
+    : `El caso de ${input.customerName} pasó a ${input.analystName}.`
+  return { prefix: 'Listo', message }
 }
 
-/** Toast after assigning from the case view or the analyst sheet. */
-export function assignedToastTitle(customerName: string, analystName: string): string {
-  return `Listo · El caso de ${customerName} pasó a ${analystName}`
+/** Toast after reassigning from the case view. */
+export function reassignedToastTitle(customerName: string, analystName: string): string {
+  return `El caso de ${customerName} pasó a ${analystName}`
 }
 
 /** Info toast when the chosen analyst already had the case (200 no-op). */
@@ -527,7 +857,214 @@ export function unchangedToastTitle(analystName: string): string {
   return `${firstName(analystName)} ya tenía este caso.`
 }
 
-// ── Supervisor notice (SuAvisoNueva, contract §8.7) ──────────────────────────
+// ── "Escalados" (slice 9) ────────────────────────────────────────────────────
+
+export interface EscalationGroup {
+  key: 'open' | 'attended'
+  label: string
+  items: EscalationItem[]
+}
+
+/**
+ * "Abiertos (n)" (the longest waiting first) and "Atendidos hoy" (supervision attended
+ * them today in the viewer's zone, the most recent first). Withdrawn ones and those that
+ * ended with the case are never listed.
+ */
+export function escalationGroups(
+  items: readonly EscalationItem[],
+  now: DateInput,
+): EscalationGroup[] {
+  const open = items
+    .filter((item) => item.escalation.state === 'open')
+    .sort((a, b) => toMs(a.escalation.escalatedAt) - toMs(b.escalation.escalatedAt))
+  const today = localDayKey(now)
+  const attended = items
+    .filter(
+      (item) =>
+        (item.escalation.state === 'answered' ||
+          item.escalation.state === 'taken' ||
+          item.escalation.state === 'reassigned') &&
+        item.escalation.resolvedAt !== null &&
+        localDayKey(item.escalation.resolvedAt) === today,
+    )
+    .sort((a, b) => toMs(b.escalation.resolvedAt ?? 0) - toMs(a.escalation.resolvedAt ?? 0))
+  const groups: EscalationGroup[] = []
+  if (open.length) groups.push({ key: 'open', label: `Abiertos (${open.length})`, items: open })
+  if (attended.length) groups.push({ key: 'attended', label: 'Atendidos hoy', items: attended })
+  return groups
+}
+
+/** "2 abiertos" / "1 abierto" (header aside). */
+export function openEscalationsLabel(count: number): string {
+  return pluralize(count, 'abierto')
+}
+
+/** "Escaló hace 6 min" (the panel's time fact). */
+export function escalatedAgo(escalation: Pick<Escalation, 'escalatedAt'>, now: DateInput): string {
+  return `Escaló ${formatRelativeTime(escalation.escalatedAt, now)}`
+}
+
+/**
+ * What supervision did, from the viewer's side: "Respondiste a Daniela" / "Lucía Herrera
+ * respondió", "Tomaste el caso" / "… tomó el caso", "Lo reasignaste a …" / "… lo
+ * reasignó a …". `null` while it is open.
+ */
+export function escalationOutcomeTitle(escalation: Escalation, meId: string): string | null {
+  const mine = escalation.resolvedById === meId
+  const who = escalation.resolvedByName ?? 'Supervisión'
+  switch (escalation.state) {
+    case 'answered':
+      return mine
+        ? `Respondiste a ${firstName(escalation.escalatedByName ?? 'quien escaló')}`
+        : `${who} respondió`
+    case 'taken':
+      return mine ? 'Tomaste el caso' : `${who} tomó el caso`
+    case 'reassigned': {
+      const to = escalation.reassignedToName ?? 'otra persona del equipo'
+      return mine ? `Lo reasignaste a ${to}` : `${who} lo reasignó a ${to}`
+    }
+    default:
+      return null
+  }
+}
+
+/** The "El caso" facts of the panel (icon + short value; the label is for screen readers). */
+export function escalationCaseFacts(
+  input: {
+    summary: CaseSummary
+    holderName: string | null
+    customer: Pick<CaseCustomer, 'city' | 'country'> | null
+  },
+  now: DateInput,
+): FactItem[] {
+  const { summary, customer } = input
+  const place = customer ? `${customer.city}, ${countryName(customer.country)}` : null
+  const facts: (FactItem | null)[] = [
+    {
+      key: 'holder',
+      icon: 'user',
+      text: input.holderName ?? 'Sin asignar',
+      label: 'Lo atiende',
+    },
+    place ? { key: 'place', icon: 'map-pin', text: place, label: 'Ciudad' } : null,
+    { key: 'language', icon: 'languages', text: languageWord(summary.language), label: 'Idioma' },
+    {
+      key: 'channel',
+      icon: summary.channel === 'app_chat' ? 'smartphone' : 'globe',
+      text: channelTooltip(summary),
+      label: 'Canal',
+    },
+    {
+      key: 'priority',
+      icon: CASE_PRIORITY[summary.priority].icon,
+      text: CASE_PRIORITY[summary.priority].label,
+      label: 'Prioridad',
+    },
+    { key: 'open-for', icon: 'clock', text: openForText(summary, now), label: 'Abierto hace' },
+  ]
+  return facts.filter((fact): fact is FactItem => fact !== null)
+}
+
+/** The "Listo" strip after acting on an escalation. */
+export function escalationResultCopy(
+  kind: 'answered' | 'taken' | 'reassigned',
+  item: { analystName: string; customerName: string; toName?: string },
+): { prefix: string; message: string } {
+  const analyst = firstName(item.analystName)
+  switch (kind) {
+    case 'answered':
+      return {
+        prefix: 'Listo',
+        message: `Le llegó tu respuesta a ${analyst} en el caso de ${item.customerName}.`,
+      }
+    case 'taken':
+      return {
+        prefix: 'Listo',
+        message: `Tomaste el caso de ${item.customerName}. ${analyst} lo puede leer, pero ya no responder.`,
+      }
+    case 'reassigned':
+      return {
+        prefix: 'Listo',
+        message: `El caso de ${item.customerName} pasó de ${item.analystName} a ${item.toName ?? 'otra persona del equipo'}.`,
+      }
+  }
+}
+
+export const REPLY_REQUIRED_ERROR = 'Escribe tu respuesta.'
+
+/** "Tu respuesta para Daniela". */
+export function replyLabel(escalation: Pick<Escalation, 'escalatedByName'>): string {
+  return `Tu respuesta para ${firstName(escalation.escalatedByName ?? 'quien escaló')}`
+}
+
+/** "Le llega a Daniela dentro del caso. El cliente no la ve." */
+export function replyHelp(escalation: Pick<Escalation, 'escalatedByName'>): string {
+  return `Le llega a ${firstName(escalation.escalatedByName ?? 'quien escaló')} dentro del caso. El cliente no la ve.`
+}
+
+export interface EscalationFailure {
+  message: string
+  /** Refetch "Escalados" (the escalation changed meanwhile). */
+  refetch: boolean
+}
+
+export function describeEscalationFailure(
+  error: unknown,
+  context: { caseLanguage: Language },
+): EscalationFailure {
+  if (isApiProblem(error)) {
+    switch (error.code) {
+      case 'escalation_not_open':
+        return {
+          message:
+            'Este escalamiento ya no está abierto: lo retiraron o alguien de supervisión ya lo atendió.',
+          refetch: true,
+        }
+      case 'analyst_not_eligible':
+        return {
+          message: 'Para tomar el caso necesitas también el rol de Analista.',
+          refetch: false,
+        }
+      case 'language_mismatch':
+        return {
+          message: `Ese caso es en ${LANGUAGE_NAMES[context.caseLanguage]} y no lo hablas (regla 3).`,
+          refetch: false,
+        }
+      case 'case_closed':
+        return { message: 'Este caso ya se cerró.', refetch: true }
+      case 'validation_error':
+        return { message: 'Escribe tu respuesta (hasta 500 caracteres).', refetch: false }
+      case 'network_error':
+        return { message: 'Revisa tu conexión e inténtalo de nuevo.', refetch: false }
+      default:
+        break
+    }
+  }
+  return { message: 'No pudimos completar la acción. Inténtalo de nuevo.', refetch: false }
+}
+
+export interface EscalationsUrlState {
+  /** `?escalamiento=ESC-…`: the side panel. */
+  escalationId: string | null
+  /** `?reasignar=1`: the reassign dialog for the selected escalation's case. */
+  reassign: boolean
+}
+
+export function parseEscalationsSearch(params: URLSearchParams): EscalationsUrlState {
+  return {
+    escalationId: params.get('escalamiento')?.trim() || null,
+    reassign: params.get('reasignar') === '1',
+  }
+}
+
+export function toEscalationsSearch(state: EscalationsUrlState): URLSearchParams {
+  const params = new URLSearchParams()
+  if (state.escalationId) params.set('escalamiento', state.escalationId)
+  if (state.reassign && state.escalationId) params.set('reasignar', '1')
+  return params
+}
+
+// ── Notices (toasts on every supervision screen) ─────────────────────────────
 
 /** Toast on `queue.case_queued`: "Un caso espera en la cola en portugués". */
 export function queuedNoticeCopy(summary: Pick<CaseSummary, 'language' | 'customer'>): {
@@ -538,29 +1075,33 @@ export function queuedNoticeCopy(summary: Pick<CaseSummary, 'language' | 'custom
   const label = QUEUE_LABEL[summary.language]
   return {
     tag: label,
-    title: `Un caso espera en ${queueInSentence(label)}`,
-    description: `${summary.customer.displayName} · nadie disponible habla ${LANGUAGE_NAMES[summary.language]}`,
+    title: `Un caso espera en la ${label.charAt(0).toLowerCase()}${label.slice(1)}`,
+    description: summary.customer.displayName,
   }
 }
 
-// ── URL state (frozen, contract §8.9) ────────────────────────────────────────
-
-export interface TeamUrlState {
-  /** `?equipo=<TeamSummary.id>` (`TEAM-…`); unknown → treated as all (`selectedTeam`). */
-  team: string | null
-  /** `?estado=conectadas|en-pausa|desconectadas` (default conectadas). */
-  activity: ActivityFilter
-  /** `?analista=STF-…`: the analyst sheet. */
-  analystId: string | null
-  /** `?asignar=CASE-…`: the assign dialog. */
-  assignCaseId: string | null
+/** Toast on a new escalation: "Daniela Ríos escaló un caso" + the customer + the motive. */
+export function escalationNoticeCopy(escalation: Escalation): {
+  title: string
+  description: string
+  meta: string
+} {
+  const motive =
+    escalation.motive.length > 90 ? `${escalation.motive.slice(0, 89)}…` : escalation.motive
+  return {
+    title: `${escalation.escalatedByName ?? 'Alguien del equipo'} escaló un caso`,
+    description: escalation.customerName,
+    meta: `“${motive}”`,
+  }
 }
+
+// ── Supervisor case view ─────────────────────────────────────────────────────
 
 export interface CaseViewUrlState {
   /** `?historial=lista|CASE-…`: the "Casos anteriores" sheet. */
   history: 'lista' | string | null
-  /** `?asignar=1`: the assign dialog for this case. */
-  assign: boolean
+  /** `?reasignar=1` (slice 3: `?asignar=1`): the reassign dialog for this case. */
+  reassign: boolean
 }
 
 export interface UrlStateChangeOptions {
@@ -568,43 +1109,31 @@ export interface UrlStateChangeOptions {
   replace?: boolean
 }
 
-const trimmed = (value: string | null) => value?.trim() || null
-
-export function parseTeamSearch(params: URLSearchParams): TeamUrlState {
-  const slug = params.get('estado')
-  return {
-    team: trimmed(params.get('equipo')),
-    activity: ACTIVITY_FILTERS.find((option) => option.slug === slug)?.value ?? 'connected',
-    analystId: trimmed(params.get('analista')),
-    assignCaseId: trimmed(params.get('asignar')),
-  }
-}
-
-export function toTeamSearch(state: TeamUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  if (state.team) params.set('equipo', state.team)
-  if (state.activity !== 'connected') {
-    const slug = ACTIVITY_FILTERS.find((option) => option.value === state.activity)?.slug
-    if (slug) params.set('estado', slug)
-  }
-  if (state.analystId) params.set('analista', state.analystId)
-  if (state.assignCaseId) params.set('asignar', state.assignCaseId)
-  return params
-}
-
 export function parseCaseViewSearch(params: URLSearchParams): CaseViewUrlState {
   return {
-    history: trimmed(params.get('historial')),
-    assign: params.get('asignar') === '1',
+    history: params.get('historial')?.trim() || null,
+    reassign: params.get('reasignar') === '1' || params.get('asignar') === '1',
   }
 }
 
 export function toCaseViewSearch(state: CaseViewUrlState): URLSearchParams {
   const params = new URLSearchParams()
   if (state.history) params.set('historial', state.history)
-  if (state.assign) params.set('asignar', '1')
+  if (state.reassign) params.set('reasignar', '1')
   return params
 }
+
+/** Where "Volver" goes from the case view, by the screen it came from. */
+export function backLabelFor(from: string | null): string {
+  if (!from) return 'Volver a Colas'
+  if (from.startsWith('/supervision/auditoria')) return 'Volver a Auditoría'
+  if (from.startsWith('/supervision/equipo')) return 'Volver a Equipo'
+  if (from.startsWith('/supervision/escalados')) return 'Volver a Escalados'
+  return 'Volver a Colas'
+}
+
+/** "CASE-…0101" under a customer's name. */
+export { shortCaseId }
 
 // ── "Calificación 7 días" (slice 7: customer ratings 1–4) ─────────────────────
 
@@ -627,9 +1156,8 @@ export function formatRatingAverage(average: number): string {
 }
 
 /**
- * The analyst's 7-day rating cell: face + average + count, with the tooltip that
- * spells it out; `null` when no case she closed in the window was rated ("—").
- * Ratings count for whoever closed the case.
+ * The analyst's 7-day rating cell: face + average + count, with the tooltip that spells
+ * it out; `null` when no case she closed in the window was rated ("—").
  */
 export function recentRatingCell(stats: RatingStats): RecentRatingCell | null {
   if (stats.count <= 0 || stats.average === null) return null
@@ -651,3 +1179,19 @@ export const RECENT_RATING_HEADER = {
   title: 'Promedio de calificaciones de clientes, escala 1 a 4, últimos 7 días',
   empty: 'Sin calificaciones en los últimos 7 días',
 } as const
+
+/** The channel word for the "Colas" row's icon tooltip ("Chat en la app" / "Chat web"). */
+export function channelTooltip(summary: Pick<CaseSummary, 'channel'>): string {
+  return summary.channel === 'app_chat' ? 'Chat en la app' : 'Chat web'
+}
+
+/** Teams by id → name (the analyst sheet's team fact). */
+export function teamNames(teams: readonly TeamSummary[]): Record<string, string> {
+  return Object.fromEntries(teams.map((team) => [team.id, team.name]))
+}
+
+/** A fact without its list `key` (React keys never travel in a spread). */
+export function withoutKey<T extends { key: string }>(fact: T): Omit<T, 'key'> {
+  const { key: _key, ...rest } = fact
+  return rest
+}

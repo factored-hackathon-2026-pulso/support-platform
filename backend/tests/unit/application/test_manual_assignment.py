@@ -298,6 +298,7 @@ async def test_reassignment_tells_the_customer_and_keeps_history_access() -> Non
     assert [e.event_type for e in added] == [
         "case.status_changed",
         "case.assigned",
+        "escalation.reassigned",  # Julián had escalated it (seed, slice 9)
         "turn.created",
         "turn.created",
     ]

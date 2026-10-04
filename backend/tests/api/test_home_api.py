@@ -122,7 +122,7 @@ def test_only_analysts_have_a_home(
         response = client.get(HOME, headers=bearer(sign_in(seed.email)))
         assert (response.status_code, response.json()["code"]) == (403, "forbidden")
         assert response.json()["requiredRoles"] == ["analyst"]
-    # Analista + Supervisora: she is an analyst.
+    # Analista + Supervisión: she is an analyst.
     assert client.get(HOME, headers=bearer(sign_in(TEAM_LEAD.email))).status_code == 200
     # A customer token is not a staff session at all.
     customer = client.get(HOME, headers=bearer(customer_session(2001)))

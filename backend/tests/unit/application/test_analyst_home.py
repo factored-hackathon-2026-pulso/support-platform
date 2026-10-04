@@ -253,7 +253,7 @@ async def test_other_analysts_events_and_her_own_actions_are_left_out(world: Con
 
 
 async def test_a_supervisor_assigning_to_herself_is_her_own_action(world: Container) -> None:
-    """Felipe (Analista + Supervisora) takes a queued case himself: not news to him."""
+    """Felipe (Analista + Supervisión) takes a queued case himself: not news to him."""
     await signed_out_at(world)
     felipe = actor_for(TEAM_LEAD)
     rosa_es = seed_case_id(111)

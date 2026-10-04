@@ -58,7 +58,8 @@ RESPONSE_SCHEMAS = (
     "AuditCaseRef", "AdminUser", "AdminUserGuards", "OpenCaseCounts", "AdminUserList",
     "RoleCounts", "UserStatusCounts", "CreatedUser", "AdminUserChange", "PasswordResetResult",
     "AdminTeam", "TeamStatusCounts", "AdminTeamList", "AdminTeamMember", "AdminTeamDetail",
-    "AdminTeamChange", "StaffListResponse",
+    "AdminTeamChange", "StaffListResponse", "Escalation", "EscalationResult", "EscalationItem",
+    "EscalationOverview", "LanguageOpenCases", "OpenCaseRow",
 )  # fmt: skip
 
 
@@ -89,5 +90,6 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "internal_error", "version_conflict", "email_taken", "team_name_taken",
         "self_change_forbidden", "last_admin", "staff_has_open_cases", "team_not_empty",
         "team_inactive", "staff_inactive", "case_not_closed", "already_rated",
+        "escalation_open", "escalation_not_open",
     }  # fmt: skip
     assert set(schemas["CloseCaseRequest"]["required"]) == {"reason", "note"}

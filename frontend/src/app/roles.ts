@@ -1,5 +1,7 @@
 import {
+  CircleArrowUp,
   House,
+  Inbox,
   MessageSquare,
   Shield,
   UserPlus,
@@ -18,8 +20,10 @@ export type RoleId = 'analyst' | 'supervisor' | 'admin'
  * owns the data (app/rail-indicators.ts); a key nobody feeds shows nothing.
  */
 export type RailIndicatorKey =
-  /** Cases waiting in a language queue (fed by `useQueuedCasesCount`, supervision). */
+  /** Cases nobody holds yet, in the language queues (fed by `useQueuedCasesCount`, supervision). */
   | 'queuedCases'
+  /** Open escalations to supervision (fed by `useOpenEscalationsCount`, supervision; slice 9). */
+  | 'openEscalations'
   /** Accounts locked now (fed by `useLockedAccountsCount`, admin). */
   | 'lockedAccounts'
   /** Her open cases "Por responder" (fed by `useToReplyCount`, cases; slice 6). */
@@ -29,6 +33,8 @@ export type RailIndicatorKey =
 export interface RailIndicator {
   count?: number
   dot?: boolean
+  /** What the count counts, for the accessible name (default "pendiente(s)"): "sin asignar". */
+  noun?: readonly [singular: string, plural: string]
 }
 
 export type RailIndicators = Partial<Record<RailIndicatorKey, RailIndicator>>
@@ -102,18 +108,27 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
   },
   supervisor: {
     id: 'supervisor',
-    label: 'Supervisora',
+    // Gender-neutral (slice 9): the role, not a person ("Supervisión", never "Supervisora").
+    label: 'Supervisión',
     basePath: '/supervision',
-    home: '/supervision/equipo',
+    // Slice 9: supervision lands on "Colas" (every open case, by language).
+    home: '/supervision/colas',
     avatarTone: 'peach',
     nav: [
       {
-        to: '/supervision/equipo',
-        label: 'Equipo y colas',
-        icon: Users,
+        to: '/supervision/colas',
+        label: 'Colas',
+        icon: Inbox,
         indicator: 'queuedCases',
-        // The read-only case view is reached from the team screen.
+        // The read-only case view is reached from Colas (and the other screens).
         alsoActiveOn: ['/supervision/casos'],
+      },
+      { to: '/supervision/equipo', label: 'Equipo', icon: Users },
+      {
+        to: '/supervision/escalados',
+        label: 'Escalados',
+        icon: CircleArrowUp,
+        indicator: 'openEscalations',
       },
       { to: '/supervision/auditoria', label: 'Auditoría', icon: Shield },
     ],
@@ -157,9 +172,16 @@ export function supervisionCasePath(caseId: string): string {
   return `/supervision/casos/${caseId}`
 }
 
-/** "Equipo y colas" with one analyst's sheet open (slice 3 §8.9). */
+/** "Equipo" with one analyst's sheet open (slice 3 §8.9). */
 export function supervisionAnalystPath(staffId: string): string {
   return `/supervision/equipo?${new URLSearchParams({ analista: staffId }).toString()}`
+}
+
+/** "Escalados" with one escalation open in the side panel (slice 9). */
+export function supervisionEscalationPath(escalationId?: string | null): string {
+  return escalationId
+    ? `/supervision/escalados?${new URLSearchParams({ escalamiento: escalationId }).toString()}`
+    : '/supervision/escalados'
 }
 
 /** "Usuarios y roles" with one person selected (slice 4 §10.1). */
@@ -200,11 +222,11 @@ export function sortRoles(roles: readonly string[]): RoleId[] {
  */
 export const ROLE_LABEL: Record<RoleId, string> = {
   analyst: 'Analista',
-  supervisor: 'Supervisora',
+  supervisor: 'Supervisión',
   admin: 'Administración',
 }
 
-/** "Analista y Supervisora": the user's roles in canonical order. */
+/** "Analista y Supervisión": the user's roles in canonical order. */
 export function rolesLabel(roles: readonly string[]): string {
   return joinEs(sortRoles(roles).map((role) => ROLE_LABEL[role]))
 }

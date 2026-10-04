@@ -57,7 +57,7 @@ export const selfAdmin = makeAdminUser({
   guards: { isSelf: true, lastActiveAdmin: false },
 })
 
-/** The other admin (Supervisora + Administración). */
+/** The other admin (Supervisión + Administración). */
 export const carolina = makeAdminUser({
   id: supervisorAdminStaff.id,
   name: supervisorAdminStaff.name,
@@ -81,7 +81,7 @@ export const daniela = makeAdminUser({
   version: 7,
 })
 
-/** Mariana: Supervisora, locked until T+13m after five wrong passwords. */
+/** Mariana: Supervisión, locked until T+13m after five wrong passwords. */
 export const mariana = makeAdminUser({
   id: MARIANA_ID,
   name: 'Mariana Duque',

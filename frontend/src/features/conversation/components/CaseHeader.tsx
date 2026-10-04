@@ -1,8 +1,9 @@
 import type { ReactNode, Ref } from 'react'
-import { Copy, History } from 'lucide-react'
+import { CircleArrowUp, Copy, History } from 'lucide-react'
 import { Button, IconButton, Status, useToast } from '@/components/ui'
 import { caseStatus } from '@/features/cases'
 import {
+  canEscalate,
   CUSTOMER_FILE_PANEL_ID,
   CUSTOMER_FILE_TRIGGER_ID,
   caseHeaderMeta,
@@ -15,6 +16,8 @@ import type { CaseDetail } from '../types'
 export interface CaseHeaderProps {
   detail: CaseDetail
   onRequestClose: () => void
+  /** "Escalar a supervisión" (slice 9): absent = no button (supervision mode). */
+  onRequestEscalate?: () => void
   /** "Casos anteriores (n)": opens the customer's case history (absent = no button). */
   onOpenHistory?: () => void
   /** The customer-name heading (focusable with `tabIndex=-1`): the Workspace moves focus here on a programmatic case switch. */
@@ -43,6 +46,7 @@ export interface CaseHeaderProps {
 export function CaseHeader({
   detail,
   onRequestClose,
+  onRequestEscalate,
   onOpenHistory,
   headingRef,
   actions,
@@ -91,6 +95,15 @@ export function CaseHeader({
           onClick={onOpenHistory}
         >
           {historyLabel}
+        </Button>
+      ) : null}
+      {onRequestEscalate && !hideClose && canEscalate(detail) ? (
+        <Button
+          variant="secondary"
+          icon={<CircleArrowUp size={15} aria-hidden="true" />}
+          onClick={onRequestEscalate}
+        >
+          Escalar a supervisión
         </Button>
       ) : null}
       {!closed && !hideClose && capabilities.canClose ? (

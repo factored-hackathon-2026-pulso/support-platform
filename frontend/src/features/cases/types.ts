@@ -24,3 +24,6 @@ export type InboxCounts = Schemas['InboxCounts']
 export type InboxResponse = Schemas['InboxResponse']
 export type Availability = Schemas['Availability']
 export type UpdateAvailabilityRequest = Schemas['UpdateAvailabilityRequest']
+/** An escalation to supervision (slice 9): staff only, never the customer. */
+export type Escalation = Schemas['Escalation']
+export type EscalationState = Schemas['EscalationState']

@@ -5,7 +5,9 @@ import {
   CASE_ID,
   envelope,
   makeAnalystTurn,
+  makeAnsweredEscalation,
   makeCaseDetail,
+  makeEscalation,
   makeTurn,
   seededTurns,
 } from '@/test/conversation-fixtures'
@@ -139,5 +141,32 @@ describe('case.updated / case.assigned', () => {
   it('does nothing for cases whose detail is not cached', () => {
     registry.dispatch(envelope('case.updated', makeCaseDetail().case), queryClient)
     expect(detail()).toBeUndefined()
+  })
+})
+
+describe('escalation.updated (slice 9)', () => {
+  it('puts the newer state of the escalation in the open detail and refetches it', () => {
+    queryClient.setQueryData(detailKey, makeCaseDetail({ escalation: makeEscalation() }))
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    registry.dispatch(envelope('escalation.updated', makeAnsweredEscalation()), queryClient)
+    const detail = queryClient.getQueryData<CaseDetail>(detailKey)
+    expect(detail?.escalation?.state).toBe('answered')
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: detailKey, exact: true })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: turnsKey, exact: true })
+  })
+
+  it('keeps a newer escalation over a late one of an older escalation', () => {
+    const newer = makeEscalation({ id: 'ESC-NEWER', escalatedAt: '2026-03-05T15:58:00Z' })
+    queryClient.setQueryData(detailKey, makeCaseDetail({ escalation: newer }))
+    registry.dispatch(envelope('escalation.updated', makeAnsweredEscalation()), queryClient)
+    expect(queryClient.getQueryData<CaseDetail>(detailKey)?.escalation?.id).toBe('ESC-NEWER')
+  })
+
+  it('ignores a case nobody has open and a malformed payload', () => {
+    registry.dispatch(envelope('escalation.updated', makeEscalation()), queryClient)
+    expect(queryClient.getQueryData(detailKey)).toBeUndefined()
+    queryClient.setQueryData(detailKey, makeCaseDetail())
+    registry.dispatch(envelope('escalation.updated', { id: 1 }), queryClient)
+    expect(queryClient.getQueryData<CaseDetail>(detailKey)?.escalation).toBeNull()
   })
 })

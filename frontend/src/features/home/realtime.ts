@@ -9,7 +9,7 @@
  * once per window (leading + trailing, throttle state per registry). The
  * analyst follows only her own `inbox:<id>` (her cases, `inbox.counts`,
  * `availability.updated`); `queue.*` reach someone who also holds the
- * Supervisora role and has a supervision screen open. No topic is added for
+ * Supervisión role and has a supervision screen open. No topic is added for
  * analysts: the team snapshot also refetches every 60 s (hooks/use-home.ts).
  * The tiles and "Lo primero" read the inbox cache, which the cases handlers patch.
  */

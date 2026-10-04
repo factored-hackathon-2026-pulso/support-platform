@@ -6,8 +6,8 @@
  * every problem code and the toasts. No React, no I/O: unit-tested in
  * model.test.ts.
  */
-import { sortRoles, type RoleId } from '@/app/roles'
-import type { FactItem, StatusAppearance } from '@/components/ui'
+import { ROLE_LABEL, sortRoles, type RoleId } from '@/app/roles'
+import type { FactItem, FilterGroup, FilterSelection, StatusAppearance } from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
 import { formatTime, joinEs, pluralize } from '@/lib/format'
 import type {
@@ -22,7 +22,6 @@ import type {
   StaffRole,
   TeamStatusFilter,
   UpdateUserRequest,
-  UserStatusFilter,
 } from './types'
 
 export { joinEs }
@@ -37,7 +36,8 @@ const toMs = (value: DateInput) =>
 /** Second line of the role checkbox cards. */
 export const ROLE_DESCRIPTION: Record<RoleId, string> = {
   analyst: 'Atiende casos por chat con los clientes.',
-  supervisor: 'Ve el equipo y las colas, asigna y reasigna casos, y revisa la auditoría.',
+  supervisor:
+    'Ve las colas y el equipo, atiende escalamientos, reasigna casos y revisa la auditoría.',
   admin: 'Crea y edita cuentas, roles, idiomas y equipos.',
 }
 
@@ -171,17 +171,23 @@ export function userSummaryFacts(user: Pick<AdminUser, 'languages' | 'team'>): F
   ]
 }
 
-// ── URL state (frozen, contract §10.11) ──────────────────────────────────────
+// ── URL state (contract §10.11; slice 9: multi-value filters) ──────────────────
 
+/**
+ * The directory's filters (slice 9, Admin.dc.html): one "Filtros" dropdown with four
+ * groups, several values per group (OR inside a group, AND across groups), as
+ * comma-separated URL values. Empty = no filter on that group: everyone is listed,
+ * deactivated people too (the canvas default).
+ */
 export interface UsersUrlState {
-  /** `?rol=analistas|supervisoras|administracion`. */
-  role: RoleId | null
-  /** `?estado=activas|bloqueadas|desactivadas|todas` (default activas). */
-  status: UserStatusFilter
-  /** `?equipo=TEAM-…`. */
-  teamId: string | null
-  /** `?idioma=es|pt`. */
-  language: Language | null
+  /** `?rol=analistas,supervision,administracion`. */
+  roles: RoleId[]
+  /** `?estado=activas,bloqueadas,desactivadas` (the status at the screen's clock). */
+  statuses: AccountStatus[]
+  /** `?equipo=TEAM-…,TEAM-…`. */
+  teamIds: string[]
+  /** `?idioma=es,pt`. */
+  languages: Language[]
   /** `?q=`. */
   query: string
   /** `?persona=STF-…`: the selected person (aside). */
@@ -206,15 +212,17 @@ export interface UrlStateChangeOptions {
 
 const ROLE_SLUGS: Record<RoleId, string> = {
   analyst: 'analistas',
-  supervisor: 'supervisoras',
+  supervisor: 'supervision',
   admin: 'administracion',
 }
 
-const USER_STATUS_SLUGS: Record<UserStatusFilter, string> = {
+/** Older links (slice 4) still open the same filter. */
+const ROLE_SLUG_ALIASES: Record<string, RoleId> = { supervisoras: 'supervisor' }
+
+const ACCOUNT_STATUS_SLUGS: Record<AccountStatus, string> = {
   active: 'activas',
   locked: 'bloqueadas',
   inactive: 'desactivadas',
-  all: 'todas',
 }
 
 const TEAM_STATUS_SLUGS: Record<TeamStatusFilter, string> = {
@@ -232,25 +240,47 @@ function fromSlug<K extends string>(slugs: Record<K, string>, slug: string | nul
   return entry ? entry[0] : null
 }
 
+/** "a,b,,c " → ["a", "b", "c"]: unique, trimmed, empty ones dropped. */
+function listParam(params: URLSearchParams, name: string): string[] {
+  const values = (params.get(name) ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  return [...new Set(values)]
+}
+
+/** Known values in a canonical order (unknown slugs dropped). */
+function inOrder<K extends string>(order: readonly K[], values: readonly (K | null)[]): K[] {
+  return order.filter((value) => values.includes(value))
+}
+
 const trimmed = (value: string | null) => value?.trim() || null
 
 export const EMPTY_USERS_STATE: UsersUrlState = {
-  role: null,
-  status: 'active',
-  teamId: null,
-  language: null,
+  roles: [],
+  statuses: [],
+  teamIds: [],
+  languages: [],
   query: '',
   staffId: null,
   create: false,
 }
 
+const ACCOUNT_STATUS_ORDER: readonly AccountStatus[] = ['active', 'locked', 'inactive']
+
 export function parseUsersSearch(params: URLSearchParams): UsersUrlState {
-  const language = params.get('idioma')
+  const roles = listParam(params, 'rol').map(
+    (slug) => fromSlug(ROLE_SLUGS, slug) ?? ROLE_SLUG_ALIASES[slug] ?? null,
+  )
+  const statuses = listParam(params, 'estado').map((slug) => fromSlug(ACCOUNT_STATUS_SLUGS, slug))
+  const languages = listParam(params, 'idioma').map((value) =>
+    value === 'es' || value === 'pt' ? value : null,
+  )
   return {
-    role: fromSlug(ROLE_SLUGS, params.get('rol')),
-    status: fromSlug(USER_STATUS_SLUGS, params.get('estado')) ?? 'active',
-    teamId: trimmed(params.get('equipo')),
-    language: language === 'es' || language === 'pt' ? language : null,
+    roles: inOrder<RoleId>(['analyst', 'supervisor', 'admin'], roles),
+    statuses: inOrder(ACCOUNT_STATUS_ORDER, statuses),
+    teamIds: listParam(params, 'equipo'),
+    languages: inOrder(LANGUAGES, languages),
     query: (params.get('q') ?? '').slice(0, USER_SEARCH_MAX_LENGTH),
     staffId: trimmed(params.get('persona')),
     create: params.get('nueva') === '1',
@@ -259,10 +289,12 @@ export function parseUsersSearch(params: URLSearchParams): UsersUrlState {
 
 export function toUsersSearch(state: UsersUrlState): URLSearchParams {
   const params = new URLSearchParams()
-  if (state.role) params.set('rol', ROLE_SLUGS[state.role])
-  if (state.status !== 'active') params.set('estado', USER_STATUS_SLUGS[state.status])
-  if (state.teamId) params.set('equipo', state.teamId)
-  if (state.language) params.set('idioma', state.language)
+  if (state.roles.length) params.set('rol', state.roles.map((r) => ROLE_SLUGS[r]).join(','))
+  if (state.statuses.length) {
+    params.set('estado', state.statuses.map((s) => ACCOUNT_STATUS_SLUGS[s]).join(','))
+  }
+  if (state.teamIds.length) params.set('equipo', state.teamIds.join(','))
+  if (state.languages.length) params.set('idioma', state.languages.join(','))
   if (state.query) params.set('q', state.query)
   if (state.staffId) params.set('persona', state.staffId)
   if (state.create) params.set('nueva', '1')
@@ -285,25 +317,26 @@ export function toTeamsSearch(state: TeamsUrlState): URLSearchParams {
   return params
 }
 
-/** URL state → GET /admin/users filters (defaults and empty values left out). */
+/**
+ * URL state → GET /admin/users. The server filters one value per field, the dropdown
+ * combines several: the screen asks once for everyone (`status=all`, the ≤ 500-row
+ * directory the server already filters in memory) with the search only, and the
+ * groups filter here (`filterUsers`), so the faceted counts need no extra request.
+ */
 export function usersQueryOf(state: UsersUrlState): AdminUserFilters {
-  const filters: AdminUserFilters = {}
+  const filters: AdminUserFilters = { status: 'all' }
   const q = state.query.trim().slice(0, USER_SEARCH_MAX_LENGTH)
   if (q) filters.q = q
-  if (state.role) filters.role = state.role
-  if (state.status !== 'active') filters.status = state.status
-  if (state.teamId) filters.teamId = state.teamId
-  if (state.language) filters.language = state.language
   return filters
 }
 
 /** Any list filter set (the selection and the dialog are not filters). */
 export function hasUserFilters(state: UsersUrlState): boolean {
   return (
-    state.role !== null ||
-    state.status !== 'active' ||
-    state.teamId !== null ||
-    state.language !== null ||
+    state.roles.length > 0 ||
+    state.statuses.length > 0 ||
+    state.teamIds.length > 0 ||
+    state.languages.length > 0 ||
     state.query.trim() !== ''
   )
 }
@@ -311,6 +344,144 @@ export function hasUserFilters(state: UsersUrlState): boolean {
 /** "Limpiar filtros": every filter back to its default; the selection stays. */
 export function clearUserFilters(state: UsersUrlState): UsersUrlState {
   return { ...EMPTY_USERS_STATE, staffId: state.staffId }
+}
+
+// ── "Filtros" of the directory (slice 9) ─────────────────────────────────────
+
+/** The four groups of the dropdown, in order. */
+export type UserFilterKey = 'role' | 'status' | 'team' | 'language'
+
+const USER_FILTER_KEYS: readonly UserFilterKey[] = ['role', 'status', 'team', 'language']
+
+/** The URL state as the dropdown's selection. */
+export function userFilterSelection(state: UsersUrlState): Record<UserFilterKey, string[]> {
+  return {
+    role: [...state.roles],
+    status: [...state.statuses],
+    team: [...state.teamIds],
+    language: [...state.languages],
+  }
+}
+
+/** The dropdown's selection back into the URL state (unknown values dropped). */
+export function usersPatchOfSelection(selection: FilterSelection): Partial<UsersUrlState> {
+  const of = (key: UserFilterKey) => selection[key] ?? []
+  return {
+    roles: inOrder<RoleId>(['analyst', 'supervisor', 'admin'], of('role') as RoleId[]),
+    statuses: inOrder(ACCOUNT_STATUS_ORDER, of('status') as AccountStatus[]),
+    teamIds: [...of('team')],
+    languages: inOrder(LANGUAGES, of('language') as Language[]),
+  }
+}
+
+/** Whether `user` matches one option of a group (the status at `now`: locks expire). */
+export function matchesUserFilter(
+  user: AdminUser,
+  key: UserFilterKey,
+  value: string,
+  now: DateInput,
+): boolean {
+  switch (key) {
+    case 'role':
+      return user.roles.includes(value as StaffRole)
+    case 'status':
+      return accountStatusAt(user, now) === value
+    case 'team':
+      return user.team.id === value
+    case 'language':
+      return user.languages.includes(value as Language)
+  }
+}
+
+function passesGroup(
+  user: AdminUser,
+  key: UserFilterKey,
+  selection: FilterSelection,
+  now: DateInput,
+): boolean {
+  const values = selection[key] ?? []
+  return values.length === 0 || values.some((value) => matchesUserFilter(user, key, value, now))
+}
+
+/** The rows that pass every group (`except` one, for its faceted counts). */
+export function filterUsers(
+  users: readonly AdminUser[],
+  selection: FilterSelection,
+  now: DateInput,
+  except: UserFilterKey | null = null,
+): AdminUser[] {
+  return users.filter((user) =>
+    USER_FILTER_KEYS.every((key) => key === except || passesGroup(user, key, selection, now)),
+  )
+}
+
+/**
+ * The groups of "Filtros" with faceted counts: how many people would show with this
+ * option, the search and every **other** group applied (Admin.dc.html `passAll`).
+ * Rol, Estado, Equipo (active teams first; an inactive one says so; a team from the URL
+ * nobody knows is kept by its id), Idioma.
+ */
+export function userFilterGroups(
+  users: readonly AdminUser[],
+  teams: readonly AdminTeam[],
+  selection: FilterSelection,
+  now: DateInput,
+): FilterGroup[] {
+  const counted = (key: UserFilterKey, options: { value: string; label: string }[]) => {
+    const base = filterUsers(users, selection, now, key)
+    return {
+      key,
+      options: options.map((option) => ({
+        ...option,
+        count: base.filter((user) => matchesUserFilter(user, key, option.value, now)).length,
+      })),
+    }
+  }
+  const teamOptions = teams
+    .slice()
+    .sort((a, b) => Number(b.active) - Number(a.active) || byName(a, b))
+    .map((team) => ({ value: team.id, label: teamOptionLabel(team) }))
+  for (const teamId of selection.team ?? []) {
+    if (!teamOptions.some((option) => option.value === teamId)) {
+      teamOptions.push({ value: teamId, label: teamId })
+    }
+  }
+  return [
+    {
+      ...counted(
+        'role',
+        (['analyst', 'supervisor', 'admin'] as const).map((role) => ({
+          value: role,
+          label: ROLE_LABEL[role],
+        })),
+      ),
+      legend: 'Rol',
+    },
+    {
+      ...counted(
+        'status',
+        ACCOUNT_STATUS_ORDER.map((status) => ({
+          value: status,
+          label: ACCOUNT_STATUS_LABEL[status],
+        })),
+      ),
+      legend: 'Estado',
+    },
+    { ...counted('team', teamOptions), legend: 'Equipo' },
+    {
+      ...counted(
+        'language',
+        LANGUAGES.map((language) => ({ value: language, label: LANGUAGE_LABEL[language] })),
+      ),
+      legend: 'Idioma',
+    },
+  ]
+}
+
+/** "13 personas", or "4 de 13 personas" while filtered. */
+export function usersShownLabel(shown: number, total: number): string {
+  const all = pluralize(total, 'persona')
+  return shown === total ? all : `${shown} de ${all}`
 }
 
 /** Header subtitle: "Quién puede hacer qué en la plataforma · 13 personas". */
@@ -758,6 +929,3 @@ export function sortMembers(members: readonly AdminTeamMember[]): AdminTeamMembe
     return inactive !== 0 ? inactive : byName(a, b)
   })
 }
-
-/** Role filter keys of the pills ("Todas" + each role). */
-export type RolePill = 'all' | StaffRole

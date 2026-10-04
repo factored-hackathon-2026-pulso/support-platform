@@ -8,7 +8,7 @@ export const DEMO_PASSWORD = 'demo1234'
 export const DEV_MFA_CODE = '000000'
 
 export const SEEDED = {
-  /** Supervisora (es, pt). */
+  /** Supervisión (es, pt). */
   supervisor: { name: 'Lucía Herrera', email: 'lucia.herrera@latambank.example' },
   /** Administración. */
   admin: { name: 'Valeria Quintero', email: 'valeria.quintero@latambank.example' },

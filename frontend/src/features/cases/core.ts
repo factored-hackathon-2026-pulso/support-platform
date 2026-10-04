@@ -7,12 +7,22 @@
  */
 export { availabilityKeys, caseKeys } from './api'
 export { useAvailabilityPresence, useToReplyCount } from './hooks/use-analyst-shell'
-export { applyCaseSummaryToInboxes, readCaseSummary, registerCasesRealtime } from './realtime'
+export {
+  applyCaseSummaryToInboxes,
+  readCaseSummary,
+  readEscalation,
+  registerCasesRealtime,
+} from './realtime'
 export {
   CASE_PRIORITY,
   CASE_STATUS,
   CLOSE_REASONS,
+  ESCALATED_MARKER,
+  ESCALATION_STATE,
+  ESCALATION_WAIT_LONG_MS,
+  ESCALATION_WAIT_RISK_MS,
   INBOX_FILTERS,
+  MAX_ESCALATION_TEXT,
   OPEN_CASE_STATUS,
   caseCardFacts,
   caseLifecycleStatus,
@@ -25,6 +35,9 @@ export {
   closeReasonOption,
   compareByUrgency,
   countryName,
+  escalationToastCopy,
+  escalationWaitFact,
+  isAttendedEscalation,
   filterChipLabel,
   formatSla,
   inboxStatusFromSlug,
@@ -66,6 +79,8 @@ export type {
   CaseStatus,
   CaseSummary,
   CloseReason,
+  Escalation,
+  EscalationState,
   InboxCounts,
   InboxResponse,
   InboxStatus,

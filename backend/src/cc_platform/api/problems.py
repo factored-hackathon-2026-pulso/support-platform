@@ -40,6 +40,9 @@ class ProblemCode(StrEnum):
     # customer rating (slice 7)
     CASE_NOT_CLOSED = "case_not_closed"
     ALREADY_RATED = "already_rated"
+    # escalations (slice 9)
+    ESCALATION_OPEN = "escalation_open"
+    ESCALATION_NOT_OPEN = "escalation_not_open"
     # supervision (manual assignment)
     ANALYST_NOT_ELIGIBLE = "analyst_not_eligible"
     LANGUAGE_MISMATCH = "language_mismatch"
@@ -103,6 +106,12 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
     ),
     P.ALREADY_RATED: ProblemSpec(
         409, "Already rated", "Esta conversación ya tiene una calificación."
+    ),
+    P.ESCALATION_OPEN: ProblemSpec(
+        409, "Escalation already open", "Este caso ya está escalado a supervisión."
+    ),
+    P.ESCALATION_NOT_OPEN: ProblemSpec(
+        409, "Escalation not open", "Este escalamiento ya no está abierto."
     ),
     P.ANALYST_NOT_ELIGIBLE: ProblemSpec(
         422, "Analyst not eligible", "Esa persona no puede recibir casos."

@@ -1,7 +1,7 @@
 import { ROLE_LABEL, sortRoles, type RoleId } from '@/app/roles'
 import { cn } from '@/lib/cn'
 
-/** Canvas role chips (Admin.dc.html): Analista grey, Supervisora peach, Administración green. */
+/** Canvas role chips (Admin.dc.html): Analista grey, Supervisión peach, Administración green. */
 const CHIP_CLASS: Record<RoleId, string> = {
   analyst: 'bg-panel text-ink-2',
   supervisor: 'bg-peach text-warn-strong',

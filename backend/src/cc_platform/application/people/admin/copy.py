@@ -12,7 +12,7 @@ from cc_platform.domain.people.staff import Language, StaffRole
 
 ROLE_LABEL: Mapping[StaffRole, str] = {
     StaffRole.ANALYST: "Analista",
-    StaffRole.SUPERVISOR: "Supervisora",
+    StaffRole.SUPERVISOR: "Supervisión",
     StaffRole.ADMIN: "Administración",
 }
 

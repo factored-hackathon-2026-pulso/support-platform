@@ -1,16 +1,18 @@
-import { Button, Fact, FactList, Sheet, Stat, Status, toneBorderLeft } from '@/components/ui'
-import { caseStatus, formatSla } from '@/features/cases'
+import { Button, Fact, Sheet, Stat, Status, toneBorderLeft } from '@/components/ui'
+import { caseStatus } from '@/features/cases'
 import { cn } from '@/lib/cn'
-import { formatRelativeTime } from '@/lib/format'
+import { formatRelativeTime, joinEs } from '@/lib/format'
 import {
+  ACTIVITY_META,
   RECENT_RATING_HEADER,
-  analystSheetDescription,
-  casePriorityFact,
-  caseRowFacts,
+  firstResponseFact,
+  languageWord,
+  withoutKey,
 } from '../model'
 import { RecentRating } from './RecentRating'
 import type { CaseSummary, TeamAnalyst } from '../types'
 import { CaseLink } from './CaseLink'
+import { CaseStatusCell } from './CaseCells'
 
 export interface AnalystSheetProps {
   analyst: TeamAnalyst
@@ -21,9 +23,9 @@ export interface AnalystSheetProps {
 }
 
 /**
- * One analyst (contract §8.4, `?analista=`): what she is doing now, her open
- * cases by status, and each open case with "Ver conversación" (the read-only
- * case view) and "Reasignar".
+ * One analyst (`?analista=`): what she is doing now, her languages and team as facts,
+ * her figures, and each open case with "Ver conversación" (the read-only case view)
+ * and "Reasignar" (the exception: assignment is automatic).
  */
 export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: AnalystSheetProps) {
   return (
@@ -33,7 +35,18 @@ export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: 
         if (!open) onClose()
       }}
       title={analyst.name}
-      description={analystSheetDescription(analyst)}
+      description={
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Status {...ACTIVITY_META[analyst.activity]} />
+          <Fact
+            icon="languages"
+            text={joinEs(analyst.languages.map(languageWord))}
+            label="Idiomas"
+            size="md"
+          />
+          <Fact icon="users" text={analyst.team.name} label="Equipo" size="md" />
+        </span>
+      }
       width={600}
     >
       <div className="grid grid-cols-5 gap-3">
@@ -57,7 +70,7 @@ export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: 
         ) : (
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {analyst.openCases.map((summary) => (
-              <OpenCaseRow
+              <OpenCaseItem
                 key={summary.id}
                 summary={summary}
                 now={now}
@@ -83,16 +96,16 @@ function SheetStat({ label, value }: { label: string; value: number }) {
   )
 }
 
-interface OpenCaseRowProps {
+interface OpenCaseItemProps {
   summary: CaseSummary
   now: number
   onOpenCase(caseId: string): void
   onReassign(caseId: string): void
 }
 
-function OpenCaseRow({ summary, now, onOpenCase, onReassign }: OpenCaseRowProps) {
+function OpenCaseItem({ summary, now, onOpenCase, onReassign }: OpenCaseItemProps) {
   const status = caseStatus(summary.inboxStatus)
-  const sla = formatSla(summary, now)
+  const firstResponse = firstResponseFact(summary, now)
   return (
     <li
       className={cn(
@@ -102,25 +115,22 @@ function OpenCaseRow({ summary, now, onOpenCase, onReassign }: OpenCaseRowProps)
     >
       <span className="flex items-baseline justify-between gap-2">
         <span className="truncate text-15 font-semibold">{summary.customer.displayName}</span>
-        {sla ? (
-          <span
-            className={cn(
-              'shrink-0 text-12 font-semibold',
-              sla.atRisk ? 'text-warn' : 'text-ink-2',
-            )}
-          >
-            {sla.text}
-          </span>
-        ) : null}
+        <Fact {...withoutKey(firstResponse)} className="shrink-0" />
       </span>
       <span className="truncate text-13 text-ink-2">
         {summary.preview ?? 'Sin mensajes todavía'}
       </span>
       <span className="flex items-center justify-between gap-2 text-12 text-muted">
         <span className="flex min-w-0 items-center gap-2.5">
-          <Status {...status} size="sm" className="shrink-0" />
-          <Fact {...casePriorityFact(summary)} />
-          <FactList items={caseRowFacts(summary)} className="min-w-0" />
+          <CaseStatusCell summary={summary} size="sm" />
+          <Fact
+            icon={summary.channel === 'app_chat' ? 'smartphone' : 'globe'}
+            text={
+              summary.channel === 'app_chat' ? 'Escribió desde la app' : 'Escribió desde la web'
+            }
+            label="Canal"
+            iconOnly
+          />
         </span>
         <span className="shrink-0">{formatRelativeTime(summary.lastInteractionAt, now)}</span>
       </span>

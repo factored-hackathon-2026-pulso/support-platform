@@ -35,7 +35,7 @@ describe('Field', () => {
   it('works with Checkbox: Field label, hint and error reach the input', () => {
     render(
       <Field label="Roles" hint="Puedes combinar roles" error="Elige al menos uno">
-        <Checkbox label="Supervisora" description="Aprueba y audita" />
+        <Checkbox label="Supervisión" description="Aprueba y audita" />
       </Field>,
     )
     const checkbox = screen.getByRole('checkbox')

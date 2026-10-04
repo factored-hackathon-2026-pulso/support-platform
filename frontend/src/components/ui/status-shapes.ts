@@ -9,9 +9,22 @@
  * - `dot`: filled circle (busy: "Atendiendo")
  * - `pause`: ring with a pause glyph ("En pausa")
  * - `lock`: ring with a lock ("Bloqueada")
+ * - `up`: ring with an up arrow (slice 9: "Escalado" to supervision)
+ * - `forward`: ring with a right arrow (slice 9: an escalation that ended "Reasignado")
  */
 export type StatusShape =
-  'dashed' | 'ring' | 'pie-25' | 'pie-50' | 'pie-75' | 'check' | 'cross' | 'dot' | 'pause' | 'lock'
+  | 'dashed'
+  | 'ring'
+  | 'pie-25'
+  | 'pie-50'
+  | 'pie-75'
+  | 'check'
+  | 'cross'
+  | 'dot'
+  | 'pause'
+  | 'lock'
+  | 'up'
+  | 'forward'
 
 export const STATUS_SHAPES: readonly StatusShape[] = [
   'dashed',
@@ -24,4 +37,6 @@ export const STATUS_SHAPES: readonly StatusShape[] = [
   'dot',
   'pause',
   'lock',
+  'up',
+  'forward',
 ]

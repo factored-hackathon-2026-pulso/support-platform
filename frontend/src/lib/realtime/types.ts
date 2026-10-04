@@ -24,6 +24,9 @@ export type KnownRealtimeEventType =
   // Slice 4 (administration, slice-4-administration.md §9.2)
   | 'directory.updated'
   | 'me.updated'
+  // Slice 9 (escalations, slice-9-supervision-v2.md): on `case:`, `inbox:` and
+  // `supervision:escalations`
+  | 'escalation.updated'
 
 export type RealtimeEventType = KnownRealtimeEventType | ControlEnvelopeType | (string & {})
 
@@ -36,8 +39,8 @@ export interface RealtimeEnvelope<TData = unknown, TType extends string = Realti
   data: TData
 }
 
-/** Keys of the supervision topics (slice 3 §7.1). */
-export type SupervisionTopicKey = 'queues' | 'team'
+/** Keys of the supervision topics (slice 3 §7.1; slice 9 adds `escalations`). */
+export type SupervisionTopicKey = 'queues' | 'team' | 'escalations'
 
 /**
  * `case:<caseId>`, `inbox:<staffId>` (staff tokens), `customer:<customerId>`
@@ -84,6 +87,7 @@ export const topics = {
   customer: (customerId: string): RealtimeTopic => `customer:${customerId}`,
   supervisionQueues: (): RealtimeTopic => 'supervision:queues',
   supervisionTeam: (): RealtimeTopic => 'supervision:team',
+  supervisionEscalations: (): RealtimeTopic => 'supervision:escalations',
   adminDirectory: (): RealtimeTopic => 'admin:directory',
   staff: (staffId: string): RealtimeTopic => `staff:${staffId}`,
 } as const

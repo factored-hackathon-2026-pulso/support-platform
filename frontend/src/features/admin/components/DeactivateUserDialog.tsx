@@ -7,7 +7,7 @@ import type { AdminUser, AdminUserChange } from '../types'
 
 export interface DeactivateUserDialogProps {
   user: AdminUser
-  /** The viewer also holds Supervisora: the open-case block links to "Equipo y colas". */
+  /** The viewer also holds Supervisión: the open-case block links to supervision. */
   canOpenSupervision: boolean
   onClose(): void
   onDone(change: AdminUserChange): void

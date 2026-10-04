@@ -11,6 +11,8 @@ State machine (slice 2 contract §2.3; explicit transitions, anything else raise
     closed ──▶ closed + rating          (its customer rates it once, slice 7; no transition)
     open (not closed) ──▶ same + priority (the assignee or supervision sets it, slice 8;
                                           no transition, never on a closed case)
+    assigned | in_progress ──▶ same + open escalation (the assignee escalates, slice 9; one
+                                          at a time, ``open_escalation_id``; no transition)
 
 A closed case never reopens: the customer's next message opens a new case linked through
 ``previous_case_id``. Every transition records a domain event; the optimistic ``version``
@@ -33,6 +35,7 @@ from cc_platform.domain.cases.errors import (
     AlreadyRatedError,
     CaseClosedError,
     CaseNotClosedError,
+    EscalationOpenError,
     invalid_case_transition,
 )
 from cc_platform.domain.cases.events import (
@@ -148,6 +151,8 @@ class Case(AggregateRoot):
     closure: CaseClosure | None = None
     rating: CaseRating | None = None
     """The customer's satisfaction rating (slice 7): only on a closed case, at most once."""
+    open_escalation_id: str | None = None
+    """The escalation to supervision that is open now (slice 9): at most one per case."""
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.CASE)
@@ -164,6 +169,8 @@ class Case(AggregateRoot):
             raise InvalidValueError("read cursor out of range", field="assignee_read_sequence")
         if self.rating is not None and self.closure is None:
             raise InvalidValueError("only a closed case carries a rating", field="rating")
+        if self.open_escalation_id is not None:
+            require_id(self.open_escalation_id, IdPrefix.ESCALATION)
 
     # ------------------------------------------------------------------ factory
     @classmethod
@@ -235,6 +242,32 @@ class Case(AggregateRoot):
 
     def is_assignee(self, staff_id: str) -> bool:
         return self.assigned_analyst_id is not None and self.assigned_analyst_id == staff_id
+
+    @property
+    def is_escalated(self) -> bool:
+        return self.open_escalation_id is not None
+
+    # ------------------------------------------------------------------ escalation (slice 9)
+    def escalate(self, escalation_id: str) -> None:
+        """Hold the pointer of a new open escalation (the ``Escalation`` records the event).
+
+        Only an assigned case can be escalated (its assignee asks for help); a closed case is
+        ``case_closed``; a second open escalation is ``escalation_open``.
+        """
+        require_id(escalation_id, IdPrefix.ESCALATION)
+        if self.is_closed:
+            raise CaseClosedError()
+        if self.status not in OPEN_ASSIGNED_STATUSES:
+            raise invalid_case_transition(self.status, "escalated")
+        if self.open_escalation_id is not None:
+            raise EscalationOpenError(self.open_escalation_id)
+        self.open_escalation_id = escalation_id
+
+    def clear_escalation(self, escalation_id: str) -> None:
+        """The open escalation ended (withdrawn, answered, taken, reassigned or closed)."""
+        if self.open_escalation_id != escalation_id:
+            raise InvalidValueError("that escalation is not the open one", field="escalation")
+        self.open_escalation_id = None
 
     # ------------------------------------------------------------------ transcript
     def append_turn(

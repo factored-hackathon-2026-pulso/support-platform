@@ -4,17 +4,16 @@ import { ROLES } from '@/app/roles'
 import { readRedirectFrom } from '@/app/redirect'
 import {
   SupervisorCaseScreen,
+  backLabelFor,
   parseCaseViewSearch,
   toCaseViewSearch,
   type CaseViewUrlState,
   type UrlStateChangeOptions,
 } from '@/features/supervision'
 
-const AUDIT_PATH = '/supervision/auditoria'
-
 /**
  * /supervision/casos/:caseId — the supervisor's read-only case view
- * (slice-3-supervision.md §8.5). `?historial=&asignar=` live in the URL; the
+ * (slice-3-supervision.md §8.5). `?historial=&reasignar=` live in the URL; the
  * screen it came from arrives as `state.from` (one-shot hand-off, kept across
  * the view's own URL changes) and names the "Volver" link.
  */
@@ -37,7 +36,6 @@ export default function SupervisorCaseRoute() {
   )
 
   const from = readRedirectFrom(routerState)
-  const fromAudit = from !== null && from.startsWith(AUDIT_PATH)
   return (
     <SupervisorCaseScreen
       key={caseId}
@@ -45,7 +43,7 @@ export default function SupervisorCaseRoute() {
       state={state}
       onStateChange={onStateChange}
       backTo={from ?? ROLES.supervisor.home}
-      backLabel={fromAudit ? 'Volver a Auditoría' : 'Volver a Equipo y colas'}
+      backLabel={backLabelFor(from)}
     />
   )
 }

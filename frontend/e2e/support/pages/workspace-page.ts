@@ -168,4 +168,46 @@ export class WorkspacePage {
     await dialog.getByRole('button', { name: 'Cerrar caso' }).click()
     await expect(dialog).toBeHidden()
   }
+
+  // ── Escalation to supervision (slice 9) ──────────────────────────────────────
+
+  /** "Escalar a supervisión" in the conversation header (assignee, open, not escalated). */
+  escalateButton(customerName: string): Locator {
+    return this.conversation(customerName).getByRole('button', { name: 'Escalar a supervisión' })
+  }
+
+  /** Opens the dialog, writes the motive and sends it; the open card shows. */
+  async escalate(customerName: string, motive: string): Promise<Locator> {
+    await this.escalateButton(customerName).click()
+    const dialog = this.page.getByRole('dialog', { name: 'Escalar a supervisión' })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('textbox', { name: 'Motivo' }).fill(motive)
+    await dialog.getByRole('button', { name: 'Escalar', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    const card = this.escalationCard(customerName)
+    await expect(card.getByText('Escalado a supervisión')).toBeVisible()
+    await expect(this.escalateButton(customerName)).toHaveCount(0)
+    return card
+  }
+
+  /** The staff-only escalation card under the header (open, or what supervision did). */
+  escalationCard(customerName: string): Locator {
+    return this.conversation(customerName).getByRole('region', {
+      name: 'Escalamiento a supervisión',
+    })
+  }
+
+  /** "Retirar escalamiento" on the open card; the card goes away. */
+  async withdrawEscalation(customerName: string): Promise<void> {
+    const card = this.escalationCard(customerName)
+    await card.getByRole('button', { name: 'Retirar escalamiento' }).click()
+    await expect(card).toHaveCount(0)
+  }
+
+  /** "Entendido" on the answered card; the card goes away. */
+  async acknowledgeEscalation(customerName: string): Promise<void> {
+    const card = this.escalationCard(customerName)
+    await card.getByRole('button', { name: 'Entendido' }).click()
+    await expect(card).toHaveCount(0)
+  }
 }

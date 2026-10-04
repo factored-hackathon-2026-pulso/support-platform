@@ -160,6 +160,98 @@ class CaseViewed(DomainEvent):
     assigned_analyst_id: str | None
 
 
+# ----------------------------------------------------------------------------- escalations
+# Slice 9: an analyst asks supervision for help on a case she holds (``Escalation``). The
+# dataset only says whether a case was escalated (yes/no): there are no types, amounts,
+# levels or deadlines. ``entity_id`` is the escalation id (``ESC-…``); ``case_id`` is set.
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EscalationOpened(DomainEvent):
+    """The assignee escalated the case. ``motive`` is staff text: the audit API shows only
+    its length (like message text)."""
+
+    event_type = "escalation.opened"
+    entity = "escalation"
+
+    motive: str
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EscalationWithdrawn(DomainEvent):
+    """The assignee withdrew her escalation while it was open."""
+
+    event_type = "escalation.withdrawn"
+    entity = "escalation"
+
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EscalationAnswered(DomainEvent):
+    """Supervision answered with a note for the analyst (the audit shows only its length)."""
+
+    event_type = "escalation.answered"
+    entity = "escalation"
+
+    note: str
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EscalationTaken(DomainEvent):
+    """A supervisor who also holds Analista took the case herself."""
+
+    event_type = "escalation.taken"
+    entity = "escalation"
+
+    previous_analyst_id: str
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EscalationReassigned(DomainEvent):
+    """Supervision passed the escalated case to another analyst (``SetCaseAssignee``)."""
+
+    event_type = "escalation.reassigned"
+    entity = "escalation"
+
+    previous_analyst_id: str
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EscalationClosed(DomainEvent):
+    """The case closed while the escalation was still open: it ends with the case."""
+
+    event_type = "escalation.closed"
+    entity = "escalation"
+
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class EscalationAcknowledged(DomainEvent):
+    """The analyst who escalated read what supervision did ("Entendido")."""
+
+    event_type = "escalation.acknowledged"
+    entity = "escalation"
+
+    analyst_id: str
+
+
+#: Every escalation event (slice 9).
+ESCALATION_EVENTS: tuple[type[DomainEvent], ...] = (
+    EscalationOpened,
+    EscalationWithdrawn,
+    EscalationAnswered,
+    EscalationTaken,
+    EscalationReassigned,
+    EscalationClosed,
+    EscalationAcknowledged,
+)
+
 #: Every event type of the cases context (the realtime projection owns them).
 CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseOpened,
@@ -172,4 +264,5 @@ CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseClosed,
     CaseRated,
     CasePriorityChanged,
+    *ESCALATION_EVENTS,
 )

@@ -77,24 +77,31 @@ describe('team.updated throttle', () => {
 
   it('refetches at once, then at most once per window with a trailing call', () => {
     const { registry, queryClient } = setup()
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    // Each refetch: the team and "Colas" (the held cases move with the same signals).
+    const invalidate = {
+      get calls() {
+        return spy.mock.calls.filter(([filters]) => filters?.queryKey?.[1] === 'team')
+      },
+    }
     const signal = () =>
       registry.dispatch(envelope('team.updated', { staffIds: ['STF-1'] }), queryClient)
 
     signal()
-    expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(invalidate).toHaveBeenLastCalledWith({ queryKey: supervisionKeys.team(), exact: true })
+    expect(invalidate.calls).toHaveLength(1)
+    expect(spy).toHaveBeenCalledWith({ queryKey: supervisionKeys.team(), exact: true })
+    expect(spy).toHaveBeenCalledWith({ queryKey: supervisionKeys.openCases() })
 
     signal()
     signal()
-    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate.calls).toHaveLength(1)
     vi.advanceTimersByTime(TEAM_REFETCH_THROTTLE_MS)
-    expect(invalidate).toHaveBeenCalledTimes(2) // the trailing call
+    expect(invalidate.calls).toHaveLength(2) // the trailing call
 
     vi.advanceTimersByTime(TEAM_REFETCH_THROTTLE_MS)
-    expect(invalidate).toHaveBeenCalledTimes(2) // nothing pending: the window closes
+    expect(invalidate.calls).toHaveLength(2) // nothing pending: the window closes
     signal()
-    expect(invalidate).toHaveBeenCalledTimes(3) // a new window starts at once
+    expect(invalidate.calls).toHaveLength(3) // a new window starts at once
   })
 
   it('keeps the throttle per registry', () => {
@@ -103,6 +110,15 @@ describe('team.updated throttle', () => {
     const spy = vi.spyOn(second.queryClient, 'invalidateQueries')
     first.registry.dispatch(envelope('team.updated', { staffIds: [] }), first.queryClient)
     second.registry.dispatch(envelope('team.updated', { staffIds: [] }), second.queryClient)
-    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(2) // team + "Colas", once
+  })
+})
+
+describe('escalation.updated (slice 9)', () => {
+  it('refetches "Escalados" (and its badge)', () => {
+    const { registry, queryClient } = setup()
+    queryClient.setQueryData(supervisionKeys.escalations(), { items: [], openCount: 0 })
+    registry.dispatch(envelope('escalation.updated', { id: 'ESC-1' }), queryClient)
+    expect(queryClient.getQueryState(supervisionKeys.escalations())?.isInvalidated).toBe(true)
   })
 })

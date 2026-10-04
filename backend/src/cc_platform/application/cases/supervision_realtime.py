@@ -15,9 +15,10 @@ from a presenter that renders the REST schemas). Sockets only *signal*: clients 
   changed): a message in an assigned case, an assignment (new and previous analyst), a
   status change, a first response, a close, an availability change, an analyst's session
   starting or ending, (slice 7) a customer rating, for the analyst who closed the case
-  ("Calificación 7 días"), and (slice 8) a priority change, for the case's assignee (her open
-  cases show it). A priority change of a queued case sends ``queue.updated`` like any other
-  event of a queued case.
+  ("Calificación 7 días"), (slice 8) a priority change, for the case's assignee (her open
+  cases show it), and (slice 9) an escalation that opens or ends (the "Escalado" marker).
+  A priority change of a queued case sends ``queue.updated`` like any other event of a
+  queued case.
 
 Slice 4 (administration) adds signals, no new envelope:
 
@@ -50,6 +51,7 @@ from cc_platform.application.realtime.topics import Topic
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.events import (
     CASE_EVENTS,
+    ESCALATION_EVENTS,
     CaseAssigned,
     CaseClosed,
     CaseFirstResponded,
@@ -57,6 +59,7 @@ from cc_platform.domain.cases.events import (
     CaseQueued,
     CaseRated,
     CaseStatusChanged,
+    EscalationAcknowledged,
     TurnCreated,
 )
 from cc_platform.domain.cases.values import AssignmentReason, CaseStatus, TurnKind
@@ -128,6 +131,8 @@ def team_rows_of(event: DomainEvent, case: Case) -> list[str]:
         return _unique([case.assigned_analyst_id])
     if isinstance(event, CaseRated):
         return _unique([event.analyst_id])
+    if isinstance(event, ESCALATION_EVENTS) and not isinstance(event, EscalationAcknowledged):
+        return _unique([case.assigned_analyst_id])  # slice 9: the "Escalado" marker
     return []
 
 

@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 
-export type RoleLabel = 'Analista' | 'Supervisora' | 'Administración'
+export type RoleLabel = 'Analista' | 'Supervisión' | 'Administración'
 
 /** The staff shell: the "Principal" rail, the role switcher and the toasts. */
 export class AppShell {

@@ -34,9 +34,9 @@ describe('Rail per role', () => {
     expect(rail.getByRole('link', { name: 'Inicio' })).not.toHaveAttribute('aria-current')
   })
 
-  it('supervisor: team and audit', async () => {
+  it('supervisor: queues, team, escalations and audit', async () => {
     const rail = await railFor('/supervision/auditoria', 'Auditoría')
-    expect(destinations(rail)).toEqual(['Equipo y colas', 'Auditoría'])
+    expect(destinations(rail)).toEqual(['Colas', 'Equipo', 'Escalados', 'Auditoría'])
     expect(rail.getByRole('link', { name: 'Auditoría' })).toHaveAttribute('aria-current', 'page')
   })
 

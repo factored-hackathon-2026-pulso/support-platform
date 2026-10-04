@@ -32,6 +32,14 @@ from cc_platform.application.cases.customer_chat import (
     PostCustomerTurn,
     RateConversation,
 )
+from cc_platform.application.cases.escalations import (
+    AcknowledgeEscalation,
+    EscalateCase,
+    GetEscalationOverview,
+    RespondEscalation,
+    TakeEscalatedCase,
+    WithdrawEscalation,
+)
 from cc_platform.application.cases.manual_assignment import SetCaseAssignee
 from cc_platform.application.cases.priority import ChangeCasePriority
 from cc_platform.application.cases.queries import (
@@ -47,7 +55,11 @@ from cc_platform.application.cases.realtime import (
     CaseRealtimeProjector,
 )
 from cc_platform.application.cases.sla import FirstResponseSlaPolicy
-from cc_platform.application.cases.supervision import GetQueueOverview, GetTeamOverview
+from cc_platform.application.cases.supervision import (
+    GetLanguageOpenCases,
+    GetQueueOverview,
+    GetTeamOverview,
+)
 from cc_platform.application.cases.supervision_realtime import (
     SUPERVISION_EVENTS,
     SupervisionRealtimeProjector,
@@ -335,6 +347,13 @@ def build_container(
             analyst_home=GetAnalystHome(uow=uow, clock=clock),
             rate_conversation=RateConversation(uow=uow, clock=clock),
             change_priority=ChangeCasePriority(uow=uow, clock=clock),
+            language_open_cases=GetLanguageOpenCases(uow=uow, clock=clock),
+            escalate=EscalateCase(uow=uow, clock=clock, ids=ids),
+            withdraw_escalation=WithdrawEscalation(uow=uow, clock=clock, ids=ids),
+            acknowledge_escalation=AcknowledgeEscalation(uow=uow, clock=clock),
+            respond_escalation=RespondEscalation(uow=uow, clock=clock, ids=ids),
+            take_escalated_case=TakeEscalatedCase(uow=uow, clock=clock, ids=ids),
+            escalation_overview=GetEscalationOverview(uow=uow, clock=clock),
         ),
         customers=CustomersUseCases(
             list_demo_customers=ListDemoCustomers(uow=uow),

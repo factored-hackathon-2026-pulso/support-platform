@@ -20,6 +20,8 @@ analyst, ``paused_override``), ``Case.assign`` (from the queue) or ``Case.reassi
 staff-only ``routing`` banner and, on a reassignment only, a customer ``notice`` in the case
 language ("Ahora te atiende {Nombre}…"). From the queue the customer only sees the header
 change ("Te atiende {nombre}") through ``conversation.updated``. The SLA is untouched.
+Slice 9: reassigning a case with an open escalation ends it as ``reassigned`` (the analyst
+who escalated no longer holds it); ``TakeEscalatedCase`` reuses ``hand_over`` (``taken``).
 
 Races (contract §3.9) are settled by the case's compare-and-set: a customer message, a
 reply, a close, the queue drain or a second supervisor either commits first (and this
@@ -29,6 +31,7 @@ command re-runs on fresh state) or loses to it and re-runs itself.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from cc_platform.application.cases import copy
 from cc_platform.application.cases.assignment import language_rule
@@ -47,6 +50,7 @@ from cc_platform.application.security import Actor
 from cc_platform.domain.cases.assignment import Assignment, ensure_speaks_case_language
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.errors import CaseClosedError
+from cc_platform.domain.cases.escalation import Escalation
 from cc_platform.domain.cases.values import (
     OPEN_ASSIGNED_STATUSES,
     AssignmentReason,
@@ -56,6 +60,7 @@ from cc_platform.domain.cases.values import (
     TurnKind,
 )
 from cc_platform.domain.people.staff import Staff, StaffRole
+from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import NotFoundError
 from cc_platform.domain.shared.ids import IdPrefix, is_valid_id
 
@@ -98,7 +103,7 @@ class SetCaseAssignee:
                 raise NotFoundError("No encontramos ese caso.", caseId=case_id)
             if case.is_closed:
                 raise CaseClosedError()
-            target = await _eligible_analyst(uow, command.analyst_id)
+            target = await eligible_analyst(uow, command.analyst_id)
             ensure_speaks_case_language(case.language, target.id, target.languages)
             reader = CaseReader(uow)
             if case.assigned_analyst_id == target.id:
@@ -129,78 +134,130 @@ class SetCaseAssignee:
         *,
         paused: bool,
     ) -> Assignment:
-        now = self.clock.now()
-        loads = await uow.cases.assignee_loads(OPEN_ASSIGNED_STATUSES)
-        load = loads.get(target.id)
-        from_queue = case.status is CaseStatus.QUEUED
-        previous = case.assigned_analyst_id
-        waited = (
-            max(0, int((now - (case.queued_at or case.opened_at)).total_seconds()))
-            if from_queue
-            else None
+        return await hand_over(
+            uow, reader, actor, case, target, paused=paused, now=self.clock.now(), ids=self.ids
         )
-        assignment = Assignment(
-            id=self.ids.new_id(IdPrefix.ASSIGNMENT),
-            case_id=case.id,
-            staff_id=target.id,
-            reason=AssignmentReason.MANUAL,
-            policy_rule_id=language_rule(case.language),
-            open_cases_at_assignment=load.open_cases if load else 0,
-            strategy=MANUAL_STRATEGY,
-            assigned_at=now,
-            assigned_by=actor.acting_as({StaffRole.SUPERVISOR}),
-            waited_seconds=waited,
-            previous_staff_id=previous,
-            paused_override=paused,
+
+
+async def hand_over(
+    uow: UnitOfWork,
+    reader: CaseReader,
+    actor: Actor,
+    case: Case,
+    target: Staff,
+    *,
+    paused: bool,
+    now: datetime,
+    ids: IdGenerator,
+    take: bool = False,
+) -> Assignment:
+    """Assign (from the queue) or reassign ``case`` to ``target`` as supervision, in the
+    caller's Unit of Work: the ``Assignment`` row, the staff banner, the customer notice on a
+    reassignment, and (slice 9) the end of an open escalation: ``reassigned`` or, when the
+    supervisor takes it herself (``take``), ``taken``."""
+    supervisor = actor.acting_as({StaffRole.SUPERVISOR})
+    loads = await uow.cases.assignee_loads(OPEN_ASSIGNED_STATUSES)
+    load = loads.get(target.id)
+    from_queue = case.status is CaseStatus.QUEUED
+    previous = case.assigned_analyst_id
+    waited = (
+        max(0, int((now - (case.queued_at or case.opened_at)).total_seconds()))
+        if from_queue
+        else None
+    )
+    assignment = Assignment(
+        id=ids.new_id(IdPrefix.ASSIGNMENT),
+        case_id=case.id,
+        staff_id=target.id,
+        reason=AssignmentReason.MANUAL,
+        policy_rule_id=language_rule(case.language),
+        open_cases_at_assignment=load.open_cases if load else 0,
+        strategy=MANUAL_STRATEGY,
+        assigned_at=now,
+        assigned_by=supervisor,
+        waited_seconds=waited,
+        previous_staff_id=previous,
+        paused_override=paused,
+    )
+    paused_name = first_name(target.name) if paused else None
+    if waited is not None:
+        case.assign(assignment)
+        label = case.queue_label or copy.QUEUE_LABEL[case.language]
+        banner = copy.manually_assigned_from_queue(
+            actor.name,
+            target.name,
+            copy.queue_wait_minutes(waited),
+            label,
+            paused_first_name=paused_name,
         )
-        paused_name = first_name(target.name) if paused else None
-        if waited is not None:
-            case.assign(assignment)
-            label = case.queue_label or copy.QUEUE_LABEL[case.language]
-            banner = copy.manually_assigned_from_queue(
-                actor.name,
-                target.name,
-                copy.queue_wait_minutes(waited),
-                label,
-                paused_first_name=paused_name,
-            )
+    else:
+        case.reassign(assignment)
+        previous_name = (await reader.staff_name(previous) if previous else None) or ""
+        if take:
+            banner = copy.escalation_taken(actor.name, previous_name)
         else:
-            case.reassign(assignment)
-            previous_name = (await reader.staff_name(previous) if previous else None) or ""
             banner = copy.reassigned(
                 actor.name, previous_name, target.name, paused_first_name=paused_name
             )
-        turns = [
+    escalation = await _end_open_escalation(uow, case, supervisor, target, now=now, take=take)
+    turns = [
+        case.append_turn(
+            turn_id=ids.new_id(IdPrefix.TURN),
+            kind=TurnKind.ROUTING,
+            audience=TurnAudience.STAFF,
+            author_role=TurnAuthorRole.SYSTEM,
+            author_id=None,
+            text=banner,
+            created_at=now,
+        )
+    ]
+    if waited is None:
+        turns.append(
             case.append_turn(
-                turn_id=self.ids.new_id(IdPrefix.TURN),
-                kind=TurnKind.ROUTING,
-                audience=TurnAudience.STAFF,
+                turn_id=ids.new_id(IdPrefix.TURN),
+                kind=TurnKind.NOTICE,
+                audience=TurnAudience.EVERYONE,
                 author_role=TurnAuthorRole.SYSTEM,
                 author_id=None,
-                text=banner,
+                text=copy.reassigned_notice(case.language, first_name(target.name)),
                 created_at=now,
             )
-        ]
-        if waited is None:
-            turns.append(
-                case.append_turn(
-                    turn_id=self.ids.new_id(IdPrefix.TURN),
-                    kind=TurnKind.NOTICE,
-                    audience=TurnAudience.EVERYONE,
-                    author_role=TurnAuthorRole.SYSTEM,
-                    author_id=None,
-                    text=copy.reassigned_notice(case.language, first_name(target.name)),
-                    created_at=now,
-                )
-            )
-        await uow.cases.save(case)
-        for turn in turns:
-            await uow.turns.add(turn)
-        await uow.assignments.add(assignment)
-        return assignment
+        )
+    await uow.cases.save(case)
+    if escalation is not None:
+        await uow.escalations.save(escalation)
+    for turn in turns:
+        await uow.turns.add(turn)
+    await uow.assignments.add(assignment)
+    return assignment
 
 
-async def _eligible_analyst(uow: UnitOfWork, analyst_id: str) -> Staff:
+async def _end_open_escalation(
+    uow: UnitOfWork,
+    case: Case,
+    supervisor: ActorRef,
+    target: Staff,
+    *,
+    now: datetime,
+    take: bool,
+) -> Escalation | None:
+    """Slice 9: the analyst who escalated no longer holds the case, so its open escalation
+    ends here (``taken`` or ``reassigned``)."""
+    escalation_id = case.open_escalation_id
+    if escalation_id is None:
+        return None
+    escalation = await uow.escalations.get(escalation_id)
+    case.clear_escalation(escalation_id)
+    if escalation is None or not escalation.is_open:  # pragma: no cover - pointer drift guard
+        return None
+    if take:
+        escalation.take(actor=supervisor, at=now)
+    else:
+        escalation.mark_reassigned(actor=supervisor, to_staff_id=target.id, at=now)
+    return escalation
+
+
+async def eligible_analyst(uow: UnitOfWork, analyst_id: str) -> Staff:
     """Rule 3 of §3.3: an existing, active staff member holding ``analyst``."""
     staff = await uow.staff.get(analyst_id) if is_valid_id(analyst_id, IdPrefix.STAFF) else None
     if staff is None or not staff.active or not staff.has_role(StaffRole.ANALYST):

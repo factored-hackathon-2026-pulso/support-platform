@@ -12,6 +12,7 @@ import type {
   CaseSummary,
   ChangePriorityRequest,
   CloseCaseRequest,
+  EscalationResult,
   PostAnalystTurnRequest,
   PostTurnResponse,
   TurnPage,
@@ -30,6 +31,10 @@ export const conversationMutationKeys = {
   read: (caseId: string) => ['conversation', caseId, 'read'] as const,
   close: (caseId: string) => ['conversation', caseId, 'close'] as const,
   priority: (caseId: string) => ['conversation', caseId, 'priority'] as const,
+  escalate: (caseId: string) => ['conversation', caseId, 'escalate'] as const,
+  withdrawEscalation: (caseId: string) => ['conversation', caseId, 'escalation-withdraw'] as const,
+  acknowledgeEscalation: (caseId: string) =>
+    ['conversation', caseId, 'escalation-acknowledge'] as const,
 }
 
 /** GET /cases/{caseId}: case, customer, assignment ("Cómo llegó a ti"), closure, capabilities. */
@@ -109,4 +114,46 @@ export async function changeCasePriority(
   body: ChangePriorityRequest,
 ): Promise<CasePriorityResult> {
   return unwrap(api.PUT('/api/v1/cases/{caseId}/priority', { params: { path: { caseId } }, body }))
+}
+
+/**
+ * POST /cases/{caseId}/escalations (slice 9): the assignee asks supervision for help with a
+ * required motive. `idempotencyKey`: one per open dialog, so a retry replays the escalation
+ * it created instead of failing with `escalation_open`.
+ */
+export async function escalateCase(
+  caseId: string,
+  motive: string,
+  idempotencyKey: string,
+): Promise<EscalationResult> {
+  return unwrap(
+    api.POST('/api/v1/cases/{caseId}/escalations', {
+      params: { path: { caseId }, header: { 'Idempotency-Key': idempotencyKey } },
+      body: { motive },
+    }),
+  )
+}
+
+/** POST /cases/{caseId}/escalations/{escalationId}/withdraw: the assignee, while it is open. */
+export async function withdrawEscalation(
+  caseId: string,
+  escalationId: string,
+): Promise<EscalationResult> {
+  return unwrap(
+    api.POST('/api/v1/cases/{caseId}/escalations/{escalationId}/withdraw', {
+      params: { path: { caseId, escalationId } },
+    }),
+  )
+}
+
+/** POST …/acknowledge ("Entendido"): who escalated read what supervision did. Idempotent. */
+export async function acknowledgeEscalation(
+  caseId: string,
+  escalationId: string,
+): Promise<EscalationResult> {
+  return unwrap(
+    api.POST('/api/v1/cases/{caseId}/escalations/{escalationId}/acknowledge', {
+      params: { path: { caseId, escalationId } },
+    }),
+  )
 }

@@ -24,8 +24,11 @@ function indicatorFor(item: NavItem, indicators: RailIndicators): RailIndicator 
   return (item.indicator && indicators[item.indicator]) || {}
 }
 
-function navAccessibleName(label: string, { count, dot }: RailIndicator): string {
-  if (count) return `${label}, ${count} ${count === 1 ? 'pendiente' : 'pendientes'}`
+function navAccessibleName(label: string, { count, dot, noun }: RailIndicator): string {
+  if (count) {
+    const [one, many] = noun ?? ['pendiente', 'pendientes']
+    return `${label}, ${count} ${count === 1 ? one : many}`
+  }
   if (dot) return `${label}, con novedades`
   return label
 }
@@ -50,12 +53,12 @@ export function Rail({ role, indicators = {}, presence = null }: RailProps) {
         {role.nav.map((item) => {
           const Icon = item.icon
           const active = isNavItemActive(item, pathname)
-          const { count, dot } = indicatorFor(item, indicators)
+          const { count, dot, noun } = indicatorFor(item, indicators)
           return (
             <li key={item.to}>
               <Link
                 to={item.to}
-                aria-label={navAccessibleName(item.label, { count, dot })}
+                aria-label={navAccessibleName(item.label, { count, dot, noun })}
                 aria-current={active ? 'page' : undefined}
                 title={item.label}
                 className={cn(

@@ -1,5 +1,6 @@
 """Analyst Workspace: inbox ("Casos"), case detail, the customer's other cases, transcript,
-replies, read cursor, close, and the priority (slice 8: the assignee or supervision).
+replies, read cursor, close, the priority (slice 8: the assignee or supervision) and the
+escalation to supervision (slice 9: escalate, withdraw, "Entendido").
 
 Visibility (enforced in the use cases, contract §4.3): the assignee analyst reads and
 writes; any supervisor reads; an analyst who holds (or held) another case of the same
@@ -22,6 +23,8 @@ from cc_platform.api.schemas.cases import (
     CaseSummary,
     ChangePriorityRequest,
     CloseCaseRequest,
+    EscalateRequest,
+    EscalationResult,
     InboxResponse,
     MarkReadRequest,
     PostAnalystTurnRequest,
@@ -30,6 +33,7 @@ from cc_platform.api.schemas.cases import (
 )
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.application.cases.dto import CaseSummaryView, CloseCaseCommand, PostTurnCommand
+from cc_platform.application.cases.escalations import EscalateCommand
 from cc_platform.application.cases.priority import ChangePriorityCommand
 from cc_platform.application.errors import VersionConflictError
 from cc_platform.application.pagination import MAX_SEQUENCE
@@ -45,6 +49,7 @@ AnalystOrSupervisor = Annotated[
     Actor, Depends(require_roles(StaffRole.ANALYST, StaffRole.SUPERVISOR))
 ]
 CaseId = Annotated[str, Path(alias="caseId", max_length=64, examples=["CASE-01J…"])]
+EscalationId = Annotated[str, Path(alias="escalationId", max_length=64, examples=["ESC-01J…"])]
 
 IDEMPOTENCY_KEY = "Idempotency-Key"
 REPLAYED_HEADER = "Idempotent-Replayed"
@@ -55,6 +60,18 @@ IdempotencyKey = Annotated[
         min_length=8,
         max_length=64,
         description="Must equal the body `clientMessageId`; a retry with it is a replay.",
+    ),
+]
+
+
+CreationKey = Annotated[
+    str,
+    Header(
+        alias=IDEMPOTENCY_KEY,
+        min_length=8,
+        max_length=64,
+        description="One key per escalation the caller means to open: a retry with it replays "
+        "the escalation it created (200 + `Idempotent-Replayed: true`).",
     ),
 ]
 
@@ -266,3 +283,72 @@ async def change_priority(
             exc.details = {**exc.details, "current": cast("JsonValue", current)}
         raise
     return CasePriorityResult.from_view(view)
+
+
+# ------------------------------------------------------------------------- escalations (slice 9)
+@router.post(
+    "/{caseId}/escalations",
+    response_model=EscalationResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Escalate the case to supervision (the assignee, with a motive)",
+    description=(
+        "Slice 9. The assignee analyst only (403 `case_not_assigned`), on an open assigned "
+        "case (409 `case_closed` / `invalid_transition`) without an open escalation (409 "
+        "`escalation_open`). The motive is required (trimmed, at most 500). The case stays "
+        "with her; a staff banner records it in the transcript; supervision is told live."
+    ),
+    responses={
+        200: {"description": "Replay of the same Idempotency-Key", "model": EscalationResult},
+        **problem_responses(401, 403, 404, 409, 422),
+    },
+)
+async def escalate_case(
+    *,
+    case_id: CaseId,
+    body: EscalateRequest,
+    idempotency_key: CreationKey,
+    actor: Analyst,
+    api: ApiContextDep,
+    response: Response,
+) -> EscalationResult:
+    result = await api.use_cases.cases.escalate.execute(
+        actor, case_id, EscalateCommand(motive=body.motive, idempotency_key=idempotency_key)
+    )
+    if result.replayed:
+        response.status_code = status.HTTP_200_OK
+        response.headers[REPLAYED_HEADER] = "true"
+    return EscalationResult.from_view(result)
+
+
+@router.post(
+    "/{caseId}/escalations/{escalationId}/withdraw",
+    response_model=EscalationResult,
+    summary="Withdraw the open escalation (the assignee)",
+    description=(
+        "Slice 9. The assignee analyst only, while it is open (409 `escalation_not_open` with "
+        "`currentState` once supervision acted)."
+    ),
+    responses=problem_responses(401, 403, 404, 409),
+)
+async def withdraw_escalation(
+    case_id: CaseId, escalation_id: EscalationId, actor: Analyst, api: ApiContextDep
+) -> EscalationResult:
+    view = await api.use_cases.cases.withdraw_escalation.execute(actor, case_id, escalation_id)
+    return EscalationResult.from_view(view)
+
+
+@router.post(
+    "/{caseId}/escalations/{escalationId}/acknowledge",
+    response_model=EscalationResult,
+    summary='"Entendido": the analyst who escalated read what supervision did',
+    description=(
+        "Slice 9. Only who escalated (403 `case_not_assigned`), once supervision answered, took "
+        "or reassigned the case (409 `invalid_transition` before). Repeating it changes nothing."
+    ),
+    responses=problem_responses(401, 403, 404, 409),
+)
+async def acknowledge_escalation(
+    case_id: CaseId, escalation_id: EscalationId, actor: Analyst, api: ApiContextDep
+) -> EscalationResult:
+    view = await api.use_cases.cases.acknowledge_escalation.execute(actor, case_id, escalation_id)
+    return EscalationResult.from_view(view)

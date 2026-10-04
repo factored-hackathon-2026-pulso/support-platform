@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { NOW, makeCaseSummary, makeCounts, makeInbox } from '@/test/case-fixtures'
 import {
+  escalationToastCopy,
+  ESCALATED_MARKER,
+  ESCALATION_STATE,
+  MAX_ESCALATION_TEXT,
+  escalationWaitFact,
+  isAttendedEscalation,
   CASE_STATUS,
   CLOSE_REASONS,
   INBOX_FILTERS,
@@ -674,5 +680,65 @@ describe('customer rating (slice 7)', () => {
     })
     expect(ratingFact({ score: 4 })?.text).toBe('Calificación: Excelente')
     expect(ratingFact({ score: 1 })?.tone).toBe('danger')
+  })
+})
+
+describe('escalations (slice 9)', () => {
+  const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000).toISOString()
+
+  it('marks an escalated case and names every outcome as glyph + word', () => {
+    expect(ESCALATED_MARKER).toEqual({ shape: 'up', tone: 'warn', label: 'Escalado' })
+    expect(ESCALATION_STATE.open).toMatchObject({ shape: 'ring', label: 'Abierto' })
+    expect(ESCALATION_STATE.answered.label).toBe('Respondido')
+    expect(ESCALATION_STATE.taken.label).toBe('Tomado')
+    expect(ESCALATION_STATE.reassigned).toMatchObject({ shape: 'forward', label: 'Reasignado' })
+    expect(['answered', 'taken', 'reassigned'].every((s) => isAttendedEscalation(s as never))).toBe(
+      true,
+    )
+    expect(isAttendedEscalation('withdrawn')).toBe(false)
+    expect(isAttendedEscalation('open')).toBe(false)
+    expect(MAX_ESCALATION_TEXT).toBe(500)
+  })
+
+  it('emphasizes long waits (clock, orange flame > 15 min, red flame > 30 min)', () => {
+    const open = (minutes: number) =>
+      escalationWaitFact({ escalatedAt: at(-minutes), resolvedAt: null, state: 'open' }, NOW)
+    expect(open(6)).toMatchObject({ level: 'normal', icon: 'clock', text: '6 min' })
+    expect(open(6).tooltip).toBe('Espera desde hace 6 min')
+    expect(open(15)).toMatchObject({ level: 'normal' })
+    expect(open(18)).toMatchObject({ level: 'risk', icon: 'flame', tone: 'warn', text: '18 min' })
+    expect(open(34)).toMatchObject({ level: 'long', icon: 'flame-filled', tone: 'danger' })
+    expect(open(65).text).toBe('1 h 05 min')
+    const answered = escalationWaitFact(
+      { escalatedAt: at(-40), resolvedAt: at(-36), state: 'answered' },
+      NOW,
+    )
+    expect(answered).toMatchObject({ level: 'normal', icon: 'clock', tone: 'muted', text: '4 min' })
+    expect(answered.tooltip).toBe('Esperó 4 min')
+  })
+})
+
+describe('escalation toasts (slice 9)', () => {
+  const base = {
+    escalatedById: 'STF-ME',
+    resolvedByName: 'Lucía Herrera',
+    customerName: 'Marcela Quintana Pardo',
+  }
+
+  it('tells her when supervision answered or took her case', () => {
+    expect(escalationToastCopy({ ...base, state: 'answered' }, 'STF-ME')).toEqual({
+      title: 'Lucía Herrera respondió tu escalamiento',
+      description: 'Marcela Quintana Pardo',
+      tag: 'Supervisión',
+    })
+    expect(escalationToastCopy({ ...base, state: 'taken' }, 'STF-ME')?.title).toBe(
+      'Lucía Herrera tomó tu caso',
+    )
+  })
+
+  it('stays quiet otherwise (a reassignment has its own toast)', () => {
+    expect(escalationToastCopy({ ...base, state: 'reassigned' }, 'STF-ME')).toBeNull()
+    expect(escalationToastCopy({ ...base, state: 'open' }, 'STF-ME')).toBeNull()
+    expect(escalationToastCopy({ ...base, state: 'answered' }, 'STF-OTHER')).toBeNull()
   })
 })

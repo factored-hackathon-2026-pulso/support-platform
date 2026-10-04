@@ -82,9 +82,9 @@ describe('format', () => {
   it('joins lists in Spanish', () => {
     expect(joinEs([])).toBe('')
     expect(joinEs(['Analista'])).toBe('Analista')
-    expect(joinEs(['Analista', 'Supervisora'])).toBe('Analista y Supervisora')
-    expect(joinEs(['Analista', 'Supervisora', 'Administración'])).toBe(
-      'Analista, Supervisora y Administración',
+    expect(joinEs(['Analista', 'Supervisión'])).toBe('Analista y Supervisión')
+    expect(joinEs(['Analista', 'Supervisión', 'Administración'])).toBe(
+      'Analista, Supervisión y Administración',
     )
   })
 })

@@ -24,7 +24,7 @@ export class UsersPage {
     ).toBeVisible()
   }
 
-  /** The row of this person (the "Cuenta" filter must include her status). */
+  /** The row of this person (the "Filtros" in use must include her). */
   row(name: string): Locator {
     return this.table.getByRole('row').filter({
       has: this.page.getByRole('button', { name, exact: true }),
@@ -54,7 +54,7 @@ export class UsersPage {
       .getByRole('checkbox', { name: new RegExp(`^${role}\\b`) })
   }
 
-  /** "Nueva persona" → fill the form → "Crear cuenta" → the temporary password shown once. */
+  /** "Nuevo usuario" → fill the form → "Crear cuenta" → the temporary password shown once. */
   async createPerson(input: {
     name: string
     email: string
@@ -62,10 +62,10 @@ export class UsersPage {
     languages: Language[]
     team: string
   }): Promise<string> {
-    await this.page.getByRole('button', { name: 'Nueva persona' }).click()
-    const dialog = this.page.getByRole('dialog', { name: 'Nueva persona' })
+    await this.page.getByRole('button', { name: 'Nuevo usuario' }).click()
+    const dialog = this.page.getByRole('dialog', { name: 'Nuevo usuario' })
     await expect(dialog).toBeVisible()
-    const form = dialog.getByRole('form', { name: 'Nueva persona' })
+    const form = dialog.getByRole('form', { name: 'Nuevo usuario' })
     await form.getByRole('textbox', { name: 'Nombre completo' }).fill(input.name)
     await form.getByRole('textbox', { name: 'Correo' }).fill(input.email)
     for (const role of input.roles) {
@@ -75,10 +75,13 @@ export class UsersPage {
         .check()
     }
     for (const language of input.languages) {
-      await form
+      // A pill toggle: the native checkbox is visually hidden inside the pill (keyboard works).
+      const pill = form
         .getByRole('group', { name: 'Idiomas' })
         .getByRole('checkbox', { name: LANGUAGE_LABEL[language], exact: true })
-        .check()
+      await pill.focus()
+      if (!(await pill.isChecked())) await pill.press('Space')
+      await expect(pill).toBeChecked()
     }
     await form.getByRole('combobox', { name: 'Equipo' }).selectOption({ label: input.team })
     await dialog.getByRole('button', { name: 'Crear cuenta' }).click()

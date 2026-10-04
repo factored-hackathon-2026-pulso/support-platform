@@ -7,11 +7,11 @@
  * `version` is newer, so a repeated or late envelope is a no-op.
  */
 import type { QueryClient } from '@tanstack/react-query'
-import { readCaseSummary } from '@/features/cases/core'
+import { readCaseSummary, readEscalation } from '@/features/cases/core'
 import { envelopePayload, type RealtimeEnvelope, type RealtimeRegistration } from '@/lib/realtime'
 import { conversationKeys } from './api'
 import { applySummary, hasSequenceGap, mergeTurns, needsDetailRefetch } from './model'
-import type { CaseDetail, TranscriptCache, Turn } from './types'
+import type { CaseDetail, Escalation, TranscriptCache, Turn } from './types'
 
 /** Staff `Turn` payload (the customer socket has its own registry and shape). */
 export function readTurn(envelope: RealtimeEnvelope): Turn | null {
@@ -61,8 +61,42 @@ function applyCase(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
   if (refetch) void queryClient.invalidateQueries({ queryKey: key, exact: true })
 }
 
+/**
+ * Whether `incoming` should replace the escalation the detail holds: the same escalation (its
+ * newer state), or a newer one of the case (escalated again after the last one ended).
+ */
+export function replacesEscalation(incoming: Escalation, current: Escalation | null): boolean {
+  if (!current) return true
+  if (incoming.id === current.id) return true
+  return new Date(incoming.escalatedAt).getTime() > new Date(current.escalatedAt).getTime()
+}
+
+/**
+ * `escalation.updated` (slice 9): the case's escalation → the detail cache at once (the card
+ * under the header), then a refetch of the detail (capabilities) and of the transcript (the
+ * staff banner the command wrote).
+ */
+function applyEscalation(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
+  const escalation = readEscalation(envelope)
+  if (!escalation) return
+  const key = conversationKeys.detail(escalation.caseId)
+  const detail = queryClient.getQueryData<CaseDetail>(key)
+  if (!detail) return
+  if (replacesEscalation(escalation, detail.escalation)) {
+    queryClient.setQueryData<CaseDetail>(key, (current) =>
+      current ? { ...current, escalation } : current,
+    )
+  }
+  void queryClient.invalidateQueries({ queryKey: key, exact: true })
+  void queryClient.invalidateQueries({
+    queryKey: conversationKeys.turns(escalation.caseId),
+    exact: true,
+  })
+}
+
 export const registerConversationRealtime: RealtimeRegistration = (registry) => {
   registry.register('turn.created', applyTurn)
+  registry.register('escalation.updated', applyEscalation)
   registry.register('case.updated', applyCase)
   registry.register('case.assigned', applyCase)
 }

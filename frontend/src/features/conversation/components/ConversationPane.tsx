@@ -9,8 +9,10 @@ import {
 } from 'react'
 import { useCurrentUser } from '@/app/session'
 import { Button, Callout, Skeleton, useToastClearance } from '@/components/ui'
+import { useNow } from '@/lib/hooks'
 import {
   describeCaseLoadFailure,
+  escalationCardOf,
   toTranscriptItems,
   type ConversationMode,
   type TranscriptItem,
@@ -28,6 +30,8 @@ import { ArrivalNote } from './ArrivalNote'
 import { CaseHeader } from './CaseHeader'
 import { ChatTranscript } from './ChatTranscript'
 import { CloseCaseDialog } from './CloseCaseDialog'
+import { EscalateCaseDialog } from './EscalateCaseDialog'
+import { EscalationCard } from './EscalationCard'
 import { Composer } from './Composer'
 import { ReadOnlyFooter } from './ReadOnlyFooter'
 import { UnsentDraft } from './UnsentDraft'
@@ -165,6 +169,10 @@ function LoadedConversation({
   const supervision = mode === 'supervision'
   const canReply = capabilities.canReply && !supervision
   const [closing, setClosing] = useState(false)
+  const [escalating, setEscalating] = useState(false)
+  // "hace 6 min" on the escalation card (slice 9).
+  const now = useNow(30_000)
+  const escalationCard = escalationCardOf(detail, meId, mode, now)
   // Owned here, not by the composer: when the viewer loses the case (supervision
   // reassigned it, or it closed) the composer goes away but the text stays.
   const [draft, setDraft] = useState('')
@@ -184,11 +192,13 @@ function LoadedConversation({
         detail={detail}
         headingRef={headingRef}
         onRequestClose={() => setClosing(true)}
+        onRequestEscalate={supervision ? undefined : () => setEscalating(true)}
         onOpenHistory={onOpenHistory}
         actions={headerActions}
         hideClose={supervision}
         customerFile={customerFile}
       />
+      {escalationCard ? <EscalationCard caseId={summary.id} card={escalationCard} /> : null}
       <ArrivalNote detail={detail} meId={meId} mode={mode} />
       <TranscriptArea caseId={summary.id} turns={turns} items={items} onRetry={retry} />
       {/* Toasts rise above the composer so they never cover "Enviar". */}
@@ -207,12 +217,15 @@ function LoadedConversation({
         </div>
       </div>
       {supervision ? null : (
-        <CloseCaseDialog
-          summary={summary}
-          open={closing}
-          onOpenChange={setClosing}
-          onClosed={onClosed}
-        />
+        <>
+          <CloseCaseDialog
+            summary={summary}
+            open={closing}
+            onOpenChange={setClosing}
+            onClosed={onClosed}
+          />
+          <EscalateCaseDialog summary={summary} open={escalating} onOpenChange={setEscalating} />
+        </>
       )}
     </section>
   )

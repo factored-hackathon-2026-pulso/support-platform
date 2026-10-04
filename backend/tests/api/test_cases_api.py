@@ -24,7 +24,7 @@ SUMMARY_KEYS = {
     "id", "version", "customer", "channel", "language", "priority", "status", "inboxStatus",
     "openedAt", "slaDueAt", "firstResponseAt", "lastInteractionAt", "preview",
     "previewAuthorRole", "assignedAnalystId", "unreadCount", "lastSequence", "previousCaseId",
-    "closedAt", "closeReason", "rating",
+    "closedAt", "closeReason", "rating", "escalated",
 }  # fmt: skip
 
 
@@ -130,6 +130,7 @@ def test_case_detail_for_the_assignee(client: TestClient, daniela: dict[str, str
         "closure",
         "capabilities",
         "previousCaseCount",
+        "escalation",
     }
     assert detail["customer"] == {
         "id": detail["case"]["customer"]["id"],
@@ -154,6 +155,7 @@ def test_case_detail_for_the_assignee(client: TestClient, daniela: dict[str, str
         "canClose": True,
         "canAssign": False,
         "canChangePriority": True,
+        "canEscalate": True,
     }
     portuguese = client.get(f"/api/v1/cases/{LARISSA}", headers=daniela).json()
     assert portuguese["assignment"]["policyRuleId"] == "H1"
@@ -174,6 +176,7 @@ def test_closed_case_detail(client: TestClient, daniela: dict[str, str]) -> None
         "canClose": False,
         "canAssign": False,
         "canChangePriority": False,
+        "canEscalate": False,
     }
 
 
@@ -242,6 +245,7 @@ def test_history_access_is_read_only(
         "canClose": False,
         "canAssign": False,
         "canChangePriority": False,
+        "canEscalate": False,
     }
     turns = client.get(f"/api/v1/cases/{PATRICIA_OLD}/turns", headers=daniela).json()
     assert [t["authorName"] for t in turns["items"] if t["authorRole"] == "analyst"] == [
@@ -405,6 +409,7 @@ def test_close_with_every_reason(client: TestClient, daniela: dict[str, str], re
         "canClose": False,
         "canAssign": False,
         "canChangePriority": False,
+        "canEscalate": False,
     }
 
 

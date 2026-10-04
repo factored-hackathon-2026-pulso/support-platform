@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from cc_platform.api.schemas.cases import CaseSummary, InboxCounts
+from cc_platform.api.schemas.cases import CaseSummary, Escalation, InboxCounts
 from cc_platform.api.schemas.common import ApiModel
 from cc_platform.api.schemas.supervision import QueueCounts
 from cc_platform.infrastructure.seed.cases import seed_case_id
@@ -31,6 +31,7 @@ QUEUES, TEAM = "supervision:queues", "supervision:team"
 SignIn = Callable[[str], str]
 
 SCHEMAS: dict[str, type[ApiModel]] = {
+    "escalation.updated": Escalation,
     "case.updated": CaseSummary,
     "case.assigned": CaseSummary,
     "case.unassigned": CaseSummary,
@@ -132,11 +133,22 @@ def test_reassignment_reaches_both_inboxes_and_the_customer(
         to_julian, to_daniela = until_pong(julian), until_pong(daniela)
         to_customer, to_supervisor = until_pong(customer), until_pong(supervisor)
 
-    assert [e["type"] for e in to_julian] == ["case.updated", "case.unassigned", "inbox.counts"]
-    unassigned = to_julian[1]
+    # Julián had escalated 113 (seed): the reassignment ends it, and he hears it (slice 9).
+    (ended,) = of_type(to_julian, "escalation.updated")
+    assert (ended["data"]["payload"]["state"], ended["data"]["payload"]["reassignedToId"]) == (
+        "reassigned",
+        DANIELA_ID,
+    )
+    case_envelopes = [e for e in to_julian if e["type"] != "escalation.updated"]
+    assert [e["type"] for e in case_envelopes] == [
+        "case.updated",
+        "case.unassigned",
+        "inbox.counts",
+    ]
+    unassigned = case_envelopes[1]
     assert unassigned["data"]["payload"]["assignedAnalystId"] == DANIELA_ID
     assert unassigned["data"]["actor"] == {"role": "supervisor", "id": LUCIA_ID}
-    julian_counts = to_julian[2]["data"]["payload"]
+    julian_counts = case_envelopes[2]["data"]["payload"]
     assert (julian_counts["all"], julian_counts["toReply"]) == (1, 0)  # 114 only
     validate(to_julian)
 
@@ -288,7 +300,8 @@ def test_team_updated_triggers(
     assert ids(paused) == [[DANIELA_ID]]
     assert ids(session) == [[JULIAN_ID]]
     assert not_analyst == []
-    assert ids(closed) == [[DANIELA_ID], [DANIELA_ID]]  # case.closed + case.status_changed
+    # case.closed + case.status_changed + escalation.closed (101 was escalated, slice 9)
+    assert ids(closed) == [[DANIELA_ID], [DANIELA_ID], [DANIELA_ID]]
     for envelope in session:
         assert envelope["type"] == "team.updated"  # auth events never go out raw
 

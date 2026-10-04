@@ -19,6 +19,7 @@ from cc_platform.application.cases.dto import (
     CaseHistoryView,
     CaseRatingView,
     CaseSummaryView,
+    EscalationView,
     InboxCountsView,
     InboxView,
     PostTurnResult,
@@ -26,8 +27,10 @@ from cc_platform.application.cases.dto import (
     TurnPageView,
     TurnView,
 )
+from cc_platform.application.cases.escalations import EscalationResult as EscalationResultView
 from cc_platform.application.cases.priority import PriorityResultView
 from cc_platform.domain.cases.case import MAX_CLOSE_NOTE
+from cc_platform.domain.cases.escalation import MAX_ESCALATION_TEXT, EscalationState
 from cc_platform.domain.cases.turn import MAX_TURN_TEXT
 from cc_platform.domain.cases.values import (
     AssignmentReason,
@@ -108,6 +111,9 @@ class CaseSummary(ApiModel):
     rating: CaseRating | None = Field(
         description="The customer's rating (slice 7); only on a closed case, null until rated."
     )
+    escalated: bool = Field(
+        description='Slice 9: an escalation to supervision is open ("Escalado").'
+    )
 
     @classmethod
     def from_view(cls, view: CaseSummaryView) -> CaseSummary:
@@ -133,6 +139,7 @@ class CaseSummary(ApiModel):
             closed_at=view.closed_at,
             close_reason=view.close_reason,
             rating=CaseRating.from_view(view.rating),
+            escalated=view.escalated,
         )
 
 
@@ -256,6 +263,10 @@ class CaseCapabilities(ApiModel):
         description="Slice 8: the caller is the assignee analyst or a supervisor, and the case "
         "is open (PUT /cases/{caseId}/priority)."
     )
+    can_escalate: bool = Field(
+        description="Slice 9: the caller is the assignee analyst, the case is open and has no "
+        "open escalation (POST /cases/{caseId}/escalations)."
+    )
 
     @classmethod
     def from_view(cls, view: CaseCapabilitiesView) -> CaseCapabilities:
@@ -265,6 +276,54 @@ class CaseCapabilities(ApiModel):
             can_close=view.can_close,
             can_assign=view.can_assign,
             can_change_priority=view.can_change_priority,
+            can_escalate=view.can_escalate,
+        )
+
+
+class Escalation(ApiModel):
+    """An escalation to supervision (slice 9). Staff only: the customer never sees it."""
+
+    id: str = Field(description="ESC-…")
+    case_id: str
+    customer_name: str
+    state: EscalationState = Field(
+        description="open · answered · taken · reassigned · withdrawn · closed (the case closed "
+        "while it was open)."
+    )
+    motive: str = Field(description="Why the analyst escalated (staff text, at most 500).")
+    escalated_at: datetime
+    escalated_by_id: str
+    escalated_by_name: str | None
+    resolved_at: datetime | None = Field(description="When it stopped being open.")
+    resolved_by_id: str | None
+    resolved_by_name: str | None
+    note: str | None = Field(description="Supervision's answer (answered only).")
+    reassigned_to_id: str | None = Field(
+        description="Who holds the case now (taken: the supervisor; reassigned)."
+    )
+    reassigned_to_name: str | None
+    acknowledged_at: datetime | None = Field(
+        description='The analyst read what supervision did ("Entendido").'
+    )
+
+    @classmethod
+    def from_view(cls, view: EscalationView) -> Escalation:
+        return cls(
+            id=view.id,
+            case_id=view.case_id,
+            customer_name=view.customer_name,
+            state=view.state,
+            motive=view.motive,
+            escalated_at=view.escalated_at,
+            escalated_by_id=view.escalated_by_id,
+            escalated_by_name=view.escalated_by_name,
+            resolved_at=view.resolved_at,
+            resolved_by_id=view.resolved_by_id,
+            resolved_by_name=view.resolved_by_name,
+            note=view.note,
+            reassigned_to_id=view.reassigned_to_id,
+            reassigned_to_name=view.reassigned_to_name,
+            acknowledged_at=view.acknowledged_at,
         )
 
 
@@ -275,6 +334,9 @@ class CaseDetail(ApiModel):
     closure: CaseClosure | None
     capabilities: CaseCapabilities = Field(description="Computed for the caller.")
     previous_case_count: int = Field(description="Other cases of this customer (any status).")
+    escalation: Escalation | None = Field(
+        description="Slice 9: the case's latest escalation (any state), or null."
+    )
 
     @classmethod
     def from_view(cls, view: CaseDetailView) -> CaseDetail:
@@ -285,6 +347,7 @@ class CaseDetail(ApiModel):
             closure=CaseClosure.from_view(view.closure) if view.closure else None,
             capabilities=CaseCapabilities.from_view(view.capabilities),
             previous_case_count=view.previous_case_count,
+            escalation=Escalation.from_view(view.escalation) if view.escalation else None,
         )
 
 
@@ -422,3 +485,32 @@ class CasePriorityResult(ApiModel):
     @classmethod
     def from_view(cls, view: PriorityResultView) -> CasePriorityResult:
         return cls(changed=view.changed, case=CaseSummary.from_view(view.case))
+
+
+# ------------------------------------------------------------------------- escalations (slice 9)
+EscalationText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_ESCALATION_TEXT),
+]
+
+
+class EscalateRequest(RequestModel):
+    motive: EscalationText = Field(description="Why (required, trimmed, at most 500).")
+
+
+class RespondEscalationRequest(RequestModel):
+    note: EscalationText = Field(
+        description="The answer for the analyst (required, trimmed, at most 500)."
+    )
+
+
+class EscalationResult(ApiModel):
+    escalation: Escalation
+    case: CaseSummary
+
+    @classmethod
+    def from_view(cls, view: EscalationResultView) -> EscalationResult:
+        return cls(
+            escalation=Escalation.from_view(view.escalation),
+            case=CaseSummary.from_view(view.case),
+        )

@@ -1,37 +1,40 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Page, PageBody } from '@/components/layout'
-import { PageHeader, SegmentedControl } from '@/components/ui'
 import {
-  analystsOfTeam,
-  assignResultCopy,
-  findCaseSummary,
-  selectedTeam,
-  teamPillLabels,
+  FilterChips,
+  FilterMenu,
+  PageHeader,
+  activeFilterChips,
+  toggleFilter,
+  type FilterSelection,
+} from '@/components/ui'
+import { useNow } from '@/lib/hooks'
+import {
+  filterAnalysts,
+  findOpenCase,
+  reassignResultCopy,
+  teamFilterGroups,
+  teamSelection,
+  teamStateFromSelection,
   teamSubtitle,
-  type ActivityFilter,
   type TeamUrlState,
   type UrlStateChangeOptions,
 } from '../model'
-import { useNow } from '@/lib/hooks'
 import {
   useIsAssigning,
-  useQueueNotices,
-  useQueueOverview,
   useSupervisionLive,
+  useSupervisionNotices,
   useTeamOverview,
 } from '../hooks'
-import type { AssignmentResult, CaseSummary, TeamAnalyst } from '../types'
+import type { CaseSummary } from '../types'
 import { AnalystSheet } from './AnalystSheet'
 import { AnalystsPanel } from './AnalystsPanel'
-import { AssignCaseDialog } from './AssignCaseDialog'
-import { QueuesColumn } from './QueuesColumn'
+import { ReassignDialog } from './ReassignDialog'
 import { ResultStrip } from './ResultStrip'
+import { SUPERVISION_TICK_MS } from './QueuesScreen'
 
-/** Clock of the screen: SLA tags, waits and risk counts (minute resolution). */
-export const TEAM_TICK_MS = 15_000
-
-/** "Todos los equipos" pill value (team ids are `TEAM-…`, never this). */
-const ALL_TEAMS = '__todos'
+/** Kept for the case view and older imports: the supervision clock. */
+export const TEAM_TICK_MS = SUPERVISION_TICK_MS
 
 export interface TeamScreenProps {
   state: TeamUrlState
@@ -41,26 +44,27 @@ export interface TeamScreenProps {
 }
 
 /**
- * Equipo y colas (SuTeam.dc.html, contract §8.4): the language queues and the
- * analysts, live through `supervision:queues` / `supervision:team`. Team and
- * queues load and fail independently. The URL holds the team, the state filter,
- * the analyst sheet and the assign dialog (`?equipo=&estado=&analista=&asignar=`).
+ * "Equipo" (SuTeam.dc.html, slice 9): one table of every analyst, live through
+ * `supervision:team`. The team is a filter (never a tab): one "Filtros" dropdown (Estado,
+ * Idioma, Equipo, each with its count) and removable chips, all in the URL
+ * (`?estado=&idioma=&equipo=&analista=&reasignar=`). The analyst sheet lists her open
+ * cases with "Reasignar".
  */
 export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps) {
   useSupervisionLive()
-  useQueueNotices()
+  useSupervisionNotices()
   const team = useTeamOverview()
-  const queues = useQueueOverview()
-  const now = useNow(TEAM_TICK_MS)
-  const [result, setResult] = useState<{ prefix: string; message: string } | null>(null)
+  const now = useNow(SUPERVISION_TICK_MS)
+  const [result, setResult] = useState<{ message: string } | null>(null)
 
-  const teams = team.data?.teams ?? []
-  const current = selectedTeam(teams, state.team)
-  const teamId = current?.id ?? null
   const analysts = team.data?.analysts
-  const subtitle = analysts
-    ? teamSubtitle(current, analystsOfTeam(analysts, teamId).length)
-    : 'Cargando el equipo…'
+  const groups = team.data ? teamFilterGroups(team.data, state) : []
+  const selection = teamSelection(state)
+  const chips = activeFilterChips(groups, selection)
+  const shown = analysts ? filterAnalysts(analysts, state) : []
+  const update = (next: FilterSelection) =>
+    onStateChange(teamStateFromSelection(state, next), { replace: true })
+  const clear = () => onStateChange({ activities: [], languages: [], teams: [] }, { replace: true })
 
   // ?analista= of someone not (or no longer) listed: close the sheet.
   const sheetAnalyst = state.analystId
@@ -71,39 +75,26 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
     if (unknownAnalyst) onStateChange({ analystId: null }, { replace: true })
   }, [unknownAnalyst, onStateChange])
 
-  // ?asignar=: the case as the overviews show it now. Team and queues refetch
-  // separately (the team's is throttled), so right after an assignment the queues
-  // can drop the case before the team lists it under the analyst. Keep the summary
-  // the dialog last showed for that window: unmounting it would lose the `mutate`
-  // callbacks (the result strip, clearing `?asignar=`), and the team refetch would
-  // then reopen it as "Reasignar caso".
-  const liveSummary = state.assignCaseId
-    ? findCaseSummary(state.assignCaseId, team.data, queues.data)
-    : null
+  // ?reasignar=: the open case as the overview shows it now. Keep the last one while the
+  // reassignment is in flight (the refetch may move it under another analyst first).
+  const liveSummary = state.reassignCaseId ? findOpenCase(state.reassignCaseId, team.data) : null
   const [keptSummary, setKeptSummary] = useState<CaseSummary | null>(null)
   if (liveSummary && liveSummary !== keptSummary) setKeptSummary(liveSummary)
-  const assignSummary =
-    liveSummary ?? (keptSummary && keptSummary.id === state.assignCaseId ? keptSummary : null)
-
-  // A case that is neither queued nor open any more (both overviews settled, no
-  // assignment of it in flight): drop ?asignar=.
-  const assigning = useIsAssigning(state.assignCaseId)
-  const settled =
-    team.status === 'success' &&
-    queues.status === 'success' &&
-    !team.isFetching &&
-    !queues.isFetching
-  const unknownCase = state.assignCaseId !== null && settled && !liveSummary && !assigning
+  const reassignSummary =
+    liveSummary ?? (keptSummary && keptSummary.id === state.reassignCaseId ? keptSummary : null)
+  const assigning = useIsAssigning(state.reassignCaseId)
+  const settled = team.status === 'success' && !team.isFetching
+  const unknownCase = state.reassignCaseId !== null && settled && !liveSummary && !assigning
   useEffect(() => {
-    if (unknownCase) onStateChange({ assignCaseId: null }, { replace: true })
+    if (unknownCase) onStateChange({ reassignCaseId: null }, { replace: true })
   }, [unknownCase, onStateChange])
 
-  const openAssign = useCallback(
-    (caseId: string) => onStateChange({ assignCaseId: caseId }),
+  const openReassign = useCallback(
+    (caseId: string) => onStateChange({ reassignCaseId: caseId }),
     [onStateChange],
   )
-  const closeAssign = useCallback(
-    () => onStateChange({ assignCaseId: null }, { replace: true }),
+  const closeReassign = useCallback(
+    () => onStateChange({ reassignCaseId: null }, { replace: true }),
     [onStateChange],
   )
 
@@ -112,65 +103,53 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
     return analysts?.find((analyst) => analyst.id === summary.assignedAnalystId)?.name ?? null
   }
 
-  function reportAssigned(summary: CaseSummary, _result: AssignmentResult, chosen: TeamAnalyst) {
-    const queue = queues.data?.queues.find((q) => q.language === summary.language)
-    setResult(
-      assignResultCopy({
-        customerName: summary.customer.displayName,
-        analystName: chosen.name,
-        previousAnalystName: summary.assignedAnalystId
-          ? (holderOf(summary) ?? 'otra persona del equipo')
-          : null,
-        queueLanguage: summary.language,
-        // Robust to the refetch landing before or after this response.
-        queueRemaining: queue ? queue.cases.filter((c) => c.id !== summary.id).length : 0,
-      }),
-    )
-  }
-
-  const pillLabels = teamPillLabels(teams)
-
   return (
     <Page
       header={
         <PageHeader
-          title="Equipo y colas"
-          subtitle={subtitle}
+          title="Equipo"
+          subtitle={
+            analysts
+              ? teamSubtitle(shown.length, analysts.length, chips.length > 0)
+              : 'Cargando el equipo…'
+          }
           actions={
-            teams.length > 0 ? (
-              <SegmentedControl
-                label="Equipo"
-                variant="pills"
-                value={teamId ?? ALL_TEAMS}
-                onValueChange={(value) =>
-                  onStateChange({ team: value === ALL_TEAMS ? null : value }, { replace: true })
-                }
-                options={[
-                  { value: ALL_TEAMS, label: 'Todos los equipos' },
-                  ...teams.map((t) => ({ value: t.id, label: pillLabels[t.id] ?? t.name })),
-                ]}
+            <div className="flex flex-col items-end gap-2">
+              <FilterMenu
+                groups={groups}
+                selection={selection}
+                align="end"
+                onToggle={(group, value) => update(toggleFilter(selection, group, value))}
+                onClear={clear}
               />
-            ) : null
+            </div>
           }
         />
       }
-      toolbar={<ResultStrip result={result} onDismiss={() => setResult(null)} />}
+      toolbar={
+        <>
+          {chips.length ? (
+            <div className="shrink-0 border-b border-border bg-surface px-7 py-2">
+              <FilterChips
+                chips={chips}
+                onRemove={(group, value) => update(toggleFilter(selection, group, value))}
+                onClear={clear}
+              />
+            </div>
+          ) : null}
+          <ResultStrip result={result} onDismiss={() => setResult(null)} />
+        </>
+      }
     >
-      <PageBody
-        scroll={false}
-        className="grid grid-cols-[440px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-4"
-      >
-        <QueuesColumn query={queues} now={now} onAssign={openAssign} onOpenCase={onOpenCase} />
+      <PageBody scroll={false} className="flex min-h-0 flex-col">
         <AnalystsPanel
           query={team}
-          teamId={teamId}
-          filter={state.activity}
+          analysts={shown}
+          filtered={chips.length > 0}
           selectedAnalystId={state.analystId}
           now={now}
-          onFilterChange={(activity: ActivityFilter) =>
-            onStateChange({ activity }, { replace: true })
-          }
           onSelectAnalyst={(analystId) => onStateChange({ analystId })}
+          onClearFilters={clear}
         />
       </PageBody>
 
@@ -180,19 +159,26 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
           now={now}
           onClose={() => onStateChange({ analystId: null })}
           onOpenCase={onOpenCase}
-          onReassign={openAssign}
+          onReassign={openReassign}
         />
       ) : null}
 
-      {assignSummary && analysts ? (
-        <AssignCaseDialog
-          key={assignSummary.id}
-          summary={assignSummary}
+      {reassignSummary && analysts ? (
+        <ReassignDialog
+          key={reassignSummary.id}
+          summary={reassignSummary}
           analysts={analysts}
-          holderName={holderOf(assignSummary)}
-          now={now}
-          onClose={closeAssign}
-          onAssigned={(assigned, chosen) => reportAssigned(assignSummary, assigned, chosen)}
+          holderName={holderOf(reassignSummary)}
+          onClose={closeReassign}
+          onReassigned={(_result, chosen) =>
+            setResult(
+              reassignResultCopy({
+                customerName: reassignSummary.customer.displayName,
+                previousAnalystName: holderOf(reassignSummary),
+                analystName: chosen.name,
+              }),
+            )
+          }
         />
       ) : null}
     </Page>

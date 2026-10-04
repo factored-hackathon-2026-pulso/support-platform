@@ -6,10 +6,10 @@ import { setCaseAssignee, supervisionKeys, supervisionMutationKeys } from '../ap
 import type { AssignmentResult, SetAssigneeRequest } from '../types'
 
 /**
- * PUT /supervision/cases/{caseId}/assignee (contract §8.6). On success the case
- * detail (capabilities, assignment, the banner in the transcript), the team and
- * the queues are refetched: patching the detail with the returned summary is not
- * enough, the server computes the rest.
+ * PUT /supervision/cases/{caseId}/assignee ("Reasignar"; slice 3 §8.6). On success the
+ * case detail (capabilities, assignment, the banner in the transcript), the team, the
+ * queues, "Colas" and "Escalados" (a reassignment ends an open escalation, slice 9) are
+ * refetched: patching the detail with the returned summary is not enough.
  */
 export function useSetAssignee(caseId: string) {
   const queryClient = useQueryClient()
@@ -21,6 +21,8 @@ export function useSetAssignee(caseId: string) {
       void queryClient.invalidateQueries({ queryKey: conversationKeys.turns(caseId) })
       void queryClient.invalidateQueries({ queryKey: supervisionKeys.team() })
       void queryClient.invalidateQueries({ queryKey: supervisionKeys.queues() })
+      void queryClient.invalidateQueries({ queryKey: supervisionKeys.openCases() })
+      void queryClient.invalidateQueries({ queryKey: supervisionKeys.escalations() })
     },
   })
 }

@@ -1,4 +1,5 @@
-"""Supervision: team and queues ("Equipo y colas") and manual assignment (slice 3 §4).
+"""Supervision: team and queues, manual assignment (slice 3 §4); slice 9: "Colas" (every open
+case of a language) and "Escalados" (answer, take the case).
 
 Supervisors only. A supervisor reads any case through ``/cases/{caseId}`` (read-only; that
 read is audited as ``case.viewed``) and assigns or reassigns it here. Rule 3 applies to a
@@ -9,24 +10,28 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 
 from cc_platform.api.dependencies import ApiContextDep, require_roles
+from cc_platform.api.schemas.cases import EscalationResult, RespondEscalationRequest
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.api.schemas.supervision import (
     AssignmentResult,
+    EscalationOverview,
+    LanguageOpenCases,
     QueueOverview,
     SetAssigneeRequest,
     TeamOverview,
 )
 from cc_platform.application.cases.manual_assignment import SetAssigneeCommand
 from cc_platform.application.security import Actor
-from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.people.staff import Language, StaffRole
 
 router = APIRouter(prefix="/supervision", tags=["supervision"])
 
 Supervisor = Annotated[Actor, Depends(require_roles(StaffRole.SUPERVISOR))]
 CaseId = Annotated[str, Path(alias="caseId", max_length=64, examples=["CASE-01J…"])]
+EscalationId = Annotated[str, Path(alias="escalationId", max_length=64, examples=["ESC-01J…"])]
 
 
 @router.get(
@@ -82,3 +87,74 @@ async def set_assignee(
         ),
     )
     return AssignmentResult.from_view(view)
+
+
+@router.get(
+    "/open-cases",
+    response_model=LanguageOpenCases,
+    summary='"Colas": every open case of one language and who holds it',
+    description=(
+        "Slice 9. Queued, assigned and in-progress cases of `language` (one indexed query): "
+        "the ones nobody holds first (oldest first), then the held ones in open-inbox order. "
+        "Assignment stays automatic: this is a view."
+    ),
+    responses=problem_responses(401, 403, 422),
+)
+async def get_open_cases(
+    _actor: Supervisor,
+    api: ApiContextDep,
+    language: Annotated[Language, Query(description="es | pt")],
+) -> LanguageOpenCases:
+    view = await api.use_cases.cases.language_open_cases.execute(language)
+    return LanguageOpenCases.from_view(view)
+
+
+@router.get(
+    "/escalations",
+    response_model=EscalationOverview,
+    summary='"Escalados": open escalations and the ones attended in the last 24 hours',
+    responses=problem_responses(401, 403),
+)
+async def get_escalations(actor: Supervisor, api: ApiContextDep) -> EscalationOverview:
+    return EscalationOverview.from_view(
+        await api.use_cases.cases.escalation_overview.execute(actor)
+    )
+
+
+@router.post(
+    "/escalations/{escalationId}/response",
+    response_model=EscalationResult,
+    summary="Answer an open escalation with a note (the case stays with the analyst)",
+    description=(
+        "Slice 9. 404 unknown escalation · 409 `escalation_not_open` (`currentState`) · 422 "
+        "empty or longer than 500. The analyst sees the answer live in the case."
+    ),
+    responses=problem_responses(401, 403, 404, 409, 422),
+)
+async def respond_escalation(
+    escalation_id: EscalationId,
+    body: RespondEscalationRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> EscalationResult:
+    view = await api.use_cases.cases.respond_escalation.execute(actor, escalation_id, body.note)
+    return EscalationResult.from_view(view)
+
+
+@router.post(
+    "/escalations/{escalationId}/take",
+    response_model=EscalationResult,
+    summary="Take the escalated case yourself (supervisors who also hold Analista)",
+    description=(
+        "Slice 9. A reassignment to the caller: she must be an active analyst too (422 "
+        "`analyst_not_eligible`) who speaks the case language (rule 3, 422 "
+        "`language_mismatch`), and the escalation open (409 `escalation_not_open`). The "
+        "customer is told who attends them now."
+    ),
+    responses=problem_responses(401, 403, 404, 409, 422),
+)
+async def take_escalated_case(
+    escalation_id: EscalationId, actor: Supervisor, api: ApiContextDep
+) -> EscalationResult:
+    view = await api.use_cases.cases.take_escalated_case.execute(actor, escalation_id)
+    return EscalationResult.from_view(view)

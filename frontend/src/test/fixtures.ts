@@ -24,7 +24,7 @@ export const analystStaff: Staff = {
   active: true,
 }
 
-/** Analista + Supervisora (team lead): exercises the role switcher. */
+/** Analista + Supervisión (team lead): exercises the role switcher. */
 export const supervisorStaff: Staff = {
   id: 'STF-SUP0000001',
   name: 'Laura Méndez Castro',
@@ -46,7 +46,7 @@ export const adminStaff: Staff = {
   active: true,
 }
 
-/** Supervisora + Administración: two roles without the analyst one. */
+/** Supervisión + Administración: two roles without the analyst one. */
 export const supervisorAdminStaff: Staff = {
   id: 'STF-SAD0000001',
   name: 'Carolina Peña Ruiz',

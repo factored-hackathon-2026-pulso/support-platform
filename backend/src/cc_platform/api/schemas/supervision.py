@@ -11,15 +11,21 @@ from datetime import datetime
 
 from pydantic import Field
 
-from cc_platform.api.schemas.cases import AssignmentOut, CaseSummary
+from cc_platform.api.schemas.cases import AssignmentOut, CaseSummary, Escalation
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.api.schemas.people import TeamRef
+from cc_platform.application.cases.escalations import (
+    EscalationItemView,
+    EscalationOverviewView,
+)
 from cc_platform.application.cases.manual_assignment import AssignmentResultView
 from cc_platform.application.cases.supervision import (
     ActivityCountsView,
     AnalystActivity,
     AnalystCaseCountsView,
+    LanguageOpenCasesView,
     LanguageQueueView,
+    OpenCaseRowView,
     QueueCountsView,
     QueueCountView,
     QueueOverviewView,
@@ -181,6 +187,10 @@ class LanguageQueue(ApiModel):
     available_speakers: int = Field(description="Active analysts, available, who speak it.")
     speakers: int = Field(description="Active analysts who speak it (any availability).")
     cases: list[CaseSummary] = Field(description="Queued, oldest openedAt first.")
+    open_cases: int = Field(description="Slice 9: every open case of the language (queued too).")
+    open_at_risk: int = Field(
+        description="Slice 9: open cases at first-response risk, at serverTime."
+    )
 
     @classmethod
     def from_view(cls, view: LanguageQueueView) -> LanguageQueue:
@@ -193,6 +203,8 @@ class LanguageQueue(ApiModel):
             available_speakers=view.available_speakers,
             speakers=view.speakers,
             cases=[CaseSummary.from_view(case) for case in view.cases],
+            open_cases=view.open_cases,
+            open_at_risk=view.open_at_risk,
         )
 
 
@@ -231,4 +243,70 @@ class AssignmentResult(ApiModel):
             changed=view.changed,
             case=CaseSummary.from_view(view.case),
             assignment=AssignmentOut.from_view(view.assignment),
+        )
+
+
+# ------------------------------------------------------------------------------ "Colas" (slice 9)
+class OpenCaseRow(ApiModel):
+    case: CaseSummary
+    assignee_name: str | None = Field(description="Who holds it; null = nobody (queued).")
+
+    @classmethod
+    def from_view(cls, view: OpenCaseRowView) -> OpenCaseRow:
+        return cls(case=CaseSummary.from_view(view.case), assignee_name=view.assignee_name)
+
+
+class LanguageOpenCases(ApiModel):
+    language: Language
+    label: str = Field(examples=["Cola en español"])
+    cases: list[OpenCaseRow] = Field(
+        description="Every open case of the language: nobody's first (oldest first), then the "
+        "held ones in open-inbox order."
+    )
+    server_time: datetime
+
+    @classmethod
+    def from_view(cls, view: LanguageOpenCasesView) -> LanguageOpenCases:
+        return cls(
+            language=view.language,
+            label=view.label,
+            cases=[OpenCaseRow.from_view(row) for row in view.cases],
+            server_time=view.server_time,
+        )
+
+
+# -------------------------------------------------------------------------- "Escalados" (slice 9)
+class EscalationItem(ApiModel):
+    escalation: Escalation
+    case: CaseSummary
+    assignee_name: str | None = Field(description="Who holds the case now.")
+    can_take: bool = Field(
+        description="The caller may take the case herself (she also holds Analista, speaks "
+        "its language, it is open and someone else's)."
+    )
+
+    @classmethod
+    def from_view(cls, view: EscalationItemView) -> EscalationItem:
+        return cls(
+            escalation=Escalation.from_view(view.escalation),
+            case=CaseSummary.from_view(view.case),
+            assignee_name=view.assignee_name,
+            can_take=view.can_take,
+        )
+
+
+class EscalationOverview(ApiModel):
+    items: list[EscalationItem] = Field(
+        description="Open first (the longest waiting first), then the ones supervision attended "
+        "in the last 24 hours (the most recent first)."
+    )
+    open_count: int
+    server_time: datetime
+
+    @classmethod
+    def from_view(cls, view: EscalationOverviewView) -> EscalationOverview:
+        return cls(
+            items=[EscalationItem.from_view(item) for item in view.items],
+            open_count=view.open_count,
+            server_time=view.server_time,
         )

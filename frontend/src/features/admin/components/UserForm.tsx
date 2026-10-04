@@ -1,6 +1,8 @@
 import { useId, type RefObject } from 'react'
+import { Check, Languages } from 'lucide-react'
 import { ROLE_LABEL, ROLE_ORDER, type RoleId } from '@/app/roles'
 import { Checkbox, Field, Input, Kicker, Select } from '@/components/ui'
+import { cn } from '@/lib/cn'
 import {
   EMAIL_MAX_LENGTH,
   LANGUAGES,
@@ -141,30 +143,52 @@ export function UserForm({
       </fieldset>
 
       <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
-        <Kicker as="legend" className="mb-2 p-0">
+        <Kicker as="legend" className="mb-2 flex items-center gap-1.5 p-0">
+          <Languages size={14} aria-hidden="true" />
           Idiomas
         </Kicker>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
-          {LANGUAGES.map((language, index) => (
-            <Checkbox
-              key={language}
-              ref={index === 0 ? register('languages') : undefined}
-              label={LANGUAGE_LABEL[language]}
-              checked={draft.languages.includes(language)}
-              disabled={disabled}
-              aria-invalid={errors.languages ? true : undefined}
-              aria-describedby={
-                [errors.languages ? languagesErrorId : null, languagesHintId]
-                  .filter(Boolean)
-                  .join(' ') || undefined
-              }
-              onChange={(event) =>
-                set({
-                  languages: toggleValue<Language>(draft.languages, language, event.target.checked),
-                })
-              }
-            />
-          ))}
+        {/* Icon pill toggles (Admin.dc.html): a native checkbox, visually hidden, in each pill. */}
+        <div className="flex flex-wrap gap-2">
+          {LANGUAGES.map((language, index) => {
+            const on = draft.languages.includes(language)
+            return (
+              <label
+                key={language}
+                className={cn(
+                  'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-14 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent',
+                  on
+                    ? 'border-ink bg-ink font-medium text-white'
+                    : 'border-border bg-surface text-ink',
+                  disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-ink',
+                )}
+              >
+                <input
+                  ref={index === 0 ? register('languages') : undefined}
+                  type="checkbox"
+                  className="sr-only"
+                  checked={on}
+                  disabled={disabled}
+                  aria-invalid={errors.languages ? true : undefined}
+                  aria-describedby={
+                    [errors.languages ? languagesErrorId : null, languagesHintId]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                  onChange={(event) =>
+                    set({
+                      languages: toggleValue<Language>(
+                        draft.languages,
+                        language,
+                        event.target.checked,
+                      ),
+                    })
+                  }
+                />
+                {on ? <Check size={14} aria-hidden="true" /> : null}
+                {LANGUAGE_LABEL[language]}
+              </label>
+            )
+          })}
         </div>
         {errors.languages ? (
           <span id={languagesErrorId} className="text-13 font-medium text-danger-strong">

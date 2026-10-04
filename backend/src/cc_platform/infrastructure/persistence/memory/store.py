@@ -8,6 +8,7 @@ from cc_platform.application.events import StoredEvent
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
+from cc_platform.domain.cases.escalation import Escalation
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.customers.customer import Customer
 from cc_platform.domain.people.admin_roster import AdminRoster
@@ -33,4 +34,5 @@ class InMemoryStore:
     turns: dict[str, Turn] = field(default_factory=dict)
     assignments: dict[str, Assignment] = field(default_factory=dict)
     case_slots: dict[str, CustomerCaseSlot] = field(default_factory=dict)
+    escalations: dict[str, Escalation] = field(default_factory=dict)
     events: list[StoredEvent] = field(default_factory=list)

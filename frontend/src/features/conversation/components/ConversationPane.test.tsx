@@ -488,6 +488,7 @@ describe('ConversationPane · states', () => {
           canClose: false,
           canAssign: false,
           canChangePriority: false,
+          canEscalate: false,
         },
         assignment: { ...base.assignment!, analystId: 'STF-2', analystName: 'Julián Ortega' },
       }),
@@ -513,6 +514,7 @@ describe('ConversationPane · states', () => {
           canClose: false,
           canAssign: false,
           canChangePriority: false,
+          canEscalate: false,
         },
         assignment: {
           ...base.assignment!,
@@ -689,12 +691,13 @@ describe('ConversationPane · supervision mode (slice 3)', () => {
     await screen.findByRole('list', { name: 'Mensajes' })
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cerrar caso' })).not.toBeInTheDocument()
-    expect(
-      screen.getByText('Vista de supervisión · Solo lectura. Lo atiende Daniela Ríos.'),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Cómo llegó').parentElement).toHaveTextContent(
-      'Lo atiende Daniela Ríos: le llegó al estar disponible y hablar español · 5 mar, 10:46',
+    expect(screen.getByText('Solo lectura: lo atiende Daniela Ríos.')).toBeInTheDocument()
+    const arrival = screen.getByText('Cómo llegó').parentElement!.parentElement!
+    expect(arrival).toHaveTextContent(
+      'Lo atiende Daniela Ríos: le llegó al estar disponible y hablar español',
     )
+    expect(arrival).toHaveTextContent('5 mar, 10:46')
+    expect(arrival).not.toHaveTextContent('·')
     await new Promise((resolve) => setTimeout(resolve, 1100))
     expect(api.markCaseRead).not.toHaveBeenCalled()
   })

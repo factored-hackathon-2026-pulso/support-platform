@@ -81,7 +81,7 @@ describe('Auditoría (administración)', () => {
     ).toBeInTheDocument()
   })
 
-  it('hides "Ver la conversación" from an admin without Supervisora', async () => {
+  it('hides "Ver la conversación" from an admin without Supervisión', async () => {
     const { user } = renderRoute(`/administracion/auditoria?evento=${assigned.id}`, {
       staff: adminStaff,
     })

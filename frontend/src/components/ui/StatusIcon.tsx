@@ -90,6 +90,28 @@ function glyph(shape: StatusShape): ReactNode {
           strokeLinecap="round"
         />,
       )
+    case 'up':
+      return ring(
+        <path
+          d="M8 11V5.4M5.6 7.7 8 5.3l2.4 2.4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={STROKE}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />,
+      )
+    case 'forward':
+      return ring(
+        <path
+          d="M5 8h5.6M8.4 5.6 10.8 8l-2.4 2.4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={STROKE}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />,
+      )
     case 'lock':
       return ring(
         <>

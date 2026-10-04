@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from cc_platform.api.schemas.availability import Availability
-from cc_platform.api.schemas.cases import CaseSummary, InboxCounts, Turn
+from cc_platform.api.schemas.cases import CaseSummary, Escalation, InboxCounts, Turn
 from cc_platform.api.schemas.common import ApiModel
 from cc_platform.api.schemas.customer import CustomerConversation, CustomerTurn
 from cc_platform.infrastructure.seed.cases import seed_case_id
@@ -29,6 +29,7 @@ PAYLOAD_SCHEMAS: dict[str, type[ApiModel]] = {
     "inbox.counts": InboxCounts,
     "availability.updated": Availability,
     "conversation.updated": CustomerConversation,
+    "escalation.updated": Escalation,
 }
 
 

@@ -1,9 +1,9 @@
+import { Flame } from 'lucide-react'
 import {
   Badge,
+  Button,
   QueryState,
-  SegmentedControl,
   Skeleton,
-  SourceNote,
   Status,
   TBody,
   TCell,
@@ -15,83 +15,70 @@ import {
   type QueryLike,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
-import { RecentRating } from './RecentRating'
 import {
-  ACTIVITY_FILTERS,
-  RECENT_RATING_HEADER,
   ACTIVITY_META,
   NO_SESSION_HINT,
-  analystsInFilter,
-  analystsOfTeam,
-  analystsSummary,
+  RECENT_RATING_HEADER,
+  analystsFigures,
   atRiskCount,
-  countByFilter,
   isHighLoad,
-  languagesLabel,
+  languageWord,
   longestWait,
   openCasesCell,
   showsNoSessionHint,
-  teamPillLabels,
   toReplyCount,
-  type ActivityFilter,
 } from '../model'
 import type { TeamAnalyst, TeamOverview } from '../types'
+import { AnalystAvatar } from './AnalystAvatar'
+import { RecentRating } from './RecentRating'
 
 export interface AnalystsPanelProps {
   query: QueryLike<TeamOverview>
-  /** `null` = every team (the row then names the team). */
-  teamId: string | null
-  filter: ActivityFilter
+  /** The analysts that pass the filters (server order: activity, then name). */
+  analysts: readonly TeamAnalyst[]
+  /** Some filter is on: an empty result offers "Limpiar filtros". */
+  filtered: boolean
   selectedAnalystId: string | null
   now: number
-  onFilterChange(filter: ActivityFilter): void
   onSelectAnalyst(analystId: string): void
+  onClearFilters(): void
 }
 
 /**
- * "Analistas" (SuTeam, contract §8.4): the state filters (native radios), the
- * team's figures, and one row per analyst with what she is doing now and her
- * load. Selecting a row opens her sheet (`?analista=`).
+ * "Analistas" (SuTeam, slice 9): one table of every analyst, whatever the team (the team
+ * is a filter, never a tab): what each one is doing now, her languages and her load.
+ * Selecting a row opens her sheet (`?analista=`).
  */
 export function AnalystsPanel({
   query,
-  teamId,
-  filter,
+  analysts,
+  filtered,
   selectedAnalystId,
   now,
-  onFilterChange,
   onSelectAnalyst,
+  onClearFilters,
 }: AnalystsPanelProps) {
-  const ofTeam = query.data ? analystsOfTeam(query.data.analysts, teamId) : []
-  const counts = countByFilter(ofTeam)
-  // The row names the team like the pills do ("Equipo Andes"): the shared prefix costs width.
-  const teamLabels = query.data ? teamPillLabels(query.data.teams) : {}
-
+  const figures = analystsFigures(analysts, now)
   return (
     <section
       aria-labelledby="analysts-heading"
       className="flex min-h-0 flex-col overflow-hidden rounded-12 border border-border bg-surface"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-3.5 pb-2.5">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h2 id="analysts-heading" className="m-0 text-16 font-semibold">
-            Analistas
-          </h2>
-          {query.data ? (
-            <span className="text-13 text-muted">{analystsSummary(ofTeam, now)}</span>
-          ) : null}
-        </div>
-        <SegmentedControl<ActivityFilter>
-          label="Estado"
-          variant="pills"
-          value={filter}
-          onValueChange={onFilterChange}
-          options={ACTIVITY_FILTERS.map((option) => ({
-            value: option.value,
-            label: option.label,
-            count: query.data ? counts[option.value] : undefined,
-          }))}
-        />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3.5 pb-2.5">
+        <h2 id="analysts-heading" className="m-0 text-16 font-semibold">
+          Analistas
+        </h2>
+        {query.data ? (
+          <>
+            <span className="text-13 text-muted">{figures.open}</span>
+            {figures.atRisk > 0 ? (
+              <span className="inline-flex items-center gap-1 text-13 font-semibold text-warn">
+                <Flame size={13} aria-hidden="true" />
+                {figures.atRisk} en riesgo
+              </span>
+            ) : null}
+          </>
+        ) : null}
       </div>
       <QueryState
         query={query}
@@ -99,12 +86,16 @@ export function AnalystsPanel({
         errorTitle="No pudimos cargar el equipo"
       >
         {() => {
-          const rows = analystsInFilter(ofTeam, filter)
-          if (rows.length === 0) {
+          if (analysts.length === 0) {
             return (
-              <p className="m-0 border-t border-border-soft px-4 py-6 text-center text-14 text-muted">
-                Nadie en este estado ahora.
-              </p>
+              <div className="flex flex-col items-center gap-2 border-t border-border-soft px-4 py-8 text-14 text-muted">
+                <span>{filtered ? 'Nadie coincide con los filtros.' : 'No hay analistas.'}</span>
+                {filtered ? (
+                  <Button size="sm" variant="secondary" onClick={onClearFilters}>
+                    Limpiar filtros
+                  </Button>
+                ) : null}
+              </div>
             )
           }
           return (
@@ -124,7 +115,7 @@ export function AnalystsPanel({
                     Espera más larga
                   </TH>
                   <TH align="right" className={NUMERIC_HEADER}>
-                    SLA en riesgo
+                    En riesgo
                   </TH>
                   <TH align="right" className={NUMERIC_HEADER} title={RECENT_RATING_HEADER.title}>
                     {RECENT_RATING_HEADER.label}
@@ -132,13 +123,10 @@ export function AnalystsPanel({
                 </TRow>
               </THead>
               <TBody>
-                {rows.map((analyst) => (
+                {analysts.map((analyst) => (
                   <AnalystRow
                     key={analyst.id}
                     analyst={analyst}
-                    teamLabel={
-                      teamId === null ? (teamLabels[analyst.team.id] ?? analyst.team.name) : null
-                    }
                     selected={analyst.id === selectedAnalystId}
                     now={now}
                     onSelect={() => onSelectAnalyst(analyst.id)}
@@ -149,49 +137,34 @@ export function AnalystsPanel({
           )
         }}
       </QueryState>
-      <SourceNote>
-        Personas, idiomas y equipos: directorio del equipo. Estado, colas y casos: datos de ejemplo.
-      </SourceNote>
     </section>
   )
 }
 
-/**
- * Eight columns share the right column (~860 px at 1440, ~700 px at 1280): tighter
- * side padding than the table default, and the long numeric headers wrap to two
- * lines, so every column stays visible without a horizontal scroll.
- */
+/** Eight columns: tighter side padding, long numeric headers wrap (no scroll at 1280). */
 const CELL_X = 'px-3'
 const NUMERIC_HEADER = 'px-3 whitespace-normal leading-tight min-w-[72px]'
 
 interface AnalystRowProps {
   analyst: TeamAnalyst
-  /** The team, when every team is listed ("Todos los equipos"); null hides it. */
-  teamLabel: string | null
   selected: boolean
   now: number
   onSelect(): void
 }
 
-function AnalystRow({ analyst, teamLabel, selected, now, onSelect }: AnalystRowProps) {
-  const meta = ACTIVITY_META[analyst.activity]
+function AnalystRow({ analyst, selected, now, onSelect }: AnalystRowProps) {
   const atRisk = atRiskCount(analyst.openCases, now)
-  const speaksPortuguese = analyst.languages.includes('pt')
   return (
     <TRow selected={selected} onSelect={onSelect}>
       <TCell className={cn(CELL_X, 'max-w-[240px]')}>
-        <span className="flex min-w-0 flex-col py-1">
+        <span className="flex min-w-0 items-center gap-2.5 py-1">
+          <AnalystAvatar name={analyst.name} />
           <TRowSelect className="truncate">{analyst.name}</TRowSelect>
-          {teamLabel ? (
-            <span className="truncate text-12 text-muted" title={analyst.team.name}>
-              {teamLabel}
-            </span>
-          ) : null}
         </span>
       </TCell>
       <TCell muted className={CELL_X}>
         <span className="flex flex-wrap items-center gap-x-2">
-          <Status {...meta} />
+          <Status {...ACTIVITY_META[analyst.activity]} />
           {showsNoSessionHint(analyst) ? (
             <span className="text-12 text-muted" title={NO_SESSION_HINT.title}>
               {NO_SESSION_HINT.label}
@@ -199,8 +172,14 @@ function AnalystRow({ analyst, teamLabel, selected, now, onSelect }: AnalystRowP
           ) : null}
         </span>
       </TCell>
-      <TCell muted className={cn(CELL_X, speaksPortuguese && 'font-semibold text-accent')}>
-        {languagesLabel(analyst.languages)}
+      <TCell className={CELL_X}>
+        <span className="flex flex-wrap gap-1">
+          {analyst.languages.map((language) => (
+            <Badge key={language} tone={language === 'pt' ? 'accent' : 'neutral'} size="sm">
+              {languageWord(language)}
+            </Badge>
+          ))}
+        </span>
       </TCell>
       <TCell align="right" className={CELL_X}>
         <span className="inline-flex items-center gap-1.5">
@@ -219,7 +198,14 @@ function AnalystRow({ analyst, teamLabel, selected, now, onSelect }: AnalystRowP
         {longestWait(analyst, now)}
       </TCell>
       <TCell align="right" className={cn(CELL_X, atRisk > 0 && 'font-semibold text-warn')}>
-        {atRisk > 0 ? atRisk : '—'}
+        {atRisk > 0 ? (
+          <span className="inline-flex items-center gap-1">
+            <Flame size={13} aria-hidden="true" />
+            {atRisk}
+          </span>
+        ) : (
+          '—'
+        )}
       </TCell>
       <TCell align="right" className={cn(CELL_X, 'whitespace-nowrap')}>
         <RecentRating stats={analyst.recentRatings} />

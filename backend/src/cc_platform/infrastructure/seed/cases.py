@@ -7,6 +7,9 @@ Priorities (slice 8): every case opens with ``none`` and staff set it through th
 Mauricio's queued 112 high (Lucía), 106 and 114 low, 104/107/110/113 medium, the rest none.
 Customer ratings (slice 7, invented): Patricia rated 104 "Excelente" with a comment and 110
 "Bien", Héctor rated 106 "Bien"; Claudia's 105 stays unrated (the simulator asks her).
+Escalations to supervision (slice 9, neutral invented motives): Daniela's 101 (open, T−6m) and
+Julián's 113 (open, T−21m); Daniela's 107, answered by Lucía (T−35m, not yet acknowledged:
+Daniela sees the answer card); Paula's 114, ended when Lucía reassigned the case to Julián.
 Besides it: three queued cases (two in "Cola en español", one at risk and one due in 7 min; one
 in "Cola en portugués"), Julián's two open cases (one overdue, one that Lucía reassigned to
 him from Paula), one closed case of Julián outside the 7-day window (Patricia's history),
@@ -42,6 +45,7 @@ from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFac
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
+from cc_platform.domain.cases.escalation import Escalation
 from cc_platform.domain.cases.events import CaseViewed
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
@@ -71,6 +75,11 @@ def seed_case_id(number: int) -> str:
     return make_id(IdPrefix.CASE, str(number).zfill(BODY_LENGTH))
 
 
+def seed_escalation_id(case_number: int) -> str:
+    """Seeded escalations: one per case, numbered like it."""
+    return make_id(IdPrefix.ESCALATION, str(case_number).zfill(BODY_LENGTH))
+
+
 def _staff_name(number: int) -> str:
     return next(seed.name for seed in DEMO_STAFF if seed.number == number)
 
@@ -92,6 +101,7 @@ class _Story:
     customer_first_name: str
     turns: list[Turn] = field(default_factory=list)
     assignments: list[Assignment] = field(default_factory=list)
+    escalations: list[Escalation] = field(default_factory=list)
 
     def _turn(
         self,
@@ -181,6 +191,12 @@ class _Story:
         )
         self.case.reassign(assignment)
         self.assignments.append(assignment)
+        if self.case.open_escalation_id is not None:  # slice 9: it ends as ``reassigned``
+            escalation = self._open_escalation()
+            escalation.mark_reassigned(
+                actor=assignment.assigned_by, to_staff_id=assignment.staff_id, at=at
+            )
+            self.case.clear_escalation(escalation.id)
         previous_name = _staff_name_of(previous) if previous else ""
         self.banner(at, copy.reassigned(_staff_name(by), previous_name, _staff_name(staff)))
         self._turn(
@@ -190,6 +206,31 @@ class _Story:
             role=TurnAuthorRole.SYSTEM,
             author=None,
         )
+
+    def escalate(self, at: datetime, motive: str) -> None:
+        """The assignee escalates to supervision (slice 9), as ``EscalateCase`` does."""
+        staff_id = self.case.assigned_analyst_id or seed_staff_id(DANIELA)
+        number = int(self.case.id.removeprefix("CASE-"))
+        escalation = Escalation.open(
+            escalation_id=seed_escalation_id(number),
+            case_id=self.case.id,
+            motive=motive,
+            actor=ActorRef(ActorRole.ANALYST, staff_id),
+            at=at,
+        )
+        self.case.escalate(escalation.id)
+        self.escalations.append(escalation)
+        self.banner(at, copy.escalated(_staff_name_of(staff_id)))
+
+    def answer_escalation(self, at: datetime, *, by: int, note: str) -> None:
+        """Supervision (``by``) answers the open escalation, as ``RespondEscalation`` does."""
+        escalation = self._open_escalation()
+        escalation.answer(actor=ActorRef(ActorRole.SUPERVISOR, seed_staff_id(by)), note=note, at=at)
+        self.case.clear_escalation(escalation.id)
+        self.banner(at, copy.escalation_answered(_staff_name(by)))
+
+    def _open_escalation(self) -> Escalation:
+        return next(e for e in self.escalations if e.id == self.case.open_escalation_id)
 
     def wait_in_queue(self, at: datetime) -> None:
         label = copy.QUEUE_LABEL[self.case.language]
@@ -256,6 +297,8 @@ class _Story:
             await uow.turns.add(turn)
         for assignment in self.assignments:
             await uow.assignments.add(assignment)
+        for escalation in self.escalations:
+            await uow.escalations.add(escalation)
 
 
 def _open(
@@ -376,6 +419,15 @@ def _joaquin_waiting(ids: IdGenerator, t: datetime) -> _Story:
     s.analyst(t - timedelta(minutes=40),
               "Hola, Joaquín. Soy Daniela, de LATAM Bank. Para encontrar su reclamo, ¿me "
               "podría decir la fecha aproximada del cobro y el monto?")  # fmt: skip
+    s.escalate(t - timedelta(minutes=38),
+               "Pide el estado de un reclamo de hace dos semanas y quiere que alguien de "
+               "supervisión le confirme el plazo.")  # fmt: skip
+    s.answer_escalation(
+        t - timedelta(minutes=35),
+        by=LUCIA,
+        note="Revisé el reclamo: sigue dentro del plazo. Cuando te dé la fecha y el monto, "
+        "confírmale que le escribimos apenas haya respuesta.",
+    )
     return s
 
 
@@ -392,6 +444,9 @@ def _marcela_to_reply(ids: IdGenerator, t: datetime) -> _Story:
     s.analyst(t - timedelta(minutes=10),
               "Hola, Marcela. Soy Daniela, de LATAM Bank. Con gusto le ayudo. ¿Me cuenta de "
               "qué fecha es el cargo y por qué valor?")  # fmt: skip
+    s.escalate(t - timedelta(minutes=6),
+               "La clienta pide hablar con supervisión: no reconoce un retiro en cajero y no "
+               "quiere esperar el proceso normal.")  # fmt: skip
     s.customer(t - timedelta(minutes=2),
                "es un retiro en cajero del 9 de enero por $1.585.208, yo no lo hice")  # fmt: skip
     return s
@@ -463,6 +518,7 @@ def _esteban_reassigned(ids: IdGenerator, t: datetime) -> _Story:
     s.customer(opened, "Quiero saber por qué me cobraron una comisión por manejo.")
     s.opened_notice(opened)
     s.assign(opened, PAULA, open_cases=0)
+    s.escalate(t - timedelta(minutes=36), "Pregunta por una comisión que no sé explicar.")
     s.reassign(t - timedelta(minutes=32), JULIAN, by=LUCIA, open_cases=1)
     s.prioritize(t - timedelta(minutes=31), CasePriority.LOW, by=JULIAN)
     s.analyst(t - timedelta(minutes=30),
@@ -482,6 +538,9 @@ def _camila_overdue(ids: IdGenerator, t: datetime) -> _Story:
     s.assign(opened, JULIAN, open_cases=0)
     s.read_up_to(t - timedelta(minutes=22), 3)
     s.prioritize(t - timedelta(minutes=22), CasePriority.MEDIUM, by=JULIAN)
+    s.escalate(t - timedelta(minutes=21),
+               "Problema con la app al hacer una transferencia: no le llegó a su hermano y no "
+               "sé cómo seguir.")  # fmt: skip
     s.customer(t - timedelta(minutes=12), "¿Me ayudan por favor?")
     return s
 
@@ -551,7 +610,7 @@ async def add_demo_cases(
             continue
         story = factory(ids, t)
         await story.save(unit)
-        timeline.take(story.case)
+        timeline.take(story.case, *story.escalations)
         built[story.case.id] = story.case
     await _add_supervisor_view(unit, t, timeline, built)
     return len(built)

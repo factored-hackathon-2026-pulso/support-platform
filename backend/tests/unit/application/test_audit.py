@@ -30,6 +30,7 @@ from cc_platform.application.audit.queries import (
     redact,
 )
 from cc_platform.application.cases.dto import CloseCaseCommand, PostTurnCommand
+from cc_platform.application.cases.escalations import EscalateCommand
 from cc_platform.application.cases.manual_assignment import SetAssigneeCommand
 from cc_platform.application.errors import InvalidCredentialsError
 from cc_platform.application.events import StoredEvent
@@ -51,7 +52,11 @@ from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from cc_platform.infrastructure.persistence.sqlalchemy.database import Database
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
-from cc_platform.infrastructure.seed.cases import seed_case_id, seed_demo_cases
+from cc_platform.infrastructure.seed.cases import (
+    seed_case_id,
+    seed_demo_cases,
+    seed_escalation_id,
+)
 from cc_platform.infrastructure.seed.customers import seed_customer_id, seed_demo_customers
 from cc_platform.infrastructure.seed.people import (
     seed_demo_admin_story,
@@ -67,6 +72,7 @@ from tests.support import (
     PASSWORD,
     SEBASTIAN,
     SUPERVISOR,
+    TEAM_LEAD,
     PlainHasher,
     actor_for,
     make_available_quietly,
@@ -177,6 +183,17 @@ async def emit_everything(container: Container) -> None:
         seed_case_id(102),
         PostTurnCommand(text="Hola, Beatriz", client_message_id="c-0001aa"),
     )
+    # Slice 9: every escalation outcome (the seed opened, answered and reassigned some).
+    await cases.acknowledge_escalation.execute(daniela, seed_case_id(107), seed_escalation_id(107))
+    await cases.withdraw_escalation.execute(daniela, seed_case_id(101), seed_escalation_id(101))
+    taken = await cases.escalate.execute(
+        daniela, seed_case_id(108), EscalateCommand("Pide hablar con supervisión.", "esc-key-01")
+    )
+    await cases.take_escalated_case.execute(actor_for(TEAM_LEAD), taken.escalation.id)
+    await cases.escalate.execute(
+        daniela, seed_case_id(102), EscalateCommand("No sé cómo seguir.", "esc-key-02")
+    )
+    await cases.close.execute(daniela, seed_case_id(102), CloseCaseCommand(CloseReason.RESOLVED))
     await cases.close.execute(daniela, seed_case_id(107), CloseCaseCommand(CloseReason.DUPLICATE))
     await people.set_availability.execute(daniela, AvailabilityStatus.PAUSED)
     await people.set_availability.execute(daniela, AvailabilityStatus.AVAILABLE)
@@ -271,6 +288,13 @@ async def test_every_emitted_event_has_a_description() -> None:
         "Respondió al cliente",
         "La plataforma le envió un aviso al cliente",
         "Dejó una nota de asignación para el equipo",
+        "Escaló el caso a supervisión",
+        "Retiró el escalamiento",
+        "Respondió el escalamiento",
+        "Tomó el caso escalado de Daniela Ríos",
+        "Reasignó el caso escalado de Julián Ortega a Daniela Ríos",
+        "El escalamiento terminó porque se cerró el caso",
+        "Leyó lo que hizo supervisión con su escalamiento",
     } <= descriptions
     assert any(
         d.startswith("Asignó el caso a Daniela Ríos desde la cola en español después de ")
@@ -395,7 +419,9 @@ async def test_filter_by_actor_kind_and_person(harness: Harness) -> None:
     assert [e.description for e in lucia] == [
         "Cambió la prioridad a Alta",  # Mauricio's queued case (slice 8)
         "Abrió la conversación en modo supervisión (solo lectura)",
+        "Reasignó el caso escalado de Paula Medina a Julián Ortega",  # slice 9
         "Reasignó el caso de Paula Medina a Julián Ortega",
+        "Respondió el escalamiento",  # Daniela's 107 (slice 9)
     ]
     assert {e.actor.name for e in lucia} == {"Lucía Herrera"}
     assert await search(harness, actor_id=LUCIA_ID, actor_kind=AuditActorKind.CUSTOMER) == []
@@ -405,7 +431,9 @@ async def test_filter_by_case_family_and_changes(harness: Harness) -> None:
     case = await search(harness, case_id=seed_case_id(114))
     assert {e.case_ref.id for e in case if e.case_ref} == {seed_case_id(114)}
     assert {e.case_ref.customer_name for e in case if e.case_ref} == {"Esteban Morales Quiroga"}
-    assert len(case) == 13  # incl. Julián's case.priority_changed (slice 8)
+    # incl. Julián's case.priority_changed (slice 8) and Paula's escalation, its banner and its
+    # end by the reassignment (slice 9)
+    assert len(case) == 16
     for family in AuditFamily:
         found = await search(harness, family=family)
         assert found, family

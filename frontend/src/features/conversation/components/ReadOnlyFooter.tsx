@@ -7,7 +7,7 @@ import type { CaseDetail } from '../types'
 export interface ReadOnlyFooterProps {
   detail: Pick<CaseDetail, 'capabilities' | 'closure' | 'assignment' | 'case'>
   meId: string
-  /** `supervision`: "Vista de supervisión · …" (slice 3 §8.3), whatever the capabilities say. */
+  /** `supervision`: "Solo lectura: …" / "Sin asignar: …" (slice 3 §8.3, slice 9), whatever the capabilities say. */
   mode?: ConversationMode
 }
 

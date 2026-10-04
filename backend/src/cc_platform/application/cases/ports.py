@@ -11,6 +11,7 @@ from cc_platform.application.events import StoredEvent
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
+from cc_platform.domain.cases.escalation import Escalation
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import CaseStatus, CloseReason, TurnAudience
 from cc_platform.domain.people.staff import Language
@@ -114,6 +115,37 @@ class CaseRepository(Protocol):
     async def rating_totals_by_closer(self, closed_since: datetime) -> dict[str, RatingTotals]:
         """Per analyst who closed them: the rated cases with ``closed_at >= closed_since``
         (count and score sum), in one grouped query. Analysts without any are left out."""
+        ...
+
+    async def list_open_by_language(self, language: Language) -> list[Case]:
+        """Every open case (``queued | assigned | in_progress``) of ``language``, in one
+        indexed query ("Colas", slice 9; any order)."""
+        ...
+
+
+class EscalationRepository(Protocol):
+    """Escalations to supervision (slice 9), versioned like any aggregate."""
+
+    async def get(self, escalation_id: str) -> Escalation | None: ...
+
+    async def add(self, escalation: Escalation) -> None:
+        """Insert; a duplicate ``creation_key`` raises ``ConcurrentUpdateError`` (a retried
+        request raced the first one: the command re-runs and finds it)."""
+        ...
+
+    async def save(self, escalation: Escalation) -> None:
+        """Compare-and-set on ``version``; raises ``ConcurrentUpdateError`` when stale."""
+        ...
+
+    async def get_by_creation_key(self, key: str) -> Escalation | None: ...
+
+    async def latest_for_case(self, case_id: str) -> Escalation | None:
+        """The case's most recent escalation (any state), if any."""
+        ...
+
+    async def list_open_or_resolved_since(self, resolved_since: datetime) -> list[Escalation]:
+        """The open escalations plus every one that ended at or after ``resolved_since``
+        (any order): "Escalados" in one query."""
         ...
 
 

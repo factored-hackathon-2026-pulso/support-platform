@@ -44,6 +44,7 @@ class IdPrefix(StrEnum):
     ASSIGNMENT = "ASG"
     CUSTOMER_SESSION = "CSN"
     TEAM = "TEAM"
+    ESCALATION = "ESC"
 
 
 def encode_body(timestamp_ms: int, randomness: int) -> str:

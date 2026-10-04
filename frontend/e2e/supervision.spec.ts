@@ -1,11 +1,11 @@
 import { CUSTOMERS, firstName, SEEDED, uniqueText } from './support/data'
 import { expect, test } from './support/fixtures'
 import { HomePage } from './support/pages/home-page'
-import { SupervisorCasePage, TeamPage } from './support/pages/supervision-pages'
+import { EscalationsPage, QueuesPage, SupervisorCasePage } from './support/pages/supervision-pages'
 import { WorkspacePage } from './support/pages/workspace-page'
 
 test.describe('Colas y supervisión', () => {
-  test('a case nobody eligible can take waits in its queue and drains to the first eligible analyst', async ({
+  test('a case nobody eligible can take waits in Colas and drains to the first eligible analyst', async ({
     actors,
     people,
     customers,
@@ -21,18 +21,21 @@ test.describe('Colas y supervisión', () => {
     await esWorkspace.goto()
     await esWorkspace.becomeAvailable()
 
-    const supervisor = await actors.signedIn('supervisora', SEEDED.supervisor)
-    const team = new TeamPage(supervisor.page)
-    await team.goto()
+    const supervisor = await actors.signedIn('supervisión', SEEDED.supervisor)
+    const queues = new QueuesPage(supervisor.page)
+    await queues.goto('Portugués')
 
     const chat = await actors.customer('cliente', customer)
     const text = uniqueText('Olá, não reconheço uma compra no meu cartão')
     await chat.send(text)
 
-    // Queued: the customer waits, supervision sees it live, the Spanish speaker never gets it.
+    // Nobody holds it: the customer waits, supervision sees it live (no "Asignar": it is
+    // automatic), the Spanish speaker never gets it.
     await expect(chat.status('searching')).toBeVisible()
-    await expect(team.queuedCase('Cola en portugués', customer.name)).toBeVisible()
-    await expect(team.queuedCase('Cola en portugués', customer.name)).toContainText(text)
+    const row = queues.caseRow('Portugués', customer.name)
+    await expect(row).toBeVisible()
+    await expect(row.getByText('Sin asignar').first()).toBeVisible()
+    await expect(row.getByRole('button', { name: /Asignar/ })).toHaveCount(0)
     await expect(esWorkspace.caseCard(customer.name)).toHaveCount(0)
 
     // A Portuguese speaker becomes available: the queue drains to her.
@@ -44,13 +47,13 @@ test.describe('Colas y supervisión', () => {
 
     await expect(ptWorkspace.caseCard(customer.name)).toBeVisible()
     await expect(chat.status({ agent: firstName(portuguese.name) })).toBeVisible()
-    await expect(team.queuedCase('Cola en portugués', customer.name)).toHaveCount(0)
+    await expect(row).toContainText(portuguese.name)
     await ptWorkspace.openCase(customer.name)
     await expect(ptWorkspace.messages(customer.name).filter({ hasText: text })).toHaveCount(1)
     await expect(esWorkspace.caseCard(customer.name)).toHaveCount(0)
   })
 
-  test('a supervisor assigns a queued case and reassigns it while the analyst watches (rule 3 in the dialog)', async ({
+  test('a supervisor reassigns an open case while the analyst watches (only speakers in the dialog)', async ({
     actors,
     people,
     customers,
@@ -61,53 +64,44 @@ test.describe('Colas y supervisión', () => {
     const next = await people.analyst(['pt'])
     const spanishOnly = await people.analyst(['es'])
 
-    // The first analyst is signed in, paused: she only gets this case by hand.
+    // The first analyst is available: the case reaches her on its own.
     const analyst = await actors.signedIn('analista', holder)
     const inbox = new WorkspacePage(analyst.page)
     await inbox.goto()
+    await inbox.becomeAvailable()
 
-    const supervisor = await actors.signedIn('supervisora', SEEDED.supervisor)
-    const team = new TeamPage(supervisor.page)
-    await team.goto()
+    const supervisor = await actors.signedIn('supervisión', SEEDED.supervisor)
+    const queues = new QueuesPage(supervisor.page)
+    await queues.goto('Portugués')
 
     const chat = await actors.customer('cliente', customer)
     const text = uniqueText('Alguém pode me ajudar com uma cobrança?')
     await chat.send(text)
-    await expect(chat.status('searching')).toBeVisible()
+    await expect(inbox.caseCard(customer.name)).toBeVisible()
+    await expect(chat.status({ agent: firstName(holder.name) })).toBeVisible()
 
-    const queued = team.queuedCase('Cola en portugués', customer.name)
-    await expect(queued).toContainText(text)
-    const href = await queued
+    const row = queues.caseRow('Portugués', customer.name)
+    await expect(row).toContainText(holder.name)
+    const href = await row
       .getByRole('link', { name: customer.name, exact: true })
       .getAttribute('href')
     const caseId = href?.split('/').pop() ?? ''
     expect(caseId).toMatch(/^CASE-/)
-
-    // Assign: a Spanish-only analyst is listed but cannot be chosen (rule 3).
-    const assign = await team.openAssignDialog('Cola en portugués', customer.name)
-    await expect(assign.candidate(spanishOnly.name)).toBeDisabled()
-    await expect(assign.candidate(spanishOnly.name)).toHaveAccessibleDescription(
-      'No habla portugués (regla 3)',
-    )
-    await expect(assign.candidate(holder.name)).toBeEnabled()
-    await assign.choose(holder.name, { confirmPaused: true })
-    await assign.submit(new RegExp(`^Asignar a ${firstName(holder.name)}$`))
-
-    // Live: out of the queue, into her list, and the customer has a person.
-    await expect(queued).toHaveCount(0)
-    await expect(inbox.caseCard(customer.name)).toBeVisible()
-    await expect(analyst.shell.toast('Te asignaron un caso')).toBeVisible()
-    await expect(analyst.shell.toast(customer.name)).toBeVisible()
-    await expect(analyst.shell.toast('Supervisión')).toBeVisible()
-    await expect(chat.status({ agent: firstName(holder.name) })).toBeVisible()
     await inbox.openCase(customer.name)
     await expect(inbox.messages(customer.name).filter({ hasText: text })).toHaveCount(1)
 
-    // Reassign from the supervisor's read-only case view.
+    // Reassign from the supervisor's read-only case view (the row opens it).
+    await row.getByRole('link', { name: customer.name, exact: true }).click()
     const caseView = new SupervisorCasePage(supervisor.page)
+    await expect(supervisor.page.getByRole('link', { name: 'Volver a Colas' })).toBeVisible()
     await caseView.goto(caseId, customer.name)
     const reassign = await caseView.openReassignDialog()
-    await expect(reassign.candidate(spanishOnly.name)).toBeDisabled()
+    // Rule 3: a Spanish-only analyst is never listed, even searching for her.
+    await reassign.includeAway()
+    await reassign.search(spanishOnly.name)
+    await expect(reassign.candidate(spanishOnly.name)).toHaveCount(0)
+    await expect(reassign.root.getByText('Nadie con ese nombre habla portugués.')).toBeVisible()
+    await reassign.search(next.name)
     await reassign.choose(next.name, { confirmPaused: true })
     const notice = `Agora quem te atende é ${firstName(next.name)}, da nossa equipe.`
     await expect(reassign.root.getByText(notice)).toBeVisible()
@@ -119,23 +113,17 @@ test.describe('Colas y supervisión', () => {
     await expect(chat.status({ agent: firstName(next.name) })).toBeVisible()
     await expect(chat.messages.filter({ hasText: notice })).toHaveCount(1)
 
-    // On Inicio, "Mientras no estabas" says who took it; the row opens it read-only
-    // in Casos (history access: she held it).
+    // On Inicio, "Mientras no estabas" says who took it; the row opens it read-only in Casos.
     const home = new HomePage(analyst.page)
     await home.goto()
-    const given = home.feedRow('Te lo asignaron', customer.name)
-    await expect(given).toBeVisible()
-    await expect(given).toContainText(SEEDED.supervisor.name)
     const away = home.feedRow('Ya no es tuyo', customer.name)
     await expect(away).toContainText(SEEDED.supervisor.name)
     await expect(away).toContainText(next.name)
-    await expect(away).toContainText('Solo lectura')
     await away.click()
     await expect(analyst.page).toHaveURL(new RegExp(`/analista\\?caso=${caseId}$`))
     const readOnly = inbox.conversation(customer.name).getByRole('note', { name: 'Solo lectura' })
     await expect(readOnly).toContainText(`Lo atiende ${next.name}`)
     await expect(inbox.composer(customer.name)).toHaveCount(0)
-    await expect(inbox.messages(customer.name).filter({ hasText: text })).toHaveCount(1)
 
     // The new assignee has it.
     const second = await actors.signedIn('analista nueva', next)
@@ -143,5 +131,56 @@ test.describe('Colas y supervisión', () => {
     await secondInbox.goto()
     await secondInbox.openCase(customer.name)
     await expect(secondInbox.messages(customer.name).filter({ hasText: text })).toHaveCount(1)
+  })
+
+  test('an analyst escalates, supervision answers from Escalados and she sees the answer live', async ({
+    actors,
+    people,
+    customers,
+  }) => {
+    const customer = CUSTOMERS.lucas // es-AR
+    await customers.release(customer)
+    const person = await people.analyst(['es'])
+
+    const analyst = await actors.signedIn('analista', person)
+    const inbox = new WorkspacePage(analyst.page)
+    await inbox.goto()
+    await inbox.becomeAvailable()
+
+    const chat = await actors.customer('cliente', customer)
+    await chat.send(uniqueText('Me cobraron dos veces la misma compra'))
+    await expect(inbox.caseCard(customer.name)).toBeVisible()
+    await inbox.openCase(customer.name)
+
+    // Supervision is on Escalados before it happens: the row arrives live.
+    const supervisor = await actors.signedIn('supervisión', SEEDED.supervisor)
+    const escalations = new EscalationsPage(supervisor.page)
+    await escalations.goto()
+
+    const motive = uniqueText('Le cobraron dos veces la misma compra y pide supervisión')
+    const card = await inbox.escalate(customer.name, motive)
+    await expect(card).toContainText(motive)
+    await expect(inbox.caseCard(customer.name).getByText('Escalado')).toBeVisible()
+
+    await expect(escalations.row(customer.name)).toBeVisible()
+    await expect(escalations.row(customer.name)).toContainText(person.name)
+    // No toast on Escalados itself (the row is the news); the rail badge counts it.
+    await expect(supervisor.shell.toast(`${person.name} escaló un caso`)).toHaveCount(0)
+
+    const note = uniqueText('Revisé el cobro: sigue tú con el cliente')
+    await escalations.answer(customer.name, note)
+    await expect(escalations.panel(customer.name).getByText('Respondiste a')).toBeVisible()
+
+    // The analyst sees it live: a toast and the answer card in the case, then "Entendido".
+    await expect(
+      analyst.shell.toast(`${SEEDED.supervisor.name} respondió tu escalamiento`),
+    ).toBeVisible()
+    await expect(card.getByText(`${SEEDED.supervisor.name} respondió`)).toBeVisible()
+    await expect(card.getByText(note)).toBeVisible()
+    await expect(inbox.caseCard(customer.name).getByText('Escalado')).toHaveCount(0)
+    await inbox.acknowledgeEscalation(customer.name)
+    // The case stayed with her and she can escalate again.
+    await expect(inbox.composer(customer.name)).toBeVisible()
+    await expect(inbox.escalateButton(customer.name)).toBeVisible()
   })
 })

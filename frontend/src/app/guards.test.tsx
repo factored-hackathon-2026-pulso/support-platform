@@ -38,10 +38,9 @@ describe('route guards', () => {
 
   it('redirects role roots to their first section', async () => {
     const { router } = renderRoute('/supervision', { staff: supervisorStaff })
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Equipo y colas' }),
-    ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/supervision/equipo')
+    // Slice 9: supervision lands on "Colas".
+    expect(await screen.findByRole('heading', { level: 1, name: 'Colas' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/supervision/colas')
   })
 
   it('keeps signed-in users out of the login screens', async () => {
@@ -77,10 +76,8 @@ describe('route guards', () => {
       ),
     )
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Equipo y colas' }),
-    ).toBeInTheDocument()
-    expect(document.title).toBe('Equipo y colas · LATAM Bank Soporte')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Equipo' })).toBeInTheDocument()
+    expect(document.title).toBe('Equipo · LATAM Bank Soporte')
   })
 
   it('explains when the account has no role', async () => {

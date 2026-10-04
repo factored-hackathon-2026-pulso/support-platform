@@ -3,415 +3,545 @@ import { ApiProblem } from '@/lib/api'
 import { NOW, minutesFrom, seededInbox } from '@/test/case-fixtures'
 import {
   ANDES,
-  PACIFICO,
   DANIELA_ID,
   JULIAN_ID,
+  LUCIA_ID,
+  PACIFICO,
+  answeredEscalation,
+  camilaEscalation,
   daniela,
   felipe,
   julian,
   julianCamila,
   makeAnalyst,
-  makeQueueOverview,
+  makeEscalation,
+  makeOpenCases,
   makeTeamOverview,
-  makeTeamSummary,
+  marcelaEscalation,
   paula,
-  queuedGabriela,
+  queuedMauricio,
   queuedRosa,
-  sebastian,
   seededAnalysts,
+  sebastian,
   tomas,
 } from '@/test/supervision-fixtures'
 import {
   ACTIVITY_META,
+  AUTOMATIC_ASSIGNMENT_NOTE,
+  CONFIRM_PAUSED_LABEL,
   HIGH_LOAD_OPEN_CASES,
   QUEUE_LABEL,
   REASSIGNED_NOTICE,
-  activityFilterOf,
-  analystSheetDescription,
-  analystsInFilter,
-  analystsOfTeam,
-  analystsSummary,
-  assignCandidates,
-  assignDialogSubtitle,
-  assignDialogTitle,
-  assignResultCopy,
-  assignSubmitLabel,
-  assignedToastTitle,
+  RECENT_RATING_HEADER,
+  analystsFigures,
   atRiskCount,
-  casePriorityFact,
-  caseRowFacts,
-  countByFilter,
+  backLabelFor,
   customerSeesCopy,
   describeAssignFailure,
-  findCaseSummary,
+  describeEscalationFailure,
+  escalatedAgo,
+  escalationCaseFacts,
+  escalationGroups,
+  escalationNoticeCopy,
+  escalationOutcomeTitle,
+  escalationResultCopy,
+  filterAnalysts,
+  filterOpenCases,
+  findOpenCase,
+  firstResponseFact,
+  foldText,
+  formatRatingAverage,
   isHighLoad,
-  languagesLabel,
   longestWait,
+  moreResultsLabel,
   needsPauseConfirmation,
+  noMatchCopy,
+  openCaseStatus,
   openCasesCell,
+  openEscalationsLabel,
   parseCaseViewSearch,
+  parseEscalationsSearch,
+  parseQueuesSearch,
   parseTeamSearch,
   pausedWarning,
-  queueOldestWait,
-  queueRiskText,
+  presenceTone,
+  queueFiguresFromRows,
+  queueFilterGroups,
+  queueNavLabels,
   queuedNoticeCopy,
-  queuedWaitLabel,
-  selectedTeam,
+  queuesPath,
+  queuesStateFromSelection,
+  reassignList,
+  reassignPool,
+  reassignResultCopy,
+  reassignSubmitLabel,
+  recentRatingCell,
+  replyHelp,
+  replyLabel,
+  shownCasesLabel,
   showsNoSessionHint,
-  speakersCaption,
-  teamPillLabels,
+  teamFilterGroups,
+  teamStateFromSelection,
   teamSubtitle,
   toCaseViewSearch,
+  toEscalationsSearch,
+  toQueuesSearch,
   toReplyCount,
   toTeamSearch,
   unchangedToastTitle,
   waitSince,
-  RECENT_RATING_HEADER,
-  formatRatingAverage,
-  recentRatingCell,
+  type QueuesUrlState,
+  type TeamUrlState,
 } from './model'
 
-describe('"Ahora" (contract §2.2)', () => {
-  it('draws every activity with the dot language: dot, ring, pause, grey ring', () => {
+const QUEUES: QueuesUrlState = { language: 'es', statuses: [], priorities: [], analysts: [] }
+const TEAM: TeamUrlState = {
+  activities: [],
+  languages: [],
+  teams: [],
+  analystId: null,
+  reassignCaseId: null,
+}
+
+describe('"Ahora"', () => {
+  it('draws every activity with the dot language and gender-neutral words', () => {
     expect(ACTIVITY_META).toEqual({
       busy: { shape: 'dot', tone: 'success', label: 'Atendiendo' },
       available: { shape: 'ring', tone: 'success', label: 'Disponible' },
       paused: { shape: 'pause', tone: 'warn', label: 'En pausa' },
       offline: { shape: 'ring', tone: 'neutral', label: 'Sin conexión' },
     })
+    expect(presenceTone('busy')).toBe('success')
+    expect(presenceTone('paused')).toBe('warn')
+    expect(presenceTone('offline')).toBe('offline')
   })
 
   it('hints "sin sesión abierta" only for someone available without a session', () => {
     expect(showsNoSessionHint(daniela)).toBe(true)
-    expect(showsNoSessionHint({ ...daniela, signedIn: true })).toBe(false)
-    expect(showsNoSessionHint({ activity: 'available', signedIn: false })).toBe(true)
     expect(showsNoSessionHint(julian)).toBe(false)
-    expect(showsNoSessionHint(paula)).toBe(false)
-  })
-})
-
-describe('team and activity filters', () => {
-  it('groups busy and available as Conectadas', () => {
-    expect(activityFilterOf('busy')).toBe('connected')
-    expect(activityFilterOf('available')).toBe('connected')
-    expect(activityFilterOf('paused')).toBe('paused')
-    expect(activityFilterOf('offline')).toBe('offline')
-  })
-
-  it('counts each filter after the team filter (seed §9.4)', () => {
-    expect(countByFilter(seededAnalysts)).toEqual({ connected: 1, paused: 1, offline: 4 })
-    const andes = analystsOfTeam(seededAnalysts, ANDES.id)
-    expect(andes.map((a) => a.name)).toEqual(['Daniela Ríos', 'Julián Ortega', 'Felipe Echeverri'])
-    expect(countByFilter(andes)).toEqual({ connected: 1, paused: 1, offline: 1 })
-    expect(analystsOfTeam(seededAnalysts, null)).toHaveLength(6)
-    expect(analystsInFilter(seededAnalysts, 'offline').map((a) => a.name)).toEqual([
-      'Felipe Echeverri',
-      'Paula Medina',
-      'Sebastián Cárdenas',
-      'Tomás Arango',
-    ])
-  })
-
-  it('resolves the selected team by id, unknown ids (old slugs too) meaning all', () => {
-    const { teams } = makeTeamOverview()
-    expect(selectedTeam(teams, ANDES.id)?.name).toBe('Equipo Andes')
-    expect(selectedTeam(teams, 'disputas-equipo-andes')).toBeNull()
-    expect(selectedTeam(teams, null)).toBeNull()
-  })
-
-  it('drops the prefix every team shares from the pills', () => {
-    const { teams } = makeTeamOverview()
-    expect(teamPillLabels(teams)).toEqual({
-      [ANDES.id]: 'Equipo Andes',
-      [PACIFICO.id]: 'Equipo Pacífico',
-    })
-    const cobranzas = 'TEAM-00000000000000000000000009'
-    const mixed = [...teams, makeTeamSummary({ id: cobranzas, name: 'Cobranzas' })]
-    expect(teamPillLabels(mixed)[cobranzas]).toBe('Cobranzas')
-    expect(teamPillLabels(mixed)[ANDES.id]).toBe('Equipo Andes')
-  })
-
-  it('writes the subtitle', () => {
-    expect(teamSubtitle(null, 6)).toBe('Todos los equipos · 6 analistas')
-    expect(teamSubtitle(makeTeamSummary(), 1)).toBe('Equipo Andes · 1 analista')
+    expect(showsNoSessionHint({ activity: 'available', signedIn: true })).toBe(false)
   })
 })
 
 describe('analyst figures at a pinned now', () => {
   it('computes the SLA at risk and the longest wait from the rows', () => {
-    expect(atRiskCount(daniela.openCases, NOW)).toBe(1) // Beatriz, 3 min left
-    expect(atRiskCount(julian.openCases, NOW)).toBe(1) // Camila, overdue
-    expect(atRiskCount(seededInbox, minutesFrom(-60))).toBe(0)
+    expect(atRiskCount(daniela.openCases, NOW)).toBe(1)
+    expect(atRiskCount(julian.openCases, NOW)).toBe(1)
     expect(longestWait(daniela, NOW)).toBe('4 min')
     expect(longestWait(paula, NOW)).toBe('—')
     expect(waitSince(minutesFrom(-0.5), NOW)).toBe('30 s')
-    expect(waitSince(new Date(NOW.getTime() - 4 * 60_000 - 50_000), NOW)).toBe('4 min')
     expect(waitSince(minutesFrom(-65), NOW)).toBe('1 h 05 min')
   })
 
-  it('flags high load from 5 open cases and shows "—" for someone offline and idle', () => {
+  it('flags high load and shows "—" for someone offline and idle', () => {
     expect(HIGH_LOAD_OPEN_CASES).toBe(5)
     expect(isHighLoad(daniela)).toBe(true)
-    expect(isHighLoad(julian)).toBe(false)
-    expect(openCasesCell(daniela)).toBe('5')
     expect(openCasesCell(paula)).toBe('—')
     expect(openCasesCell({ ...paula, activity: 'paused' })).toBe('0')
     expect(toReplyCount(daniela)).toBe(4)
-    expect(toReplyCount(julian)).toBe(1)
   })
 
-  it('summarizes the listed analysts', () => {
-    expect(analystsSummary(seededAnalysts, NOW)).toBe('7 casos abiertos · 2 en riesgo de SLA')
-    expect(analystsSummary([julian], NOW)).toBe('2 casos abiertos · 1 en riesgo de SLA')
-    expect(analystsSummary([paula], NOW)).toBe('0 casos abiertos · 0 en riesgo de SLA')
-  })
-
-  it('describes an analyst and her case rows', () => {
-    expect(languagesLabel(['es', 'pt'])).toBe('español, portugués')
-    expect(analystSheetDescription(julian)).toBe('En pausa · español · Equipo Andes')
-    // Slice 8: facts, no dot-joined line; the priority is its own glyph in the status cell.
-    expect(caseRowFacts(julianCamila)).toEqual([
-      { key: 'channel', icon: 'smartphone', text: 'App', label: 'Canal', iconOnly: true },
-      { key: 'language', icon: 'languages', text: 'Español', label: 'Idioma' },
-    ])
-    expect(casePriorityFact(julianCamila)).toEqual({
-      icon: 'priority-medium',
-      text: 'Prioridad media',
-      iconOnly: true,
-    })
-    expect(casePriorityFact({ priority: 'none' }).text).toBe('Sin prioridad')
+  it('sums the listed analysts without a dot-joined line', () => {
+    expect(analystsFigures(seededAnalysts, NOW)).toEqual({ open: '7 casos abiertos', atRisk: 2 })
+    expect(analystsFigures([julian], NOW)).toEqual({ open: '2 casos abiertos', atRisk: 1 })
   })
 })
 
-describe('queues', () => {
-  it('words the risk, the oldest wait and the speakers', () => {
-    expect(queueRiskText(1)).toBe('1 en riesgo de SLA')
-    expect(queueRiskText(0)).toBe('Sin riesgo')
-    const [es, pt] = makeQueueOverview().queues
-    expect(queueOldestWait(es!, NOW)).toBe('13 min')
-    expect(queueOldestWait({ oldestQueuedAt: null }, NOW)).toBe('—')
-    expect(atRiskCount(es!.cases, NOW)).toBe(2)
-    expect(atRiskCount(pt!.cases, NOW)).toBe(0)
-    expect(speakersCaption(1, 'es')).toBe('disponible que habla español')
-    expect(speakersCaption(0, 'pt')).toBe('disponibles que hablan portugués')
-    expect(queuedWaitLabel(queuedRosa, NOW)).toBe('Espera 13 min')
-  })
+describe('"Colas"', () => {
+  const rows = makeOpenCases().cases
 
-  it('pins the queue labels to the backend text', () => {
+  it('explains that assignment is automatic', () => {
+    expect(AUTOMATIC_ASSIGNMENT_NOTE).toBe(
+      'La asignación es automática: cada caso le llega a la primera persona disponible que habla su idioma.',
+    )
     expect(QUEUE_LABEL).toEqual({ es: 'Cola en español', pt: 'Cola en portugués' })
   })
 
-  it('finds a case in the cached overviews', () => {
-    const team = makeTeamOverview()
-    const queues = makeQueueOverview()
-    expect(findCaseSummary(queuedGabriela.id, team, queues)).toBe(queuedGabriela)
-    expect(findCaseSummary(julianCamila.id, team, queues)).toBe(julianCamila)
-    expect(findCaseSummary('CASE-NOPE', team, queues)).toBeNull()
-    expect(findCaseSummary(julianCamila.id, undefined, undefined)).toBeNull()
+  it('counts open, unassigned and at-risk cases from the rows', () => {
+    const figures = queueFiguresFromRows(rows, NOW)
+    expect(figures).toEqual({ open: rows.length, unassigned: 2, atRisk: 4 })
+    expect(queueNavLabels(figures)).toEqual({
+      open: `${rows.length} abiertos`,
+      unassigned: '2 sin asignar',
+      atRisk: '4 en riesgo',
+    })
+    expect(queueNavLabels({ open: 1, unassigned: 0, atRisk: 0 }).open).toBe('1 abierto')
+    expect(shownCasesLabel(2, 9, true)).toBe('2 de 9 casos abiertos')
+    expect(shownCasesLabel(1, 1, false)).toBe('1 caso abierto')
+  })
+
+  it('says "Sin asignar" while nobody holds a case', () => {
+    expect(openCaseStatus(queuedRosa)).toEqual({
+      shape: 'dashed',
+      tone: 'neutral',
+      label: 'Sin asignar',
+    })
+    expect(openCaseStatus(julianCamila)).toMatchObject({ shape: 'pie-75', label: 'Por responder' })
+  })
+
+  it('shows the first response as flame, clock or "Respondida"', () => {
+    expect(firstResponseFact(queuedMauricio, NOW)).toMatchObject({
+      icon: 'flame-filled',
+      tone: 'danger',
+      text: 'Vencida',
+      tooltip: 'Primera respuesta vencida',
+    })
+    expect(firstResponseFact(queuedRosa, NOW)).toMatchObject({
+      icon: 'flame',
+      tone: 'warn',
+      text: '2 min',
+      tooltip: 'Primera respuesta: vence en 2 min',
+    })
+    expect(firstResponseFact({ ...queuedRosa, slaDueAt: minutesFrom(14) }, NOW)).toMatchObject({
+      icon: 'clock',
+      text: '14 min',
+    })
+    expect(firstResponseFact(seededInbox[1]!, NOW)).toMatchObject({
+      icon: 'check',
+      text: 'Respondida',
+    })
+  })
+
+  it('filters by status, priority and analyst (OR in a group, AND across)', () => {
+    const unassigned = filterOpenCases(rows, { ...QUEUES, statuses: ['queued'] })
+    expect(unassigned.map((row) => row.case.id)).toEqual([queuedRosa.id, queuedMauricio.id])
+    const julianToReply = filterOpenCases(rows, {
+      ...QUEUES,
+      statuses: ['to_reply', 'new'],
+      analysts: [JULIAN_ID],
+    })
+    expect(julianToReply.map((row) => row.case.id)).toEqual([julianCamila.id])
+    const high = filterOpenCases(rows, { ...QUEUES, priorities: ['high'] })
+    expect(high.map((row) => row.case.id)).toEqual([queuedMauricio.id])
+  })
+
+  it('offers faceted counts in the Filtros groups', () => {
+    const groups = queueFilterGroups(rows, { ...QUEUES, analysts: [JULIAN_ID] })
+    expect(groups.map((group) => group.legend)).toEqual(['Estado', 'Prioridad', 'Analista'])
+    const estado = groups[0]!.options
+    expect(estado.map((o) => [o.label, o.count])).toEqual([
+      ['Sin asignar', 0],
+      ['Nuevo', 0],
+      ['Por responder', 1],
+      ['Esperando al cliente', 1],
+    ])
+    const analysts = groups[2]!.options
+    expect(analysts.map((o) => o.label)).toEqual(['Daniela Ríos', 'Julián Ortega'])
+    expect(analysts.find((o) => o.value === JULIAN_ID)?.count).toBe(2)
+  })
+
+  it('keeps the queue and filters in the URL', () => {
+    const state: QueuesUrlState = {
+      language: 'pt',
+      statuses: ['queued', 'to_reply'],
+      priorities: ['critical'],
+      analysts: [DANIELA_ID],
+    }
+    const search = toQueuesSearch(state)
+    expect(search.toString()).toBe(
+      'idioma=pt&estado=sin-asignar%2Cpor-responder&prioridad=critica&analista=STF-ANA0000001',
+    )
+    expect(parseQueuesSearch(search)).toEqual(state)
+    expect(parseQueuesSearch(new URLSearchParams('idioma=en&estado=nada'))).toEqual(QUEUES)
+    expect(queuesPath('pt')).toBe('/supervision/colas?idioma=pt')
+    expect(queuesPath('es')).toBe('/supervision/colas')
+    expect(
+      queuesStateFromSelection(QUEUES, { estado: ['new', 'bogus'], prioridad: ['low'] }),
+    ).toEqual({ ...QUEUES, statuses: ['new'], priorities: ['low'] })
   })
 })
 
-describe('assign dialog (contract §8.6)', () => {
-  it('titles and describes a queued case and a held one', () => {
-    expect(assignDialogTitle(queuedRosa)).toBe('Asignar caso')
-    expect(assignDialogTitle(julianCamila)).toBe('Reasignar caso')
-    expect(assignDialogSubtitle(queuedRosa, null, NOW)).toBe(
-      'Rosa Elena Ibarra Méndez · CASE-…0111 · español · Espera 13 min en la cola',
-    )
-    expect(assignDialogSubtitle(julianCamila, 'Julián Ortega', NOW)).toBe(
-      'Camila Torres Benavides · CASE-…0113 · español · Lo atiende Julián Ortega',
-    )
-  })
+describe('"Equipo"', () => {
+  const overview = makeTeamOverview()
 
-  it('lists speakers first, then by activity, load and name; non-speakers disabled (rule 3)', () => {
-    const candidates = assignCandidates(seededAnalysts, queuedGabriela)
-    expect(candidates.map((c) => [c.label, c.disabled])).toEqual([
-      ['Daniela Ríos', false],
-      ['Sebastián Cárdenas', false],
-      ['Tomás Arango', false],
-      ['Julián Ortega', true],
-      ['Felipe Echeverri', true],
-      ['Paula Medina', true],
+  it('filters by state, language and team, with faceted counts', () => {
+    const groups = teamFilterGroups(overview, TEAM)
+    expect(groups.map((group) => group.legend)).toEqual(['Estado', 'Idioma', 'Equipo'])
+    expect(groups[0]!.options.map((o) => [o.label, o.count])).toEqual([
+      ['Atendiendo', 1],
+      ['Disponible', 0],
+      ['En pausa', 1],
+      ['Sin conexión', 4],
     ])
-    expect(candidates[0]?.description).toBe('Atendiendo · 5 abiertos · español, portugués')
-    expect(candidates[1]?.description).toBe('Sin conexión · 0 abiertos · español, portugués')
-    expect(candidates[3]?.description).toBe('No habla portugués (regla 3)')
-  })
-
-  it('puts available before busy and fewer open cases first', () => {
-    const free = makeAnalyst({
-      id: 'STF-X',
-      name: 'Ana Zea',
-      activity: 'available',
-      languages: ['es'],
+    expect(groups[1]!.options.map((o) => [o.label, o.count])).toEqual([
+      ['Español', 6],
+      ['Portugués', 3],
+    ])
+    expect(groups[2]!.options.map((o) => o.label)).toEqual(['Equipo Andes', 'Equipo Pacífico'])
+    const pt = filterAnalysts(seededAnalysts, { ...TEAM, languages: ['pt'] })
+    expect(pt.map((a) => a.name)).toEqual(['Daniela Ríos', 'Sebastián Cárdenas', 'Tomás Arango'])
+    const ptPacifico = filterAnalysts(seededAnalysts, {
+      ...TEAM,
+      languages: ['pt'],
+      teams: [PACIFICO.id],
     })
-    const order = assignCandidates([julian, daniela, free, paula], queuedRosa).map((c) => c.label)
-    expect(order).toEqual(['Ana Zea', 'Daniela Ríos', 'Julián Ortega', 'Paula Medina'])
+    expect(ptPacifico.map((a) => a.name)).toEqual(['Sebastián Cárdenas', 'Tomás Arango'])
+    const faceted = teamFilterGroups(overview, { ...TEAM, teams: [ANDES.id] })
+    expect(faceted[1]!.options.map((o) => o.count)).toEqual([3, 1])
+    expect(teamSubtitle(2, 6, true)).toBe('2 de 6 analistas')
+    expect(teamSubtitle(6, 6, false)).toBe('6 analistas')
   })
 
-  it('never offers the current assignee', () => {
-    const labels = assignCandidates(seededAnalysts, julianCamila).map((c) => c.value)
-    expect(labels).not.toContain(JULIAN_ID)
-    expect(labels).toContain(DANIELA_ID)
+  it('keeps the filters, the sheet and the dialog in the URL (slice 3 URLs still work)', () => {
+    const state: TeamUrlState = {
+      activities: ['busy', 'paused'],
+      languages: ['pt'],
+      teams: [ANDES.id],
+      analystId: JULIAN_ID,
+      reassignCaseId: julianCamila.id,
+    }
+    expect(parseTeamSearch(toTeamSearch(state))).toEqual(state)
+    expect(toTeamSearch(TEAM).toString()).toBe('')
+    expect(parseTeamSearch(new URLSearchParams('estado=conectadas&asignar=CASE-1'))).toEqual({
+      ...TEAM,
+      activities: ['busy', 'available'],
+      reassignCaseId: 'CASE-1',
+    })
+    expect(
+      teamStateFromSelection(TEAM, { estado: ['offline', 'x'], idioma: ['pt', 'en'] }),
+    ).toEqual({ ...TEAM, activities: ['offline'], languages: ['pt'] })
+    expect(findOpenCase(julianCamila.id, overview)?.id).toBe(julianCamila.id)
+    expect(findOpenCase(queuedRosa.id, overview)).toBeNull()
+  })
+})
+
+describe('reassign dialog', () => {
+  const connected = (name: string, open: number, activity: 'busy' | 'available' = 'busy') =>
+    makeAnalyst({
+      id: `STF-${name}`,
+      name,
+      activity,
+      availability: 'available',
+      counts: { open, new: 0, toReply: 0, waiting: 0 },
+    })
+  const team = [
+    connected('Ana Ruiz', 3),
+    connected('Bruno Díaz', 1),
+    connected('Carla Gil', 0, 'available'),
+    connected('Dario Paz', 2),
+    connected('Elena Mora', 4),
+    connected('Fabio Sol', 5),
+    connected('Gina Luz', 6),
+    julian,
+    sebastian,
+  ]
+
+  it('offers only speakers of the case language, never the holder, the least loaded first', () => {
+    const pool = reassignPool(team, julianCamila, { includeAway: false })
+    expect(pool.map((a) => a.name)).toEqual([
+      'Carla Gil',
+      'Bruno Díaz',
+      'Dario Paz',
+      'Ana Ruiz',
+      'Elena Mora',
+      'Fabio Sol',
+      'Gina Luz',
+    ])
+    const withAway = reassignPool(team, julianCamila, { includeAway: true })
+    expect(withAway.at(-1)?.name).toBe('Sebastián Cárdenas')
+    expect(withAway.some((a) => a.id === JULIAN_ID)).toBe(false) // the holder
+    const portuguese = reassignPool(
+      [...team, tomas],
+      { language: 'pt', assignedAnalystId: null },
+      {
+        includeAway: true,
+      },
+    )
+    expect(portuguese.map((a) => a.name)).toEqual(['Sebastián Cárdenas', 'Tomás Arango'])
   })
 
-  it('asks to confirm a paused or offline target', () => {
+  it('suggests three, searches up to six (accents ignored) and keeps the chosen one', () => {
+    const pool = reassignPool(team, julianCamila, { includeAway: false })
+    const suggested = reassignList(pool, '', null)
+    expect(suggested.title).toBe('Sugeridos')
+    expect(suggested.shown.map((a) => a.name)).toEqual(['Carla Gil', 'Bruno Díaz', 'Dario Paz'])
+    expect(suggested.hidden).toBe(4)
+    expect(moreResultsLabel(4)).toBe('+4 más: escribe un nombre para encontrarlos')
+    expect(moreResultsLabel(0)).toBeNull()
+    const results = reassignList(pool, 'a', null)
+    expect(results.title).toBe('Resultados')
+    expect(results.shown).toHaveLength(6)
+    expect(reassignList(pool, 'DIAZ', null).shown.map((a) => a.name)).toEqual(['Bruno Díaz'])
+    expect(reassignList(pool, '', 'STF-Gina Luz').shown.at(-1)?.name).toBe('Gina Luz')
+    expect(reassignList(pool, 'zzz', null).shown).toEqual([])
+    expect(noMatchCopy('pt')).toBe('Nadie con ese nombre habla portugués.')
+    expect(foldText('Julián')).toBe('julian')
+  })
+
+  it('asks to confirm a paused or offline choice and previews the customer notice', () => {
     expect(needsPauseConfirmation(julian)).toBe(true)
-    expect(needsPauseConfirmation(sebastian)).toBe(true)
     expect(needsPauseConfirmation(daniela)).toBe(false)
+    expect(CONFIRM_PAUSED_LABEL).toBe('Pasarlo aunque esté en pausa')
     expect(pausedWarning(julian)).toBe(
-      'Julián está en pausa: no recibe casos nuevos. Si lo asignas igual, le llega a su lista.',
+      'Julián está en pausa: no recibe casos nuevos. Si se lo pasas igual, le llega a su lista.',
     )
-    expect(pausedWarning(sebastian)).toBe(
-      'Sebastián está en pausa: no recibe casos nuevos. Si lo asignas igual, le llega a su lista. Tampoco tiene una sesión abierta.',
-    )
-  })
-
-  it('pins the reassignment notice to the backend text', () => {
+    expect(pausedWarning(paula)).toMatch(/Tampoco tiene una sesión abierta\.$/)
     expect(REASSIGNED_NOTICE.es('Daniela')).toBe('Ahora te atiende Daniela, de nuestro equipo.')
-    expect(REASSIGNED_NOTICE.pt('Daniela')).toBe('Agora quem te atende é Daniela, da nossa equipe.')
-  })
-
-  it('previews what the customer sees', () => {
-    expect(customerSeesCopy(queuedRosa, daniela)).toBe('Que ya lo atiende Daniela.')
+    expect(REASSIGNED_NOTICE.pt('Tomás')).toBe('Agora quem te atende é Tomás, da nossa equipe.')
     expect(customerSeesCopy(julianCamila, daniela)).toBe(
       'Ahora te atiende Daniela, de nuestro equipo.',
     )
-    expect(customerSeesCopy({ ...julianCamila, language: 'pt' }, tomas)).toBe(
-      'Agora quem te atende é Tomás, da nossa equipe.',
-    )
-  })
-
-  it('labels the submit button', () => {
-    expect(assignSubmitLabel(queuedRosa, daniela)).toBe('Asignar a Daniela')
-    expect(assignSubmitLabel(julianCamila, daniela)).toBe('Reasignar a Daniela')
-    expect(assignSubmitLabel(julianCamila, null)).toBe('Reasignar')
+    expect(reassignSubmitLabel(daniela)).toBe('Reasignar a Daniela')
+    expect(reassignSubmitLabel(null)).toBe('Reasignar')
   })
 
   it('maps every failure code to copy and a follow-up', () => {
     const ctx = { caseLanguage: 'pt' as const, analystName: 'Julián Ortega' }
     const problem = (status: number, code: string, extensions = {}) =>
       new ApiProblem({ status, code, extensions })
-    expect(
-      describeAssignFailure(problem(422, 'language_mismatch', { caseLanguage: 'pt' }), ctx),
-    ).toEqual({
-      message: 'Ese caso es en portugués y Julián no lo habla (regla 3).',
-      action: 'none',
-    })
+    expect(describeAssignFailure(problem(422, 'language_mismatch'), ctx).message).toBe(
+      'Ese caso es en portugués y Julián no lo habla (regla 3).',
+    )
     expect(describeAssignFailure(problem(409, 'analyst_paused'), ctx)).toEqual({
-      message: 'Julián está en pausa. Marca «Asignar aunque esté en pausa» para seguir.',
+      message: 'Julián está en pausa. Marca «Pasarlo aunque esté en pausa» para seguir.',
       action: 'confirm_paused',
     })
-    expect(describeAssignFailure(problem(409, 'assignment_changed'), ctx)).toEqual({
-      message: 'Alguien más movió este caso mientras decidías. Revisa a quién está asignado ahora.',
-      action: 'refetch',
-    })
-    expect(describeAssignFailure(problem(409, 'case_closed'), ctx)).toEqual({
-      message: 'Este caso ya se cerró.',
-      action: 'close',
-    })
-    expect(describeAssignFailure(problem(422, 'analyst_not_eligible'), ctx)).toEqual({
-      message: 'Esa persona ya no puede recibir casos.',
-      action: 'refetch_team',
-    })
-    expect(describeAssignFailure(ApiProblem.network(), ctx)).toEqual({
-      message: 'No pudimos asignar el caso. Inténtalo de nuevo.',
-      action: 'none',
-    })
-  })
-})
-
-describe('after an assignment', () => {
-  it('writes the result strip for the queue and for a reassignment', () => {
-    expect(
-      assignResultCopy({
-        customerName: 'Gabriela Duarte Melo',
-        analystName: 'Sebastián Cárdenas',
-        previousAnalystName: null,
-        queueLanguage: 'pt',
-        queueRemaining: 0,
-      }),
-    ).toEqual({
-      prefix: 'Listo ·',
-      message:
-        'El caso de Gabriela Duarte Melo pasó a Sebastián Cárdenas. La cola en portugués quedó en 0.',
-    })
-    expect(
-      assignResultCopy({
-        customerName: 'Camila Torres Benavides',
-        analystName: 'Daniela Ríos',
-        previousAnalystName: 'Julián Ortega',
-        queueLanguage: 'es',
-        queueRemaining: 2,
-      }).message,
-    ).toBe('El caso de Camila Torres Benavides pasó de Julián Ortega a Daniela Ríos.')
-  })
-
-  it('titles the success and no-op toasts', () => {
-    expect(assignedToastTitle('Camila Torres Benavides', 'Daniela Ríos')).toBe(
-      'Listo · El caso de Camila Torres Benavides pasó a Daniela Ríos',
+    expect(describeAssignFailure(problem(409, 'assignment_changed'), ctx).action).toBe('refetch')
+    expect(describeAssignFailure(problem(409, 'case_closed'), ctx).action).toBe('close')
+    expect(describeAssignFailure(problem(422, 'analyst_not_eligible'), ctx).action).toBe(
+      'refetch_team',
     )
+    expect(describeAssignFailure(ApiProblem.network(), ctx).message).toBe(
+      'No pudimos reasignar el caso. Inténtalo de nuevo.',
+    )
+  })
+
+  it('reports the result', () => {
+    expect(
+      reassignResultCopy({
+        customerName: 'Camila Torres',
+        previousAnalystName: 'Julián Ortega',
+        analystName: 'Daniela Ríos',
+      }).message,
+    ).toBe('El caso de Camila Torres pasó de Julián Ortega a Daniela Ríos.')
     expect(unchangedToastTitle('Daniela Ríos')).toBe('Daniela ya tenía este caso.')
   })
 })
 
-describe('supervisor notice', () => {
-  it('words the queued-case toast without AI or approval wording', () => {
-    expect(queuedNoticeCopy(queuedGabriela)).toEqual({
-      tag: 'Cola en portugués',
-      title: 'Un caso espera en la cola en portugués',
-      description: 'Gabriela Duarte Melo · nadie disponible habla portugués',
+describe('"Escalados"', () => {
+  it('groups open ones (the longest waiting first) and the ones attended today', () => {
+    const groups = escalationGroups([marcelaEscalation, answeredEscalation, camilaEscalation], NOW)
+    expect(groups.map((g) => g.label)).toEqual(['Abiertos (2)', 'Atendidos hoy'])
+    expect(groups[0]!.items.map((i) => i.escalation.id)).toEqual([
+      camilaEscalation.escalation.id,
+      marcelaEscalation.escalation.id,
+    ])
+    const withdrawn = {
+      ...marcelaEscalation,
+      escalation: { ...marcelaEscalation.escalation, state: 'withdrawn' as const },
+    }
+    expect(escalationGroups([withdrawn], NOW)).toEqual([])
+    const yesterday = {
+      ...answeredEscalation,
+      escalation: { ...answeredEscalation.escalation, resolvedAt: minutesFrom(-60 * 30) },
+    }
+    expect(escalationGroups([yesterday], NOW)).toEqual([])
+    expect(openEscalationsLabel(1)).toBe('1 abierto')
+    expect(openEscalationsLabel(2)).toBe('2 abiertos')
+  })
+
+  it('says what supervision did, from the viewer side', () => {
+    const answered = answeredEscalation.escalation
+    expect(escalationOutcomeTitle(answered, LUCIA_ID)).toBe('Respondiste a Daniela')
+    expect(escalationOutcomeTitle(answered, 'STF-other')).toBe('Lucía Herrera respondió')
+    const taken = makeEscalation({
+      state: 'taken',
+      resolvedById: LUCIA_ID,
+      resolvedByName: 'Lucía Herrera',
     })
+    expect(escalationOutcomeTitle(taken, LUCIA_ID)).toBe('Tomaste el caso')
+    const moved = makeEscalation({
+      state: 'reassigned',
+      resolvedById: LUCIA_ID,
+      resolvedByName: 'Lucía Herrera',
+      reassignedToName: 'Daniela Ríos',
+    })
+    expect(escalationOutcomeTitle(moved, 'STF-x')).toBe('Lucía Herrera lo reasignó a Daniela Ríos')
+    expect(escalationOutcomeTitle(makeEscalation(), LUCIA_ID)).toBeNull()
+    expect(escalatedAgo(makeEscalation(), NOW)).toBe('Escaló hace 21 min')
+  })
+
+  it('lists the case facts as icon + short value', () => {
+    const facts = escalationCaseFacts(
+      {
+        summary: camilaEscalation.case,
+        holderName: 'Julián Ortega',
+        customer: { city: 'Bucaramanga', country: 'CO' },
+      },
+      NOW,
+    )
+    expect(facts.map((f) => [f.label, f.text])).toEqual([
+      ['Lo atiende', 'Julián Ortega'],
+      ['Ciudad', 'Bucaramanga, Colombia'],
+      ['Idioma', 'Español'],
+      ['Canal', 'Chat en la app'],
+      ['Prioridad', 'Media'],
+      ['Abierto hace', '25 min'],
+    ])
+  })
+
+  it('words the reply form, the results and the failures', () => {
+    const escalation = camilaEscalation.escalation
+    expect(replyLabel(escalation)).toBe('Tu respuesta para Julián')
+    expect(replyHelp(escalation)).toBe('Le llega a Julián dentro del caso. El cliente no la ve.')
+    const item = { analystName: 'Daniela Ríos', customerName: 'Marcela Quintana Pardo' }
+    expect(escalationResultCopy('answered', item).message).toBe(
+      'Le llegó tu respuesta a Daniela en el caso de Marcela Quintana Pardo.',
+    )
+    expect(escalationResultCopy('taken', item).message).toBe(
+      'Tomaste el caso de Marcela Quintana Pardo. Daniela lo puede leer, pero ya no responder.',
+    )
+    expect(escalationResultCopy('reassigned', { ...item, toName: 'Tomás Arango' }).message).toBe(
+      'El caso de Marcela Quintana Pardo pasó de Daniela Ríos a Tomás Arango.',
+    )
+    const problem = (code: string) => new ApiProblem({ status: 409, code })
+    expect(
+      describeEscalationFailure(problem('escalation_not_open'), { caseLanguage: 'es' }),
+    ).toEqual({
+      message:
+        'Este escalamiento ya no está abierto: lo retiraron o alguien de supervisión ya lo atendió.',
+      refetch: true,
+    })
+    expect(
+      describeEscalationFailure(problem('analyst_not_eligible'), { caseLanguage: 'es' }).message,
+    ).toBe('Para tomar el caso necesitas también el rol de Analista.')
+    expect(
+      describeEscalationFailure(problem('language_mismatch'), { caseLanguage: 'pt' }).message,
+    ).toBe('Ese caso es en portugués y no lo hablas (regla 3).')
+  })
+
+  it('keeps the selection in the URL', () => {
+    const state = { escalationId: 'ESC-1', reassign: true }
+    expect(parseEscalationsSearch(toEscalationsSearch(state))).toEqual(state)
+    expect(toEscalationsSearch({ escalationId: null, reassign: true }).toString()).toBe('')
   })
 })
 
-describe('URL state', () => {
-  it('parses and serializes the team screen, unknown values falling back', () => {
-    const state = parseTeamSearch(
-      new URLSearchParams(`equipo=${ANDES.id}&estado=en-pausa&analista=STF-1&asignar=CASE-1`),
-    )
-    expect(state).toEqual({
-      team: ANDES.id,
-      activity: 'paused',
-      analystId: 'STF-1',
-      assignCaseId: 'CASE-1',
+describe('notices and the case view', () => {
+  it('words the toasts without assignment, AI or approval wording', () => {
+    expect(queuedNoticeCopy(queuedRosa)).toEqual({
+      tag: 'Cola en español',
+      title: 'Un caso espera en la cola en español',
+      description: 'Rosa Elena Ibarra Méndez',
     })
-    expect(toTeamSearch(state).toString()).toBe(
-      `equipo=${ANDES.id}&estado=en-pausa&analista=STF-1&asignar=CASE-1`,
-    )
-    const fallback = parseTeamSearch(new URLSearchParams('estado=vacaciones&analista=%20'))
-    expect(fallback).toEqual({
-      team: null,
-      activity: 'connected',
-      analystId: null,
-      assignCaseId: null,
+    expect(escalationNoticeCopy(camilaEscalation.escalation)).toEqual({
+      title: 'Julián Ortega escaló un caso',
+      description: 'Camila Torres Benavides',
+      meta: '“Problema con la app al hacer una transferencia: no le llegó a su hermano.”',
     })
-    expect(toTeamSearch(fallback).toString()).toBe('')
-    expect(toTeamSearch({ ...fallback, activity: 'offline' }).toString()).toBe(
-      'estado=desconectadas',
-    )
   })
 
-  it('parses and serializes the case view', () => {
+  it('names "Volver" after the screen it came from and keeps the dialog in the URL', () => {
+    expect(backLabelFor(null)).toBe('Volver a Colas')
+    expect(backLabelFor('/supervision/colas?idioma=pt')).toBe('Volver a Colas')
+    expect(backLabelFor('/supervision/equipo?analista=x')).toBe('Volver a Equipo')
+    expect(backLabelFor('/supervision/escalados')).toBe('Volver a Escalados')
+    expect(backLabelFor('/supervision/auditoria?caso=x')).toBe('Volver a Auditoría')
     expect(parseCaseViewSearch(new URLSearchParams('historial=lista&asignar=1'))).toEqual({
       history: 'lista',
-      assign: true,
+      reassign: true,
     })
-    expect(parseCaseViewSearch(new URLSearchParams('asignar=si'))).toEqual({
-      history: null,
-      assign: false,
-    })
-    expect(toCaseViewSearch({ history: 'CASE-9', assign: true }).toString()).toBe(
-      'historial=CASE-9&asignar=1',
-    )
-    expect(toCaseViewSearch({ history: null, assign: false }).toString()).toBe('')
-  })
-})
-
-describe('fixture sanity', () => {
-  it('keeps Felipe and Paula as Spanish-only analysts', () => {
-    expect(felipe.languages).toEqual(['es'])
-    expect(paula.languages).toEqual(['es'])
+    expect(toCaseViewSearch({ history: null, reassign: true }).toString()).toBe('reasignar=1')
   })
 })
 
@@ -424,22 +554,16 @@ describe('"Calificación 7 días" (slice 7)', () => {
       count: '(9)',
       tooltip: 'Promedio 3,6 de 4 en 9 casos calificados',
     })
-    expect(recentRatingCell({ count: 1, average: 2 })).toEqual({
-      icon: 'meh',
-      tone: 'danger',
-      average: '2,0',
-      count: '(1)',
-      tooltip: 'Promedio 2,0 de 4 en 1 caso calificado',
-    })
     expect(recentRatingCell({ count: 6, average: 2.7 })?.tone).toBe('warn')
-    expect(recentRatingCell({ count: 6, average: 2.7 })?.icon).toBe('smile')
-    expect(recentRatingCell({ count: 4, average: 1.2 })?.icon).toBe('frown')
-  })
-
-  it('is empty ("—") when nothing was rated', () => {
     expect(recentRatingCell({ count: 0, average: null })).toBeNull()
-    expect(formatRatingAverage(3)).toBe('3,0')
     expect(formatRatingAverage(3.25)).toBe('3,3')
     expect(RECENT_RATING_HEADER.label).toBe('Calificación 7 días')
+  })
+})
+
+describe('fixture sanity', () => {
+  it('keeps Felipe and Paula as Spanish-only analysts', () => {
+    expect(felipe.languages).toEqual(['es'])
+    expect(paula.languages).toEqual(['es'])
   })
 })

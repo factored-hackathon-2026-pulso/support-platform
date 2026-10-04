@@ -94,7 +94,7 @@ def test_roles_per_endpoint(
         problem(admin, 403, "forbidden")
     supervisor = client.request(method, path, json=body, headers=bearer(sign_in(SUPERVISOR.email)))
     assert supervisor.status_code == 200, supervisor.text
-    # The team lead (Analista + Supervisora) acts as a supervisor here.
+    # The team lead (Analista + Supervisión) acts as a supervisor here.
     lead = client.request(method, path, json=body, headers=bearer(sign_in(TEAM_LEAD.email)))
     assert lead.status_code == 200, lead.text
 
@@ -243,6 +243,7 @@ def test_reassignment_keeps_the_previous_analyst_reading(
         "canClose": False,
         "canAssign": False,
         "canChangePriority": False,
+        "canEscalate": False,
     }
     cmid = str(uuid.uuid4())
     write = client.post(

@@ -10,6 +10,7 @@ from pydantic.alias_generators import to_camel
 
 from cc_platform.api.problems import ProblemCode
 from cc_platform.application.people.admin.dto import OpenCasesBlock, SelfChangeAction
+from cc_platform.domain.cases.escalation import EscalationState
 from cc_platform.domain.cases.values import CaseStatus
 from cc_platform.domain.people.staff import Language, StaffRole
 
@@ -125,6 +126,12 @@ class ProblemDetails(ApiModel):
         default=None, description="team_not_empty: the team's active members."
     )
     team_id: str | None = Field(default=None, description="team_inactive: the team.")
+    escalation_id: str | None = Field(
+        default=None, description="escalation_open: the case's open escalation (slice 9)."
+    )
+    current_state: EscalationState | None = Field(
+        default=None, description="escalation_not_open: the escalation's state now (slice 9)."
+    )
 
 
 def problem_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:

@@ -369,6 +369,66 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/cases/{caseId}/escalations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Escalate the case to supervision (the assignee, with a motive)
+     * @description Slice 9. The assignee analyst only (403 `case_not_assigned`), on an open assigned case (409 `case_closed` / `invalid_transition`) without an open escalation (409 `escalation_open`). The motive is required (trimmed, at most 500). The case stays with her; a staff banner records it in the transcript; supervision is told live.
+     */
+    post: operations['cases_escalate_case']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/escalations/{escalationId}/acknowledge': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * "Entendido": the analyst who escalated read what supervision did
+     * @description Slice 9. Only who escalated (403 `case_not_assigned`), once supervision answered, took or reassigned the case (409 `invalid_transition` before). Repeating it changes nothing.
+     */
+    post: operations['cases_acknowledge_escalation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/escalations/{escalationId}/withdraw': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Withdraw the open escalation (the assignee)
+     * @description Slice 9. The assignee analyst only, while it is open (409 `escalation_not_open` with `currentState` once supervision acted).
+     */
+    post: operations['cases_withdraw_escalation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/cases/{caseId}/history': {
     parameters: {
       query?: never
@@ -686,6 +746,83 @@ export interface paths {
      * @description Checks in this order: the case exists (404) · it is not closed (409 `case_closed`) · the target is an active analyst (422 `analyst_not_eligible`) · she speaks the case language (rule 3, 422 `language_mismatch`) · she already holds it (200, `changed: false`, nothing happens) · the holder is still `expectedAnalystId` (409 `assignment_changed`) · a paused target needs `confirmPaused` (409 `analyst_paused`). A reassignment tells the customer who attends them now; a staff banner records every assignment.
      */
     put: operations['supervision_set_assignee']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/escalations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** "Escalados": open escalations and the ones attended in the last 24 hours */
+    get: operations['supervision_get_escalations']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/escalations/{escalationId}/response': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Answer an open escalation with a note (the case stays with the analyst)
+     * @description Slice 9. 404 unknown escalation · 409 `escalation_not_open` (`currentState`) · 422 empty or longer than 500. The analyst sees the answer live in the case.
+     */
+    post: operations['supervision_respond_escalation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/escalations/{escalationId}/take': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Take the escalated case yourself (supervisors who also hold Analista)
+     * @description Slice 9. A reassignment to the caller: she must be an active analyst too (422 `analyst_not_eligible`) who speaks the case language (rule 3, 422 `language_mismatch`), and the escalation open (409 `escalation_not_open`). The customer is told who attends them now.
+     */
+    post: operations['supervision_take_escalated_case']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/open-cases': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * "Colas": every open case of one language and who holds it
+     * @description Slice 9. Queued, assigned and in-progress cases of `language` (one indexed query): the ones nobody holds first (oldest first), then the held ones in open-inbox order. Assignment stays automatic: this is a view.
+     */
+    get: operations['supervision_get_open_cases']
+    put?: never
     post?: never
     delete?: never
     options?: never
@@ -1122,6 +1259,7 @@ export interface components {
       | 'availability'
       | 'access'
       | 'administration'
+      | 'escalation'
       | 'other'
     /** Availability */
     Availability: {
@@ -1151,6 +1289,11 @@ export interface components {
       canChangePriority: boolean
       /** Canclose */
       canClose: boolean
+      /**
+       * Canescalate
+       * @description Slice 9: the caller is the assignee analyst, the case is open and has no open escalation (POST /cases/{caseId}/escalations).
+       */
+      canEscalate: boolean
       /** Canreply */
       canReply: boolean
       replyBlockedReason: components['schemas']['ReplyBlockedReason'] | null
@@ -1200,6 +1343,8 @@ export interface components {
       case: components['schemas']['CaseSummary']
       closure: components['schemas']['CaseClosure'] | null
       customer: components['schemas']['CaseCustomer']
+      /** @description Slice 9: the case's latest escalation (any state), or null. */
+      escalation: components['schemas']['Escalation'] | null
       /**
        * Previouscasecount
        * @description Other cases of this customer (any status).
@@ -1302,6 +1447,11 @@ export interface components {
       /** Closedat */
       closedAt: string | null
       customer: components['schemas']['CustomerRef']
+      /**
+       * Escalated
+       * @description Slice 9: an escalation to supervision is open ("Escalado").
+       */
+      escalated: boolean
       /**
        * Firstresponseat
        * @description The first analyst message (the SLA stops); null while pending.
@@ -1628,6 +1778,111 @@ export interface components {
        */
       items: components['schemas']['DemoCustomer'][]
     }
+    /** EscalateRequest */
+    EscalateRequest: {
+      /**
+       * Motive
+       * @description Why (required, trimmed, at most 500).
+       */
+      motive: string
+    }
+    /**
+     * Escalation
+     * @description An escalation to supervision (slice 9). Staff only: the customer never sees it.
+     */
+    Escalation: {
+      /**
+       * Acknowledgedat
+       * @description The analyst read what supervision did ("Entendido").
+       */
+      acknowledgedAt: string | null
+      /** Caseid */
+      caseId: string
+      /** Customername */
+      customerName: string
+      /**
+       * Escalatedat
+       * Format: date-time
+       */
+      escalatedAt: string
+      /** Escalatedbyid */
+      escalatedById: string
+      /** Escalatedbyname */
+      escalatedByName: string | null
+      /**
+       * Id
+       * @description ESC-…
+       */
+      id: string
+      /**
+       * Motive
+       * @description Why the analyst escalated (staff text, at most 500).
+       */
+      motive: string
+      /**
+       * Note
+       * @description Supervision's answer (answered only).
+       */
+      note: string | null
+      /**
+       * Reassignedtoid
+       * @description Who holds the case now (taken: the supervisor; reassigned).
+       */
+      reassignedToId: string | null
+      /** Reassignedtoname */
+      reassignedToName: string | null
+      /**
+       * Resolvedat
+       * @description When it stopped being open.
+       */
+      resolvedAt: string | null
+      /** Resolvedbyid */
+      resolvedById: string | null
+      /** Resolvedbyname */
+      resolvedByName: string | null
+      /** @description open · answered · taken · reassigned · withdrawn · closed (the case closed while it was open). */
+      state: components['schemas']['EscalationState']
+    }
+    /** EscalationItem */
+    EscalationItem: {
+      /**
+       * Assigneename
+       * @description Who holds the case now.
+       */
+      assigneeName: string | null
+      /**
+       * Cantake
+       * @description The caller may take the case herself (she also holds Analista, speaks its language, it is open and someone else's).
+       */
+      canTake: boolean
+      case: components['schemas']['CaseSummary']
+      escalation: components['schemas']['Escalation']
+    }
+    /** EscalationOverview */
+    EscalationOverview: {
+      /**
+       * Items
+       * @description Open first (the longest waiting first), then the ones supervision attended in the last 24 hours (the most recent first).
+       */
+      items: components['schemas']['EscalationItem'][]
+      /** Opencount */
+      openCount: number
+      /**
+       * Servertime
+       * Format: date-time
+       */
+      serverTime: string
+    }
+    /** EscalationResult */
+    EscalationResult: {
+      case: components['schemas']['CaseSummary']
+      escalation: components['schemas']['Escalation']
+    }
+    /**
+     * EscalationState
+     * @enum {string}
+     */
+    EscalationState: 'open' | 'answered' | 'taken' | 'reassigned' | 'withdrawn' | 'closed'
     /** HealthResponse */
     HealthResponse: {
       /** Checks */
@@ -1812,6 +2067,25 @@ export interface components {
      * @enum {string}
      */
     Language: 'es' | 'pt'
+    /** LanguageOpenCases */
+    LanguageOpenCases: {
+      /**
+       * Cases
+       * @description Every open case of the language: nobody's first (oldest first), then the held ones in open-inbox order.
+       */
+      cases: components['schemas']['OpenCaseRow'][]
+      /**
+       * Label
+       * @example Cola en español
+       */
+      label: string
+      language: components['schemas']['Language']
+      /**
+       * Servertime
+       * Format: date-time
+       */
+      serverTime: string
+    }
     /** LanguageQueue */
     LanguageQueue: {
       /**
@@ -1837,6 +2111,16 @@ export interface components {
       language: components['schemas']['Language']
       /** Oldestqueuedat */
       oldestQueuedAt: string | null
+      /**
+       * Openatrisk
+       * @description Slice 9: open cases at first-response risk, at serverTime.
+       */
+      openAtRisk: number
+      /**
+       * Opencases
+       * @description Slice 9: every open case of the language (queued too).
+       */
+      openCases: number
       /**
        * Speakers
        * @description Active analysts who speak it (any availability).
@@ -1921,6 +2205,15 @@ export interface components {
       /** Total */
       total: number
     }
+    /** OpenCaseRow */
+    OpenCaseRow: {
+      /**
+       * Assigneename
+       * @description Who holds it; null = nobody (queued).
+       */
+      assigneeName: string | null
+      case: components['schemas']['CaseSummary']
+    }
     /**
      * OpenCasesBlock
      * @description Extension ``blockReason`` of ``staff_has_open_cases``.
@@ -1994,6 +2287,8 @@ export interface components {
       | 'idempotency_conflict'
       | 'case_not_closed'
       | 'already_rated'
+      | 'escalation_open'
+      | 'escalation_not_open'
       | 'analyst_not_eligible'
       | 'language_mismatch'
       | 'analyst_paused'
@@ -2068,6 +2363,11 @@ export interface components {
        */
       currentAnalystId: string | null
       /**
+       * @description escalation_not_open: the escalation's state now (slice 9).
+       * @default null
+       */
+      currentState: components['schemas']['EscalationState'] | null
+      /**
        * @description invalid_transition, case_closed, case_not_closed: the case status now.
        * @default null
        */
@@ -2089,6 +2389,12 @@ export interface components {
        * @default null
        */
       errors: components['schemas']['ValidationIssue'][] | null
+      /**
+       * Escalationid
+       * @description escalation_open: the case's open escalation (slice 9).
+       * @default null
+       */
+      escalationId: string | null
       /**
        * Field
        * @description invalid_value, email_taken, team_name_taken: the request field at fault (name, email, roles, languages, teamId).
@@ -2240,6 +2546,14 @@ export interface components {
      * @enum {string}
      */
     ReplyBlockedReason: 'not_assignee' | 'closed'
+    /** RespondEscalationRequest */
+    RespondEscalationRequest: {
+      /**
+       * Note
+       * @description The answer for the analyst (required, trimmed, at most 500).
+       */
+      note: string
+    }
     /** RoleCounts */
     RoleCounts: {
       /** Admin */
@@ -3949,6 +4263,225 @@ export interface operations {
       }
     }
   }
+  cases_escalate_case: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description One key per escalation the caller means to open: a retry with it replays the escalation it created (200 + `Idempotent-Replayed: true`). */
+        'Idempotency-Key': string
+      }
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EscalateRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of the same Idempotency-Key */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EscalationResult']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EscalationResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_acknowledge_escalation: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        escalationId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EscalationResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_withdraw_escalation: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        escalationId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EscalationResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   cases_get_case_history: {
     parameters: {
       query?: never
@@ -4883,6 +5416,232 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  supervision_get_escalations: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EscalationOverview']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  supervision_respond_escalation: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        escalationId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RespondEscalationRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EscalationResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  supervision_take_escalated_case: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        escalationId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EscalationResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  supervision_get_open_cases: {
+    parameters: {
+      query: {
+        /** @description es | pt */
+        language: components['schemas']['Language']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['LanguageOpenCases']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
         headers: {
           [name: string]: unknown
         }

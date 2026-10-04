@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useLockedAccountsCount } from '@/features/admin/core'
 import { useAvailabilityPresence, useToReplyCount } from '@/features/cases/core'
-import { useQueuedCasesCount } from '@/features/supervision/core'
+import { useOpenEscalationsCount, useQueuedCasesCount } from '@/features/supervision/core'
 import { presenceFor, type RailIndicators, type RailPresence, type RoleId } from './roles'
 import { useSession } from './session'
 
@@ -18,8 +18,10 @@ import { useSession } from './session'
  * No count means no badge: the rail never shows a made-up number.
  */
 export function useRailIndicators(role: RoleId): RailIndicators {
-  // "Equipo y colas, 3 pendientes": cases waiting in the language queues (slice 3 §8.1).
+  // "Colas, 3 sin asignar": open cases nobody holds yet (slice 9; slice 3 §8.1).
   const queued = useQueuedCasesCount({ enabled: role === 'supervisor' })
+  // "Escalados, 2 abiertos": open escalations to supervision (slice 9).
+  const escalations = useOpenEscalationsCount({ enabled: role === 'supervisor' })
   // "Usuarios y roles, 1 pendiente": accounts locked now (slice 4 §10.1).
   const locked = useLockedAccountsCount({ enabled: role === 'admin' })
   // "Casos, 2 pendientes": her cases Por responder (slice 6 §4.4). Also keeps her
@@ -28,11 +30,14 @@ export function useRailIndicators(role: RoleId): RailIndicators {
   const toReply = useToReplyCount({ enabled: role === 'analyst', staffId: user?.id ?? null })
   return useMemo(() => {
     const indicators: RailIndicators = {}
-    if (queued) indicators.queuedCases = { count: queued }
+    if (queued) indicators.queuedCases = { count: queued, noun: ['sin asignar', 'sin asignar'] }
+    if (escalations) {
+      indicators.openEscalations = { count: escalations, noun: ['abierto', 'abiertos'] }
+    }
     if (locked) indicators.lockedAccounts = { count: locked }
     if (toReply) indicators.toReplyCases = { count: toReply }
     return indicators
-  }, [queued, locked, toReply])
+  }, [queued, escalations, locked, toReply])
 }
 
 /** The presence dot on the rail avatar: the analyst's availability (slice 6 §4.4). */

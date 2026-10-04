@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import cast
 
 from cc_platform.api.schemas.availability import Availability
-from cc_platform.api.schemas.cases import CaseSummary, InboxCounts, Turn
+from cc_platform.api.schemas.cases import CaseSummary, Escalation, InboxCounts, Turn
 from cc_platform.api.schemas.common import ApiModel
 from cc_platform.api.schemas.customer import CustomerConversation, CustomerTurn
 from cc_platform.api.schemas.people import StaffOut
@@ -19,6 +19,7 @@ from cc_platform.application.cases.dto import (
     CaseSummaryView,
     CustomerConversationView,
     CustomerTurnView,
+    EscalationView,
     InboxCountsView,
     TurnView,
 )
@@ -50,6 +51,9 @@ class SchemaRealtimePresenter:
 
     def availability(self, view: AvailabilityView) -> JsonObject:
         return _json(Availability.from_view(view))
+
+    def escalation(self, view: EscalationView) -> JsonObject:
+        return _json(Escalation.from_view(view))
 
     def queue_counts(self, view: QueueCountsView) -> JsonObject:
         return _json(QueueCounts.from_view(view))

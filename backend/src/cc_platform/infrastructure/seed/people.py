@@ -1,14 +1,14 @@
 """Seed staff and teams — "Datos de ejemplo" (slice 2 contract §8.1, slice 4 §11).
 
 Every name, email and id here is invented (brief §4.7: staff names in the dataset are records
-too and must never be copied). Roles combine (Analista, Supervisora, Administración):
+too and must never be copied). Roles combine (Analista, Supervisión, Administración):
 
 - the main persona is an analyst who speaks Spanish and Portuguese (Daniela);
 - more analysts, two of them bilingual (Sebastián, Tomás) to show least-loaded balancing;
-- supervisors, plus a team lead holding Analista + Supervisora (Felipe exercises the
+- supervisors, plus a team lead holding Analista + Supervisión (Felipe exercises the
   role switcher: Casos ↔ Equipo y colas);
 - administrators;
-- slice 4: Mariana (Supervisora, locked by the admin story) and Andrés (an analyst whose
+- slice 4: Mariana (Supervisión, locked by the admin story) and Andrés (an analyst whose
   account Carolina deactivated). Neither appears in "Equipo y colas", so the slice 3
   numbers do not move.
 
@@ -129,8 +129,8 @@ DEMO_STAFF: tuple[StaffSeed, ...] = (
               TEAM_PLATFORM),
     StaffSeed(10, "Renata Villalba", "renata.villalba", frozenset({S}), frozenset({ES, PT}),
               TEAM_PACIFICO),
-    # Team lead: Analista + Supervisora (works cases and watches the team's queues). Valeria
-    # gave him Supervisora five days before the first seed (admin story).
+    # Team lead: Analista + Supervisión (works cases and watches the team's queues). Valeria
+    # gave him Supervisión five days before the first seed (admin story).
     StaffSeed(11, "Felipe Echeverri", "felipe.echeverri", frozenset({A, S}), frozenset({ES}),
               TEAM_ANDES),
     # Slice 4: locked by five wrong passwords (admin story); the rail badge shows 1.
@@ -194,7 +194,7 @@ async def add_demo_admin_story(unit: UnitOfWork, t: datetime, timeline: SeedTime
     """Slice 4 §11: what administration did before the first seed, through the domain, with
     the story's times (its events go to ``timeline``). Runs once (marker: team Caribe).
 
-    - Valeria gave Felipe the Supervisora role at T−5d (his stored row already has it: the
+    - Valeria gave Felipe the Supervisión role at T−5d (his stored row already has it: the
       event is recorded on his earlier revision);
     - Valeria created "Equipo Caribe" at T−3d and deactivated it at T−1d;
     - Carolina deactivated Andrés at T−2d (no sessions to end);

@@ -34,6 +34,7 @@ export function makeCaseSummary(overrides: Partial<CaseSummary> = {}): CaseSumma
     closedAt: null,
     closeReason: null,
     rating: null,
+    escalated: false,
     ...overrides,
   }
 }

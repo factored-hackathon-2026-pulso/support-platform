@@ -51,6 +51,8 @@ export const AUDIT_FAMILIES: readonly FamilyOption[] = [
   { value: 'availability', label: 'Disponibilidad', slug: 'disponibilidad' },
   { value: 'access', label: 'Accesos', slug: 'accesos' },
   { value: 'administration', label: 'Administración', slug: 'administracion' },
+  // Slice 9: escalations to supervision (motive and answer redacted).
+  { value: 'escalation', label: 'Escalamientos', slug: 'escalamientos' },
   { value: 'other', label: 'Otros', slug: 'otros' },
 ]
 
@@ -219,7 +221,7 @@ export function auditFiltersOf(state: AuditUrlState): AuditQuery {
 
 const ROLE_LABELS: Record<ActorRole, string> = {
   analyst: 'Analista',
-  supervisor: 'Supervisora',
+  supervisor: 'Supervisión',
   admin: 'Administración',
   customer: 'Cliente',
   system: 'Plataforma',
@@ -311,7 +313,7 @@ export function detailKicker(event: Pick<AuditEvent, 'occurredAt' | 'family'>): 
   return `${eventTime(event.occurredAt)} · ${familyLabel(event.family).toUpperCase()}`
 }
 
-/** "Lucía Herrera · Supervisora"; the platform is just "Plataforma". */
+/** "Lucía Herrera · Supervisión"; the platform is just "Plataforma". */
 export function detailByline(actor: AuditActor): string {
   if (actor.role === 'system') return 'Plataforma'
   return `${actorName(actor)} · ${actorRoleLabel(actor.role)}`
@@ -347,10 +349,18 @@ export const REDACTED_TEXT_NOTE =
 export const REDACTED_COMMENT_NOTE =
   'El comentario del cliente no se muestra aquí: está en el caso cerrado.'
 
+/** Slice 9: an escalation's motive and supervision's answer are staff text, redacted too. */
+export const REDACTED_MOTIVE_NOTE =
+  'El motivo del escalamiento no se muestra aquí: está en el caso y en Escalados.'
+export const REDACTED_NOTE_NOTE =
+  'La respuesta de supervisión no se muestra aquí: está en el caso y en Escalados.'
+
 /** The note under "Datos del evento" for what the PII policy removed, or null. */
 export function redactionNote(event: Pick<AuditEvent, 'redactedFields'>): string | null {
   if (hidesMessageText(event)) return REDACTED_TEXT_NOTE
   if (event.redactedFields.includes('comment')) return REDACTED_COMMENT_NOTE
+  if (event.redactedFields.includes('motive')) return REDACTED_MOTIVE_NOTE
+  if (event.redactedFields.includes('note')) return REDACTED_NOTE_NOTE
   return null
 }
 

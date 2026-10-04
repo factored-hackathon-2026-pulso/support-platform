@@ -644,3 +644,69 @@ describe('CaseListPanel', () => {
     )
   })
 })
+
+describe('CaseListPanel · escalations (slice 9)', () => {
+  it('marks an escalated open case "Escalado"', async () => {
+    vi.mocked(fetchInbox).mockResolvedValue(
+      makeInbox([
+        makeCaseSummary({ escalated: true }),
+        makeCaseSummary({
+          id: 'CASE-00000000000000000000000107',
+          customer: { id: 'CUS-00000000000000000000001007', displayName: 'Joaquín Ferreyra Paz' },
+        }),
+      ]),
+    )
+    renderPanel()
+    await screen.findByRole('list', { name: 'Casos' })
+    expect(within(card(/Marcela/)).getByText('Escalado')).toBeInTheDocument()
+    expect(within(card(/Joaquín/)).queryByText('Escalado')).toBeNull()
+  })
+
+  function escalationEnvelope(id: string, payload: Record<string, unknown>) {
+    return {
+      type: 'escalation.updated',
+      id,
+      occurredAt: NOW.toISOString(),
+      data: {
+        entity: 'escalation',
+        entityId: 'ESC-00000000000000000000000101',
+        caseId: 'CASE-00000000000000000000000107',
+        actor: { role: 'supervisor', id: 'STF-SUP0000001' },
+        payload: {
+          id: 'ESC-00000000000000000000000101',
+          caseId: 'CASE-00000000000000000000000107',
+          customerName: 'Joaquín Ferreyra Paz',
+          escalatedAt: NOW.toISOString(),
+          escalatedById: analystStaff.id,
+          resolvedByName: 'Lucía Herrera',
+          ...payload,
+        },
+      },
+    }
+  }
+
+  it('toasts once when supervision answers her escalation, with "Ver caso"', async () => {
+    const { sockets } = renderPanel()
+    await screen.findByRole('list', { name: 'Casos' })
+    const answered = escalationEnvelope('EVT-ESC-1', { state: 'answered' })
+    act(() => {
+      sockets.last()?.open()
+      sockets.last()?.receive(answered)
+      sockets.last()?.receive(answered)
+      sockets.last()?.receive(escalationEnvelope('EVT-ESC-2', { state: 'reassigned' }))
+      sockets
+        .last()
+        ?.receive(
+          escalationEnvelope('EVT-ESC-3', { state: 'answered', escalatedById: 'STF-OTHER' }),
+        )
+    })
+    const toasts = screen.getByRole('region', { name: 'Notificaciones' })
+    expect(
+      await within(toasts).findByText('Lucía Herrera respondió tu escalamiento'),
+    ).toBeInTheDocument()
+    expect(within(toasts).getAllByText('Lucía Herrera respondió tu escalamiento')).toHaveLength(1)
+    expect(within(toasts).getByText('Joaquín Ferreyra Paz')).toBeInTheDocument()
+    act(() => within(toasts).getByRole('button', { name: 'Ver caso' }).click())
+    expect(onSelectCase).toHaveBeenCalledWith('CASE-00000000000000000000000107')
+  })
+})

@@ -37,6 +37,9 @@ export type CloseCaseRequest = Schemas['CloseCaseRequest']
 /** Slice 8: PUT /cases/{caseId}/priority. */
 export type ChangePriorityRequest = Schemas['ChangePriorityRequest']
 export type CasePriorityResult = Schemas['CasePriorityResult']
+/** Slice 9: escalations to supervision (staff only). */
+export type Escalation = Schemas['Escalation']
+export type EscalationResult = Schemas['EscalationResult']
 
 /** A message the analyst sent that the server has not confirmed yet (optimistic UI). */
 export interface PendingMessage {

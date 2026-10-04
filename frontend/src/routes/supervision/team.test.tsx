@@ -1,12 +1,12 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SupervisionApi from '@/features/supervision/api'
-import type { AssignmentResult, TeamOverview } from '@/features/supervision'
 import {
+  fetchEscalations,
+  fetchOpenCases,
   fetchQueueOverview,
   fetchTeamOverview,
   setCaseAssignee,
-  supervisionKeys,
 } from '@/features/supervision/api'
 import { ApiProblem } from '@/lib/api'
 import { NOW, makeCaseSummary } from '@/test/case-fixtures'
@@ -14,16 +14,16 @@ import { makeCaseDetail } from '@/test/conversation-fixtures'
 import { supervisorStaff } from '@/test/fixtures'
 import { renderRoute } from '@/test/render'
 import {
+  ANDES,
   DANIELA_ID,
   JULIAN_ID,
-  PACIFICO,
-  SEBASTIAN_ID,
-  daniela,
-  emptyQueues,
+  camilaEscalation,
   julianCamila,
+  makeAnalyst,
+  makeEscalationOverview,
+  makeOpenCases,
   makeQueueOverview,
   makeTeamOverview,
-  queuedGabriela,
   seededAnalysts,
 } from '@/test/supervision-fixtures'
 
@@ -33,6 +33,8 @@ vi.mock('@/features/supervision/api', async (importOriginal) => {
     ...actual,
     fetchTeamOverview: vi.fn<typeof actual.fetchTeamOverview>(),
     fetchQueueOverview: vi.fn<typeof actual.fetchQueueOverview>(),
+    fetchEscalations: vi.fn<typeof actual.fetchEscalations>(),
+    fetchOpenCases: vi.fn<typeof actual.fetchOpenCases>(),
     setCaseAssignee: vi.fn<typeof actual.setCaseAssignee>(),
   }
 })
@@ -43,6 +45,8 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
   vi.mocked(fetchTeamOverview).mockResolvedValue(makeTeamOverview())
   vi.mocked(fetchQueueOverview).mockResolvedValue(makeQueueOverview())
+  vi.mocked(fetchEscalations).mockResolvedValue(makeEscalationOverview())
+  vi.mocked(fetchOpenCases).mockResolvedValue(makeOpenCases())
 })
 
 afterEach(() => {
@@ -53,155 +57,122 @@ function renderTeam(path = '/supervision/equipo') {
   return renderRoute(path, { staff: supervisorStaff })
 }
 
-const queue = (name: string) => screen.getByRole('region', { name })
 const analystsTable = () => screen.getByRole('table', { name: 'Analistas' })
 const row = (name: RegExp) => within(analystsTable()).getByRole('row', { name })
 
-describe('Equipo y colas', () => {
-  it('shows both queues with their cases, risk and waits, and the rail badge', async () => {
-    renderTeam()
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Equipo y colas' }),
-    ).toBeInTheDocument()
-    expect(document.title).toBe('Equipo y colas · LATAM Bank Soporte')
-    expect(await screen.findByText('Todos los equipos · 6 analistas')).toBeInTheDocument()
-    expect(screen.getByText('3 en espera')).toBeInTheDocument()
-
-    const es = await screen.findByRole('region', { name: 'Cola en español' })
-    expect(within(es).getByText('2 en riesgo de SLA')).toBeInTheDocument()
-    expect(within(es).getByText('13 min')).toBeInTheDocument()
-    expect(within(es).getByText('disponible que habla español')).toBeInTheDocument()
-    expect(within(es).getByRole('link', { name: 'Rosa Elena Ibarra Méndez' })).toHaveAttribute(
-      'href',
-      '/supervision/casos/CASE-00000000000000000000000111',
-    )
-    expect(within(es).getByText('SLA 2 min')).toBeInTheDocument()
-    expect(within(es).getByText('SLA vencido')).toBeInTheDocument()
-    expect(within(es).getByText('Espera 13 min')).toBeInTheDocument()
-
-    const pt = queue('Cola en portugués')
-    expect(within(pt).getByText('Sin riesgo')).toBeInTheDocument()
-    expect(within(pt).getByText('Gabriela Duarte Melo')).toBeInTheDocument()
-
-    const rail = screen.getByRole('navigation', { name: 'Principal' })
-    expect(
-      await within(rail).findByRole('link', { name: 'Equipo y colas, 3 pendientes' }),
-    ).toHaveAttribute('aria-current', 'page')
+/** A connected analyst who speaks Spanish (the reassign suggestions). */
+const connected = (id: string, name: string, open: number) =>
+  makeAnalyst({
+    id,
+    name,
+    team: ANDES,
+    availability: 'available',
+    signedIn: true,
+    activity: open > 0 ? 'busy' : 'available',
+    counts: { open, new: 0, toReply: 0, waiting: 0 },
   })
 
-  it('lists the connected analysts with "Ahora", load and SLA risk', async () => {
+describe('Equipo', () => {
+  it('lists every analyst in one table, without team tabs', async () => {
     renderTeam()
-    await screen.findByRole('table', { name: 'Analistas' })
-    expect(screen.getByRole('radio', { name: 'Conectadas 1' })).toBeChecked()
-    expect(screen.getByRole('radio', { name: 'En pausa 1' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Desconectadas 4' })).toBeInTheDocument()
-    expect(screen.getByText('7 casos abiertos · 2 en riesgo de SLA')).toBeInTheDocument()
-
-    const daniela = row(/Daniela Ríos/)
-    // "Todos los equipos": the row names the team like the pills, full name in the title.
-    expect(within(daniela).getByText('Equipo Andes')).toHaveAttribute('title', 'Equipo Andes')
-    // "Ahora" as glyph + word: the filled dot of someone attending cases.
-    const attending = within(daniela).getByText('Atendiendo').parentElement!
-    expect(attending.querySelector('svg')).toHaveAttribute('data-status-shape', 'dot')
-    expect(attending).not.toHaveClass('rounded-full')
-    expect(within(daniela).getByText('sin sesión abierta')).toHaveAttribute(
-      'title',
-      'Le siguen llegando casos aunque no haya iniciado sesión.',
-    )
-    expect(within(daniela).getByText('español, portugués')).toBeInTheDocument()
-    expect(within(daniela).getByText('Carga alta')).toBeInTheDocument()
-    const cells = within(daniela)
-      .getAllByRole('cell')
-      .map((cell) => cell.textContent)
-    expect(cells.slice(3)).toEqual([
-      'Carga alta5',
-      '4',
-      '4 min',
-      '1',
-      // "Calificación 7 días" (slice 7): face + average + count, then the text for screen
-      // readers and the (aria-hidden) tooltip bubble.
-      `3,6(9)${'Promedio 3,6 de 4 en 9 casos calificados'.repeat(2)}`,
-    ])
-    expect(screen.getByRole('columnheader', { name: 'Calificación 7 días' })).toHaveAttribute(
-      'title',
-      'Promedio de calificaciones de clientes, escala 1 a 4, últimos 7 días',
-    )
-    // The tooltip's text is also the cell's text for screen readers (the bubble is hidden).
-    const [spoken, bubble] = within(daniela).getAllByText(
-      'Promedio 3,6 de 4 en 9 casos calificados',
-    )
-    expect(spoken).toHaveClass('sr-only')
-    expect(bubble).toHaveAttribute('aria-hidden', 'true')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Equipo' })).toBeInTheDocument()
+    expect(document.title).toBe('Equipo · LATAM Bank Soporte')
+    expect(await screen.findByText('6 analistas')).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /Todos los equipos/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(within(analystsTable()).getAllByRole('row')).toHaveLength(seededAnalysts.length + 1)
+    for (const header of [
+      'Nombre',
+      'Ahora',
+      'Idiomas',
+      'Abiertos',
+      'Por responder',
+      'Espera más larga',
+      'En riesgo',
+      'Calificación 7 días',
+    ]) {
+      expect(within(analystsTable()).getByRole('columnheader', { name: header })).toBeVisible()
+    }
+    const danielaRow = row(/Daniela Ríos/)
+    expect(within(danielaRow).getByText('Atendiendo')).toBeInTheDocument()
+    expect(within(danielaRow).getByText('sin sesión abierta')).toBeInTheDocument()
+    expect(within(danielaRow).getByText('Carga alta')).toBeInTheDocument()
+    expect(within(danielaRow).getByText('Portugués')).toBeInTheDocument()
+    const julianRow = row(/Julián Ortega/)
+    expect(within(julianRow).getByText('En pausa')).toBeInTheDocument()
+    expect(within(row(/Paula Medina/)).getByText('Sin conexión')).toBeInTheDocument()
+    expect(screen.getByText('7 casos abiertos')).toBeInTheDocument()
+    expect(screen.getByText('2 en riesgo')).toBeInTheDocument()
   })
 
-  it('filters by state and team, and says when nobody is in that state', async () => {
+  it('filters with one Filtros dropdown and removable chips, in the URL', async () => {
     const { user, router } = renderTeam()
     await screen.findByRole('table', { name: 'Analistas' })
-
-    await user.click(screen.getByRole('radio', { name: 'En pausa 1' }))
-    const julian = row(/Julián Ortega/)
-    expect(within(julian).getByText('En pausa')).toBeInTheDocument()
-    expect(
-      within(julian)
-        .getAllByRole('cell')
-        .map((c) => c.textContent)
-        .slice(3),
-    ).toEqual([
-      '2',
-      '1',
-      '12 min',
-      '1',
-      `2,5(2)${'Promedio 2,5 de 4 en 2 casos calificados'.repeat(2)}`,
-    ])
-    expect(router.state.location.search).toBe('?estado=en-pausa')
-
-    await user.click(screen.getByRole('radio', { name: 'Desconectadas 4' }))
-    expect(within(row(/Paula Medina/)).getAllByRole('cell')[3]).toHaveTextContent('—')
-    // Nobody rated her cases this week: "—", spelled out for screen readers.
-    expect(within(row(/Paula Medina/)).getAllByRole('cell')[7]).toHaveTextContent(
-      '—Sin calificaciones en los últimos 7 días',
+    await user.click(screen.getByRole('button', { name: 'Filtros' }))
+    const estado = screen.getByRole('group', { name: 'Estado' })
+    expect(within(estado).getByRole('checkbox', { name: 'Sin conexión 4' })).toBeInTheDocument()
+    await user.click(
+      within(screen.getByRole('group', { name: 'Idioma' })).getByRole('checkbox', {
+        name: 'Portugués 3',
+      }),
     )
-
-    await user.click(screen.getByRole('radio', { name: 'Equipo Pacífico' }))
-    expect(screen.getByText('Equipo Pacífico · 3 analistas')).toBeInTheDocument()
-    await user.click(screen.getByRole('radio', { name: 'En pausa 0' }))
-    expect(screen.getByText('Nadie en este estado ahora.')).toBeInTheDocument()
-    expect(router.state.location.search).toBe(`?equipo=${PACIFICO.id}&estado=en-pausa`)
+    expect(router.state.location.search).toBe('?idioma=pt')
+    expect(await screen.findByText('3 de 6 analistas')).toBeInTheDocument()
+    expect(within(analystsTable()).getAllByRole('row')).toHaveLength(4)
+    await user.click(
+      within(screen.getByRole('group', { name: 'Equipo' })).getByRole('checkbox', {
+        name: 'Equipo Andes 1',
+      }),
+    )
+    expect(router.state.location.search).toBe(`?idioma=pt&equipo=${ANDES.id}`)
+    await user.click(screen.getByRole('button', { name: 'Listo' }))
+    const chips = screen.getByRole('group', { name: 'Filtros activos' })
+    await user.click(within(chips).getByRole('button', { name: 'Quitar filtro Portugués' }))
+    expect(router.state.location.search).toBe(`?equipo=${ANDES.id}`)
+    await user.click(within(chips).getByRole('button', { name: 'Limpiar filtros' }))
+    expect(router.state.location.search).toBe('')
   })
 
-  it('opens the analyst sheet with her open cases', async () => {
-    const { user, router } = renderTeam('/supervision/equipo?estado=en-pausa')
+  it('says when nobody matches and clears the filters', async () => {
+    const { user, router } = renderTeam('/supervision/equipo?estado=disponible')
+    expect(await screen.findByText('Nadie coincide con los filtros.')).toBeInTheDocument()
+    await user.click(screen.getAllByRole('button', { name: 'Limpiar filtros' }).at(-1)!)
+    await waitFor(() => expect(router.state.location.search).toBe(''))
+  })
+
+  it('opens the analyst sheet with facts, her cases and the "Escalado" marker', async () => {
+    vi.mocked(fetchTeamOverview).mockResolvedValue(
+      makeTeamOverview({
+        analysts: seededAnalysts.map((analyst) =>
+          analyst.id === JULIAN_ID
+            ? {
+                ...analyst,
+                openCases: analyst.openCases.map((c) =>
+                  c.id === julianCamila.id ? { ...c, escalated: true } : c,
+                ),
+              }
+            : analyst,
+        ),
+      }),
+    )
+    const { user, router } = renderTeam()
     await user.click(await screen.findByRole('button', { name: 'Julián Ortega' }))
     const sheet = await screen.findByRole('dialog', { name: 'Julián Ortega' })
-    expect(sheet).toHaveAccessibleDescription('En pausa · español · Equipo Andes')
-    expect(router.state.location.search).toBe(`?estado=en-pausa&analista=${JULIAN_ID}`)
-    // The stat, and each open case's status as glyph + word (no pill, no dot-joined line).
-    const waiting = within(sheet).getAllByText('Esperando al cliente')
-    expect(waiting.length).toBeGreaterThan(1)
-    const caseStatus = waiting.find((node) => node.parentElement?.querySelector('svg'))
-    expect(caseStatus?.parentElement?.querySelector('svg')).toHaveAttribute(
-      'data-status-shape',
-      'pie-50',
-    )
-    // Slice 7: her 7-day rating among the stats.
-    expect(within(sheet).getByText('Calificación 7 días')).toBeInTheDocument()
+    expect(router.state.location.search).toBe(`?analista=${JULIAN_ID}`)
+    expect(within(sheet).getByText('Equipo Andes')).toBeInTheDocument()
     expect(within(sheet).getByText('2,5')).toBeInTheDocument()
-    expect(within(sheet).getByText('(2)')).toBeInTheDocument()
-    expect(within(sheet).getByText('Camila Torres Benavides')).toBeInTheDocument()
-    expect(within(sheet).getByText('Esteban Morales Quiroga')).toBeInTheDocument()
+    expect(within(sheet).getByText('Escalado')).toBeInTheDocument()
     expect(
       within(sheet).getByRole('link', { name: 'Ver conversación de Camila Torres Benavides' }),
     ).toHaveAttribute('href', `/supervision/casos/${julianCamila.id}`)
-
     await user.click(
       within(sheet).getByRole('link', { name: 'Ver conversación de Camila Torres Benavides' }),
     )
-    // Another (lazy) route: the navigation commits once its module has loaded.
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(`/supervision/casos/${julianCamila.id}`),
     )
     expect(router.state.location.state).toEqual({
-      from: `/supervision/equipo?estado=en-pausa&analista=${JULIAN_ID}`,
+      from: `/supervision/equipo?analista=${JULIAN_ID}`,
     })
   })
 
@@ -212,99 +183,59 @@ describe('Equipo y colas', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('shows empty queues and no badge', async () => {
-    vi.mocked(fetchQueueOverview).mockResolvedValue(emptyQueues)
+  it('shows the team error with a retry', async () => {
+    vi.mocked(fetchTeamOverview).mockRejectedValue(ApiProblem.network())
     renderTeam()
-    expect(await screen.findAllByText('Sin casos en espera.')).toHaveLength(2)
-    expect(screen.getByText('0 en espera')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Equipo y colas' })).toBeInTheDocument()
-  })
-
-  it('loads and fails team and queues independently', async () => {
-    vi.mocked(fetchTeamOverview).mockRejectedValueOnce(ApiProblem.network())
-    vi.mocked(fetchQueueOverview).mockReturnValue(new Promise(() => {}))
-    const { user } = renderTeam()
     expect(await screen.findByText('No pudimos cargar el equipo')).toBeInTheDocument()
-    expect(
-      screen.getByRole('region', { name: 'Colas' }).querySelector('[aria-busy="true"]'),
-    ).not.toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
-    expect(await screen.findByRole('table', { name: 'Analistas' })).toBeInTheDocument()
-  })
-
-  it('shows the queue error with a retry while the team is fine', async () => {
-    vi.mocked(fetchQueueOverview).mockRejectedValue(
-      new ApiProblem({ status: 500, code: 'unexpected_error' }),
-    )
-    renderTeam()
-    expect(await screen.findByText('No pudimos cargar las colas')).toBeInTheDocument()
-    expect(await screen.findByRole('table', { name: 'Analistas' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
 })
 
-describe('assign dialog', () => {
-  it('disables who does not speak the case language and asks to confirm a paused target', async () => {
-    vi.mocked(setCaseAssignee).mockResolvedValue({
-      changed: true,
-      case: { ...queuedGabriela, status: 'assigned', assignedAnalystId: SEBASTIAN_ID },
-      assignment: { ...makeCaseDetail().assignment!, analystId: SEBASTIAN_ID, reason: 'manual' },
-    })
-    const { user, router } = renderTeam()
+describe('Reasignar caso', () => {
+  const people = [
+    connected('STF-A', 'Ana Ruiz', 3),
+    connected('STF-B', 'Bruno Díaz', 1),
+    connected('STF-C', 'Carla Gil', 0),
+    connected('STF-D', 'Darío Paz', 2),
+    connected('STF-E', 'Elena Mora', 4),
+  ]
+
+  it('suggests three speakers, searches the rest and includes paused people on demand', async () => {
+    vi.mocked(fetchTeamOverview).mockResolvedValue(
+      makeTeamOverview({ analysts: [...seededAnalysts, ...people] }),
+    )
+    const { user } = renderTeam(`/supervision/equipo?reasignar=${julianCamila.id}`)
+    const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
+    expect(within(dialog).getByText('Lo atiende Julián Ortega')).toBeInTheDocument()
+    expect(within(dialog).getByText('Sugeridos')).toBeInTheDocument()
+    expect(within(dialog).getByText('Solo quienes hablan español')).toBeInTheDocument()
+    const radios = () => within(dialog).getAllByRole('radio')
+    expect(radios()).toHaveLength(3)
+    expect(within(dialog).getByRole('radio', { name: /^Carla Gil/ })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('radio', { name: /^Julián Ortega/ })).not.toBeInTheDocument()
+    expect(within(dialog).getByText(/^\+3 más: escribe un nombre/)).toBeInTheDocument()
+
+    await user.type(
+      within(dialog).getByRole('searchbox', { name: 'Buscar a alguien del equipo' }),
+      'elena',
+    )
+    expect(within(dialog).getByText('Resultados')).toBeInTheDocument()
+    expect(radios()).toHaveLength(1)
+    await user.clear(within(dialog).getByRole('searchbox', { name: 'Buscar a alguien del equipo' }))
+    await user.type(
+      within(dialog).getByRole('searchbox', { name: 'Buscar a alguien del equipo' }),
+      'tomas',
+    )
+    expect(within(dialog).getByText('Nadie con ese nombre habla español.')).toBeInTheDocument()
     await user.click(
-      await screen.findByRole('button', { name: 'Asignar el caso de Gabriela Duarte Melo' }),
+      within(dialog).getByRole('checkbox', {
+        name: 'Incluir a quienes están en pausa o desconectados',
+      }),
     )
-    const dialog = await screen.findByRole('dialog', { name: 'Asignar caso' })
-    expect(dialog).toHaveAccessibleDescription(
-      'Gabriela Duarte Melo · CASE-…0109 · portugués · Espera 6 min en la cola',
-    )
-    expect(router.state.location.search).toBe(`?asignar=${queuedGabriela.id}`)
-
-    const julian = within(dialog).getByRole('radio', { name: 'Julián Ortega' })
-    expect(julian).toBeDisabled()
-    expect(julian).toHaveAccessibleDescription('No habla portugués (regla 3)')
-    expect(within(dialog).getByRole('radio', { name: 'Paula Medina' })).toBeDisabled()
-    expect(within(dialog).getByRole('radio', { name: 'Daniela Ríos' })).toBeEnabled()
-
-    // Nobody chosen yet.
-    await user.click(within(dialog).getByRole('button', { name: 'Asignar' }))
-    expect(within(dialog).getByText('Elige a quién asignarlo.')).toBeInTheDocument()
-
-    await user.click(within(dialog).getByRole('radio', { name: 'Sebastián Cárdenas' }))
-    expect(
-      within(dialog).getByText(
-        'Sebastián está en pausa: no recibe casos nuevos. Si lo asignas igual, le llega a su lista. Tampoco tiene una sesión abierta.',
-      ),
-    ).toBeInTheDocument()
-    expect(within(dialog).getByText('Que ya lo atiende Sebastián.')).toBeInTheDocument()
-    const confirm = within(dialog).getByRole('checkbox', { name: 'Asignar aunque esté en pausa' })
-
-    await user.click(within(dialog).getByRole('button', { name: 'Asignar a Sebastián' }))
-    expect(confirm).toHaveFocus()
-    expect(confirm).toHaveAccessibleDescription(
-      'Confirma que quieres asignarlo aunque esté en pausa.',
-    )
-    expect(setCaseAssignee).not.toHaveBeenCalled()
-
-    await user.click(confirm)
-    await user.click(within(dialog).getByRole('button', { name: 'Asignar a Sebastián' }))
-    expect(setCaseAssignee).toHaveBeenCalledWith(queuedGabriela.id, {
-      analystId: SEBASTIAN_ID,
-      expectedAnalystId: null,
-      confirmPaused: true,
-    })
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(
-      screen.getByText(
-        'El caso de Gabriela Duarte Melo pasó a Sebastián Cárdenas. La cola en portugués quedó en 0.',
-      ),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Listo ·')).toBeInTheDocument()
-    expect(router.state.location.search).toBe('')
-    // The team and queues are refetched.
-    await waitFor(() => expect(fetchQueueOverview).toHaveBeenCalledTimes(2))
+    expect(within(dialog).getByRole('radio', { name: /^Tomás Arango/ })).toBeInTheDocument()
   })
 
-  it('reassigns from the analyst sheet, previews the notice and reports a race', async () => {
+  it('asks to confirm a paused choice, previews the notice and reports a race', async () => {
     vi.mocked(setCaseAssignee).mockRejectedValueOnce(
       new ApiProblem({
         status: 409,
@@ -312,25 +243,24 @@ describe('assign dialog', () => {
         extensions: { currentAnalystId: DANIELA_ID },
       }),
     )
-    const { user } = renderTeam(`/supervision/equipo?estado=en-pausa&analista=${JULIAN_ID}`)
-    const sheet = await screen.findByRole('dialog', { name: 'Julián Ortega' })
-    await user.click(
-      within(sheet).getByRole('button', { name: 'Reasignar el caso de Camila Torres Benavides' }),
-    )
+    const { user } = renderTeam(`/supervision/equipo?reasignar=${julianCamila.id}`)
     const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
-    expect(dialog).toHaveAccessibleDescription(
-      'Camila Torres Benavides · CASE-…0113 · español · Lo atiende Julián Ortega',
+    await user.click(
+      within(dialog).getByRole('checkbox', {
+        name: 'Incluir a quienes están en pausa o desconectados',
+      }),
     )
-    expect(within(dialog).queryByRole('radio', { name: 'Julián Ortega' })).not.toBeInTheDocument()
-
-    await user.click(within(dialog).getByRole('radio', { name: 'Daniela Ríos' }))
+    await user.click(within(dialog).getByRole('radio', { name: /^Paula Medina/ }))
+    expect(within(dialog).getByText(/Paula está en pausa: no recibe casos nuevos/)).toBeVisible()
+    await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Paula' }))
+    expect(
+      within(dialog).getByText('Confirma que quieres pasarlo aunque esté en pausa.'),
+    ).toBeInTheDocument()
+    expect(setCaseAssignee).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('radio', { name: /^Daniela Ríos/ }))
     expect(
       within(dialog).getByText('Ahora te atiende Daniela, de nuestro equipo.'),
     ).toHaveAttribute('lang', 'es')
-    expect(
-      within(dialog).queryByRole('checkbox', { name: 'Asignar aunque esté en pausa' }),
-    ).not.toBeInTheDocument()
-    const teamCalls = vi.mocked(fetchTeamOverview).mock.calls.length
     await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Daniela' }))
     expect(setCaseAssignee).toHaveBeenCalledWith(julianCamila.id, {
       analystId: DANIELA_ID,
@@ -342,10 +272,6 @@ describe('assign dialog', () => {
         'Alguien más movió este caso mientras decidías. Revisa a quién está asignado ahora.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByRole('dialog', { name: 'Reasignar caso' })).toBeInTheDocument()
-    await waitFor(() =>
-      expect(vi.mocked(fetchTeamOverview).mock.calls.length).toBeGreaterThan(teamCalls),
-    )
   })
 
   it('reports a reassignment in the strip', async () => {
@@ -354,9 +280,9 @@ describe('assign dialog', () => {
       case: makeCaseSummary({ ...julianCamila, assignedAnalystId: DANIELA_ID }),
       assignment: { ...makeCaseDetail().assignment!, reason: 'manual' },
     })
-    const { user } = renderTeam(`/supervision/equipo?asignar=${julianCamila.id}`)
+    const { user } = renderTeam(`/supervision/equipo?reasignar=${julianCamila.id}`)
     const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
-    await user.click(within(dialog).getByRole('radio', { name: 'Daniela Ríos' }))
+    await user.click(within(dialog).getByRole('radio', { name: /^Daniela Ríos/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Daniela' }))
     expect(
       await screen.findByText(
@@ -365,199 +291,57 @@ describe('assign dialog', () => {
     ).toBeInTheDocument()
   })
 
-  it('says when the analyst already had the case', async () => {
-    vi.mocked(setCaseAssignee).mockResolvedValue({
-      changed: false,
-      case: julianCamila,
-      assignment: { ...makeCaseDetail().assignment!, reason: 'manual' },
-    })
-    const { user } = renderTeam(`/supervision/equipo?asignar=${julianCamila.id}`)
-    const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
-    await user.click(within(dialog).getByRole('radio', { name: 'Daniela Ríos' }))
-    await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Daniela' }))
-    expect(await screen.findByText('Daniela ya tenía este caso.')).toBeInTheDocument()
-    expect(screen.queryByText(/Listo ·/)).not.toBeInTheDocument()
-  })
-
-  describe('while the assignment is on its way (realtime refetches race the answer)', () => {
-    const gabrielaWithDaniela = makeCaseSummary({
-      ...queuedGabriela,
-      status: 'assigned',
-      inboxStatus: 'new',
-      assignedAnalystId: DANIELA_ID,
-    })
-    const assignedToDaniela: AssignmentResult = {
-      changed: true,
-      case: gabrielaWithDaniela,
-      assignment: { ...makeCaseDetail().assignment!, analystId: DANIELA_ID, reason: 'manual' },
-    }
-    /** The team after the assignment: Gabriela is one of Daniela's open cases. */
-    const teamAfter = makeTeamOverview({
-      analysts: seededAnalysts.map((analyst) =>
-        analyst.id === DANIELA_ID
-          ? { ...daniela, openCases: [...daniela.openCases, gabrielaWithDaniela] }
-          : analyst,
-      ),
-    })
-    const queuesAfter = makeQueueOverview({
-      queues: makeQueueOverview().queues.map((q) =>
-        q.language === 'pt' ? { ...q, waiting: 0, oldestQueuedAt: null, cases: [] } : q,
-      ),
-    })
-
-    function deferred<T>() {
-      let resolve!: (value: T) => void
-      const promise = new Promise<T>((r) => {
-        resolve = r
-      })
-      return { promise, resolve }
-    }
-
-    async function submitToDaniela() {
-      const answer = deferred<AssignmentResult>()
-      vi.mocked(setCaseAssignee).mockReturnValue(answer.promise)
-      const rendered = renderTeam(`/supervision/equipo?asignar=${queuedGabriela.id}`)
-      const dialog = await screen.findByRole('dialog', { name: 'Asignar caso' })
-      await rendered.user.click(within(dialog).getByRole('radio', { name: 'Daniela Ríos' }))
-      await rendered.user.click(within(dialog).getByRole('button', { name: 'Asignar a Daniela' }))
-      expect(setCaseAssignee).toHaveBeenCalledTimes(1)
-      return { ...rendered, answer }
-    }
-
-    it('keeps the dialog when the queues update lands before the team update, and never reopens it', async () => {
-      const { router, queryClient, answer } = await submitToDaniela()
-
-      // Realtime: the queues refetch lands (Gabriela left the queue) while the
-      // team's is still on its way, so for a moment the case is in neither list.
-      const team = deferred<TeamOverview>()
-      vi.mocked(fetchTeamOverview).mockReturnValue(team.promise)
-      vi.mocked(fetchQueueOverview).mockResolvedValue(queuesAfter)
-      act(() => {
-        void queryClient.invalidateQueries({ queryKey: supervisionKeys.all })
-      })
-      expect(
-        await within(queue('Cola en portugués')).findByText('Sin casos en espera.'),
-      ).toBeInTheDocument()
-      expect(screen.getByRole('dialog', { name: 'Asignar caso' })).toBeInTheDocument()
-      expect(router.state.location.search).toBe(`?asignar=${queuedGabriela.id}`)
-
-      // The answer arrives: the dialog closes, ?asignar= goes, the strip reports it.
-      await act(async () => answer.resolve(assignedToDaniela))
-      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-      expect(router.state.location.search).toBe('')
-      expect(
-        screen.getByText(
-          'El caso de Gabriela Duarte Melo pasó a Daniela Ríos. La cola en portugués quedó en 0.',
-        ),
-      ).toBeInTheDocument()
-
-      // The team update lands with Gabriela under Daniela: nothing reopens.
-      await act(async () => team.resolve(teamAfter))
-      await waitFor(() =>
-        expect(queryClient.getQueryData(supervisionKeys.team())).toEqual(teamAfter),
-      )
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    })
-
-    it('keeps ?asignar= while the team refetch is still throttled (only the queues moved)', async () => {
-      const { router, queryClient, answer } = await submitToDaniela()
-
-      vi.mocked(fetchQueueOverview).mockResolvedValue(queuesAfter)
-      act(() => {
-        void queryClient.invalidateQueries({ queryKey: supervisionKeys.queues() })
-      })
-      expect(
-        await within(queue('Cola en portugués')).findByText('Sin casos en espera.'),
-      ).toBeInTheDocument()
-      // Both overviews are settled and neither lists the case, but its assignment is
-      // in flight: the case is not "gone", the dialog stays.
-      expect(screen.getByRole('dialog', { name: 'Asignar caso' })).toBeInTheDocument()
-      expect(router.state.location.search).toBe(`?asignar=${queuedGabriela.id}`)
-
-      await act(async () => answer.resolve(assignedToDaniela))
-      await waitFor(() => expect(router.state.location.search).toBe(''))
-      expect(screen.getByText(/pasó a Daniela Ríos/)).toBeInTheDocument()
-    })
-
-    it('keeps "Asignar caso" when the team shows the new holder before the answer', async () => {
-      const { queryClient, answer } = await submitToDaniela()
-
-      vi.mocked(fetchTeamOverview).mockResolvedValue(teamAfter)
-      vi.mocked(fetchQueueOverview).mockResolvedValue(queuesAfter)
-      act(() => {
-        void queryClient.invalidateQueries({ queryKey: supervisionKeys.all })
-      })
-      await waitFor(() =>
-        expect(queryClient.getQueryData(supervisionKeys.team())).toEqual(teamAfter),
-      )
-      const dialog = screen.getByRole('dialog', { name: 'Asignar caso' })
-      expect(dialog).toHaveAccessibleDescription(/Espera 6 min en la cola/)
-      expect(within(dialog).getByRole('radio', { name: 'Daniela Ríos' })).toBeChecked()
-      expect(screen.queryByRole('dialog', { name: 'Reasignar caso' })).not.toBeInTheDocument()
-
-      await act(async () => answer.resolve(assignedToDaniela))
-      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-      expect(screen.getByText(/pasó a Daniela Ríos/)).toBeInTheDocument()
-    })
-  })
-
-  it('drops ?asignar= for a case that is neither queued nor open', async () => {
-    const { router } = renderTeam('/supervision/equipo?asignar=CASE-NADA')
+  it('drops ?reasignar= for a case that is not open any more', async () => {
+    const { router } = renderTeam('/supervision/equipo?reasignar=CASE-NADA')
     await screen.findByRole('table', { name: 'Analistas' })
     await waitFor(() => expect(router.state.location.search).toBe(''))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 
-describe('supervisor notice', () => {
-  it('toasts a case that entered a queue, once, and opens the assign dialog', async () => {
+describe('notices', () => {
+  it('toasts a new escalation once, with "Revisar"', async () => {
     const { user, sockets, router } = renderTeam()
     await screen.findByRole('table', { name: 'Analistas' })
     const envelope = {
-      type: 'queue.case_queued',
-      id: 'EVT-QUEUED-1',
+      type: 'escalation.updated',
+      id: 'EVT-ESC-1',
       occurredAt: NOW.toISOString(),
       data: {
-        entity: 'case',
-        entityId: queuedGabriela.id,
-        caseId: queuedGabriela.id,
-        actor: { role: 'system', id: null },
-        payload: queuedGabriela,
+        entity: 'escalation',
+        entityId: camilaEscalation.escalation.id,
+        caseId: julianCamila.id,
+        actor: { role: 'analyst', id: JULIAN_ID },
+        payload: camilaEscalation.escalation,
       },
     }
     act(() => {
       sockets.last()?.open()
       sockets.last()?.receive(envelope)
-      sockets.last()?.receive(envelope)
+      sockets.last()?.receive({ ...envelope, id: 'EVT-ESC-2' })
     })
     const toasts = screen.getByRole('region', { name: 'Notificaciones' })
-    expect(
-      await within(toasts).findByText('Un caso espera en la cola en portugués'),
-    ).toBeInTheDocument()
-    expect(within(toasts).getAllByText('Un caso espera en la cola en portugués')).toHaveLength(1)
-    expect(
-      within(toasts).getByText('Gabriela Duarte Melo · nadie disponible habla portugués'),
-    ).toBeInTheDocument()
-    expect(within(toasts).getByText('Cola en portugués')).toBeInTheDocument()
-    expect(within(toasts).getByRole('button', { name: 'Más tarde' })).toBeInTheDocument()
-
-    await user.click(within(toasts).getByRole('button', { name: 'Asignar' }))
-    expect(router.state.location.search).toBe(`?asignar=${queuedGabriela.id}`)
-    expect(await screen.findByRole('dialog', { name: 'Asignar caso' })).toBeInTheDocument()
+    expect(await within(toasts).findByText('Julián Ortega escaló un caso')).toBeInTheDocument()
+    expect(within(toasts).getAllByText('Julián Ortega escaló un caso')).toHaveLength(1)
+    await user.click(within(toasts).getByRole('button', { name: 'Revisar' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/escalados'))
+    expect(router.state.location.search).toBe(`?escalamiento=${camilaEscalation.escalation.id}`)
   })
 
-  it('subscribes to both supervision topics', async () => {
+  it('subscribes to the supervision topics', async () => {
     const { sockets } = renderTeam()
     await screen.findByRole('table', { name: 'Analistas' })
     act(() => sockets.last()?.open())
     const messages = sockets.last()?.messages()
-    expect(messages).toContainEqual({ action: 'subscribe', topic: 'supervision:team' })
-    expect(messages).toContainEqual({ action: 'subscribe', topic: 'supervision:queues' })
+    for (const topic of ['supervision:team', 'supervision:queues', 'supervision:escalations']) {
+      expect(messages).toContainEqual({ action: 'subscribe', topic })
+    }
   })
 })
 
 describe('supervision routes', () => {
-  it('keeps the removed approvals URL on the role not-found page', async () => {
+  it('lands on Colas and keeps the removed approvals URL on the not-found page', async () => {
+    const { router } = renderTeam('/supervision')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/colas'))
     renderTeam('/supervision/aprobaciones')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Página no encontrada' }),

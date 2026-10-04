@@ -441,7 +441,7 @@ def test_admin_audit_family_and_staff_include_inactive(client: TestClient, sign_
         "Desactivó el equipo Equipo Caribe",
         "Desactivó la cuenta de Andrés Villamil",
         "Creó el equipo Equipo Caribe",
-        "Le dio a Felipe Echeverri el rol de Supervisora",
+        "Le dio a Felipe Echeverri el rol de Supervisión",
     ]
     assert {e["family"] for e in events} == {"administration"}
     assert events[0]["entity"] == "team"

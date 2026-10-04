@@ -19,6 +19,7 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import
     SqlCaseRepository,
     SqlCustomerCaseSlotRepository,
     SqlCustomerRepository,
+    SqlEscalationRepository,
     SqlTurnRepository,
 )
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.event_log import (
@@ -59,6 +60,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     turns: SqlTurnRepository
     assignments: SqlAssignmentRepository
     case_slots: SqlCustomerCaseSlotRepository
+    escalations: SqlEscalationRepository
     event_log: SqlEventLogRepository
     analyst_home: SqlAnalystHomeReader
 
@@ -89,6 +91,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.turns = SqlTurnRepository(session)
         self.assignments = SqlAssignmentRepository(session)
         self.case_slots = SqlCustomerCaseSlotRepository(session, self.track)
+        self.escalations = SqlEscalationRepository(session, self.track)
         self.event_log = SqlEventLogRepository(session)
         self.analyst_home = SqlAnalystHomeReader(session)
 

@@ -5,12 +5,16 @@
  * the query keys and the types. No components and nothing that reaches one:
  * src/test/architecture.test.ts checks it.
  */
-export { useQueuedCasesCount } from './hooks/use-overviews'
+export { useOpenEscalationsCount, useQueuedCasesCount } from './hooks/use-overviews'
 export { supervisionKeys, supervisionMutationKeys } from './api'
 export { registerSupervisionRealtime } from './realtime'
 export type {
   AnalystActivity,
   AssignmentResult,
+  EscalationItem,
+  EscalationOverview,
+  LanguageOpenCases,
+  OpenCaseRow,
   LanguageQueue,
   QueueCounts,
   QueueOverview,

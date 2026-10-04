@@ -6,18 +6,22 @@ import type * as CasesApi from '@/features/cases/api'
 import { fetchAvailability, fetchInbox } from '@/features/cases/api'
 import { fetchAdminUsers } from '@/features/admin/api'
 import type * as SupervisionApi from '@/features/supervision/api'
-import { fetchQueueOverview } from '@/features/supervision/api'
+import { fetchEscalations, fetchQueueOverview } from '@/features/supervision/api'
 import { NOW, available, makeInbox, paused } from '@/test/case-fixtures'
 import { makeUserList } from '@/test/admin-fixtures'
 import { adminStaff, supervisorStaff } from '@/test/fixtures'
 import { renderWithProviders } from '@/test/render'
-import { makeQueueOverview } from '@/test/supervision-fixtures'
+import { makeEscalationOverview, makeQueueOverview } from '@/test/supervision-fixtures'
 import { useRailIndicators, useRailPresence } from './rail-indicators'
 import { ROLES, type RoleId } from './roles'
 
 vi.mock('@/features/supervision/api', async (importOriginal) => {
   const actual = await importOriginal<typeof SupervisionApi>()
-  return { ...actual, fetchQueueOverview: vi.fn<typeof actual.fetchQueueOverview>() }
+  return {
+    ...actual,
+    fetchQueueOverview: vi.fn<typeof actual.fetchQueueOverview>(),
+    fetchEscalations: vi.fn<typeof actual.fetchEscalations>(),
+  }
 })
 
 function RailFor({ roleId }: { roleId: RoleId }) {
@@ -46,25 +50,29 @@ vi.mock('@/features/admin/api', async (importOriginal) => {
 
 beforeEach(() => {
   vi.mocked(fetchQueueOverview).mockResolvedValue(makeQueueOverview())
+  vi.mocked(fetchEscalations).mockResolvedValue(makeEscalationOverview())
   vi.mocked(fetchAdminUsers).mockResolvedValue(makeUserList())
   vi.mocked(fetchInbox).mockResolvedValue(makeInbox())
   vi.mocked(fetchAvailability).mockResolvedValue(paused)
 })
 
 describe('useRailIndicators', () => {
-  it('shows the queued cases on "Equipo y colas" in the Supervisora role, live', async () => {
+  it('shows the unassigned cases on "Colas" and the open escalations in the Supervisión role, live', async () => {
     const { sockets } = renderWithProviders(<RailFor roleId="supervisor" />, {
       staff: supervisorStaff,
       route: '/supervision/auditoria',
     })
-    expect(
-      await screen.findByRole('link', { name: 'Equipo y colas, 3 pendientes' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Colas, 3 sin asignar' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Escalados, 2 abiertos' })).toBeInTheDocument()
 
     act(() => sockets.last()?.open())
     expect(sockets.last()?.messages()).toContainEqual({
       action: 'subscribe',
       topic: 'supervision:queues',
+    })
+    expect(sockets.last()?.messages()).toContainEqual({
+      action: 'subscribe',
+      topic: 'supervision:escalations',
     })
     // A queue.updated with newer counts moves the badge at once.
     vi.mocked(fetchQueueOverview).mockReturnValue(new Promise(() => {}))
@@ -86,9 +94,7 @@ describe('useRailIndicators', () => {
         },
       }),
     )
-    expect(
-      await screen.findByRole('link', { name: 'Equipo y colas, 2 pendientes' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Colas, 2 sin asignar' })).toBeInTheDocument()
   })
 
   it('shows Por responder on Casos and her presence in the analyst role, never the queues', async () => {
@@ -127,7 +133,7 @@ describe('useRailIndicators', () => {
       staff: supervisorStaff,
       route: '/supervision/equipo',
     })
-    await screen.findByRole('link', { name: 'Equipo y colas, 3 pendientes' })
+    await screen.findByRole('link', { name: 'Colas, 3 sin asignar' })
     expect(fetchInbox).not.toHaveBeenCalled()
     expect(fetchAvailability).not.toHaveBeenCalled()
     expect(screen.queryByText(/^Estado:/)).not.toBeInTheDocument()
@@ -142,7 +148,7 @@ describe('useRailIndicators', () => {
       route: '/supervision/equipo',
     })
     await vi.waitFor(() => expect(fetchQueueOverview).toHaveBeenCalled())
-    expect(screen.getByRole('link', { name: 'Equipo y colas' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Colas' })).toBeInTheDocument()
   })
 
   it('shows the locked accounts on "Usuarios y roles" in the Administración role, live', async () => {
@@ -187,7 +193,7 @@ describe('useRailIndicators', () => {
       staff: supervisorStaff,
       route: '/supervision/equipo',
     })
-    await screen.findByRole('link', { name: 'Equipo y colas, 3 pendientes' })
+    await screen.findByRole('link', { name: 'Colas, 3 sin asignar' })
     expect(fetchAdminUsers).not.toHaveBeenCalled()
   })
 })

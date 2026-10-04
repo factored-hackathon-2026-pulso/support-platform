@@ -36,6 +36,7 @@ class AuditFamily(StrEnum):
     AVAILABILITY = "availability"
     ACCESS = "access"
     ADMINISTRATION = "administration"
+    ESCALATION = "escalation"
     OTHER = "other"
 
 
@@ -52,6 +53,14 @@ FAMILY: Mapping[str, AuditFamily] = {
     "case.priority_changed": AuditFamily.LIFECYCLE,
     "case.viewed": AuditFamily.ACCESS,
     "turn.created": AuditFamily.CONVERSATION,
+    # escalations to supervision (slice 9)
+    "escalation.opened": AuditFamily.ESCALATION,
+    "escalation.withdrawn": AuditFamily.ESCALATION,
+    "escalation.answered": AuditFamily.ESCALATION,
+    "escalation.taken": AuditFamily.ESCALATION,
+    "escalation.reassigned": AuditFamily.ESCALATION,
+    "escalation.closed": AuditFamily.ESCALATION,
+    "escalation.acknowledged": AuditFamily.ESCALATION,
     "staff.availability_changed": AuditFamily.AVAILABILITY,
     "customer.session_started": AuditFamily.ACCESS,
     "auth.password_accepted": AuditFamily.ACCESS,
@@ -92,6 +101,12 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "case.closed",
         "case.rated",
         "case.priority_changed",
+        "escalation.opened",
+        "escalation.withdrawn",
+        "escalation.answered",
+        "escalation.taken",
+        "escalation.reassigned",
+        "escalation.closed",
         "staff.availability_changed",
         "auth.account_locked",
         *ADMINISTRATION_TYPES,
@@ -248,6 +263,18 @@ def _case_priority_changed(event: StoredEvent, _names: AuditNames) -> str:
         return "Quitó la prioridad"
     label = PRIORITY_LABEL.get(to or "")
     return f"Cambió la prioridad a {label}" if label else "Cambió la prioridad"
+
+
+def _escalation_taken(event: StoredEvent, names: AuditNames) -> str:
+    """Next to the supervisor: "Felipe Echeverri · Tomó el caso escalado de Daniela Ríos"."""
+    return f"Tomó el caso escalado de {names.name(event.payload.get('previous_analyst_id'))}"
+
+
+def _escalation_reassigned(event: StoredEvent, names: AuditNames) -> str:
+    previous = names.name(event.payload.get("previous_analyst_id"))
+    return (
+        f"Reasignó el caso escalado de {previous} a {names.name(event.payload.get('analyst_id'))}"
+    )
 
 
 def _case_viewed(_event: StoredEvent, _names: AuditNames) -> str:
@@ -418,6 +445,15 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "case.priority_changed": _case_priority_changed,
     "case.viewed": _case_viewed,
     "turn.created": _turn_created,
+    # slice 9: the log shows the actor next to them ("Daniela Ríos · Escaló el caso a
+    # supervisión"); the motive and the answer are never shown (only their length).
+    "escalation.opened": _fixed("Escaló el caso a supervisión"),
+    "escalation.withdrawn": _fixed("Retiró el escalamiento"),
+    "escalation.answered": _fixed("Respondió el escalamiento"),
+    "escalation.taken": _escalation_taken,
+    "escalation.reassigned": _escalation_reassigned,
+    "escalation.closed": _fixed("El escalamiento terminó porque se cerró el caso"),
+    "escalation.acknowledged": _fixed("Leyó lo que hizo supervisión con su escalamiento"),
     "staff.availability_changed": _availability_changed,
     "customer.session_started": _customer_session,
     "auth.password_accepted": _fixed("Ingresó la contraseña correcta"),

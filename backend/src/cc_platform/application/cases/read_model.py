@@ -23,6 +23,7 @@ from cc_platform.application.cases.dto import (
     CustomerConversationView,
     CustomerRefView,
     CustomerTurnView,
+    EscalationView,
     InboxCountsView,
     ReplyBlockedReason,
     TurnView,
@@ -31,6 +32,7 @@ from cc_platform.application.ports.unit_of_work import UnitOfWork
 from cc_platform.application.security import Actor
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
+from cc_platform.domain.cases.escalation import Escalation
 from cc_platform.domain.cases.rating import CaseRating
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
@@ -104,6 +106,7 @@ def summarize(case: Case, customer_name: str) -> CaseSummaryView:
         closed_at=case.closed_at,
         close_reason=case.closure.reason if case.closure else None,
         rating=rating_view(case.rating),
+        escalated=case.is_escalated,
     )
 
 
@@ -152,6 +155,17 @@ def capabilities_for(case: Case, actor: Actor) -> CaseCapabilitiesView:
         can_close=is_assignee and case.status in CLOSABLE_STATUSES,
         can_assign=actor.has_any_role({StaffRole.SUPERVISOR}) and not case.is_closed,
         can_change_priority=can_change_priority(case, actor),
+        can_escalate=can_escalate(case, actor),
+    )
+
+
+def can_escalate(case: Case, actor: Actor) -> bool:
+    """Slice 9: its assignee (as Analista) asks supervision for help, one at a time."""
+    return (
+        case.is_assignee(actor.staff_id)
+        and actor.has_any_role({StaffRole.ANALYST})
+        and case.status in OPEN_ASSIGNED_STATUSES
+        and not case.is_escalated
     )
 
 
@@ -254,6 +268,33 @@ class CaseReader:
             previous_analyst_id=previous,
             previous_analyst_name=await self.staff_name(previous) if previous else None,
         )
+
+    async def escalation_view(self, escalation: Escalation, case: Case) -> EscalationView:
+        names = await self.customer_names([case.customer_id])
+        resolver = escalation.resolved_by_id
+        target = escalation.reassigned_to_id
+        return EscalationView(
+            id=escalation.id,
+            case_id=escalation.case_id,
+            customer_name=names[case.customer_id],
+            state=escalation.state,
+            motive=escalation.motive,
+            escalated_at=escalation.escalated_at,
+            escalated_by_id=escalation.escalated_by_id,
+            escalated_by_name=await self.staff_name(escalation.escalated_by_id),
+            resolved_at=escalation.resolved_at,
+            resolved_by_id=resolver,
+            resolved_by_name=await self.staff_name(resolver) if resolver else None,
+            note=escalation.note,
+            reassigned_to_id=target,
+            reassigned_to_name=await self.staff_name(target) if target else None,
+            acknowledged_at=escalation.acknowledged_at,
+        )
+
+    async def latest_escalation(self, case: Case) -> EscalationView | None:
+        """The case's latest escalation (slice 9), any state."""
+        escalation = await self._uow.escalations.latest_for_case(case.id)
+        return None if escalation is None else await self.escalation_view(escalation, case)
 
     async def closure(self, case: Case) -> CaseClosureView | None:
         closure = case.closure

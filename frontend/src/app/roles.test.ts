@@ -30,7 +30,17 @@ describe('roles', () => {
     expect(ROLES.analyst.nav.map((item) => item.label)).toEqual(['Inicio', 'Casos'])
     expect(ROLES.analyst.home).toBe('/analista/inicio')
     expect(ROLES.analyst.nav[1]?.indicator).toBe('toReplyCases')
-    expect(ROLES.supervisor.nav.map((item) => item.label)).toEqual(['Equipo y colas', 'Auditoría'])
+    // Slice 9: Colas (the landing, badge = cases nobody holds), Equipo, Escalados (badge =
+    // open escalations), Auditoría; no team tabs anywhere.
+    expect(ROLES.supervisor.label).toBe('Supervisión')
+    expect(ROLES.supervisor.home).toBe('/supervision/colas')
+    expect(ROLES.supervisor.nav.map((item) => [item.label, item.to, item.indicator])).toEqual([
+      ['Colas', '/supervision/colas', 'queuedCases'],
+      ['Equipo', '/supervision/equipo', undefined],
+      ['Escalados', '/supervision/escalados', 'openEscalations'],
+      ['Auditoría', '/supervision/auditoria', undefined],
+    ])
+    expect(ROLES.supervisor.nav[0]?.alsoActiveOn).toEqual(['/supervision/casos'])
     expect(ROLES.admin.nav.map((item) => item.label)).toEqual([
       'Usuarios y roles',
       'Equipos',
@@ -50,29 +60,29 @@ describe('roles', () => {
   it('orders roles canonically and finds the first home', () => {
     expect(sortRoles(['admin', 'ghost', 'analyst'])).toEqual(['analyst', 'admin'])
     expect(sortRoles(['ghost', 'admin'])).toEqual(['admin'])
-    expect(firstRoleHome(['admin', 'supervisor'])).toBe('/supervision/equipo')
+    expect(firstRoleHome(['admin', 'supervisor'])).toBe('/supervision/colas')
     expect(firstRoleHome([])).toBeNull()
   })
 
   it('names roles like the backend copy (copy.ROLE_LABEL) and says what she has now', () => {
     expect(ROLE_LABEL).toEqual({
       analyst: 'Analista',
-      supervisor: 'Supervisora',
+      supervisor: 'Supervisión',
       admin: 'Administración',
     })
     expect(rolesLabel(['admin', 'ghost', 'analyst'])).toBe('Analista y Administración')
     expect(rolesLabel(['admin', 'supervisor', 'analyst'])).toBe(
-      'Analista, Supervisora y Administración',
+      'Analista, Supervisión y Administración',
     )
     expect(rolesNowCopy(['analyst'])).toBe('Ahora tienes: Analista.')
   })
 
   it('marks an item active on its path, an `end` item only on the exact path', () => {
     const team: NavItem = ROLES.supervisor.nav[0]!
-    expect(isNavItemActive(team, '/supervision/equipo')).toBe(true)
+    expect(isNavItemActive(team, '/supervision/colas')).toBe(true)
     expect(isNavItemActive(team, '/supervision/auditoria')).toBe(false)
     const exact: NavItem = { ...team, end: true }
-    expect(isNavItemActive(exact, '/supervision/equipo/detalle')).toBe(false)
+    expect(isNavItemActive(exact, '/supervision/colas/detalle')).toBe(false)
     expect(isNavItemActive(team, '/supervision/casos/CASE-1')).toBe(true)
     expect(team.indicator).toBe('queuedCases')
   })
@@ -118,7 +128,7 @@ describe('roles', () => {
       '/supervision/auditoria?x=1',
     )
     expect(resolvePostLoginPath(['supervisor'], '/administracion/usuarios')).toBe(
-      '/supervision/equipo',
+      '/supervision/colas',
     )
     expect(resolvePostLoginPath(['analyst'], '//evil.example')).toBe('/analista/inicio')
     expect(resolvePostLoginPath(['analyst'], null)).toBe('/analista/inicio')

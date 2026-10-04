@@ -7,15 +7,15 @@ import {
   type AuditStateChangeOptions,
   type AuditUrlState,
 } from '@/features/audit'
-import { useQueueNotices } from '@/features/supervision'
+import { useSupervisionNotices } from '@/features/supervision'
 
 /**
  * /supervision/auditoria — Auditoría. Filters, search and the selected event
  * live in the URL (slice-3-supervision.md §8.9). Like every supervision screen
- * it shows the "Un caso espera…" notice (the route composes both features).
+ * it shows the supervision notices (the route composes both features).
  */
 export default function AuditRoute() {
-  useQueueNotices()
+  useSupervisionNotices()
   const [searchParams, setSearchParams] = useSearchParams()
   const state = useMemo(() => parseAuditSearch(searchParams), [searchParams])
 

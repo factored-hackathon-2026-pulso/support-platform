@@ -56,6 +56,7 @@ function ownCaseDetail(): CaseDetail {
       canClose: true,
       canAssign: true,
       canChangePriority: true,
+      canEscalate: false,
     },
   })
   detail.case = {
@@ -83,6 +84,7 @@ function queuedDetail(): CaseDetail {
         canClose: false,
         canAssign: true,
         canChangePriority: true,
+        canEscalate: false,
       },
     }),
     case: queuedRosa,
@@ -151,20 +153,18 @@ describe('supervisor case view', () => {
       }),
     ).toBeInTheDocument()
     expect(document.title).toBe('Caso CASE-…0101 · Supervisión · LATAM Bank Soporte')
-    expect(screen.getByText('Vista de supervisión · solo lectura')).toBeInTheDocument()
+    expect(screen.getByText('Solo lectura')).toBeInTheDocument()
     await screen.findByRole('list', { name: 'Mensajes' })
     expect(screen.queryByRole('textbox', { name: 'Escribe al cliente' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cerrar caso' })).not.toBeInTheDocument()
-    expect(
-      screen.getByText('Vista de supervisión · Solo lectura. Lo atiende Laura Méndez.'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Solo lectura: lo atiende Laura Méndez.')).toBeInTheDocument()
     expect(screen.getByText('Cómo llegó').parentElement).toHaveTextContent(
       'Lo atiende Laura Méndez: le llegó al estar disponible y hablar español',
     )
     expect(screen.getByRole('button', { name: 'Reasignar' })).toBeInTheDocument()
-    // The rail keeps "Equipo y colas" current on the case view.
+    // The rail keeps "Colas" current on the case view.
     const rail = screen.getByRole('navigation', { name: 'Principal' })
-    expect(within(rail).getByRole('link', { name: /Equipo y colas/ })).toHaveAttribute(
+    expect(within(rail).getByRole('link', { name: /^Colas/ })).toHaveAttribute(
       'aria-current',
       'page',
     )
@@ -192,56 +192,57 @@ describe('supervisor case view', () => {
     )
   })
 
-  it('defaults "Volver" to Equipo y colas', async () => {
+  it('defaults "Volver" to Colas, and names Equipo or Escalados after the screen', async () => {
     renderRoute(casePath(), { staff: supervisorStaff })
-    expect(await screen.findByRole('link', { name: 'Volver a Equipo y colas' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Volver a Colas' })).toHaveAttribute(
       'href',
-      '/supervision/equipo',
+      '/supervision/colas',
     )
   })
 
-  it('assigns a queued case from the view', async () => {
+  it('explains that a queued case is assigned automatically, without an Asignar button', async () => {
     vi.mocked(fetchCaseDetail).mockResolvedValue(queuedDetail())
-    vi.mocked(setCaseAssignee).mockResolvedValue({
-      changed: true,
-      case: { ...queuedRosa, status: 'assigned', assignedAnalystId: DANIELA_ID },
-      assignment: { ...makeCaseDetail().assignment!, reason: 'manual' },
-    })
-    const { user, router } = renderRoute(casePath(queuedRosa.id), { staff: supervisorStaff })
+    renderRoute(casePath(queuedRosa.id), { staff: supervisorStaff })
     expect(
       await screen.findByText(
-        'Vista de supervisión · El caso espera en la cola en español. Asígnalo para que alguien le responda.',
+        'Sin asignar: le llega automáticamente a la primera persona disponible que hable español.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByText('Cómo llegó').parentElement).toHaveTextContent(
-      'Espera en la cola en español desde las 10:47: nadie disponible habla español',
-    )
+    expect(screen.queryByRole('button', { name: /^Asignar/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reasignar' })).not.toBeInTheDocument()
+  })
 
-    await user.click(screen.getByRole('button', { name: 'Asignar' }))
-    expect(router.state.location.search).toBe('?asignar=1')
-    await user.click(await screen.findByRole('radio', { name: 'Daniela Ríos' }))
-    const dialog = screen.getByRole('dialog', { name: 'Asignar caso' })
-    await user.click(within(dialog).getByRole('button', { name: 'Asignar a Daniela' }))
-    expect(setCaseAssignee).toHaveBeenCalledWith(queuedRosa.id, {
-      analystId: DANIELA_ID,
-      expectedAnalystId: null,
-      confirmPaused: false,
+  it('shows the "Escalado" marker and reassigns, ending the escalation', async () => {
+    const detail = ownCaseDetail()
+    vi.mocked(fetchCaseDetail).mockResolvedValue({
+      ...detail,
+      case: { ...detail.case, escalated: true },
     })
+    vi.mocked(setCaseAssignee).mockResolvedValue({
+      changed: true,
+      case: { ...makeCaseDetail().case, assignedAnalystId: DANIELA_ID },
+      assignment: { ...makeCaseDetail().assignment!, reason: 'manual' },
+    })
+    const { user, router } = renderRoute(casePath(), { staff: supervisorStaff })
+    expect((await screen.findAllByText('Escalado')).length).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button', { name: 'Reasignar' }))
+    expect(router.state.location.search).toBe('?reasignar=1')
+    const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
+    await user.click(within(dialog).getByRole('radio', { name: /^Daniela Ríos/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Daniela' }))
     expect(
-      await screen.findByText('Listo · El caso de Rosa Elena Ibarra Méndez pasó a Daniela Ríos'),
+      await screen.findByText('El caso de Marcela Quintana Pardo pasó a Daniela Ríos'),
     ).toBeInTheDocument()
     await waitFor(() => expect(router.state.location.search).toBe(''))
-    // The pane refetches the detail (capabilities, assignment).
-    await waitFor(() => expect(vi.mocked(fetchCaseDetail).mock.calls.length).toBeGreaterThan(1))
   })
 
   it('closes the dialog when the case was closed meanwhile', async () => {
     vi.mocked(setCaseAssignee).mockRejectedValue(
       new ApiProblem({ status: 409, code: 'case_closed', extensions: { currentStatus: 'closed' } }),
     )
-    const { user } = renderRoute(`${casePath()}?asignar=1`, { staff: supervisorStaff })
+    const { user } = renderRoute(`${casePath()}?reasignar=1`, { staff: supervisorStaff })
     // The dialog loads the team (the candidates) first.
-    await user.click(await screen.findByRole('radio', { name: 'Daniela Ríos' }))
+    await user.click(await screen.findByRole('radio', { name: /^Daniela Ríos/ }))
     await user.click(screen.getByRole('button', { name: 'Reasignar a Daniela' }))
     expect(await screen.findByText('Este caso ya se cerró.')).toBeInTheDocument()
     await waitFor(() =>

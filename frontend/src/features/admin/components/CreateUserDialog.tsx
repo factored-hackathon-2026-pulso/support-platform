@@ -22,7 +22,7 @@ export interface CreateUserDialogProps {
 }
 
 /**
- * "Nueva persona" (`?nueva=1`, contract §10.3): the person form, empty, and
+ * "Nuevo usuario" (`?nueva=1`, contract §10.3): the person form, empty, and
  * "Crear cuenta". The create carries one `Idempotency-Key` per open dialog, so
  * a retry after a lost response never creates the person twice.
  */
@@ -80,7 +80,7 @@ export function CreateUserDialog({
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title="Nueva persona"
+      title="Nuevo usuario"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -95,7 +95,7 @@ export function CreateUserDialog({
       <form
         id={formId}
         noValidate
-        aria-label="Nueva persona"
+        aria-label="Nuevo usuario"
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault()

@@ -25,7 +25,7 @@ from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from cc_platform.infrastructure.persistence.sqlalchemy.database import Database
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
-from cc_platform.infrastructure.seed.cases import seed_case_id, seed_demo_cases
+from cc_platform.infrastructure.seed.cases import seed_case_id, seed_demo_cases, seed_escalation_id
 from cc_platform.infrastructure.seed.customers import seed_customer_id, seed_demo_customers
 from cc_platform.infrastructure.seed.people import seed_demo_staff, seed_staff_id
 from tests.support import PlainHasher
@@ -75,9 +75,10 @@ async def test_case_round_trip_keeps_every_field(harness: Harness) -> None:
     assert (marcela.status, marcela.version, marcela.last_sequence) == (
         CaseStatus.IN_PROGRESS,
         1,
-        5,
+        6,  # incl. the staff banner of her escalation (slice 9)
     )
-    assert (marcela.assignee_read_sequence, marcela.unread_sequences) == (4, (5,))
+    assert (marcela.assignee_read_sequence, marcela.unread_sequences) == (4, (6,))
+    assert marcela.open_escalation_id == seed_escalation_id(101)
     assert marcela.first_response_at is not None
     assert marcela.first_response_at.tzinfo is not None
     assert refund is not None

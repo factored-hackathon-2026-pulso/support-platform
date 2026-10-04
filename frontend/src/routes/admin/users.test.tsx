@@ -66,7 +66,7 @@ const search = (router: { state: { location: { search: string } } }) =>
   new URLSearchParams(router.state.location.search)
 
 describe('Usuarios y roles', () => {
-  it('lists people with their roles, languages, team and account, the pills and the badge', async () => {
+  it('lists people with their roles, languages, team and account, the filters and the badge', async () => {
     renderUsers()
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Usuarios y roles' }),
@@ -76,14 +76,10 @@ describe('Usuarios y roles', () => {
     expect(
       screen.getByText('Quién puede hacer qué en la plataforma · 13 personas'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Todas 12' })).toBeChecked()
-    expect(screen.getByRole('radio', { name: 'Analistas 6' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Supervisoras 5' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Administración 2' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Bloqueadas (1)' })).toBeInTheDocument()
-    expect(
-      await screen.findByRole('option', { name: 'Equipo Caribe (inactivo)' }),
-    ).toBeInTheDocument()
+    expect(screen.getByText('4 personas')).toBeInTheDocument()
+    // One "Filtros" dropdown, never pill rows or selects (slice 9).
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeNull()
 
     const danielaRow = row(/Daniela Ríos Medina/)
     expect(within(danielaRow).getByText('daniela.rios@latambank.example')).toBeInTheDocument()
@@ -92,7 +88,7 @@ describe('Usuarios y roles', () => {
     expect(within(danielaRow).getByText('Equipo Andes')).toBeInTheDocument()
     expect(within(danielaRow).getByText('Activa')).toBeInTheDocument()
     const carolinaRow = row(/Carolina Peña Ruiz/)
-    expect(within(carolinaRow).getByText('Supervisora')).toBeInTheDocument()
+    expect(within(carolinaRow).getByText('Supervisión')).toBeInTheDocument()
     expect(within(carolinaRow).getByText('Administración')).toBeInTheDocument()
     expect(within(carolinaRow).getByText('—')).toBeInTheDocument()
     // Account status as glyph + word: a lock, its end time on hover.
@@ -116,29 +112,49 @@ describe('Usuarios y roles', () => {
         'Personas, roles, idiomas y equipos: directorio de la plataforma (datos de ejemplo).',
       ),
     ).toBeInTheDocument()
-    expect(fetchAdminUsers).toHaveBeenCalledWith({}, expect.anything())
+    // Everyone once (the search only); the groups filter on the screen.
+    expect(fetchAdminUsers).toHaveBeenCalledWith({ status: 'all' }, expect.anything())
   })
 
-  it('filters by role, account, team, language and search, replacing the history entry', async () => {
+  it('filters with the Filtros dropdown (faceted counts, chips) and the search, replacing the history entry', async () => {
     const { user, router } = renderUsers()
     await screen.findByRole('table', { name: 'Personas' })
-    await user.click(screen.getByRole('radio', { name: 'Analistas 6' }))
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Cuenta' }), 'inactive')
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Equipo' }), TEAM_PACIFICO.id)
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Idioma' }), 'pt')
-    expect(router.state.location.search).toBe(
-      `?rol=analistas&estado=desactivadas&equipo=${TEAM_PACIFICO.id}&idioma=pt`,
-    )
+    await user.click(screen.getByRole('button', { name: 'Filtros' }))
+    const panel = screen.getByRole('group', { name: 'Filtros' })
+    expect(within(panel).getByRole('group', { name: 'Rol' })).toBeInTheDocument()
+    expect(within(panel).getByRole('checkbox', { name: 'Analista 1' })).toBeInTheDocument()
+    expect(within(panel).getByRole('checkbox', { name: 'Administración 2' })).toBeInTheDocument()
+    expect(
+      await within(panel).findByRole('checkbox', { name: 'Equipo Caribe (inactivo) 0' }),
+    ).toBeInTheDocument()
+    expect(within(panel).getByRole('checkbox', { name: 'Portugués 1' })).toBeInTheDocument()
+
+    await user.click(within(panel).getByRole('checkbox', { name: 'Supervisión 2' }))
+    expect(router.state.location.search).toBe('?rol=supervision')
+    expect(router.state.historyAction).toBe('REPLACE')
+    expect(within(table()).queryByRole('row', { name: /Daniela Ríos Medina/ })).toBeNull()
+    expect(row(/Carolina Peña Ruiz/)).toBeInTheDocument()
+    expect(screen.getByText('2 de 4 personas')).toBeInTheDocument()
+    // The other groups count only supervisors now.
+    expect(within(panel).getByRole('checkbox', { name: 'Activa 1' })).toBeInTheDocument()
+    await user.click(within(panel).getByRole('checkbox', { name: 'Bloqueada 1' }))
+    expect(search(router).get('estado')).toBe('bloqueadas')
+    expect(within(table()).getAllByRole('row')).toHaveLength(2) // header + Mariana
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('button', { name: 'Filtros 2 activos' })).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: 'Quitar filtro Supervisión' }))
+    expect(router.state.location.search).toBe('?estado=bloqueadas')
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar persona' }), 'Duque')
+    await waitFor(() => expect(search(router).get('q')).toBe('Duque'))
     await waitFor(() =>
       expect(fetchAdminUsers).toHaveBeenLastCalledWith(
-        { role: 'analyst', status: 'inactive', teamId: TEAM_PACIFICO.id, language: 'pt' },
+        { status: 'all', q: 'Duque' },
         expect.anything(),
       ),
     )
-    await user.type(screen.getByRole('searchbox', { name: 'Buscar persona' }), 'Duque')
-    await waitFor(() => expect(search(router).get('q')).toBe('Duque'))
     await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
-    expect(router.state.location.search).toBe('')
+    expect(router.state.location.search).toBe('?q=Duque')
     expect(router.state.historyAction).toBe('REPLACE')
   })
 
@@ -176,7 +192,7 @@ describe('Usuarios y roles', () => {
     expect(within(panel).getByRole('heading', { name: 'Mariana Duque' })).toBeInTheDocument()
     // Structured items, not a dot-joined line (slice 6): a role chip, languages, team.
     expect(
-      within(panel).getByText('Supervisora', { selector: 'span.rounded-full' }),
+      within(panel).getByText('Supervisión', { selector: 'span.rounded-full' }),
     ).toBeInTheDocument()
     expect(within(panel).getByText('Idiomas:').parentElement).toHaveTextContent('Español')
     expect(within(panel).getByText('Equipo:').parentElement).toHaveTextContent('Equipo Pacífico')
@@ -272,7 +288,7 @@ describe('Usuarios y roles', () => {
 
     await user.click(within(panel).getByRole('checkbox', { name: 'Portugués' }))
     await user.click(within(panel).getByRole('checkbox', { name: /^Analista/ }))
-    await user.click(within(panel).getByRole('checkbox', { name: /^Supervisora/ }))
+    await user.click(within(panel).getByRole('checkbox', { name: /^Supervisión/ }))
     await user.click(within(panel).getByRole('button', { name: 'Guardar cambios' }))
     expect(
       await within(panel).findByText(
@@ -315,7 +331,7 @@ describe('Usuarios y roles', () => {
     })
     const { user } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
-    await user.click(await within(panel).findByRole('checkbox', { name: /^Supervisora/ }))
+    await user.click(await within(panel).findByRole('checkbox', { name: /^Supervisión/ }))
     expect(
       within(panel).getByText(/Los cambios de rol se aplican de inmediato/),
     ).toBeInTheDocument()
@@ -357,7 +373,7 @@ describe('Usuarios y roles', () => {
   it('warns when someone else changes the person while she has a draft', async () => {
     const { user, queryClient } = renderUsers(`/administracion/usuarios?persona=${daniela.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Persona seleccionada' })
-    await user.click(await within(panel).findByRole('checkbox', { name: /^Supervisora/ }))
+    await user.click(await within(panel).findByRole('checkbox', { name: /^Supervisión/ }))
     const { adminKeys } = await import('@/features/admin')
     queryClient.setQueryData(adminKeys.user(daniela.id), { ...daniela, version: 8 })
     expect(
@@ -365,7 +381,7 @@ describe('Usuarios y roles', () => {
         'Alguien más acaba de cambiar a esta persona. Si guardas, revisaremos que no choquen tus cambios.',
       ),
     ).toBeInTheDocument()
-    expect(within(panel).getByRole('checkbox', { name: /^Supervisora/ })).toBeChecked()
+    expect(within(panel).getByRole('checkbox', { name: /^Supervisión/ })).toBeChecked()
   })
 
   it('creates a person and shows the temporary password once', async () => {
@@ -383,9 +399,9 @@ describe('Usuarios y roles', () => {
     vi.mocked(fetchAdminUser).mockResolvedValue(ana)
     const { user, router } = renderUsers()
     await screen.findByRole('table', { name: 'Personas' })
-    await user.click(screen.getByRole('button', { name: 'Nueva persona' }))
+    await user.click(screen.getByRole('button', { name: 'Nuevo usuario' }))
     expect(search(router).get('nueva')).toBe('1')
-    const dialog = await screen.findByRole('dialog', { name: 'Nueva persona' })
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo usuario' })
 
     // Empty form: client validation, first invalid control focused, no request.
     await user.click(within(dialog).getByRole('button', { name: 'Crear cuenta' }))
@@ -399,6 +415,14 @@ describe('Usuarios y roles', () => {
       'ana.gil@latambank.example',
     )
     await user.click(within(dialog).getByRole('checkbox', { name: /^Analista/ }))
+    // Languages are pill toggles (a native checkbox inside each pill, keyboard included).
+    const spanish = within(dialog).getByRole('checkbox', { name: 'Español' })
+    spanish.focus()
+    await user.keyboard(' ')
+    expect(spanish).toBeChecked()
+    expect(spanish.closest('label')?.querySelector('svg')).not.toBeNull()
+    await user.click(spanish)
+    expect(spanish).not.toBeChecked()
     await user.click(within(dialog).getByRole('checkbox', { name: 'Portugués' }))
     await user.selectOptions(
       within(dialog).getByRole('combobox', { name: 'Equipo' }),
@@ -443,7 +467,7 @@ describe('Usuarios y roles', () => {
     vi.mocked(createUser).mockResolvedValue({ user: daniela, temporaryPassword: null })
     vi.mocked(fetchAdminUser).mockResolvedValue(daniela)
     const { user } = renderUsers('/administracion/usuarios?nueva=1')
-    const dialog = await screen.findByRole('dialog', { name: 'Nueva persona' })
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo usuario' })
     await user.type(within(dialog).getByRole('textbox', { name: 'Nombre completo' }), daniela.name)
     await user.type(within(dialog).getByRole('textbox', { name: 'Correo' }), daniela.email)
     await user.click(within(dialog).getByRole('checkbox', { name: /^Analista/ }))
@@ -470,10 +494,10 @@ describe('Usuarios y roles', () => {
       new ApiProblem({ status: 409, code: 'email_taken', extensions: { field: 'email' } }),
     )
     const { user } = renderUsers('/administracion/usuarios?nueva=1')
-    const dialog = await screen.findByRole('dialog', { name: 'Nueva persona' })
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo usuario' })
     await user.type(within(dialog).getByRole('textbox', { name: 'Nombre completo' }), 'Ana Gil')
     await user.type(within(dialog).getByRole('textbox', { name: 'Correo' }), daniela.email)
-    await user.click(within(dialog).getByRole('checkbox', { name: /^Supervisora/ }))
+    await user.click(within(dialog).getByRole('checkbox', { name: /^Supervisión/ }))
     await waitFor(() => expect(within(dialog).getAllByRole('option').length).toBeGreaterThan(1))
     await user.selectOptions(
       within(dialog).getByRole('combobox', { name: 'Equipo' }),

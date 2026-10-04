@@ -9,8 +9,9 @@ Privacy (§5.4): message text never leaves through the audit API. ``turn.created
 removed (its length is kept as ``text_length``) and listed in ``redactedFields``: the text
 stays readable in the transcript, through the supervisor case view, which is itself
 audited (``case.viewed``). The same holds for the customer's rating comment (slice 7:
-``case.rated.comment`` → ``comment_length``; staff read it on the closed case). Reading the
-audit is not audited.
+``case.rated.comment`` → ``comment_length``; staff read it on the closed case) and, slice 9,
+an escalation's motive and supervision's answer (``motive_length``, ``note_length``; staff
+read them in the case and in "Escalados"). Reading the audit is not audited.
 
 Names are resolved with a fixed number of queries per page (staff, customers, the cases'
 customer and language), never one per row.
@@ -61,7 +62,13 @@ ACTOR_ROLES: dict[AuditActorKind, frozenset[str]] = {
 }
 
 #: Payload keys removed by the PII policy, per event type (the value's length is kept).
-REDACTED_TEXT: dict[str, str] = {"turn.created": "text", "case.rated": "comment"}
+#: Slice 9: an escalation's motive and supervision's answer are staff text like messages.
+REDACTED_TEXT: dict[str, str] = {
+    "turn.created": "text",
+    "case.rated": "comment",
+    "escalation.opened": "motive",
+    "escalation.answered": "note",
+}
 
 
 @dataclass(frozen=True, slots=True)

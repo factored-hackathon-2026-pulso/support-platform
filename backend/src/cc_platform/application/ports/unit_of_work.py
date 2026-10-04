@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         AssignmentRepository,
         CaseRepository,
         CustomerCaseSlotRepository,
+        EscalationRepository,
         TurnRepository,
     )
     from cc_platform.application.customers.ports import CustomerRepository
@@ -84,6 +85,9 @@ class UnitOfWork(Protocol):
 
     @property
     def case_slots(self) -> CustomerCaseSlotRepository: ...
+
+    @property
+    def escalations(self) -> EscalationRepository: ...
 
     @property
     def event_log(self) -> EventLogRepository: ...

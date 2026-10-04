@@ -10,7 +10,12 @@ from cc_platform.application.cases.read_model import CaseReader
 from cc_platform.application.events import StoredEvent
 from cc_platform.bootstrap.container import Container
 from cc_platform.domain.cases import CaseChannel, CaseStatus, InboxStatus, TurnAuthorRole
-from cc_platform.infrastructure.seed.cases import DEMO_STORIES, seed_case_id, seed_demo_cases
+from cc_platform.infrastructure.seed.cases import (
+    DEMO_STORIES,
+    seed_case_id,
+    seed_demo_cases,
+    seed_escalation_id,
+)
 from cc_platform.infrastructure.seed.customers import DEMO_CUSTOMERS
 from cc_platform.infrastructure.seed.people import seed_session_id, seed_staff_id
 from tests.support import memory_container
@@ -194,3 +199,28 @@ async def test_seeded_arrivals_respect_rule_3_and_the_queue_order() -> None:
 async def all_events(container: Container) -> list[StoredEvent]:
     async with container.uow() as uow:
         return list((await uow.event_log.page(limit=500)).items)
+
+
+async def test_seeded_escalations_tell_every_outcome() -> None:
+    """Slice 9: two open (Daniela's 101, Julián's 113), one answered by Lucía (107, not yet
+    acknowledged) and Paula's 114, ended when Lucía reassigned it to Julián."""
+    container = await memory_container()
+    async with container.uow() as uow:
+        cases = {n: await uow.cases.get(seed_case_id(n)) for n in (101, 113, 107, 114)}
+        escalations = {n: await uow.escalations.latest_for_case(seed_case_id(n)) for n in cases}
+        open_now = await uow.escalations.list_open_or_resolved_since(container.clock.now())
+    states = {n: e.state.value if e else None for n, e in escalations.items()}
+    assert states == {101: "open", 113: "open", 107: "answered", 114: "reassigned"}
+    pointers = {n: c.open_escalation_id if c else None for n, c in cases.items()}
+    assert pointers == {
+        101: seed_escalation_id(101),
+        113: seed_escalation_id(113),
+        107: None,
+        114: None,
+    }
+    assert {e.id for e in open_now} == {seed_escalation_id(101), seed_escalation_id(113)}
+    answered, moved = escalations[107], escalations[114]
+    assert answered is not None
+    assert (answered.resolved_by_id, answered.acknowledged_at) == (seed_staff_id(5), None)
+    assert moved is not None
+    assert (moved.escalated_by_id, moved.reassigned_to_id) == (PAULA, JULIAN)

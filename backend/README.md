@@ -1,13 +1,14 @@
 # CC Platform API (backend)
 
-FastAPI service of the LATAM Bank support platform: support staff (Analista, Supervisora,
+FastAPI service of the LATAM Bank support platform: support staff (Analista, Supervisión,
 Administración) and customers talk by chat. Hexagonal (ports and adapters) + DDD-lite +
 CQRS-lite with an append-only event log.
 
 Read first: `docs/platform/ENGINEERING_BRIEF.md` (scope, rules, conventions),
 `docs/platform/adr/0001-architecture.md`, and the slice contracts in `docs/platform/api/`
 (slice 2 case life cycle, slice 3 supervision, slice 4 administration, slice 6 analyst home,
-slice 7 customer rating, slice 8 case priority; a later slice wins).
+slice 7 customer rating, slice 8 case priority, slice 9 supervision v2: Colas and escalations;
+a later slice wins).
 Operating the app (accounts, reset, troubleshooting) is in `docs/platform/RUNBOOK.md`.
 
 ## Run
@@ -60,7 +61,10 @@ re-read on every request.
 | Cases | `GET /cases/inbox?status=&q=` (`closed` = last 7 days), `GET /cases/{id}`, `GET /cases/{id}/history`, `GET\|POST /cases/{id}/turns`, `POST /cases/{id}/read`, `POST /cases/{id}/close` (`{reason, note}`) | analyst; supervisors read any case (audited `case.viewed`) |
 | Case priority (slice 8) | `PUT /cases/{id}/priority` (`{priority, expectedVersion}` → `{changed, case}`) | the assignee analyst, or a supervisor on any open case |
 | Customer simulator | `GET /customer/demo-customers`, `POST /customer/sessions`, `GET /customer/conversation`, `POST /customer/conversation/turns`, `GET /customer/conversations`, `GET /customer/conversations/{id}`, `POST /customer/conversations/{id}/rating` (slice 7: `{score 1–4, comment?}` + `Idempotency-Key`) | customer token |
-| Supervision | `GET /supervision/team`, `GET /supervision/queues`, `PUT /supervision/cases/{id}/assignee` (`{analystId, expectedAnalystId, confirmPaused}`) | supervisor |
+| Supervision | `GET /supervision/team`, `GET /supervision/queues`, `PUT /supervision/cases/{id}/assignee` (`{analystId, expectedAnalystId, confirmPaused}`; ends an open escalation as `reassigned`) | supervisor |
+| Colas (slice 9) | `GET /supervision/open-cases?language=es\|pt`: every open case of a language and who holds it | supervisor |
+| Escalations (slice 9) | `POST /cases/{id}/escalations` (`{motive}` + `Idempotency-Key`), `POST /cases/{id}/escalations/{escId}/withdraw`, `POST /cases/{id}/escalations/{escId}/acknowledge` | analyst (the assignee; acknowledge: who escalated) |
+| Escalados (slice 9) | `GET /supervision/escalations`, `POST /supervision/escalations/{escId}/response` (`{note}`), `POST /supervision/escalations/{escId}/take` | supervisor (take: also Analista and speaks the language) |
 | Audit | `GET /audit/events` (filters `actorKind, actorId, caseId, family, changesOnly, from, to, q`, cursor), `GET /audit/events/{id}` | supervisor, admin |
 | People | `GET /staff?role=&includeInactive=` | supervisor, admin |
 | Administration | `GET\|POST /admin/users`, `GET\|PATCH /admin/users/{id}`, `POST /admin/users/{id}/deactivate\|reactivate\|unlock\|password-reset`, `GET\|POST /admin/teams`, `GET\|PATCH /admin/teams/{id}`, `POST /admin/teams/{id}/deactivate\|reactivate` | admin |
@@ -81,6 +85,13 @@ Product rules enforced in the service layer (brief §4.3):
   is `409 case_closed`, the same level is `changed: false`, a stale `expectedVersion` is
   `409 version_conflict` with the case as `current`. The first-response SLA is a fixed 15 minutes
   for every case (`FirstResponseSlaPolicy`), whatever the priority.
+- Slice 9 (escalations, grounded only in the dataset's `was_escalated` yes/no): the assignee
+  escalates an open assigned case with a motive (≤ 500); one open escalation per case
+  (`409 escalation_open`); she may withdraw it while open; supervision answers (a note ≤ 500),
+  takes the case (only someone who also holds Analista, is active and speaks its language:
+  `422 analyst_not_eligible` / `language_mismatch`) or reassigns it (`reassigned`); closing the
+  case ends it (`closed`); anything on an ended one is `409 escalation_not_open`. Motive and note
+  are redacted from the audit (`motive_length`, `note_length`).
 - Only the assignee writes; a closed case is read-only. A close needs a reason from a fixed
   list; the customer sees a notice, never the reason. Staff banners never reach customers.
 - Administration guard rails: nobody removes their own Administración, deactivates themself or
@@ -116,10 +127,10 @@ signal changes: REST and the event log stay the source of truth.
 
 | Topic | Who | Envelopes |
 |---|---|---|
-| `case:<caseId>` | assignee, supervisors | `turn.created`, `case.updated` |
-| `inbox:<staffId>` | that analyst | `case.updated`, `case.assigned`, `case.unassigned`, `inbox.counts`, `availability.updated` |
+| `case:<caseId>` | assignee, supervisors | `turn.created`, `case.updated`, `escalation.updated` |
+| `inbox:<staffId>` | that analyst | `case.updated`, `case.assigned`, `case.unassigned`, `inbox.counts`, `availability.updated`, `escalation.updated` (her escalations) |
 | `customer:<customerId>` | that customer | `turn.created`, `conversation.updated` |
-| `supervision:queues`, `supervision:team` | supervisors | `queue.updated`, `queue.case_queued`, `team.updated` |
+| `supervision:queues`, `supervision:team`, `supervision:escalations` | supervisors | `queue.updated`, `queue.case_queued`, `team.updated`, `escalation.updated` |
 | `admin:directory` | admins | `directory.updated` |
 | `staff:<staffId>` | that person | `me.updated` |
 

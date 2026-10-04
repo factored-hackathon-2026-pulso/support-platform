@@ -2,11 +2,11 @@
  * API types of the supervision feature (docs/platform/api/slice-3-supervision.md
  * §4.2): aliases of the schemas generated from `backend/openapi.json` (`pnpm gen:api`).
  */
-import type { CaseSummary } from '@/features/cases/core'
-import type { AssignmentOut, Language } from '@/features/conversation/core'
+import type { CaseSummary, Escalation, EscalationState } from '@/features/cases/core'
+import type { AssignmentOut, Language, Turn } from '@/features/conversation/core'
 import type { Schemas } from '@/lib/api'
 
-export type { AssignmentOut, CaseSummary, Language }
+export type { AssignmentOut, CaseSummary, Escalation, EscalationState, Language, Turn }
 
 export type StaffRole = Schemas['StaffRole']
 export type AvailabilityStatus = Schemas['AvailabilityStatus']
@@ -29,3 +29,13 @@ export type QueueOverview = Schemas['QueueOverview']
 
 export type SetAssigneeRequest = Schemas['SetAssigneeRequest']
 export type AssignmentResult = Schemas['AssignmentResult']
+
+/** "Colas" (slice 9): every open case of one language and who holds it. */
+export type LanguageOpenCases = Schemas['LanguageOpenCases']
+export type OpenCaseRow = Schemas['OpenCaseRow']
+
+/** "Escalados" (slice 9). */
+export type EscalationOverview = Schemas['EscalationOverview']
+export type EscalationItem = Schemas['EscalationItem']
+export type EscalationResult = Schemas['EscalationResult']
+export type TurnPage = Schemas['TurnPage']

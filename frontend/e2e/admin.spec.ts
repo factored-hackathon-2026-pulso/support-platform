@@ -66,23 +66,21 @@ test.describe('Administración', () => {
     const users = new UsersPage(admin.page)
     await users.goto()
     const form = await users.select(person.name)
-    await users.roleCheckbox(person.name, 'Supervisora').check()
+    await users.roleCheckbox(person.name, 'Supervisión').check()
     await form.getByRole('button', { name: 'Guardar cambios' }).click()
     await expect(admin.shell.toast('Cambios guardados')).toBeVisible()
 
     // No reload, no new sign-in: her shell follows.
     await expect(analyst.shell.toast('Cambiaron tus roles')).toBeVisible()
-    await expect(analyst.shell.toast('Ahora tienes: Analista y Supervisora.')).toBeVisible()
+    await expect(analyst.shell.toast('Ahora tienes: Analista y Supervisión.')).toBeVisible()
     roles = await analyst.shell.openRoleSwitcher()
-    await expect(roles.getByRole('link')).toHaveText(['Analista de casos', 'Supervisora'])
-    await roles.getByRole('link', { name: 'Supervisora' }).click()
-    await expect(analyst.page).toHaveURL(/\/supervision\/equipo/)
-    await expect(
-      analyst.page.getByRole('heading', { level: 1, name: 'Equipo y colas' }),
-    ).toBeVisible()
+    await expect(roles.getByRole('link')).toHaveText(['Analista de casos', 'Supervisión'])
+    await roles.getByRole('link', { name: 'Supervisión' }).click()
+    await expect(analyst.page).toHaveURL(/\/supervision\/colas/)
+    await expect(analyst.page.getByRole('heading', { level: 1, name: 'Colas' })).toBeVisible()
 
     // Taking the role away moves her out of the section she is in.
-    await users.roleCheckbox(person.name, 'Supervisora').uncheck()
+    await users.roleCheckbox(person.name, 'Supervisión').uncheck()
     await form.getByRole('button', { name: 'Guardar cambios' }).click()
     await expect(analyst.page).toHaveURL(/\/analista/)
     await expect(analyst.shell.toast('Ahora tienes: Analista.')).toBeVisible()

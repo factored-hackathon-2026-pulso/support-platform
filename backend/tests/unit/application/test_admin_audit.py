@@ -70,7 +70,7 @@ def test_the_administration_family_changes_state() -> None:
             "staff.created",
             {"name": "Ana Gil", "roles": ["analyst", "supervisor", "admin"], "languages": [],
              "team_id": TEAM, "team_name": "Equipo Sur"},
-            "Creó la cuenta de Ana Gil · Analista, Supervisora y Administración · Equipo Sur",
+            "Creó la cuenta de Ana Gil · Analista, Supervisión y Administración · Equipo Sur",
         ),
         (
             "staff.profile_updated",
@@ -91,7 +91,7 @@ def test_the_administration_family_changes_state() -> None:
             "staff.roles_changed",
             {"from_roles": ["analyst"], "to_roles": ["analyst", "supervisor"],
              "added": ["supervisor"], "removed": []},
-            "Le dio a Ana Gil el rol de Supervisora",
+            "Le dio a Ana Gil el rol de Supervisión",
         ),
         (
             "staff.roles_changed",
@@ -103,7 +103,7 @@ def test_the_administration_family_changes_state() -> None:
             "staff.roles_changed",
             {"from_roles": ["analyst"], "to_roles": ["supervisor", "admin"],
              "added": ["supervisor", "admin"], "removed": ["analyst"]},
-            "Cambió los roles de Ana Gil: le dio Supervisora y Administración y le quitó "
+            "Cambió los roles de Ana Gil: le dio Supervisión y Administración y le quitó "
             "Analista",
         ),
         (
@@ -210,4 +210,4 @@ def test_spanish_lists_and_role_labels() -> None:
         "A y B",
         "A, B y C",
     ]
-    assert [ROLE_LABEL[r] for r in ROLE_LABEL] == ["Analista", "Supervisora", "Administración"]
+    assert [ROLE_LABEL[r] for r in ROLE_LABEL] == ["Analista", "Supervisión", "Administración"]

@@ -6,7 +6,11 @@
   Slice 7: her customers' ratings of the last 7 days (``RatingStatsView``: count and
   average over the cases she closed in the window that were rated; one grouped query).
 - ``GetQueueOverview``: one queue per language (always both), its cases oldest first (the
-  drain order), the oldest wait and how many analysts could take them.
+  drain order), the oldest wait and how many analysts could take them. Slice 9 ("Colas"):
+  also every open case of the language (``openCases``) and how many are at first-response
+  risk (``openAtRisk``), at ``serverTime``.
+- ``GetLanguageOpenCases`` (slice 9, "Colas"): **every** open case of one language (queued,
+  assigned, in progress) with who holds it, in one indexed query.
 
 Everything is read through one Unit of Work and ``CaseReader`` (so every case row is the
 slice 2 ``CaseSummary``), with a fixed number of queries whatever the team size: staff,
@@ -32,7 +36,7 @@ from cc_platform.application.cases.read_model import CaseReader, inbox_order
 from cc_platform.application.people.dto import TeamRefView
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
-from cc_platform.domain.cases.case import search_key
+from cc_platform.domain.cases.case import Case, search_key
 from cc_platform.domain.cases.values import OPEN_ASSIGNED_STATUSES, CaseStatus, InboxStatus
 from cc_platform.domain.people.availability import AnalystAvailability, AvailabilityStatus
 from cc_platform.domain.people.names import fold
@@ -75,6 +79,15 @@ def activity_of(
     if availability is AvailabilityStatus.AVAILABLE:
         return AnalystActivity.BUSY if open_cases > 0 else AnalystActivity.AVAILABLE
     return AnalystActivity.PAUSED if signed_in else AnalystActivity.OFFLINE
+
+
+def case_at_sla_risk(case: Case, now: datetime) -> bool:
+    """``at_sla_risk`` on the aggregate (counts that need no summary)."""
+    return (
+        case.first_response_at is None
+        and not case.is_closed
+        and case.sla_due_at - now <= SLA_AT_RISK
+    )
 
 
 def at_sla_risk(summary: CaseSummaryView, now: datetime) -> bool:
@@ -176,6 +189,24 @@ class LanguageQueueView:
     available_speakers: int
     speakers: int
     cases: tuple[CaseSummaryView, ...]
+    open_cases: int
+    """Slice 9: every open case of the language (queued included)."""
+    open_at_risk: int
+    """Slice 9: open cases whose first response is due in 5 minutes or less (or overdue)."""
+
+
+@dataclass(frozen=True, slots=True)
+class OpenCaseRowView:
+    case: CaseSummaryView
+    assignee_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LanguageOpenCasesView:
+    language: Language
+    label: str
+    cases: tuple[OpenCaseRowView, ...]
+    server_time: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,11 +393,13 @@ class GetQueueOverview:
         now = self.clock.now()
         async with self.uow() as uow:
             queued = await queued_summaries(uow, CaseReader(uow))
+            assigned = await uow.cases.list_by_statuses(OPEN_ASSIGNED_STATUSES)
             analysts = await active_analysts(uow)
             available = {a.staff_id for a in await uow.availability.list() if a.is_available}
         queues = []
         for language in QUEUE_LANGUAGES:
             mine = tuple(case for case in queued if case.language is language)
+            held = [case for case in assigned if case.language is language]
             speakers = [a for a in analysts if a.speaks(language)]
             queues.append(
                 LanguageQueueView(
@@ -378,8 +411,53 @@ class GetQueueOverview:
                     available_speakers=sum(a.id in available for a in speakers),
                     speakers=len(speakers),
                     cases=mine,
+                    open_cases=len(mine) + len(held),
+                    open_at_risk=sum(at_sla_risk(case, now) for case in mine)
+                    + sum(case_at_sla_risk(case, now) for case in held),
                 )
             )
         return QueueOverviewView(
             queues=tuple(queues), counts=count_queues(queued, now), server_time=now
+        )
+
+
+def open_case_order(row: OpenCaseRowView) -> tuple[int, int, datetime, datetime, str]:
+    """ "Colas": the cases nobody holds first (oldest first, the drain order), then the
+    held ones in the open-inbox order (Nuevo and Por responder before Esperando)."""
+    summary = row.case
+    if summary.status is CaseStatus.QUEUED:
+        return (0, 0, summary.opened_at, summary.opened_at, summary.id)
+    group, last, opened, case_id = inbox_order(summary)
+    return (1, group, last, opened, case_id)
+
+
+@dataclass(frozen=True, slots=True)
+class GetLanguageOpenCases:
+    """ "Colas" (slice 9): every open case of one language and who holds it."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+
+    async def execute(self, language: Language) -> LanguageOpenCasesView:
+        now = self.clock.now()
+        async with self.uow() as uow:
+            reader = CaseReader(uow)
+            cases = await uow.cases.list_open_by_language(language)
+            summaries = await reader.summaries(cases)
+            rows = [
+                OpenCaseRowView(
+                    case=summary,
+                    assignee_name=(
+                        await reader.staff_name(summary.assigned_analyst_id)
+                        if summary.assigned_analyst_id
+                        else None
+                    ),
+                )
+                for summary in summaries
+            ]
+        return LanguageOpenCasesView(
+            language=language,
+            label=copy.QUEUE_LABEL[language],
+            cases=tuple(sorted(rows, key=open_case_order)),
+            server_time=now,
         )

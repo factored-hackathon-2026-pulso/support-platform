@@ -55,12 +55,12 @@ describe('SessionLiveSync', () => {
     })
     let switcher = await openSwitcher(user)
     expect(switcher.getAllByRole('link').map((link) => link.textContent)).toEqual([
-      'Supervisora',
+      'Supervisión',
       'Administración',
     ])
     await user.keyboard('{Escape}')
 
-    // An admin removed her Supervisora role and moved her to Pacífico.
+    // An admin removed her Supervisión role and moved her to Pacífico.
     act(() =>
       sockets
         .last()
@@ -94,8 +94,8 @@ describe('SessionLiveSync', () => {
         .last()
         ?.receive(meUpdated({ ...supervisorAdminStaff, roles: ['supervisor'] }, 'EVT-ME-2')),
     )
-    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/equipo'))
-    expect(await screen.findByText('Ahora tienes: Supervisora.')).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/colas'))
+    expect(await screen.findByText('Ahora tienes: Supervisión.')).toBeInTheDocument()
   })
 
   it('on 4409 reconnects at once and reloads /auth/me', async () => {

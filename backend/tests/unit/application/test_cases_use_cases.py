@@ -116,13 +116,13 @@ async def test_customer_sees_only_public_turns(container: Container) -> None:
         CustomerTurnAuthor.SYSTEM,
         CustomerTurnAuthor.ANALYST,
         CustomerTurnAuthor.CUSTOMER,
-    ]  # the staff-only banner (sequence 3) is not there
-    assert [turn.sequence for turn in result.turns] == [1, 2, 4, 5]
+    ]  # the staff-only banners (3: assigned, 5: escalated, slice 9) are not there
+    assert [turn.sequence for turn in result.turns] == [1, 2, 4, 6]
     assert result.turns[2].author_name == "Daniela"
     later = await container.use_cases.cases.customer_conversation.execute(
         customer_actor(1001), after_sequence=4
     )
-    assert [turn.sequence for turn in later.turns] == [5]
+    assert [turn.sequence for turn in later.turns] == [6]
     fresh = await container.use_cases.cases.customer_conversation.execute(customer_actor(2002))
     assert (fresh.conversation, fresh.turns, fresh.past_conversation_count) == (None, (), 0)
 

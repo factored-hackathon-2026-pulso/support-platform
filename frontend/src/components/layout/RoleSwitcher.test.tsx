@@ -15,7 +15,7 @@ describe('RoleSwitcher', () => {
 
     const list = screen.getByRole('list', { name: 'Cambiar de rol' })
     const links = within(list).getAllByRole('link')
-    expect(links.map((link) => link.textContent)).toEqual(['Supervisora', 'Administración'])
+    expect(links.map((link) => link.textContent)).toEqual(['Supervisión', 'Administración'])
     expect(within(list).getByRole('link', { name: 'Administración' })).toHaveAttribute(
       'aria-current',
       'true',
@@ -27,11 +27,9 @@ describe('RoleSwitcher', () => {
     const { user, router } = renderRoute('/analista', { staff: supervisorStaff })
     await screen.findByRole('heading', { level: 1, name: 'Casos' })
     await user.click(screen.getByRole('button', { name: /cambiar de rol/ }))
-    await user.click(screen.getByRole('link', { name: 'Supervisora' }))
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Equipo y colas' }),
-    ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/supervision/equipo')
+    await user.click(screen.getByRole('link', { name: 'Supervisión' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Colas' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/supervision/colas')
     expect(screen.queryByRole('list', { name: 'Cambiar de rol' })).not.toBeInTheDocument()
   })
 

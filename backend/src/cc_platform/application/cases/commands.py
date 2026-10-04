@@ -134,7 +134,8 @@ class CloseCase:
     """Close with a required reason (contract §4.4), in one Unit of Work: the closed notice
     in the case language (the customer never sees the reason or the note), ``case.closed``
     + ``case.status_changed``, and the customer's slot is freed (their next message opens a
-    new case linked to this one)."""
+    new case linked to this one). Slice 9: an open escalation ends with the case
+    (``escalation.closed``)."""
 
     uow: UnitOfWorkFactory
     clock: Clock
@@ -165,12 +166,15 @@ class CloseCase:
                 text=copy.NOTICE_CLOSED[case.language],
                 created_at=now,
             )
-            case.close(
-                actor=actor.acting_as({StaffRole.ANALYST}),
-                at=now,
-                reason=command.reason,
-                note=command.note,
-            )
+            closer = actor.acting_as({StaffRole.ANALYST})
+            case.close(actor=closer, at=now, reason=command.reason, note=command.note)
+            escalation_id = case.open_escalation_id
+            if escalation_id is not None:  # slice 9: an open escalation ends with the case
+                case.clear_escalation(escalation_id)
+                escalation = await uow.escalations.get(escalation_id)
+                if escalation is not None and escalation.is_open:
+                    escalation.end_with_case(actor=closer, at=now)
+                    await uow.escalations.save(escalation)
             await uow.cases.save(case)
             await uow.turns.add(notice)
             slot = await uow.case_slots.get(case.customer_id)

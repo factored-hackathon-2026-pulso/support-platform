@@ -11,6 +11,8 @@ Topics (brief §4.4):
   supervisors only.
 - ``supervision:team``: rows of "Equipo y colas" that may have changed (``team.updated``);
   supervisors only.
+- ``supervision:escalations``: escalations to supervision (``escalation.updated``, slice 9);
+  supervisors only.
 - ``admin:directory``: people and teams of the directory that may have changed
   (``directory.updated``); admins only (slice 4).
 - ``staff:<STF-id>``: one person's own profile and roles (``me.updated``); only that person,
@@ -49,7 +51,8 @@ _KEY_PREFIX: dict[TopicKind, IdPrefix] = {
 
 SUPERVISION_QUEUES = "queues"
 SUPERVISION_TEAM = "team"
-_SUPERVISION_KEYS = frozenset({SUPERVISION_QUEUES, SUPERVISION_TEAM})
+SUPERVISION_ESCALATIONS = "escalations"
+_SUPERVISION_KEYS = frozenset({SUPERVISION_QUEUES, SUPERVISION_TEAM, SUPERVISION_ESCALATIONS})
 ADMIN_DIRECTORY = "directory"
 
 
@@ -80,6 +83,10 @@ class Topic:
     @classmethod
     def supervision_team(cls) -> Topic:
         return cls(TopicKind.SUPERVISION, SUPERVISION_TEAM)
+
+    @classmethod
+    def supervision_escalations(cls) -> Topic:
+        return cls(TopicKind.SUPERVISION, SUPERVISION_ESCALATIONS)
 
     @classmethod
     def admin_directory(cls) -> Topic:

@@ -215,6 +215,35 @@ direction.
   `casePriorityFact` (every level, icon-only) next to the status in the analyst sheet and the
   queue rows; `caseRowFacts` replaces the dot-joined `caseRowLine`.
 
+### Supervision v2 and escalations (slice 9)
+
+Contract: `docs/platform/api/slice-9-supervision-v2.md`. No new feature folder; dependency
+direction unchanged (`routes/supervision/*` → `features/supervision` → `features/conversation`
+→ `features/cases`).
+
+- **`components/ui`**: `FilterMenu` + `FilterChips` (and the pure `filter-selection.ts`:
+  `toggleFilter`, `activeFilterChips`, `countSelected`) are the one way to filter a list: a
+  "Filtros" button, a panel (`fieldset`) of checkbox groups with counts, "Limpiar filtros" /
+  "Listo", removable chips. `StatusShape` gains `up` ("Escalado") and `forward` ("Reasignado").
+  `RailIndicator.noun` names what a badge counts ("Colas, 3 sin asignar").
+- **`cases`** (core): `ESCALATED_MARKER`, `ESCALATION_STATE`, `escalationWaitFact`,
+  `isAttendedEscalation`, `MAX_ESCALATION_TEXT`, `readEscalation` (the one reader of
+  `escalation.updated`); the Casos card shows "Escalado".
+- **`conversation`**: "Escalar a supervisión", `EscalateCaseDialog`, `EscalationCard` (open,
+  attended + "Entendido", supervision read-only), the escalation hooks; `escalation.updated`
+  patches `detail.escalation`. The supervision arrival line and footer carry no " · ".
+- **`supervision`**: `QueuesScreen` ("Colas", the landing; `useOpenCases`), `TeamScreen` (one
+  table, `teamFilterGroups`, the sheet), `ReassignDialog` (`reassignPool`, `reassignList`),
+  `EscalationsScreen` + `EscalationPanel` (`useEscalationOverview`, `useRespondEscalation`,
+  `useTakeEscalatedCase`, `useLastTurns`), the case view (no "Asignar"; "Escalado" marker),
+  `useSupervisionNotices` (queue and escalation toasts; none for escalations on "Escalados"),
+  `useOpenEscalationsCount` (rail badge, core). `registerSupervisionRealtime` also refetches
+  "Colas" on queue and team signals and "Escalados" on `escalation.updated`. The slice 3 queue
+  column, team pills and `AssignCaseDialog` are gone.
+- **`audit`**: the "Escalamientos" family and its redaction notes; role badge "Supervisión".
+- **`admin`**: the users list filters with `FilterMenu` (multi-value URL), "Nuevo usuario",
+  language pill toggles.
+
 ### Supervision and audit (slice 3)
 
 Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
@@ -223,7 +252,7 @@ Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
 case ids) and `@/app/roles`. The audit route mounts `useQueueNotices()` itself, so
 the audit feature never imports supervision.
 
-- **`supervision`**: "Equipo y colas" (`TeamScreen`: the two language queues with
+- **`supervision`**: (Superseded by slice 9 above.) "Equipo y colas" (`TeamScreen`: the two language queues with
   their cases, the analysts table with the "Ahora" state, filters Conectadas / En
   pausa / Desconectadas, the team pills, the analyst sheet, the "Listo ·" strip),
   the supervisor's read-only case view (`SupervisorCaseScreen`: `ConversationPane
@@ -309,8 +338,10 @@ route composes `@/features/audit`, and `app/` composes the badge and the session
 | `/login`, `/login/verificacion`, `/login/bloqueada`                                    | login, MFA, lockout                                | GuestOnly  |
 | `/analista/inicio`                                                                     | Inicio (the analyst's landing, slice 6)            | analyst    |
 | `/analista?caso=&estado=&q=&lista=&ficha=&historial=`                                  | Workspace ("Casos")                                | analyst    |
-| `/supervision/equipo?equipo=&estado=&analista=&asignar=`                               | Equipo y colas                                     | supervisor |
-| `/supervision/casos/:caseId?historial=&asignar=`                                       | supervisor read-only case view (`state.from`)      | supervisor |
+| `/supervision/colas?idioma=&estado=&prioridad=&analista=`                              | Colas (the landing of Supervisión, slice 9)        | supervisor |
+| `/supervision/equipo?estado=&idioma=&equipo=&analista=&reasignar=`                     | Equipo (slice 9)                                   | supervisor |
+| `/supervision/escalados?escalamiento=&reasignar=`                                      | Escalados (slice 9)                                | supervisor |
+| `/supervision/casos/:caseId?historial=&reasignar=`                                     | supervisor read-only case view (`state.from`)      | supervisor |
 | `/supervision/auditoria?quien=&persona=&caso=&tipo=&desde=&hasta=&q=&cambios=&evento=` | Auditoría                                          | supervisor |
 | `/administracion/usuarios?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=`             | Usuarios y roles                                   | admin      |
 | `/administracion/equipos?estado=&equipo=&nuevo=`                                       | Equipos                                            | admin      |

@@ -151,7 +151,7 @@ def test_capabilities_for_assignee_others_and_closed() -> None:
         False,
     )
     assert capabilities_for(case_in(CaseStatus.CLOSED), lucia).can_assign is False
-    # Felipe (Analista + Supervisora) on his own case: replies, closes and may reassign.
+    # Felipe (Analista + Supervisión) on his own case: replies, closes and may reassign.
     felipe = make_actor(StaffRole.ANALYST, StaffRole.SUPERVISOR, staff_id=DANIELA)
     lead = capabilities_for(open_chat, felipe)
     assert (lead.can_reply, lead.can_close, lead.can_assign) == (True, True, True)

@@ -1,8 +1,9 @@
 /**
- * Supervision realtime (slice-3-supervision.md §7, §8.7): envelopes of the
- * `supervision:queues` and `supervision:team` topics → the team and queue
- * caches. Registered in `app/realtime-handlers.ts`; keep this module light
- * (keys + handlers only): it is part of the main bundle.
+ * Supervision realtime (slice-3-supervision.md §7, §8.7; slice 9): envelopes of the
+ * `supervision:queues`, `supervision:team` and `supervision:escalations` topics → the
+ * team, queue, "Colas" (open cases by language) and "Escalados" caches. Registered in
+ * `app/realtime-handlers.ts`; keep this module light (keys + handlers only): it is part
+ * of the main bundle.
  *
  * Sockets only signal: `team.updated` carries analyst ids, not rows, and
  * `queue.case_queued` one case, so both refetch. `queue.updated` carries the
@@ -48,11 +49,18 @@ function applyQueueCounts(envelope: RealtimeEnvelope, queryClient: QueryClient):
   if (cached && !isNewerQueueCounts(counts, cached.counts)) return
   if (cached) queryClient.setQueryData<QueueOverview>(key, { ...cached, counts })
   void queryClient.invalidateQueries({ queryKey: key, exact: true })
+  void queryClient.invalidateQueries({ queryKey: supervisionKeys.openCases() })
 }
 
-/** `queue.case_queued`: a case entered a queue; the queues refetch (the notice is a hook). */
+/** `queue.case_queued`: a case entered a queue; queues and "Colas" refetch (the notice is a hook). */
 function refetchQueues(_envelope: RealtimeEnvelope, queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: supervisionKeys.queues(), exact: true })
+  void queryClient.invalidateQueries({ queryKey: supervisionKeys.openCases() })
+}
+
+/** `escalation.updated` (slice 9): "Escalados" and its badge refetch. */
+function refetchEscalations(_envelope: RealtimeEnvelope, queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: supervisionKeys.escalations(), exact: true })
 }
 
 export const registerSupervisionRealtime: RealtimeRegistration = (registry) => {
@@ -60,8 +68,11 @@ export const registerSupervisionRealtime: RealtimeRegistration = (registry) => {
   let timer: ReturnType<typeof setTimeout> | null = null
   let pending: QueryClient | null = null
 
-  const refetchTeam = (queryClient: QueryClient) =>
+  // The held cases of "Colas" change with the same signals as the team's rows.
+  const refetchTeam = (queryClient: QueryClient) => {
     void queryClient.invalidateQueries({ queryKey: supervisionKeys.team(), exact: true })
+    void queryClient.invalidateQueries({ queryKey: supervisionKeys.openCases() })
+  }
 
   const closeWindow = () => {
     const queryClient = pending
@@ -77,6 +88,7 @@ export const registerSupervisionRealtime: RealtimeRegistration = (registry) => {
 
   registry.register('queue.updated', applyQueueCounts)
   registry.register('queue.case_queued', refetchQueues)
+  registry.register('escalation.updated', refetchEscalations)
   registry.register('team.updated', (_envelope, queryClient) => {
     if (timer !== null) {
       pending = queryClient

@@ -71,8 +71,11 @@ describe('URL state', () => {
       'disponibilidad',
       'accesos',
       'administracion',
+      'escalamientos',
       'otros',
     ])
+    expect(parseAuditSearch(new URLSearchParams('tipo=escalamientos')).family).toBe('escalation')
+    expect(familyLabel('escalation')).toBe('Escalamientos')
     expect(parseAuditSearch(new URLSearchParams('tipo=administracion')).family).toBe(
       'administration',
     )
@@ -165,7 +168,7 @@ describe('filters', () => {
 describe('rows', () => {
   it('labels and tones each kind of actor', () => {
     expect(actorRoleLabel('analyst')).toBe('Analista')
-    expect(actorRoleLabel('supervisor')).toBe('Supervisora')
+    expect(actorRoleLabel('supervisor')).toBe('Supervisión')
     expect(actorRoleLabel('admin')).toBe('Administración')
     expect(actorRoleLabel('customer')).toBe('Cliente')
     expect(actorRoleLabel('system')).toBe('Plataforma')
@@ -234,7 +237,7 @@ describe('detail aside', () => {
   it('writes the kicker and the byline', () => {
     const event = makeAuditEvent()
     expect(detailKicker(event)).toBe('11:02:05 · ASIGNACIÓN')
-    expect(detailByline(event.actor)).toBe('Lucía Herrera · Supervisora')
+    expect(detailByline(event.actor)).toBe('Lucía Herrera · Supervisión')
     expect(detailByline({ role: 'system', id: 'system', name: null })).toBe('Plataforma')
   })
 
@@ -256,6 +259,12 @@ describe('detail aside', () => {
     )
     expect(redactionNote(makeAuditEvent({ redactedFields: ['comment'] }))).toBe(
       'El comentario del cliente no se muestra aquí: está en el caso cerrado.',
+    )
+    expect(redactionNote(makeAuditEvent({ redactedFields: ['motive'] }))).toMatch(
+      /^El motivo del escalamiento no se muestra aquí/,
+    )
+    expect(redactionNote(makeAuditEvent({ redactedFields: ['note'] }))).toMatch(
+      /^La respuesta de supervisión no se muestra aquí/,
     )
     expect(redactionNote(makeAuditEvent({ redactedFields: [] }))).toBeNull()
   })

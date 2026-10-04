@@ -67,7 +67,7 @@ describe('Auditoría', () => {
 
     const reassigned = within(log()).getByRole('row', { name: /Reasignó el caso/ })
     expect(within(reassigned).getByText('11:02:05')).toBeInTheDocument()
-    expect(within(reassigned).getByText('Supervisora')).toBeInTheDocument()
+    expect(within(reassigned).getByText('Supervisión')).toBeInTheDocument()
     expect(within(reassigned).getByText('Lucía Herrera')).toBeInTheDocument()
     expect(within(reassigned).getByText('CAMBIO')).toBeInTheDocument()
     expect(within(reassigned).getByText('CASE-…0114')).toBeInTheDocument()
@@ -98,7 +98,7 @@ describe('Auditoría', () => {
         name: 'Reasignó el caso de Paula Medina a Julián Ortega',
       }),
     ).toBeInTheDocument()
-    expect(within(detail).getByText('Lucía Herrera · Supervisora')).toBeInTheDocument()
+    expect(within(detail).getByText('Lucía Herrera · Supervisión')).toBeInTheDocument()
     expect(within(detail).getByText('case.assigned')).toBeInTheDocument()
     expect(within(detail).getByText(ESTEBAN_CASE)).toBeInTheDocument()
     // Ocurrió and Registrado.

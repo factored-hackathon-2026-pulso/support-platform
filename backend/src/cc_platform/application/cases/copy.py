@@ -149,3 +149,24 @@ def reassigned(
     """Staff-only banner: a supervisor moved an open case to another analyst."""
     sentence = f"{supervisor_name} pasó el caso de {previous_name} a {analyst_name}."
     return _paused_suffix(sentence, paused_first_name)
+
+
+# ----------------------------------------------------------------------------- escalations
+# Slice 9: staff-only banners in the transcript (``routing`` turns, never to the customer).
+
+
+def escalated(analyst_name: str) -> str:
+    return f"{analyst_name} escaló el caso a supervisión."
+
+
+def escalation_withdrawn(analyst_name: str) -> str:
+    return f"{analyst_name} retiró el escalamiento."
+
+
+def escalation_answered(supervisor_name: str) -> str:
+    return f"{supervisor_name} respondió el escalamiento."
+
+
+def escalation_taken(supervisor_name: str, previous_name: str) -> str:
+    """The supervisor took the escalated case herself (she also holds Analista)."""
+    return f"{supervisor_name} tomó el caso de {previous_name}."

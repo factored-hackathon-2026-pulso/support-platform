@@ -1,4 +1,13 @@
-import type { QueueOverview, TeamAnalyst, TeamOverview, TeamSummary } from '@/features/supervision'
+import type { Escalation } from '@/features/cases'
+import type {
+  EscalationItem,
+  EscalationOverview,
+  LanguageOpenCases,
+  QueueOverview,
+  TeamAnalyst,
+  TeamOverview,
+  TeamSummary,
+} from '@/features/supervision'
 import { NOW, makeCaseSummary, minutesFrom, seededInbox } from './case-fixtures'
 import { TEAM_ANDES, TEAM_PACIFICO } from './fixtures'
 
@@ -220,6 +229,8 @@ export function makeQueueOverview(overrides: Partial<QueueOverview> = {}): Queue
         availableSpeakers: 1,
         speakers: 6,
         cases: [queuedRosa, queuedMauricio],
+        openCases: 9,
+        openAtRisk: 4,
       },
       {
         language: 'pt',
@@ -230,6 +241,8 @@ export function makeQueueOverview(overrides: Partial<QueueOverview> = {}): Queue
         availableSpeakers: 1,
         speakers: 3,
         cases: [queuedGabriela],
+        openCases: 2,
+        openAtRisk: 1,
       },
     ],
     counts: {
@@ -256,6 +269,8 @@ export const emptyQueues: QueueOverview = makeQueueOverview({
       availableSpeakers: 1,
       speakers: 6,
       cases: [],
+      openCases: 0,
+      openAtRisk: 0,
     },
     {
       language: 'pt',
@@ -266,6 +281,8 @@ export const emptyQueues: QueueOverview = makeQueueOverview({
       availableSpeakers: 1,
       speakers: 3,
       cases: [],
+      openCases: 0,
+      openAtRisk: 0,
     },
   ],
   counts: {
@@ -277,3 +294,113 @@ export const emptyQueues: QueueOverview = makeQueueOverview({
     computedAt: NOW.toISOString(),
   },
 })
+
+// ── "Colas" and "Escalados" (slice 9) ─────────────────────────────────────────
+
+export const LUCIA_ID = 'STF-SUP0000005'
+
+/** Every open Spanish case: Rosa and Mauricio (nobody), Daniela's and Julián's. */
+export function makeOpenCases(overrides: Partial<LanguageOpenCases> = {}): LanguageOpenCases {
+  const danielaSpanish = seededInbox.filter((summary) => summary.language === 'es')
+  return {
+    language: 'es',
+    label: 'Cola en español',
+    cases: [
+      { case: queuedRosa, assigneeName: null },
+      { case: queuedMauricio, assigneeName: null },
+      ...danielaSpanish.map((summary) => ({ case: summary, assigneeName: 'Daniela Ríos' })),
+      { case: { ...julianCamila, escalated: true }, assigneeName: 'Julián Ortega' },
+      { case: julianEsteban, assigneeName: 'Julián Ortega' },
+    ],
+    serverTime: NOW.toISOString(),
+    ...overrides,
+  }
+}
+
+export const portugueseOpenCases: LanguageOpenCases = {
+  language: 'pt',
+  label: 'Cola en portugués',
+  cases: [{ case: queuedGabriela, assigneeName: null }],
+  serverTime: NOW.toISOString(),
+}
+
+export function makeEscalation(overrides: Partial<Escalation> = {}): Escalation {
+  return {
+    id: 'ESC-00000000000000000000000113',
+    caseId: julianCamila.id,
+    customerName: 'Camila Torres Benavides',
+    state: 'open',
+    motive: 'Problema con la app al hacer una transferencia: no le llegó a su hermano.',
+    escalatedAt: minutesFrom(-21),
+    escalatedById: JULIAN_ID,
+    escalatedByName: 'Julián Ortega',
+    resolvedAt: null,
+    resolvedById: null,
+    resolvedByName: null,
+    note: null,
+    reassignedToId: null,
+    reassignedToName: null,
+    acknowledgedAt: null,
+    ...overrides,
+  }
+}
+
+/** Julián's open escalation of Camila's case (113), waiting 21 min. */
+export const camilaEscalation: EscalationItem = {
+  escalation: makeEscalation(),
+  case: { ...julianCamila, escalated: true },
+  assigneeName: 'Julián Ortega',
+  canTake: false,
+}
+
+/** Daniela's open escalation of Marcela's case (101), waiting 6 min. */
+export const marcelaEscalation: EscalationItem = {
+  escalation: makeEscalation({
+    id: 'ESC-00000000000000000000000101',
+    caseId: 'CASE-00000000000000000000000101',
+    customerName: 'Marcela Quintana Pardo',
+    motive: 'La clienta pide hablar con supervisión: no reconoce un retiro en cajero.',
+    escalatedAt: minutesFrom(-6),
+    escalatedById: DANIELA_ID,
+    escalatedByName: 'Daniela Ríos',
+  }),
+  case: { ...seededInbox[1]!, escalated: true },
+  assigneeName: 'Daniela Ríos',
+  canTake: false,
+}
+
+/** Daniela's escalation of Joaquín's case, answered by Lucía 35 min ago. */
+export const answeredEscalation: EscalationItem = {
+  escalation: makeEscalation({
+    id: 'ESC-00000000000000000000000107',
+    caseId: 'CASE-00000000000000000000000107',
+    customerName: 'Joaquín Ferreyra Paz',
+    state: 'answered',
+    motive: 'Pide el estado de un reclamo de hace dos semanas.',
+    escalatedAt: minutesFrom(-38),
+    escalatedById: DANIELA_ID,
+    escalatedByName: 'Daniela Ríos',
+    resolvedAt: minutesFrom(-35),
+    resolvedById: LUCIA_ID,
+    resolvedByName: 'Lucía Herrera',
+    note: 'Revisé el reclamo: sigue dentro del plazo.',
+  }),
+  case: makeCaseSummary({
+    id: 'CASE-00000000000000000000000107',
+    customer: { id: 'CUS-00000000000000000000001007', displayName: 'Joaquín Ferreyra Paz' },
+    inboxStatus: 'waiting',
+  }),
+  assigneeName: 'Daniela Ríos',
+  canTake: false,
+}
+
+export function makeEscalationOverview(
+  overrides: Partial<EscalationOverview> = {},
+): EscalationOverview {
+  return {
+    items: [camilaEscalation, marcelaEscalation, answeredEscalation],
+    openCount: 2,
+    serverTime: NOW.toISOString(),
+    ...overrides,
+  }
+}

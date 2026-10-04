@@ -13,6 +13,14 @@ from cc_platform.application.cases.customer_chat import (
     PostCustomerTurn,
     RateConversation,
 )
+from cc_platform.application.cases.escalations import (
+    AcknowledgeEscalation,
+    EscalateCase,
+    GetEscalationOverview,
+    RespondEscalation,
+    TakeEscalatedCase,
+    WithdrawEscalation,
+)
 from cc_platform.application.cases.manual_assignment import SetCaseAssignee
 from cc_platform.application.cases.priority import ChangeCasePriority
 from cc_platform.application.cases.queries import (
@@ -22,7 +30,11 @@ from cc_platform.application.cases.queries import (
     GetInbox,
     ListCaseTurns,
 )
-from cc_platform.application.cases.supervision import GetQueueOverview, GetTeamOverview
+from cc_platform.application.cases.supervision import (
+    GetLanguageOpenCases,
+    GetQueueOverview,
+    GetTeamOverview,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,3 +57,11 @@ class CasesUseCases:
     analyst_home: GetAnalystHome
     rate_conversation: RateConversation
     change_priority: ChangeCasePriority
+    # slice 9: "Colas" and escalations
+    language_open_cases: GetLanguageOpenCases
+    escalate: EscalateCase
+    withdraw_escalation: WithdrawEscalation
+    acknowledge_escalation: AcknowledgeEscalation
+    respond_escalation: RespondEscalation
+    take_escalated_case: TakeEscalatedCase
+    escalation_overview: GetEscalationOverview

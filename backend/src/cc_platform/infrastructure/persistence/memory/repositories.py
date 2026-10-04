@@ -22,6 +22,7 @@ from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
+from cc_platform.domain.cases.escalation import Escalation, EscalationState
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import OPEN_ASSIGNED_STATUSES, CaseStatus, TurnAudience
 from cc_platform.domain.customers.customer import Customer
@@ -31,7 +32,7 @@ from cc_platform.domain.people.errors import EmailTakenError, TeamNameTakenError
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.session import StaffSession
-from cc_platform.domain.people.staff import Staff, StaffRole
+from cc_platform.domain.people.staff import Language, Staff, StaffRole
 from cc_platform.domain.people.team import Team
 from cc_platform.domain.shared.aggregate import AggregateRoot
 from cc_platform.domain.shared.errors import (
@@ -509,6 +510,56 @@ class InMemoryCaseRepository(_StagedRepository[Case]):
                 count=current.count + 1, score_sum=current.score_sum + rating.score
             )
         return totals
+
+    async def list_open_by_language(self, language: Language) -> list[Case]:
+        open_statuses = {CaseStatus.QUEUED, *OPEN_ASSIGNED_STATUSES}
+        return self._tracked(
+            case
+            for case in self._all()
+            if case.language is language and case.status in open_statuses
+        )
+
+
+class InMemoryEscalationRepository(_StagedRepository[Escalation]):
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, Escalation], track: Tracker) -> None:
+        super().__init__(committed, lambda escalation: escalation.id, track)
+
+    def _unique_violation(self, aggregate: Escalation, other: Escalation) -> DomainError | None:
+        key = aggregate.creation_key
+        if key is not None and other.creation_key == key:
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    def _tracked(self, escalations: Iterable[Escalation]) -> list[Escalation]:
+        found = list(escalations)
+        for escalation in found:
+            self._track(escalation)
+        return found
+
+    async def get(self, escalation_id: str) -> Escalation | None:
+        return await self._get(escalation_id)
+
+    async def get_by_creation_key(self, key: str) -> Escalation | None:
+        found = [e for e in self._all() if e.creation_key == key]
+        return self._tracked(found)[0] if found else None
+
+    async def latest_for_case(self, case_id: str) -> Escalation | None:
+        mine = [e for e in self._all() if e.case_id == case_id]
+        if not mine:
+            return None
+        latest = max(mine, key=lambda e: (e.escalated_at, e.id))
+        self._track(latest)
+        return latest
+
+    async def list_open_or_resolved_since(self, resolved_since: datetime) -> list[Escalation]:
+        return self._tracked(
+            e
+            for e in self._all()
+            if e.state is EscalationState.OPEN
+            or (e.resolved_at is not None and e.resolved_at >= resolved_since)
+        )
 
 
 class InMemoryCustomerCaseSlotRepository(_StagedRepository[CustomerCaseSlot]):

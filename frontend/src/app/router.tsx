@@ -24,7 +24,7 @@ function lazyRoute(path: string | undefined, load: () => Promise<RouteModule>): 
   }
 }
 
-/** Role root without a screen of its own (/supervision → /supervision/equipo). */
+/** Role root without a screen of its own (/supervision → /supervision/colas). */
 function indexRedirect(to: string): RouteObject {
   return { index: true, element: <Navigate to={to} replace /> }
 }
@@ -76,8 +76,10 @@ export const routes: RouteObject[] = [
             lazyRoute('*', () => import('@/routes/not-found')),
           ]),
           roleSection('supervisor', '/supervision', [
-            indexRedirect('equipo'),
+            indexRedirect('colas'),
+            lazyRoute('colas', () => import('@/routes/supervision/queues')),
             lazyRoute('equipo', () => import('@/routes/supervision/team')),
+            lazyRoute('escalados', () => import('@/routes/supervision/escalations')),
             lazyRoute('casos/:caseId', () => import('@/routes/supervision/case')),
             lazyRoute('auditoria', () => import('@/routes/supervision/audit')),
             lazyRoute('*', () => import('@/routes/not-found')),

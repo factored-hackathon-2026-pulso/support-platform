@@ -416,6 +416,48 @@ describe('ConversationPane · states', () => {
     expect(api.markCaseRead).not.toHaveBeenCalled()
   })
 
+  it("adds the customer's rating and comment to a closed case's footer (slice 7)", async () => {
+    const closed = makeClosedDetail()
+    setup({
+      ...closed,
+      case: {
+        ...closed.case,
+        rating: { score: 3, comment: 'Muy amable', ratedAt: '2026-03-05T16:05:00Z' },
+      },
+    })
+    const footer = await screen.findByRole('note', { name: 'Solo lectura' })
+    const pill = within(footer).getByText('El cliente calificó: Bien')
+    expect(pill).toHaveClass('bg-success-soft')
+    expect(pill.querySelector('.lucide-smile')).not.toBeNull()
+    expect(footer).toHaveTextContent('“Muy amable”')
+    expect(footer.textContent).not.toContain('·')
+  })
+
+  it('shows no rating line while the customer has not rated (slice 7)', async () => {
+    setup(makeClosedDetail())
+    const footer = await screen.findByRole('note', { name: 'Solo lectura' })
+    expect(footer).not.toHaveTextContent(/calificó/i)
+  })
+
+  it('updates the footer when the rating arrives live (slice 7)', async () => {
+    const closed = makeClosedDetail()
+    const { sockets } = setup(closed)
+    const footer = await screen.findByRole('note', { name: 'Solo lectura' })
+    act(() => sockets.last()?.open())
+    act(() =>
+      sockets.last()?.receive(
+        envelope('case.updated', {
+          ...closed.case,
+          version: closed.case.version + 1,
+          rating: { score: 1, comment: null, ratedAt: '2026-03-05T16:05:00Z' },
+        }),
+      ),
+    )
+    expect(await within(footer).findByText('El cliente calificó: Mal')).toHaveClass(
+      'bg-danger-soft',
+    )
+  })
+
   it("shows another analyst's case read-only (history access)", async () => {
     setup(makeJulianDetail(), page({ items: julianTurns(), lastSequence: 3 }))
     expect(await screen.findByText('Quién lo atendió')).toBeInTheDocument()

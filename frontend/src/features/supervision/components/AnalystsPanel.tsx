@@ -15,8 +15,10 @@ import {
   type QueryLike,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { RecentRating } from './RecentRating'
 import {
   ACTIVITY_FILTERS,
+  RECENT_RATING_HEADER,
   ACTIVITY_META,
   NO_SESSION_HINT,
   analystsInFilter,
@@ -124,6 +126,9 @@ export function AnalystsPanel({
                   <TH align="right" className={NUMERIC_HEADER}>
                     SLA en riesgo
                   </TH>
+                  <TH align="right" className={NUMERIC_HEADER} title={RECENT_RATING_HEADER.title}>
+                    {RECENT_RATING_HEADER.label}
+                  </TH>
                 </TRow>
               </THead>
               <TBody>
@@ -152,7 +157,7 @@ export function AnalystsPanel({
 }
 
 /**
- * Seven columns share the right column (~860 px at 1440, ~700 px at 1280): tighter
+ * Eight columns share the right column (~860 px at 1440, ~700 px at 1280): tighter
  * side padding than the table default, and the long numeric headers wrap to two
  * lines, so every column stays visible without a horizontal scroll.
  */
@@ -215,6 +220,9 @@ function AnalystRow({ analyst, teamLabel, selected, now, onSelect }: AnalystRowP
       </TCell>
       <TCell align="right" className={cn(CELL_X, atRisk > 0 && 'font-semibold text-warn')}>
         {atRisk > 0 ? atRisk : '—'}
+      </TCell>
+      <TCell align="right" className={cn(CELL_X, 'whitespace-nowrap')}>
+        <RecentRating stats={analyst.recentRatings} />
       </TCell>
     </TRow>
   )

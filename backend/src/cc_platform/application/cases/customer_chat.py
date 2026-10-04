@@ -1,5 +1,5 @@
 """The customer's side of the chat (simulator): read the conversation, write a message, and
-look at past conversations.
+look at past conversations, and rate a closed one (slice 7).
 
 A customer only ever sees their own cases and only ``everyone`` turns. Writing with no open
 case opens one (contract §3.1), all in **one** Unit of Work: the slot is taken, the case
@@ -23,6 +23,8 @@ from cc_platform.application.cases.dto import (
     CustomerConversationSummaryView,
     PostCustomerTurnResult,
     PostTurnCommand,
+    RateConversationCommand,
+    RateConversationResult,
 )
 from cc_platform.application.cases.read_model import CaseReader
 from cc_platform.application.cases.sla import SlaPolicy
@@ -34,6 +36,8 @@ from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFac
 from cc_platform.application.security import CustomerActor
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
+from cc_platform.domain.cases.errors import AlreadyRatedError, IdempotencyConflictError
+from cc_platform.domain.cases.rating import normalize_rating_comment, normalize_rating_score
 from cc_platform.domain.cases.turn import Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
     AssignmentReason,
@@ -130,15 +134,77 @@ class GetPastConversation:
         self, customer: CustomerActor, case_id: str
     ) -> CustomerConversationDetailView:
         async with self.uow() as uow:
-            case = await uow.cases.get(case_id) if is_valid_id(case_id, IdPrefix.CASE) else None
-            if case is None or case.customer_id != customer.customer_id:
-                raise NotFoundError("No encontramos esa conversación.", caseId=case_id)
+            case = await _own_case(uow, customer, case_id)
             reader = CaseReader(uow)
             turns = await _public_turns(uow, case.id)
             return CustomerConversationDetailView(
                 conversation=await reader.conversation(case),
                 turns=tuple(await reader.customer_turn_views(turns, customer.customer_id)),
             )
+
+
+async def _own_case(uow: UnitOfWork, customer: CustomerActor, case_id: str) -> Case:
+    """One of the customer's cases; someone else's answers ``not_found`` like an unknown id."""
+    case = await uow.cases.get(case_id) if is_valid_id(case_id, IdPrefix.CASE) else None
+    if case is None or case.customer_id != customer.customer_id:
+        raise NotFoundError("No encontramos esa conversación.", caseId=case_id)
+    return case
+
+
+@dataclass(frozen=True, slots=True)
+class RateConversation:
+    """The customer rates a closed conversation (CSAT 1–4, slice 7 contract §3), in one Unit
+    of Work: ``case.rated`` lands in the event log with the case's new version.
+
+    Checks, in this order: the case is theirs (else ``not_found``) · the answer is valid
+    (``invalid_value``) · a rating already there with the same ``Idempotency-Key`` and the
+    same answer is a replay (another answer with that key: ``idempotency_conflict``; another
+    key: ``already_rated``) · the case is closed (``case_not_closed``). Runs inside
+    ``retry_on_conflict``: of two ratings racing on the same case one commits, the other
+    re-runs on fresh state and answers ``already_rated`` (or replays when it was the same
+    request retried).
+    """
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+
+    async def execute(
+        self, customer: CustomerActor, case_id: str, command: RateConversationCommand
+    ) -> RateConversationResult:
+        score = normalize_rating_score(command.score)
+        comment = normalize_rating_comment(command.comment)
+        return await retry_on_conflict(
+            lambda: self._attempt(customer, case_id, score, comment, command.idempotency_key)
+        )
+
+    async def _attempt(
+        self, customer: CustomerActor, case_id: str, score: int, comment: str | None, key: str
+    ) -> RateConversationResult:
+        async with self.uow() as uow:
+            case = await _own_case(uow, customer, case_id)
+            reader = CaseReader(uow)
+            existing = case.rating
+            if existing is not None and existing.key == key:
+                if not existing.answers(score, comment):
+                    raise IdempotencyConflictError("Esa clave ya se usó para otra calificación.")
+                return RateConversationResult(
+                    conversation=await reader.conversation(case), replayed=True
+                )
+            if existing is not None:
+                raise AlreadyRatedError()
+            case.rate(
+                actor=customer.actor_ref(),
+                score=score,
+                comment=comment,
+                at=self.clock.now(),
+                key=key,
+            )
+            await uow.cases.save(case)
+            result = RateConversationResult(
+                conversation=await reader.conversation(case), replayed=False
+            )
+            await uow.commit()
+        return result
 
 
 @dataclass(frozen=True, slots=True)

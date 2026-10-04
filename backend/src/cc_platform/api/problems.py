@@ -37,6 +37,9 @@ class ProblemCode(StrEnum):
     CASE_NOT_ASSIGNED = "case_not_assigned"
     CASE_CLOSED = "case_closed"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
+    # customer rating (slice 7)
+    CASE_NOT_CLOSED = "case_not_closed"
+    ALREADY_RATED = "already_rated"
     # supervision (manual assignment)
     ANALYST_NOT_ELIGIBLE = "analyst_not_eligible"
     LANGUAGE_MISMATCH = "language_mismatch"
@@ -94,6 +97,12 @@ PROBLEMS: Mapping[ProblemCode, ProblemSpec] = {
     P.CASE_CLOSED: ProblemSpec(409, "Case closed", "Este caso ya está cerrado."),
     P.IDEMPOTENCY_CONFLICT: ProblemSpec(
         409, "Idempotency conflict", "Ese mensaje ya se envió con otro texto."
+    ),
+    P.CASE_NOT_CLOSED: ProblemSpec(
+        409, "Case not closed", "Solo se puede calificar una conversación terminada."
+    ),
+    P.ALREADY_RATED: ProblemSpec(
+        409, "Already rated", "Esta conversación ya tiene una calificación."
     ),
     P.ANALYST_NOT_ELIGIBLE: ProblemSpec(
         422, "Analyst not eligible", "Esa persona no puede recibir casos."

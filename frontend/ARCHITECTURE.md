@@ -169,6 +169,28 @@ Contract: `docs/platform/api/slice-6-analyst-home.md`. Dependency direction:
   `SidePanel` slot with the ficha's sections; auto-selection and "next after close" follow the
   urgency order.
 
+### Customer rating (slice 7)
+
+Contract: `docs/platform/api/slice-7-csat.md`. No new feature folder and no new dependency
+direction.
+
+- **`customer-chat`**: `RatingSurvey` (takes the composer's place while `surveyState` is `ask`:
+  closed, unrated, not skipped), `RatedPill` in an always-mounted `<output>`,
+  `useRateConversation` (one `Idempotency-Key` per survey; the answer goes into the chat cache;
+  `already_rated` / `case_not_closed` refetch), `useSkippedRatings` ("Ahora no", sessionStorage
+  `cc.customer.rating-skipped`). Copy in the customer's language (`ratingSurveyCopy`,
+  `ratingOptions`, `ratedThanks`). Still imports no feature.
+- **`cases`**: the staff vocabulary `RATING_SCALE` / `ratingOption` / `ratingFact` /
+  `ratedByCustomerLabel` / `ratedShortLabel` (core) and `RatingBadge` (index); the Cerrados card
+  shows the face as an icon-only fact. Face icons (`frown`, `meh`, `smile`, `laugh`) joined
+  `FACT_ICONS`; tokens `app-rate-good`, `app-rate-great`, `app-rate-ink` for the simulator.
+- **`conversation`**: `footerFacts(...).rating` + `ratingComment` (closed footer pill and quoted
+  comment), `ratingRow` ("Calificación" in "Este caso", closed cases only), `historyItemFacts`
+  adds "Calificó: …". `CaseSummary.rating` carries the comment, so `case.updated` updates the
+  footer in place.
+- **`supervision`**: `recentRatingCell` / `RecentRating` (the "Calificación 7 días" column and a
+  sheet stat). **`audit`**: `redactionNote` (message text or rating comment).
+
 ### Supervision and audit (slice 3)
 
 Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:

@@ -479,6 +479,8 @@ describe('CustomerSimulatorScreen · chat', () => {
     }))
     const { user } = renderSimulator()
     expect(await screen.findByText('Conversa encerrada')).toBeInTheDocument()
+    // Slice 7: an unrated closed conversation asks first; "Agora não" brings the composer.
+    await user.click(screen.getByRole('button', { name: 'Agora não' }))
     expect(
       screen.getByText('Esta conversa terminou. Se você escrever, começamos uma nova.'),
     ).toBeInTheDocument()

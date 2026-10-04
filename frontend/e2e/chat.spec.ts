@@ -145,4 +145,57 @@ test.describe('Chat en vivo · analista ↔ cliente', () => {
     await past.getByRole('button', { expanded: false }).last().click()
     await expect(past.getByRole('listitem').filter({ hasText: answer })).toHaveCount(1)
   })
+
+  test('the customer rates the closed conversation and the analyst sees it (slice 7)', async ({
+    actors,
+    people,
+    customers,
+  }) => {
+    const customer = CUSTOMERS.andres
+    await customers.release(customer)
+    const analyst = await people.analyst(['es'])
+
+    const { page } = await actors.signedIn('analista', analyst)
+    const workspace = new WorkspacePage(page)
+    await workspace.goto()
+    await workspace.becomeAvailable()
+
+    const chat = await actors.customer('cliente', customer)
+    await chat.send(uniqueText('Hola, quiero revisar un cobro'))
+    await workspace.openCase(customer.name)
+    const answer = uniqueText('Listo, ya quedó revisado el cobro')
+    await workspace.reply(customer.name, answer)
+    await expect(chat.messages.filter({ hasText: answer })).toHaveCount(1)
+    await workspace.closeCase(customer.name, 'Resuelto')
+
+    // The analyst opens the closed case: no rating yet.
+    await workspace.showFilter('Cerrados')
+    await workspace.openCase(customer.name)
+    const footer = workspace.readOnlyFooter(customer.name)
+    await expect(footer).toContainText('Resuelto')
+    await expect(footer).not.toContainText('calificó')
+    await expect(workspace.caseCard(customer.name)).not.toHaveAccessibleName(/Calificación/)
+
+    // The survey takes the composer's place in the customer's window.
+    await expect(chat.status('ended')).toBeVisible()
+    await expect(chat.survey(firstName(analyst.name))).toBeVisible()
+    await expect(chat.page.getByRole('textbox', { name: 'Escribe tu mensaje' })).toHaveCount(0)
+    const comment = uniqueText('Muy clara la explicación')
+    await chat.rate('Excelente', comment)
+    await expect(chat.page.getByRole('textbox', { name: 'Escribe tu mensaje' })).toBeVisible()
+
+    // Live in the analyst's window: the footer pill with the comment, the card's face.
+    await expect(footer.getByText('El cliente calificó: Excelente')).toBeVisible()
+    await expect(footer).toContainText(`“${comment}”`)
+    await expect(workspace.caseCard(customer.name)).toHaveAccessibleName(/Calificación: Excelente/)
+    const panel = await workspace.openCustomerFile(customer.name)
+    await expect(panel.getByRole('region', { name: 'Este caso' })).toContainText(
+      'CalificaciónExcelente',
+    )
+
+    // Rated once: a reload thanks again and never asks for this conversation.
+    await chat.page.reload()
+    await expect(chat.thanks('Excelente')).toBeVisible()
+    await expect(chat.survey()).toHaveCount(0)
+  })
 })

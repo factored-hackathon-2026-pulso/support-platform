@@ -507,6 +507,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/customer/conversations/{caseId}/rating': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Rate a closed conversation (CSAT 1–4, once)
+     * @description Only the customer's own **closed** case (`case_not_closed` otherwise), once (`already_rated`). Someone else's case is `not_found`, like an unknown id. Idempotent on `Idempotency-Key`: a retry with the same key and the same answer answers 200 with `Idempotent-Replayed: true`; the same key with another answer is `idempotency_conflict`. Records `case.rated` (the analyst who closed the case gets it) and answers the conversation with its `rating`.
+     */
+    post: operations['customer_rate_conversation']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/customer/demo-customers': {
     parameters: {
       query?: never
@@ -1199,6 +1219,8 @@ export interface components {
        * @description Last message text (at most 140 characters).
        */
       preview: string | null
+      /** @description The customer's rating, if any (slice 7). */
+      rating: components['schemas']['CaseRating'] | null
       status: components['schemas']['CaseStatus']
     }
     /**
@@ -1207,6 +1229,27 @@ export interface components {
      * @enum {string}
      */
     CasePriority: 'low' | 'medium' | 'high'
+    /**
+     * CaseRating
+     * @description The customer's rating of a closed case: 1 Mal · 2 Regular · 3 Bien · 4 Excelente.
+     */
+    CaseRating: {
+      /**
+       * Comment
+       * @description The customer's words (trimmed, at most 500).
+       */
+      comment: string | null
+      /**
+       * Ratedat
+       * Format: date-time
+       */
+      ratedAt: string
+      /**
+       * Score
+       * @description 1 Mal · 2 Regular · 3 Bien · 4 Excelente.
+       */
+      score: number
+    }
     /**
      * CaseStatus
      * @description Stored state machine of a case (see ``Case``).
@@ -1253,6 +1296,8 @@ export interface components {
        */
       previousCaseId: string | null
       priority: components['schemas']['CasePriority']
+      /** @description The customer's rating (slice 7); only on a closed case, null until rated. */
+      rating: components['schemas']['CaseRating'] | null
       /**
        * Sladueat
        * Format: date-time
@@ -1368,6 +1413,8 @@ export interface components {
        * @description The closed case this one continues.
        */
       previousCaseId: string | null
+      /** @description The customer's own rating (slice 7); null until rated (or while open). */
+      rating: components['schemas']['CaseRating'] | null
       status: components['schemas']['CustomerConversationStatus']
     }
     /** CustomerConversationDetail */
@@ -1898,6 +1945,8 @@ export interface components {
       | 'case_not_assigned'
       | 'case_closed'
       | 'idempotency_conflict'
+      | 'case_not_closed'
+      | 'already_rated'
       | 'analyst_not_eligible'
       | 'language_mismatch'
       | 'analyst_paused'
@@ -1972,7 +2021,7 @@ export interface components {
        */
       currentAnalystId: string | null
       /**
-       * @description invalid_transition, case_closed: the case status now.
+       * @description invalid_transition, case_closed, case_not_closed: the case status now.
        * @default null
        */
       currentStatus: components['schemas']['CaseStatus'] | null
@@ -2099,6 +2148,32 @@ export interface components {
        * Format: date-time
        */
       serverTime: string
+    }
+    /** RateConversationRequest */
+    RateConversationRequest: {
+      /** Comment */
+      comment?: string | null
+      /**
+       * Score
+       * @description 1 Mal · 2 Regular · 3 Bien · 4 Excelente.
+       */
+      score: number
+    }
+    /**
+     * RatingStats
+     * @description Customer ratings (1–4) of the cases she closed in the last 7 days (slice 7).
+     */
+    RatingStats: {
+      /**
+       * Average
+       * @description Unrounded average score; null when count = 0.
+       */
+      average: number | null
+      /**
+       * Count
+       * @description Rated cases among the ones she closed in the window.
+       */
+      count: number
     }
     /** RenameTeamRequest */
     RenameTeamRequest: {
@@ -2247,6 +2322,8 @@ export interface components {
        * @description assigned | in_progress, inbox order.
        */
       openCases: components['schemas']['CaseSummary'][]
+      /** @description "Calificación 7 días": ratings of the cases she closed in the last 7 days. */
+      recentRatings: components['schemas']['RatingStats']
       /**
        * Roles
        * @description Canonical order.
@@ -4261,6 +4338,80 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  customer_rate_conversation: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Client-generated (UUID v4); a retry with it and the same answer replays. */
+        'Idempotency-Key': string
+      }
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RateConversationRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of the same rating */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerConversation']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CustomerConversation']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
       422: {
         headers: {
           [name: string]: unknown

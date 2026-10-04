@@ -1,6 +1,15 @@
 import { useCurrentUser } from '@/app/session'
 import { SidePanelSection } from '@/components/layout'
-import { Badge, Button, Callout, Fact, FACT_ICONS, FactList, Skeleton } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Callout,
+  Fact,
+  FACT_ICONS,
+  FactList,
+  Skeleton,
+  type FactIcon,
+} from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/lib/hooks'
 import { useCaseDetail } from '../hooks'
@@ -99,6 +108,12 @@ export function CustomerFile({ caseId, history, onHistoryChange }: CustomerFileP
   )
 }
 
+function pillIcon(icon: FactIcon | undefined) {
+  if (!icon) return undefined
+  const Icon = FACT_ICONS[icon]
+  return <Icon size={13} aria-hidden="true" className="shrink-0" />
+}
+
 /** Label column (icon + label) and value column: text, a status pill or short facts. */
 function FileRows({ rows }: { rows: readonly FileRow[] }) {
   return (
@@ -116,7 +131,7 @@ function FileRows({ rows }: { rows: readonly FileRow[] }) {
               title={row.mono ? row.text : undefined}
             >
               {row.pill ? (
-                <Badge tone={row.pill.tone} size="sm">
+                <Badge tone={row.pill.tone} size="sm" icon={pillIcon(row.pill.icon)}>
                   {row.pill.label}
                 </Badge>
               ) : row.facts ? (

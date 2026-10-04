@@ -161,6 +161,7 @@ export function makeHistoryItem(overrides: Partial<CaseHistoryItem> = {}): CaseH
     analystId: ME,
     analystName: 'Daniela Ríos',
     preview: 'Perfecto, muchas gracias.',
+    rating: null,
     ...overrides,
   }
 }
@@ -168,7 +169,13 @@ export function makeHistoryItem(overrides: Partial<CaseHistoryItem> = {}): CaseH
 /** Patricia's other cases (contract §8.3): 104 (Daniela) and 110 (Julián), newest first. */
 export const patriciaHistory: CaseHistory = {
   items: [
-    makeHistoryItem(),
+    makeHistoryItem({
+      rating: {
+        score: 4,
+        comment: 'Muy clara la explicación del plazo, gracias.',
+        ratedAt: '2026-03-03T16:02:00Z',
+      },
+    }),
     makeHistoryItem({
       id: JULIAN_CASE_ID,
       channel: 'web_chat',
@@ -177,6 +184,7 @@ export const patriciaHistory: CaseHistory = {
       analystId: OTHER_ANALYST_ID,
       analystName: 'Julián Ortega',
       preview: 'Ah, es cierto. Gracias.',
+      rating: { score: 3, comment: null, ratedAt: '2026-02-13T15:16:00Z' },
     }),
   ],
   total: 2,
@@ -370,6 +378,7 @@ export function makeCustomerConversation(
     agentName: null,
     lastSequence: 2,
     previousCaseId: null,
+    rating: null,
     ...overrides,
   }
 }

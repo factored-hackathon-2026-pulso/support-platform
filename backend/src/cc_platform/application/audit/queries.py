@@ -8,7 +8,9 @@ something" filters come from the catalog (``catalog.py``), never from the client
 Privacy (§5.4): message text never leaves through the audit API. ``turn.created.text`` is
 removed (its length is kept as ``text_length``) and listed in ``redactedFields``: the text
 stays readable in the transcript, through the supervisor case view, which is itself
-audited (``case.viewed``). Reading the audit is not audited.
+audited (``case.viewed``). The same holds for the customer's rating comment (slice 7:
+``case.rated.comment`` → ``comment_length``; staff read it on the closed case). Reading the
+audit is not audited.
 
 Names are resolved with a fixed number of queries per page (staff, customers, the cases'
 customer and language), never one per row.
@@ -59,7 +61,7 @@ ACTOR_ROLES: dict[AuditActorKind, frozenset[str]] = {
 }
 
 #: Payload keys removed by the PII policy, per event type (the value's length is kept).
-REDACTED_TEXT: dict[str, str] = {"turn.created": "text"}
+REDACTED_TEXT: dict[str, str] = {"turn.created": "text", "case.rated": "comment"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +115,8 @@ class AuditEventPageView:
 
 
 def redact(event_type: str, payload: JsonObject) -> tuple[JsonObject, tuple[str, ...]]:
-    """Remove message text (contract §5.4); ``text_length`` keeps its size."""
+    """Remove message text (contract §5.4) and rating comments (slice 7); ``<key>_length``
+    keeps their size (0 for none)."""
     key = REDACTED_TEXT.get(event_type)
     if key is None or key not in payload:
         return dict(payload), ()

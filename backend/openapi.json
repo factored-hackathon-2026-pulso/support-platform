@@ -1114,6 +1114,17 @@
             "description": "Last message text (at most 140 characters).",
             "title": "Preview"
           },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseRating"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The customer's rating, if any (slice 7)."
+          },
           "status": {
             "$ref": "#/components/schemas/CaseStatus"
           }
@@ -1127,7 +1138,8 @@
           "closeReason",
           "analystId",
           "analystName",
-          "preview"
+          "preview",
+          "rating"
         ],
         "title": "CaseHistoryItem",
         "type": "object"
@@ -1141,6 +1153,42 @@
         ],
         "title": "CasePriority",
         "type": "string"
+      },
+      "CaseRating": {
+        "description": "The customer's rating of a closed case: 1 Mal · 2 Regular · 3 Bien · 4 Excelente.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The customer's words (trimmed, at most 500).",
+            "title": "Comment"
+          },
+          "ratedAt": {
+            "format": "date-time",
+            "title": "Ratedat",
+            "type": "string"
+          },
+          "score": {
+            "description": "1 Mal · 2 Regular · 3 Bien · 4 Excelente.",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "score",
+          "comment",
+          "ratedAt"
+        ],
+        "title": "CaseRating",
+        "type": "object"
       },
       "CaseStatus": {
         "description": "Stored state machine of a case (see ``Case``).",
@@ -1275,6 +1323,17 @@
           "priority": {
             "$ref": "#/components/schemas/CasePriority"
           },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseRating"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The customer's rating (slice 7); only on a closed case, null until rated."
+          },
           "slaDueAt": {
             "description": "First-response due time.",
             "format": "date-time",
@@ -1314,7 +1373,8 @@
           "lastSequence",
           "previousCaseId",
           "closedAt",
-          "closeReason"
+          "closeReason",
+          "rating"
         ],
         "title": "CaseSummary",
         "type": "object"
@@ -1550,6 +1610,17 @@
             "description": "The closed case this one continues.",
             "title": "Previouscaseid"
           },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseRating"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The customer's own rating (slice 7); null until rated (or while open)."
+          },
           "status": {
             "$ref": "#/components/schemas/CustomerConversationStatus"
           }
@@ -1563,7 +1634,8 @@
           "closedAt",
           "agentName",
           "lastSequence",
-          "previousCaseId"
+          "previousCaseId",
+          "rating"
         ],
         "title": "CustomerConversation",
         "type": "object"
@@ -2758,6 +2830,8 @@
           "case_not_assigned",
           "case_closed",
           "idempotency_conflict",
+          "case_not_closed",
+          "already_rated",
           "analyst_not_eligible",
           "language_mismatch",
           "analyst_paused",
@@ -2893,7 +2967,7 @@
               }
             ],
             "default": null,
-            "description": "invalid_transition, case_closed: the case status now."
+            "description": "invalid_transition, case_closed, case_not_closed: the case status now."
           },
           "currentVersion": {
             "anyOf": [
@@ -3176,6 +3250,64 @@
           "serverTime"
         ],
         "title": "QueueOverview",
+        "type": "object"
+      },
+      "RateConversationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "description": "Optional: trimmed, blank becomes null, at most 500 characters.",
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "score": {
+            "description": "1 Mal · 2 Regular · 3 Bien · 4 Excelente.",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "score"
+        ],
+        "title": "RateConversationRequest",
+        "type": "object"
+      },
+      "RatingStats": {
+        "description": "Customer ratings (1–4) of the cases she closed in the last 7 days (slice 7).",
+        "properties": {
+          "average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Unrounded average score; null when count = 0.",
+            "title": "Average"
+          },
+          "count": {
+            "description": "Rated cases among the ones she closed in the window.",
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "average"
+        ],
+        "title": "RatingStats",
         "type": "object"
       },
       "RenameTeamRequest": {
@@ -3477,6 +3609,10 @@
             "title": "Opencases",
             "type": "array"
           },
+          "recentRatings": {
+            "$ref": "#/components/schemas/RatingStats",
+            "description": "\"Calificación 7 días\": ratings of the cases she closed in the last 7 days."
+          },
           "roles": {
             "description": "Canonical order.",
             "items": {
@@ -3506,7 +3642,8 @@
           "activity",
           "counts",
           "oldestWaitingSince",
-          "openCases"
+          "openCases",
+          "recentRatings"
         ],
         "title": "TeamAnalyst",
         "type": "object"
@@ -6797,6 +6934,119 @@
           }
         ],
         "summary": "One of my conversations with its turns (read-only)",
+        "tags": [
+          "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/conversations/{caseId}/rating": {
+      "post": {
+        "description": "Only the customer's own **closed** case (`case_not_closed` otherwise), once (`already_rated`). Someone else's case is `not_found`, like an unknown id. Idempotent on `Idempotency-Key`: a retry with the same key and the same answer answers 200 with `Idempotent-Replayed: true`; the same key with another answer is `idempotency_conflict`. Records `case.rated` (the analyst who closed the case gets it) and answers the conversation with its `rating`.",
+        "operationId": "customer_rate_conversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Client-generated (UUID v4); a retry with it and the same answer replays.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Client-generated (UUID v4); a retry with it and the same answer replays.",
+              "maxLength": 64,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateConversationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerConversation"
+                }
+              }
+            },
+            "description": "Replay of the same rating"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "Rate a closed conversation (CSAT 1–4, once)",
         "tags": [
           "customer"
         ]

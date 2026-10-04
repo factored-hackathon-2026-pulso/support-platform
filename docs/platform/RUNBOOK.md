@@ -185,7 +185,9 @@ abren un caso con su primer mensaje:
 
 También aparecen los clientes de los casos sembrados: con "Conversación abierta" se continúa su
 caso; Claudia y Héctor tienen una conversación cerrada, y si escriben se abre un caso nuevo
-vinculado al anterior.
+vinculado al anterior. Calificaciones sembradas (slice 7): Héctor ya calificó su caso
+("¡Gracias! Calificaste: Bien"); a Claudia el simulador le muestra la encuesta (o "Ahora no").
+Patricia calificó sus casos anteriores 104 (Excelente, con comentario) y 110 (Bien).
 
 ## 6. Reiniciar la base de datos
 

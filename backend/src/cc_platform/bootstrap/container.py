@@ -30,6 +30,7 @@ from cc_platform.application.cases.customer_chat import (
     GetPastConversation,
     ListPastConversations,
     PostCustomerTurn,
+    RateConversation,
 )
 from cc_platform.application.cases.manual_assignment import SetCaseAssignee
 from cc_platform.application.cases.queries import (
@@ -331,6 +332,7 @@ def build_container(
             queue_overview=GetQueueOverview(uow=uow, clock=clock),
             set_assignee=SetCaseAssignee(uow=uow, clock=clock, ids=ids),
             analyst_home=GetAnalystHome(uow=uow, clock=clock),
+            rate_conversation=RateConversation(uow=uow, clock=clock),
         ),
         customers=CustomersUseCases(
             list_demo_customers=ListDemoCustomers(uow=uow),

@@ -23,6 +23,7 @@ from cc_platform.application.cases.supervision import (
     QueueCountsView,
     QueueCountView,
     QueueOverviewView,
+    RatingStatsView,
     TeamAnalystView,
     TeamOverviewView,
     TeamSummaryView,
@@ -76,6 +77,17 @@ class AnalystCaseCounts(ApiModel):
         return cls(open=view.open, new=view.new, to_reply=view.to_reply, waiting=view.waiting)
 
 
+class RatingStats(ApiModel):
+    """Customer ratings (1–4) of the cases she closed in the last 7 days (slice 7)."""
+
+    count: int = Field(description="Rated cases among the ones she closed in the window.")
+    average: float | None = Field(description="Unrounded average score; null when count = 0.")
+
+    @classmethod
+    def from_view(cls, view: RatingStatsView) -> RatingStats:
+        return cls(count=view.count, average=view.average)
+
+
 class TeamAnalyst(ApiModel):
     id: str
     name: str
@@ -94,6 +106,9 @@ class TeamAnalyst(ApiModel):
         description="Oldest lastInteractionAt of her new/to_reply cases; null if none."
     )
     open_cases: list[CaseSummary] = Field(description="assigned | in_progress, inbox order.")
+    recent_ratings: RatingStats = Field(
+        description='"Calificación 7 días": ratings of the cases she closed in the last 7 days.'
+    )
 
     @classmethod
     def from_view(cls, view: TeamAnalystView) -> TeamAnalyst:
@@ -110,6 +125,7 @@ class TeamAnalyst(ApiModel):
             counts=AnalystCaseCounts.from_view(view.counts),
             oldest_waiting_since=view.oldest_waiting_since,
             open_cases=[CaseSummary.from_view(case) for case in view.open_cases],
+            recent_ratings=RatingStats.from_view(view.recent_ratings),
         )
 
 

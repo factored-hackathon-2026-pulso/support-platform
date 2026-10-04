@@ -113,6 +113,20 @@ class CaseClosed(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CaseRated(DomainEvent):
+    """The customer rated a closed case (CSAT 1–4, slice 7). ``analyst_id`` is who closed it:
+    the rating counts for her. The comment is the customer's own words: the audit API never
+    shows it (only its length), like message text."""
+
+    event_type = "case.rated"
+    entity = "case"
+
+    score: int
+    comment: str | None
+    analyst_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CaseViewed(DomainEvent):
     """A supervisor opened a case she does not hold (supervision view, read-only).
 
@@ -139,4 +153,5 @@ CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseRead,
     CaseFirstResponded,
     CaseClosed,
+    CaseRated,
 )

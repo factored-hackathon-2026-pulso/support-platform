@@ -30,6 +30,17 @@ class ReplyBlockedReason(StrEnum):
     CLOSED = "closed"
 
 
+# ----------------------------------------------------------------------------- both sides
+@dataclass(frozen=True, slots=True)
+class CaseRatingView:
+    """The customer's rating of a closed case (slice 7): 1 Mal · 2 Regular · 3 Bien ·
+    4 Excelente (the words live in the frontend)."""
+
+    score: int
+    comment: str | None
+    rated_at: datetime
+
+
 # ----------------------------------------------------------------------------- analyst side
 @dataclass(frozen=True, slots=True)
 class CustomerRefView:
@@ -59,6 +70,7 @@ class CaseSummaryView:
     previous_case_id: str | None
     closed_at: datetime | None
     close_reason: CloseReason | None
+    rating: CaseRatingView | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +161,7 @@ class CaseHistoryItemView:
     analyst_id: str | None
     analyst_name: str | None
     preview: str | None
+    rating: CaseRatingView | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,6 +224,7 @@ class CustomerConversationView:
     agent_name: str | None
     last_sequence: int
     previous_case_id: str | None
+    rating: CaseRatingView | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,4 +269,20 @@ class PostCustomerTurnResult:
     turn: CustomerTurnView
     conversation: CustomerConversationView
     case_created: bool
+    replayed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RateConversationCommand:
+    """``POST /customer/conversations/{caseId}/rating`` (slice 7). ``idempotency_key`` is the
+    ``Idempotency-Key`` header: a retry with it and the same answer is a replay."""
+
+    score: int
+    comment: str | None
+    idempotency_key: str
+
+
+@dataclass(frozen=True, slots=True)
+class RateConversationResult:
+    conversation: CustomerConversationView
     replayed: bool

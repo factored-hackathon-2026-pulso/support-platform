@@ -7,6 +7,7 @@ import {
   JULIAN_CASE_ID,
   julianTurns,
   makeCaseDetail,
+  makeClosedDetail,
   makeJulianDetail,
   patriciaHistory,
   seededTurns,
@@ -126,6 +127,13 @@ describe('CustomerFile ("Ficha del cliente")', () => {
     const list = await within(previous).findByRole('list', { name: 'Casos anteriores' })
     // Each closed case shows its reason's icon and tone.
     expect(list.querySelectorAll('[data-reason="resolved"]')).toHaveLength(2)
+    // …and how the customer rated it (slice 7).
+    expect(within(list).getByRole('button', { name: /Daniela Ríos/ })).toHaveTextContent(
+      'Calificó: Excelente',
+    )
+    expect(within(list).getByRole('button', { name: /Julián Ortega/ })).toHaveTextContent(
+      'Calificó: Bien',
+    )
     await user.click(within(list).getByRole('button', { name: /Julián Ortega/ }))
     expect(
       await within(previous).findByRole('heading', { level: 4, name: /^Caso CASE-…0110/ }),
@@ -139,6 +147,48 @@ describe('CustomerFile ("Ficha del cliente")', () => {
     expect(
       await within(previous).findByRole('list', { name: 'Casos anteriores' }),
     ).toBeInTheDocument()
+  })
+
+  it('adds "Calificación" to a closed case: the face pill or "Sin calificar" (slice 7)', async () => {
+    const closed = makeClosedDetail()
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue(closed)
+    const { user, unmount } = renderWithProviders(<Harness detail={closed} />, {
+      staff: analystStaff,
+    })
+    await user.click(await screen.findByRole('button', { name: /Ver ficha de/ }))
+    let thisCase = within(
+      screen.getByRole('complementary', { name: 'Ficha del cliente' }),
+    ).getByRole('region', { name: 'Este caso' })
+    expect(thisCase).toHaveTextContent('CalificaciónSin calificar')
+    expect(within(thisCase).getByText('Sin calificar')).toHaveClass('bg-panel')
+    unmount()
+
+    const rated = {
+      ...closed,
+      case: {
+        ...closed.case,
+        rating: { score: 4, comment: null, ratedAt: '2026-03-05T16:05:00Z' },
+      },
+    }
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue(rated)
+    const second = renderWithProviders(<Harness detail={rated} />, { staff: analystStaff })
+    await second.user.click(await screen.findByRole('button', { name: /Ver ficha de/ }))
+    thisCase = within(screen.getByRole('complementary', { name: 'Ficha del cliente' })).getByRole(
+      'region',
+      { name: 'Este caso' },
+    )
+    const pill = within(thisCase).getByText('Excelente')
+    expect(pill).toHaveClass('bg-success-soft')
+    expect(pill.querySelector('.lucide-laugh')).not.toBeNull()
+  })
+
+  it('has no "Calificación" row while the case is open (slice 7)', async () => {
+    const { user } = renderWithProviders(<Harness />, { staff: analystStaff })
+    await user.click(await screen.findByRole('button', { name: /Ver ficha de/ }))
+    const thisCase = within(
+      screen.getByRole('complementary', { name: 'Ficha del cliente' }),
+    ).getByRole('region', { name: 'Este caso' })
+    expect(thisCase).not.toHaveTextContent('Calificación')
   })
 
   it('closes with Escape inside the panel and gives the focus back to the name', async () => {

@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response, status
+from fastapi import APIRouter, Header, Path, Query, Response, status
 
 from cc_platform.api.dependencies import ApiContextDep, CurrentCustomer
 from cc_platform.api.routers.cases import (
+    IDEMPOTENCY_KEY,
     REPLAYED_HEADER,
     IdempotencyKey,
     ensure_idempotency_key,
@@ -20,6 +21,7 @@ from cc_platform.api.routers.cases import (
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.api.schemas.customer import (
     CreateCustomerSessionRequest,
+    CustomerConversation,
     CustomerConversationDetail,
     CustomerConversationList,
     CustomerConversationResponse,
@@ -29,12 +31,24 @@ from cc_platform.api.schemas.customer import (
     DemoCustomerList,
     PostCustomerTurnRequest,
     PostCustomerTurnResponse,
+    RateConversationRequest,
 )
-from cc_platform.application.cases.dto import PostTurnCommand
+from cc_platform.application.cases.dto import PostTurnCommand, RateConversationCommand
 from cc_platform.application.pagination import MAX_SEQUENCE
 from cc_platform.domain.cases.values import CaseChannel
 
 router = APIRouter(prefix="/customer", tags=["customer"])
+
+RatingKey = Annotated[
+    str,
+    Header(
+        alias=IDEMPOTENCY_KEY,
+        min_length=8,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9-]+$",
+        description="Client-generated (UUID v4); a retry with it and the same answer replays.",
+    ),
+]
 
 
 @router.get(
@@ -150,3 +164,43 @@ async def post_turn(
         response.status_code = status.HTTP_200_OK
         response.headers[REPLAYED_HEADER] = "true"
     return PostCustomerTurnResponse.from_result(result)
+
+
+@router.post(
+    "/conversations/{caseId}/rating",
+    response_model=CustomerConversation,
+    status_code=status.HTTP_201_CREATED,
+    summary="Rate a closed conversation (CSAT 1–4, once)",
+    description=(
+        "Only the customer's own **closed** case (`case_not_closed` otherwise), once "
+        "(`already_rated`). Someone else's case is `not_found`, like an unknown id. "
+        "Idempotent on `Idempotency-Key`: a retry with the same key and the same answer "
+        "answers 200 with `Idempotent-Replayed: true`; the same key with another answer is "
+        "`idempotency_conflict`. Records `case.rated` (the analyst who closed the case gets "
+        "it) and answers the conversation with its `rating`."
+    ),
+    responses={
+        200: {"description": "Replay of the same rating", "model": CustomerConversation},
+        **problem_responses(401, 404, 409, 422),
+    },
+)
+async def rate_conversation(
+    *,
+    case_id: Annotated[str, Path(alias="caseId", max_length=64)],
+    body: RateConversationRequest,
+    idempotency_key: RatingKey,
+    customer: CurrentCustomer,
+    api: ApiContextDep,
+    response: Response,
+) -> CustomerConversation:
+    result = await api.use_cases.cases.rate_conversation.execute(
+        customer,
+        case_id,
+        RateConversationCommand(
+            score=body.score, comment=body.comment, idempotency_key=idempotency_key
+        ),
+    )
+    if result.replayed:
+        response.status_code = status.HTTP_200_OK
+        response.headers[REPLAYED_HEADER] = "true"
+    return CustomerConversation.from_view(result.conversation)

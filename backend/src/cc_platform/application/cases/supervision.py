@@ -3,6 +3,8 @@
 - ``GetTeamOverview``: the analysts (active staff holding ``analyst``), grouped by team,
   with what each one is doing **now** (``AnalystActivity``, derived, never stored), her load
   by inbox status, the longest customer wait and her open cases as ``CaseSummary`` rows.
+  Slice 7: her customers' ratings of the last 7 days (``RatingStatsView``: count and
+  average over the cases she closed in the window that were rated; one grouped query).
 - ``GetQueueOverview``: one queue per language (always both), its cases oldest first (the
   drain order), the oldest wait and how many analysts could take them.
 
@@ -25,6 +27,7 @@ from enum import StrEnum
 
 from cc_platform.application.cases import copy
 from cc_platform.application.cases.dto import CaseSummaryView
+from cc_platform.application.cases.ports import RatingTotals
 from cc_platform.application.cases.read_model import CaseReader, inbox_order
 from cc_platform.application.people.dto import TeamRefView
 from cc_platform.application.ports.clock import Clock
@@ -39,6 +42,10 @@ from cc_platform.domain.people.team import Team
 #: Team-generated: a pending first response is "at risk" 5 minutes before ``slaDueAt``
 #: (overdue included). The frontend keeps the same value (``SLA_AT_RISK_MS``).
 SLA_AT_RISK = timedelta(minutes=5)
+
+#: Team-generated: "Calificación 7 días" counts the ratings of the cases an analyst closed in
+#: the last 7 days (the same window as "Cerrados").
+RATING_WINDOW = timedelta(days=7)
 
 #: Queues are global, one per language, always listed in this order.
 QUEUE_LANGUAGES: tuple[Language, ...] = (Language.SPANISH, Language.PORTUGUESE)
@@ -107,6 +114,21 @@ class AnalystCaseCountsView:
 
 
 @dataclass(frozen=True, slots=True)
+class RatingStatsView:
+    """Customer ratings (1–4) of the cases she closed in the window: how many were rated
+    and their average (``None`` when none was)."""
+
+    count: int
+    average: float | None
+
+
+def rating_stats(totals: RatingTotals | None) -> RatingStatsView:
+    if totals is None or totals.count <= 0:
+        return RatingStatsView(count=0, average=None)
+    return RatingStatsView(count=totals.count, average=totals.score_sum / totals.count)
+
+
+@dataclass(frozen=True, slots=True)
 class TeamAnalystView:
     id: str
     name: str
@@ -120,6 +142,7 @@ class TeamAnalystView:
     counts: AnalystCaseCountsView
     oldest_waiting_since: datetime | None
     open_cases: tuple[CaseSummaryView, ...]
+    recent_ratings: RatingStatsView
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,6 +262,7 @@ class GetTeamOverview:
             open_cases = await reader.summaries(
                 await uow.cases.list_by_statuses(OPEN_ASSIGNED_STATUSES)
             )
+            ratings = await uow.cases.rating_totals_by_closer(now - RATING_WINDOW)
         by_analyst: dict[str, list[CaseSummaryView]] = defaultdict(list)
         for summary in open_cases:
             if summary.assigned_analyst_id is not None:
@@ -251,6 +275,7 @@ class GetTeamOverview:
                 availability.get(analyst.id),
                 signed_in=analyst.id in signed_in,
                 cases=sorted(by_analyst.get(analyst.id, []), key=inbox_order),
+                ratings=rating_stats(ratings.get(analyst.id)),
             )
             for analyst in analysts
         ]
@@ -268,6 +293,7 @@ class GetTeamOverview:
         *,
         signed_in: bool,
         cases: list[CaseSummaryView],
+        ratings: RatingStatsView,
     ) -> TeamAnalystView:
         # A missing availability row means paused (slice 1 rule).
         status = availability.status if availability else AvailabilityStatus.PAUSED
@@ -284,6 +310,7 @@ class GetTeamOverview:
             counts=_case_counts(cases),
             oldest_waiting_since=_oldest_waiting(cases),
             open_cases=tuple(cases),
+            recent_ratings=ratings,
         )
 
 

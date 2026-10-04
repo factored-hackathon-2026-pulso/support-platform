@@ -43,6 +43,7 @@ FAMILY: Mapping[str, AuditFamily] = {
     "case.read": AuditFamily.CONVERSATION,
     "case.first_responded": AuditFamily.CONVERSATION,
     "case.closed": AuditFamily.LIFECYCLE,
+    "case.rated": AuditFamily.LIFECYCLE,
     "case.viewed": AuditFamily.ACCESS,
     "turn.created": AuditFamily.CONVERSATION,
     "staff.availability_changed": AuditFamily.AVAILABILITY,
@@ -83,6 +84,7 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "case.assigned",
         "case.status_changed",
         "case.closed",
+        "case.rated",
         "staff.availability_changed",
         "auth.account_locked",
         *ADMINISTRATION_TYPES,
@@ -209,6 +211,17 @@ def _case_closed(event: StoredEvent, _names: AuditNames) -> str:
     labels = {reason.value: label for reason, label in copy.CLOSE_REASON_LABEL.items()}
     label = labels.get(raw or "", copy.CLOSE_REASON_LABEL[CloseReason.OTHER])
     return f"Cerró el caso · {label}"
+
+
+#: Slice 7: the 1–4 scale in words (the frontend uses the same ones, ``RATING_SCALE``).
+RATING_LABEL: Mapping[int, str] = {1: "Mal", 2: "Regular", 3: "Bien", 4: "Excelente"}
+
+
+def _case_rated(event: StoredEvent, _names: AuditNames) -> str:
+    """Never the comment (privacy, like message text): only the score."""
+    score = _int(event.payload, "score")
+    label = RATING_LABEL.get(score or 0)
+    return f"El cliente calificó el caso: {label}" if label else "El cliente calificó el caso"
 
 
 def _case_viewed(_event: StoredEvent, _names: AuditNames) -> str:
@@ -375,6 +388,7 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "case.read": _case_read,
     "case.first_responded": _case_first_responded,
     "case.closed": _case_closed,
+    "case.rated": _case_rated,
     "case.viewed": _case_viewed,
     "turn.created": _turn_created,
     "staff.availability_changed": _availability_changed,

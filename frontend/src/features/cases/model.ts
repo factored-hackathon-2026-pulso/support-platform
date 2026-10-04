@@ -3,11 +3,12 @@
  * docs/platform/api/slice-2-case-lifecycle.md §4.1–§4.5, §9.1). No React, no
  * I/O: unit-tested in model.test.ts.
  */
-import type { FactItem, Tone } from '@/components/ui'
+import type { FactIcon, FactItem, FactTone, Tone } from '@/components/ui'
 import { formatRelativeTime } from '@/lib/format'
 import type {
   CaseChannel,
   CasePriority,
+  CaseRating,
   CaseSummary,
   CloseReason,
   CountryCode,
@@ -233,6 +234,68 @@ export function closeReasonOption(reason: CloseReason): CloseReasonOption {
 export function closeReasonLabel(reason: CloseReason | null | undefined): string {
   if (!reason) return 'Sin motivo'
   return CLOSE_REASONS.find((option) => option.value === reason)?.label ?? reason
+}
+
+// ─── Customer rating (slice 7: CSAT 1–4, as in the bank's own survey) ─────────
+
+export type RatingScore = 1 | 2 | 3 | 4
+
+export interface RatingOption {
+  score: RatingScore
+  /** "Mal", "Regular", "Bien", "Excelente". */
+  label: string
+  /** A face: frown · meh · smile · laugh. */
+  icon: FactIcon
+  /** Pill tone: 1 danger, 2 warn, 3–4 success. */
+  tone: Tone
+  /** Text tone of the face alone (same colors). */
+  textTone: FactTone
+}
+
+/** The one score → words/face/tone map of the staff UI (the audit uses the same words). */
+export const RATING_SCALE: ReadonlyArray<RatingOption> = [
+  { score: 1, label: 'Mal', icon: 'frown', tone: 'danger', textTone: 'danger' },
+  { score: 2, label: 'Regular', icon: 'meh', tone: 'warn', textTone: 'warn' },
+  { score: 3, label: 'Bien', icon: 'smile', tone: 'success', textTone: 'success' },
+  { score: 4, label: 'Excelente', icon: 'laugh', tone: 'success', textTone: 'success' },
+]
+
+/** The option of a score; anything off the scale is clamped to 1–4 (rounded). */
+export function ratingOption(score: number): RatingOption {
+  const clamped = Math.min(4, Math.max(1, Math.round(Number.isFinite(score) ? score : 1)))
+  return RATING_SCALE[clamped - 1] ?? (RATING_SCALE[0] as RatingOption)
+}
+
+/** "Bien" (`null` → null). */
+export function ratingLabel(rating: Pick<CaseRating, 'score'> | null | undefined): string | null {
+  return rating ? ratingOption(rating.score).label : null
+}
+
+/**
+ * The rating of a Cerrados card as an icon-only fact: the face, the tooltip "Bien" and the
+ * accessible name "Calificación: Bien" (a secondary fact). Unrated → null.
+ */
+export function ratingFact(rating: Pick<CaseRating, 'score'> | null | undefined): FactItem | null {
+  if (!rating) return null
+  const option = ratingOption(rating.score)
+  return {
+    key: 'rating',
+    icon: option.icon,
+    text: option.label,
+    label: 'Calificación',
+    tone: option.textTone,
+    iconOnly: true,
+  }
+}
+
+/** Closed-case footer pill: "El cliente calificó: Bien". */
+export function ratedByCustomerLabel(rating: Pick<CaseRating, 'score'>): string {
+  return `El cliente calificó: ${ratingOption(rating.score).label}`
+}
+
+/** "Casos anteriores" row: "Calificó: Excelente". */
+export function ratedShortLabel(rating: Pick<CaseRating, 'score'>): string {
+  return `Calificó: ${ratingOption(rating.score).label}`
 }
 
 // ─── First-response SLA and last interaction (contract §4.5) ──────────────────

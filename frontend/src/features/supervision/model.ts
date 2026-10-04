@@ -6,8 +6,8 @@
  * what the customer sees, failures), the result copy, the queue notice and the
  * URL state. No React, no I/O: unit-tested in model.test.ts.
  */
-import type { Tone } from '@/components/ui'
-import { channelLabel, formatSla, priorityLabel } from '@/features/cases'
+import type { FactIcon, FactTone, Tone } from '@/components/ui'
+import { channelLabel, formatSla, priorityLabel, ratingOption } from '@/features/cases'
 import {
   LANGUAGE_NAMES,
   QUEUE_LABEL,
@@ -23,6 +23,7 @@ import type {
   Language,
   LanguageQueue,
   QueueOverview,
+  RatingStats,
   TeamAnalyst,
   TeamOverview,
   TeamSummary,
@@ -586,3 +587,49 @@ export function toCaseViewSearch(state: CaseViewUrlState): URLSearchParams {
   if (state.assign) params.set('asignar', '1')
   return params
 }
+
+// ── "Calificación 7 días" (slice 7: customer ratings 1–4) ─────────────────────
+
+export interface RecentRatingCell {
+  /** The face of the rounded average (1–4). */
+  icon: FactIcon
+  /** < 2.5 danger, < 3 warn, else success. */
+  tone: FactTone
+  /** One decimal with a comma: "3,6". */
+  average: string
+  /** Muted after it: "(9)". */
+  count: string
+  /** "Promedio 3,6 de 4 en 9 casos calificados". */
+  tooltip: string
+}
+
+/** "3,6" (one decimal, Spanish comma). */
+export function formatRatingAverage(average: number): string {
+  return average.toFixed(1).replace('.', ',')
+}
+
+/**
+ * The analyst's 7-day rating cell: face + average + count, with the tooltip that
+ * spells it out; `null` when no case she closed in the window was rated ("—").
+ * Ratings count for whoever closed the case.
+ */
+export function recentRatingCell(stats: RatingStats): RecentRatingCell | null {
+  if (stats.count <= 0 || stats.average === null) return null
+  const average = formatRatingAverage(stats.average)
+  const tone: FactTone = stats.average < 2.5 ? 'danger' : stats.average < 3 ? 'warn' : 'success'
+  const cases = stats.count === 1 ? '1 caso calificado' : `${stats.count} casos calificados`
+  return {
+    icon: ratingOption(stats.average).icon,
+    tone,
+    average,
+    count: `(${stats.count})`,
+    tooltip: `Promedio ${average} de 4 en ${cases}`,
+  }
+}
+
+/** Header tooltip of the column. */
+export const RECENT_RATING_HEADER = {
+  label: 'Calificación 7 días',
+  title: 'Promedio de calificaciones de clientes, escala 1 a 4, últimos 7 días',
+  empty: 'Sin calificaciones en los últimos 7 días',
+} as const

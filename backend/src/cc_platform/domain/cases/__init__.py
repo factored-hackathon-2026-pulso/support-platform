@@ -11,7 +11,9 @@ from cc_platform.domain.cases.case import (
 )
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.errors import (
+    AlreadyRatedError,
     CaseClosedError,
+    CaseNotClosedError,
     IdempotencyConflictError,
     LanguageMismatchError,
 )
@@ -22,10 +24,17 @@ from cc_platform.domain.cases.events import (
     CaseFirstResponded,
     CaseOpened,
     CaseQueued,
+    CaseRated,
     CaseRead,
     CaseStatusChanged,
     CaseViewed,
     TurnCreated,
+)
+from cc_platform.domain.cases.rating import (
+    MAX_RATING_COMMENT,
+    CaseRating,
+    normalize_rating_comment,
+    normalize_rating_score,
 )
 from cc_platform.domain.cases.turn import MAX_TURN_TEXT, Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
@@ -51,9 +60,11 @@ __all__ = [
     "CLOSABLE_STATUSES",
     "LANGUAGE_RULE_ID",
     "MAX_CLOSE_NOTE",
+    "MAX_RATING_COMMENT",
     "MAX_TURN_TEXT",
     "OPEN_ASSIGNED_STATUSES",
     "REPLYABLE_STATUSES",
+    "AlreadyRatedError",
     "Assignment",
     "AssignmentReason",
     "Case",
@@ -63,9 +74,12 @@ __all__ = [
     "CaseClosedError",
     "CaseClosure",
     "CaseFirstResponded",
+    "CaseNotClosedError",
     "CaseOpened",
     "CasePriority",
     "CaseQueued",
+    "CaseRated",
+    "CaseRating",
     "CaseRead",
     "CaseStatus",
     "CaseStatusChanged",
@@ -84,6 +98,8 @@ __all__ = [
     "TurnKind",
     "ensure_speaks_case_language",
     "normalize_close_note",
+    "normalize_rating_comment",
+    "normalize_rating_score",
     "normalize_turn_text",
     "preview_of",
     "search_key",

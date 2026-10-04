@@ -1,7 +1,13 @@
 import { Lock } from 'lucide-react'
 import { Fact } from '@/components/ui'
-import { CloseReasonIcon, closeReasonLabel } from '@/features/cases'
-import { footerFacts, supervisionFooter, type ConversationMode } from '../model'
+import {
+  type CaseRating,
+  CloseReasonIcon,
+  RatingBadge,
+  closeReasonLabel,
+  ratedByCustomerLabel,
+} from '@/features/cases'
+import { footerFacts, ratingComment, supervisionFooter, type ConversationMode } from '../model'
 import type { CaseDetail } from '../types'
 
 export interface ReadOnlyFooterProps {
@@ -19,8 +25,9 @@ const frame =
  * Workspace (slice 6 UI rule) it is short facts: a closed case shows its reason
  * (icon + label, the same as in Cerrados and the close dialog), when it closed
  * and who closed it when it was someone else, then the internal note on its own
- * line; someone else's case shows [lock] Solo lectura and [user] Lo atiende … .
- * The supervisor view keeps its lines.
+ * line, then (slice 7) the customer's rating as a pill with its face ("El cliente
+ * calificó: Bien") and their comment in quotes; someone else's case shows [lock]
+ * Solo lectura and [user] Lo atiende … . The supervisor view keeps its lines.
  */
 export function ReadOnlyFooter({ detail, meId, mode = 'workspace' }: ReadOnlyFooterProps) {
   if (mode === 'supervision') {
@@ -62,7 +69,18 @@ export function ReadOnlyFooter({ detail, meId, mode = 'workspace' }: ReadOnlyFoo
           ))}
         </div>
         {footer.note ? <p className="m-0 break-words whitespace-pre-line">{footer.note}</p> : null}
+        {footer.rating ? <RatingLine rating={footer.rating} /> : null}
       </div>
     </div>
+  )
+}
+
+function RatingLine({ rating }: { rating: CaseRating }) {
+  const comment = ratingComment(rating)
+  return (
+    <p className="m-0 mt-1 flex flex-wrap items-center gap-2">
+      <RatingBadge rating={rating}>{ratedByCustomerLabel(rating)}</RatingBadge>
+      {comment ? <span className="text-13 break-words text-ink-2">{comment}</span> : null}
+    </p>
   )
 }

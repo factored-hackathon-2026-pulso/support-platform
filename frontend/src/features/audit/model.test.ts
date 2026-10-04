@@ -21,6 +21,7 @@ import {
   groupByDay,
   hasAuditFilters,
   hidesMessageText,
+  redactionNote,
   isDateKey,
   parseAuditSearch,
   payloadLines,
@@ -249,5 +250,13 @@ describe('detail aside', () => {
     ])
     expect(hidesMessageText(makeAuditEvent())).toBe(false)
     expect(hidesMessageText(makeAuditEvent({ redactedFields: ['text'] }))).toBe(true)
+    // Slice 7: a rating comment is redacted too, with its own note.
+    expect(redactionNote(makeAuditEvent({ redactedFields: ['text'] }))).toBe(
+      'El texto del mensaje no se muestra aquí: está en la conversación.',
+    )
+    expect(redactionNote(makeAuditEvent({ redactedFields: ['comment'] }))).toBe(
+      'El comentario del cliente no se muestra aquí: está en el caso cerrado.',
+    )
+    expect(redactionNote(makeAuditEvent({ redactedFields: [] }))).toBeNull()
   })
 })

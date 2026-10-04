@@ -71,7 +71,8 @@ class ProblemDetails(ApiModel):
         default=None, description="validation_error: one entry per invalid field."
     )
     current_status: CaseStatus | None = Field(
-        default=None, description="invalid_transition, case_closed: the case status now."
+        default=None,
+        description="invalid_transition, case_closed, case_not_closed: the case status now.",
     )
     analyst_id: str | None = Field(
         default=None,

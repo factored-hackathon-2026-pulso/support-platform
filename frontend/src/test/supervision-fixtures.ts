@@ -122,11 +122,15 @@ export function makeAnalyst(overrides: Partial<TeamAnalyst> = {}): TeamAnalyst {
     counts: { open: 0, new: 0, toReply: 0, waiting: 0 },
     oldestWaitingSince: null,
     openCases: [],
+    recentRatings: { count: 0, average: null },
     ...overrides,
   }
 }
 
-/** Daniela: available without a session, 5 open (Carga alta), Beatriz at SLA risk. */
+/**
+ * Daniela: available without a session, 5 open (Carga alta), Beatriz at SLA risk; her
+ * customers rated 9 of the cases she closed this week, 3,6 on average.
+ */
 export const daniela = makeAnalyst({
   id: DANIELA_ID,
   name: 'Daniela Ríos',
@@ -139,9 +143,10 @@ export const daniela = makeAnalyst({
   counts: { open: 5, new: 2, toReply: 2, waiting: 1 },
   oldestWaitingSince: minutesFrom(-4),
   openCases: seededInbox,
+  recentRatings: { count: 9, average: 32 / 9 },
 })
 
-/** Julián: paused with a session ("En pausa"), 2 open, Camila overdue. */
+/** Julián: paused with a session ("En pausa"), 2 open, Camila overdue, rated 2,5 once. */
 export const julian = makeAnalyst({
   id: JULIAN_ID,
   name: 'Julián Ortega',
@@ -153,6 +158,7 @@ export const julian = makeAnalyst({
   counts: { open: 2, new: 0, toReply: 1, waiting: 1 },
   oldestWaitingSince: minutesFrom(-12),
   openCases: [julianCamila, julianEsteban],
+  recentRatings: { count: 2, average: 2.5 },
 })
 
 export const paula = makeAnalyst()

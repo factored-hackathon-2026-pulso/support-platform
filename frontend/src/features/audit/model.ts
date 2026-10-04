@@ -343,6 +343,17 @@ export function hidesMessageText(event: Pick<AuditEvent, 'redactedFields'>): boo
 export const REDACTED_TEXT_NOTE =
   'El texto del mensaje no se muestra aquí: está en la conversación.'
 
+/** Slice 7: the customer's rating comment is redacted the same way (`case.rated`). */
+export const REDACTED_COMMENT_NOTE =
+  'El comentario del cliente no se muestra aquí: está en el caso cerrado.'
+
+/** The note under "Datos del evento" for what the PII policy removed, or null. */
+export function redactionNote(event: Pick<AuditEvent, 'redactedFields'>): string | null {
+  if (hidesMessageText(event)) return REDACTED_TEXT_NOTE
+  if (event.redactedFields.includes('comment')) return REDACTED_COMMENT_NOTE
+  return null
+}
+
 // ── Persona filter ───────────────────────────────────────────────────────────
 
 /** "Persona" option: active and inactive staff, the inactive ones marked "(desactivada)". */

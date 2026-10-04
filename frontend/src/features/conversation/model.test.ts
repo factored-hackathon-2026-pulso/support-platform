@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
-import { makeCaseSummary } from '@/test/case-fixtures'
+import { NOW, makeCaseSummary } from '@/test/case-fixtures'
 import {
   makeAnalystTurn,
   makeCaseDetail,
@@ -55,6 +55,8 @@ import {
   firstResponseFacts,
   languageName,
   previousCasesSectionTitle,
+  ratingComment,
+  ratingRow,
 } from './model'
 import type { PendingMessage, TranscriptCache } from './types'
 
@@ -523,6 +525,7 @@ describe('closure and the read-only footer', () => {
         },
       ],
       note: 'Nota: Se explicó el plazo del reverso (5 días hábiles).',
+      rating: null,
     })
     expect(footerFacts(makeJulianDetail(), ME)?.facts.map((fact) => fact.text)).toEqual([
       '13 feb, 10:15',
@@ -551,7 +554,60 @@ describe('closure and the read-only footer', () => {
         { key: 'owner', icon: 'user', text: 'Lo atiende Julián Ortega' },
       ],
       note: null,
+      rating: null,
     })
+  })
+
+  it("carries the customer's rating of a closed case (slice 7)", () => {
+    const rating = { score: 3, comment: 'Muy amable', ratedAt: '2026-03-05T16:00:00Z' }
+    const closed = makeClosedDetail()
+    const rated = { ...closed, case: { ...closed.case, rating } }
+    expect(footerFacts(rated, ME)?.rating).toEqual(rating)
+    expect(ratingComment(rating)).toBe('“Muy amable”')
+    expect(ratingComment({ comment: null })).toBeNull()
+    expect(ratingComment(null)).toBeNull()
+  })
+})
+
+describe('rating in the ficha and "Casos anteriores" (slice 7)', () => {
+  it('adds "Calificación" to a closed case: the face pill, or "Sin calificar"', () => {
+    const closed = makeClosedDetail()
+    const unrated = caseRows(closed, NOW).at(-1)
+    expect(unrated).toEqual({
+      key: 'rating',
+      icon: 'smile',
+      label: 'Calificación',
+      pill: { label: 'Sin calificar', tone: 'closed' },
+    })
+    const rated = caseRows(
+      {
+        ...closed,
+        case: { ...closed.case, rating: { score: 1, comment: null, ratedAt: NOW.toISOString() } },
+      },
+      NOW,
+    ).at(-1)
+    expect(rated?.pill).toEqual({ label: 'Mal', tone: 'danger', icon: 'frown' })
+    expect(ratingRow({ score: 4 }).pill).toEqual({
+      label: 'Excelente',
+      tone: 'success',
+      icon: 'laugh',
+    })
+    expect(ratingRow({ score: 2 }).pill).toEqual({ label: 'Regular', tone: 'warn', icon: 'meh' })
+    // An open case has no rating row.
+    expect(caseRows(makeCaseDetail(), NOW).map((row) => row.key)).not.toContain('rating')
+  })
+
+  it('says "Calificó: Excelente" on a past case the customer rated', () => {
+    const facts = historyItemFacts(
+      makeHistoryItem({ rating: { score: 4, comment: null, ratedAt: '2026-03-03T16:05:00Z' } }),
+    )
+    expect(facts.at(-1)).toEqual({
+      key: 'rating',
+      icon: 'laugh',
+      text: 'Calificó: Excelente',
+      tone: 'success',
+    })
+    expect(historyItemFacts(makeHistoryItem()).map((fact) => fact.key)).not.toContain('rating')
   })
 })
 

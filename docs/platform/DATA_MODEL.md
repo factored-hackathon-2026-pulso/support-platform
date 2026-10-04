@@ -1,6 +1,6 @@
 # Modelo de datos de la plataforma
 
-Versión: slices 0 a 4. Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
+Versión: slices 0 a 7 (slice 7: calificación del cliente). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
 
 La plataforma es solo para personas: clientes y equipo de soporte conversan por chat. Guarda las conversaciones, quién atiende cada caso, las cuentas del equipo y el registro de eventos; nada más (la [última sección](#diferencias-con-contractsplatform_historyjson) compara este modelo con la muestra sintética).
 
@@ -57,6 +57,10 @@ erDiagram
         datetime closed_at
         string close_reason
         string close_note
+        int rating_score "1 a 4, slice 7"
+        string rating_comment
+        datetime rated_at
+        string rating_key
         int version
     }
     turns {
@@ -167,12 +171,16 @@ stateDiagram-v2
     in_progress --> assigned: la supervisora lo reasigna
     assigned --> closed: el analista lo cierra con motivo
     in_progress --> closed: el analista lo cierra con motivo
+    closed --> closed: el cliente lo califica (una vez, slice 7)
     closed --> [*]
 ```
 
 - Un caso cerrado no se reabre: si el cliente vuelve a escribir, se abre un caso nuevo con `previous_case_id` apuntando al anterior.
 - Un cliente tiene como máximo un caso abierto (`customer_case_slots`).
 - Regla 3 (`policy_rule_id = H1`): un caso en portugués solo va a quien habla portugués. Entre los elegibles, va a quien tenga menos casos abiertos. Si no hay nadie disponible, queda en cola (`queued`).
+- Calificación del cliente (slice 7): solo un caso **cerrado**, **una vez**, y solo su propio
+  cliente. No cambia el estado (sigue cerrado y de solo lectura). Cuenta para quien lo cerró
+  (`closed_by_id`).
 - Plazo de primera respuesta (`sla_due_at`): 5, 15 o 60 minutos según la prioridad alta, media o baja. El primer mensaje del analista fija `first_response_at`.
 
 **Estado en la bandeja del analista** (se calcula, no se guarda):
@@ -225,7 +233,19 @@ stateDiagram-v2
 | `closed_at`, `closed_by_id`, `closed_by_role` | | cierre |
 | `close_reason` | texto, nulo | `resolved`, `customer_unresponsive`, `duplicate`, `out_of_scope`, `other` |
 | `close_note` | texto(500), nulo | nota opcional |
-| `version` | entero | concurrencia optimista |
+| `rating_score` | entero, nulo | calificación del cliente (slice 7): 1 Mal, 2 Regular, 3 Bien, 4 Excelente; solo en un caso cerrado |
+| `rating_comment` | texto(500), nulo | comentario opcional del cliente (sin espacios sobrantes; vacío = nulo) |
+| `rated_at` | fecha, nula | cuándo calificó |
+| `rating_key` | texto(64), nulo | `Idempotency-Key` de la solicitud: un reintento con la misma respuesta no califica dos veces |
+| `version` | entero | concurrencia optimista (una calificación sube la versión: dos calificaciones a la vez, gana una) |
+
+Índice de "Calificación 7 días" (slice 7): `ix_cases_closer_closed` (`closed_by_id`, `closed_at`).
+La supervisión agrupa por quien cerró los casos calificados con `closed_at` en los últimos 7 días
+(cantidad y promedio, una sola consulta).
+
+**Por qué en `cases` y no en una tabla aparte.** La calificación es un dato del cierre, una por
+caso y escrita una sola vez; guardarla en el mismo agregado reutiliza su control de concurrencia
+(`version`) y su registro de eventos, sin otra tabla ni otra regla de unicidad.
 
 **`turns`** · cada mensaje o aviso del chat. Solo se agregan filas.
 
@@ -297,7 +317,7 @@ Tipos de evento:
 
 | Familia | Eventos |
 |---|---|
-| Casos | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.viewed` (una supervisora abrió el caso) |
+| Casos | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.rated` (el cliente calificó; `payload`: `score`, `comment`, `analyst_id`; la auditoría muestra solo el largo del comentario), `case.viewed` (una supervisora abrió el caso) |
 | Mensajes | `turn.created` |
 | Equipo | `staff.availability_changed` |
 | Administración | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `staff.password_reset`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated` |
@@ -305,7 +325,8 @@ Tipos de evento:
 
 ## Lo que todavía puede cambiar
 
-- El último slice (pruebas en navegador y documentación) no cambia el modelo.
+- Slice 7 agrega las columnas de calificación a `cases`: una base creada antes falla al arrancar
+  (`OutdatedSchemaError`) hasta borrarla.
 - Pendiente conocido: no hay migraciones. Cualquier cambio futuro de esquema exige borrar `backend/cc_platform.db` hasta que se agreguen.
 
 ## Diferencias con `contracts/platform_history.json`
@@ -315,7 +336,7 @@ Ese contrato (v0.5.1) describe la muestra sintética que compartimos para el equ
 | En el contrato de la muestra | En la plataforma |
 |---|---|
 | `case`, `turn` | sí (`cases`, `turns`); faltan `origin`, `topic`, `complaint_id` en el caso y `from_suggestion_id`, `evidence_ids` en el mensaje |
-| `case_close` (`resolved`, `contact_reason`, `resolution_code`, `followup_at`, `csat`) | distinto: dentro de `cases`, solo `close_reason` y `close_note` |
+| `case_close` (`resolved`, `contact_reason`, `resolution_code`, `followup_at`, `csat`) | distinto: dentro de `cases`, `close_reason` y `close_note`; `csat` (misma escala 1 a 4) es `rating_score` + `rating_comment`, que pone el cliente después del cierre (slice 7) |
 | `routing_step` (juez, árbol, agente, humano) | no: el caso va directo a una persona; quién lo recibió y por qué queda en `assignments`, que es nuevo |
 | canales `phone`, `email`; origen `regulator`, `branch` | no: solo `app_chat` y `web_chat` |
 | tema del caso (`topic`) | no existe (lo asignaba el juez) |

@@ -17,6 +17,7 @@ from cc_platform.application.cases.dto import (
     CaseDetailView,
     CaseHistoryItemView,
     CaseHistoryView,
+    CaseRatingView,
     CaseSummaryView,
     InboxCountsView,
     InboxView,
@@ -55,6 +56,21 @@ ClientMessageId = Annotated[
 ]
 
 
+# ----------------------------------------------------------------------------- rating (slice 7)
+class CaseRating(ApiModel):
+    """The customer's rating of a closed case: 1 Mal · 2 Regular · 3 Bien · 4 Excelente."""
+
+    score: int = Field(ge=1, le=4, description="1 Mal · 2 Regular · 3 Bien · 4 Excelente.")
+    comment: str | None = Field(description="The customer's words (trimmed, at most 500).")
+    rated_at: datetime
+
+    @classmethod
+    def from_view(cls, view: CaseRatingView | None) -> CaseRating | None:
+        if view is None:
+            return None
+        return cls(score=view.score, comment=view.comment, rated_at=view.rated_at)
+
+
 # ----------------------------------------------------------------------------- summaries
 class CustomerRef(ApiModel):
     id: str
@@ -86,6 +102,9 @@ class CaseSummary(ApiModel):
     )
     closed_at: datetime | None
     close_reason: CloseReason | None
+    rating: CaseRating | None = Field(
+        description="The customer's rating (slice 7); only on a closed case, null until rated."
+    )
 
     @classmethod
     def from_view(cls, view: CaseSummaryView) -> CaseSummary:
@@ -110,6 +129,7 @@ class CaseSummary(ApiModel):
             previous_case_id=view.previous_case_id,
             closed_at=view.closed_at,
             close_reason=view.close_reason,
+            rating=CaseRating.from_view(view.rating),
         )
 
 
@@ -270,6 +290,7 @@ class CaseHistoryItem(ApiModel):
     analyst_id: str | None = Field(description="Who held it (the assignee).")
     analyst_name: str | None
     preview: str | None = Field(description="Last message text (at most 140 characters).")
+    rating: CaseRating | None = Field(description="The customer's rating, if any (slice 7).")
 
     @classmethod
     def from_view(cls, view: CaseHistoryItemView) -> CaseHistoryItem:
@@ -283,6 +304,7 @@ class CaseHistoryItem(ApiModel):
             analyst_id=view.analyst_id,
             analyst_name=view.analyst_name,
             preview=view.preview,
+            rating=CaseRating.from_view(view.rating),
         )
 
 

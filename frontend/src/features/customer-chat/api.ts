@@ -15,6 +15,8 @@ import type {
   DemoCustomerList,
   PostCustomerTurnRequest,
   PostCustomerTurnResponse,
+  RateConversationRequest,
+  CustomerConversation,
 } from './types'
 
 /** Query keys (frozen by the contract §9.6). */
@@ -30,6 +32,7 @@ export const customerChatKeys = {
 export const customerChatMutationKeys = {
   start: ['customer-chat', 'start'] as const,
   send: (customerId: string) => ['customer-chat', customerId, 'send'] as const,
+  rate: (customerId: string) => ['customer-chat', customerId, 'rate'] as const,
 }
 
 /** Bearer = customer token; a 401 for it clears it (back to the picker). */
@@ -85,6 +88,23 @@ export async function fetchPastConversation(
     customerApi.GET('/api/v1/customer/conversations/{caseId}', {
       params: { path: { caseId } },
       signal,
+    }),
+  )
+}
+
+/**
+ * POST /customer/conversations/{caseId}/rating (slice 7): rate a closed conversation once
+ * (1–4, optional comment). The same `Idempotency-Key` + the same answer replays (200).
+ */
+export async function rateConversation(
+  caseId: string,
+  body: RateConversationRequest,
+  idempotencyKey: string,
+): Promise<CustomerConversation> {
+  return unwrap(
+    customerApi.POST('/api/v1/customer/conversations/{caseId}/rating', {
+      params: { path: { caseId }, header: { 'Idempotency-Key': idempotencyKey } },
+      body,
     }),
   )
 }

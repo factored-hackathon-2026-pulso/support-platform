@@ -110,7 +110,25 @@ describe('Equipo y colas', () => {
     const cells = within(daniela)
       .getAllByRole('cell')
       .map((cell) => cell.textContent)
-    expect(cells.slice(3)).toEqual(['Carga alta5', '4', '4 min', '1'])
+    expect(cells.slice(3)).toEqual([
+      'Carga alta5',
+      '4',
+      '4 min',
+      '1',
+      // "Calificación 7 días" (slice 7): face + average + count, then the text for screen
+      // readers and the (aria-hidden) tooltip bubble.
+      `3,6(9)${'Promedio 3,6 de 4 en 9 casos calificados'.repeat(2)}`,
+    ])
+    expect(screen.getByRole('columnheader', { name: 'Calificación 7 días' })).toHaveAttribute(
+      'title',
+      'Promedio de calificaciones de clientes, escala 1 a 4, últimos 7 días',
+    )
+    // The tooltip's text is also the cell's text for screen readers (the bubble is hidden).
+    const [spoken, bubble] = within(daniela).getAllByText(
+      'Promedio 3,6 de 4 en 9 casos calificados',
+    )
+    expect(spoken).toHaveClass('sr-only')
+    expect(bubble).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('filters by state and team, and says when nobody is in that state', async () => {
@@ -125,11 +143,21 @@ describe('Equipo y colas', () => {
         .getAllByRole('cell')
         .map((c) => c.textContent)
         .slice(3),
-    ).toEqual(['2', '1', '12 min', '1'])
+    ).toEqual([
+      '2',
+      '1',
+      '12 min',
+      '1',
+      `2,5(2)${'Promedio 2,5 de 4 en 2 casos calificados'.repeat(2)}`,
+    ])
     expect(router.state.location.search).toBe('?estado=en-pausa')
 
     await user.click(screen.getByRole('radio', { name: 'Desconectadas 4' }))
     expect(within(row(/Paula Medina/)).getAllByRole('cell')[3]).toHaveTextContent('—')
+    // Nobody rated her cases this week: "—", spelled out for screen readers.
+    expect(within(row(/Paula Medina/)).getAllByRole('cell')[7]).toHaveTextContent(
+      '—Sin calificaciones en los últimos 7 días',
+    )
 
     await user.click(screen.getByRole('radio', { name: 'Equipo Pacífico' }))
     expect(screen.getByText('Equipo Pacífico · 3 analistas')).toBeInTheDocument()
@@ -145,6 +173,10 @@ describe('Equipo y colas', () => {
     expect(sheet).toHaveAccessibleDescription('En pausa · español · Equipo Andes')
     expect(router.state.location.search).toBe(`?estado=en-pausa&analista=${JULIAN_ID}`)
     expect(within(sheet).getByText('Esperando al cliente')).toBeInTheDocument()
+    // Slice 7: her 7-day rating among the stats.
+    expect(within(sheet).getByText('Calificación 7 días')).toBeInTheDocument()
+    expect(within(sheet).getByText('2,5')).toBeInTheDocument()
+    expect(within(sheet).getByText('(2)')).toBeInTheDocument()
     expect(within(sheet).getByText('Camila Torres Benavides')).toBeInTheDocument()
     expect(within(sheet).getByText('Esteban Morales Quiroga')).toBeInTheDocument()
     expect(

@@ -4,6 +4,7 @@ import {
   closeReasonLabel,
   formatClosedAgo,
   formatLastInteraction,
+  ratingFact,
   slaFact,
   inboxStatusMeta,
 } from '../model'
@@ -23,14 +24,16 @@ export interface CaseCardProps {
  * "SLA x" (clock, only while the first reply is pending) on top, the last
  * message, then the status pill, the channel, the priority when high and
  * "Volvió a escribir", and the time since the last interaction (clock). Closed
- * (Cerrados): when it closed, the last message, the "Cerrado" pill and the
- * reason with its icon.
+ * (Cerrados): when it closed, the last message, the "Cerrado" pill, the
+ * reason with its icon and, once the customer rated it (slice 7), the face alone
+ * (tooltip "Bien", accessible "Calificación: Bien").
  */
 export function CaseCard({ summary, selected, now, onSelect }: CaseCardProps) {
   const meta = inboxStatusMeta(summary)
   const closed = summary.status === 'closed'
   const sla = closed ? null : slaFact(summary, now)
   const closedAgo = closed ? formatClosedAgo(summary, now) : null
+  const rating = closed ? ratingFact(summary.rating) : null
   return (
     <ListItemButton
       selected={selected}
@@ -72,10 +75,22 @@ export function CaseCard({ summary, selected, now, onSelect }: CaseCardProps) {
             {meta.subLabel}
           </Badge>
           {closed ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-12 text-ink-2">
-              {summary.closeReason ? <CloseReasonIcon reason={summary.closeReason} /> : null}
-              <span className="truncate">{closeReasonLabel(summary.closeReason)}</span>
-            </span>
+            <>
+              <span className="flex min-w-0 items-center gap-1.5 text-12 text-ink-2">
+                {summary.closeReason ? <CloseReasonIcon reason={summary.closeReason} /> : null}
+                <span className="truncate">{closeReasonLabel(summary.closeReason)}</span>
+              </span>
+              {rating ? (
+                <Fact
+                  icon={rating.icon}
+                  text={rating.text}
+                  label={rating.label}
+                  tone={rating.tone}
+                  iconOnly
+                  focusable={false}
+                />
+              ) : null}
+            </>
           ) : (
             caseCardFacts(summary).map(({ key, ...fact }) => (
               <Fact key={key} {...fact} focusable={false} />

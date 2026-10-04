@@ -112,7 +112,26 @@ Pulsa **"Cerrar caso"**.
 
 **Se ve:** en B la lista pasa al siguiente caso; en Inicio el contador "Cerrados" (últimos 7
 días, solo lectura) sube a 1. En A: "Conversación terminada" y "La conversación terminó. Si
-necesitas algo más, escríbenos y te atendemos en una nueva conversación."
+necesitas algo más, escríbenos y te atendemos en una nueva conversación."; abajo, en lugar del
+campo de texto, la encuesta **"¿Cómo te atendió Felipe?"**.
+
+### 4b. La clienta califica la atención (slice 7)
+
+**A:** pulsa la carita **"Excelente"**. Aparece "¿Quieres contarnos algo más? (opcional)":
+escribe `Muy clara la explicación` y pulsa **"Enviar"**.
+
+**Se ve en A:** la píldora **"¡Gracias! Calificaste: Excelente"** con la carita, y vuelve el
+campo de texto. ("Ahora no" habría cerrado la encuesta sin calificar, solo para esa
+conversación.)
+
+**Se ve en B, sin recargar:** en Inicio pulsa el contador **"Cerrados"** y abre el caso de
+Natalia. Al pie: **"El cliente calificó: Excelente"** con la carita y el comentario entre
+comillas. La tarjeta muestra la carita (pasa el mouse: "Excelente"), y en la ficha, "Este caso"
+tiene la fila **"Calificación"**.
+
+**Decir:** "La calificación es de 1 a 4, como la encuesta del banco; solo se califica una
+conversación cerrada, una vez, y cuenta para quien la cerró. El analista no ve promedios: la
+supervisora ve en Equipo y colas la columna 'Calificación 7 días'."
 
 ### 5. La clienta vuelve: caso nuevo vinculado (4:00 – 5:00)
 

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Button, Callout, Skeleton } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -9,14 +9,22 @@ import {
   customerChatCopy,
   inputPlaceholder,
   normalizeCustomerMessage,
+  surveyState,
   toChatItems,
   visibleSuggestions,
   type ChatItem,
 } from '../model'
-import { useCustomerChatLive, useCustomerConversation, useSendCustomerMessage } from '../hooks'
+import {
+  useCustomerChatLive,
+  useCustomerConversation,
+  useRateConversation,
+  useSendCustomerMessage,
+  useSkippedRatings,
+} from '../hooks'
 import type { Language } from '../types'
 import { ChatBubble } from './ChatBubble'
 import { PastConversations } from './PastConversations'
+import { RatedPill, RatingSurvey } from './RatingSurvey'
 
 export interface CustomerChatProps {
   customerId: string
@@ -34,6 +42,10 @@ export interface CustomerChatProps {
  * conversation (contract §9.6). Live through `customer:<id>`. The copy follows
  * the customer's language (Spanish or Portuguese), like the notices the server
  * sends them.
+ *
+ * Slice 7: while the current conversation is closed and neither rated nor skipped,
+ * the satisfaction survey takes the composer's place; once rated, a thanks pill
+ * closes the transcript and the composer returns ("Ahora no" brings it back too).
  */
 export function CustomerChat({ customerId, suggestions, language }: CustomerChatProps) {
   const copy = customerChatCopy(language)
@@ -47,7 +59,20 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
   const conversation = chat.data?.conversation ?? null
   const chips = chat.status === 'success' ? visibleSuggestions(suggestions, chat.data) : []
   const message = normalizeCustomerMessage(text)
-  const closedNote = closedConversationNote(conversation, language)
+  const { skipped, skip } = useSkippedRatings()
+  const rate = useRateConversation(customerId)
+  const survey = chat.status === 'success' ? surveyState(conversation, skipped) : 'none'
+  const asking = survey === 'ask' && conversation !== null
+  const closedNote = asking ? null : closedConversationNote(conversation, language)
+  const visibleChips = asking ? [] : chips
+  // The survey held the focus when it left (sent or skipped): hand it to the input.
+  const focusInputNext = useRef(false)
+  useEffect(() => {
+    if (!asking && focusInputNext.current) {
+      focusInputNext.current = false
+      inputRef.current?.focus()
+    }
+  }, [asking])
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -116,10 +141,17 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
             </div>
           </>
         )}
-        {chips.length > 0 ? (
+        {/* <output> is a polite status region mounted with the chat, so the thanks is
+          announced when it appears. */}
+        <output className="flex flex-col">
+          {survey === 'rated' && conversation?.rating ? (
+            <RatedPill rating={conversation.rating} language={language} />
+          ) : null}
+        </output>
+        {visibleChips.length > 0 ? (
           <fieldset className="m-0 flex min-w-0 flex-col items-start gap-2 border-0 p-0">
             <legend className="sr-only">{copy.suggestionsLabel}</legend>
-            {chips.map((suggestion) => (
+            {visibleChips.map((suggestion) => (
               <button
                 key={suggestion}
                 type="button"
@@ -136,40 +168,61 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
         ) : null}
       </div>
 
+      {asking ? (
+        <RatingSurvey
+          key={conversation.caseId}
+          caseId={conversation.caseId}
+          agentName={conversation.agentName}
+          language={language}
+          sending={rate.isPending}
+          error={rate.isError ? rate.error : null}
+          onSend={(input) => {
+            focusInputNext.current = true
+            rate.mutate(input)
+          }}
+          onSkip={(caseId) => {
+            focusInputNext.current = true
+            skip(caseId)
+            rate.reset()
+          }}
+        />
+      ) : null}
       {closedNote ? (
         <p className="m-0 border-t border-app-line bg-white px-5 pt-3 text-center text-12 text-app-muted">
           {closedNote}
         </p>
       ) : null}
-      <form
-        onSubmit={submit}
-        className={cn(
-          'flex items-center gap-2 bg-white px-4 pt-3 pb-[26px]',
-          !closedNote && 'border-t border-app-line',
-        )}
-      >
-        <label htmlFor="customer-message" className="sr-only">
-          {copy.inputLabel}
-        </label>
-        <input
-          ref={inputRef}
-          id="customer-message"
-          type="text"
-          autoComplete="off"
-          placeholder={inputPlaceholder(conversation, language)}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          className="min-h-11 grow rounded-full border-0 bg-app-canvas px-4 text-15 text-app-ink placeholder:text-app-muted"
-        />
-        <button
-          type="submit"
-          aria-label={copy.send}
-          aria-disabled={!message || undefined}
-          className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-app-brand text-white hover:bg-app-brand-strong aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+      {asking ? null : (
+        <form
+          onSubmit={submit}
+          className={cn(
+            'flex items-center gap-2 bg-white px-4 pt-3 pb-[26px]',
+            !closedNote && 'border-t border-app-line',
+          )}
         >
-          <ArrowRight size={18} aria-hidden="true" />
-        </button>
-      </form>
+          <label htmlFor="customer-message" className="sr-only">
+            {copy.inputLabel}
+          </label>
+          <input
+            ref={inputRef}
+            id="customer-message"
+            type="text"
+            autoComplete="off"
+            placeholder={inputPlaceholder(conversation, language)}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            className="min-h-11 grow rounded-full border-0 bg-app-canvas px-4 text-15 text-app-ink placeholder:text-app-muted"
+          />
+          <button
+            type="submit"
+            aria-label={copy.send}
+            aria-disabled={!message || undefined}
+            className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-app-brand text-white hover:bg-app-brand-strong aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+          >
+            <ArrowRight size={18} aria-hidden="true" />
+          </button>
+        </form>
+      )}
     </div>
   )
 }

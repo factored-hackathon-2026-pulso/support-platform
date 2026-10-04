@@ -10,6 +10,7 @@
 import { formatDate } from '@/lib/format'
 import { isApiProblem } from '@/lib/api'
 import type {
+  CaseRating,
   CustomerChatCache,
   CustomerConversation,
   CustomerConversationResponse,
@@ -536,4 +537,149 @@ export function describeStartFailure(error: unknown): string {
     return 'No hay conexión con el servidor. Revisa que el backend esté corriendo.'
   }
   return 'No pudimos abrir la sesión del cliente. Inténtalo de nuevo.'
+}
+
+// ── Satisfaction survey (slice 7: CSAT 1–4, in the customer's language) ─────
+
+export type CustomerRatingScore = 1 | 2 | 3 | 4
+
+export interface CustomerRatingOption {
+  score: CustomerRatingScore
+  /** es: Mal · Regular · Bien · Excelente; pt: Ruim · Regular · Bom · Excelente. */
+  label: string
+  /** A face (`FACT_ICONS`): frown · meh · smile · laugh. */
+  icon: 'frown' | 'meh' | 'smile' | 'laugh'
+  /** Card colors when picked: 1 danger, 2 warn, 3 good, 4 great. */
+  tone: 'danger' | 'warn' | 'good' | 'great'
+}
+
+const RATING_WORDS: Record<Language, readonly [string, string, string, string]> = {
+  es: ['Mal', 'Regular', 'Bien', 'Excelente'],
+  pt: ['Ruim', 'Regular', 'Bom', 'Excelente'],
+}
+const RATING_ICONS = ['frown', 'meh', 'smile', 'laugh'] as const
+const RATING_TONES = ['danger', 'warn', 'good', 'great'] as const
+
+/** The four answers, worst to best, in the customer's language. */
+export function ratingOptions(language: Language): CustomerRatingOption[] {
+  const words = RATING_WORDS[language] ?? RATING_WORDS.es
+  return words.map((label, index) => ({
+    score: (index + 1) as CustomerRatingScore,
+    label,
+    icon: RATING_ICONS[index] ?? 'smile',
+    tone: RATING_TONES[index] ?? 'good',
+  }))
+}
+
+export function customerRatingOption(score: number, language: Language): CustomerRatingOption {
+  const options = ratingOptions(language)
+  const index = Math.min(4, Math.max(1, Math.round(score))) - 1
+  return options[index] ?? (options[0] as CustomerRatingOption)
+}
+
+/** What the bottom of the chat shows for the current conversation. */
+export type SurveyState = 'ask' | 'rated' | 'none'
+
+/**
+ * The survey replaces the composer while the **current** conversation is closed, not
+ * rated and not skipped ("Ahora no", remembered per conversation). Once rated the chat
+ * shows the thanks pill and the composer. A new conversation (the customer wrote after
+ * the close) never asks for the old one.
+ */
+export function surveyState(
+  conversation: Pick<CustomerConversation, 'caseId' | 'status' | 'rating'> | null,
+  skipped: ReadonlySet<string>,
+): SurveyState {
+  if (!conversation || conversation.status !== 'closed') return 'none'
+  if (conversation.rating) return 'rated'
+  return skipped.has(conversation.caseId) ? 'none' : 'ask'
+}
+
+export const RATING_COMMENT_MAX_LENGTH = 500
+
+/** The request body: the comment trimmed, blank → null. */
+export function toRatingRequest(
+  score: CustomerRatingScore,
+  comment: string,
+): { score: CustomerRatingScore; comment: string | null } {
+  const trimmed = comment.trim()
+  return { score, comment: trimmed ? trimmed.slice(0, RATING_COMMENT_MAX_LENGTH) : null }
+}
+
+export interface RatingSurveyCopy {
+  title: string
+  legend: string
+  commentLabel: string
+  commentPlaceholder: string
+  skip: string
+  send: string
+  pickFirst: string
+}
+
+/** "¿Cómo te atendió Daniela?" / "Como foi o atendimento de Daniela?" and the rest. */
+export function ratingSurveyCopy(agentName: string | null, language: Language): RatingSurveyCopy {
+  if (language === 'pt') {
+    return {
+      title: `Como foi o atendimento de ${agentName ?? 'nossa equipe'}?`,
+      legend: 'Avalie o atendimento',
+      commentLabel: 'Quer contar algo mais? (opcional)',
+      commentPlaceholder: 'O que podemos melhorar',
+      skip: 'Agora não',
+      send: 'Enviar',
+      pickFirst: 'Escolha uma opção para enviar.',
+    }
+  }
+  return {
+    title: `¿Cómo te atendió ${agentName ?? 'nuestro equipo'}?`,
+    legend: 'Califica la atención',
+    commentLabel: '¿Quieres contarnos algo más? (opcional)',
+    commentPlaceholder: 'Qué podemos mejorar o qué te gustó',
+    skip: 'Ahora no',
+    send: 'Enviar',
+    pickFirst: 'Elige una opción para enviar.',
+  }
+}
+
+/** "¡Gracias! Calificaste: Excelente" / "Obrigado! Você avaliou: Excelente". */
+export function ratedThanks(rating: Pick<CaseRating, 'score'>, language: Language): string {
+  const { label } = customerRatingOption(rating.score, language)
+  return language === 'pt' ? `Obrigado! Você avaliou: ${label}` : `¡Gracias! Calificaste: ${label}`
+}
+
+/** A failed send, in the customer's language (already rated / no longer closed: refetch). */
+export function describeRatingFailure(error: unknown, language: Language): string {
+  const pt = language === 'pt'
+  if (isApiProblem(error, 'network_error')) {
+    return pt ? 'Sem conexão. Tente de novo.' : 'No hay conexión. Inténtalo de nuevo.'
+  }
+  return pt
+    ? 'Não foi possível enviar sua avaliação. Tente de novo.'
+    : 'No pudimos enviar tu calificación. Inténtalo de nuevo.'
+}
+
+/** Problems after which the conversation itself changed: refetch it, the survey follows. */
+export function ratingFailureRefetches(error: unknown): boolean {
+  return (
+    isApiProblem(error, 'already_rated') ||
+    isApiProblem(error, 'case_not_closed') ||
+    isApiProblem(error, 'not_found')
+  )
+}
+
+/** sessionStorage value of the skipped conversations ("Ahora no") → their case ids. */
+export function parseSkippedRatings(raw: string | null): Set<string> {
+  if (!raw) return new Set()
+  try {
+    const value: unknown = JSON.parse(raw)
+    return new Set(
+      Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [],
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+/** Case ids → the stored value (at most the 50 most recent, the simulator is a demo tool). */
+export function serializeSkippedRatings(ids: ReadonlySet<string>): string {
+  return JSON.stringify([...ids].slice(-50))
 }

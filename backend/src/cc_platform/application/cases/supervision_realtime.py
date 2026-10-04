@@ -14,7 +14,8 @@ from a presenter that renders the REST schemas). Sockets only *signal*: clients 
 - ``team.updated`` → ``supervision:team`` (``{staffIds}``, the analysts whose row may have
   changed): a message in an assigned case, an assignment (new and previous analyst), a
   status change, a first response, a close, an availability change, an analyst's session
-  starting or ending.
+  starting or ending, and (slice 7) a customer rating, for the analyst who closed the case
+  ("Calificación 7 días").
 
 Slice 4 (administration) adds signals, no new envelope:
 
@@ -51,6 +52,7 @@ from cc_platform.domain.cases.events import (
     CaseClosed,
     CaseFirstResponded,
     CaseQueued,
+    CaseRated,
     CaseStatusChanged,
     TurnCreated,
 )
@@ -121,6 +123,8 @@ def team_rows_of(event: DomainEvent, case: Case) -> list[str]:
         return _unique([event.assigned_analyst_id, event.previous_analyst_id])
     if isinstance(event, _ASSIGNEE_ROW_EVENTS):
         return _unique([case.assigned_analyst_id])
+    if isinstance(event, CaseRated):
+        return _unique([event.analyst_id])
     return []
 
 

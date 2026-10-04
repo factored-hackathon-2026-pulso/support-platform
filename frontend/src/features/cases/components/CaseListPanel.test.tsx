@@ -194,6 +194,28 @@ describe('CaseListPanel', () => {
     expect(card(/Patricia Lozano Vega/)).toHaveTextContent('hace 2 días')
   })
 
+  it("shows the customer's rating on a Cerrados card as a face with its name (slice 7)", async () => {
+    vi.mocked(fetchInbox).mockImplementation(async ({ status }) =>
+      status === 'closed' ? makeInbox(closedInbox) : makeInbox(),
+    )
+    renderPanel({ filter: 'closed' })
+    const hector = await within(await screen.findByRole('list', { name: 'Casos' })).findByRole(
+      'button',
+      { name: /Héctor Villarreal Garza/ },
+    )
+    // Icon-only and secondary: its name is in the card's name, the tooltip shows the word.
+    expect(hector).toHaveAccessibleName(/Calificación: Bien/)
+    expect(within(hector).getByText('Calificación: Bien')).toHaveClass('sr-only')
+    expect(hector.querySelector('.lucide-smile')).not.toBeNull()
+    expect(card(/Patricia Lozano Vega/)).toHaveAccessibleName(/Calificación: Excelente/)
+    expect(card(/Patricia Lozano Vega/).querySelector('.lucide-laugh')).not.toBeNull()
+    // Unrated: nothing (no "Sin calificar" on the card).
+    const claudia = card(/Claudia Restrepo Varela/)
+    expect(claudia).not.toHaveAccessibleName(/Calificación/)
+    // Never a dot-joined line.
+    expect(hector.textContent).not.toContain('·')
+  })
+
   it('says when no case was closed in the last 7 days', async () => {
     vi.mocked(fetchInbox).mockResolvedValue(emptyInbox)
     renderPanel({ filter: 'closed' })

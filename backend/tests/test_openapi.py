@@ -88,6 +88,6 @@ def test_removed_scope_is_gone_from_the_contract() -> None:
         "domain_error", "application_error", "invalid_topic", "invalid_message", "http_error",
         "internal_error", "version_conflict", "email_taken", "team_name_taken",
         "self_change_forbidden", "last_admin", "staff_has_open_cases", "team_not_empty",
-        "team_inactive", "staff_inactive",
+        "team_inactive", "staff_inactive", "case_not_closed", "already_rated",
     }  # fmt: skip
     assert set(schemas["CloseCaseRequest"]["required"]) == {"reason", "note"}

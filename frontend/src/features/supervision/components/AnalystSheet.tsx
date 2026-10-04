@@ -2,7 +2,8 @@ import { Button, Sheet, Stat, toneBorderLeft } from '@/components/ui'
 import { formatSla, inboxStatusMeta } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { formatRelativeTime } from '@/lib/format'
-import { analystSheetDescription, caseRowLine } from '../model'
+import { RECENT_RATING_HEADER, analystSheetDescription, caseRowLine } from '../model'
+import { RecentRating } from './RecentRating'
 import type { CaseSummary, TeamAnalyst } from '../types'
 import { CaseLink } from './CaseLink'
 
@@ -30,11 +31,17 @@ export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: 
       description={analystSheetDescription(analyst)}
       width={600}
     >
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
         <SheetStat label="Abiertos" value={analyst.counts.open} />
         <SheetStat label="Nuevos" value={analyst.counts.new} />
         <SheetStat label="Por responder" value={analyst.counts.toReply} />
         <SheetStat label="Esperando al cliente" value={analyst.counts.waiting} />
+        <Stat
+          label={RECENT_RATING_HEADER.label}
+          value={<RecentRating stats={analyst.recentRatings} className="text-16" />}
+          size="sm"
+          className="rounded-10 border border-border bg-surface px-3 py-2.5"
+        />
       </div>
       <section aria-labelledby="analyst-cases-heading" className="flex flex-col gap-2">
         <h3 id="analyst-cases-heading" className="m-0 text-15 font-semibold">

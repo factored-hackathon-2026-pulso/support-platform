@@ -24,7 +24,7 @@ SUMMARY_KEYS = {
     "id", "version", "customer", "channel", "language", "priority", "status", "inboxStatus",
     "openedAt", "slaDueAt", "firstResponseAt", "lastInteractionAt", "preview",
     "previewAuthorRole", "assignedAnalystId", "unreadCount", "lastSequence", "previousCaseId",
-    "closedAt", "closeReason",
+    "closedAt", "closeReason", "rating",
 }  # fmt: skip
 
 
@@ -217,6 +217,13 @@ def test_history_lists_the_customers_other_cases(
         "analystId": old["analystId"],
         "analystName": "Julián Ortega",
         "preview": "Ah, es cierto. Gracias.",
+        "rating": {"score": 3, "comment": None, "ratedAt": "2026-09-12T14:16:00Z"},
+    }
+    # Slice 7: "Calificó: Excelente" with the customer's words, for the case Daniela closed.
+    assert body["items"][0]["rating"] == {
+        "score": 4,
+        "comment": "Muy clara la explicación del plazo, gracias.",
+        "ratedAt": "2026-09-30T14:02:00Z",
     }
     alone = client.get(f"/api/v1/cases/{BEATRIZ}/history", headers=daniela).json()
     assert alone == {"items": [], "total": 0}

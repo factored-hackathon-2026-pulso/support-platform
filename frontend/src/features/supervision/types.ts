@@ -18,6 +18,8 @@ export type TeamRef = Schemas['TeamRef']
 export type TeamSummary = Schemas['TeamSummary']
 export type AnalystCaseCounts = Schemas['AnalystCaseCounts']
 export type TeamAnalyst = Schemas['TeamAnalyst']
+/** "Calificación 7 días" (slice 7): ratings of the cases she closed in the last 7 days. */
+export type RatingStats = Schemas['RatingStats']
 export type TeamOverview = Schemas['TeamOverview']
 
 export type LanguageQueue = Schemas['LanguageQueue']

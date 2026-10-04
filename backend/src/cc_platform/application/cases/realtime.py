@@ -10,7 +10,8 @@ schemas the REST endpoints return), so socket and REST cannot drift.
   for ``everyone`` turns only.
 - ``case.updated`` → ``case:<id>`` and ``inbox:<assignee>`` (``CaseSummary``), after
   turn.created, case.assigned, case.status_changed, case.read, case.first_responded,
-  case.closed (a close moves the card to Cerrados: ``inboxStatus = closed``). One envelope
+  case.closed (a close moves the card to Cerrados: ``inboxStatus = closed``), case.rated
+  (slice 7: the closed card and the read-only footer show the customer's rating). One envelope
   published to both topics at once, so a socket subscribed to both receives it once.
 - ``case.assigned`` → ``inbox:<assignee>`` (``CaseSummary``). A reassignment (slice 3) also
   sends ``case.unassigned`` (``CaseSummary``), ``case.updated`` and her fresh
@@ -19,7 +20,8 @@ schemas the REST endpoints return), so socket and REST cannot drift.
   window), with each inbox ``case.updated``.
 - ``availability.updated`` → ``inbox:<staff>`` (``Availability``).
 - ``conversation.updated`` → ``customer:<cus>`` (``CustomerConversation``), after
-  case.opened, case.queued, case.assigned, case.status_changed, case.closed. A new case
+  case.opened, case.queued, case.assigned, case.status_changed, case.closed, case.rated
+  (the simulator stops asking for a rating in every open tab). A new case
   after a close carries a different ``caseId``: the simulator switches conversations.
 
 Envelope ``id`` = the source event id (unique per ``type``); clients dedupe on
@@ -57,6 +59,7 @@ from cc_platform.domain.cases.events import (
     CaseFirstResponded,
     CaseOpened,
     CaseQueued,
+    CaseRated,
     CaseRead,
     CaseStatusChanged,
     CaseViewed,
@@ -94,8 +97,16 @@ _CASE_UPDATING = (
     CaseRead,
     CaseFirstResponded,
     CaseClosed,
+    CaseRated,
 )
-_CONVERSATION_UPDATING = (CaseOpened, CaseQueued, CaseAssigned, CaseStatusChanged, CaseClosed)
+_CONVERSATION_UPDATING = (
+    CaseOpened,
+    CaseQueued,
+    CaseAssigned,
+    CaseStatusChanged,
+    CaseClosed,
+    CaseRated,
+)
 
 
 class CaseRealtimePresenter(Protocol):

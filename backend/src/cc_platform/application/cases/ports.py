@@ -40,6 +40,14 @@ class OpenCaseRef:
     language: Language
 
 
+@dataclass(frozen=True, slots=True)
+class RatingTotals:
+    """Customer ratings counted for one analyst (slice 7): how many and their sum."""
+
+    count: int
+    score_sum: int
+
+
 class CaseRepository(Protocol):
     async def get(self, case_id: str) -> Case | None: ...
 
@@ -101,6 +109,11 @@ class CaseRepository(Protocol):
     ) -> dict[str, list[OpenCaseRef]]:
         """Each assignee's open cases (``assigned | in_progress``), by case id, in one query;
         only ``staff_ids`` when given. People without open cases are left out."""
+        ...
+
+    async def rating_totals_by_closer(self, closed_since: datetime) -> dict[str, RatingTotals]:
+        """Per analyst who closed them: the rated cases with ``closed_at >= closed_since``
+        (count and score sum), in one grouped query. Analysts without any are left out."""
         ...
 
 

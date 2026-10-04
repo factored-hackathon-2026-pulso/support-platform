@@ -11,10 +11,11 @@ from sqlalchemy import case as sql_case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cc_platform.application.cases.ports import AssigneeLoad, CaseRef, OpenCaseRef
+from cc_platform.application.cases.ports import AssigneeLoad, CaseRef, OpenCaseRef, RatingTotals
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case, CaseClosure
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
+from cc_platform.domain.cases.rating import CaseRating
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
     OPEN_ASSIGNED_STATUSES,
@@ -51,6 +52,7 @@ class SqlCaseRepository(VersionedRepository[Case]):
 
     def _to_row(self, aggregate: Case) -> dict[str, Any]:
         closure = aggregate.closure
+        rating = aggregate.rating
         return {
             "id": aggregate.id,
             "customer_id": aggregate.customer_id,
@@ -87,6 +89,10 @@ class SqlCaseRepository(VersionedRepository[Case]):
             "closed_by_role": closure.closed_by_role.value if closure else None,
             "close_reason": closure.reason.value if closure else None,
             "close_note": closure.note if closure else None,
+            "rating_score": rating.score if rating else None,
+            "rating_comment": rating.comment if rating else None,
+            "rated_at": rating.rated_at if rating else None,
+            "rating_key": rating.key if rating else None,
         }
 
     def _from_row(self, row: Row) -> Case:
@@ -98,6 +104,14 @@ class SqlCaseRepository(VersionedRepository[Case]):
                 closed_by_role=ActorRole(row["closed_by_role"]),
                 reason=CloseReason(row["close_reason"]),
                 note=row["close_note"],
+            )
+        rating = None
+        if row["rating_score"] is not None:
+            rating = CaseRating(
+                score=row["rating_score"],
+                rated_at=row["rated_at"],
+                comment=row["rating_comment"],
+                key=row["rating_key"],
             )
         return Case(
             id=row["id"],
@@ -125,6 +139,7 @@ class SqlCaseRepository(VersionedRepository[Case]):
             assignee_read_sequence=row["assignee_read_sequence"],
             unread_sequences=tuple(int(s) for s in row["unread_sequences"]),
             closure=closure,
+            rating=rating,
         )
 
     async def _list(self, *criteria: Any, order: tuple[Any, ...] = ()) -> list[Case]:
@@ -255,6 +270,29 @@ class SqlCaseRepository(VersionedRepository[Case]):
                 OpenCaseRef(case_id=row.id, language=Language(row.language))
             )
         return refs
+
+    async def rating_totals_by_closer(self, closed_since: datetime) -> dict[str, RatingTotals]:
+        c = self.table.c
+        statement = (
+            select(
+                c.closed_by_id,
+                func.count(c.rating_score).label("rated"),
+                func.sum(c.rating_score).label("score_sum"),
+            )
+            .where(
+                c.closed_by_id.is_not(None),
+                c.closed_at >= closed_since,
+                c.rating_score.is_not(None),
+            )
+            .group_by(c.closed_by_id)
+        )
+        rows = (await self._session.execute(statement)).mappings().all()
+        return {
+            row["closed_by_id"]: RatingTotals(
+                count=int(row["rated"] or 0), score_sum=int(row["score_sum"] or 0)
+            )
+            for row in rows
+        }
 
 
 class SqlCustomerCaseSlotRepository(VersionedRepository[CustomerCaseSlot]):

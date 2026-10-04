@@ -35,6 +35,9 @@ export type CustomerConversationSummary = Schemas['CustomerConversationSummary']
 /** One own conversation with its latest `everyone` turns, ascending. */
 export type CustomerConversationDetail = Schemas['CustomerConversationDetail']
 export type PostCustomerTurnRequest = Schemas['PostCustomerTurnRequest']
+/** The customer's own rating of a closed conversation (slice 7): score 1–4, comment. */
+export type CaseRating = Schemas['CaseRating']
+export type RateConversationRequest = Schemas['RateConversationRequest']
 export type PostCustomerTurnResponse = Schemas['PostCustomerTurnResponse']
 
 /** A message the customer sent that the server has not confirmed yet. */

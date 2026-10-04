@@ -32,6 +32,12 @@ import {
   patchInbox,
   priorityLabel,
   slugFromInboxStatus,
+  RATING_SCALE,
+  ratedByCustomerLabel,
+  ratedShortLabel,
+  ratingFact,
+  ratingLabel,
+  ratingOption,
 } from './model'
 
 const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000).toISOString()
@@ -508,5 +514,40 @@ describe('slaFact (the shared SLA level → icon/tone map)', () => {
   it('stops once answered or closed', () => {
     expect(slaFact({ ...pending(1), firstResponseAt: at(-1) }, NOW)).toBeNull()
     expect(slaFact({ ...pending(1), status: 'closed' }, NOW)).toBeNull()
+  })
+})
+
+describe('customer rating (slice 7)', () => {
+  it('maps each score to its word, face and tone', () => {
+    expect(RATING_SCALE.map((o) => [o.score, o.label, o.icon, o.tone])).toEqual([
+      [1, 'Mal', 'frown', 'danger'],
+      [2, 'Regular', 'meh', 'warn'],
+      [3, 'Bien', 'smile', 'success'],
+      [4, 'Excelente', 'laugh', 'success'],
+    ])
+    expect(ratingOption(3.6).label).toBe('Excelente')
+    expect(ratingOption(3.4).label).toBe('Bien')
+    expect(ratingOption(0).label).toBe('Mal')
+    expect(ratingOption(Number.NaN).label).toBe('Mal')
+    expect(ratingLabel(null)).toBeNull()
+    expect(ratingLabel({ score: 2 })).toBe('Regular')
+  })
+
+  it('shows a rated closed card as an icon-only face with its name', () => {
+    expect(ratingFact(null)).toBeNull()
+    expect(ratingFact({ score: 3 })).toEqual({
+      key: 'rating',
+      icon: 'smile',
+      text: 'Bien',
+      label: 'Calificación',
+      tone: 'success',
+      iconOnly: true,
+    })
+    expect(ratingFact({ score: 1 })?.tone).toBe('danger')
+  })
+
+  it('words the footer pill and the history row', () => {
+    expect(ratedByCustomerLabel({ score: 3 })).toBe('El cliente calificó: Bien')
+    expect(ratedShortLabel({ score: 4 })).toBe('Calificó: Excelente')
   })
 })

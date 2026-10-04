@@ -97,6 +97,11 @@
   --color-app-chip-line: #c9d3cc;
   --color-app-brand: #2f7a67;
   --color-app-brand-strong: #225a4c;
+  /* Satisfaction survey (slice 7, Main.dc.html "cerrado"/"calificado"): the picked "Bien" and
+     "Excelente" cards and the thanks pill. app-rate-ink on either tint is above 7:1. */
+  --color-app-rate-good: #e7f0ec;
+  --color-app-rate-great: #d7ebe2;
+  --color-app-rate-ink: #1f5546;
 
   /* Typography */
   --font-sans: 'Schibsted Grotesk', system-ui, sans-serif;

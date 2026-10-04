@@ -174,11 +174,18 @@ cases = Table(
     Column("closed_by_role", String(20), nullable=True),
     Column("close_reason", String(30), nullable=True),
     Column("close_note", String(500), nullable=True),
+    # customer rating (slice 7, flattened): 1–4, optional comment, the Idempotency-Key
+    Column("rating_score", Integer, nullable=True),
+    Column("rating_comment", String(500), nullable=True),
+    Column("rated_at", UtcDateTime, nullable=True),
+    Column("rating_key", String(64), nullable=True),
     _version(),
     Index("ix_cases_assignee_status", "assigned_analyst_id", "status"),
     Index("ix_cases_assignee_closed", "assigned_analyst_id", "closed_at"),
     Index("ix_cases_status_opened", "status", "opened_at"),
     Index("ix_cases_customer_opened", "customer_id", "opened_at"),
+    # "Calificación 7 días" (slice 7): the rated cases each analyst closed since a time.
+    Index("ix_cases_closer_closed", "closed_by_id", "closed_at"),
 )
 
 # Append-only transcript. (case_id, sequence) is gap-free per case (the case CAS

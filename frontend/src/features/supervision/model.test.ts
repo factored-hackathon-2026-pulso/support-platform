@@ -65,6 +65,9 @@ import {
   toTeamSearch,
   unchangedToastTitle,
   waitSince,
+  RECENT_RATING_HEADER,
+  formatRatingAverage,
+  recentRatingCell,
 } from './model'
 
 describe('"Ahora" (contract §2.2)', () => {
@@ -398,5 +401,34 @@ describe('fixture sanity', () => {
   it('keeps Felipe and Paula as Spanish-only analysts', () => {
     expect(felipe.languages).toEqual(['es'])
     expect(paula.languages).toEqual(['es'])
+  })
+})
+
+describe('"Calificación 7 días" (slice 7)', () => {
+  it('shows the face of the average, one decimal with a comma, and the count', () => {
+    expect(recentRatingCell({ count: 9, average: 32 / 9 })).toEqual({
+      icon: 'laugh',
+      tone: 'success',
+      average: '3,6',
+      count: '(9)',
+      tooltip: 'Promedio 3,6 de 4 en 9 casos calificados',
+    })
+    expect(recentRatingCell({ count: 1, average: 2 })).toEqual({
+      icon: 'meh',
+      tone: 'danger',
+      average: '2,0',
+      count: '(1)',
+      tooltip: 'Promedio 2,0 de 4 en 1 caso calificado',
+    })
+    expect(recentRatingCell({ count: 6, average: 2.7 })?.tone).toBe('warn')
+    expect(recentRatingCell({ count: 6, average: 2.7 })?.icon).toBe('smile')
+    expect(recentRatingCell({ count: 4, average: 1.2 })?.icon).toBe('frown')
+  })
+
+  it('is empty ("—") when nothing was rated', () => {
+    expect(recentRatingCell({ count: 0, average: null })).toBeNull()
+    expect(formatRatingAverage(3)).toBe('3,0')
+    expect(formatRatingAverage(3.25)).toBe('3,3')
+    expect(RECENT_RATING_HEADER.label).toBe('Calificación 7 días')
   })
 })

@@ -114,6 +114,11 @@ export class WorkspacePage {
     return conversation
   }
 
+  /** The read-only footer of a closed case (or someone else's): "Solo lectura". */
+  readOnlyFooter(customerName: string): Locator {
+    return this.conversation(customerName).getByRole('note', { name: 'Solo lectura' })
+  }
+
   composer(customerName: string): Locator {
     return this.conversation(customerName).getByRole('textbox', { name: 'Escribe al cliente' })
   }

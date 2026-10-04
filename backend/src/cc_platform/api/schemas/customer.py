@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, StringConstraints, field_validator
 
-from cc_platform.api.schemas.cases import ClientMessageId, TurnText
+from cc_platform.api.schemas.cases import CaseRating, ClientMessageId, TurnText
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.application.cases.dto import (
     CustomerConversationDetailView,
@@ -20,6 +20,11 @@ from cc_platform.application.cases.dto import (
 from cc_platform.application.customers.dto import (
     CustomerSessionGrant,
     DemoCustomerView,
+)
+from cc_platform.domain.cases.rating import (
+    MAX_RATING_COMMENT,
+    MAX_RATING_SCORE,
+    MIN_RATING_SCORE,
 )
 from cc_platform.domain.cases.values import (
     CaseChannel,
@@ -124,6 +129,9 @@ class CustomerConversation(ApiModel):
     )
     last_sequence: int = Field(description="Highest sequence among customer-visible turns.")
     previous_case_id: str | None = Field(description="The closed case this one continues.")
+    rating: CaseRating | None = Field(
+        description="The customer's own rating (slice 7); null until rated (or while open)."
+    )
 
     @classmethod
     def from_view(cls, view: CustomerConversationView) -> CustomerConversation:
@@ -137,6 +145,7 @@ class CustomerConversation(ApiModel):
             agent_name=view.agent_name,
             last_sequence=view.last_sequence,
             previous_case_id=view.previous_case_id,
+            rating=CaseRating.from_view(view.rating),
         )
 
 
@@ -242,3 +251,25 @@ class PostCustomerTurnResponse(ApiModel):
             conversation=CustomerConversation.from_view(result.conversation),
             case_created=result.case_created,
         )
+
+
+# ----------------------------------------------------------------------------- rating (slice 7)
+RatingComment = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, max_length=MAX_RATING_COMMENT),
+    Field(description="Optional: trimmed, blank becomes null, at most 500 characters."),
+]
+
+
+class RateConversationRequest(RequestModel):
+    score: int = Field(
+        ge=MIN_RATING_SCORE,
+        le=MAX_RATING_SCORE,
+        description="1 Mal · 2 Regular · 3 Bien · 4 Excelente.",
+    )
+    comment: RatingComment | None = None
+
+    @field_validator("comment")
+    @classmethod
+    def _blank_comment_is_null(cls, comment: str | None) -> str | None:
+        return comment or None

@@ -33,6 +33,7 @@ export function makeCaseSummary(overrides: Partial<CaseSummary> = {}): CaseSumma
     previousCaseId: null,
     closedAt: null,
     closeReason: null,
+    rating: null,
     ...overrides,
   }
 }
@@ -113,6 +114,7 @@ export const closedInbox: CaseSummary[] = [
     closeReason: 'out_of_scope',
     preview: 'Ah ok, gracias',
     unreadCount: 0,
+    rating: { score: 3, comment: null, ratedAt: minutesFrom(-3 * 60 + 5) },
   }),
   makeCaseSummary({
     id: 'CASE-00000000000000000000000105',
@@ -142,6 +144,11 @@ export const closedInbox: CaseSummary[] = [
     preview: 'Perfecto, muchas gracias.',
     unreadCount: 0,
     previousCaseId: 'CASE-00000000000000000000000110',
+    rating: {
+      score: 4,
+      comment: 'Muy clara la explicación del plazo, gracias.',
+      ratedAt: minutesFrom(-48 * 60 + 2),
+    },
   }),
 ]
 

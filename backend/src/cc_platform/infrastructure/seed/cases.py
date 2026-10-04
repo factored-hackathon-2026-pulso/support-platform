@@ -2,6 +2,8 @@
 people.
 
 Daniela's inbox: Todos 5 · Por responder 2 · Nuevos 2 · Esperando al cliente 1 · Cerrados 3.
+Customer ratings (slice 7, invented): Patricia rated 104 "Excelente" with a comment and 110
+"Bien", Héctor rated 106 "Bien"; Claudia's 105 stays unrated (the simulator asks her).
 Besides it: three queued cases (two in "Cola en español", one at risk and one overdue; one
 in "Cola en portugués"), Julián's two open cases (one overdue, one that Lucía reassigned to
 him from Paula), one closed case of Julián outside the 7-day window (Patricia's history),
@@ -219,6 +221,15 @@ class _Story:
             actor=ActorRef(ActorRole.ANALYST, staff_id), at=at, reason=reason, note=note
         )
 
+    def rate(self, at: datetime, score: int, comment: str | None = None) -> None:
+        """The customer rates the closed case (slice 7), as ``RateConversation`` does."""
+        self.case.rate(
+            actor=ActorRef(ActorRole.CUSTOMER, self.case.customer_id),
+            score=score,
+            comment=comment,
+            at=at,
+        )
+
     async def save(self, uow: UnitOfWork) -> None:
         """Store the case; an open case takes the customer's one-open-case slot."""
         slot = await uow.case_slots.get(self.case.customer_id)
@@ -281,6 +292,7 @@ def _patricia_old(ids: IdGenerator, t: datetime) -> _Story:
               "música, contratada en marzo.")  # fmt: skip
     s.customer(opened + timedelta(minutes=10), "Ah, es cierto. Gracias.")
     s.close(opened + timedelta(minutes=15), CloseReason.RESOLVED)
+    s.rate(opened + timedelta(minutes=16), 3)
     return s
 
 
@@ -300,6 +312,7 @@ def _patricia_refund(ids: IdGenerator, t: datetime) -> _Story:
               "reversa en un plazo de 5 días hábiles.")  # fmt: skip
     s.customer(opened + timedelta(minutes=20), "Perfecto, muchas gracias.")
     s.close(closed, CloseReason.RESOLVED, "Se explicó el plazo del reverso (5 días hábiles).")
+    s.rate(closed + timedelta(minutes=2), 4, "Muy clara la explicación del plazo, gracias.")
     return s
 
 
@@ -334,6 +347,7 @@ def _hector_out_of_scope(ids: IdGenerator, t: datetime) -> _Story:
     s.close(
         t - timedelta(hours=3), CloseReason.OUT_OF_SCOPE, "Pregunta por un crédito hipotecario."
     )
+    s.rate(t - timedelta(hours=3) + timedelta(minutes=5), 3)
     return s
 
 

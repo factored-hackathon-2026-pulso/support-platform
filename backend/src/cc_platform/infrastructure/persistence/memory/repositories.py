@@ -15,6 +15,7 @@ from cc_platform.application.cases.ports import (
     CaseRef,
     CustomerCaseFact,
     OpenCaseRef,
+    RatingTotals,
 )
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
 from cc_platform.application.ports.event_log import AuditFilters
@@ -496,6 +497,18 @@ class InMemoryCaseRepository(_StagedRepository[Case]):
                 OpenCaseRef(case_id=case.id, language=case.language)
             )
         return refs
+
+    async def rating_totals_by_closer(self, closed_since: datetime) -> dict[str, RatingTotals]:
+        totals: dict[str, RatingTotals] = {}
+        for case in self._all():
+            closure, rating = case.closure, case.rating
+            if closure is None or rating is None or closure.closed_at < closed_since:
+                continue
+            current = totals.get(closure.closed_by_id, RatingTotals(count=0, score_sum=0))
+            totals[closure.closed_by_id] = RatingTotals(
+                count=current.count + 1, score_sum=current.score_sum + rating.score
+            )
+        return totals
 
 
 class InMemoryCustomerCaseSlotRepository(_StagedRepository[CustomerCaseSlot]):

@@ -17,6 +17,7 @@ from cc_platform.application.cases.dto import (
     CaseClosureView,
     CaseCustomerView,
     CaseHistoryItemView,
+    CaseRatingView,
     CaseSummaryView,
     CustomerConversationSummaryView,
     CustomerConversationView,
@@ -30,6 +31,7 @@ from cc_platform.application.ports.unit_of_work import UnitOfWork
 from cc_platform.application.security import Actor
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
+from cc_platform.domain.cases.rating import CaseRating
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import (
     CLOSABLE_STATUSES,
@@ -69,6 +71,13 @@ def inbox_status(case: Case) -> InboxStatus | None:
             return None
 
 
+def rating_view(rating: CaseRating | None) -> CaseRatingView | None:
+    """The rating as both sides see it (the idempotency key stays inside)."""
+    if rating is None:
+        return None
+    return CaseRatingView(score=rating.score, comment=rating.comment, rated_at=rating.rated_at)
+
+
 def summarize(case: Case, customer_name: str) -> CaseSummaryView:
     has_message = case.last_message_preview is not None
     return CaseSummaryView(
@@ -94,6 +103,7 @@ def summarize(case: Case, customer_name: str) -> CaseSummaryView:
         previous_case_id=case.previous_case_id,
         closed_at=case.closed_at,
         close_reason=case.closure.reason if case.closure else None,
+        rating=rating_view(case.rating),
     )
 
 
@@ -262,6 +272,7 @@ class CaseReader:
                     analyst_id=analyst,
                     analyst_name=await self.staff_name(analyst) if analyst else None,
                     preview=case.last_message_preview,
+                    rating=rating_view(case.rating),
                 )
             )
         return items
@@ -347,6 +358,7 @@ class CaseReader:
             agent_name=await self._agent_name(case, status),
             last_sequence=case.last_public_sequence,
             previous_case_id=case.previous_case_id,
+            rating=rating_view(case.rating),
         )
 
     async def conversation_summary(self, case: Case) -> CustomerConversationSummaryView:

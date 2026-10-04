@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
+import * as rm from './model'
 import {
   demoCustomers,
   fakeCustomerToken,
@@ -415,5 +416,92 @@ describe('past conversations', () => {
       agentName: 'Daniela',
       preview: 'Olá',
     })
+  })
+})
+
+describe('satisfaction survey (slice 7)', () => {
+  const closed = makeCustomerConversation({ status: 'closed', agentName: 'Daniela' })
+
+  it('asks only for the current closed conversation, unrated and not skipped', () => {
+    expect(rm.surveyState(null, new Set())).toBe('none')
+    expect(rm.surveyState(makeCustomerConversation({ status: 'with_agent' }), new Set())).toBe(
+      'none',
+    )
+    expect(rm.surveyState(closed, new Set())).toBe('ask')
+    expect(rm.surveyState(closed, new Set([closed.caseId]))).toBe('none')
+    const rated = {
+      ...closed,
+      rating: { score: 3, comment: null, ratedAt: '2026-03-05T17:00:00Z' },
+    }
+    expect(rm.surveyState(rated, new Set())).toBe('rated')
+    // Rated wins over a skip (the thanks still shows).
+    expect(rm.surveyState(rated, new Set([closed.caseId]))).toBe('rated')
+  })
+
+  it('names the four answers with a face and a tone, in each language', () => {
+    expect(rm.ratingOptions('es')).toEqual([
+      { score: 1, label: 'Mal', icon: 'frown', tone: 'danger' },
+      { score: 2, label: 'Regular', icon: 'meh', tone: 'warn' },
+      { score: 3, label: 'Bien', icon: 'smile', tone: 'good' },
+      { score: 4, label: 'Excelente', icon: 'laugh', tone: 'great' },
+    ])
+    expect(rm.ratingOptions('pt').map((option) => option.label)).toEqual([
+      'Ruim',
+      'Regular',
+      'Bom',
+      'Excelente',
+    ])
+    expect(rm.customerRatingOption(9, 'es').label).toBe('Excelente')
+    expect(rm.customerRatingOption(0, 'pt').label).toBe('Ruim')
+  })
+
+  it('writes the survey copy with the analyst, or the team when unknown', () => {
+    expect(rm.ratingSurveyCopy('Daniela', 'es')).toMatchObject({
+      title: '¿Cómo te atendió Daniela?',
+      legend: 'Califica la atención',
+      commentLabel: '¿Quieres contarnos algo más? (opcional)',
+      skip: 'Ahora no',
+      send: 'Enviar',
+    })
+    expect(rm.ratingSurveyCopy(null, 'es').title).toBe('¿Cómo te atendió nuestro equipo?')
+    expect(rm.ratingSurveyCopy('Daniela', 'pt')).toMatchObject({
+      title: 'Como foi o atendimento de Daniela?',
+      legend: 'Avalie o atendimento',
+      skip: 'Agora não',
+    })
+    expect(rm.ratingSurveyCopy(null, 'pt').title).toBe('Como foi o atendimento de nossa equipe?')
+    expect(rm.ratedThanks({ score: 4 }, 'es')).toBe('¡Gracias! Calificaste: Excelente')
+    expect(rm.ratedThanks({ score: 3 }, 'pt')).toBe('Obrigado! Você avaliou: Bom')
+  })
+
+  it('trims the comment (blank → null, at most 500)', () => {
+    expect(rm.toRatingRequest(4, '  Muy amable ')).toEqual({ score: 4, comment: 'Muy amable' })
+    expect(rm.toRatingRequest(1, '   ')).toEqual({ score: 1, comment: null })
+    expect(rm.toRatingRequest(2, 'x'.repeat(600)).comment).toHaveLength(500)
+  })
+
+  it('explains a failed send and refetches when the conversation changed', () => {
+    const network = new ApiProblem({ status: 0, code: 'network_error' })
+    const rated = new ApiProblem({ status: 409, code: 'already_rated' })
+    expect(rm.describeRatingFailure(network, 'es')).toBe('No hay conexión. Inténtalo de nuevo.')
+    expect(rm.describeRatingFailure(rated, 'pt')).toBe(
+      'Não foi possível enviar sua avaliação. Tente de novo.',
+    )
+    expect(rm.ratingFailureRefetches(rated)).toBe(true)
+    expect(
+      rm.ratingFailureRefetches(new ApiProblem({ status: 409, code: 'case_not_closed' })),
+    ).toBe(true)
+    expect(rm.ratingFailureRefetches(network)).toBe(false)
+  })
+
+  it('remembers skipped conversations in a forgiving format', () => {
+    expect(rm.parseSkippedRatings(null)).toEqual(new Set())
+    expect(rm.parseSkippedRatings('not json')).toEqual(new Set())
+    expect(rm.parseSkippedRatings('{"a":1}')).toEqual(new Set())
+    expect(rm.parseSkippedRatings('["CASE-1", 2, "CASE-2"]')).toEqual(new Set(['CASE-1', 'CASE-2']))
+    const many = new Set(Array.from({ length: 60 }, (_, i) => `CASE-${i}`))
+    const stored = JSON.parse(rm.serializeSkippedRatings(many)) as string[]
+    expect(stored).toHaveLength(50)
+    expect(stored.at(-1)).toBe('CASE-59')
   })
 })

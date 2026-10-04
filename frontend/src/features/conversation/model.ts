@@ -14,7 +14,9 @@ import {
   inboxStatusMeta,
   isNewerCase,
   priorityLabel,
+  ratingOption,
   slaFact,
+  type CaseRating,
   type CloseReason,
 } from '@/features/cases/core'
 import { isApiProblem } from '@/lib/api'
@@ -517,8 +519,8 @@ export interface FileRow {
   label: string
   text?: string
   mono?: boolean
-  /** The case status as a colored pill. */
-  pill?: { label: string; tone: Tone }
+  /** The case status (or the customer's rating, with its face) as a colored pill. */
+  pill?: { label: string; tone: Tone; icon?: FactIcon }
   /** Short facts as the value ("Primera respuesta"). */
   facts?: FactItem[]
 }
@@ -604,7 +606,30 @@ export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | 
       label: 'Primera respuesta',
       facts: firstResponseFacts(summary, now),
     },
+    ...(summary.status === 'closed' ? [ratingRow(summary.rating)] : []),
   ]
+}
+
+/**
+ * "Calificación" of a closed case (slice 7): the face and the word as a pill, or
+ * "Sin calificar" while the customer has not rated it. Open cases have no row.
+ */
+export function ratingRow(rating: Pick<CaseRating, 'score'> | null): FileRow {
+  if (!rating) {
+    return {
+      key: 'rating',
+      icon: 'smile',
+      label: 'Calificación',
+      pill: { label: 'Sin calificar', tone: 'closed' },
+    }
+  }
+  const option = ratingOption(rating.score)
+  return {
+    key: 'rating',
+    icon: 'smile',
+    label: 'Calificación',
+    pill: { label: option.label, tone: option.tone, icon: option.icon },
+  }
 }
 
 /** "Chat en la app" / "Chat web". */
@@ -714,10 +739,14 @@ export interface FooterFacts {
   reason: CloseReason | null
   facts: FactItem[]
   note: string | null
+  /** The customer's rating of the closed case (slice 7): "El cliente calificó: Bien". */
+  rating: CaseRating | null
 }
 
 export function footerFacts(
-  detail: Pick<CaseDetail, 'capabilities' | 'closure' | 'assignment'>,
+  detail: Pick<CaseDetail, 'capabilities' | 'closure' | 'assignment'> & {
+    case?: Pick<CaseDetail['case'], 'rating'>
+  },
   meId: string,
 ): FooterFacts | null {
   const { capabilities, closure, assignment } = detail
@@ -741,26 +770,51 @@ export function footerFacts(
         tooltip: 'Lo cerró',
       })
     }
-    return { reason: closure.reason, facts, note: closureNote(closure) }
+    return {
+      reason: closure.reason,
+      facts,
+      note: closureNote(closure),
+      rating: detail.case?.rating ?? null,
+    }
   }
   const facts: FactItem[] = [{ key: 'read-only', icon: 'lock', text: 'Solo lectura' }]
   if (assignment && assignment.analystId !== meId) {
     facts.push({ key: 'owner', icon: 'user', text: `Lo atiende ${assignment.analystName}` })
   }
-  return { reason: null, facts, note: null }
+  return { reason: null, facts, note: null, rating: null }
 }
 
-/** A row of "Casos anteriores" as facts: [calendar] date, the reason (or "Abierto"), [user] who. */
+/**
+ * A row of "Casos anteriores" as facts: [calendar] date, the reason (or "Abierto"),
+ * [user] who, and (slice 7) the customer's rating as [face] "Calificó: Excelente".
+ */
 export function historyItemFacts(
-  item: Pick<CaseHistoryItem, 'openedAt' | 'status' | 'analystName'>,
+  item: Pick<CaseHistoryItem, 'openedAt' | 'status' | 'analystName'> &
+    Partial<Pick<CaseHistoryItem, 'rating'>>,
 ): FactItem[] {
+  const rating = item.rating ? ratingOption(item.rating.score) : null
   return [
     { key: 'date', icon: 'calendar', text: formatDate(item.openedAt), label: 'Abierto' },
     ...(item.status === 'closed'
       ? []
       : [{ key: 'open', icon: 'inbox' as const, text: 'Abierto', tone: 'accent' as const }]),
     { key: 'analyst', icon: 'user', text: item.analystName ?? 'Sin asignar' },
+    ...(rating
+      ? [
+          {
+            key: 'rating',
+            icon: rating.icon,
+            text: `Calificó: ${rating.label}`,
+            tone: rating.textTone,
+          },
+        ]
+      : []),
   ]
+}
+
+/** The quoted comment under the rating pill: “Muy clara…” (none → null). */
+export function ratingComment(rating: Pick<CaseRating, 'comment'> | null): string | null {
+  return rating?.comment ? `“${rating.comment}”` : null
 }
 
 /** "Casos anteriores (2)", the panel section title (also without any: "(0)"). */

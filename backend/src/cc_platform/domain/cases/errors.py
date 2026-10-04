@@ -16,6 +16,23 @@ class CaseClosedError(ConflictError):
         super().__init__(None, currentStatus=CaseStatus.CLOSED.value)
 
 
+class CaseNotClosedError(ConflictError):
+    """Only a closed case can be rated (409, slice 7)."""
+
+    code = "case_not_closed"
+    default_message = "Solo se puede calificar una conversación terminada."
+
+    def __init__(self, current: CaseStatus) -> None:
+        super().__init__(None, currentStatus=current.value)
+
+
+class AlreadyRatedError(ConflictError):
+    """The case already has its rating: a customer rates a case once (409, slice 7)."""
+
+    code = "already_rated"
+    default_message = "Esta conversación ya tiene una calificación."
+
+
 class IdempotencyConflictError(ConflictError):
     """The same ``clientMessageId`` was already used with another text (409)."""
 

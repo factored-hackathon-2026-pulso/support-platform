@@ -18,6 +18,8 @@ export type CountryCode = Schemas['CountryCode']
 
 export type CustomerRef = Schemas['CustomerRef']
 export type CaseSummary = Schemas['CaseSummary']
+/** The customer's rating of a closed case (slice 7): score 1–4, optional comment. */
+export type CaseRating = Schemas['CaseRating']
 export type InboxCounts = Schemas['InboxCounts']
 export type InboxResponse = Schemas['InboxResponse']
 export type Availability = Schemas['Availability']

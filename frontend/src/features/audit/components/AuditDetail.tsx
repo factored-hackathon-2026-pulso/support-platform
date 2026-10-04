@@ -13,14 +13,7 @@ import {
   Spinner,
 } from '@/components/ui'
 import { isApiProblem, type ApiProblem } from '@/lib/api'
-import {
-  REDACTED_TEXT_NOTE,
-  detailByline,
-  detailKicker,
-  eventInstant,
-  hidesMessageText,
-  payloadLines,
-} from '../model'
+import { detailByline, detailKicker, eventInstant, payloadLines, redactionNote } from '../model'
 import type { AuditEvent } from '../types'
 
 export interface AuditDetailProps {
@@ -159,8 +152,8 @@ function EventDetail({
             </AccordionItem>
           </Accordion>
         ) : null}
-        {hidesMessageText(event) ? (
-          <p className="m-0 text-13 text-muted">{REDACTED_TEXT_NOTE}</p>
+        {redactionNote(event) ? (
+          <p className="m-0 text-13 text-muted">{redactionNote(event)}</p>
         ) : null}
       </div>
       {caseRef ? (

@@ -8,6 +8,7 @@ State machine (slice 2 contract §2.3; explicit transitions, anything else raise
     assigned ──▶ in_progress            (the assignee opens or replies)
     assigned | in_progress ──▶ assigned (a supervisor reassigns it to another analyst)
     assigned | in_progress ──▶ closed   (the assignee closes with a reason; terminal)
+    closed ──▶ closed + rating          (its customer rates it once, slice 7; no transition)
 
 A closed case never reopens: the customer's next message opens a new case linked through
 ``previous_case_id``. Every transition records a domain event; the optimistic ``version``
@@ -25,16 +26,27 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.domain.cases.assignment import Assignment
-from cc_platform.domain.cases.errors import CaseClosedError, invalid_case_transition
+from cc_platform.domain.cases.errors import (
+    AlreadyRatedError,
+    CaseClosedError,
+    CaseNotClosedError,
+    invalid_case_transition,
+)
 from cc_platform.domain.cases.events import (
     CaseAssigned,
     CaseClosed,
     CaseFirstResponded,
     CaseOpened,
     CaseQueued,
+    CaseRated,
     CaseRead,
     CaseStatusChanged,
     TurnCreated,
+)
+from cc_platform.domain.cases.rating import (
+    CaseRating,
+    normalize_rating_comment,
+    normalize_rating_score,
 )
 from cc_platform.domain.cases.turn import Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
@@ -52,7 +64,11 @@ from cc_platform.domain.cases.values import (
 from cc_platform.domain.people.staff import Language
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.aggregate import AggregateRoot
-from cc_platform.domain.shared.errors import InvalidTransitionError, InvalidValueError
+from cc_platform.domain.shared.errors import (
+    InvalidTransitionError,
+    InvalidValueError,
+    NotFoundError,
+)
 from cc_platform.domain.shared.ids import IdPrefix, require_id
 
 PREVIEW_LENGTH = 140
@@ -126,6 +142,8 @@ class Case(AggregateRoot):
     unread_sequences: tuple[int, ...] = ()
     """Sequences of customer messages after the assignee's read cursor (``unreadCount``)."""
     closure: CaseClosure | None = None
+    rating: CaseRating | None = None
+    """The customer's satisfaction rating (slice 7): only on a closed case, at most once."""
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.CASE)
@@ -140,6 +158,8 @@ class Case(AggregateRoot):
             raise InvalidValueError("SLA cannot be due before the case opens", field="sla_due_at")
         if not 0 <= self.assignee_read_sequence <= self.last_sequence:
             raise InvalidValueError("read cursor out of range", field="assignee_read_sequence")
+        if self.rating is not None and self.closure is None:
+            raise InvalidValueError("only a closed case carries a rating", field="rating")
 
     # ------------------------------------------------------------------ factory
     @classmethod
@@ -454,6 +474,51 @@ class Case(AggregateRoot):
             )
         )
         self._change_status(CaseStatus.CLOSED, at=at, actor=actor, reason="closed")
+
+    # ------------------------------------------------------------------ rating (slice 7)
+    def rate(
+        self,
+        *,
+        actor: ActorRef,
+        score: int,
+        comment: str | None,
+        at: datetime,
+        key: str | None = None,
+    ) -> CaseRating:
+        """The customer rates the attention of a **closed** case, once (CSAT 1–4).
+
+        Only the case's own customer may rate it (anyone else: ``not_found``, as if the case
+        did not exist); an open case is ``case_not_closed``; a second rating is
+        ``already_rated``. The comment is trimmed (blank → ``None``, at most 500). Records
+        ``case.rated`` with the analyst who closed it (the rating counts for her). The
+        status does not change: a closed case stays read-only for everyone.
+        """
+        if actor.role is not ActorRole.CUSTOMER or actor.actor_id != self.customer_id:
+            raise NotFoundError("No encontramos esa conversación.", caseId=self.id)
+        closure = self.closure
+        if not self.is_closed or closure is None:
+            raise CaseNotClosedError(self.status)
+        if self.rating is not None:
+            raise AlreadyRatedError()
+        rating = CaseRating(
+            score=normalize_rating_score(score),
+            rated_at=at,
+            comment=normalize_rating_comment(comment),
+            key=key,
+        )
+        self.rating = rating
+        self._record(
+            CaseRated(
+                occurred_at=at,
+                actor=actor,
+                entity_id=self.id,
+                case_id=self.id,
+                score=rating.score,
+                comment=rating.comment,
+                analyst_id=closure.closed_by_id,
+            )
+        )
+        return rating
 
     # ------------------------------------------------------------------ helpers
     def _require(self, *allowed: CaseStatus, target: CaseStatus) -> None:

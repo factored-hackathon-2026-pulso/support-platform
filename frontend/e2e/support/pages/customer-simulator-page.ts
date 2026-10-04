@@ -12,6 +12,11 @@ const COPY = {
     you: 'Tú',
     past: 'Conversaciones anteriores',
     showPast: /^Ver conversaciones anteriores \(\d+\)$/,
+    survey: (agent: string) => `¿Cómo te atendió ${agent}?`,
+    anySurvey: /^¿Cómo te atendió /,
+    skip: 'Ahora no',
+    comment: '¿Quieres contarnos algo más? (opcional)',
+    thanks: (label: string) => `¡Gracias! Calificaste: ${label}`,
   },
   pt: {
     log: 'Conversa com o suporte',
@@ -23,6 +28,11 @@ const COPY = {
     you: 'Você',
     past: 'Conversas anteriores',
     showPast: /^Ver conversas anteriores \(\d+\)$/,
+    survey: (agent: string) => `Como foi o atendimento de ${agent}?`,
+    anySurvey: /^Como foi o atendimento de /,
+    skip: 'Agora não',
+    comment: 'Quer contar algo mais? (opcional)',
+    thanks: (label: string) => `Obrigado! Você avaliou: ${label}`,
   },
 } as const
 
@@ -76,8 +86,48 @@ export class CustomerSimulatorPage {
     return this.page.getByRole('main').getByText(text, { exact: true })
   }
 
+  /**
+   * Slice 7: the satisfaction survey of a closed conversation (it replaces the input);
+   * `agent` names the analyst in its title, or any survey without it.
+   */
+  survey(agent?: string): Locator {
+    return this.page.getByRole('form', {
+      name: agent ? this.copy.survey(agent) : this.copy.anySurvey,
+    })
+  }
+
+  /** Picks a face (its card: the native radio is visually hidden), comments and sends. */
+  async rate(label: string, comment?: string): Promise<void> {
+    const survey = this.survey()
+    const radio = survey.getByRole('radio', { name: label, exact: true })
+    await survey
+      .locator('label')
+      .filter({ has: this.page.getByRole('radio', { name: label, exact: true }) })
+      .click()
+    await expect(radio).toBeChecked()
+    if (comment) await survey.getByRole('textbox', { name: this.copy.comment }).fill(comment)
+    await survey.getByRole('button', { name: 'Enviar', exact: true }).click()
+    await expect(this.thanks(label)).toBeVisible()
+    await expect(survey).toHaveCount(0)
+  }
+
+  /** "¡Gracias! Calificaste: Excelente". */
+  thanks(label: string): Locator {
+    return this.page.getByText(this.copy.thanks(label), { exact: true })
+  }
+
+  /**
+   * Writes a message. A closed, unrated conversation first shows the survey instead of
+   * the input: this customer answers "Ahora no" and writes (a new conversation opens).
+   */
   async send(text: string): Promise<void> {
     const input = this.page.getByRole('textbox', { name: this.copy.input })
+    const survey = this.survey()
+    await expect(input.or(survey)).toBeVisible()
+    if (await survey.isVisible()) {
+      await survey.getByRole('button', { name: this.copy.skip }).click()
+      await expect(survey).toHaveCount(0)
+    }
     await input.fill(text)
     await input.press('Enter')
     await expect(input).toHaveValue('')

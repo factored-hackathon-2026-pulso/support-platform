@@ -11,6 +11,7 @@ from cc_platform.application.cases.customer_chat import (
     GetPastConversation,
     ListPastConversations,
     PostCustomerTurn,
+    RateConversation,
 )
 from cc_platform.application.cases.manual_assignment import SetCaseAssignee
 from cc_platform.application.cases.queries import (
@@ -41,3 +42,4 @@ class CasesUseCases:
     queue_overview: GetQueueOverview
     set_assignee: SetCaseAssignee
     analyst_home: GetAnalystHome
+    rate_conversation: RateConversation

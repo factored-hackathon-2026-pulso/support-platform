@@ -91,7 +91,7 @@ describe('status tiles', () => {
         tone: 'warn',
         shape: 'pie-75',
         count: 2,
-        href: '/analista?estado=por-responder',
+        href: '/analyst/cases?status=to_reply',
       },
       {
         status: 'new',
@@ -99,7 +99,7 @@ describe('status tiles', () => {
         tone: 'accent',
         shape: 'ring',
         count: 2,
-        href: '/analista?estado=nuevos',
+        href: '/analyst/cases?status=new',
       },
       {
         status: 'waiting',
@@ -107,7 +107,7 @@ describe('status tiles', () => {
         tone: 'waiting',
         shape: 'pie-50',
         count: 1,
-        href: '/analista?estado=esperando',
+        href: '/analyst/cases?status=waiting',
       },
       {
         status: 'closed',
@@ -115,7 +115,7 @@ describe('status tiles', () => {
         tone: 'closed',
         shape: 'check',
         count: 3,
-        href: '/analista?estado=cerrados',
+        href: '/analyst/cases?status=closed',
       },
     ])
     expect(statusTiles(undefined).map((tile) => tile.count)).toEqual([null, null, null, null])
@@ -136,7 +136,7 @@ describe('Lo primero', () => {
     expect(beatriz).toMatchObject({
       status: { shape: 'pie-75', label: 'Por responder', tone: 'warn' },
       sla: { icon: 'flame', text: '3 min', tone: 'warn', tooltip: 'Vence en 3 min' },
-      href: '/analista?caso=CASE-00000000000000000000000102&estado=por-responder',
+      href: '/analyst/cases?case=CASE-00000000000000000000000102&status=to_reply',
     })
     expect(texts(beatriz!.facts)).toEqual(['Chat en la app'])
     expect(beatriz!.facts[0]).toMatchObject({ icon: 'message', iconOnly: true })
@@ -149,7 +149,7 @@ describe('Lo primero', () => {
       status: { shape: 'pie-50', label: 'Esperando al cliente', tone: 'waiting' },
       preview: 'Tú: Hola, Joaquín. Soy Daniela, de LATAM Bank.',
       last: { text: 'hace 40 min', tooltip: 'Sin respuesta del cliente' },
-      href: '/analista?caso=CASE-00000000000000000000000107&estado=esperando',
+      href: '/analyst/cases?case=CASE-00000000000000000000000107&status=waiting',
     })
   })
 
@@ -221,19 +221,22 @@ describe('"Mientras no estabas" · templates', () => {
   const template = (overrides: Parameters<typeof makeActivityItem>[0]) =>
     activityTemplate(makeActivityItem(overrides), NOW)
 
-  it('arrival on rule 3: the language, and the "Regla 3" tag only for Portuguese', () => {
+  it('arrival on rule 3: the language mark, and the "Regla 3" tag only for Portuguese', () => {
     expect(template({ kind: 'assigned_on_arrival', language: 'es' })).toEqual({
       phrase: 'Te llegó',
       status: null,
-      facts: [{ key: 'language', icon: 'languages', text: 'Español', label: 'Por idioma' }],
+      facts: [
+        { key: 'language', icon: 'languages', text: '', label: 'Por idioma', languages: ['es'] },
+      ],
       lastCloseReason: null,
     })
     expect(template({ kind: 'assigned_on_arrival', language: 'pt' }).facts).toEqual([
       {
         key: 'language',
         icon: 'languages',
-        text: 'Portugués',
+        text: '',
         label: 'Por idioma',
+        languages: ['pt'],
         tag: 'Regla 3',
       },
     ])
@@ -367,7 +370,7 @@ describe('"Mientras no estabas" · rows', () => {
         'Beatriz Salcedo Prieto',
         'Escribió 2 mensajes',
         'hace 2 min',
-        '/analista?caso=CASE-00000000000000000000000102&estado=por-responder',
+        '/analyst/cases?case=CASE-00000000000000000000000102&status=to_reply',
         false,
       ],
       [
@@ -376,7 +379,7 @@ describe('"Mientras no estabas" · rows', () => {
         'Ya no es tuyo',
         'hace 6 min',
         // Read-only: no filter (it is in none of her lists).
-        '/analista?caso=CASE-00000000000000000000000101',
+        '/analyst/cases?case=CASE-00000000000000000000000101',
         true,
       ],
       [
@@ -384,7 +387,7 @@ describe('"Mientras no estabas" · rows', () => {
         'Larissa Monteiro Alves',
         'Te llegó',
         'hace 14 min',
-        '/analista?caso=CASE-00000000000000000000000103&estado=nuevos',
+        '/analyst/cases?case=CASE-00000000000000000000000103&status=new',
         false,
       ],
       [
@@ -392,7 +395,7 @@ describe('"Mientras no estabas" · rows', () => {
         'Patricia Lozano Vega',
         'Volvió a escribir',
         'hace 15 min',
-        '/analista?caso=CASE-00000000000000000000000108&estado=nuevos',
+        '/analyst/cases?case=CASE-00000000000000000000000108&status=new',
         false,
       ],
       [
@@ -400,7 +403,7 @@ describe('"Mientras no estabas" · rows', () => {
         'Rosa Elena Ibarra Méndez',
         'Te llegó desde la cola',
         'hace 20 min',
-        '/analista?caso=CASE-00000000000000000000000111&estado=nuevos',
+        '/analyst/cases?case=CASE-00000000000000000000000111&status=new',
         false,
       ],
     ])
@@ -472,7 +475,8 @@ describe('"Tu equipo ahora"', () => {
       {
         key: 'queue-es',
         icon: 'inbox',
-        label: 'Cola en español',
+        language: 'es',
+        label: 'Esperan en la cola',
         value: '2',
         tag: null,
         wait: {
@@ -484,7 +488,7 @@ describe('"Tu equipo ahora"', () => {
           tone: 'muted',
         },
       },
-      expect.objectContaining({ label: 'Cola en portugués', value: '1' }),
+      expect.objectContaining({ language: 'pt', label: 'Esperan en la cola', value: '1' }),
     ])
     expect(queueWait({ language: 'es', waiting: 0, oldestQueuedAt: null }, NOW)).toBeNull()
   })

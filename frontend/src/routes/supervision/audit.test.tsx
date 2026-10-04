@@ -49,7 +49,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderAudit(path = '/supervision/auditoria') {
+function renderAudit(path = '/supervision/audit') {
   return renderRoute(path, { staff: supervisorStaff })
 }
 
@@ -90,7 +90,7 @@ describe('audit (supervision)', () => {
     await user.click(
       within(log()).getByRole('button', { name: /Reasignó el caso de Paula Medina/ }),
     )
-    expect(router.state.location.search).toMatch(/^\?evento=EVT-/)
+    expect(router.state.location.search).toMatch(/^\?event=EVT-/)
     const detail = aside()
     expect(within(detail).getByText('11:02:05')).toBeInTheDocument()
     expect(within(detail).getByText('ASIGNACIÓN')).toBeInTheDocument()
@@ -112,10 +112,10 @@ describe('audit (supervision)', () => {
     expect(within(detail).getByText('STF-ANA0000003')).toBeInTheDocument()
 
     const link = within(detail).getByRole('link', { name: 'Ver la conversación' })
-    expect(link).toHaveAttribute('href', `/supervision/casos/${ESTEBAN_CASE}`)
+    expect(link).toHaveAttribute('href', `/supervision/cases/${ESTEBAN_CASE}`)
 
     await user.click(within(detail).getByRole('button', { name: 'Filtrar por este caso' }))
-    expect(new URLSearchParams(router.state.location.search).get('caso')).toBe(ESTEBAN_CASE)
+    expect(new URLSearchParams(router.state.location.search).get('case')).toBe(ESTEBAN_CASE)
     await waitFor(() =>
       expect(fetchAuditEvents).toHaveBeenLastCalledWith(
         { caseId: ESTEBAN_CASE },
@@ -130,17 +130,17 @@ describe('audit (supervision)', () => {
     await user.click(within(aside()).getByRole('link', { name: 'Ver la conversación' }))
     // Another (lazy) route: the navigation commits once its module has loaded.
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe(`/supervision/casos/${ESTEBAN_CASE}`),
+      expect(router.state.location.pathname).toBe(`/supervision/cases/${ESTEBAN_CASE}`),
     )
     expect(router.state.location.state).toEqual({
-      from: expect.stringMatching(/^\/supervision\/auditoria\?caso=/),
+      from: expect.stringMatching(/^\/supervision\/audit\?case=/),
     })
   })
 
   it('says the message text lives in the conversation', async () => {
     const turn = makeRedactedTurnEvent()
     vi.mocked(fetchAuditEvents).mockResolvedValue(makeAuditPage([turn]))
-    renderAudit(`/supervision/auditoria?evento=${turn.id}`)
+    renderAudit(`/supervision/audit?event=${turn.id}`)
     expect(
       await screen.findByText('El texto del mensaje no se muestra aquí: está en la conversación.'),
     ).toBeInTheDocument()
@@ -169,7 +169,7 @@ describe('audit (supervision)', () => {
     )
     await user.click(screen.getByRole('checkbox', { name: 'Solo acciones que cambian algo' }))
     expect(router.state.location.search).toBe(
-      `?quien=equipo&persona=${LUCIA_ID}&tipo=asignacion&cambios=1`,
+      `?actor=staff&person=${LUCIA_ID}&type=assignment&changes=1`,
     )
     await waitFor(() =>
       expect(fetchAuditEvents).toHaveBeenLastCalledWith(
@@ -181,7 +181,7 @@ describe('audit (supervision)', () => {
     // Customers have no "Persona": the filter goes.
     await user.click(screen.getByRole('radio', { name: 'Clientes' }))
     expect(screen.queryByRole('combobox', { name: 'Persona' })).not.toBeInTheDocument()
-    expect(router.state.location.search).toBe('?quien=clientes&tipo=asignacion&cambios=1')
+    expect(router.state.location.search).toBe('?actor=customer&type=assignment&changes=1')
   })
 
   it('searches ids after a pause in typing', async () => {
@@ -195,7 +195,7 @@ describe('audit (supervision)', () => {
   })
 
   it('rejects a Hasta before Desde without asking the server', async () => {
-    renderAudit('/supervision/auditoria?desde=2026-03-05&hasta=2026-03-04')
+    renderAudit('/supervision/audit?from=2026-03-05&to=2026-03-04')
     expect(await screen.findByText('Corrige las fechas para ver el registro.')).toBeInTheDocument()
     expect(screen.getByLabelText('Hasta')).toHaveAccessibleDescription(
       'Debe ser el mismo día de «Desde» o uno posterior.',
@@ -204,7 +204,7 @@ describe('audit (supervision)', () => {
   })
 
   it('sends the days as UTC instants of the viewer zone', async () => {
-    renderAudit('/supervision/auditoria?desde=2026-03-04&hasta=2026-03-05')
+    renderAudit('/supervision/audit?from=2026-03-04&to=2026-03-05')
     await screen.findByRole('table', { name: 'Eventos' })
     expect(fetchAuditEvents).toHaveBeenCalledWith(
       { from: '2026-03-04T05:00:00.000Z', to: '2026-03-06T05:00:00.000Z' },
@@ -215,7 +215,7 @@ describe('audit (supervision)', () => {
 
   it('offers "Limpiar filtros" when nothing matches the filters', async () => {
     vi.mocked(fetchAuditEvents).mockResolvedValue(makeAuditPage([]))
-    const { user, router } = renderAudit('/supervision/auditoria?cambios=1&tipo=accesos')
+    const { user, router } = renderAudit('/supervision/audit?changes=1&type=access')
     expect(
       await screen.findByRole('heading', { name: 'Ningún evento coincide con estos filtros.' }),
     ).toBeInTheDocument()
@@ -240,7 +240,7 @@ describe('audit (supervision)', () => {
     const pause = makePauseEvent()
     vi.mocked(fetchAuditEvents).mockResolvedValue(makeAuditPage([makeAuditEvent()]))
     vi.mocked(fetchAuditEvent).mockResolvedValueOnce(pause)
-    const { unmount } = renderAudit(`/supervision/auditoria?evento=${pause.id}`)
+    const { unmount } = renderAudit(`/supervision/audit?event=${pause.id}`)
     expect(
       await within(
         await screen.findByRole('complementary', { name: 'Detalle del registro' }),
@@ -253,7 +253,7 @@ describe('audit (supervision)', () => {
     vi.mocked(fetchAuditEvent).mockRejectedValueOnce(
       new ApiProblem({ status: 404, code: 'not_found' }),
     )
-    renderAudit('/supervision/auditoria?evento=EVT-NADA')
+    renderAudit('/supervision/audit?event=EVT-NADA')
     expect(await screen.findByText('No encontramos ese evento.')).toBeInTheDocument()
   })
 })

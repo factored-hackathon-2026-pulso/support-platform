@@ -15,10 +15,12 @@ import {
   CaseHistorySheet,
   CasePriorityControl,
   ConversationPane,
+  PREVIOUS_CASES_LIST,
   shortCaseId,
   useCaseDetail,
 } from '@/features/conversation'
-import { reassignedToastTitle, type CaseViewUrlState, type UrlStateChangeOptions } from '../model'
+import { reassignedToastTitle } from '../model'
+import type { CaseViewUrlState, UrlStateChangeOptions } from '../url'
 import { useTeamOverview } from '../hooks'
 import type { CaseSummary } from '../types'
 import { ReassignDialog } from './ReassignDialog'
@@ -55,7 +57,7 @@ export function SupervisorCaseScreen({
   const held = summary !== undefined && summary.status !== 'queued' && summary.status !== 'closed'
   const canReassign = held && (detail.data?.capabilities.canAssign ?? false)
 
-  // ?reasignar=1 on a case that cannot be reassigned (queued, closed, not a supervisor).
+  // ?reassign=1 on a case that cannot be reassigned (queued, closed, not a supervisor).
   const cannotReassign = state.reassign && detail.status === 'success' && !canReassign
   useEffect(() => {
     if (cannotReassign) onStateChange({ reassign: false }, { replace: true })
@@ -108,7 +110,7 @@ export function SupervisorCaseScreen({
           caseId={caseId}
           mode="supervision"
           headerActions={headerActions}
-          onOpenHistory={() => onStateChange({ history: 'lista' })}
+          onOpenHistory={() => onStateChange({ history: PREVIOUS_CASES_LIST })}
         />
       </main>
 

@@ -23,62 +23,29 @@ import {
   hidesMessageText,
   redactionNote,
   isDateKey,
-  parseAuditSearch,
   payloadLines,
   personOptionLabel,
   shownCountLabel,
   showsPersonFilter,
-  toAuditSearch,
   withActorKind,
-  type AuditUrlState,
 } from './model'
+import type { AuditUrlState } from './url'
 
 // The test process runs in America/Bogota (UTC−5), see vite.config.ts.
 
-describe('URL state', () => {
-  it('parses and serializes every filter', () => {
-    const search =
-      'quien=equipo&persona=STF-1&caso=CASE-114&tipo=asignacion&desde=2026-03-01&hasta=2026-03-05&q=114&cambios=1&evento=EVT-9'
-    const state = parseAuditSearch(new URLSearchParams(search))
-    expect(state).toEqual({
-      actorKind: 'staff',
-      actorId: 'STF-1',
-      caseId: 'CASE-114',
-      family: 'assignment',
-      fromDate: '2026-03-01',
-      toDate: '2026-03-05',
-      query: '114',
-      changesOnly: true,
-      eventId: 'EVT-9',
-    })
-    expect(toAuditSearch(state).toString()).toBe(search)
-  })
-
-  it('falls back on unknown values and leaves defaults out', () => {
-    const state = parseAuditSearch(
-      new URLSearchParams('quien=agentes&tipo=arbol&desde=2026-02-30&hasta=ayer&cambios=si'),
-    )
-    expect(state).toEqual(EMPTY_AUDIT_STATE)
-    expect(toAuditSearch(state).toString()).toBe('')
-    expect(parseAuditSearch(new URLSearchParams(`q=${'x'.repeat(100)}`)).query).toHaveLength(80)
-  })
-
-  it('maps every family and kind slug', () => {
-    expect(AUDIT_FAMILIES.map((f) => f.slug)).toEqual([
-      'conversacion',
-      'asignacion',
-      'ciclo',
-      'disponibilidad',
-      'accesos',
-      'administracion',
-      'escalamientos',
-      'otros',
-    ])
-    expect(parseAuditSearch(new URLSearchParams('tipo=escalamientos')).family).toBe('escalation')
-    expect(familyLabel('escalation')).toBe('Escalamientos')
-    expect(parseAuditSearch(new URLSearchParams('tipo=administracion')).family).toBe(
+describe('labels', () => {
+  it('names every family and kind of actor', () => {
+    expect(AUDIT_FAMILIES.map((f) => f.value)).toEqual([
+      'conversation',
+      'assignment',
+      'lifecycle',
+      'availability',
+      'access',
       'administration',
-    )
+      'escalation',
+      'other',
+    ])
+    expect(familyLabel('escalation')).toBe('Escalamientos')
     expect(familyLabel('administration')).toBe('Administración')
     expect(personOptionLabel({ name: 'Andrés Villamil', active: false })).toBe(
       'Andrés Villamil (desactivada)',

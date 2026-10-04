@@ -1,73 +1,8 @@
 /**
- * Pure rules of the Workspace screen: URL state (`?caso=&estado=&q=&lista=&ficha=&historial=`,
- * docs/platform/api/slice-2-case-lifecycle.md §9.2), which case to show, and the
- * empty-state copy. No React, no I/O: unit-tested in model.test.ts.
+ * Pure rules of the Workspace screen: which case to show and the empty-state copy (the
+ * URL state is in url.ts). No React, no I/O: unit-tested in model.test.ts.
  */
-import {
-  inboxStatusFromSlug,
-  slugFromInboxStatus,
-  type CaseSummary,
-  type InboxStatus,
-} from '@/features/cases'
-
-/** `historial=lista`: "Casos anteriores" (a section of "Ficha del cliente") on its list. */
-export const HISTORY_LIST = 'lista'
-
-export interface WorkspaceUrlState {
-  caseId: string | null
-  /** `null` = Todos (open cases); `closed` = Cerrados. */
-  filter: InboxStatus | null
-  query: string
-  listCollapsed: boolean
-  /** `?ficha=1`: "Ficha del cliente" is open (slice 6 §5). */
-  customerFile: boolean
-  /**
-   * "Casos anteriores" inside the panel: `'lista'`, a past case id (its
-   * transcript), or null (the list). A value also opens the panel, so the old
-   * `?historial=` deep links keep working.
-   */
-  history: typeof HISTORY_LIST | string | null
-}
-
-/** Whether "Ficha del cliente" shows (`?ficha=1`, or a `?historial=` deep link). */
-export function isCustomerFileOpen(
-  state: Pick<WorkspaceUrlState, 'customerFile' | 'history'>,
-): boolean {
-  return state.customerFile || state.history !== null
-}
-
-export interface WorkspaceStateChangeOptions {
-  /** Replace the history entry instead of pushing one (auto-selection, typing, toggles). */
-  replace?: boolean
-}
-
-/**
- * URLSearchParams → state. Unknown values fall back to the defaults; the slice 1
- * params `panel` and `apoyo` (the removed support panel) are ignored.
- */
-export function parseWorkspaceSearch(params: URLSearchParams): WorkspaceUrlState {
-  return {
-    caseId: params.get('caso')?.trim() || null,
-    filter: inboxStatusFromSlug(params.get('estado')),
-    query: params.get('q') ?? '',
-    listCollapsed: params.get('lista') === 'contraida',
-    customerFile: params.get('ficha') === '1',
-    history: params.get('historial')?.trim() || null,
-  }
-}
-
-/** State → URLSearchParams, leaving defaults out so the URL stays short. */
-export function toWorkspaceSearch(state: WorkspaceUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  if (state.caseId) params.set('caso', state.caseId)
-  const slug = slugFromInboxStatus(state.filter)
-  if (slug) params.set('estado', slug)
-  if (state.query) params.set('q', state.query)
-  if (state.listCollapsed) params.set('lista', 'contraida')
-  if (state.customerFile) params.set('ficha', '1')
-  if (state.history) params.set('historial', state.history)
-  return params
-}
+import type { CaseSummary } from '@/features/cases'
 
 /** First case of the list that is not in `skip` (cases just closed here). */
 export function firstSelectableCase(

@@ -9,38 +9,38 @@ const GREETING = /^(Buenos días|Buenas tardes|Buenas noches), /
 
 describe('route guards', () => {
   it('sends anonymous users to /login and remembers where they were going', async () => {
-    const { router } = renderRoute('/supervision/auditoria?filtro=cierres')
+    const { router } = renderRoute('/supervision/audit?filtro=cierres')
     expect(await screen.findByRole('heading', { level: 1, name: 'Entrar' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
-    expect(router.state.location.state).toEqual({ from: '/supervision/auditoria?filtro=cierres' })
+    expect(router.state.location.state).toEqual({ from: '/supervision/audit?filtro=cierres' })
   })
 
   it('redirects a role section the user does not hold to their first role home', async () => {
-    const { router } = renderRoute('/administracion/usuarios', { staff: analystStaff })
+    const { router } = renderRoute('/admin/users', { staff: analystStaff })
     expect(await screen.findByRole('heading', { level: 1, name: GREETING })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/analista/inicio')
+    expect(router.state.location.pathname).toBe('/analyst/home')
   })
 
   it('opens the sections of every role the user holds', async () => {
-    const { router } = renderRoute('/administracion/usuarios', { staff: supervisorAdminStaff })
+    const { router } = renderRoute('/admin/users', { staff: supervisorAdminStaff })
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Usuarios y roles' }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/administracion/usuarios')
+    expect(router.state.location.pathname).toBe('/admin/users')
   })
 
   it('sends "/" to the home of the first role', async () => {
     const { router } = renderRoute('/', { staff: supervisorStaff })
     // supervisorStaff holds supervisor + analyst: analyst comes first in canonical order.
     expect(await screen.findByRole('heading', { level: 1, name: GREETING })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/analista/inicio')
+    expect(router.state.location.pathname).toBe('/analyst/home')
   })
 
   it('redirects role roots to their first section', async () => {
     const { router } = renderRoute('/supervision', { staff: supervisorStaff })
     // Slice 9: supervision lands on "Colas".
     expect(await screen.findByRole('heading', { level: 1, name: 'Colas' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/supervision/colas')
+    expect(router.state.location.pathname).toBe('/supervision/queues')
   })
 
   it('keeps signed-in users out of the login screens', async () => {
@@ -48,7 +48,7 @@ describe('route guards', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Usuarios y roles' }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/administracion/usuarios')
+    expect(router.state.location.pathname).toBe('/admin/users')
   })
 
   it('offers a retry instead of the login when the session cannot be restored (API down)', async () => {
@@ -59,11 +59,11 @@ describe('route guards', () => {
         headers: { 'Content-Type': 'application/problem+json' },
       }),
     )
-    const { user, router } = renderRoute('/supervision/equipo', { token: 'tkn-stored' })
+    const { user, router } = renderRoute('/supervision/team', { token: 'tkn-stored' })
     expect(
       await screen.findByRole('heading', { level: 1, name: 'No pudimos cargar tu sesión' }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/supervision/equipo')
+    expect(router.state.location.pathname).toBe('/supervision/team')
     expect(sessionToken.get()).toBe('tkn-stored')
 
     fetchMock.mockResolvedValueOnce(
@@ -81,21 +81,21 @@ describe('route guards', () => {
   })
 
   it('explains when the account has no role', async () => {
-    renderRoute('/analista', { staff: { ...analystStaff, roles: [] } })
+    renderRoute('/analyst/cases', { staff: { ...analystStaff, roles: [] } })
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Tu cuenta no tiene un rol asignado' }),
     ).toBeInTheDocument()
   })
 
   it('shows the not found page inside the shell', async () => {
-    renderRoute('/administracion/reglas', { staff: adminStaff })
+    renderRoute('/admin/rules', { staff: adminStaff })
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Principal' })).toBeInTheDocument()
   })
 
-  it.each(['/administracion/herramientas', '/administracion/retencion'])(
+  it.each(['/admin/tools', '/admin/retention'])(
     'keeps the removed admin screen %s as a not found page',
     async (path) => {
       renderRoute(path, { staff: adminStaff })
@@ -106,16 +106,16 @@ describe('route guards', () => {
   )
 
   it('opens the new admin screens for an admin only', async () => {
-    const { unmount } = renderRoute('/administracion/equipos', { staff: adminStaff })
+    const { unmount } = renderRoute('/admin/teams', { staff: adminStaff })
     expect(await screen.findByRole('heading', { level: 1, name: 'Equipos' })).toBeInTheDocument()
     unmount()
-    const { router } = renderRoute('/administracion/auditoria', { staff: supervisorStaff })
+    const { router } = renderRoute('/admin/audit', { staff: supervisorStaff })
     expect(await screen.findByRole('heading', { level: 1, name: GREETING })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/analista/inicio')
+    expect(router.state.location.pathname).toBe('/analyst/home')
   })
 
   it('renders the customer simulator without the staff shell or a session', async () => {
-    renderRoute('/cliente')
+    renderRoute('/customer')
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Simulador de cliente' }),
     ).toBeInTheDocument()

@@ -20,7 +20,11 @@ const GROUPS: FilterGroup[] = [
       { value: 'to_reply', label: 'Por responder', count: 3 },
     ],
   },
-  { key: 'idioma', legend: 'Idioma', options: [{ value: 'pt', label: 'Portugués' }] },
+  {
+    key: 'idioma',
+    legend: 'Idioma',
+    options: [{ value: 'pt', label: 'Português', language: 'pt', count: 1 }],
+  },
 ]
 
 function Harness({ initial = {} }: { initial?: FilterSelection }) {
@@ -54,7 +58,10 @@ describe('FilterMenu', () => {
     const estado = screen.getByRole('group', { name: 'Estado' })
     expect(estado).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'Nuevo 2' })).toHaveFocus()
-    expect(screen.getByRole('checkbox', { name: 'Portugués' })).toBeInTheDocument()
+    // A language option: only the language's own name, no icon.
+    const portuguese = screen.getByRole('checkbox', { name: 'Português 1' })
+    expect(screen.getByText('Português')).toHaveAttribute('lang', 'pt')
+    expect(portuguese.parentElement!.querySelector('svg')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Listo' }))
     expect(screen.queryByRole('group', { name: 'Estado' })).not.toBeInTheDocument()
     expect(button).toHaveFocus()
@@ -65,12 +72,16 @@ describe('FilterMenu', () => {
     render(<Harness />)
     await user.click(screen.getByRole('button', { name: 'Filtros' }))
     await user.click(screen.getByRole('checkbox', { name: 'Por responder 3' }))
-    await user.click(screen.getByRole('checkbox', { name: 'Portugués' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Português 1' }))
     expect(screen.getByRole('button', { name: 'Filtros 2 activos' })).toBeInTheDocument()
     const chips = screen.getByRole('group', { name: 'Filtros activos' })
     expect(chips).toHaveTextContent('Por responder')
-    await user.click(screen.getByRole('button', { name: 'Quitar filtro Portugués' }))
-    expect(screen.queryByRole('button', { name: 'Quitar filtro Portugués' })).toBeNull()
+    // The language chip shows its mark (globe + code) and is named by the language.
+    const languageChip = screen.getByRole('button', { name: 'Quitar filtro Português' })
+    expect(languageChip).toHaveTextContent(/^PT$/)
+    expect(languageChip.querySelector('[data-languages="pt"] svg.lucide-globe')).not.toBeNull()
+    await user.click(languageChip)
+    expect(screen.queryByRole('button', { name: 'Quitar filtro Português' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Filtros 1 activos' })).toBeInTheDocument()
   })
 
@@ -99,7 +110,7 @@ describe('FilterMenu', () => {
     expect(countSelected({ estado: ['new', 'to_reply'], idioma: ['pt'] })).toBe(3)
     expect(activeFilterChips(GROUPS, { idioma: ['pt'], estado: ['to_reply'] })).toEqual([
       { groupKey: 'estado', value: 'to_reply', label: 'Por responder' },
-      { groupKey: 'idioma', value: 'pt', label: 'Portugués' },
+      { groupKey: 'idioma', value: 'pt', label: 'Português', language: 'pt' },
     ])
   })
 })

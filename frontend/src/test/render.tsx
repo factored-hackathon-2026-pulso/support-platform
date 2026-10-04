@@ -55,7 +55,7 @@ function setupProviders({ staff = null, token }: RenderAppOptions) {
 export interface RenderWithProvidersOptions extends RenderOptions, RenderAppOptions {
   /** Initial URL. */
   route?: string
-  /** Route pattern the UI is mounted at, so `useParams` works (e.g. '/supervision/casos/:caseId'). */
+  /** Route pattern the UI is mounted at, so `useParams` works (e.g. '/supervision/cases/:caseId'). */
   path?: string
 }
 

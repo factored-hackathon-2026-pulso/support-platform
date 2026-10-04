@@ -6128,7 +6128,7 @@
             "type": "integer"
           },
           "id": {
-            "description": "TEAM-… id (the `?equipo=` filter).",
+            "description": "TEAM-… id (the `?team=` filter).",
             "title": "Id",
             "type": "string"
           },

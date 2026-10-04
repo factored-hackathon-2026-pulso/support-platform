@@ -38,7 +38,7 @@ test.describe('Administration', () => {
     const mailbox = new DevMailboxPage(page)
     await mailbox.goto()
     await mailbox.openInvitation(invited.email)
-    await expect(page).toHaveURL(/\/activar\?token=/)
+    await expect(page).toHaveURL(/\/activate\?token=/)
 
     // Step 1: her own password; step 2: her authenticator (the test computes the code).
     const activation = new ActivationPage(page)
@@ -71,7 +71,7 @@ test.describe('Administration', () => {
     await expect(login.failure).toBeVisible()
     await login.submitPassword(analyst.email, analyst.password)
     await login.enterMfa(totpCode(analyst.totpSecret))
-    await expect(page).toHaveURL(/\/analista\/inicio$/)
+    await expect(page).toHaveURL(/\/analyst\/home$/)
     await expect(new HomePage(page).availability).toContainText('Estás en pausa')
     const workspace = new WorkspacePage(page)
     await workspace.goto()
@@ -111,13 +111,13 @@ test.describe('Administration', () => {
     roles = await analyst.shell.openRoleSwitcher()
     await expect(roles.getByRole('link')).toHaveText(['Analista de casos', 'Supervisión'])
     await roles.getByRole('link', { name: 'Supervisión' }).click()
-    await expect(analyst.page).toHaveURL(/\/supervision\/colas/)
+    await expect(analyst.page).toHaveURL(/\/supervision\/queues/)
     await expect(analyst.page.getByRole('heading', { level: 1, name: 'Colas' })).toBeVisible()
 
     // Taking the role away moves her out of the section she is in.
     await users.roleCheckbox(person.name, 'Supervisión').uncheck()
     await form.getByRole('button', { name: 'Guardar cambios' }).click()
-    await expect(analyst.page).toHaveURL(/\/analista/)
+    await expect(analyst.page).toHaveURL(/\/analyst/)
     await expect(analyst.shell.toast('Ahora tienes: Analista.')).toBeVisible()
     roles = await analyst.shell.openRoleSwitcher()
     await expect(roles.getByRole('link')).toHaveText(['Analista de casos'])

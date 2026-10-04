@@ -124,7 +124,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const casePath = (id = CASE_ID) => `/supervision/casos/${id}`
+const casePath = (id = CASE_ID) => `/supervision/cases/${id}`
 
 describe('supervisor case view', () => {
   it('sets the priority of a queued case from the header (slice 8)', async () => {
@@ -180,7 +180,7 @@ describe('supervisor case view', () => {
   })
 
   it('goes back to where it came from, even after opening the history', async () => {
-    const from = '/supervision/auditoria?caso=CASE-00000000000000000000000101'
+    const from = '/supervision/audit?case=CASE-00000000000000000000000101'
     const { user, router } = renderRoute(
       { pathname: casePath(), state: { from } },
       { staff: supervisorStaff },
@@ -191,7 +191,7 @@ describe('supervisor case view', () => {
     await user.click(await screen.findByRole('button', { name: 'Casos anteriores (2)' }))
     const sheet = await screen.findByRole('dialog', { name: 'Casos anteriores de Marcela' })
     expect(within(sheet).getByRole('list', { name: 'Casos anteriores' })).toBeInTheDocument()
-    expect(router.state.location.search).toBe('?historial=lista')
+    expect(router.state.location.search).toBe('?previous=list')
     expect(screen.getByRole('link', { name: 'Volver a Auditoría', hidden: true })).toHaveAttribute(
       'href',
       from,
@@ -202,7 +202,7 @@ describe('supervisor case view', () => {
     renderRoute(casePath(), { staff: supervisorStaff })
     expect(await screen.findByRole('link', { name: 'Volver a Colas' })).toHaveAttribute(
       'href',
-      '/supervision/colas',
+      '/supervision/queues',
     )
   })
 
@@ -232,7 +232,7 @@ describe('supervisor case view', () => {
     const { user, router } = renderRoute(casePath(), { staff: supervisorStaff })
     expect((await screen.findAllByText('Escalado')).length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: 'Reasignar' }))
-    expect(router.state.location.search).toBe('?reasignar=1')
+    expect(router.state.location.search).toBe('?reassign=1')
     const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
     await user.click(within(dialog).getByRole('radio', { name: /^Daniela Ríos/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Daniela' }))
@@ -246,7 +246,7 @@ describe('supervisor case view', () => {
     vi.mocked(setCaseAssignee).mockRejectedValue(
       new ApiProblem({ status: 409, code: 'case_closed', extensions: { currentStatus: 'closed' } }),
     )
-    const { user } = renderRoute(`${casePath()}?reasignar=1`, { staff: supervisorStaff })
+    const { user } = renderRoute(`${casePath()}?reassign=1`, { staff: supervisorStaff })
     // The dialog loads the team (the candidates) first.
     await user.click(await screen.findByRole('radio', { name: /^Daniela Ríos/ }))
     await user.click(screen.getByRole('button', { name: 'Reasignar a Daniela' }))

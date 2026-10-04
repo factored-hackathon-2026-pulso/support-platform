@@ -9,17 +9,17 @@ sees or hands out a password**. The temporary-password flow of slice 4 (§3.1, �
 
 1. **Invitations by email.** "Nuevo usuario" → "Enviar invitación": the person is created
    `invited` (no password, cannot sign in) with an `Invitation` (single-use link, 48 h). With the
-   link (`/activar?token=…`) she sets her own password and enrolls an authenticator app (TOTP,
+   link (`/activate?token=…`) she sets her own password and enrolls an authenticator app (TOTP,
    RFC 6238); then the account is active and starts En pausa. Administration can resend (new
    link, the old one stops working) or cancel the invitation.
 2. **Password reset by email link.** "Restablecer contraseña" → "Enviar enlace para restablecer":
-   a single-use link (1 h, `/restablecer?token=…`); her sessions end now; she sets the new password
+   a single-use link (1 h, `/reset-password?token=…`); her sessions end now; she sets the new password
    herself. Her second factor never changes there.
 3. **TOTP at sign-in.** Every account created by an invitation signs in with the code of its own
    authenticator. The development code `000000` stays only for the **seeded** accounts that have
    no authenticator (and only outside production).
 4. **Email delivery port** with a development adapter only: the **dev mailbox** (SQLite or memory,
-   no external service), listed by `GET /api/v1/dev/mailbox` and the SPA page `/dev/correos`
+   no external service), listed by `GET /api/v1/dev/mailbox` and the SPA page `/dev/mailbox`
    while `CC_DEV_MAILBOX` is on (never in production).
 
 People-only, as every slice: no AI, fixed templates.
@@ -38,7 +38,7 @@ Design: canvas `Admin.dc.html` (views `nuevo`, `invitacion`, `pendiente`), `BoAc
 | Who knows a password | Only its owner. No API response, email, event or log carries a password, a token or a TOTP secret (the dev mailbox holds the links, development only). | User decision; slice 4 handed passwords out in a response body. |
 | Invitation model | Its own aggregate `Invitation` (`INV-…`), **one per person** (`staff_id` unique): resend replaces the token; a cancelled one is reissued when the same email is invited again. States stored: `pending`, `accepted`, `cancelled`; `expired` is derived (`pending` past `expires_at`). | "One pending invitation per person" holds by construction; resend invalidates the old link atomically (one row, CAS). |
 | The person before activation | `Staff.setup = invited` (`active` false: no case, no supervision row, no notification, no admin roster); `withdrawn` after a cancel (hidden from the directory, email reusable: "Nuevo usuario" with it invites the same record again); `complete` once activated (or seeded). | The slice 4 rules for active people stay untouched; an invited person cannot sign in (no login account: same answer as an unknown email). |
-| Tokens | `secrets.token_urlsafe(32)` (256 bits); only the SHA-256 is stored (indexed lookup); single use. Tokens travel in **POST bodies** (`/onboarding/*`), never in API URLs, so access logs and proxies never see them (the SPA URL `/activar?token=` is the email link). | A GET with the token in the query string would leak it into server logs. |
+| Tokens | `secrets.token_urlsafe(32)` (256 bits); only the SHA-256 is stored (indexed lookup); single use. Tokens travel in **POST bodies** (`/onboarding/*`), never in API URLs, so access logs and proxies never see them (the SPA URL `/activate?token=` is the email link). | A GET with the token in the query string would leak it into server logs. |
 | Generic answers | Unknown, expired, used and cancelled tokens all answer **410 `link_invalid`** ("El enlace venció o ya se usó."), never who it was for. A valid token proves possession: the check shows her name, email, roles and team (the welcome line). | No account enumeration beyond what the token proves. |
 | Rate limit | Like the login's unknown-email counters: a process-local `FailedAttemptCounter` per client address (`link:<host>`). 10 unusable links lock the onboarding routes for that client 15 minutes (**429 `rate_limited`**, `unlockAt`), valid links included. Wrong enrollment codes count **on the invitation** with the login lockout (5 → 15 min, **423 `account_locked`**). | 256-bit tokens are not guessable; the counters cap automated probing and code guessing with a stolen link. |
 | Password policy | Server-side (`domain/people/password_policy.py`), NIST 800-63B style: ≥ 12 characters (≤ 128), not containing her email name (or a piece of it of 3+ letters) nor a word of her name (3+ letters), accents and case ignored, not in a short block list. **422 `password_rejected`** with `reasons`. The SPA mirrors the same rules live. | Spec; canvas `BoActivar` rules. |
@@ -203,12 +203,12 @@ Payloads never carry an email, a token, a password or a secret (the guard test c
   the email, sessions end now, a lock is cleared, nobody sees the new password). No password is
   ever displayed; `TemporaryPasswordDialog` is gone.
 - **Public routes** (outside the staff shell and outside `GuestOnly`, same look as the login):
-  `/activar?token=` (step indicator "Contraseña" → "Verificación en dos pasos"; live rules; QR
+  `/activate?token=` (step indicator "Contraseña" → "Verificación en dos pasos"; live rules; QR
   rendered from `otpauthUri` with `qrcode-generator` pinned; manual key in mono with "Copiar"; the
   6-digit `CodeInput`; "Tu cuenta está lista" → "Entrar"; "El enlace venció o ya se usó" with "Pide
-  una nueva invitación a administración") and `/restablecer?token=` (password, then "Contraseña
+  una nueva invitación a administración") and `/reset-password?token=` (password, then "Contraseña
   actualizada").
-- **Dev mailbox** `/dev/correos` (only when `/meta` says `devMailbox`), linked from the login
+- **Dev mailbox** `/dev/mailbox` (only when `/meta` says `devMailbox`), linked from the login
   footer in that case; clearly marked as a development tool.
 
 ## 8. Seed

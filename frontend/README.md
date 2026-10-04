@@ -25,13 +25,13 @@ same origin. Override it in `.env.local` (template `.env.example`) or inline:
 `VITE_API_URL=http://localhost:8100 pnpm dev --port 5180 --strictPort`. The SPA origin must be
 listed in the backend's `CC_CORS_ORIGINS`.
 
-| Path                                                                                                                          | Screen                                                             |
-| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `/login`                                                                                                                      | sign-in, MFA (`000000` in dev), lockout                            |
-| `/analista`                                                                                                                   | "Casos": inbox + conversation                                      |
-| `/supervision/colas`, `/supervision/equipo`, `/supervision/escalados`, `/supervision/casos/:caseId`, `/supervision/auditoria` | Colas (landing), Equipo, Escalados, read-only case view, Auditoría |
-| `/administracion/usuarios`, `/administracion/equipos`, `/administracion/auditoria`                                            | Usuarios y roles, Equipos, Auditoría                               |
-| `/cliente`                                                                                                                    | customer chat simulator (dev/demo tool, outside the staff shell)   |
+| Path                                                                                                                       | Screen                                                             |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `/login`                                                                                                                   | sign-in, MFA (`000000` in dev), lockout                            |
+| `/analyst/home`, `/analyst/cases`                                                                                          | Inicio (landing), "Casos": inbox + conversation                    |
+| `/supervision/queues`, `/supervision/team`, `/supervision/escalations`, `/supervision/cases/:caseId`, `/supervision/audit` | Colas (landing), Equipo, Escalados, read-only case view, Auditoría |
+| `/admin/users`, `/admin/teams`, `/admin/audit`                                                                             | Usuarios y roles, Equipos, Auditoría                               |
+| `/customer`                                                                                                                | customer chat simulator (dev/demo tool, outside the staff shell)   |
 
 Each browser tab keeps its own session (`sessionStorage`), so one tab per person.
 

@@ -64,7 +64,7 @@ function renderSimulator() {
   const view = renderWithProviders(
     <CustomerSimulatorScreen createSocket={sockets.factory} channel="chat" />,
     {
-      route: '/cliente',
+      route: '/customer',
     },
   )
   return { ...view, sockets }

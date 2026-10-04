@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supervisionAnalystPath } from '@/app/roles'
+import { supervisionAnalystPath } from '@/app/paths'
 import { Button, Callout, Dialog, LinkButton } from '@/components/ui'
 import { DEACTIVATE_CONSEQUENCES, deactivateBlockedCopy } from '../model'
 import { useDeactivateUser, useFailureHandler, useRecheckAdminUser } from '../hooks'

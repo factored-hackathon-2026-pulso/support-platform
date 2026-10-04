@@ -276,26 +276,9 @@ export const INVALID_LINK_COPY: Record<
   },
 }
 
-/** `?token=` of the link (blank = no token: the invalid screen). */
-export function readToken(params: URLSearchParams): string | null {
-  const token = params.get('token')?.trim()
-  return token ? token : null
-}
-
 // ── Dev mailbox (development tool) ───────────────────────────────────────────
 
 export const DEV_EMAIL_KIND_LABEL: Record<DevEmail['kind'], string> = {
   invitation: 'Invitación',
   password_reset: 'Restablecer contraseña',
-}
-
-/** The link of an email as an in-app path ("/activar?token=…"), or null when foreign. */
-export function inAppPath(link: string): string | null {
-  try {
-    const url = new URL(link)
-    if (url.pathname !== '/activar' && url.pathname !== '/restablecer') return null
-    return `${url.pathname}${url.search}`
-  } catch {
-    return null
-  }
 }

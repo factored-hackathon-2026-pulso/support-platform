@@ -1,13 +1,20 @@
 /**
  * Pure rules and copy of administration (Admin.dc.html section `usuarios`,
  * contract docs/platform/api/slice-4-administration.md §1.2, §10): labels, the
- * account status at a given time, the URL state of both screens, the user
+ * account status at a given time, the directory filters (the URL state is in url.ts), the user
  * draft (diff, validation, guard rails, open-case blocks), the failure copy of
  * every problem code and the toasts. No React, no I/O: unit-tested in
  * model.test.ts.
  */
 import { ROLE_LABEL, sortRoles, type RoleId } from '@/app/roles'
-import type { FactItem, FilterGroup, FilterSelection, StatusAppearance } from '@/components/ui'
+import {
+  LANGUAGE_NATIVE_NAME,
+  type FactItem,
+  type FilterGroup,
+  type FilterOption,
+  type FilterSelection,
+  type StatusAppearance,
+} from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
 import { formatRelativeTime, formatTime, joinEs, pluralize } from '@/lib/format'
 import type {
@@ -24,6 +31,7 @@ import type {
   TeamStatusFilter,
   UpdateUserRequest,
 } from './types'
+import type { TeamsUrlState, UsersUrlState } from './url'
 
 export { joinEs }
 
@@ -44,8 +52,7 @@ export const ROLE_DESCRIPTION: Record<RoleId, string> = {
 
 export const LANGUAGES: readonly Language[] = ['es', 'pt']
 
-/** "Español" (controls) and "español" (inside a sentence). */
-export const LANGUAGE_LABEL: Record<Language, string> = { es: 'Español', pt: 'Portugués' }
+/** "español" (inside a sentence); controls show the language mark or its own name. */
 export const LANGUAGE_IN_SENTENCE: Record<Language, string> = { es: 'español', pt: 'portugués' }
 
 /**
@@ -78,14 +85,6 @@ export const TEAM_STATUS: Readonly<Record<'active' | 'inactive', StatusAppearanc
 
 export function teamStatus(team: Pick<AdminTeam, 'active'>): StatusAppearance {
   return TEAM_STATUS[team.active ? 'active' : 'inactive']
-}
-
-/** "español, portugués", or "—" without languages. */
-export function languagesLabel(languages: readonly Language[]): string {
-  const sorted = LANGUAGES.filter((language) => languages.includes(language))
-  return sorted.length > 0
-    ? sorted.map((language) => LANGUAGE_IN_SENTENCE[language]).join(', ')
-    : '—'
 }
 
 /** "Equipo Andes (inactivo)" for options naming an inactive team. */
@@ -162,119 +161,45 @@ export function openCasesFact(openCases: AdminUser['openCases']): string {
 
 /**
  * Aside facts under the name (slice 6 UI rule: structured items, never a
- * dot-joined line; the roles are chips next to them): [languages] "Español y
- * portugués", [users] the team.
+ * dot-joined line; the roles are chips next to them): her languages as one mark
+ * ("[globe] ES PT", named "Español y Português") or [languages] "Sin idiomas", [users] the team.
  */
 export function userSummaryFacts(user: Pick<AdminUser, 'languages' | 'team'>): FactItem[] {
-  const sorted = LANGUAGES.filter((language) => user.languages.includes(language))
-  const spoken = joinEs(sorted.map((language) => LANGUAGE_IN_SENTENCE[language]))
+  const languages = LANGUAGES.filter((language) => user.languages.includes(language))
   return [
-    {
-      key: 'languages',
-      icon: 'languages',
-      text: spoken ? spoken.charAt(0).toUpperCase() + spoken.slice(1) : 'Sin idiomas',
-      label: 'Idiomas',
-    },
+    languages.length > 0
+      ? { key: 'languages', icon: 'languages', text: '', label: 'Idiomas', languages }
+      : { key: 'languages', icon: 'languages', text: 'Sin idiomas', label: 'Idiomas' },
     { key: 'team', icon: 'users', text: user.team.name, label: 'Equipo' },
   ]
 }
 
-// ── URL state (contract §10.11; slice 9: multi-value filters) ──────────────────
-
-/**
- * The directory's filters (slice 9, Admin.dc.html): one "Filtros" dropdown with four
- * groups, several values per group (OR inside a group, AND across groups), as
- * comma-separated URL values. Empty = no filter on that group: everyone is listed,
- * deactivated people too (the canvas default).
- */
-export interface UsersUrlState {
-  /** `?rol=analistas,supervision,administracion`. */
-  roles: RoleId[]
-  /** `?estado=activas,bloqueadas,pendientes,desactivadas` (the status at the screen's clock). */
-  statuses: AccountStatus[]
-  /** `?equipo=TEAM-…,TEAM-…`. */
-  teamIds: string[]
-  /** `?idioma=es,pt`. */
-  languages: Language[]
-  /** `?q=`. */
-  query: string
-  /** `?persona=STF-…`: the selected person (aside). */
-  staffId: string | null
-  /** `?nueva=1`: the create dialog. */
-  create: boolean
-}
+// ── Directory filters (contract §10.11; slice 9: multi-value filters) ─────────
+// The URL state of both screens (parse + serialize) is in url.ts.
 
 /** A team state the "Filtros" dropdown of Equipos can check. */
 export type TeamState = 'active' | 'inactive'
 
-export interface TeamsUrlState {
-  /**
-   * The checked "Estado" options of "Filtros" (`?estado=activos,inactivos`; absent = only
-   * the active teams; `todos` = nothing checked). None or both checked = every team.
-   */
-  statuses: TeamState[]
-  /** `?equipo=TEAM-…`: the selected team (aside). */
-  teamId: string | null
-  /** `?nuevo=1`: the create dialog. */
-  create: boolean
-}
+export const TEAM_STATE_ORDER: readonly TeamState[] = ['active', 'inactive']
 
-export interface UrlStateChangeOptions {
-  /** Replace the history entry (filters) instead of pushing one (selection, dialogs). */
-  replace?: boolean
-}
-
-const ROLE_SLUGS: Record<RoleId, string> = {
-  analyst: 'analistas',
-  supervisor: 'supervision',
-  admin: 'administracion',
-}
-
-/** Older links (slice 4) still open the same filter. */
-const ROLE_SLUG_ALIASES: Record<string, RoleId> = { supervisoras: 'supervisor' }
-
-const ACCOUNT_STATUS_SLUGS: Record<AccountStatus, string> = {
-  active: 'activas',
-  locked: 'bloqueadas',
-  invited: 'pendientes',
-  inactive: 'desactivadas',
-  cancelled: 'canceladas',
-}
-
-const TEAM_STATUS_SLUGS: Record<TeamState, string> = {
-  active: 'activos',
-  inactive: 'inactivos',
-}
-
-/** `?estado=todos`: nothing checked (every team). */
-const ALL_TEAMS_SLUG = 'todos'
-
-const TEAM_STATE_ORDER: readonly TeamState[] = ['active', 'inactive']
+/** The "Estado" options of "Filtros" (a cancelled invitation is never listed). */
+export const ACCOUNT_STATUS_ORDER: readonly AccountStatus[] = [
+  'active',
+  'locked',
+  'invited',
+  'inactive',
+]
 
 /** Max length of `q` (the API accepts 1–80). */
 export const USER_SEARCH_MAX_LENGTH = 80
 
-function fromSlug<K extends string>(slugs: Record<K, string>, slug: string | null): K | null {
-  if (!slug) return null
-  const entry = (Object.entries(slugs) as [K, string][]).find(([, value]) => value === slug)
-  return entry ? entry[0] : null
-}
-
-/** "a,b,,c " → ["a", "b", "c"]: unique, trimmed, empty ones dropped. */
-function listParam(params: URLSearchParams, name: string): string[] {
-  const values = (params.get(name) ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
-  return [...new Set(values)]
-}
-
-/** Known values in a canonical order (unknown slugs dropped). */
-function inOrder<K extends string>(order: readonly K[], values: readonly (K | null)[]): K[] {
+/** Known values in a canonical order (unknown ones dropped). */
+export function inOrder<K extends string>(
+  order: readonly K[],
+  values: readonly (K | string | null)[],
+): K[] {
   return order.filter((value) => values.includes(value))
 }
-
-const trimmed = (value: string | null) => value?.trim() || null
 
 export const EMPTY_USERS_STATE: UsersUrlState = {
   roles: [],
@@ -284,75 +209,6 @@ export const EMPTY_USERS_STATE: UsersUrlState = {
   query: '',
   staffId: null,
   create: false,
-}
-
-/** The "Estado" options of "Filtros" (a cancelled invitation is never listed). */
-const ACCOUNT_STATUS_ORDER: readonly AccountStatus[] = ['active', 'locked', 'invited', 'inactive']
-
-export function parseUsersSearch(params: URLSearchParams): UsersUrlState {
-  const roles = listParam(params, 'rol').map(
-    (slug) => fromSlug(ROLE_SLUGS, slug) ?? ROLE_SLUG_ALIASES[slug] ?? null,
-  )
-  const statuses = listParam(params, 'estado').map((slug) => fromSlug(ACCOUNT_STATUS_SLUGS, slug))
-  const languages = listParam(params, 'idioma').map((value) =>
-    value === 'es' || value === 'pt' ? value : null,
-  )
-  return {
-    roles: inOrder<RoleId>(['analyst', 'supervisor', 'admin'], roles),
-    statuses: inOrder(ACCOUNT_STATUS_ORDER, statuses),
-    teamIds: listParam(params, 'equipo'),
-    languages: inOrder(LANGUAGES, languages),
-    query: (params.get('q') ?? '').slice(0, USER_SEARCH_MAX_LENGTH),
-    staffId: trimmed(params.get('persona')),
-    create: params.get('nueva') === '1',
-  }
-}
-
-export function toUsersSearch(state: UsersUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  if (state.roles.length) params.set('rol', state.roles.map((r) => ROLE_SLUGS[r]).join(','))
-  if (state.statuses.length) {
-    params.set('estado', state.statuses.map((s) => ACCOUNT_STATUS_SLUGS[s]).join(','))
-  }
-  if (state.teamIds.length) params.set('equipo', state.teamIds.join(','))
-  if (state.languages.length) params.set('idioma', state.languages.join(','))
-  if (state.query) params.set('q', state.query)
-  if (state.staffId) params.set('persona', state.staffId)
-  if (state.create) params.set('nueva', '1')
-  return params
-}
-
-export function parseTeamsSearch(params: URLSearchParams): TeamsUrlState {
-  const slugs = listParam(params, 'estado')
-  const known = inOrder(
-    TEAM_STATE_ORDER,
-    slugs.map((slug) => fromSlug(TEAM_STATUS_SLUGS, slug)),
-  )
-  const statuses: TeamState[] =
-    known.length > 0 ? known : slugs.includes(ALL_TEAMS_SLUG) ? [] : ['active']
-  return {
-    statuses,
-    teamId: trimmed(params.get('equipo')),
-    create: params.get('nuevo') === '1',
-  }
-}
-
-export function toTeamsSearch(state: TeamsUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  const onlyActive = state.statuses.length === 1 && state.statuses[0] === 'active'
-  if (!onlyActive) {
-    params.set(
-      'estado',
-      state.statuses.length === 0
-        ? ALL_TEAMS_SLUG
-        : inOrder(TEAM_STATE_ORDER, state.statuses)
-            .map((status) => TEAM_STATUS_SLUGS[status])
-            .join(','),
-    )
-  }
-  if (state.teamId) params.set('equipo', state.teamId)
-  if (state.create) params.set('nuevo', '1')
-  return params
 }
 
 /**
@@ -465,7 +321,7 @@ export function userFilterGroups(
   selection: FilterSelection,
   now: DateInput,
 ): FilterGroup[] {
-  const counted = (key: UserFilterKey, options: { value: string; label: string }[]) => {
+  const counted = (key: UserFilterKey, options: FilterOption[]) => {
     const base = filterUsers(users, selection, now, key)
     return {
       key,
@@ -509,7 +365,11 @@ export function userFilterGroups(
     {
       ...counted(
         'language',
-        LANGUAGES.map((language) => ({ value: language, label: LANGUAGE_LABEL[language] })),
+        LANGUAGES.map((language) => ({
+          value: language,
+          label: LANGUAGE_NATIVE_NAME[language],
+          language,
+        })),
       ),
       legend: 'Idioma',
     },

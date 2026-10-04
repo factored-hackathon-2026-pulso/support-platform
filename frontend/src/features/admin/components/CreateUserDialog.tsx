@@ -24,7 +24,7 @@ export interface CreateUserDialogProps {
 }
 
 /**
- * "Nuevo usuario" (`?nueva=1`, Admin.dc.html `nuevo`, part 4): the person form,
+ * "Nuevo usuario" (`?new=1`, Admin.dc.html `nuevo`, part 4): the person form,
  * empty, the invitation note and "Enviar invitación". Nobody types or sees a
  * password: she gets a link by email. The create carries one `Idempotency-Key` per
  * open dialog, so a retry after a lost response never invites the person twice.

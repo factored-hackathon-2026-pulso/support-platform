@@ -44,7 +44,7 @@ async function openSwitcher(user: ReturnType<typeof renderRoute>['user']) {
 
 describe('SessionLiveSync', () => {
   it('subscribes to her own topic and applies me.updated: role switcher, summary and toast', async () => {
-    const { user, sockets } = renderRoute('/administracion/equipos', {
+    const { user, sockets } = renderRoute('/admin/teams', {
       staff: supervisorAdminStaff,
     })
     await screen.findByRole('heading', { level: 1, name: 'Equipos' })
@@ -76,15 +76,16 @@ describe('SessionLiveSync', () => {
     ])
     // Icon rows, not a dot-joined line (slice 6).
     const summary = screen.getByText('Equipo:').closest('ul')!
-    expect(
-      within(summary)
-        .getAllByRole('listitem')
-        .map((item) => item.textContent),
-    ).toEqual(['Equipo: Equipo Pacífico', 'Idiomas: Español'])
+    const [team, languages] = within(summary).getAllByRole('listitem')
+    expect(team).toHaveTextContent(/^Equipo: Equipo Pacífico$/)
+    // Her languages as one mark (globe + code), named for screen readers.
+    expect(within(languages!).getByText('Español', { selector: '.sr-only' })).toBeInTheDocument()
+    expect(languages).toHaveTextContent(/^Idiomas: EspañolES/)
+    expect(languages!.querySelector('[data-languages="es"] svg.lucide-globe')).not.toBeNull()
   })
 
   it('sends her home when the section she is in is gone', async () => {
-    const { router, sockets } = renderRoute('/administracion/equipos', {
+    const { router, sockets } = renderRoute('/admin/teams', {
       staff: supervisorAdminStaff,
     })
     await screen.findByRole('heading', { level: 1, name: 'Equipos' })
@@ -94,12 +95,12 @@ describe('SessionLiveSync', () => {
         .last()
         ?.receive(meUpdated({ ...supervisorAdminStaff, roles: ['supervisor'] }, 'EVT-ME-2')),
     )
-    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/colas'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/supervision/queues'))
     expect(await screen.findByText('Ahora tienes: Supervisión.')).toBeInTheDocument()
   })
 
   it('on 4409 reconnects at once and reloads /auth/me', async () => {
-    const { sockets } = renderRoute('/administracion/equipos', { staff: supervisorAdminStaff })
+    const { sockets } = renderRoute('/admin/teams', { staff: supervisorAdminStaff })
     await screen.findByRole('heading', { level: 1, name: 'Equipos' })
     act(() => sockets.last()?.open())
     const fetchMock = vi.mocked(globalThis.fetch)

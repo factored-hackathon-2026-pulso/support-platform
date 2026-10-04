@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import type { AvatarTone } from '@/components/ui'
 import { joinEs } from '@/lib/format'
+import { PATHS } from './paths'
 
 /** Same values as the API `StaffRole` enum. */
 export type RoleId = 'analyst' | 'supervisor' | 'admin'
@@ -90,118 +91,59 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
   analyst: {
     id: 'analyst',
     label: 'Analista de casos',
-    basePath: '/analista',
+    basePath: PATHS.analyst.root,
     // Slice 6: the analyst lands on "Inicio"; "Casos" is the Workspace.
-    home: '/analista/inicio',
+    home: PATHS.analyst.home,
     avatarTone: 'accent',
     nav: [
-      { to: '/analista/inicio', label: 'Inicio', icon: House },
-      // `end`: /analista/inicio must not also mark "Casos" as current.
-      {
-        to: '/analista',
-        label: 'Casos',
-        icon: MessageSquare,
-        indicator: 'toReplyCases',
-        end: true,
-      },
+      { to: PATHS.analyst.home, label: 'Inicio', icon: House },
+      { to: PATHS.analyst.cases, label: 'Casos', icon: MessageSquare, indicator: 'toReplyCases' },
     ],
   },
   supervisor: {
     id: 'supervisor',
     // Gender-neutral (slice 9): the role, not a person ("Supervisión", never "Supervisora").
     label: 'Supervisión',
-    basePath: '/supervision',
+    basePath: PATHS.supervision.root,
     // Slice 9: supervision lands on "Colas" (every open case, by language).
-    home: '/supervision/colas',
+    home: PATHS.supervision.queues,
     avatarTone: 'peach',
     nav: [
       {
-        to: '/supervision/colas',
+        to: PATHS.supervision.queues,
         label: 'Colas',
         icon: Inbox,
         indicator: 'queuedCases',
         // The read-only case view is reached from Colas (and the other screens).
-        alsoActiveOn: ['/supervision/casos'],
+        alsoActiveOn: [PATHS.supervision.cases],
       },
-      { to: '/supervision/equipo', label: 'Equipo', icon: Users },
+      { to: PATHS.supervision.team, label: 'Equipo', icon: Users },
       {
-        to: '/supervision/escalados',
+        to: PATHS.supervision.escalations,
         label: 'Escalados',
         icon: CircleArrowUp,
         indicator: 'openEscalations',
       },
-      { to: '/supervision/auditoria', label: 'Auditoría', icon: Shield },
+      { to: PATHS.supervision.audit, label: 'Auditoría', icon: Shield },
     ],
   },
   admin: {
     id: 'admin',
     label: 'Administración',
-    basePath: '/administracion',
-    home: '/administracion/usuarios',
+    basePath: PATHS.admin.root,
+    home: PATHS.admin.users,
     avatarTone: 'success',
     nav: [
       {
-        to: '/administracion/usuarios',
+        to: PATHS.admin.users,
         label: 'Usuarios y roles',
         icon: UserPlus,
         indicator: 'lockedAccounts',
       },
-      { to: '/administracion/equipos', label: 'Equipos', icon: UsersRound },
-      { to: '/administracion/auditoria', label: 'Auditoría', icon: Shield },
+      { to: PATHS.admin.teams, label: 'Equipos', icon: UsersRound },
+      { to: PATHS.admin.audit, label: 'Auditoría', icon: Shield },
     ],
   },
-}
-
-/**
- * "Casos" with a filter and/or a case open (slice 6 §4.2): the Workspace URL state
- * `?caso=&estado=` (`estado` slug from `slugFromInboxStatus`, cases feature).
- */
-export function workspacePath({
-  caseId,
-  filterSlug,
-}: { caseId?: string | null; filterSlug?: string | null } = {}): string {
-  const params = new URLSearchParams()
-  if (caseId) params.set('caso', caseId)
-  if (filterSlug) params.set('estado', filterSlug)
-  const search = params.toString()
-  return search ? `/analista?${search}` : '/analista'
-}
-
-/** Supervisor read-only view of one case (slice 3 §8.1). */
-export function supervisionCasePath(caseId: string): string {
-  return `/supervision/casos/${caseId}`
-}
-
-/** "Equipo" with one analyst's sheet open (slice 3 §8.9). */
-export function supervisionAnalystPath(staffId: string): string {
-  return `/supervision/equipo?${new URLSearchParams({ analista: staffId }).toString()}`
-}
-
-/** "Escalados" with one escalation open in the side panel (slice 9). */
-export function supervisionEscalationPath(escalationId?: string | null): string {
-  return escalationId
-    ? `/supervision/escalados?${new URLSearchParams({ escalamiento: escalationId }).toString()}`
-    : '/supervision/escalados'
-}
-
-/** "Colas" of one language (slice 9: Spanish is the default, so it carries no param). */
-export function supervisionQueuesPath(language: 'es' | 'pt'): string {
-  return language === 'es' ? '/supervision/colas' : '/supervision/colas?idioma=pt'
-}
-
-/** "Usuarios y roles" with one person selected (slice 4 §10.1). */
-export function adminUserPath(staffId: string): string {
-  return `/administracion/usuarios?${new URLSearchParams({ persona: staffId }).toString()}`
-}
-
-/** "Equipos" with one team selected (slice 4 §10.1). */
-export function adminTeamPath(teamId: string): string {
-  return `/administracion/equipos?${new URLSearchParams({ equipo: teamId }).toString()}`
-}
-
-/** The admin audit entry searching an id: what she did and what was done to her (slice 4 §7.2). */
-export function adminAuditPath(q: string): string {
-  return `/administracion/auditoria?${new URLSearchParams({ q }).toString()}`
 }
 
 /** Display order in the role switcher and priority for "first role home". */

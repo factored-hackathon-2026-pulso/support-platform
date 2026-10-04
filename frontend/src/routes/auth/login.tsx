@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from 'react-router'
+import { PATHS } from '@/app/paths'
 import { readRedirectFrom } from '@/app/redirect'
 import { LoginScreen, type LockedRouteState, type MfaRouteState } from '@/features/auth'
 import { useDevMailboxEnabled } from '@/features/onboarding/core'
@@ -27,11 +28,11 @@ export default function LoginRoute() {
           email,
           ...(from ? { from } : {}),
         }
-        navigate('/login/verificacion', { state })
+        navigate(PATHS.loginVerify, { state })
       }}
       onLocked={({ email, unlockAt }) => {
         const state: LockedRouteState = { email, ...(unlockAt ? { unlockAt } : {}) }
-        navigate('/login/bloqueada', { replace: true, state })
+        navigate(PATHS.loginLocked, { replace: true, state })
       }}
     />
   )

@@ -68,7 +68,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderTeams(path = '/administracion/equipos') {
+function renderTeams(path = '/admin/teams') {
   return renderRoute(path, { staff: adminStaff })
 }
 
@@ -116,19 +116,19 @@ describe('teams screen ("Equipos")', () => {
     const panel = screen.getByRole('group', { name: 'Filtros' })
     // Both states checked: every team.
     await user.click(within(panel).getByRole('checkbox', { name: 'Inactivos 1' }))
-    expect(router.state.location.search).toBe('?estado=activos%2Cinactivos')
+    expect(router.state.location.search).toBe('?status=active%2Cinactive')
     expect(router.state.historyAction).toBe('REPLACE')
     await waitFor(() => expect(fetchAdminTeams).toHaveBeenLastCalledWith('all', expect.anything()))
     // Only the inactive ones.
     await user.click(within(panel).getByRole('checkbox', { name: 'Activos 3' }))
-    expect(router.state.location.search).toBe('?estado=inactivos')
+    expect(router.state.location.search).toBe('?status=inactive')
     const caribe = await within(table()).findByRole('row', { name: /Equipo Caribe/ })
     const inactive = within(caribe).getByText('Inactivo').parentElement!
     expect(inactive.querySelector('svg')).toHaveAttribute('data-status-shape', 'cross')
     await user.keyboard('{Escape}')
 
     await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
-    expect(router.state.location.search).toBe('?estado=todos')
+    expect(router.state.location.search).toBe('?status=all')
     expect(await within(table()).findByRole('row', { name: /Equipo Andes/ })).toBeInTheDocument()
     expect(within(table()).getByRole('row', { name: /Equipo Caribe/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Quitar filtro/ })).toBeNull()
@@ -136,7 +136,7 @@ describe('teams screen ("Equipos")', () => {
 
   it('says when no team has the checked state', async () => {
     vi.mocked(fetchAdminTeams).mockResolvedValue(makeTeamList([]))
-    renderTeams('/administracion/equipos?estado=inactivos')
+    renderTeams('/admin/teams?status=inactive')
     expect(await screen.findByText('No hay equipos en este estado.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Quitar filtro Inactivos' })).toBeInTheDocument()
   })
@@ -144,7 +144,7 @@ describe('teams screen ("Equipos")', () => {
   it('shows the selected team with its members; deactivation is disabled with members', async () => {
     const { user, router } = renderTeams()
     await user.click(await screen.findByRole('button', { name: 'Equipo Andes' }))
-    expect(new URLSearchParams(router.state.location.search).get('equipo')).toBe(teamAndes.id)
+    expect(new URLSearchParams(router.state.location.search).get('team')).toBe(teamAndes.id)
     const panel = aside()
     expect(await within(panel).findByRole('heading', { name: 'Equipo Andes' })).toBeInTheDocument()
     expect(within(panel).getByText(teamAndes.id)).toBeInTheDocument()
@@ -157,9 +157,14 @@ describe('teams screen ("Equipos")', () => {
     expect(within(panel).getByText('Creado el 3 feb 2026')).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: daniela.name })).toHaveAttribute(
       'href',
-      `/administracion/usuarios?persona=${daniela.id}`,
+      `/admin/users?person=${daniela.id}`,
     )
     expect(within(panel).getByText('Desactivada')).toBeInTheDocument()
+    // Each member's languages as marks (flag + code).
+    const member = within(panel).getByRole('link', { name: daniela.name }).closest('li')!
+    expect(
+      within(member).getByText('Español y Português', { selector: '.sr-only' }),
+    ).toBeInTheDocument()
     const deactivate = within(panel).getByRole('button', { name: 'Desactivar equipo' })
     expect(deactivate).toBeDisabled()
     expect(deactivate).toHaveAccessibleDescription(
@@ -167,7 +172,7 @@ describe('teams screen ("Equipos")', () => {
     )
     expect(within(panel).getByRole('link', { name: 'Ver en auditoría' })).toHaveAttribute(
       'href',
-      `/administracion/auditoria?q=${teamAndes.id}`,
+      `/admin/audit?q=${teamAndes.id}`,
     )
   })
 
@@ -180,7 +185,7 @@ describe('teams screen ("Equipos")', () => {
         changed: true,
         team: { ...teamAndes, name: 'Equipo Andes Norte', version: 2 },
       })
-    const { user } = renderTeams(`/administracion/equipos?equipo=${teamAndes.id}`)
+    const { user } = renderTeams(`/admin/teams?team=${teamAndes.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Equipo seleccionado' })
     const name = await within(panel).findByRole('textbox', { name: 'Nombre del equipo' })
     expect(within(panel).getByRole('button', { name: 'Guardar nombre' })).toBeDisabled()
@@ -209,7 +214,7 @@ describe('teams screen ("Equipos")', () => {
       user: { ...mariana, team: { id: teamAndes.id, name: teamAndes.name }, version: 4 },
       revokedSessions: 0,
     })
-    const { user } = renderTeams(`/administracion/equipos?equipo=${teamAndes.id}`)
+    const { user } = renderTeams(`/admin/teams?team=${teamAndes.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Equipo seleccionado' })
     await user.click(await within(panel).findByRole('button', { name: 'Agregar persona' }))
     const dialog = await screen.findByRole('dialog', { name: 'Agregar a Equipo Andes' })
@@ -238,7 +243,7 @@ describe('teams screen ("Equipos")', () => {
     vi.mocked(deactivateTeam).mockRejectedValueOnce(
       new ApiProblem({ status: 409, code: 'team_not_empty', extensions: { memberCount: 1 } }),
     )
-    const { user } = renderTeams(`/administracion/equipos?equipo=${empty.id}`)
+    const { user } = renderTeams(`/admin/teams?team=${empty.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Equipo seleccionado' })
     expect(await within(panel).findByText('Este equipo no tiene personas.')).toBeInTheDocument()
     await user.click(within(panel).getByRole('button', { name: 'Desactivar equipo' }))
@@ -295,13 +300,13 @@ describe('teams screen ("Equipos")', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Crear equipo' }))
     expect(createTeam).toHaveBeenCalledWith('Equipo Sur', expect.any(String))
     await waitFor(() =>
-      expect(new URLSearchParams(router.state.location.search).get('equipo')).toBe(sur.id),
+      expect(new URLSearchParams(router.state.location.search).get('team')).toBe(sur.id),
     )
-    expect(new URLSearchParams(router.state.location.search).get('nuevo')).toBeNull()
+    expect(new URLSearchParams(router.state.location.search).get('new')).toBeNull()
   })
 
   it('says when the linked team does not exist', async () => {
-    renderTeams('/administracion/equipos?equipo=TEAM-NADA')
+    renderTeams('/admin/teams?team=TEAM-NADA')
     expect(await screen.findByText('No encontramos ese equipo.')).toBeInTheDocument()
   })
 })

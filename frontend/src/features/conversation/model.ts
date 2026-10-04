@@ -60,6 +60,13 @@ import type {
 /** Page size used when catching up after a reconnect or a sequence gap. */
 export const CATCH_UP_PAGE_SIZE = 200
 
+/**
+ * "Casos anteriores" on its list (`?previous=list`, in the Workspace and the supervisor case
+ * view); any other value is the id of the past case whose transcript is open.
+ */
+export const PREVIOUS_CASES_LIST = 'list'
+export type PreviousCasesSelection = typeof PREVIOUS_CASES_LIST | (string & {})
+
 export function emptyTranscript(): TranscriptCache {
   return { turns: [], olderCursor: null, contiguousSequence: 0, pending: [] }
 }
@@ -387,8 +394,8 @@ export function noticeLabel(item: TranscriptItem): string {
 /**
  * The facts after the case number in the supervisor view's header (contract §9.3; no
  * dot-joined line): the place, the channel (icon-only) and, for a Portuguese case,
- * "Portugués" (rule 3: the only cue outside the transcript that the reply must be in
- * Portuguese). Slice 8: the priority is a control of its own (the menu in the header).
+ * its language mark "[PT]" (rule 3: the only cue outside the transcript that the reply
+ * must be in Portuguese). Slice 8: the priority is a control of its own (the menu in the header).
  */
 export function caseHeaderFacts(detail: Pick<CaseDetail, 'case' | 'customer'>): FactItem[] {
   const { case: summary, customer } = detail
@@ -402,14 +409,14 @@ export function caseHeaderFacts(detail: Pick<CaseDetail, 'case' | 'customer'>): 
     channelFact(summary.channel),
   ]
   if (summary.language === 'pt') {
-    facts.push({ key: 'language', icon: 'languages', text: 'Portugués', label: 'Idioma' })
+    facts.push({ key: 'language', icon: 'languages', text: '', label: 'Idioma', languages: ['pt'] })
   }
   return facts
 }
 
 /**
  * Short case number for the header ("CASE-…0103", "CASE-…F2BC"): the full
- * 31-character id would push the meta line (country, channel, "en portugués")
+ * 31-character id would push the meta line (place, channel, language mark)
  * out of view. The full id stays in the tooltip, the accessible name and "Copiar".
  */
 export function shortCaseId(id: string): string {
@@ -606,12 +613,6 @@ export function customerFileTriggerLabel(customerName: string): string {
   return `Ver ficha de ${customerName}`
 }
 
-/** "Portugués" / "Español": the language of a case or a customer, as a value. */
-export function languageName(language: Language): string {
-  const name = LANGUAGE_NAMES[language]
-  return name.charAt(0).toUpperCase() + name.slice(1)
-}
-
 /** One row of the file: an icon and a label, then the value (text, a pill or facts). */
 export interface FileRow {
   key: string
@@ -621,6 +622,8 @@ export interface FileRow {
   mono?: boolean
   /** The case status as glyph + word (`caseStatus`, the cases map). */
   status?: StatusAppearance
+  /** A language as a globe and its own name ("[globe] Português"), no code. */
+  language?: Language
   /** The customer's rating, with its face, as a colored pill. */
   pill?: { label: string; tone: Tone; icon?: FactIcon }
   /** The case priority (slice 8): the menu when the viewer may change it, else glyph + word. */
@@ -640,7 +643,7 @@ export function customerRows(detail: Pick<CaseDetail, 'customer'>): FileRow[] {
       label: 'Ciudad',
       text: `${customer.city}, ${countryName(customer.country)}`,
     },
-    { key: 'language', icon: 'languages', label: 'Idioma', text: languageName(customer.language) },
+    { key: 'language', icon: 'languages', label: 'Idioma', language: customer.language },
     { key: 'id', icon: 'id', label: 'Id de cliente', text: customer.id, mono: true },
   ]
 }
@@ -746,7 +749,7 @@ export interface ArrivalFacts {
 /**
  * The people-based assignment as short icon rows built from the assignment
  * fields, never a sentence:
- * - hers, on arrival: [check] Estabas disponible, [languages] Hablas portugués + "Regla 3";
+ * - hers, on arrival: [check] Estabas disponible, [languages] Hablas [PT] + "Regla 3";
  * - hers, from the queue: [hourglass] Esperó 14 min, [inbox] Cola en portugués,
  *   [check] Quedaste disponible;
  * - hers, by a supervisor: [users] Asignado por Lucía Herrera (+ [hourglass] the
@@ -819,7 +822,8 @@ export function arrivalFacts(
       {
         key: 'language',
         icon: 'languages',
-        text: `Hablas ${LANGUAGE_NAMES[summary.language]}`,
+        text: 'Hablas',
+        languages: [summary.language],
         ...(summary.language === 'pt' ? { tag: 'Regla 3' } : {}),
       },
     ],

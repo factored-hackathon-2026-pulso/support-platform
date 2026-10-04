@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { UserPlus, UsersRound } from 'lucide-react'
-import { adminAuditPath, adminUserPath } from '@/app/roles'
+import { adminAuditPath, adminUserPath } from '@/app/paths'
 import {
   Button,
   Callout,
@@ -9,6 +9,7 @@ import {
   Field,
   Input,
   Kicker,
+  LanguageMarks,
   Spinner,
   Status,
   useToast,
@@ -19,7 +20,6 @@ import { formatDate } from '@/lib/format'
 import {
   ACCOUNT_STATUS,
   TEAM_NAME_MAX_LENGTH,
-  languagesLabel,
   normalizeName,
   sortMembers,
   teamNotEmptyCopy,
@@ -33,7 +33,7 @@ import { DeactivateTeamDialog } from './DeactivateTeamDialog'
 import { RoleChips } from './RoleChips'
 
 export interface TeamPanelProps {
-  /** `?equipo=`; null = nothing selected. */
+  /** `?team=`; null = nothing selected. */
   teamId: string | null
 }
 
@@ -302,9 +302,16 @@ function MemberRow({ member }: { member: AdminTeamMember }) {
       </span>
       <span className="flex flex-wrap items-center gap-2 text-12">
         <RoleChips roles={member.roles} className={cn(inactive && 'opacity-70')} />
-        <span className={inactive ? 'text-muted' : 'text-ink-2'}>
-          {languagesLabel(member.languages)}
-        </span>
+        {member.languages.length > 0 ? (
+          <LanguageMarks
+            languages={member.languages}
+            className={cn(inactive && 'text-muted opacity-70')}
+          />
+        ) : (
+          <span title="Sin idiomas" className={inactive ? 'text-muted' : 'text-ink-2'}>
+            —
+          </span>
+        )}
       </span>
     </li>
   )

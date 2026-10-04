@@ -9,7 +9,7 @@ import {
 } from '@/features/audit'
 
 /**
- * /supervision/auditoria — Auditoría. Filters, search and the selected event
+ * /supervision/audit — Auditoría. Filters, search and the selected event
  * live in the URL (slice-3-supervision.md §8.9). The supervision notices come from the
  * notification center in the shell (slice 10), like on every screen.
  */

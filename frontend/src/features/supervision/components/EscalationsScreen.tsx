@@ -5,13 +5,8 @@ import { EmptyState, Fact, PageHeader, QueryState, Skeleton, Status } from '@/co
 import { ESCALATION_STATE, escalationWaitFact } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/lib/hooks'
-import {
-  escalationGroups,
-  openEscalationsLabel,
-  type EscalationsUrlState,
-  type UrlStateChangeOptions,
-  withoutKey,
-} from '../model'
+import { escalationGroups, openEscalationsLabel, withoutKey } from '../model'
+import type { EscalationsUrlState, UrlStateChangeOptions } from '../url'
 import { useEscalationOverview, useSupervisionLive } from '../hooks'
 import type { EscalationItem, EscalationOverview } from '../types'
 import { AnalystAvatar } from './AnalystAvatar'
@@ -30,7 +25,7 @@ export interface EscalationsScreenProps {
  * "Escalados" (SuEscalados.dc.html, slice 9): the cases in which the team asked
  * supervision for help. Open ones first (the longest waiting first; a clock, an orange
  * flame after 15 min and a red one after 30: emphasis only, no deadline), then the ones
- * attended today. Selecting one opens the panel (`?escalamiento=`): the motive, the case
+ * attended today. Selecting one opens the panel (`?escalation=`): the motive, the case
  * facts, the last messages, and Responder / Tomar el caso / Reasignar.
  */
 export function EscalationsScreen({ state, onStateChange, onOpenCase }: EscalationsScreenProps) {
@@ -43,7 +38,7 @@ export function EscalationsScreen({ state, onStateChange, onOpenCase }: Escalati
   const selected = state.escalationId
     ? (items.find((item) => item.escalation.id === state.escalationId) ?? null)
     : null
-  // ?escalamiento= no longer listed (withdrawn, ended with the case, older than today).
+  // ?escalation= no longer listed (withdrawn, ended with the case, older than today).
   const unknown =
     state.escalationId !== null &&
     overview.status === 'success' &&

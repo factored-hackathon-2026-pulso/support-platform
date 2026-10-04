@@ -53,7 +53,7 @@ class ActivityCounts(ApiModel):
 
 
 class TeamSummary(ApiModel):
-    id: str = Field(description="TEAM-… id (the `?equipo=` filter).")
+    id: str = Field(description="TEAM-… id (the `?team=` filter).")
     name: str
     analyst_count: int
     activity: ActivityCounts = Field(description="The team's analysts by activity.")

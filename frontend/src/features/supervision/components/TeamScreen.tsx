@@ -17,9 +17,8 @@ import {
   teamSelection,
   teamStateFromSelection,
   teamSubtitle,
-  type TeamUrlState,
-  type UrlStateChangeOptions,
 } from '../model'
+import type { TeamUrlState, UrlStateChangeOptions } from '../url'
 import { useIsAssigning, useSupervisionLive, useTeamOverview } from '../hooks'
 import type { CaseSummary } from '../types'
 import { AnalystSheet } from './AnalystSheet'
@@ -42,7 +41,7 @@ export interface TeamScreenProps {
  * "Equipo" (SuTeam.dc.html, slice 9): one table of every analyst, live through
  * `supervision:team`. The team is a filter (never a tab): one "Filtros" dropdown (Estado,
  * Idioma, Equipo, each with its count) and removable chips, all in the URL
- * (`?estado=&idioma=&equipo=&analista=&reasignar=`). The analyst sheet lists her open
+ * (`?status=&language=&team=&analyst=&reassign=`). The analyst sheet lists her open
  * cases with "Reasignar".
  */
 export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps) {
@@ -60,7 +59,7 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
     onStateChange(teamStateFromSelection(state, next), { replace: true })
   const clear = () => onStateChange({ activities: [], languages: [], teams: [] }, { replace: true })
 
-  // ?analista= of someone not (or no longer) listed: close the sheet.
+  // ?analyst= of someone not (or no longer) listed: close the sheet.
   const sheetAnalyst = state.analystId
     ? analysts?.find((analyst) => analyst.id === state.analystId)
     : undefined
@@ -69,7 +68,7 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
     if (unknownAnalyst) onStateChange({ analystId: null }, { replace: true })
   }, [unknownAnalyst, onStateChange])
 
-  // ?reasignar=: the open case as the overview shows it now. Keep the last one while the
+  // ?reassign=: the open case as the overview shows it now. Keep the last one while the
   // reassignment is in flight (the refetch may move it under another analyst first).
   const liveSummary = state.reassignCaseId ? findOpenCase(state.reassignCaseId, team.data) : null
   const [keptSummary, setKeptSummary] = useState<CaseSummary | null>(null)

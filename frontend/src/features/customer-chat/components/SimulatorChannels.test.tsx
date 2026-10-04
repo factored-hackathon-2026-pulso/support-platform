@@ -61,7 +61,7 @@ function render(channel: SimChannel | null) {
   const sockets = createFakeSocketFactory()
   const view = renderWithProviders(
     <CustomerSimulatorScreen createSocket={sockets.factory} channel={channel} />,
-    { route: '/cliente' },
+    { route: '/customer' },
   )
   return { ...view, sockets }
 }
@@ -271,7 +271,7 @@ describe('simulator · call (slice 12)', () => {
 describe('simulator · email (slice 12)', () => {
   it('writes a new email with a subject and shows it in the thread', async () => {
     signInAs(CLAUDIA_ID)
-    const { user } = render('mail')
+    const { user } = render('email')
     const view = await screen.findByRole('region', { name: 'Nuevo correo' })
     expect(view).toHaveTextContent('Escribe tu consulta.')
     const form = within(view).getByRole('form', { name: 'Escribe tu correo' })
@@ -334,7 +334,7 @@ describe('simulator · email (slice 12)', () => {
       }),
     ]
     signInAs(CLAUDIA_ID, { conversation: open({ channel: 'email' }), turns })
-    const { user } = render('mail')
+    const { user } = render('email')
     const thread = await screen.findByRole('list', { name: 'Correos del hilo' })
     const [mine, reply] = await within(thread).findAllByRole('listitem')
     expect(within(mine!).getByRole('button')).toHaveAttribute('aria-expanded', 'false')

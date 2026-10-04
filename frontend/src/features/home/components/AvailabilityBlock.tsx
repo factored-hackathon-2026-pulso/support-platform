@@ -1,4 +1,4 @@
-import { workspacePath } from '@/app/roles'
+import { workspacePath } from '@/app/paths'
 import { Button, FactList, LinkButton, Skeleton, useToast } from '@/components/ui'
 import { useAvailability, useUpdateAvailability } from '@/features/cases'
 import { cn } from '@/lib/cn'

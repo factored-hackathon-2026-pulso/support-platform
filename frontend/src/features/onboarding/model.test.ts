@@ -13,11 +13,9 @@ import {
   firstPasswordField,
   fold,
   groupKey,
-  inAppPath,
   passwordChecks,
   passwordReady,
   personalPieces,
-  readToken,
   roleLabels,
 } from './model'
 
@@ -123,12 +121,6 @@ describe('activation', () => {
       'RITX TQQQ H543 3LHJ AHU3 GVWN MQXD G2W7',
     )
   })
-
-  it('reads the token of the link', () => {
-    expect(readToken(new URLSearchParams('token=abc'))).toBe('abc')
-    expect(readToken(new URLSearchParams('token=%20'))).toBeNull()
-    expect(readToken(new URLSearchParams(''))).toBeNull()
-  })
 })
 
 describe('describeOnboardingFailure', () => {
@@ -206,14 +198,10 @@ describe('describeOnboardingFailure', () => {
 })
 
 describe('dev mailbox', () => {
-  it('labels the kinds and keeps only the app links', () => {
+  it('labels the kinds', () => {
     expect(DEV_EMAIL_KIND_LABEL).toEqual({
       invitation: 'Invitación',
       password_reset: 'Restablecer contraseña',
     })
-    expect(inAppPath('http://localhost:5173/activar?token=abc')).toBe('/activar?token=abc')
-    expect(inAppPath('http://127.0.0.1:4000/restablecer?token=x-y')).toBe('/restablecer?token=x-y')
-    expect(inAppPath('https://evil.example/login')).toBeNull()
-    expect(inAppPath('not a url')).toBeNull()
   })
 })

@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router'
 import { MousePointerClick } from 'lucide-react'
-import { supervisionCasePath } from '@/app/roles'
+import { supervisionCasePath } from '@/app/paths'
 import {
   Accordion,
   AccordionItem,
@@ -18,7 +18,7 @@ import { detailByline, detailKicker, eventInstant, payloadLines, redactionNote }
 import type { AuditEvent } from '../types'
 
 export interface AuditDetailProps {
-  /** `?evento=`; null = nothing selected. */
+  /** `?event=`; null = nothing selected. */
   eventId: string | null
   /** The event when it is in the loaded pages, or once fetched by id. */
   event: AuditEvent | undefined

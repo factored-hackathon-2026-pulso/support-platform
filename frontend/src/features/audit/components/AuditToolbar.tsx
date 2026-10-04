@@ -21,9 +21,8 @@ import {
   personOptionLabel,
   showsPersonFilter,
   withActorKind,
-  type AuditStateChangeOptions,
-  type AuditUrlState,
 } from '../model'
+import type { AuditStateChangeOptions, AuditUrlState } from '../url'
 import { useStaffDirectory } from '../hooks'
 import type { AuditActorKind, AuditFamily } from '../types'
 

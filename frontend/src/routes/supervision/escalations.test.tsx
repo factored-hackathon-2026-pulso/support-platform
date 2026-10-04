@@ -98,7 +98,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderEscalations(path = '/supervision/escalados') {
+function renderEscalations(path = '/supervision/escalations') {
   return renderRoute(path, { staff: supervisorStaff })
 }
 
@@ -139,7 +139,7 @@ describe('escalations screen ("Escalados")', () => {
         { name: /Camila Torres Benavides/ },
       ),
     )
-    expect(router.state.location.search).toBe(`?escalamiento=${ESC.id}`)
+    expect(router.state.location.search).toBe(`?escalation=${ESC.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Camila Torres Benavides' })
     expect(within(panel).getByText(ESC.motive)).toBeInTheDocument()
     expect(within(panel).getByText('Escaló hace 21 min')).toBeInTheDocument()
@@ -149,7 +149,7 @@ describe('escalations screen ("Escalados")', () => {
     ).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: /Ver caso completo/ })).toHaveAttribute(
       'href',
-      `/supervision/casos/${julianCamila.id}`,
+      `/supervision/cases/${julianCamila.id}`,
     )
     expect(within(panel).getByRole('button', { name: 'Responder' })).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Reasignar' })).toBeInTheDocument()
@@ -162,7 +162,7 @@ describe('escalations screen ("Escalados")', () => {
       escalation: { ...ESC, state: 'answered', note: 'Sigue tú con ella.' },
       case: { ...julianCamila, escalated: false },
     })
-    const { user } = renderEscalations(`/supervision/escalados?escalamiento=${ESC.id}`)
+    const { user } = renderEscalations(`/supervision/escalations?escalation=${ESC.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Camila Torres Benavides' })
     await user.click(within(panel).getByRole('button', { name: 'Responder' }))
     const reply = within(panel).getByRole('textbox', { name: 'Tu respuesta para Julián' })
@@ -186,7 +186,7 @@ describe('escalations screen ("Escalados")', () => {
     vi.mocked(respondEscalation).mockRejectedValue(
       new ApiProblem({ status: 409, code: 'escalation_not_open' }),
     )
-    const { user } = renderEscalations(`/supervision/escalados?escalamiento=${ESC.id}`)
+    const { user } = renderEscalations(`/supervision/escalations?escalation=${ESC.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Camila Torres Benavides' })
     await user.click(within(panel).getByRole('button', { name: 'Responder' }))
     await user.type(within(panel).getByRole('textbox'), 'Hola')
@@ -206,7 +206,7 @@ describe('escalations screen ("Escalados")', () => {
       escalation: { ...ESC, state: 'taken' },
       case: { ...julianCamila, assignedAnalystId: 'STF-SUP0000005' },
     })
-    const { user } = renderEscalations(`/supervision/escalados?escalamiento=${ESC.id}`)
+    const { user } = renderEscalations(`/supervision/escalations?escalation=${ESC.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Camila Torres Benavides' })
     await user.click(within(panel).getByRole('button', { name: 'Tomar el caso' }))
     expect(takeEscalatedCase).toHaveBeenCalledWith(ESC.id)
@@ -223,10 +223,10 @@ describe('escalations screen ("Escalados")', () => {
       case: { ...julianCamila, assignedAnalystId: DANIELA_ID },
       assignment: { ...makeCaseDetail().assignment!, reason: 'manual' },
     })
-    const { user, router } = renderEscalations(`/supervision/escalados?escalamiento=${ESC.id}`)
+    const { user, router } = renderEscalations(`/supervision/escalations?escalation=${ESC.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Camila Torres Benavides' })
     await user.click(within(panel).getByRole('button', { name: 'Reasignar' }))
-    expect(router.state.location.search).toBe(`?escalamiento=${ESC.id}&reasignar=1`)
+    expect(router.state.location.search).toBe(`?escalation=${ESC.id}&reassign=1`)
     const dialog = await screen.findByRole('dialog', { name: 'Reasignar caso' })
     await user.click(within(dialog).getByRole('radio', { name: /^Daniela Ríos/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Reasignar a Daniela' }))
@@ -243,7 +243,7 @@ describe('escalations screen ("Escalados")', () => {
   })
 
   it('shows what supervision did with an attended one, without actions', async () => {
-    renderEscalations(`/supervision/escalados?escalamiento=${answeredEscalation.escalation.id}`)
+    renderEscalations(`/supervision/escalations?escalation=${answeredEscalation.escalation.id}`)
     const panel = await screen.findByRole('complementary', { name: 'Joaquín Ferreyra Paz' })
     expect(within(panel).getByText('Lucía Herrera respondió')).toBeInTheDocument()
     expect(within(panel).getByText('Revisé el reclamo: sigue dentro del plazo.')).toBeVisible()
@@ -276,7 +276,7 @@ describe('escalations screen ("Escalados")', () => {
   })
 
   it('drops an escalation that is no longer listed', async () => {
-    const { router } = renderEscalations('/supervision/escalados?escalamiento=ESC-NADA')
+    const { router } = renderEscalations('/supervision/escalations?escalation=ESC-NADA')
     await screen.findByRole('region', { name: 'Escalamientos' })
     await waitFor(() => expect(router.state.location.search).toBe(''))
   })

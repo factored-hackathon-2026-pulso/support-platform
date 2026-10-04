@@ -4,19 +4,21 @@
  * the "Ahora" states, "Colas" (every open case of a language, its filters and cells),
  * "Equipo" (the analysts, their filters and figures), the reassign dialog (suggestions,
  * search, rule 3, the pause confirmation, what the customer sees, failures),
- * "Escalados" (groups, outcomes, failures), the notices and the URL state.
+ * "Escalados" (groups, outcomes, failures) and the notices (the URL state is in url.ts).
  * Time-dependent figures take `now`. No React, no I/O: unit-tested in model.test.ts.
  *
  * Assignment is automatic (rule 3, the least loaded first): supervision never assigns
  * a queued case by hand any more; "Reasignar" stays as the exception.
  */
-import type {
-  FactIcon,
-  FactItem,
-  FactTone,
-  FilterGroup,
-  FilterSelection,
-  StatusAppearance,
+import { PATHS } from '@/app/paths'
+import {
+  LANGUAGE_NATIVE_NAME,
+  type FactIcon,
+  type FactItem,
+  type FactTone,
+  type FilterGroup,
+  type FilterSelection,
+  type StatusAppearance,
 } from '@/components/ui'
 import {
   CASE_PRIORITY,
@@ -53,6 +55,7 @@ import type {
   TeamOverview,
   TeamSummary,
 } from './types'
+import type { QueuesUrlState, TeamUrlState } from './url'
 
 export { QUEUE_LABEL }
 
@@ -79,15 +82,6 @@ export function foldText(text: string): string {
 
 function byName(a: { name: string }, b: { name: string }): number {
   return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1)
-}
-
-/** "Español" / "Portugués". */
-export function languageWord(language: Language): string {
-  return capitalize(LANGUAGE_NAMES[language])
 }
 
 // ── "Ahora" (slice 3 §2.2) ───────────────────────────────────────────────────
@@ -134,11 +128,6 @@ export function speaksLanguage(
   language: Language,
 ): boolean {
   return analyst.languages.includes(language)
-}
-
-/** "español, portugués". */
-export function languagesLabel(languages: readonly Language[]): string {
-  return languages.map((language) => LANGUAGE_NAMES[language]).join(', ')
 }
 
 // ── Time-dependent figures (recomputed with the ticking clock) ───────────────
@@ -295,6 +284,11 @@ export function shownCasesLabel(shown: number, total: number, filtered: boolean)
   return filtered ? `${shown} de ${all}` : all
 }
 
+/** Name of the queue's table: "Casos abiertos en portugués". */
+export function openCasesTableLabel(language: Language): string {
+  return `Casos abiertos en ${LANGUAGE_NAMES[language]}`
+}
+
 export function emptyQueueTitle(language: Language): string {
   return `No hay casos abiertos en ${LANGUAGE_NAMES[language]}`
 }
@@ -309,45 +303,17 @@ export const OPEN_CASE_STATUS_KEYS: readonly OpenCaseStatusKey[] = [
   'waiting',
 ]
 
-const STATUS_SLUG: Record<OpenCaseStatusKey, string> = {
-  queued: 'sin-asignar',
-  new: 'nuevo',
-  to_reply: 'por-responder',
-  waiting: 'esperando',
-}
-
-const PRIORITY_SLUG: Record<CasePriority, string> = {
-  none: 'sin-prioridad',
-  low: 'baja',
-  medium: 'media',
-  high: 'alta',
-  critical: 'critica',
-}
-
 function statusKeyOf(summary: Pick<CaseSummary, 'inboxStatus'>): OpenCaseStatusKey {
   const status = summary.inboxStatus
   return status === 'new' || status === 'to_reply' || status === 'waiting' ? status : 'queued'
 }
 
-export interface QueuesUrlState {
-  /** `?idioma=es|pt` (default `es`). */
-  language: Language
-  /** `?estado=sin-asignar,nuevo,por-responder,esperando`. */
-  statuses: OpenCaseStatusKey[]
-  /** `?prioridad=sin-prioridad,baja,media,alta,critica`. */
-  priorities: CasePriority[]
-  /** `?analista=STF-…,STF-…`: who holds the case. */
-  analysts: string[]
-}
-
-export const QUEUE_FILTER_KEYS = { status: 'estado', priority: 'prioridad', analyst: 'analista' }
-
 /** The checked filters of "Colas" as a `FilterSelection` (the FilterMenu's input). */
 export function queuesSelection(state: QueuesUrlState): FilterSelection {
   return {
-    estado: state.statuses,
-    prioridad: state.priorities,
-    analista: state.analysts,
+    status: state.statuses,
+    priority: state.priorities,
+    analyst: state.analysts,
   }
 }
 
@@ -358,20 +324,20 @@ export function queuesStateFromSelection(
 ): QueuesUrlState {
   return {
     ...state,
-    statuses: (selection.estado ?? []).filter((v): v is OpenCaseStatusKey =>
+    statuses: (selection.status ?? []).filter((v): v is OpenCaseStatusKey =>
       (OPEN_CASE_STATUS_KEYS as readonly string[]).includes(v),
     ),
-    priorities: (selection.prioridad ?? []).filter((v): v is CasePriority => v in CASE_PRIORITY),
-    analysts: [...(selection.analista ?? [])],
+    priorities: (selection.priority ?? []).filter((v): v is CasePriority => v in CASE_PRIORITY),
+    analysts: [...(selection.analyst ?? [])],
   }
 }
 
 type RowTest = (row: OpenCaseRow, value: string) => boolean
 
-const QUEUE_TESTS: Record<'estado' | 'prioridad' | 'analista', RowTest> = {
-  estado: (row, value) => statusKeyOf(row.case) === value,
-  prioridad: (row, value) => row.case.priority === value,
-  analista: (row, value) => row.case.assignedAnalystId === value,
+const QUEUE_TESTS: Record<'status' | 'priority' | 'analyst', RowTest> = {
+  status: (row, value) => statusKeyOf(row.case) === value,
+  priority: (row, value) => row.case.priority === value,
+  analyst: (row, value) => row.case.assignedAnalystId === value,
 }
 
 function passesGroup(row: OpenCaseRow, key: keyof typeof QUEUE_TESTS, values: readonly string[]) {
@@ -416,110 +382,45 @@ export function queueFilterGroups(
   for (const id of state.analysts) if (!holders.has(id)) holders.set(id, id)
   return [
     {
-      key: 'estado',
+      key: 'status',
       legend: 'Estado',
       options: OPEN_CASE_STATUS_KEYS.map((key) => ({
         value: key,
         label: CASE_STATUS[key].label,
-        count: count('estado', key),
+        count: count('status', key),
       })),
     },
     {
-      key: 'prioridad',
+      key: 'priority',
       legend: 'Prioridad',
       options: PRIORITY_OPTIONS.map((config) => ({
         value: config.value,
         label: config.label,
-        count: count('prioridad', config.value),
+        count: count('priority', config.value),
       })),
     },
     {
-      key: 'analista',
+      key: 'analyst',
       legend: 'Analista',
       options: [...holders.entries()]
         .sort((a, b) => a[1].localeCompare(b[1], 'es', { sensitivity: 'base' }))
-        .map(([id, name]) => ({ value: id, label: name, count: count('analista', id) })),
+        .map(([id, name]) => ({ value: id, label: name, count: count('analyst', id) })),
     },
   ]
 }
 
-export function parseQueuesSearch(params: URLSearchParams): QueuesUrlState {
-  const language = params.get('idioma') === 'pt' ? 'pt' : 'es'
-  const list = (key: string) =>
-    (params.get(key) ?? '')
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean)
-  const fromSlug = <K extends string>(slugs: Record<K, string>, values: string[]): K[] => {
-    const keys = Object.keys(slugs) as K[]
-    return keys.filter((key) => values.includes(slugs[key]))
-  }
-  return {
-    language,
-    statuses: fromSlug(STATUS_SLUG, list('estado')),
-    priorities: fromSlug(PRIORITY_SLUG, list('prioridad')),
-    analysts: [...new Set(list('analista'))],
-  }
-}
-
-export function toQueuesSearch(state: QueuesUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  if (state.language !== 'es') params.set('idioma', state.language)
-  if (state.statuses.length) {
-    params.set('estado', state.statuses.map((key) => STATUS_SLUG[key]).join(','))
-  }
-  if (state.priorities.length) {
-    params.set('prioridad', state.priorities.map((key) => PRIORITY_SLUG[key]).join(','))
-  }
-  if (state.analysts.length) params.set('analista', state.analysts.join(','))
-  return params
-}
-
-/** "Colas" of one language, as a link (the queue notice, "Ver en la cola"). */
-export function queuesPath(language: Language): string {
-  const search = toQueuesSearch({ language, statuses: [], priorities: [], analysts: [] })
-  const query = search.toString()
-  return query ? `/supervision/colas?${query}` : '/supervision/colas'
-}
-
 // ── "Equipo" (slice 9: one table, no team tabs) ──────────────────────────────
-
-export interface TeamUrlState {
-  /** `?estado=atendiendo,disponible,en-pausa,sin-conexion`. */
-  activities: AnalystActivity[]
-  /** `?idioma=es,pt`. */
-  languages: Language[]
-  /** `?equipo=TEAM-…,TEAM-…`. */
-  teams: string[]
-  /** `?analista=STF-…`: the analyst sheet. */
-  analystId: string | null
-  /** `?reasignar=CASE-…`: the reassign dialog. */
-  reassignCaseId: string | null
-}
-
-const ACTIVITY_SLUG: Record<AnalystActivity, string> = {
-  busy: 'atendiendo',
-  available: 'disponible',
-  paused: 'en-pausa',
-  offline: 'sin-conexion',
-}
-
-/** Slice 3 URLs (`?estado=conectadas` …) still open the right analysts. */
-const LEGACY_ACTIVITY_SLUGS: Record<string, AnalystActivity[]> = {
-  conectadas: ['busy', 'available'],
-  desconectadas: ['offline'],
-}
 
 type AnalystTest = (analyst: TeamAnalyst, value: string) => boolean
 
-const TEAM_TESTS: Record<'estado' | 'idioma' | 'equipo', AnalystTest> = {
-  estado: (analyst, value) => analyst.activity === value,
-  idioma: (analyst, value) => analyst.languages.includes(value as Language),
-  equipo: (analyst, value) => analyst.team.id === value,
+const TEAM_TESTS: Record<'status' | 'language' | 'team', AnalystTest> = {
+  status: (analyst, value) => analyst.activity === value,
+  language: (analyst, value) => analyst.languages.includes(value as Language),
+  team: (analyst, value) => analyst.team.id === value,
 }
 
 export function teamSelection(state: TeamUrlState): FilterSelection {
-  return { estado: state.activities, idioma: state.languages, equipo: state.teams }
+  return { status: state.activities, language: state.languages, team: state.teams }
 }
 
 export function teamStateFromSelection(
@@ -528,11 +429,11 @@ export function teamStateFromSelection(
 ): TeamUrlState {
   return {
     ...state,
-    activities: (selection.estado ?? []).filter((v): v is AnalystActivity =>
+    activities: (selection.status ?? []).filter((v): v is AnalystActivity =>
       (ACTIVITY_ORDER as readonly string[]).includes(v),
     ),
-    languages: (selection.idioma ?? []).filter((v): v is Language => v === 'es' || v === 'pt'),
-    teams: [...(selection.equipo ?? [])],
+    languages: (selection.language ?? []).filter((v): v is Language => v === 'es' || v === 'pt'),
+    teams: [...(selection.team ?? [])],
   }
 }
 
@@ -575,29 +476,30 @@ export function teamFilterGroups(
   }
   return [
     {
-      key: 'estado',
+      key: 'status',
       legend: 'Estado',
       options: ACTIVITY_ORDER.map((activity) => ({
         value: activity,
         label: ACTIVITY_META[activity].label,
-        count: count('estado', activity),
+        count: count('status', activity),
       })),
     },
     {
-      key: 'idioma',
+      key: 'language',
       legend: 'Idioma',
       options: QUEUE_LANGUAGES.map((language) => ({
         value: language,
-        label: languageWord(language),
-        count: count('idioma', language),
+        label: LANGUAGE_NATIVE_NAME[language],
+        language,
+        count: count('language', language),
       })),
     },
     {
-      key: 'equipo',
+      key: 'team',
       legend: 'Equipo',
       options: [...teams.entries()]
         .sort((a, b) => a[1].localeCompare(b[1], 'es', { sensitivity: 'base' }))
-        .map(([id, name]) => ({ value: id, label: name, count: count('equipo', id) })),
+        .map(([id, name]) => ({ value: id, label: name, count: count('team', id) })),
     },
   ]
 }
@@ -616,42 +518,6 @@ export function analystsFigures(
   const open = analysts.reduce((sum, analyst) => sum + analyst.counts.open, 0)
   const atRisk = analysts.reduce((sum, analyst) => sum + atRiskCount(analyst.openCases, now), 0)
   return { open: pluralize(open, 'caso abierto', 'casos abiertos'), atRisk }
-}
-
-export function parseTeamSearch(params: URLSearchParams): TeamUrlState {
-  const list = (key: string) =>
-    (params.get(key) ?? '')
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean)
-  const estado = list('estado')
-  const activities = new Set<AnalystActivity>()
-  for (const slug of estado) {
-    for (const legacy of LEGACY_ACTIVITY_SLUGS[slug] ?? []) activities.add(legacy)
-    const found = ACTIVITY_ORDER.find((activity) => ACTIVITY_SLUG[activity] === slug)
-    if (found) activities.add(found)
-  }
-  const trimmed = (value: string | null) => value?.trim() || null
-  return {
-    activities: ACTIVITY_ORDER.filter((activity) => activities.has(activity)),
-    languages: QUEUE_LANGUAGES.filter((language) => list('idioma').includes(language)),
-    teams: [...new Set(list('equipo'))],
-    analystId: trimmed(params.get('analista')),
-    // `?asignar=` was the slice 3 name of the dialog.
-    reassignCaseId: trimmed(params.get('reasignar')) ?? trimmed(params.get('asignar')),
-  }
-}
-
-export function toTeamSearch(state: TeamUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  if (state.activities.length) {
-    params.set('estado', state.activities.map((activity) => ACTIVITY_SLUG[activity]).join(','))
-  }
-  if (state.languages.length) params.set('idioma', state.languages.join(','))
-  if (state.teams.length) params.set('equipo', state.teams.join(','))
-  if (state.analystId) params.set('analista', state.analystId)
-  if (state.reassignCaseId) params.set('reasignar', state.reassignCaseId)
-  return params
 }
 
 /** The `CaseSummary` of `caseId` among the analysts' open cases, or null. */
@@ -949,7 +815,13 @@ export function escalationCaseFacts(
       label: 'Lo atiende',
     },
     place ? { key: 'place', icon: 'map-pin', text: place, label: 'Ciudad' } : null,
-    { key: 'language', icon: 'languages', text: languageWord(summary.language), label: 'Idioma' },
+    {
+      key: 'language',
+      icon: 'languages',
+      text: LANGUAGE_NATIVE_NAME[summary.language],
+      language: summary.language,
+      label: 'Idioma',
+    },
     {
       key: 'channel',
       icon: caseChannel(summary.channel).icon,
@@ -1045,61 +917,14 @@ export function describeEscalationFailure(
   return { message: 'No pudimos completar la acción. Inténtalo de nuevo.', refetch: false }
 }
 
-export interface EscalationsUrlState {
-  /** `?escalamiento=ESC-…`: the side panel. */
-  escalationId: string | null
-  /** `?reasignar=1`: the reassign dialog for the selected escalation's case. */
-  reassign: boolean
-}
-
-export function parseEscalationsSearch(params: URLSearchParams): EscalationsUrlState {
-  return {
-    escalationId: params.get('escalamiento')?.trim() || null,
-    reassign: params.get('reasignar') === '1',
-  }
-}
-
-export function toEscalationsSearch(state: EscalationsUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  if (state.escalationId) params.set('escalamiento', state.escalationId)
-  if (state.reassign && state.escalationId) params.set('reasignar', '1')
-  return params
-}
-
 // ── Supervisor case view ─────────────────────────────────────────────────────
-
-export interface CaseViewUrlState {
-  /** `?historial=lista|CASE-…`: the "Casos anteriores" sheet. */
-  history: 'lista' | string | null
-  /** `?reasignar=1` (slice 3: `?asignar=1`): the reassign dialog for this case. */
-  reassign: boolean
-}
-
-export interface UrlStateChangeOptions {
-  /** Replace the history entry (filters) instead of pushing one (selection, dialogs). */
-  replace?: boolean
-}
-
-export function parseCaseViewSearch(params: URLSearchParams): CaseViewUrlState {
-  return {
-    history: params.get('historial')?.trim() || null,
-    reassign: params.get('reasignar') === '1' || params.get('asignar') === '1',
-  }
-}
-
-export function toCaseViewSearch(state: CaseViewUrlState): URLSearchParams {
-  const params = new URLSearchParams()
-  if (state.history) params.set('historial', state.history)
-  if (state.reassign) params.set('reasignar', '1')
-  return params
-}
 
 /** Where "Volver" goes from the case view, by the screen it came from. */
 export function backLabelFor(from: string | null): string {
   if (!from) return 'Volver a Colas'
-  if (from.startsWith('/supervision/auditoria')) return 'Volver a Auditoría'
-  if (from.startsWith('/supervision/equipo')) return 'Volver a Equipo'
-  if (from.startsWith('/supervision/escalados')) return 'Volver a Escalados'
+  if (from.startsWith(PATHS.supervision.audit)) return 'Volver a Auditoría'
+  if (from.startsWith(PATHS.supervision.team)) return 'Volver a Equipo'
+  if (from.startsWith(PATHS.supervision.escalations)) return 'Volver a Escalados'
   return 'Volver a Colas'
 }
 

@@ -4,7 +4,7 @@
 **Date:** 2026-10-03.
 
 **Scope.** After a case closes, its customer can rate the attention once, from the customer
-simulator, on the bank's 1–4 scale (`pulso-data/contracts/synthetic-sample/platform_history.json`, `case_close.csat`), with
+simulator, on the bank's 1–4 scale (`data-lab/contracts/synthetic-sample/platform_history.json`, `case_close.csat`), with
 an optional comment. Staff see the rating where they already see the closed case: the
 read-only footer, the Cerrados card, the ficha ("Este caso" and "Casos anteriores"). Supervision
 sees each analyst's 7-day average in "Equipo y colas". The audit logs it, never the comment.

@@ -49,8 +49,8 @@ Where contracts disagree, the later slice wins, and the brief wins over all of t
 
 Other sources of truth: the design boards in `warehouse/design/source/project/*.dc.html`
 (read-only; only the screens still in scope apply, brief §2), rule 3 (language, policy `H1`) in
-`pulso-data/docs/policies.md`, and the event envelope of `pulso-data/contracts/synthetic-sample/platform_history.json` (read-only). The
-other rules of `pulso-data/docs/policies.md` and `pulso-data/docs/security_questions.md` do not apply to the platform.
+`data-lab/docs/policies.md`, and the event envelope of `data-lab/contracts/synthetic-sample/platform_history.json` (read-only). The
+other rules of `data-lab/docs/policies.md` and `data-lab/docs/security_questions.md` do not apply to the platform.
 
 New architecture decisions go in `adr/NNNN-title.md` (next number: 0003).
 

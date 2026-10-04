@@ -1,4 +1,4 @@
-# Pulso · Support platform
+# Support platform
 
 Support platform for LATAM Bank's transaction-dispute intake (Factored AI & Data Hackathon 2026). Customers and support staff talk by chat and by simulated phone calls and email; analysts handle cases, supervisors watch queues, team and escalations, and administrators manage users by email invitation. People only: no AI is connected yet.
 
@@ -28,4 +28,4 @@ Frontend (`cd frontend`): `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnp
 
 ## Related repo
 
-`pulso-data` holds the data side: ingestion and quality of the challenge dataset, its contracts, the synthetic sample shared with the AI team, and the business policies.
+`data-lab` holds the data side: ingestion and quality of the challenge dataset, its contracts, the synthetic sample shared with the AI team, and the business policies.

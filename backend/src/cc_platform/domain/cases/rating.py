@@ -1,7 +1,7 @@
 """Customer satisfaction rating of a closed case (CSAT, slice 7 contract §2).
 
 The scale is 1–4, as in the bank's own survey and
-``pulso-data/contracts/synthetic-sample/platform_history.json`` (``case_close.csat``): 1 Mal,
+``data-lab/contracts/synthetic-sample/platform_history.json`` (``case_close.csat``): 1 Mal,
 2 Regular, 3 Bien, 4 Excelente. The words live in the frontend; the domain only knows
 the number. A case is rated at most once, only after it closed, only by its own
 customer (``Case.rate``); the optional comment is trimmed and at most 500 characters

@@ -137,7 +137,7 @@ class AssignmentReason(StrEnum):
     """Slice 12: the analyst opened the case herself to call the customer (a follow-up)."""
 
 
-#: Policy id of rule 3 (pulso-data/docs/policies.md): a case only goes to an analyst who speaks its
+#: Policy id of rule 3 (data-lab/docs/policies.md): a case only goes to an analyst who speaks its
 #: language (a Portuguese case only to a Portuguese speaker).
 LANGUAGE_RULE_ID = "H1"
 

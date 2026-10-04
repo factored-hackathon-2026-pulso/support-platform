@@ -2,7 +2,7 @@
 
 Version: slices 0 to 12 (slice 7: customer rating; slice 8: case priority; slice 9: escalations to supervision; slice 10: notifications; slice 11: secure onboarding by invitation, part 4; slice 12: simulated phone and email). Source of truth: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tables) and `backend/src/cc_platform/domain/` (rules and allowed values). The API contract is `backend/openapi.json`.
 
-The platform is for people only: customers and support staff talk by chat and, since slice 12, by **simulated** phone and email (no telephony and no mail server: it stores the call's state, its times and what each person said, and the case's email thread). It stores the conversations, who handles each case, the staff accounts and the event log; nothing else (the [last section](#differences-from-pulso-datacontractssynthetic-sampleplatform_historyjson) compares this model with the synthetic sample).
+The platform is for people only: customers and support staff talk by chat and, since slice 12, by **simulated** phone and email (no telephony and no mail server: it stores the call's state, its times and what each person said, and the case's email thread). It stores the conversations, who handles each case, the staff accounts and the event log; nothing else (the [last section](#differences-from-data-labcontractssynthetic-sampleplatform_historyjson) compares this model with the synthetic sample).
 
 ## How it is stored
 
@@ -575,7 +575,7 @@ Event types:
   fails on startup (`OutdatedSchemaError`) until it is deleted.
 - Known gap: there are no migrations. Any future schema change requires deleting `backend/cc_platform.db` until they are added.
 
-## Differences from `pulso-data/contracts/synthetic-sample/platform_history.json`
+## Differences from `data-lab/contracts/synthetic-sample/platform_history.json`
 
 That contract (v0.5.1) describes the synthetic sample we shared with the AI team, which included the full platform with AI. The platform built is a subset:
 

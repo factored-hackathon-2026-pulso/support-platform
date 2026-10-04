@@ -1,7 +1,7 @@
 """Who performed an action.
 
 ``ActorRole`` is the vocabulary of ``actor_role`` in the event-log envelope
-(``pulso-data/contracts/synthetic-sample/platform_history.json``): the staff roles, the customer
+(``data-lab/contracts/synthetic-sample/platform_history.json``): the staff roles, the customer
 and the platform itself (``system``).
 """
 

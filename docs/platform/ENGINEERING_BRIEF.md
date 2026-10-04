@@ -2,7 +2,7 @@
 
 Read this before you write any code. Every slice and every reviewer follows it. If it conflicts with code already in the repo, this brief wins. If it conflicts with the user's latest decision, the decision wins and this file must be updated first.
 
-Language: the implementation is in English: code, identifiers (variables, functions, types, file names, CSS classes, test ids), comments and docstrings, tests (test names and titles), log and developer-facing error messages, engineering docs (`docs/platform/`, including the slice contracts and ADRs, the READMEs, `frontend/ARCHITECTURE.md`) and commit messages. The product is in Spanish: everything a user sees in the UI (neutral es-CO/es-MX; copy, labels, aria-labels, toasts, user-facing errors, emails, audit texts), the seeded demo content (names, messages, motives) and the business docs (`pulso-data/docs/policies.md`, `pulso-data/docs/security_questions.md`). The customer simulator speaks the customer's own locale (es-CO, es-MX, es-AR, pt-BR). When English text refers to UI copy, it quotes it in Spanish (for example, the "Por responder" status). Data-side artifacts (`reports/`, `synthetic/writer_prompt.md`) keep their own language.
+Language: the implementation is in English: code, identifiers (variables, functions, types, file names, CSS classes, test ids), comments and docstrings, tests (test names and titles), log and developer-facing error messages, engineering docs (`docs/platform/`, including the slice contracts and ADRs, the READMEs, `frontend/ARCHITECTURE.md`) and commit messages. The product is in Spanish: everything a user sees in the UI (neutral es-CO/es-MX; copy, labels, aria-labels, toasts, user-facing errors, emails, audit texts), the seeded demo content (names, messages, motives) and the business docs (`data-lab/docs/policies.md`, `data-lab/docs/security_questions.md`). The customer simulator speaks the customer's own locale (es-CO, es-MX, es-AR, pt-BR). When English text refers to UI copy, it quotes it in Spanish (for example, the "Por responder" status). Data-side artifacts (`reports/`, `synthetic/writer_prompt.md`) keep their own language.
 
 Scope decision of **2026-10-03**. It overrides every earlier doc, canvas note and slice contract.
 
@@ -71,10 +71,10 @@ The chat must work for real in two browser windows: the analyst Workspace and th
 
   Only boards for things still in scope apply: the Workspace list and conversation, login/MFA/lockout, the customer chat (`AppSupportChat`), supervision team and queues, audit, and admin users. Ignore every copilot, tools, client-file, identity, approval, call, email and automation board, and every board element of that kind (the support panel, "Siguiente paso", action cards). Where this brief changes a canvas decision (§5.4), the brief wins.
 - **Design tokens:** `frontend/src/styles/index.css` (`@theme`). Never hard-code colors. If a token is missing, add it.
-- **Data contracts:** `pulso-data/contracts/synthetic-sample/platform_history.json`, for the event-log envelope only (`event_id, event_type, entity, entity_id, case_id, actor_role, actor_id, event_time, ingested_at, payload`). Its AI entities (`routing_step`, `tool_call`, `copilot_query`, `component`, …) are not produced. `pulso-data/contracts/synthetic-sample/evaluation.json` is not used by the platform.
-- **Policies:** from `pulso-data/docs/policies.md`, only **rule 3 (language, policy id `H1`)** applies. `pulso-data/docs/security_questions.md` and the identity, abono, approval, verified-action, regulator and automation rules no longer apply.
+- **Data contracts:** `data-lab/contracts/synthetic-sample/platform_history.json`, for the event-log envelope only (`event_id, event_type, entity, entity_id, case_id, actor_role, actor_id, event_time, ingested_at, payload`). Its AI entities (`routing_step`, `tool_call`, `copilot_query`, `component`, …) are not produced. `data-lab/contracts/synthetic-sample/evaluation.json` is not used by the platform.
+- **Policies:** from `data-lab/docs/policies.md`, only **rule 3 (language, policy id `H1`)** applies. `data-lab/docs/security_questions.md` and the identity, abono, approval, verified-action, regulator and automation rules no longer apply.
 - **Synthetic values:** SLA targets, the closed-case window, queue names and close reasons are **team-generated** (not from the dataset). Name them as such in code comments. Where the UI shows them as policy, label them "Política de ejemplo".
-- **Sample data reference:** `pulso-data/reports/platform/SAMPLE.md`. Never commit dataset files, `data/`, `warehouse/` or `guides/`.
+- **Sample data reference:** `data-lab/reports/platform/SAMPLE.md`. Never commit dataset files, `data/`, `warehouse/` or `guides/`.
 
 ## 3. Repository layout
 
@@ -306,7 +306,7 @@ Test coverage required:
 ## 7. Repo hygiene
 - Never commit `data/`, `warehouse/`, `guides/`, `.env`, credentials or dataset-derived customer records.
 - Commits: imperative English subject, no co-author trailers. Agents never commit: the user does.
-- Data-side material (contracts, sample generator, reports, policies) lives in the sibling repo `pulso-data`; read it, do not copy it here.
+- Data-side material (contracts, sample generator, reports, policies) lives in the sibling repo `data-lab`; read it, do not copy it here.
 
 ## 8. Slice plan
 

@@ -3971,7 +3971,7 @@ export interface components {
       atRiskCases: number
       /**
        * Id
-       * @description TEAM-… id (the `?equipo=` filter).
+       * @description TEAM-… id (the `?team=` filter).
        */
       id: string
       /** Name */

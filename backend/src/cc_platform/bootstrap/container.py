@@ -24,6 +24,7 @@ from cc_platform.application.ai.customer import (
     VerifyAssistantStepUp,
 )
 from cc_platform.application.ai.engine import AssistantEngine, AssistantHandover
+from cc_platform.application.ai.grants import GetGrantStatus
 from cc_platform.application.ai.priority import ApplyHandoffPriority, HandoffPriorityProcess
 from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
 from cc_platform.application.ai.staff import (
@@ -32,6 +33,7 @@ from cc_platform.application.ai.staff import (
     RecordHandoffResolution,
     ReleaseAssistantCase,
 )
+from cc_platform.application.ai.sweep import SweepAssistantSessions
 from cc_platform.application.ai.use_cases import AssistantUseCases
 from cc_platform.application.audit.queries import GetAuditEvent, ListAuditEvents
 from cc_platform.application.audit.use_cases import AuditUseCases
@@ -257,6 +259,7 @@ class Container:
     #: ADR 0003: ``None`` while ``CC_AGENT_CORE_URL`` is unset (the platform stays people-only).
     agent_core: AgentCoreServices | None = None
     assistant_engine: AssistantEngine | None = None
+    assistant_sweep: PeriodicTask | None = None
 
     def api_context(self) -> ApiContext:
         """The narrow view the HTTP/WebSocket layer gets (no adapters, no Unit of Work)."""
@@ -275,6 +278,11 @@ class Container:
             realtime=RealtimeOptions(
                 expiry_check_interval=self.settings.realtime_expiry_check_interval
             ),
+            internal_token=(
+                self.settings.internal_service_token.get_secret_value()
+                if self.settings.internal_service_token is not None
+                else None
+            ),
         )
 
     async def startup(self) -> None:
@@ -291,6 +299,8 @@ class Container:
             # Slice 10: cases already at risk get their notification now, then every tick.
             await self.use_cases.notifications.sweep_sla_risk.execute()
             self.sla_sweep.start()
+        if self.assistant_sweep is not None:
+            self.assistant_sweep.start()
 
     async def _link_bank_customers(self) -> None:
         """ADR 0003: apply the private ``{platform customer id: dataset customer id}`` file."""
@@ -339,6 +349,8 @@ class Container:
     async def shutdown(self) -> None:
         if self.sla_sweep is not None:
             await self.sla_sweep.stop()
+        if self.assistant_sweep is not None:
+            await self.assistant_sweep.stop()
         await self.background.drain()
         if self.agent_core is not None and self.agent_core.http_client is not None:
             await self.agent_core.http_client.aclose()
@@ -410,6 +422,7 @@ class _AssistantParts:
     engine: AssistantEngine
     resolution: RecordHandoffResolution
     use_cases: AssistantUseCases
+    sweep: SweepAssistantSessions
 
 
 def _build_assistant(
@@ -462,6 +475,7 @@ def _build_assistant(
         ),
         release=ReleaseAssistantCase(uow=uow, clock=clock, handover=handover),
         copilot_thread=GetCopilotThread(uow=uow),
+        grant_status=GetGrantStatus(uow=uow),
         ask_copilot=AskCopilot(
             uow=uow,
             clock=clock,
@@ -478,6 +492,7 @@ def _build_assistant(
             uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
         ),
         use_cases=use_cases,
+        sweep=SweepAssistantSessions(uow=uow, clock=clock, tasks=background, engine=engine),
     )
 
 
@@ -803,6 +818,11 @@ def build_container(
         ),
         assistant=assistant_use_cases,
     )
+    assistant_sweep = (
+        PeriodicTask("assistant_sweep", settings.assistant_sweep_seconds, assistant.sweep.execute)
+        if assistant is not None and settings.assistant_sweep_seconds > 0
+        else None
+    )
     sla_sweep = (
         PeriodicTask("sla_sweep", settings.notification_sweep_seconds, sweep_sla_risk.execute)
         if settings.notification_sweep_seconds > 0
@@ -834,4 +854,5 @@ def build_container(
         sla_sweep=sla_sweep,
         agent_core=agent_core,
         assistant_engine=assistant_engine,
+        assistant_sweep=assistant_sweep,
     )

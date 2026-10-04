@@ -789,6 +789,12 @@ class InMemoryAssistantSessionRepository(_StagedRepository[AssistantSession]):
             return None
         return await self._get(found[0].id)
 
+    async def list_active(self) -> list[AssistantSession]:
+        mine = sorted((s for s in self._all() if s.is_active), key=lambda s: (s.created_at, s.id))
+        for session in mine:
+            self._track(session)
+        return mine
+
 
 class InMemoryCopilotThreadRepository(_StagedRepository[CopilotThread]):
     """ADR 0003. Same answers as ``SqlCopilotThreadRepository`` (a thread per case and analyst)."""

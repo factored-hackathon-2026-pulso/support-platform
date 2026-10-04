@@ -265,11 +265,16 @@ Things that are easy to get wrong:
 - **Streaming**: agent-core answers request/response; a turn takes as long as the model (up to
   `CC_AGENT_CORE_TIMEOUT_SECONDS`). The UI shows `assistant.working` meanwhile.
 - **Single process**: the bus, the realtime hub and the background jobs run in-process (as the rest of the
-  platform). A job lost with its process is recovered by the stale-claim takeover **only when the customer
-  writes again**; there is no sweep yet (S17).
+  platform). A job lost with its process is recovered by a **sweep** (`SweepAssistantSessions`, every
+  `CC_ASSISTANT_SWEEP_SECONDS`, 30 s by default): for every active session quiet for 20 s it re-runs the
+  (idempotent) job, which takes over a stale claim or resends an unanswered message; agent-core
+  de-duplicates by `client_turn_id`.
 - **The second factor is simulated** and says so (`simulated`, and `auth.simulated` in the credential).
-- **`grant_active`** (agent-core asks the platform whether a delegation is still active) is not answered
-  yet; the short delegation TTL bounds the risk. Needs an internal endpoint here and a real adapter there.
+- **`grant_active`**: the platform now answers it at `GET /api/v1/internal/grants/{grantRef}` (secret
+  `CC_INTERNAL_SERVICE_TOKEN`; `{"active": bool}`; a grant is `<case id>:<staff id>`, active while she is an
+  active analyst and the assignee of that case, open or closed). agent-core still needs an adapter that
+  calls it (its `serve --grant-active module:attr` is a demo double today); the 10-minute TTL bounds the
+  risk meanwhile.
 - **Tools and data**: the assistant's tools run in agent-core (today demo doubles with `ALLOW_DEMO=1`). The
   real tool service over `gold_restricted` is track T.
 - **First-response SLA**: decided that the assistant's reply does not stop it, and it restarts when the case

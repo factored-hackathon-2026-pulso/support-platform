@@ -12,6 +12,7 @@ from cc_platform.application.ai.customer import (
     RequestPerson,
     VerifyAssistantStepUp,
 )
+from cc_platform.application.ai.grants import GetGrantStatus
 from cc_platform.application.ai.staff import GetCaseHandoff, ReleaseAssistantCase
 
 
@@ -27,3 +28,5 @@ class AssistantUseCases:
     # the analyst's copilot (slice 15)
     copilot_thread: GetCopilotThread
     ask_copilot: AskCopilot
+    # service-to-service: agent-core's ``grant_active`` check
+    grant_status: GetGrantStatus

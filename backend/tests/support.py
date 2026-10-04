@@ -74,6 +74,8 @@ def make_settings(**overrides: Any) -> Settings:
         "build": "test-build",
         # Slice 10: no periodic SLA sweep (tests run ``sweep_sla_risk.execute`` themselves).
         "notification_sweep_seconds": 0,
+        # ADR 0003: no periodic assistant sweep either (tests run ``SweepAssistantSessions``).
+        "assistant_sweep_seconds": 0,
         # Part 4: the dev mailbox holds the invitation and reset links the tests follow.
         "dev_mailbox": True,
     }

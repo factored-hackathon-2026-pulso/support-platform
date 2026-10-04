@@ -78,7 +78,12 @@ describe('CustomerSimulatorScreen · picker', () => {
     const joaquin = await screen.findByRole('button', { name: /Joaquín Ferreyra Paz/ })
     expect(within(joaquin).getByText('Conversación abierta')).toBeInTheDocument()
     const rafael = screen.getByRole('button', { name: /Rafael Nogueira Costa/ })
-    expect(within(rafael).getByText('Portugués de Brasil')).toBeInTheDocument()
+    // pt-BR shows the PT language mark (Portugal's flag), named by the locale.
+    expect(
+      within(rafael).getByText('Portugués de Brasil', { selector: '.sr-only' }),
+    ).toBeInTheDocument()
+    expect(rafael).toHaveTextContent(/PT/)
+    expect(rafael.querySelector('svg[data-language="pt"]')).not.toBeNull()
     expect(within(rafael).getByText('Buenos Aires, Argentina')).toBeInTheDocument()
     expect(rafael).not.toHaveTextContent(/conversaci(ó|o)n(es)? anterior/)
     const claudia = screen.getByRole('button', { name: /Claudia Restrepo Varela/ })
@@ -128,6 +133,9 @@ describe('CustomerSimulatorScreen · chat', () => {
     const { user, customerSockets } = renderSimulator()
 
     expect(await screen.findByText('Hablando como')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Portugués de Brasil', { selector: '.sr-only' }),
+    ).toBeInTheDocument()
     // Rafael (pt-BR): the chat speaks Portuguese; the simulator chrome stays in Spanish.
     const status = await screen.findByText(/Escreva sua mensagem e uma pessoa da equipe/)
     expect(status.closest('[lang]')).toHaveAttribute('lang', 'pt-BR')

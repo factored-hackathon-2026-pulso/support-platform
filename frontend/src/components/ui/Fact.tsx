@@ -1,5 +1,6 @@
 import { cn } from '@/lib/cn'
 import { FACT_ICONS, type FactItem, type FactTone } from './fact-icons'
+import { LanguageMark, LanguageMarks } from './LanguageMark'
 import { Tooltip } from './Tooltip'
 
 const TONE_TEXT: Record<FactTone, string> = {
@@ -23,8 +24,8 @@ export interface FactProps extends Omit<FactItem, 'key'> {
 }
 
 /**
- * One short fact: icon + 1–3 words (+ an optional tag). Metadata is shown as
- * separate facts, never as a dot-joined string or a wrapping sentence.
+ * One short fact: icon + 1–3 words (+ language marks, + an optional tag). Metadata is
+ * shown as separate facts, never as a dot-joined string or a wrapping sentence.
  */
 export function Fact({
   icon,
@@ -34,6 +35,8 @@ export function Fact({
   tag,
   iconOnly = false,
   tooltip,
+  languages,
+  language,
   size = 'sm',
   focusable = true,
   className,
@@ -47,6 +50,8 @@ export function Fact({
       </Tooltip>
     )
   }
+  // Marks with no text: the flags are the glyph, no icon before them.
+  const marksOnly = Boolean(languages?.length) && !text
   const fact = (
     <span
       className={cn(
@@ -56,9 +61,17 @@ export function Fact({
         className,
       )}
     >
-      <Icon size={size === 'md' ? 14 : 13} aria-hidden="true" className="shrink-0" />
+      {marksOnly ? null : (
+        <Icon size={size === 'md' ? 14 : 13} aria-hidden="true" className="shrink-0" />
+      )}
       {label ? <span className="sr-only">{label}: </span> : null}
-      <span className="truncate">{text}</span>
+      {language ? <LanguageMark language={language} className="text-ink" /> : null}
+      {text ? (
+        <span className="truncate" lang={language}>
+          {text}
+        </span>
+      ) : null}
+      {languages?.length ? <LanguageMarks languages={languages} focusable={focusable} /> : null}
       {tag ? (
         <span className="ml-0.5 rounded-full bg-accent-soft px-1.5 text-11 font-semibold text-accent-strong">
           {tag}

@@ -107,7 +107,9 @@ describe('CustomerFile ("Ficha del cliente")', () => {
     const customer = within(panel).getByRole('region', { name: 'Cliente' })
     // One fact per row, each label with its icon; no dot-joined values.
     expect(customer).toHaveTextContent('CiudadBarranquilla, Colombia')
-    expect(customer).toHaveTextContent('IdiomaEspañol')
+    // The language: its mark (flag + code) and only its own name.
+    expect(customer).toHaveTextContent('IdiomaESEspañol')
+    expect(customer.querySelector('dd svg[data-language="es"]')).not.toBeNull()
     expect(customer).toHaveTextContent('CUS-00000000000000000000001001')
     expect(customer.querySelectorAll('dt svg')).toHaveLength(4)
     expect(panel.textContent).not.toContain('·')
@@ -128,7 +130,7 @@ describe('CustomerFile ("Ficha del cliente")', () => {
       within(arrival)
         .getAllByRole('listitem')
         .map((item) => item.textContent),
-    ).toEqual(['Estabas disponible', 'Hablas español'])
+    ).toEqual(['Estabas disponible', expect.stringMatching(/^HablasEspañolES/)])
     expect(arrival).toHaveTextContent('Asignado: 5 mar, 10:46')
 
     const previous = within(panel).getByRole('region', { name: 'Casos anteriores (2)' })

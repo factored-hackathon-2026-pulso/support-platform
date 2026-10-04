@@ -12,7 +12,7 @@
  * glyph + word (`caseStatus`, the cases map), the time its own element with a clock.
  */
 import { workspacePath } from '@/app/paths'
-import type { FactItem, StatusAppearance, Tone } from '@/components/ui'
+import { spokenFact, type FactItem, type StatusAppearance, type Tone } from '@/components/ui'
 import {
   ESCALATED_MARKER,
   INBOX_FILTERS,
@@ -26,7 +26,7 @@ import {
   type InboxCounts,
   type InboxStatus,
 } from '@/features/cases/core'
-import { LANGUAGE_NAMES, type Language } from '@/features/conversation/core'
+import type { Language } from '@/features/conversation/core'
 import {
   formatDate,
   formatLongDate,
@@ -242,14 +242,14 @@ function waitMinutes(seconds: number): number {
   return Math.max(1, Math.round(seconds / 60))
 }
 
-/** Rule 3 applied: the language as text, and the "Regla 3" tag only for Portuguese. */
+/** Rule 3 applied: the language mark, and the "Regla 3" tag only for Portuguese. */
 export function languageFact(language: Language): FactItem {
-  const name = LANGUAGE_NAMES[language]
   return {
     key: 'language',
     icon: 'languages',
-    text: name.charAt(0).toUpperCase() + name.slice(1),
+    text: '',
     label: 'Por idioma',
+    languages: [language],
     ...(language === 'pt' ? { tag: 'Regla 3' } : {}),
   }
 }
@@ -376,7 +376,7 @@ export function activityRow(item: HomeActivityItem, now: DateInput): ActivityRow
 
 /** Accessible name of a row link: who, what, the facts and the time, then where it goes. */
 export function activityLinkLabel(row: ActivityRow, reasonLabel?: string): string {
-  const facts = row.facts.map((fact) => (fact.label ? `${fact.label}: ${fact.text}` : fact.text))
+  const facts = row.facts.map(spokenFact)
   const parts = [
     row.status?.label,
     ...facts,
@@ -434,6 +434,8 @@ export const EMPTY_FEED_COPY = 'Nada nuevo desde tu última sesión'
 export interface TeamRow {
   key: string
   icon: FactItem['icon']
+  /** A queue row: its language mark stands in for the icon. */
+  language?: Language
   label: string
   value: string
   /** "Tú": she is one of the available ones. */
@@ -474,7 +476,8 @@ export function teamRows(team: HomeTeam, meAvailable: boolean, now: DateInput): 
     ...team.queues.map((queue) => ({
       key: `queue-${queue.language}`,
       icon: 'inbox' as const,
-      label: `Cola en ${LANGUAGE_NAMES[queue.language]}`,
+      language: queue.language,
+      label: 'Esperan en la cola',
       value: String(queue.waiting),
       tag: null,
       wait: queueWait(queue, now),

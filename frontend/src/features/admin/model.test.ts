@@ -33,7 +33,6 @@ import {
   hasUserFilters,
   isDraftDirty,
   joinEs,
-  languagesLabel,
   lockedUntilTitle,
   normalizeName,
   openCaseBlocks,
@@ -123,13 +122,11 @@ describe('labels', () => {
   })
 
   it('names languages and teams', () => {
-    expect(languagesLabel(['pt', 'es'])).toBe('español, portugués')
-    expect(languagesLabel([])).toBe('—')
     expect(teamOptionLabel({ name: 'Equipo Caribe', active: false })).toBe(
       'Equipo Caribe (inactivo)',
     )
     expect(userSummaryFacts(daniela)).toEqual([
-      { key: 'languages', icon: 'languages', text: 'Español y portugués', label: 'Idiomas' },
+      { key: 'languages', icon: 'languages', text: '', label: 'Idiomas', languages: ['es', 'pt'] },
       { key: 'team', icon: 'users', text: 'Equipo Andes', label: 'Equipo' },
     ])
     expect(userSummaryFacts({ ...daniela, languages: [] })[0]?.text).toBe('Sin idiomas')
@@ -286,7 +283,7 @@ describe('"Filtros" of the directory (slice 9)', () => {
       'Invitación pendiente': 0,
       Desactivada: 0,
     })
-    expect(counts('language')).toEqual({ Español: 1, Portugués: 0 })
+    expect(counts('language')).toEqual({ Español: 1, Português: 0 })
     expect(groups[2]!.options.map((option) => option.label)).toEqual([
       'Equipo Andes',
       'Equipo Pacífico',

@@ -11,13 +11,14 @@
  * a queued case by hand any more; "Reasignar" stays as the exception.
  */
 import { PATHS } from '@/app/paths'
-import type {
-  FactIcon,
-  FactItem,
-  FactTone,
-  FilterGroup,
-  FilterSelection,
-  StatusAppearance,
+import {
+  LANGUAGE_NATIVE_NAME,
+  type FactIcon,
+  type FactItem,
+  type FactTone,
+  type FilterGroup,
+  type FilterSelection,
+  type StatusAppearance,
 } from '@/components/ui'
 import {
   CASE_PRIORITY,
@@ -83,15 +84,6 @@ function byName(a: { name: string }, b: { name: string }): number {
   return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
 }
 
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1)
-}
-
-/** "Español" / "Portugués". */
-export function languageWord(language: Language): string {
-  return capitalize(LANGUAGE_NAMES[language])
-}
-
 // ── "Ahora" (slice 3 §2.2) ───────────────────────────────────────────────────
 
 /** What an analyst is doing now, as glyph + word (Status). */
@@ -136,11 +128,6 @@ export function speaksLanguage(
   language: Language,
 ): boolean {
   return analyst.languages.includes(language)
-}
-
-/** "español, portugués". */
-export function languagesLabel(languages: readonly Language[]): string {
-  return languages.map((language) => LANGUAGE_NAMES[language]).join(', ')
 }
 
 // ── Time-dependent figures (recomputed with the ticking clock) ───────────────
@@ -295,6 +282,11 @@ export const AUTOMATIC_ASSIGNMENT_NOTE =
 export function shownCasesLabel(shown: number, total: number, filtered: boolean): string {
   const all = pluralize(total, 'caso abierto', 'casos abiertos')
   return filtered ? `${shown} de ${all}` : all
+}
+
+/** Name of the queue's table: "Casos abiertos en portugués". */
+export function openCasesTableLabel(language: Language): string {
+  return `Casos abiertos en ${LANGUAGE_NAMES[language]}`
 }
 
 export function emptyQueueTitle(language: Language): string {
@@ -497,7 +489,8 @@ export function teamFilterGroups(
       legend: 'Idioma',
       options: QUEUE_LANGUAGES.map((language) => ({
         value: language,
-        label: languageWord(language),
+        label: LANGUAGE_NATIVE_NAME[language],
+        language,
         count: count('language', language),
       })),
     },
@@ -822,7 +815,13 @@ export function escalationCaseFacts(
       label: 'Lo atiende',
     },
     place ? { key: 'place', icon: 'map-pin', text: place, label: 'Ciudad' } : null,
-    { key: 'language', icon: 'languages', text: languageWord(summary.language), label: 'Idioma' },
+    {
+      key: 'language',
+      icon: 'languages',
+      text: LANGUAGE_NATIVE_NAME[summary.language],
+      language: summary.language,
+      label: 'Idioma',
+    },
     {
       key: 'channel',
       icon: caseChannel(summary.channel).icon,

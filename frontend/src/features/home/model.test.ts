@@ -221,19 +221,22 @@ describe('"Mientras no estabas" · templates', () => {
   const template = (overrides: Parameters<typeof makeActivityItem>[0]) =>
     activityTemplate(makeActivityItem(overrides), NOW)
 
-  it('arrival on rule 3: the language, and the "Regla 3" tag only for Portuguese', () => {
+  it('arrival on rule 3: the language mark, and the "Regla 3" tag only for Portuguese', () => {
     expect(template({ kind: 'assigned_on_arrival', language: 'es' })).toEqual({
       phrase: 'Te llegó',
       status: null,
-      facts: [{ key: 'language', icon: 'languages', text: 'Español', label: 'Por idioma' }],
+      facts: [
+        { key: 'language', icon: 'languages', text: '', label: 'Por idioma', languages: ['es'] },
+      ],
       lastCloseReason: null,
     })
     expect(template({ kind: 'assigned_on_arrival', language: 'pt' }).facts).toEqual([
       {
         key: 'language',
         icon: 'languages',
-        text: 'Portugués',
+        text: '',
         label: 'Por idioma',
+        languages: ['pt'],
         tag: 'Regla 3',
       },
     ])
@@ -472,7 +475,8 @@ describe('"Tu equipo ahora"', () => {
       {
         key: 'queue-es',
         icon: 'inbox',
-        label: 'Cola en español',
+        language: 'es',
+        label: 'Esperan en la cola',
         value: '2',
         tag: null,
         wait: {
@@ -484,7 +488,7 @@ describe('"Tu equipo ahora"', () => {
           tone: 'muted',
         },
       },
-      expect.objectContaining({ label: 'Cola en portugués', value: '1' }),
+      expect.objectContaining({ language: 'pt', label: 'Esperan en la cola', value: '1' }),
     ])
     expect(queueWait({ language: 'es', waiting: 0, oldestQueuedAt: null }, NOW)).toBeNull()
   })

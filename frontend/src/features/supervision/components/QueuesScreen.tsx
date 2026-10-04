@@ -1,4 +1,4 @@
-import { Flame, Info, Languages } from 'lucide-react'
+import { Flame, Info } from 'lucide-react'
 import { Page, PageBody } from '@/components/layout'
 import {
   Avatar,
@@ -7,6 +7,7 @@ import {
   Fact,
   FilterChips,
   FilterMenu,
+  LanguageMarks,
   PageHeader,
   QueryState,
   Skeleton,
@@ -24,11 +25,12 @@ import { cn } from '@/lib/cn'
 import { useNow } from '@/lib/hooks'
 import {
   AUTOMATIC_ASSIGNMENT_NOTE,
+  QUEUE_LABEL,
   QUEUE_LANGUAGES,
   emptyQueueTitle,
   filterOpenCases,
   firstResponseFact,
-  languageWord,
+  openCasesTableLabel,
   openForText,
   queueFiguresFromRows,
   queueFilterGroups,
@@ -147,10 +149,13 @@ function QueueButton({ language, figures, selected, onSelect }: QueueButtonProps
           : 'border border-border bg-transparent hover:bg-surface',
       )}
     >
-      <span className="flex items-center gap-2 text-15 font-semibold text-ink">
-        <Languages size={16} aria-hidden="true" className="text-muted" />
-        {languageWord(language)}
-      </span>
+      <LanguageMarks
+        languages={[language]}
+        name={QUEUE_LABEL[language]}
+        focusable={false}
+        className="text-ink"
+        markClassName="gap-1.5 text-16"
+      />
       {labels && figures ? (
         <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-13">
           <span className="text-ink-2">{labels.open}</span>
@@ -183,7 +188,7 @@ interface QueueCasesProps {
 }
 
 function QueueCases({ query, state, now, onStateChange, onOpenCase }: QueueCasesProps) {
-  const title = languageWord(state.language)
+  const title = QUEUE_LABEL[state.language]
   const rows = query.data?.cases ?? []
   const groups = queueFilterGroups(rows, state)
   const selection = queuesSelection(state)
@@ -202,8 +207,14 @@ function QueueCases({ query, state, now, onStateChange, onOpenCase }: QueueCases
       <div className="flex flex-col gap-2 px-4 pt-3.5 pb-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-0.5">
-            <h2 id="queue-title" className="m-0 text-16 font-semibold">
-              {title}
+            <h2 id="queue-title" className="m-0 flex text-16 font-semibold">
+              <LanguageMarks
+                languages={[state.language]}
+                name={title}
+                focusable={false}
+                className="text-ink"
+                markClassName="gap-1.5 text-16"
+              />
             </h2>
             {query.data ? (
               <span className="text-13 text-muted">
@@ -253,7 +264,7 @@ function QueueCases({ query, state, now, onStateChange, onOpenCase }: QueueCases
           }
           return (
             <Table
-              aria-label={`Casos abiertos en ${title.toLowerCase()}`}
+              aria-label={openCasesTableLabel(state.language)}
               stickyHeader
               density="comfortable"
               wrapperClassName="grow"

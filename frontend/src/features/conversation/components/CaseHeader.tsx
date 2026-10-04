@@ -38,11 +38,11 @@ export interface CaseHeaderProps {
 
 /**
  * Case header (contract §9.3): name; short id (copyable), then the place, the channel icon
- * and "Portugués" as facts; "Casos anteriores
+ * and the "[PT]" language mark as facts; "Casos anteriores
  * (n)" when the customer has other cases; "Cerrar caso" for the assignee, or the
  * "Cerrado" status on a closed case (the full header always shows the status). The supervisor view adds its "Asignar" /
  * "Reasignar" (`actions`) and never offers "Cerrar caso". The meta line wraps instead of being
- * truncated: "Portugués" is the only cue outside the transcript that the
+ * truncated: the "[PT]" mark is the only cue outside the transcript that the
  * analyst must reply in Portuguese (rule 3).
  */
 export function CaseHeader({

@@ -236,9 +236,10 @@ describe('"Equipo"', () => {
       ['En pausa', 1],
       ['Sin conexión', 4],
     ])
-    expect(groups[1]!.options.map((o) => [o.label, o.count])).toEqual([
-      ['Español', 6],
-      ['Portugués', 3],
+    // Language options: the flag and the language's own name.
+    expect(groups[1]!.options.map((o) => [o.label, o.language, o.count])).toEqual([
+      ['Español', 'es', 6],
+      ['Português', 'pt', 3],
     ])
     expect(groups[2]!.options.map((o) => o.label)).toEqual(['Equipo Andes', 'Equipo Pacífico'])
     const pt = filterAnalysts(seededAnalysts, { ...TEAM, languages: ['pt'] })
@@ -437,6 +438,8 @@ describe('"Escalados"', () => {
       ['Prioridad', 'Media'],
       ['Abierto hace', '25 min'],
     ])
+    // The language: its mark before its own name.
+    expect(facts.find((f) => f.key === 'language')?.language).toBe('es')
   })
 
   it('words the reply form, the results and the failures', () => {

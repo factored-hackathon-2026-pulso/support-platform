@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { ArrowLeftRight, Languages, LogOut } from 'lucide-react'
+import { ArrowLeftRight, LogOut } from 'lucide-react'
 import { Page, PageBody } from '@/components/layout'
-import { Badge, Button, PageHeader } from '@/components/ui'
+import { Badge, Button, LanguageMarks, PageHeader } from '@/components/ui'
 import { RealtimeProvider, type WebSocketFactory } from '@/lib/realtime'
 import { describeCustomerCallFailure, isCustomerCallActive, type SimChannel } from '../channels'
 import { describeStartFailure, localeLabel } from '../model'
@@ -153,12 +153,7 @@ function SimulatorBody({
               {me?.displayName ?? 'cliente de ejemplo'}
             </span>
           </p>
-          {me ? (
-            <span className="inline-flex items-center gap-1 text-13">
-              <Languages size={13} aria-hidden="true" />
-              {localeLabel(me.locale)}
-            </span>
-          ) : null}
+          {me ? <LanguageMarks languages={[me.language]} name={localeLabel(me.locale)} /> : null}
           <span className="font-mono text-12 text-muted">{customerId}</span>
         </div>
         <div className="flex gap-2">

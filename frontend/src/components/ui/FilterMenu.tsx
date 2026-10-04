@@ -7,6 +7,7 @@ import {
   type FilterGroup,
   type FilterSelection,
 } from './filter-selection'
+import { LanguageMark, LanguageOptionLabel } from './LanguageMark'
 
 export interface FilterMenuProps {
   groups: readonly FilterGroup[]
@@ -125,7 +126,11 @@ export function FilterMenu({
                         onChange={() => onToggle(group.key, option.value)}
                         className="size-4 shrink-0 accent-ink"
                       />
-                      <span className="grow">{option.label}</span>
+                      {option.language ? (
+                        <LanguageOptionLabel language={option.language} className="grow" />
+                      ) : (
+                        <span className="grow">{option.label}</span>
+                      )}
                       {option.count !== undefined ? ' ' : null}
                       {option.count !== undefined ? (
                         <span className="text-13 text-muted tabular-nums">{option.count}</span>
@@ -184,7 +189,7 @@ export function FilterChips({ chips, onRemove, onClear, className }: FilterChips
           onClick={() => onRemove(chip.groupKey, chip.value)}
           className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-surface pr-2 pl-3 text-13 text-ink hover:bg-subtle"
         >
-          {chip.label}
+          {chip.language ? <LanguageMark language={chip.language} /> : chip.label}
           <X size={13} aria-hidden="true" className="text-muted" />
         </button>
       ))}

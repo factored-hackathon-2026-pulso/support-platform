@@ -76,11 +76,12 @@ describe('SessionLiveSync', () => {
     ])
     // Icon rows, not a dot-joined line (slice 6).
     const summary = screen.getByText('Equipo:').closest('ul')!
-    expect(
-      within(summary)
-        .getAllByRole('listitem')
-        .map((item) => item.textContent),
-    ).toEqual(['Equipo: Equipo Pacífico', 'Idiomas: Español'])
+    const [team, languages] = within(summary).getAllByRole('listitem')
+    expect(team).toHaveTextContent(/^Equipo: Equipo Pacífico$/)
+    // Her languages as marks (flag + code), named for screen readers.
+    expect(within(languages!).getByText('Español', { selector: '.sr-only' })).toBeInTheDocument()
+    expect(languages).toHaveTextContent(/^Idiomas: EspañolES/)
+    expect(languages!.querySelector('svg[data-language="es"]')).not.toBeNull()
   })
 
   it('sends her home when the section she is in is gone', async () => {

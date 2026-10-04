@@ -160,6 +160,11 @@ describe('teams screen ("Equipos")', () => {
       `/admin/users?person=${daniela.id}`,
     )
     expect(within(panel).getByText('Desactivada')).toBeInTheDocument()
+    // Each member's languages as marks (flag + code).
+    const member = within(panel).getByRole('link', { name: daniela.name }).closest('li')!
+    expect(
+      within(member).getByText('Español y Português', { selector: '.sr-only' }),
+    ).toBeInTheDocument()
     const deactivate = within(panel).getByRole('button', { name: 'Desactivar equipo' })
     expect(deactivate).toBeDisabled()
     expect(deactivate).toHaveAccessibleDescription(

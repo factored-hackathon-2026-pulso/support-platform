@@ -11,29 +11,23 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router'
 import { api, isApiProblem, unwrap, type Schemas } from '@/lib/api'
-import type { FactItem } from '@/components/ui'
-import { getInitials, joinEs } from '@/lib/format'
+import { sortLanguages, type FactItem } from '@/components/ui'
+import { getInitials } from '@/lib/format'
 import { sessionToken } from '@/lib/session-token'
 import { ROLES, roleFromPath, sortRoles, type RoleDefinition, type RoleId } from './roles'
 
 export type Staff = Schemas['StaffOut']
 
-const LANGUAGE_LABELS: Record<string, string> = { es: 'español', pt: 'portugués' }
-
 /**
  * The person's summary as short icon rows (slice 6 UI rule: never a dot-joined
- * line): [users] the team, [languages] "Español y portugués" (skipped when empty).
+ * line): [users] the team, then her languages as marks ("[ES] [PT]", named
+ * "Español y Português"; skipped when empty).
  */
 export function summaryFacts(staff: Pick<Staff, 'team' | 'languages'>): FactItem[] {
-  const spoken = joinEs(staff.languages.map((code) => LANGUAGE_LABELS[code] ?? code))
+  const languages = sortLanguages(staff.languages)
   const facts: FactItem[] = [{ key: 'team', icon: 'users', text: staff.team.name, label: 'Equipo' }]
-  if (spoken) {
-    facts.push({
-      key: 'languages',
-      icon: 'languages',
-      text: spoken.charAt(0).toUpperCase() + spoken.slice(1),
-      label: 'Idiomas',
-    })
+  if (languages.length > 0) {
+    facts.push({ key: 'languages', icon: 'languages', text: '', label: 'Idiomas', languages })
   }
   return facts
 }

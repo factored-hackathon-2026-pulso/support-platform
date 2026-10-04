@@ -20,7 +20,6 @@ import {
   PICK_ANALYST_ERROR,
   customerSeesCopy,
   describeAssignFailure,
-  languageWord,
   moreResultsLabel,
   needsPauseConfirmation,
   noMatchCopy,
@@ -167,7 +166,8 @@ export function ReassignDialog({
           <span className="font-mono">{shortCaseId(summary.id)}</span>
           <Fact
             icon="languages"
-            text={languageWord(summary.language)}
+            text=""
+            languages={[summary.language]}
             label="Idioma"
             size="md"
             focusable={false}

@@ -1,5 +1,13 @@
 import { UserRound } from 'lucide-react'
-import { Callout, cardClasses, EmptyState, QueryState, Skeleton, Status } from '@/components/ui'
+import {
+  Callout,
+  cardClasses,
+  EmptyState,
+  LanguageMarks,
+  QueryState,
+  Skeleton,
+  Status,
+} from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { closedConversationsLine, localeLabel, pickerStatus, placeLabel } from '../model'
 import { useDemoCustomers } from '../hooks'
@@ -98,7 +106,12 @@ function CustomerCard({
         <span className="text-16 font-semibold">{customer.displayName}</span>
         {status ? <Status {...status} className="mt-0.5 shrink-0" /> : null}
       </span>
-      <span className="text-13 text-ink-2">{localeLabel(customer.locale)}</span>
+      {/* The language mark (pt-BR shows PT with Portugal's flag), named by the locale. */}
+      <LanguageMarks
+        languages={[customer.language]}
+        name={localeLabel(customer.locale)}
+        focusable={false}
+      />
       <span className="text-13 text-ink-2">{placeLabel(customer.city, customer.country)}</span>
       {past ? <span className="text-12 text-muted">{past}</span> : null}
       {busy ? <span className="text-12 text-muted">Abriendo sesión…</span> : null}

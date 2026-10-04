@@ -2,7 +2,8 @@ import { expect, type Locator, type Page } from '@playwright/test'
 import type { Language } from '../data'
 import type { RoleLabel } from './app-shell'
 
-const LANGUAGE_LABEL: Record<Language, string> = { es: 'Español', pt: 'Portugués' }
+/** A language option is named by the language's own name (next to its flag). */
+const LANGUAGE_NAME: Record<Language, string> = { es: 'Español', pt: 'Português' }
 
 /** "Usuarios y roles" (`/admin/users`): table + the "Persona seleccionada" aside. */
 export class UsersPage {
@@ -78,13 +79,13 @@ export class UsersPage {
         .check()
     }
     for (const language of input.languages) {
-      // A pill toggle: the native checkbox is visually hidden inside the pill (keyboard works).
-      const pill = form
+      // An option card: the native checkbox is visually hidden inside the card (keyboard works).
+      const option = form
         .getByRole('group', { name: 'Idiomas' })
-        .getByRole('checkbox', { name: LANGUAGE_LABEL[language], exact: true })
-      await pill.focus()
-      if (!(await pill.isChecked())) await pill.press('Space')
-      await expect(pill).toBeChecked()
+        .getByRole('checkbox', { name: LANGUAGE_NAME[language], exact: true })
+      await option.focus()
+      if (!(await option.isChecked())) await option.press('Space')
+      await expect(option).toBeChecked()
     }
     await form.getByRole('combobox', { name: 'Equipo' }).selectOption({ label: input.team })
     await dialog.getByRole('button', { name: 'Enviar invitación' }).click()

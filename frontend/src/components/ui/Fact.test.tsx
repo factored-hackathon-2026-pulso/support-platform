@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { Fact, FactList } from './Fact'
+import { spokenFact } from './fact-icons'
 
 describe('Fact / FactList', () => {
   it('draws one short fact with its icon, an optional screen-reader label and a tag', () => {
@@ -33,6 +34,39 @@ describe('Fact / FactList', () => {
     expect(button).toHaveAccessibleName(/Prioridad alta/)
     expect(button.querySelector('[tabindex]')).toBeNull()
     expect(button).toHaveTextContent('Última actividad')
+  })
+
+  it('draws language marks after the text, in place of the icon, or before a language name', () => {
+    const { container } = render(
+      <FactList
+        items={[
+          { key: 'a', icon: 'languages', text: 'Hablas', languages: ['pt'], tag: 'Regla 3' },
+          { key: 'b', icon: 'languages', text: '', label: 'Idiomas', languages: ['es', 'pt'] },
+          { key: 'c', icon: 'languages', text: 'Português', label: 'Idioma', language: 'pt' },
+        ]}
+      />,
+    )
+    const named = screen.getAllByRole('listitem')[2]!
+    // A language as the value: icon, its mark, then its own name.
+    expect(named).toHaveTextContent(/^Idioma: PTPortuguês$/)
+    expect(within(named).getByText('Português')).toHaveAttribute('lang', 'pt')
+    const [spoken, marks] = screen.getAllByRole('listitem')
+    // Text, the marks' name (screen readers), the code, the tooltip bubble, the tag.
+    expect(spoken).toHaveTextContent('HablasPortuguêsPTPortuguêsRegla 3')
+    expect(spoken!.querySelectorAll('svg')).toHaveLength(2) // the icon and the flag
+    expect(marks).toHaveTextContent('Idiomas: Español y PortuguêsESPTEspañol y Português')
+    expect(marks!.querySelectorAll('svg')).toHaveLength(2) // two flags, no icon
+    expect(container.querySelectorAll('svg[data-language]')).toHaveLength(4)
+  })
+
+  it('says a fact as a control names it', () => {
+    expect(spokenFact({ label: 'Canal', text: 'App' })).toBe('Canal: App')
+    expect(spokenFact({ label: 'Por idioma', text: '', languages: ['pt'] })).toBe(
+      'Por idioma: Português',
+    )
+    expect(spokenFact({ text: 'Hablas', languages: ['es', 'pt'] })).toBe(
+      'Hablas Español y Português',
+    )
   })
 
   it('lists facts as list items and renders nothing for none', () => {

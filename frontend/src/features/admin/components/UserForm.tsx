@@ -1,12 +1,11 @@
 import { useId, type RefObject } from 'react'
 import { Check, Languages } from 'lucide-react'
 import { ROLE_LABEL, ROLE_ORDER, type RoleId } from '@/app/roles'
-import { Checkbox, Field, Input, Kicker, Select } from '@/components/ui'
+import { Checkbox, Field, Input, Kicker, LanguageOptionLabel, Select } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import {
   EMAIL_MAX_LENGTH,
   LANGUAGES,
-  LANGUAGE_LABEL,
   NAME_MAX_LENGTH,
   ROLE_DESCRIPTION,
   byName,
@@ -147,18 +146,19 @@ export function UserForm({
           <Languages size={14} aria-hidden="true" />
           Idiomas
         </Kicker>
-        {/* Icon pill toggles (Admin.dc.html): a native checkbox, visually hidden, in each pill. */}
-        <div className="flex flex-wrap gap-2">
+        {/*
+          Option cards (Admin.dc.html): the flag and the language's own name, a native
+          checkbox (visually hidden) and the round check of the selected state.
+        */}
+        <div className="grid grid-cols-2 gap-2">
           {LANGUAGES.map((language, index) => {
             const on = draft.languages.includes(language)
             return (
               <label
                 key={language}
                 className={cn(
-                  'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-14 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent',
-                  on
-                    ? 'border-ink bg-ink font-medium text-white'
-                    : 'border-border bg-surface text-ink',
+                  'flex min-h-[52px] items-center gap-2.5 rounded-10 px-3 py-2 text-14 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent',
+                  on ? 'border-2 border-ink bg-canvas' : 'border border-border bg-surface',
                   disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-ink',
                 )}
               >
@@ -184,8 +184,19 @@ export function UserForm({
                     })
                   }
                 />
-                {on ? <Check size={14} aria-hidden="true" /> : null}
-                {LANGUAGE_LABEL[language]}
+                <LanguageOptionLabel
+                  language={language}
+                  className="min-w-0 grow gap-2.5 font-semibold text-ink"
+                />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'flex size-5 shrink-0 items-center justify-center rounded-full',
+                    on ? 'bg-ink text-white' : 'border-[1.5px] border-offline bg-surface',
+                  )}
+                >
+                  {on ? <Check size={13} strokeWidth={3} /> : null}
+                </span>
               </label>
             )
           })}

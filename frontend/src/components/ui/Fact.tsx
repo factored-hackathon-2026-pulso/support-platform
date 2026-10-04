@@ -1,6 +1,6 @@
 import { cn } from '@/lib/cn'
 import { FACT_ICONS, type FactItem, type FactTone } from './fact-icons'
-import { LanguageMarks } from './LanguageMark'
+import { LanguageMark, LanguageMarks } from './LanguageMark'
 import { Tooltip } from './Tooltip'
 
 const TONE_TEXT: Record<FactTone, string> = {
@@ -36,6 +36,7 @@ export function Fact({
   iconOnly = false,
   tooltip,
   languages,
+  language,
   size = 'sm',
   focusable = true,
   className,
@@ -64,7 +65,12 @@ export function Fact({
         <Icon size={size === 'md' ? 14 : 13} aria-hidden="true" className="shrink-0" />
       )}
       {label ? <span className="sr-only">{label}: </span> : null}
-      {text ? <span className="truncate">{text}</span> : null}
+      {language ? <LanguageMark language={language} className="text-ink" /> : null}
+      {text ? (
+        <span className="truncate" lang={language}>
+          {text}
+        </span>
+      ) : null}
       {languages?.length ? <LanguageMarks languages={languages} focusable={focusable} /> : null}
       {tag ? (
         <span className="ml-0.5 rounded-full bg-accent-soft px-1.5 text-11 font-semibold text-accent-strong">

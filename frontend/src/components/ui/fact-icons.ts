@@ -131,6 +131,11 @@ export interface FactItem {
    * text the marks stand in for the icon ("Idiomas: [ES] [PT]").
    */
   languages?: readonly LanguageCode[]
+  /**
+   * The text is this language's own name ("Português"): its mark goes before it, as
+   * in an "Idioma" row ("[PT] Português").
+   */
+  language?: LanguageCode
 }
 
 /**

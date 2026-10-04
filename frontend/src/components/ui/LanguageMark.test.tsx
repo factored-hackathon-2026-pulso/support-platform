@@ -78,6 +78,15 @@ describe('LanguageMarks', () => {
     expect(screen.getByText('Português', { selector: '.sr-only' })).toHaveAttribute('lang', 'pt')
   })
 
+  it('takes a name of its own, and a size for the marks', () => {
+    const { container } = render(
+      <LanguageMarks languages={['es']} name="Cola en español" markClassName="text-16" />,
+    )
+    const name = screen.getByText('Cola en español', { selector: '.sr-only' })
+    expect(name).not.toHaveAttribute('lang')
+    expect(container.querySelector('[aria-hidden="true"].text-16')).toHaveTextContent('ES')
+  })
+
   it('renders nothing for no known language', () => {
     const { container } = render(<LanguageMarks languages={[]} />)
     expect(container).toBeEmptyDOMElement()

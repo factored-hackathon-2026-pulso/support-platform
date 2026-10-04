@@ -2,6 +2,7 @@ import { Flame } from 'lucide-react'
 import {
   Badge,
   Button,
+  LanguageMarks,
   QueryState,
   Skeleton,
   Status,
@@ -22,7 +23,6 @@ import {
   analystsFigures,
   atRiskCount,
   isHighLoad,
-  languageWord,
   longestWait,
   openCasesCell,
   showsNoSessionHint,
@@ -173,13 +173,7 @@ function AnalystRow({ analyst, selected, now, onSelect }: AnalystRowProps) {
         </span>
       </TCell>
       <TCell className={CELL_X}>
-        <span className="flex flex-wrap gap-1">
-          {analyst.languages.map((language) => (
-            <Badge key={language} tone={language === 'pt' ? 'accent' : 'neutral'} size="sm">
-              {languageWord(language)}
-            </Badge>
-          ))}
-        </span>
+        <LanguageMarks languages={analyst.languages} />
       </TCell>
       <TCell align="right" className={CELL_X}>
         <span className="inline-flex items-center gap-1.5">

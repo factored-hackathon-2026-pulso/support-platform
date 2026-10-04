@@ -112,8 +112,15 @@ export interface LanguageMarksProps {
    * button or a link: the name is then part of that control's accessible name.
    */
   focusable?: boolean
+  /**
+   * The tooltip and screen-reader name when the marks stand for more than the
+   * languages ("Cola en español"); default "Español y Português".
+   */
+  name?: string
   /** Text color of the codes (default `text-ink-2`). */
   className?: string
+  /** Size of each mark's code, for a heading or a card title (e.g. `gap-1.5 text-16`). */
+  markClassName?: string
 }
 
 /**
@@ -121,11 +128,17 @@ export interface LanguageMarksProps {
  * marks are visual, the group's name ("Español y Português") is its tooltip and its
  * screen-reader text. Nothing for no language (the caller shows its own empty value).
  */
-export function LanguageMarks({ languages, focusable = true, className }: LanguageMarksProps) {
+export function LanguageMarks({
+  languages,
+  focusable = true,
+  name: givenName,
+  className,
+  markClassName,
+}: LanguageMarksProps) {
   const sorted = sortLanguages(languages)
   if (sorted.length === 0) return null
-  const name = languagesName(sorted)
-  const only = sorted.length === 1 ? sorted[0] : undefined
+  const name = givenName ?? languagesName(sorted)
+  const only = !givenName && sorted.length === 1 ? sorted[0] : undefined
   return (
     <Tooltip
       content={name}
@@ -136,7 +149,7 @@ export function LanguageMarks({ languages, focusable = true, className }: Langua
         {name}
       </span>
       {sorted.map((language) => (
-        <LanguageMark key={language} language={language} />
+        <LanguageMark key={language} language={language} className={markClassName} />
       ))}
     </Tooltip>
   )

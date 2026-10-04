@@ -850,6 +850,11 @@
             "title": "Canassign",
             "type": "boolean"
           },
+          "canChangePriority": {
+            "description": "Slice 8: the caller is the assignee analyst or a supervisor, and the case is open (PUT /cases/{caseId}/priority).",
+            "title": "Canchangepriority",
+            "type": "boolean"
+          },
           "canClose": {
             "title": "Canclose",
             "type": "boolean"
@@ -873,7 +878,8 @@
           "canReply",
           "replyBlockedReason",
           "canClose",
-          "canAssign"
+          "canAssign",
+          "canChangePriority"
         ],
         "title": "CaseCapabilities",
         "type": "object"
@@ -1145,14 +1151,34 @@
         "type": "object"
       },
       "CasePriority": {
-        "description": "Drives the first-response SLA target. Live cases open as ``medium``.",
+        "description": "How urgent a case is, as staff judge it (slice 8). The levels follow the dataset's\n``complaints.priority`` (Low, Medium, High, Critical) plus ``none``: every case opens\nwith ``none`` and its analyst or supervision sets it (``ChangeCasePriority``). It does\nnot drive the first-response SLA (a fixed target, ``SlaPolicy``).",
         "enum": [
+          "none",
           "low",
           "medium",
-          "high"
+          "high",
+          "critical"
         ],
         "title": "CasePriority",
         "type": "string"
+      },
+      "CasePriorityResult": {
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "changed": {
+            "description": "false: the case already had that priority (no event).",
+            "title": "Changed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "changed",
+          "case"
+        ],
+        "title": "CasePriorityResult",
+        "type": "object"
       },
       "CaseRating": {
         "description": "The customer's rating of a closed case: 1 Mal · 2 Regular · 3 Bien · 4 Excelente.",
@@ -1321,7 +1347,8 @@
             "title": "Previouscaseid"
           },
           "priority": {
-            "$ref": "#/components/schemas/CasePriority"
+            "$ref": "#/components/schemas/CasePriority",
+            "description": "Slice 8: `none` until the assignee or supervision sets it."
           },
           "rating": {
             "anyOf": [
@@ -1377,6 +1404,26 @@
           "rating"
         ],
         "title": "CaseSummary",
+        "type": "object"
+      },
+      "ChangePriorityRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "description": "The case `version` the caller saw (stale → `version_conflict`).",
+            "minimum": 0.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/CasePriority"
+          }
+        },
+        "required": [
+          "priority",
+          "expectedVersion"
+        ],
+        "title": "ChangePriorityRequest",
         "type": "object"
       },
       "CloseCaseRequest": {
@@ -2941,7 +2988,7 @@
               }
             ],
             "default": null,
-            "description": "version_conflict: the record as its GET returns it now (AdminUser or AdminTeam).",
+            "description": "version_conflict: the record as its GET returns it now (AdminUser or AdminTeam; CaseSummary for a case priority, slice 8).",
             "title": "Current"
           },
           "currentAnalystId": {
@@ -6327,6 +6374,108 @@
           }
         ],
         "summary": "\"Casos anteriores de este cliente\": the customer's other cases",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/priority": {
+      "put": {
+        "description": "Slice 8. Checks in this order: the case exists (404) · the caller is its assignee analyst or a supervisor (403 `case_not_assigned`) · it is not closed (409 `case_closed`) · it already has that priority (200, `changed: false`, nothing happens) · it is still at `expectedVersion` (409 `version_conflict`, with the case now as `current`). Records `case.priority_changed` `{from, to}`; the first-response SLA does not change.",
+        "operationId": "cases_change_priority",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePriorityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasePriorityResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Set the case priority (the assignee, or supervision on any open case)",
         "tags": [
           "cases"
         ]

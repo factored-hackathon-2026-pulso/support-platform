@@ -38,6 +38,7 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | [api/slice-3-supervision.md](./api/slice-3-supervision.md) | English | Slice 3: team and queues, manual assignment and reassignment (rule 3, paused confirmation), supervisor case view, audit queries, supervision realtime topics. |
 | [api/slice-4-administration.md](./api/slice-4-administration.md) | English | Slice 4: users, combinable roles, languages, teams, lock/unlock, password reset, guard rails, admin realtime, audit texts. |
 | [api/slice-5-e2e.md](./api/slice-5-e2e.md) | English | Slice 5: the Playwright browser e2e (scenarios mapped to the brief, fresh temp database and free ports, one worker, fixtures and customer reservation, how to add a scenario), the `writeInbox` fix, known gaps, hand-over docs. |
+| [api/slice-8-priority.md](./api/slice-8-priority.md) | English | Slice 8 (part 1): case priority (none to critical), who may change it, `expectedVersion`, audit and realtime, the fixed 15-minute SLA, the priority glyphs and menu, ratings with less text. |
 | [../../backend/README.md](../../backend/README.md) | English | API: run, layout, endpoint map, conventions, realtime, concurrency, gates, known gaps. |
 | [../../frontend/README.md](../../frontend/README.md), [../../frontend/ARCHITECTURE.md](../../frontend/ARCHITECTURE.md) | English | SPA: run, scripts, folder and import rules, routing, data layer, realtime, testing, e2e. |
 

@@ -57,6 +57,8 @@ import {
   previousCasesSectionTitle,
   ratingComment,
   ratingRow,
+  conflictCurrentCase,
+  describePriorityFailure,
 } from './model'
 import type { PendingMessage, TranscriptCache } from './types'
 
@@ -279,17 +281,49 @@ describe('case summary updates', () => {
   })
 })
 
-describe('header', () => {
-  it('builds the meta line: country, city, channel and priority', () => {
-    expect(caseHeaderMeta(makeCaseDetail())).toBe(
-      'Colombia · Barranquilla · chat web · prioridad media',
+describe('priority failures (slice 8)', () => {
+  const conflict = (current: unknown) =>
+    new ApiProblem({ status: 409, code: 'version_conflict', extensions: { current } })
+
+  it('says why, and what the priority is now after a conflict', () => {
+    const current = { ...makeCaseDetail().case, priority: 'critical' as const }
+    expect(describePriorityFailure(conflict(current))).toEqual({
+      title: 'No pudimos cambiar la prioridad',
+      description: 'Alguien más la cambió: ahora es Crítica.',
+    })
+    expect(describePriorityFailure(conflict(null)).description).toBe(
+      'Alguien más la cambió mientras elegías.',
     )
-    const app = makeCaseDetail()
-    app.case = { ...app.case, channel: 'app_chat', priority: 'high' }
-    expect(caseHeaderMeta(app)).toBe('Colombia · Barranquilla · chat en la app · prioridad alta')
+    expect(
+      describePriorityFailure(new ApiProblem({ status: 409, code: 'case_closed' })).description,
+    ).toBe('El caso ya está cerrado.')
+    expect(
+      describePriorityFailure(new ApiProblem({ status: 403, code: 'case_not_assigned' }))
+        .description,
+    ).toBe('Ya no puedes cambiar la prioridad de este caso.')
+    expect(
+      describePriorityFailure(new ApiProblem({ status: 0, code: 'network_error' })).description,
+    ).toBe('Revisa tu conexión e inténtalo de nuevo.')
+    expect(describePriorityFailure(new Error('x')).description).toBe('Inténtalo de nuevo.')
   })
 
-  it('says "en portugués" instead of the priority for a Portuguese case (rule 3)', () => {
+  it('reads the case of a conflict only when it is a case summary', () => {
+    const current = makeCaseDetail().case
+    expect(conflictCurrentCase(conflict(current))).toEqual(current)
+    expect(conflictCurrentCase(conflict({ id: 'STF-1', version: 2 }))).toBeNull()
+    expect(conflictCurrentCase(new ApiProblem({ status: 409, code: 'case_closed' }))).toBeNull()
+  })
+})
+
+describe('header', () => {
+  it('builds the meta line: country, city and channel (slice 8: the priority is a menu)', () => {
+    expect(caseHeaderMeta(makeCaseDetail())).toBe('Colombia · Barranquilla · chat web')
+    const app = makeCaseDetail()
+    app.case = { ...app.case, channel: 'app_chat', priority: 'high' }
+    expect(caseHeaderMeta(app)).toBe('Colombia · Barranquilla · chat en la app')
+  })
+
+  it('ends with "en portugués" for a Portuguese case (rule 3)', () => {
     const pt = makeCaseDetail()
     pt.case = { ...pt.case, language: 'pt' }
     expect(caseHeaderMeta(pt)).toBe('Colombia · Barranquilla · chat web · en portugués')
@@ -540,6 +574,7 @@ describe('closure and the read-only footer', () => {
         replyBlockedReason: 'not_assignee',
         canClose: false,
         canAssign: false,
+        canChangePriority: false,
       },
       assignment: {
         ...makeCaseDetail().assignment!,
@@ -597,15 +632,16 @@ describe('rating in the ficha and "Casos anteriores" (slice 7)', () => {
     expect(caseRows(makeCaseDetail(), NOW).map((row) => row.key)).not.toContain('rating')
   })
 
-  it('says "Calificó: Excelente" on a past case the customer rated', () => {
+  it('shows the face alone on a past case the customer rated (slice 8)', () => {
     const facts = historyItemFacts(
       makeHistoryItem({ rating: { score: 4, comment: null, ratedAt: '2026-03-03T16:05:00Z' } }),
     )
     expect(facts.at(-1)).toEqual({
       key: 'rating',
       icon: 'laugh',
-      text: 'Calificó: Excelente',
+      text: 'Calificación: Excelente',
       tone: 'success',
+      iconOnly: true,
     })
     expect(historyItemFacts(makeHistoryItem()).map((fact) => fact.key)).not.toContain('rating')
   })
@@ -769,6 +805,8 @@ describe('"Ficha del cliente" rows (slice 6 §5)', () => {
       strong: true,
     })
     expect(rows[4]!.pill).toBeUndefined()
+    expect(rows[2]!.priority).toBe('medium') // slice 8: the row holds the priority menu
+    expect(rows.filter((row) => row.priority).map((row) => row.key)).toEqual(['priority'])
     expect(rows[5]!.facts?.map((fact) => fact.text)).toEqual(['A tiempo', '5 mar, 10:50'])
     for (const row of rows) expect(row.text ?? '').not.toContain('·')
   })

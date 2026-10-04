@@ -33,6 +33,7 @@ from cc_platform.application.cases.customer_chat import (
     RateConversation,
 )
 from cc_platform.application.cases.manual_assignment import SetCaseAssignee
+from cc_platform.application.cases.priority import ChangeCasePriority
 from cc_platform.application.cases.queries import (
     AuthorizeCaseSubscription,
     GetCaseDetail,
@@ -333,6 +334,7 @@ def build_container(
             set_assignee=SetCaseAssignee(uow=uow, clock=clock, ids=ids),
             analyst_home=GetAnalystHome(uow=uow, clock=clock),
             rate_conversation=RateConversation(uow=uow, clock=clock),
+            change_priority=ChangeCasePriority(uow=uow, clock=clock),
         ),
         customers=CustomersUseCases(
             list_demo_customers=ListDemoCustomers(uow=uow),

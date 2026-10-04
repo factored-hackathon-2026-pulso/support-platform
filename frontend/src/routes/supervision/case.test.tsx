@@ -2,11 +2,13 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ConversationApi from '@/features/conversation/api'
 import {
+  changeCasePriority,
   fetchCaseDetail,
   fetchCaseHistory,
   fetchTurns,
   markCaseRead,
 } from '@/features/conversation/api'
+import { priorityMenuLabel } from '@/features/cases'
 import type { CaseDetail } from '@/features/conversation'
 import type * as SupervisionApi from '@/features/supervision/api'
 import { fetchQueueOverview, fetchTeamOverview, setCaseAssignee } from '@/features/supervision/api'
@@ -30,6 +32,7 @@ vi.mock('@/features/conversation/api', async (importOriginal) => {
     fetchTurns: vi.fn<typeof actual.fetchTurns>(),
     fetchCaseHistory: vi.fn<typeof actual.fetchCaseHistory>(),
     markCaseRead: vi.fn<typeof actual.markCaseRead>(),
+    changeCasePriority: vi.fn<typeof actual.changeCasePriority>(),
   }
 })
 
@@ -47,7 +50,13 @@ vi.mock('@/features/supervision/api', async (importOriginal) => {
 function ownCaseDetail(): CaseDetail {
   const detail = makeCaseDetail({
     previousCaseCount: 2,
-    capabilities: { canReply: true, replyBlockedReason: null, canClose: true, canAssign: true },
+    capabilities: {
+      canReply: true,
+      replyBlockedReason: null,
+      canClose: true,
+      canAssign: true,
+      canChangePriority: true,
+    },
   })
   detail.case = {
     ...detail.case,
@@ -73,6 +82,7 @@ function queuedDetail(): CaseDetail {
         replyBlockedReason: 'not_assignee',
         canClose: false,
         canAssign: true,
+        canChangePriority: true,
       },
     }),
     case: queuedRosa,
@@ -109,6 +119,29 @@ afterEach(() => {
 const casePath = (id = CASE_ID) => `/supervision/casos/${id}`
 
 describe('supervisor case view', () => {
+  it('sets the priority of a queued case from the header (slice 8)', async () => {
+    vi.mocked(fetchCaseDetail).mockResolvedValue(queuedDetail())
+    vi.mocked(changeCasePriority).mockImplementation(async (caseId, body) => ({
+      changed: true,
+      case: { ...queuedRosa, id: caseId, priority: body.priority, version: queuedRosa.version + 1 },
+    }))
+    const { user } = renderRoute(casePath(queuedRosa.id), { staff: supervisorStaff })
+    const trigger = await screen.findByRole('button', {
+      name: priorityMenuLabel(queuedRosa.priority),
+    })
+    await user.click(trigger)
+    await user.click(screen.getByRole('menuitemradio', { name: 'Crítica' }))
+    expect(changeCasePriority).toHaveBeenCalledWith(queuedRosa.id, {
+      priority: 'critical',
+      expectedVersion: queuedRosa.version,
+    })
+    expect(
+      await screen.findByRole('button', { name: 'Prioridad: Crítica. Cambiar la prioridad' }),
+    ).toBeInTheDocument()
+    // The meta line no longer carries the priority.
+    expect(screen.queryByText(/prioridad (media|alta|baja)/)).not.toBeInTheDocument()
+  })
+
   it('is read-only even for an assignee holding both roles', async () => {
     renderRoute(casePath(), { staff: supervisorStaff })
     expect(

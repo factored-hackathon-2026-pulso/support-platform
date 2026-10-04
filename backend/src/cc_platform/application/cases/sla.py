@@ -1,37 +1,32 @@
-"""First-response SLA (Strategy ``SlaPolicy``; slice 2 contract §4.5).
+"""First-response SLA (Strategy ``SlaPolicy``; slice 2 contract §4.5, slice 8).
 
-``sla_due_at = opened_at + target(priority)``. Team-generated targets (not from the
-dataset; the UI labels them "Política de ejemplo"): ``high`` 5 min · ``medium`` 15 min ·
-``low`` 60 min. The SLA stops at the first analyst message (``case.first_responded``); the
-frontend formats "SLA x" from ``slaDueAt`` while ``firstResponseAt`` is null.
+``sla_due_at = opened_at + target``: one fixed, team-generated target for every case (not
+from the dataset; the UI labels it "Política de ejemplo"): 15 minutes. Since slice 8 the
+priority no longer drives it (a case opens with priority ``none`` and staff set it later,
+which must not move a promise already made). The SLA stops at the first analyst message
+(``case.first_responded``); the frontend shows its level from ``slaDueAt`` while
+``firstResponseAt`` is null.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Protocol
 
-from cc_platform.domain.cases.values import CasePriority
+#: Team-generated first-response target, the same for every case.
+FIRST_RESPONSE_TARGET = timedelta(minutes=15)
 
 
 class SlaPolicy(Protocol):
-    def due_at(self, *, priority: CasePriority, opened_at: datetime) -> datetime:
+    def due_at(self, *, opened_at: datetime) -> datetime:
         """When the first response is due for a case opened at ``opened_at``."""
         ...
 
 
-def _team_generated_targets() -> dict[CasePriority, timedelta]:
-    return {
-        CasePriority.HIGH: timedelta(minutes=5),
-        CasePriority.MEDIUM: timedelta(minutes=15),
-        CasePriority.LOW: timedelta(minutes=60),
-    }
-
-
 @dataclass(frozen=True, slots=True)
 class FirstResponseSlaPolicy:
-    targets: dict[CasePriority, timedelta] = field(default_factory=_team_generated_targets)
+    target: timedelta = FIRST_RESPONSE_TARGET
 
-    def due_at(self, *, priority: CasePriority, opened_at: datetime) -> datetime:
-        return opened_at + self.targets[priority]
+    def due_at(self, *, opened_at: datetime) -> datetime:
+        return opened_at + self.target

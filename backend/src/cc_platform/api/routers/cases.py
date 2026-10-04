@@ -1,5 +1,5 @@
 """Analyst Workspace: inbox ("Casos"), case detail, the customer's other cases, transcript,
-replies, read cursor, close.
+replies, read cursor, close, and the priority (slice 8: the assignee or supervision).
 
 Visibility (enforced in the use cases, contract §4.3): the assignee analyst reads and
 writes; any supervisor reads; an analyst who holds (or held) another case of the same
@@ -9,7 +9,7 @@ else → 403 ``case_not_assigned``. ``/cases/inbox`` is declared before ``/cases
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from fastapi.exceptions import RequestValidationError
@@ -18,7 +18,9 @@ from cc_platform.api.dependencies import ApiContextDep, require_roles
 from cc_platform.api.schemas.cases import (
     CaseDetail,
     CaseHistory,
+    CasePriorityResult,
     CaseSummary,
+    ChangePriorityRequest,
     CloseCaseRequest,
     InboxResponse,
     MarkReadRequest,
@@ -27,11 +29,14 @@ from cc_platform.api.schemas.cases import (
     TurnPage,
 )
 from cc_platform.api.schemas.common import problem_responses
-from cc_platform.application.cases.dto import CloseCaseCommand, PostTurnCommand
+from cc_platform.application.cases.dto import CaseSummaryView, CloseCaseCommand, PostTurnCommand
+from cc_platform.application.cases.priority import ChangePriorityCommand
+from cc_platform.application.errors import VersionConflictError
 from cc_platform.application.pagination import MAX_SEQUENCE
 from cc_platform.application.security import Actor
 from cc_platform.domain.cases.values import InboxStatus
 from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.shared.json import JsonValue
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -228,3 +233,36 @@ async def close_case(
         CloseCaseCommand(reason=body.reason, note=body.note),
     )
     return CaseDetail.from_view(detail)
+
+
+@router.put(
+    "/{caseId}/priority",
+    response_model=CasePriorityResult,
+    summary="Set the case priority (the assignee, or supervision on any open case)",
+    description=(
+        "Slice 8. Checks in this order: the case exists (404) · the caller is its assignee "
+        "analyst or a supervisor (403 `case_not_assigned`) · it is not closed (409 "
+        "`case_closed`) · it already has that priority (200, `changed: false`, nothing "
+        "happens) · it is still at `expectedVersion` (409 `version_conflict`, with the case "
+        "now as `current`). Records `case.priority_changed` `{from, to}`; the first-response "
+        "SLA does not change."
+    ),
+    responses=problem_responses(401, 403, 404, 409, 422),
+)
+async def change_priority(
+    case_id: CaseId, body: ChangePriorityRequest, actor: AnalystOrSupervisor, api: ApiContextDep
+) -> CasePriorityResult:
+    try:
+        view = await api.use_cases.cases.change_priority.execute(
+            actor,
+            case_id,
+            ChangePriorityCommand(priority=body.priority, expected_version=body.expected_version),
+        )
+    except VersionConflictError as exc:
+        if isinstance(exc.current_view, CaseSummaryView):
+            current: dict[str, Any] = CaseSummary.from_view(exc.current_view).model_dump(
+                mode="json", by_alias=True
+            )
+            exc.details = {**exc.details, "current": cast("JsonValue", current)}
+        raise
+    return CasePriorityResult.from_view(view)

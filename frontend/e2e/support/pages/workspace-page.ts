@@ -89,6 +89,26 @@ export class WorkspacePage {
     return panel
   }
 
+  /**
+   * Slice 8: the "Prioridad" row of the ficha is a menu button; picks `level` ("Alta") with
+   * the keyboard, the way an analyst who does not use the mouse would.
+   */
+  async setPriority(panel: Locator, level: string): Promise<void> {
+    const trigger = panel
+      .getByRole('region', { name: 'Este caso' })
+      .getByRole('button', { name: /^Prioridad: .*\. Cambiar la prioridad$/ })
+    await trigger.focus()
+    await this.page.keyboard.press('Enter')
+    const menu = this.page.getByRole('menu', { name: 'Prioridad' })
+    await expect(menu).toBeVisible()
+    await menu.getByRole('menuitemradio', { name: level }).focus()
+    await this.page.keyboard.press('Enter')
+    await expect(menu).toHaveCount(0)
+    await expect(
+      panel.getByRole('button', { name: `Prioridad: ${level}. Cambiar la prioridad` }),
+    ).toBeFocused()
+  }
+
   /** A case card of the list (its accessible name starts with the customer name). */
   caseCard(customerName: string): Locator {
     return this.caseList.getByRole('button', { name: startsWithName(customerName) })

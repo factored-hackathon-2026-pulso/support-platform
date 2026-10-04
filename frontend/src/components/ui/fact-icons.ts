@@ -29,6 +29,21 @@ import {
   Users,
   type LucideProps,
 } from 'lucide-react'
+import { PriorityIcon } from './PriorityIcon'
+import type { PriorityLevel } from './priority-levels'
+
+/** A priority glyph (`PriorityIcon`) usable wherever a fact names its icon. */
+function priorityGlyph(level: PriorityLevel) {
+  function PriorityGlyph({ size, className }: LucideProps) {
+    return createElement(PriorityIcon, {
+      level,
+      size: typeof size === 'number' ? size : 14,
+      className,
+    })
+  }
+  PriorityGlyph.displayName = `PriorityGlyph(${level})`
+  return PriorityGlyph
+}
 
 /** The overdue SLA: the same flame, filled. */
 function FlameFilled(props: LucideProps) {
@@ -65,6 +80,11 @@ export const FACT_ICONS = {
   meh: Meh,
   message: MessageSquare,
   pause: CirclePause,
+  'priority-none': priorityGlyph('none'),
+  'priority-low': priorityGlyph('low'),
+  'priority-medium': priorityGlyph('medium'),
+  'priority-high': priorityGlyph('high'),
+  'priority-critical': priorityGlyph('critical'),
   smartphone: Smartphone,
   smile: Smile,
   user: User,
@@ -88,8 +108,8 @@ export interface FactItem {
   /** A small tag after the text ("Regla 3"). */
   tag?: string
   /**
-   * Secondary, easy-to-learn facts (channel, a non-Spanish language, the high
-   * priority flag, "Volvió a escribir"): only the icon shows, the text is the
+   * Secondary, easy-to-learn facts (channel, a non-Spanish language, a high or
+   * critical priority, "Volvió a escribir", a rating face): only the icon shows, the text is the
    * tooltip and the accessible text. Never for status, reasons, names or the SLA.
    */
   iconOnly?: boolean

@@ -88,9 +88,11 @@ describe('CaseHistorySheet', () => {
     const rows = within(list).getAllByRole('button')
     // Short facts (slice 6): the reason with its icon, [calendar] date, [user] who.
     expect(rows.map((row) => row.textContent)).toEqual([
-      // Slice 7: and the customer's rating ("Calificó: …") when there is one.
-      'ResueltoAbierto: 3 mar 2026Daniela RíosCalificó: ExcelentePerfecto, muchas gracias.',
-      'ResueltoAbierto: 13 feb 2026Julián OrtegaCalificó: BienAh, es cierto. Gracias.',
+      // Slice 7: and the customer's rating when there is one (slice 8: the face alone;
+      // its name "Calificación: …" is the tooltip and the accessible text).
+      // (the accessible text, then the tooltip bubble: the row shows only the face).
+      'ResueltoAbierto: 3 mar 2026Daniela RíosCalificación: ExcelenteCalificación: ExcelentePerfecto, muchas gracias.',
+      'ResueltoAbierto: 13 feb 2026Julián OrtegaCalificación: BienCalificación: BienAh, es cierto. Gracias.',
     ])
     expect(rows[0]!.querySelector('[data-reason="resolved"]')).toBeInTheDocument()
     expect(api.fetchCaseHistory).toHaveBeenCalledWith(PATRICIA_CASE_ID, expect.anything())

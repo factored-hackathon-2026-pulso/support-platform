@@ -19,11 +19,16 @@ class CaseChannel(StrEnum):
 
 
 class CasePriority(StrEnum):
-    """Drives the first-response SLA target. Live cases open as ``medium``."""
+    """How urgent a case is, as staff judge it (slice 8). The levels follow the dataset's
+    ``complaints.priority`` (Low, Medium, High, Critical) plus ``none``: every case opens
+    with ``none`` and its analyst or supervision sets it (``ChangeCasePriority``). It does
+    not drive the first-response SLA (a fixed target, ``SlaPolicy``)."""
 
+    NONE = "none"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+    CRITICAL = "critical"
 
 
 class CaseStatus(StrEnum):

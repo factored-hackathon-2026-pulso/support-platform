@@ -27,7 +27,7 @@ export interface FirstCasesProps {
 /**
  * "Lo primero" (canvas `queue`): her open cases in urgency order (the same
  * `sortByUrgency` as the Casos list), each with its status stripe and status (glyph + word), the
- * channel (and the high-priority flag, "Volvió a escribir") as icons with a
+ * channel (and a high or critical priority glyph, "Volvió a escribir") as icons with a
  * tooltip, the last message, the SLA or the time, and "Abrir" (Casos with that
  * case open and its filter set, so the card is highlighted).
  */

@@ -14,6 +14,7 @@ from cc_platform.application.cases.customer_chat import (
     RateConversation,
 )
 from cc_platform.application.cases.manual_assignment import SetCaseAssignee
+from cc_platform.application.cases.priority import ChangeCasePriority
 from cc_platform.application.cases.queries import (
     AuthorizeCaseSubscription,
     GetCaseDetail,
@@ -43,3 +44,4 @@ class CasesUseCases:
     set_assignee: SetCaseAssignee
     analyst_home: GetAnalystHome
     rate_conversation: RateConversation
+    change_priority: ChangeCasePriority

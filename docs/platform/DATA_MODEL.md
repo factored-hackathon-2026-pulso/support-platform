@@ -1,6 +1,6 @@
 # Modelo de datos de la plataforma
 
-Versión: slices 0 a 7 (slice 7: calificación del cliente). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
+Versión: slices 0 a 8 (slice 7: calificación del cliente; slice 8: prioridad del caso). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
 
 La plataforma es solo para personas: clientes y equipo de soporte conversan por chat. Guarda las conversaciones, quién atiende cada caso, las cuentas del equipo y el registro de eventos; nada más (la [última sección](#diferencias-con-contractsplatform_historyjson) compara este modelo con la muestra sintética).
 
@@ -45,7 +45,7 @@ erDiagram
         string customer_id FK
         string channel "app_chat web_chat"
         string language "es pt"
-        string priority "low medium high"
+        string priority "none low medium high critical"
         string status "queued assigned in_progress closed"
         datetime opened_at
         datetime sla_due_at
@@ -172,6 +172,8 @@ stateDiagram-v2
     assigned --> closed: el analista lo cierra con motivo
     in_progress --> closed: el analista lo cierra con motivo
     closed --> closed: el cliente lo califica (una vez, slice 7)
+    assigned --> assigned: la analista o supervisión cambia la prioridad (slice 8)
+    in_progress --> in_progress: la analista o supervisión cambia la prioridad (slice 8)
     closed --> [*]
 ```
 
@@ -181,7 +183,12 @@ stateDiagram-v2
 - Calificación del cliente (slice 7): solo un caso **cerrado**, **una vez**, y solo su propio
   cliente. No cambia el estado (sigue cerrado y de solo lectura). Cuenta para quien lo cerró
   (`closed_by_id`).
-- Plazo de primera respuesta (`sla_due_at`): 5, 15 o 60 minutos según la prioridad alta, media o baja. El primer mensaje del analista fija `first_response_at`.
+- Plazo de primera respuesta (`sla_due_at`): 15 minutos para todos los casos (slice 8; antes
+  dependía de la prioridad). El primer mensaje del analista fija `first_response_at`.
+- Prioridad (slice 8): todo caso abre con `none` ("Sin prioridad"). La cambia quien lo atiende
+  (con el rol Analista) o Supervisión (cualquier caso abierto, también en cola); nunca en un caso
+  cerrado. No cambia el estado ni el plazo de primera respuesta. Los niveles siguen
+  `complaints.priority` del dataset (Low, Medium, High, Critical) más `none`.
 
 **Estado en la bandeja del analista** (se calcula, no se guarda):
 
@@ -216,7 +223,7 @@ stateDiagram-v2
 | `customer_id` | FK → customers | |
 | `channel` | texto | `app_chat`, `web_chat` |
 | `language` | texto | `es`, `pt` |
-| `priority` | texto | `low`, `medium`, `high` |
+| `priority` | texto | `none` (al abrir), `low`, `medium`, `high`, `critical` (slice 8); la cambia la analista asignada o Supervisión |
 | `status` | texto | `queued`, `assigned`, `in_progress`, `closed` |
 | `opened_at` | fecha | |
 | `sla_due_at` | fecha | vencimiento de la primera respuesta |
@@ -237,7 +244,7 @@ stateDiagram-v2
 | `rating_comment` | texto(500), nulo | comentario opcional del cliente (sin espacios sobrantes; vacío = nulo) |
 | `rated_at` | fecha, nula | cuándo calificó |
 | `rating_key` | texto(64), nulo | `Idempotency-Key` de la solicitud: un reintento con la misma respuesta no califica dos veces |
-| `version` | entero | concurrencia optimista (una calificación sube la versión: dos calificaciones a la vez, gana una) |
+| `version` | entero | concurrencia optimista (una calificación o un cambio de prioridad sube la versión: dos a la vez, gana una; el cambio de prioridad además exige la versión que vio quien lo pide, `expectedVersion`) |
 
 Índice de "Calificación 7 días" (slice 7): `ix_cases_closer_closed` (`closed_by_id`, `closed_at`).
 La supervisión agrupa por quien cerró los casos calificados con `closed_at` en los últimos 7 días
@@ -317,7 +324,7 @@ Tipos de evento:
 
 | Familia | Eventos |
 |---|---|
-| Casos | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.rated` (el cliente calificó; `payload`: `score`, `comment`, `analyst_id`; la auditoría muestra solo el largo del comentario), `case.viewed` (una supervisora abrió el caso) |
+| Casos | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.rated` (el cliente calificó; `payload`: `score`, `comment`, `analyst_id`; la auditoría muestra solo el largo del comentario), `case.priority_changed` (slice 8; `payload`: `from`, `to`; auditoría: "Cambió la prioridad a Alta"), `case.viewed` (una supervisora abrió el caso) |
 | Mensajes | `turn.created` |
 | Equipo | `staff.availability_changed` |
 | Administración | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `staff.password_reset`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated` |
@@ -327,6 +334,9 @@ Tipos de evento:
 
 - Slice 7 agrega las columnas de calificación a `cases`: una base creada antes falla al arrancar
   (`OutdatedSchemaError`) hasta borrarla.
+- Slice 8 no agrega columnas, pero cambia los valores de `priority`, el plazo de primera
+  respuesta y la historia sembrada: borra `backend/cc_platform.db` para verlos (una base anterior
+  arranca, con `medium` en sus casos y los plazos viejos).
 - Pendiente conocido: no hay migraciones. Cualquier cambio futuro de esquema exige borrar `backend/cc_platform.db` hasta que se agreguen.
 
 ## Diferencias con `contracts/platform_history.json`

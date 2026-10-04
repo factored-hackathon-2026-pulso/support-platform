@@ -111,7 +111,13 @@ export function makeCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail 
       previousAnalystName: null,
     },
     closure: null,
-    capabilities: { canReply: true, replyBlockedReason: null, canClose: true, canAssign: false },
+    capabilities: {
+      canReply: true,
+      replyBlockedReason: null,
+      canClose: true,
+      canAssign: false,
+      canChangePriority: true,
+    },
     previousCaseCount: 0,
     ...overrides,
   }
@@ -142,6 +148,7 @@ export function makeClosedDetail(overrides: Partial<CaseDetail> = {}): CaseDetai
       replyBlockedReason: 'closed',
       canClose: false,
       canAssign: false,
+      canChangePriority: false,
     },
     ...overrides,
   }
@@ -239,6 +246,7 @@ export function makeJulianDetail(): CaseDetail {
       replyBlockedReason: 'closed',
       canClose: false,
       canAssign: false,
+      canChangePriority: false,
     },
     previousCaseCount: 2,
   }

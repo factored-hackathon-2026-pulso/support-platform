@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.domain.shared.events import DomainEvent
+from cc_platform.domain.shared.json import JsonObject
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -127,6 +128,22 @@ class CaseRated(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CasePriorityChanged(DomainEvent):
+    """The assignee or supervision changed the case priority (slice 8). Payload
+    ``{"from": "medium", "to": "high"}`` (the contract's names; ``from`` is a Python
+    keyword, hence the field names)."""
+
+    event_type = "case.priority_changed"
+    entity = "case"
+
+    from_priority: str
+    to_priority: str
+
+    def payload(self) -> JsonObject:
+        return {"from": self.from_priority, "to": self.to_priority}
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CaseViewed(DomainEvent):
     """A supervisor opened a case she does not hold (supervision view, read-only).
 
@@ -154,4 +171,5 @@ CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseFirstResponded,
     CaseClosed,
     CaseRated,
+    CasePriorityChanged,
 )

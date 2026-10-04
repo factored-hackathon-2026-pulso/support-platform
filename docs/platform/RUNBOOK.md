@@ -150,25 +150,32 @@ llegan.
 
 ### Casos sembrados
 
+Prioridad (slice 8): todo caso abre "Sin prioridad"; la historia sembrada la cambia por el dominio
+(`case.priority_changed`), así que la auditoría muestra quién la puso.
+
 | Caso | Cliente | Dónde está |
 |---|---|---|
-| 101 | Marcela Quintana Pardo (es-CO) | Daniela · Por responder |
-| 102 | Beatriz Salcedo Prieto (es-CO) | Daniela · Por responder, SLA en riesgo |
+| 101 | Marcela Quintana Pardo (es-CO) | Daniela · Por responder, prioridad crítica |
+| 102 | Beatriz Salcedo Prieto (es-CO) | Daniela · Por responder, SLA en riesgo, prioridad alta |
 | 103 | Larissa Monteiro Alves (pt-BR) | Daniela · Nuevo, en portugués |
 | 108 | Patricia Lozano Vega (es-MX) | Daniela · Nuevo, "Volvió a escribir" (casos anteriores 104 y 110) |
-| 107 | Joaquín Ferreyra Paz (es-AR) | Daniela · Esperando al cliente |
-| 104, 105, 106 | Patricia, Claudia, Héctor | Daniela · Cerrados en los últimos 7 días |
+| 107 | Joaquín Ferreyra Paz (es-AR) | Daniela · Esperando al cliente, prioridad media |
+| 104, 105, 106 | Patricia, Claudia, Héctor | Daniela · Cerrados en los últimos 7 días (media, sin prioridad, baja) |
 | 110 | Patricia | Cerrado por Julián hace 20 días (fuera de la ventana de 7 días) |
-| 113 | Camila Torres Benavides (es-CO) | Julián · Por responder, SLA vencido |
-| 114 | Esteban Morales Quiroga (es-CO) | Julián · Esperando al cliente (Lucía se lo reasignó desde Paula) |
+| 113 | Camila Torres Benavides (es-CO) | Julián · Por responder, SLA vencido, prioridad media |
+| 114 | Esteban Morales Quiroga (es-CO) | Julián · Esperando al cliente (Lucía se lo reasignó desde Paula), prioridad baja |
 | 111 | Rosa Elena Ibarra Méndez (es-MX) | Cola en español, SLA en riesgo |
-| 112 | Mauricio Achával Ríos (es-AR) | Cola en español, prioridad alta, SLA vencido |
+| 112 | Mauricio Achával Ríos (es-AR) | Cola en español, prioridad alta (la puso Lucía), SLA en 7 min |
 | 109 | Gabriela Duarte Melo (pt-BR) | Cola en portugués |
 
 Los ids completos son `CASE-` seguido del número relleno con ceros hasta 26 dígitos (por ejemplo
 `CASE-00000000000000000000000109`). Valores generados por el equipo (no vienen del dataset): SLA de
-primera respuesta (alta 5 min · media 15 min · baja 60 min), la ventana de 7 días de Cerrados, los
-nombres de las colas y los motivos de cierre.
+primera respuesta (15 min para todos los casos desde el slice 8; ya no depende de la prioridad), la
+ventana de 7 días de Cerrados, los nombres de las colas y los motivos de cierre. Los niveles de
+prioridad sí siguen el dataset (`complaints.priority`), más "Sin prioridad".
+
+Después de actualizar a slice 8, borra `backend/cc_platform.db`: la siembra solo agrega casos
+que faltan, así que una base anterior conserva las prioridades y los plazos viejos.
 
 ### Clientes del simulador
 

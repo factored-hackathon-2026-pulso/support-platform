@@ -168,14 +168,78 @@ export function channelPhrase(channel: CaseChannel): string {
   return CHANNEL_PHRASES[channel] ?? channel
 }
 
-const PRIORITY_LABELS: Record<CasePriority, string> = {
-  low: 'Prioridad baja',
-  medium: 'Prioridad media',
-  high: 'Prioridad alta',
+// ─── Priority (slice 8: the dataset's complaints.priority levels + "Sin prioridad") ─
+
+export interface CasePriorityConfig {
+  value: CasePriority
+  /** The level as a value: "Alta", "Sin prioridad" (ficha, menu, supervision). */
+  label: string
+  /** With the noun, for tooltips and accessible names: "Prioridad alta". */
+  longLabel: string
+  /** The Linear-style glyph (`PriorityIcon`), also usable as a fact icon. */
+  icon: Extract<FactIcon, `priority-${string}`>
+  /** Urgency rank: critical 0, high 1, the rest 2 (only critical and high reorder lists). */
+  rank: number
 }
 
+/**
+ * The one priority map of the staff UI (slice 8): every place that shows or changes a
+ * priority reads it (the cards, Inicio, the ficha menu, the supervisor view, supervision
+ * rows). Menu order as Linear: none first, then the most urgent down.
+ */
+export const CASE_PRIORITY: Readonly<Record<CasePriority, CasePriorityConfig>> = {
+  none: {
+    value: 'none',
+    label: 'Sin prioridad',
+    longLabel: 'Sin prioridad',
+    icon: 'priority-none',
+    rank: 2,
+  },
+  critical: {
+    value: 'critical',
+    label: 'Crítica',
+    longLabel: 'Prioridad crítica',
+    icon: 'priority-critical',
+    rank: 0,
+  },
+  high: {
+    value: 'high',
+    label: 'Alta',
+    longLabel: 'Prioridad alta',
+    icon: 'priority-high',
+    rank: 1,
+  },
+  medium: {
+    value: 'medium',
+    label: 'Media',
+    longLabel: 'Prioridad media',
+    icon: 'priority-medium',
+    rank: 2,
+  },
+  low: { value: 'low', label: 'Baja', longLabel: 'Prioridad baja', icon: 'priority-low', rank: 2 },
+}
+
+/** The options of the priority menu, in menu order. */
+export const PRIORITY_OPTIONS: readonly CasePriorityConfig[] = Object.values(CASE_PRIORITY)
+
+/** The config of a level (an unknown value reads as "Sin prioridad"). */
+export function casePriority(priority: CasePriority): CasePriorityConfig {
+  return CASE_PRIORITY[priority] ?? CASE_PRIORITY.none
+}
+
+/** "Prioridad alta", "Sin prioridad". */
 export function priorityLabel(priority: CasePriority): string {
-  return PRIORITY_LABELS[priority] ?? priority
+  return casePriority(priority).longLabel
+}
+
+/** The trigger of the priority menu: the value, then what it does. */
+export function priorityMenuLabel(priority: CasePriority): string {
+  return `Prioridad: ${casePriority(priority).label}. Cambiar la prioridad`
+}
+
+/** Only critical and high show on a card (slice 8 UI rule): the rest is noise there. */
+export function isUrgentPriority(priority: CasePriority): boolean {
+  return priority === 'critical' || priority === 'high'
 }
 
 const COUNTRY_NAMES: Record<CountryCode, string> = {
@@ -200,16 +264,22 @@ export function channelFact(channel: CaseChannel): FactItem {
   }
 }
 
-/** Priority is shown only when it is high (slice 6 UI rule): [flag] Prioridad alta. */
-export function priorityFact(priority: CasePriority): FactItem | null {
-  return priority === 'high'
-    ? { key: 'priority', icon: 'flag', text: priorityLabel(priority), tone: 'warn', iconOnly: true }
-    : null
+/**
+ * The priority as an icon-only fact (glyph, tooltip and accessible text "Prioridad alta").
+ * `onlyUrgent` (cards, Inicio): `null` unless it is high or critical.
+ */
+export function priorityFact(
+  priority: CasePriority,
+  { onlyUrgent = true }: { onlyUrgent?: boolean } = {},
+): FactItem | null {
+  if (onlyUrgent && !isUrgentPriority(priority)) return null
+  const config = casePriority(priority)
+  return { key: 'priority', icon: config.icon, text: config.longLabel, iconOnly: true }
 }
 
 /**
  * The facts of an open card's bottom line (slice 6 UI rule: one fact each, no
- * dot-joined line): channel, priority when high, "Volvió a escribir".
+ * dot-joined line): channel, priority when high or critical (slice 8), "Volvió a escribir".
  * The status is a pill and the time its own element (CaseCard).
  */
 export function caseCardFacts(
@@ -323,8 +393,9 @@ export function ratingLabel(rating: Pick<CaseRating, 'score'> | null | undefined
 }
 
 /**
- * The rating of a Cerrados card as an icon-only fact: the face, the tooltip "Bien" and the
- * accessible name "Calificación: Bien" (a secondary fact). Unrated → null.
+ * The rating in a list (Cerrados cards, "Casos anteriores"; slice 8: less text) as an
+ * icon-only fact: the colored face, the tooltip and accessible text "Calificación: Bien".
+ * Unrated → null.
  */
 export function ratingFact(rating: Pick<CaseRating, 'score'> | null | undefined): FactItem | null {
   if (!rating) return null
@@ -332,21 +403,10 @@ export function ratingFact(rating: Pick<CaseRating, 'score'> | null | undefined)
   return {
     key: 'rating',
     icon: option.icon,
-    text: option.label,
-    label: 'Calificación',
+    text: `Calificación: ${option.label}`,
     tone: option.textTone,
     iconOnly: true,
   }
-}
-
-/** Closed-case footer pill: "El cliente calificó: Bien". */
-export function ratedByCustomerLabel(rating: Pick<CaseRating, 'score'>): string {
-  return `El cliente calificó: ${ratingOption(rating.score).label}`
-}
-
-/** "Casos anteriores" row: "Calificó: Excelente". */
-export function ratedShortLabel(rating: Pick<CaseRating, 'score'>): string {
-  return `Calificó: ${ratingOption(rating.score).label}`
 }
 
 // ─── First-response SLA and last interaction (contract §4.5) ──────────────────
@@ -446,35 +506,59 @@ export function slaFact(
 // ─── Urgency (Inicio "Lo primero" and the Casos list, slice 6 §4.2) ─────────
 
 /**
- * Urgency group of a case at `now` (lower = sooner): 0 first-response SLA overdue
- * or at risk (≤ 5 min), 1 SLA still running, 2 the customer waits without an SLA
- * (Nuevo / Por responder after the first reply), 3 Esperando al cliente, 4 closed.
+ * Urgency group of a case at `now` (lower = sooner; slice 8): 0 first-response SLA
+ * overdue, 1 critical, 2 high (both: the analyst has to act, not "Esperando al
+ * cliente"), 3 SLA at risk (≤ 5 min) or running, 4 the customer waits without an SLA
+ * (Nuevo / Por responder after the first reply), 5 Esperando al cliente, 6 closed.
  */
 export function urgencyGroup(
-  summary: Pick<CaseSummary, 'status' | 'inboxStatus' | 'slaDueAt' | 'firstResponseAt'>,
+  summary: Pick<
+    CaseSummary,
+    'status' | 'inboxStatus' | 'slaDueAt' | 'firstResponseAt' | 'priority'
+  >,
   now: DateInput,
 ): number {
-  if (summary.status === 'closed') return 4
-  if (summary.inboxStatus === 'waiting') return 3
-  if (summary.firstResponseAt) return 2
-  return toMs(summary.slaDueAt) - toMs(now) <= SLA_AT_RISK_MS ? 0 : 1
+  if (summary.status === 'closed') return WAITING_GROUP + 1
+  if (summary.inboxStatus === 'waiting') return WAITING_GROUP
+  if (!summary.firstResponseAt && toMs(summary.slaDueAt) <= toMs(now)) return 0
+  const rank = casePriority(summary.priority).rank
+  if (rank < 2) return 1 + rank
+  return summary.firstResponseAt ? 4 : 3
 }
 
 type UrgencyFields = Pick<
   CaseSummary,
-  'id' | 'status' | 'inboxStatus' | 'slaDueAt' | 'firstResponseAt' | 'lastInteractionAt'
+  | 'id'
+  | 'status'
+  | 'inboxStatus'
+  | 'slaDueAt'
+  | 'firstResponseAt'
+  | 'lastInteractionAt'
+  | 'priority'
 >
 
+/** Esperando al cliente (and closed): the customer has the ball, sort by the longest wait. */
+const WAITING_GROUP = 5
+
+/** The SLA still runs: sort by the nearest due time (else by the longest wait). */
+function sortsBySla(item: UrgencyFields, group: number): boolean {
+  return group < WAITING_GROUP && !item.firstResponseAt
+}
+
 /**
- * The one urgency order of open cases (Inicio's "Lo primero" and the Casos list):
- * SLA overdue or at risk first, then the nearest `slaDueAt`, then whoever has
- * waited longest without an SLA, Esperando al cliente last; ties by id.
+ * The one urgency order of open cases (Inicio's "Lo primero" and the Casos list;
+ * slice 8): first-response SLA overdue first, then critical, then high, then the
+ * nearest `slaDueAt`, then whoever has waited longest without an SLA, Esperando al
+ * cliente last. Within a group: the nearest due time while the SLA runs (before any
+ * case without one), else the oldest last interaction; ties by id.
  */
 export function compareByUrgency(a: UrgencyFields, b: UrgencyFields, now: DateInput): number {
-  const group = urgencyGroup(a, now) - urgencyGroup(b, now)
-  if (group !== 0) return group
-  const bySla = urgencyGroup(a, now) <= 1
-  const key = (item: UrgencyFields) => toMs(bySla ? item.slaDueAt : item.lastInteractionAt)
+  const group = urgencyGroup(a, now)
+  if (group !== urgencyGroup(b, now)) return group - urgencyGroup(b, now)
+  const slaA = sortsBySla(a, group)
+  const slaB = sortsBySla(b, group)
+  if (slaA !== slaB) return slaA ? -1 : 1
+  const key = (item: UrgencyFields) => toMs(slaA ? item.slaDueAt : item.lastInteractionAt)
   return key(a) - key(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 }
 

@@ -289,16 +289,15 @@ class PostCustomerTurn:
             raise AuthenticationRequiredError()
         previous = latest_closed(await uow.cases.list_for_customer(profile.id))
         now = self.clock.now()
-        priority = CasePriority.MEDIUM  # every live case opens as medium (contract §2.1)
         case = Case.open(
             case_id=self.ids.new_id(IdPrefix.CASE),
             customer_id=profile.id,
             customer_name=profile.display_name,
             channel=customer.channel,
             language=profile.language,
-            priority=priority,
+            priority=CasePriority.NONE,  # every case opens without a priority (slice 8)
             opened_at=now,
-            sla_due_at=self.sla.due_at(priority=priority, opened_at=now),
+            sla_due_at=self.sla.due_at(opened_at=now),
             actor=customer.actor_ref(),
             previous_case_id=previous.id if previous else None,
         )

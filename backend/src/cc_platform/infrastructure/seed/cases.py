@@ -2,9 +2,12 @@
 people.
 
 Daniela's inbox: Todos 5 · Por responder 2 · Nuevos 2 · Esperando al cliente 1 · Cerrados 3.
+Priorities (slice 8): every case opens with ``none`` and staff set it through the domain
+(``case.priority_changed``): Marcela's 101 critical and Beatriz's 102 high (Daniela),
+Mauricio's queued 112 high (Lucía), 106 and 114 low, 104/107/110/113 medium, the rest none.
 Customer ratings (slice 7, invented): Patricia rated 104 "Excelente" with a comment and 110
 "Bien", Héctor rated 106 "Bien"; Claudia's 105 stays unrated (the simulator asks her).
-Besides it: three queued cases (two in "Cola en español", one at risk and one overdue; one
+Besides it: three queued cases (two in "Cola en español", one at risk and one due in 7 min; one
 in "Cola en portugués"), Julián's two open cases (one overdue, one that Lucía reassigned to
 him from Paula), one closed case of Julián outside the 7-day window (Patricia's history),
 and Lucía's supervision view of Julián's overdue case (so the audit shows an access event).
@@ -221,6 +224,13 @@ class _Story:
             actor=ActorRef(ActorRole.ANALYST, staff_id), at=at, reason=reason, note=note
         )
 
+    def prioritize(
+        self, at: datetime, priority: CasePriority, *, by: int, role: ActorRole = ActorRole.ANALYST
+    ) -> None:
+        """The assignee (or a supervisor, ``role``) sets the priority (slice 8), as
+        ``ChangeCasePriority`` does: every case opens with ``none``."""
+        self.case.change_priority(actor=ActorRef(role, seed_staff_id(by)), priority=priority, at=at)
+
     def rate(self, at: datetime, score: int, comment: str | None = None) -> None:
         """The customer rates the closed case (slice 7), as ``RateConversation`` does."""
         self.case.rate(
@@ -256,7 +266,6 @@ def _open(
     channel: CaseChannel,
     language: Language,
     opened: datetime,
-    priority: CasePriority = CasePriority.MEDIUM,
     previous: int | None = None,
 ) -> _Story:
     customer_id = seed_customer_id(customer)
@@ -266,9 +275,9 @@ def _open(
         customer_name=_customer_name(customer),
         channel=channel,
         language=language,
-        priority=priority,
+        priority=CasePriority.NONE,  # every case opens without a priority (slice 8)
         opened_at=opened,
-        sla_due_at=SLA.due_at(priority=priority, opened_at=opened),
+        sla_due_at=SLA.due_at(opened_at=opened),
         actor=ActorRef(ActorRole.CUSTOMER, customer_id),
         previous_case_id=seed_case_id(previous) if previous is not None else None,
     )
@@ -287,6 +296,7 @@ def _patricia_old(ids: IdGenerator, t: datetime) -> _Story:
     s.customer(opened, "Hola, no reconozco un cargo de una suscripción.")
     s.opened_notice(opened)
     s.assign(opened, JULIAN, open_cases=0)
+    s.prioritize(opened + timedelta(minutes=2), CasePriority.MEDIUM, by=JULIAN)
     s.analyst(opened + timedelta(minutes=3),
               "Hola, Patricia. Soy Julián, de LATAM Bank. Ese cargo es de su suscripción de "
               "música, contratada en marzo.")  # fmt: skip
@@ -307,6 +317,7 @@ def _patricia_refund(ids: IdGenerator, t: datetime) -> _Story:
     old_closed = t - timedelta(days=20) + timedelta(minutes=15)
     s.wrote_again(opened, old_closed, CloseReason.RESOLVED)
     s.assign(opened, DANIELA, open_cases=0)
+    s.prioritize(opened + timedelta(minutes=2), CasePriority.MEDIUM, by=DANIELA)
     s.analyst(opened + timedelta(minutes=3),
               "Hola, Patricia. Soy Daniela, de LATAM Bank. Ya veo los dos cobros: uno se "
               "reversa en un plazo de 5 días hábiles.")  # fmt: skip
@@ -332,13 +343,13 @@ def _claudia_unresponsive(ids: IdGenerator, t: datetime) -> _Story:
 
 
 def _hector_out_of_scope(ids: IdGenerator, t: datetime) -> _Story:
-    """106 · Héctor, app chat (low priority) asking for a mortgage → Cerrados."""
+    """106 · Héctor, app chat (Daniela set it low) asking for a mortgage → Cerrados."""
     opened = t - timedelta(hours=4)
-    s = _open(ids, number=106, customer=1006, channel=APP, language=ES, opened=opened,
-              priority=CasePriority.LOW)  # fmt: skip
+    s = _open(ids, number=106, customer=1006, channel=APP, language=ES, opened=opened)
     s.customer(opened, "Buen día, quiero saber cuánto me prestan para una casa.")
     s.opened_notice(opened)
     s.assign(opened, DANIELA, open_cases=0)
+    s.prioritize(opened + timedelta(minutes=8), CasePriority.LOW, by=DANIELA)
     s.analyst(opened + timedelta(minutes=10),
               "Hola, Héctor. Soy Daniela, de LATAM Bank. Por este chat atendemos dudas de "
               "cargos y movimientos; para créditos hipotecarios lo atienden en la línea de "
@@ -361,6 +372,7 @@ def _joaquin_waiting(ids: IdGenerator, t: datetime) -> _Story:
     s.opened_notice(opened)
     s.assign(opened, DANIELA, open_cases=0)
     s.read_up_to(t - timedelta(minutes=41), 3)
+    s.prioritize(t - timedelta(minutes=41), CasePriority.MEDIUM, by=DANIELA)
     s.analyst(t - timedelta(minutes=40),
               "Hola, Joaquín. Soy Daniela, de LATAM Bank. Para encontrar su reclamo, ¿me "
               "podría decir la fecha aproximada del cobro y el monto?")  # fmt: skip
@@ -368,13 +380,15 @@ def _joaquin_waiting(ids: IdGenerator, t: datetime) -> _Story:
 
 
 def _marcela_to_reply(ids: IdGenerator, t: datetime) -> _Story:
-    """101 · Marcela, web chat; she answered Daniela's question → Por responder."""
+    """101 · Marcela, web chat; she answered Daniela's question → Por responder. An ATM
+    withdrawal she did not make: Daniela set it critical."""
     opened = t - timedelta(minutes=19)
     s = _open(ids, number=101, customer=1001, channel=WEB, language=ES, opened=opened)
     s.customer(opened, "hola buenas, hay un cargo en mi tarjeta q no reconozco, me colaboran?")
     s.opened_notice(opened)
     s.assign(opened, DANIELA, open_cases=1)
     s.read_up_to(t - timedelta(minutes=11), 3)
+    s.prioritize(t - timedelta(minutes=11), CasePriority.CRITICAL, by=DANIELA)
     s.analyst(t - timedelta(minutes=10),
               "Hola, Marcela. Soy Daniela, de LATAM Bank. Con gusto le ayudo. ¿Me cuenta de "
               "qué fecha es el cargo y por qué valor?")  # fmt: skip
@@ -384,13 +398,15 @@ def _marcela_to_reply(ids: IdGenerator, t: datetime) -> _Story:
 
 
 def _beatriz_impatient(ids: IdGenerator, t: datetime) -> _Story:
-    """102 · Beatriz, app chat, no answer yet, SLA at risk → Por responder (3 unread)."""
+    """102 · Beatriz, app chat, no answer yet, SLA at risk → Por responder (3 unread); Daniela
+    set it high."""
     opened = t - timedelta(minutes=13)
     s = _open(ids, number=102, customer=1002, channel=APP, language=ES, opened=opened)
     s.customer(opened, "no reconozco un cargo en mi tarjeta y estoy muy molesta")
     s.opened_notice(opened)
     s.assign(opened, DANIELA, open_cases=3)
     s.read_up_to(t - timedelta(minutes=9), 3)
+    s.prioritize(t - timedelta(minutes=9), CasePriority.HIGH, by=DANIELA)
     s.customer(t - timedelta(minutes=8), "hola?")
     s.customer(t - timedelta(minutes=5), "hola?? hay alguien??")
     s.customer(t - timedelta(minutes=1), "contesten!! qué mal servicio")
@@ -439,16 +455,16 @@ def _gabriela_queued(ids: IdGenerator, t: datetime) -> _Story:
 
 # ----------------------------------------------------------------------------- slice 3
 def _esteban_reassigned(ids: IdGenerator, t: datetime) -> _Story:
-    """114 · Esteban, web chat (low): Paula got it (Julián tied on load but was assigned
-    more recently), paused at T−33m, and Lucía passed it to Julián, who answered → Julián's
-    Esperando al cliente."""
+    """114 · Esteban, web chat: Paula got it (Julián tied on load but was assigned more
+    recently), paused at T−33m, and Lucía passed it to Julián, who set it low and answered →
+    Julián's Esperando al cliente."""
     opened = t - timedelta(minutes=40)
-    s = _open(ids, number=114, customer=1012, channel=WEB, language=ES, opened=opened,
-              priority=CasePriority.LOW)  # fmt: skip
+    s = _open(ids, number=114, customer=1012, channel=WEB, language=ES, opened=opened)
     s.customer(opened, "Quiero saber por qué me cobraron una comisión por manejo.")
     s.opened_notice(opened)
     s.assign(opened, PAULA, open_cases=0)
     s.reassign(t - timedelta(minutes=32), JULIAN, by=LUCIA, open_cases=1)
+    s.prioritize(t - timedelta(minutes=31), CasePriority.LOW, by=JULIAN)
     s.analyst(t - timedelta(minutes=30),
               "Hola, Esteban. Soy Julián, de LATAM Bank. Ya reviso la comisión; ¿de qué mes "
               "es el cobro?")  # fmt: skip
@@ -465,6 +481,7 @@ def _camila_overdue(ids: IdGenerator, t: datetime) -> _Story:
     s.opened_notice(opened)
     s.assign(opened, JULIAN, open_cases=0)
     s.read_up_to(t - timedelta(minutes=22), 3)
+    s.prioritize(t - timedelta(minutes=22), CasePriority.MEDIUM, by=JULIAN)
     s.customer(t - timedelta(minutes=12), "¿Me ayudan por favor?")
     return s
 
@@ -481,16 +498,17 @@ def _rosa_queued(ids: IdGenerator, t: datetime) -> _Story:
 
 
 def _mauricio_queued(ids: IdGenerator, t: datetime) -> _Story:
-    """112 · Mauricio, web chat, high priority → queued, SLA vencido, wrote again."""
+    """112 · Mauricio, web chat → queued, wrote again; Lucía (supervision) set it high while it
+    waits (first response due in 7 min)."""
     opened = t - timedelta(minutes=8)
-    s = _open(ids, number=112, customer=1010, channel=WEB, language=ES, opened=opened,
-              priority=CasePriority.HIGH)  # fmt: skip
+    s = _open(ids, number=112, customer=1010, channel=WEB, language=ES, opened=opened)
     s.customer(opened,
                "Me están cobrando dos veces el mismo pago del celular, necesito que lo frenen "
                "ya.")  # fmt: skip
     s.opened_notice(opened)
     s.wait_in_queue(opened)
     s.customer(t - timedelta(minutes=4), "¿Alguien me puede atender?")
+    s.prioritize(t - timedelta(minutes=3), CasePriority.HIGH, by=LUCIA, role=ActorRole.SUPERVISOR)
     return s
 
 

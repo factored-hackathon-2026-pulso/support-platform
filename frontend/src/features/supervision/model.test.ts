@@ -38,7 +38,8 @@ import {
   assignSubmitLabel,
   assignedToastTitle,
   atRiskCount,
-  caseRowLine,
+  casePriorityFact,
+  caseRowFacts,
   countByFilter,
   customerSeesCopy,
   describeAssignFailure,
@@ -168,7 +169,17 @@ describe('analyst figures at a pinned now', () => {
   it('describes an analyst and her case rows', () => {
     expect(languagesLabel(['es', 'pt'])).toBe('español, portugués')
     expect(analystSheetDescription(julian)).toBe('En pausa · español · Equipo Andes')
-    expect(caseRowLine(julianCamila)).toBe('Prioridad media · App · español')
+    // Slice 8: facts, no dot-joined line; the priority is its own glyph in the status cell.
+    expect(caseRowFacts(julianCamila)).toEqual([
+      { key: 'channel', icon: 'smartphone', text: 'App', label: 'Canal', iconOnly: true },
+      { key: 'language', icon: 'languages', text: 'Español', label: 'Idioma' },
+    ])
+    expect(casePriorityFact(julianCamila)).toEqual({
+      icon: 'priority-medium',
+      text: 'Prioridad media',
+      iconOnly: true,
+    })
+    expect(casePriorityFact({ priority: 'none' }).text).toBe('Sin prioridad')
   })
 })
 

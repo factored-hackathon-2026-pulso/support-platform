@@ -389,6 +389,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/cases/{caseId}/priority': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Set the case priority (the assignee, or supervision on any open case)
+     * @description Slice 8. Checks in this order: the case exists (404) · the caller is its assignee analyst or a supervisor (403 `case_not_assigned`) · it is not closed (409 `case_closed`) · it already has that priority (200, `changed: false`, nothing happens) · it is still at `expectedVersion` (409 `version_conflict`, with the case now as `current`). Records `case.priority_changed` `{from, to}`; the first-response SLA does not change.
+     */
+    put: operations['cases_change_priority']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/cases/{caseId}/read': {
     parameters: {
       query?: never
@@ -1124,6 +1144,11 @@ export interface components {
        * @description The caller is a supervisor and the case is open ("Asignar"/"Reasignar").
        */
       canAssign: boolean
+      /**
+       * Canchangepriority
+       * @description Slice 8: the caller is the assignee analyst or a supervisor, and the case is open (PUT /cases/{caseId}/priority).
+       */
+      canChangePriority: boolean
       /** Canclose */
       canClose: boolean
       /** Canreply */
@@ -1225,10 +1250,22 @@ export interface components {
     }
     /**
      * CasePriority
-     * @description Drives the first-response SLA target. Live cases open as ``medium``.
+     * @description How urgent a case is, as staff judge it (slice 8). The levels follow the dataset's
+     *     ``complaints.priority`` (Low, Medium, High, Critical) plus ``none``: every case opens
+     *     with ``none`` and its analyst or supervision sets it (``ChangeCasePriority``). It does
+     *     not drive the first-response SLA (a fixed target, ``SlaPolicy``).
      * @enum {string}
      */
-    CasePriority: 'low' | 'medium' | 'high'
+    CasePriority: 'none' | 'low' | 'medium' | 'high' | 'critical'
+    /** CasePriorityResult */
+    CasePriorityResult: {
+      case: components['schemas']['CaseSummary']
+      /**
+       * Changed
+       * @description false: the case already had that priority (no event).
+       */
+      changed: boolean
+    }
     /**
      * CaseRating
      * @description The customer's rating of a closed case: 1 Mal · 2 Regular · 3 Bien · 4 Excelente.
@@ -1295,6 +1332,7 @@ export interface components {
        * @description The closed case this one continues ("Volvió a escribir").
        */
       previousCaseId: string | null
+      /** @description Slice 8: `none` until the assignee or supervision sets it. */
       priority: components['schemas']['CasePriority']
       /** @description The customer's rating (slice 7); only on a closed case, null until rated. */
       rating: components['schemas']['CaseRating'] | null
@@ -1312,6 +1350,15 @@ export interface components {
        * @description Realtime: apply only when newer than the cached one.
        */
       version: number
+    }
+    /** ChangePriorityRequest */
+    ChangePriorityRequest: {
+      /**
+       * Expectedversion
+       * @description The case `version` the caller saw (stale → `version_conflict`).
+       */
+      expectedVersion: number
+      priority: components['schemas']['CasePriority']
     }
     /** CloseCaseRequest */
     CloseCaseRequest: {
@@ -2008,7 +2055,7 @@ export interface components {
       code: components['schemas']['ProblemCode']
       /**
        * Current
-       * @description version_conflict: the record as its GET returns it now (AdminUser or AdminTeam).
+       * @description version_conflict: the record as its GET returns it now (AdminUser or AdminTeam; CaseSummary for a case priority, slice 8).
        * @default null
        */
       current: {
@@ -3950,6 +3997,77 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_change_priority: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ChangePriorityRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CasePriorityResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
       422: {
         headers: {
           [name: string]: unknown

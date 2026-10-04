@@ -138,7 +138,8 @@ def closed_order(item: CaseSummaryView) -> tuple[datetime, str]:
 
 def capabilities_for(case: Case, actor: Actor) -> CaseCapabilitiesView:
     """What the caller may do: reply and close as the assignee (never a supervisor as such),
-    assign or reassign as a supervisor while the case is open."""
+    assign or reassign as a supervisor while the case is open, change the priority as either
+    (slice 8)."""
     is_assignee = case.is_assignee(actor.staff_id)
     reason: ReplyBlockedReason | None = None
     if not is_assignee:
@@ -150,7 +151,16 @@ def capabilities_for(case: Case, actor: Actor) -> CaseCapabilitiesView:
         reply_blocked_reason=reason,
         can_close=is_assignee and case.status in CLOSABLE_STATUSES,
         can_assign=actor.has_any_role({StaffRole.SUPERVISOR}) and not case.is_closed,
+        can_change_priority=can_change_priority(case, actor),
     )
+
+
+def can_change_priority(case: Case, actor: Actor) -> bool:
+    """Slice 8: the assignee (as Analista) or Supervisión (any case), while it is open."""
+    if case.is_closed:
+        return False
+    is_assignee = case.is_assignee(actor.staff_id) and actor.has_any_role({StaffRole.ANALYST})
+    return is_assignee or actor.has_any_role({StaffRole.SUPERVISOR})
 
 
 def customer_of(customer: Customer) -> CaseCustomerView:

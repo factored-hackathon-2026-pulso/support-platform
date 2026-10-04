@@ -153,6 +153,7 @@ def test_case_detail_for_the_assignee(client: TestClient, daniela: dict[str, str
         "replyBlockedReason": None,
         "canClose": True,
         "canAssign": False,
+        "canChangePriority": True,
     }
     portuguese = client.get(f"/api/v1/cases/{LARISSA}", headers=daniela).json()
     assert portuguese["assignment"]["policyRuleId"] == "H1"
@@ -172,6 +173,7 @@ def test_closed_case_detail(client: TestClient, daniela: dict[str, str]) -> None
         "replyBlockedReason": "closed",
         "canClose": False,
         "canAssign": False,
+        "canChangePriority": False,
     }
 
 
@@ -239,6 +241,7 @@ def test_history_access_is_read_only(
         "replyBlockedReason": "not_assignee",
         "canClose": False,
         "canAssign": False,
+        "canChangePriority": False,
     }
     turns = client.get(f"/api/v1/cases/{PATRICIA_OLD}/turns", headers=daniela).json()
     assert [t["authorName"] for t in turns["items"] if t["authorRole"] == "analyst"] == [
@@ -401,6 +404,7 @@ def test_close_with_every_reason(client: TestClient, daniela: dict[str, str], re
         "replyBlockedReason": "closed",
         "canClose": False,
         "canAssign": False,
+        "canChangePriority": False,
     }
 
 

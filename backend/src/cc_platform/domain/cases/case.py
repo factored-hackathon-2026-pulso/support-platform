@@ -9,14 +9,17 @@ State machine (slice 2 contract §2.3; explicit transitions, anything else raise
     assigned | in_progress ──▶ assigned (a supervisor reassigns it to another analyst)
     assigned | in_progress ──▶ closed   (the assignee closes with a reason; terminal)
     closed ──▶ closed + rating          (its customer rates it once, slice 7; no transition)
+    open (not closed) ──▶ same + priority (the assignee or supervision sets it, slice 8;
+                                          no transition, never on a closed case)
 
 A closed case never reopens: the customer's next message opens a new case linked through
 ``previous_case_id``. Every transition records a domain event; the optimistic ``version``
 makes concurrent transitions lose instead of overwrite, and also serialises turn sequence
 numbers (a turn is appended in the same Unit of Work as the save).
 
-First-response SLA: ``sla_due_at`` is the first-response due time; the first analyst
-message sets ``first_response_at`` once and records ``case.first_responded``.
+First-response SLA: ``sla_due_at`` is the first-response due time (a fixed target since
+slice 8, whatever the priority); the first analyst message sets ``first_response_at`` once
+and records ``case.first_responded``.
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ from cc_platform.domain.cases.events import (
     CaseClosed,
     CaseFirstResponded,
     CaseOpened,
+    CasePriorityChanged,
     CaseQueued,
     CaseRated,
     CaseRead,
@@ -474,6 +478,32 @@ class Case(AggregateRoot):
             )
         )
         self._change_status(CaseStatus.CLOSED, at=at, actor=actor, reason="closed")
+
+    # ------------------------------------------------------------------ priority (slice 8)
+    def change_priority(self, *, actor: ActorRef, priority: CasePriority, at: datetime) -> bool:
+        """Set the priority of an open case (who may do it is the use case's rule).
+
+        A closed case is read-only (``case_closed``). The same priority is a no-op (False,
+        no event). Otherwise records ``case.priority_changed`` ``{from, to}``; the status
+        and the first-response SLA do not change.
+        """
+        if self.is_closed:
+            raise CaseClosedError()
+        if priority is self.priority:
+            return False
+        previous = self.priority
+        self.priority = priority
+        self._record(
+            CasePriorityChanged(
+                occurred_at=at,
+                actor=actor,
+                entity_id=self.id,
+                case_id=self.id,
+                from_priority=previous.value,
+                to_priority=priority.value,
+            )
+        )
+        return True
 
     # ------------------------------------------------------------------ rating (slice 7)
     def rate(

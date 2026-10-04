@@ -9,12 +9,14 @@ export { availabilityKeys, caseKeys } from './api'
 export { useAvailabilityPresence, useToReplyCount } from './hooks/use-analyst-shell'
 export { applyCaseSummaryToInboxes, readCaseSummary, registerCasesRealtime } from './realtime'
 export {
+  CASE_PRIORITY,
   CASE_STATUS,
   CLOSE_REASONS,
   INBOX_FILTERS,
   OPEN_CASE_STATUS,
   caseCardFacts,
   caseLifecycleStatus,
+  casePriority,
   caseStatus,
   channelFact,
   channelLabel,
@@ -28,11 +30,12 @@ export {
   inboxStatusFromSlug,
   inboxStatusMeta,
   isNewerCase,
+  isUrgentPriority,
+  PRIORITY_OPTIONS,
   RATING_SCALE,
   priorityFact,
   priorityLabel,
-  ratedByCustomerLabel,
-  ratedShortLabel,
+  priorityMenuLabel,
   ratingFact,
   ratingLabel,
   ratingOption,
@@ -42,6 +45,7 @@ export {
   urgencyGroup,
 } from './model'
 export type {
+  CasePriorityConfig,
   CaseStatusConfig,
   CaseStatusKey,
   CloseReasonOption,

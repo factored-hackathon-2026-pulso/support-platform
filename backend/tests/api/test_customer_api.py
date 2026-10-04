@@ -205,7 +205,7 @@ def test_live_round_trip_customer_to_analyst_and_back(
     assert case_id in [item["id"] for item in inbox["items"]]
     detail = client.get(f"/api/v1/cases/{case_id}", headers=daniela).json()
     assert detail["assignment"]["policyRuleId"] == "H1"  # rule 3
-    assert detail["case"]["priority"] == "medium"
+    assert detail["case"]["priority"] == "none"  # every case opens without one (slice 8)
     assert detail["case"]["slaDueAt"] == "2026-10-02T14:15:00Z"
 
     answer_id = str(uuid.uuid4())

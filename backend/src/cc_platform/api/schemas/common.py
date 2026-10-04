@@ -105,7 +105,8 @@ class ProblemDetails(ApiModel):
     current: dict[str, Any] | None = Field(
         default=None,
         description=(
-            "version_conflict: the record as its GET returns it now (AdminUser or AdminTeam)."
+            "version_conflict: the record as its GET returns it now (AdminUser or AdminTeam; "
+            "CaseSummary for a case priority, slice 8)."
         ),
     )
     action: SelfChangeAction | None = Field(

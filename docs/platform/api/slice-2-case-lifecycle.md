@@ -368,7 +368,7 @@ The WebSocket `case:<id>` topic stays assignee-or-supervisor. History viewers do
 
 ### 4.5 First-response SLA
 
-- **Due time:** `sla_due_at = opened_at + target(priority)`. `SlaPolicy` (Strategy) uses team-generated targets: `high` 5 min · `medium` 15 min · `low` 60 min.
+- **Due time:** `sla_due_at = opened_at + target(priority)`. `SlaPolicy` (Strategy) uses team-generated targets: `high` 5 min · `medium` 15 min · `low` 60 min. **Superseded by slice 8:** one fixed 15-minute target for every case (`slice-8-priority.md` §2).
 - **Met or missed:** the first `analyst` message sets `first_response_at` and records `case.first_responded` (`sla_met = first_response_at ≤ sla_due_at`). The SLA then **stops** for the case. A customer who writes again later starts no new SLA.
 - **"SLA x" is computed in the frontend** (`formatSla(summary, now)`, ticking every 30 s):
   - It returns `null` (no tag) when `firstResponseAt` is set or the case is closed.

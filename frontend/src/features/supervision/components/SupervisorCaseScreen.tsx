@@ -12,6 +12,7 @@ import {
 } from '@/components/ui'
 import {
   CaseHistorySheet,
+  CasePriorityControl,
   ConversationPane,
   shortCaseId,
   useCaseDetail,
@@ -36,8 +37,8 @@ export interface SupervisorCaseScreenProps {
 /**
  * The supervisor's read-only view of any case (contract §8.5): the Workspace
  * conversation in supervision mode (never a composer, a read cursor or "Cerrar
- * caso", even on her own case), "Casos anteriores", and "Asignar" / "Reasignar"
- * while the case is open. Opening it is audited by the server (`case.viewed`).
+ * caso", even on her own case), "Casos anteriores", the priority menu (slice 8) and
+ * "Asignar" / "Reasignar" while the case is open. Opening it is audited by the server (`case.viewed`).
  */
 export function SupervisorCaseScreen({
   caseId,
@@ -66,7 +67,7 @@ export function SupervisorCaseScreen({
     [onStateChange],
   )
 
-  const headerActions =
+  const assignAction =
     summary && canAssign ? (
       summary.status === 'queued' ? (
         <Button variant="primary" onClick={openAssign}>
@@ -78,6 +79,14 @@ export function SupervisorCaseScreen({
         </Button>
       )
     ) : null
+  // Slice 8: supervision sets the priority of any open case from here (the menu), and
+  // reads it on a closed one (glyph + word).
+  const headerActions = detail.data ? (
+    <>
+      <CasePriorityControl detail={detail.data} align="end" className="mr-1" />
+      {assignAction}
+    </>
+  ) : null
 
   return (
     <div className="flex h-full min-h-0 flex-col">

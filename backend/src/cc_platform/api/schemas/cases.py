@@ -26,6 +26,7 @@ from cc_platform.application.cases.dto import (
     TurnPageView,
     TurnView,
 )
+from cc_platform.application.cases.priority import PriorityResultView
 from cc_platform.domain.cases.case import MAX_CLOSE_NOTE
 from cc_platform.domain.cases.turn import MAX_TURN_TEXT
 from cc_platform.domain.cases.values import (
@@ -83,7 +84,9 @@ class CaseSummary(ApiModel):
     customer: CustomerRef
     channel: CaseChannel
     language: Language
-    priority: CasePriority
+    priority: CasePriority = Field(
+        description="Slice 8: `none` until the assignee or supervision sets it."
+    )
     status: CaseStatus
     inbox_status: InboxStatus | None = Field(description="null while the case is queued.")
     opened_at: datetime
@@ -249,6 +252,10 @@ class CaseCapabilities(ApiModel):
     can_assign: bool = Field(
         description='The caller is a supervisor and the case is open ("Asignar"/"Reasignar").'
     )
+    can_change_priority: bool = Field(
+        description="Slice 8: the caller is the assignee analyst or a supervisor, and the case "
+        "is open (PUT /cases/{caseId}/priority)."
+    )
 
     @classmethod
     def from_view(cls, view: CaseCapabilitiesView) -> CaseCapabilities:
@@ -257,6 +264,7 @@ class CaseCapabilities(ApiModel):
             reply_blocked_reason=view.reply_blocked_reason,
             can_close=view.can_close,
             can_assign=view.can_assign,
+            can_change_priority=view.can_change_priority,
         )
 
 
@@ -397,3 +405,20 @@ class CloseCaseRequest(RequestModel):
     @classmethod
     def _blank_note_is_null(cls, note: str | None) -> str | None:
         return note or None
+
+
+# ----------------------------------------------------------------------------- priority (slice 8)
+class ChangePriorityRequest(RequestModel):
+    priority: CasePriority
+    expected_version: int = Field(
+        ge=0, description="The case `version` the caller saw (stale → `version_conflict`)."
+    )
+
+
+class CasePriorityResult(ApiModel):
+    changed: bool = Field(description="false: the case already had that priority (no event).")
+    case: CaseSummary
+
+    @classmethod
+    def from_view(cls, view: PriorityResultView) -> CasePriorityResult:
+        return cls(changed=view.changed, case=CaseSummary.from_view(view.case))

@@ -13,9 +13,11 @@ import {
   closeReasonLabel,
   countryName,
   isNewerCase,
-  priorityLabel,
+  casePriority,
+  ratingFact,
   ratingOption,
   slaFact,
+  type CasePriority,
   type CaseRating,
   type CloseReason,
 } from '@/features/cases/core'
@@ -282,17 +284,16 @@ export function noticeLabel(item: TranscriptItem): string {
 // ── Header ──────────────────────────────────────────────────────────────────
 
 /**
- * Header meta line (contract §9.3): "Colombia · Barranquilla · chat web ·
- * prioridad media"; a Portuguese case ends "· en portugués" instead (rule 3: the
- * only cue outside the transcript that the reply must be in Portuguese).
+ * Header meta line of the supervisor view (contract §9.3): "Colombia · Barranquilla ·
+ * chat web"; a Portuguese case ends "· en portugués" (rule 3: the only cue outside the
+ * transcript that the reply must be in Portuguese). Slice 8: the priority left the line;
+ * it is a control of its own (the priority menu in the header).
  */
 export function caseHeaderMeta(detail: Pick<CaseDetail, 'case' | 'customer'>): string {
   const { case: summary, customer } = detail
-  const last =
-    summary.language === 'pt' ? 'en portugués' : priorityLabel(summary.priority).toLowerCase()
-  return [countryName(customer.country), customer.city, channelPhrase(summary.channel), last].join(
-    ' · ',
-  )
+  const parts = [countryName(customer.country), customer.city, channelPhrase(summary.channel)]
+  if (summary.language === 'pt') parts.push('en portugués')
+  return parts.join(' · ')
 }
 
 /**
@@ -523,6 +524,8 @@ export interface FileRow {
   status?: StatusAppearance
   /** The customer's rating, with its face, as a colored pill. */
   pill?: { label: string; tone: Tone; icon?: FactIcon }
+  /** The case priority (slice 8): the menu when the viewer may change it, else glyph + word. */
+  priority?: CasePriority
   /** Short facts as the value ("Primera respuesta"). */
   facts?: FactItem[]
 }
@@ -541,12 +544,6 @@ export function customerRows(detail: Pick<CaseDetail, 'customer'>): FileRow[] {
     { key: 'language', icon: 'languages', label: 'Idioma', text: languageName(customer.language) },
     { key: 'id', icon: 'id', label: 'Id de cliente', text: customer.id, mono: true },
   ]
-}
-
-const PRIORITY_VALUE: Record<CaseSummary['priority'], string> = {
-  low: 'Baja',
-  medium: 'Media',
-  high: 'Alta',
 }
 
 /**
@@ -588,7 +585,13 @@ export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | 
       label: 'Canal',
       text: channelName(summary.channel),
     },
-    { key: 'priority', icon: 'flag', label: 'Prioridad', text: PRIORITY_VALUE[summary.priority] },
+    {
+      key: 'priority',
+      icon: 'flag',
+      label: 'Prioridad',
+      text: casePriority(summary.priority).label,
+      priority: summary.priority,
+    },
     {
       key: 'opened',
       icon: 'calendar-clock',
@@ -786,28 +789,20 @@ export function footerFacts(
 }
 
 /**
- * A row of "Casos anteriores" as facts: [calendar] date, [user] who, and (slice 7)
- * the customer's rating as [face] "Calificó: Excelente". The reason of a closed
- * case, or the status of an open one (`caseLifecycleStatus`), is drawn before them.
+ * A row of "Casos anteriores" as facts: [calendar] date, [user] who, and (slice 7) the
+ * customer's rating as the colored face alone (slice 8: tooltip and accessible text
+ * "Calificación: Excelente"). The reason of a closed case, or the status of an open one
+ * (`caseLifecycleStatus`), is drawn before them.
  */
 export function historyItemFacts(
   item: Pick<CaseHistoryItem, 'openedAt' | 'analystName'> &
     Partial<Pick<CaseHistoryItem, 'rating'>>,
 ): FactItem[] {
-  const rating = item.rating ? ratingOption(item.rating.score) : null
+  const rating = ratingFact(item.rating)
   return [
     { key: 'date', icon: 'calendar', text: formatDate(item.openedAt), label: 'Abierto' },
     { key: 'analyst', icon: 'user', text: item.analystName ?? 'Sin asignar' },
-    ...(rating
-      ? [
-          {
-            key: 'rating',
-            icon: rating.icon,
-            text: `Calificó: ${rating.label}`,
-            tone: rating.textTone,
-          },
-        ]
-      : []),
+    ...(rating ? [rating] : []),
   ]
 }
 
@@ -832,6 +827,51 @@ export function historySheetTitle(customerName: string): string {
 /** Shown under the list when the server capped it (it returns at most 20). */
 export function historyTruncatedNote(shown: number, total: number): string | null {
   return total > shown ? 'Se muestran los 20 más recientes.' : null
+}
+
+// ── Priority (slice 8) ───────────────────────────────────────────────────────
+
+/** The toast after a priority change failed (the menu shows the previous level again). */
+export function describePriorityFailure(error: unknown): { title: string; description: string } {
+  const title = 'No pudimos cambiar la prioridad'
+  if (!isApiProblem(error)) return { title, description: 'Inténtalo de nuevo.' }
+  switch (error.code) {
+    case 'version_conflict': {
+      const current = error.extensions.current
+      const priority =
+        typeof current === 'object' && current !== null && 'priority' in current
+          ? (current.priority as CasePriority)
+          : null
+      return {
+        title,
+        description: priority
+          ? `Alguien más la cambió: ahora es ${casePriority(priority).label}.`
+          : 'Alguien más la cambió mientras elegías.',
+      }
+    }
+    case 'case_closed':
+      return { title, description: 'El caso ya está cerrado.' }
+    case 'case_not_assigned':
+    case 'forbidden':
+      return { title, description: 'Ya no puedes cambiar la prioridad de este caso.' }
+    case 'network_error':
+      return { title, description: 'Revisa tu conexión e inténtalo de nuevo.' }
+    default:
+      return { title, description: 'Inténtalo de nuevo.' }
+  }
+}
+
+/** The case of a `version_conflict` (`current`), when it is a case summary. */
+export function conflictCurrentCase(error: unknown): CaseSummary | null {
+  if (!isApiProblem(error) || error.code !== 'version_conflict') return null
+  const current = error.extensions.current
+  if (typeof current !== 'object' || current === null) return null
+  const record = current as Record<string, unknown>
+  return typeof record.id === 'string' &&
+    typeof record.version === 'number' &&
+    typeof record.priority === 'string'
+    ? (current as CaseSummary)
+    : null
 }
 
 // ── Close dialog (contract §4.4, §9.5) ──────────────────────────────────────

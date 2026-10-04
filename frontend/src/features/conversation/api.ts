@@ -1,14 +1,16 @@
 /**
  * Conversation calls (docs/platform/api/slice-2-case-lifecycle.md §5.1): case
- * detail, turns, analyst replies, read cursor, close and the customer's other
- * cases ("Casos anteriores"). The only module of the feature that
+ * detail, turns, analyst replies, read cursor, close, the customer's other
+ * cases ("Casos anteriores") and (slice 8) the priority. The only module of the feature that
  * talks to the API client; tests mock it with `vi.mock('@/features/conversation/api')`.
  */
 import { api, unwrap } from '@/lib/api'
 import type {
   CaseDetail,
   CaseHistory,
+  CasePriorityResult,
   CaseSummary,
+  ChangePriorityRequest,
   CloseCaseRequest,
   PostAnalystTurnRequest,
   PostTurnResponse,
@@ -27,6 +29,7 @@ export const conversationMutationKeys = {
   send: (caseId: string) => ['conversation', caseId, 'send'] as const,
   read: (caseId: string) => ['conversation', caseId, 'read'] as const,
   close: (caseId: string) => ['conversation', caseId, 'close'] as const,
+  priority: (caseId: string) => ['conversation', caseId, 'priority'] as const,
 }
 
 /** GET /cases/{caseId}: case, customer, assignment ("Cómo llegó a ti"), closure, capabilities. */
@@ -95,4 +98,15 @@ export async function closeCase(caseId: string, body: CloseCaseRequest): Promise
  */
 export async function fetchCaseHistory(caseId: string, signal?: AbortSignal): Promise<CaseHistory> {
   return unwrap(api.GET('/api/v1/cases/{caseId}/history', { params: { path: { caseId } }, signal }))
+}
+
+/**
+ * PUT /cases/{caseId}/priority (slice 8): the assignee or supervision. The same level is a
+ * no-op (`changed: false`); a stale `expectedVersion` is `version_conflict` with `current`.
+ */
+export async function changeCasePriority(
+  caseId: string,
+  body: ChangePriorityRequest,
+): Promise<CasePriorityResult> {
+  return unwrap(api.PUT('/api/v1/cases/{caseId}/priority', { params: { path: { caseId } }, body }))
 }

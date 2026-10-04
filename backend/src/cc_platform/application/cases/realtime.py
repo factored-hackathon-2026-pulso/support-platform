@@ -11,7 +11,8 @@ schemas the REST endpoints return), so socket and REST cannot drift.
 - ``case.updated`` → ``case:<id>`` and ``inbox:<assignee>`` (``CaseSummary``), after
   turn.created, case.assigned, case.status_changed, case.read, case.first_responded,
   case.closed (a close moves the card to Cerrados: ``inboxStatus = closed``), case.rated
-  (slice 7: the closed card and the read-only footer show the customer's rating). One envelope
+  (slice 7: the closed card and the read-only footer show the customer's rating),
+  case.priority_changed (slice 8: the card flag, the ficha, the supervisor view). One envelope
   published to both topics at once, so a socket subscribed to both receives it once.
 - ``case.assigned`` → ``inbox:<assignee>`` (``CaseSummary``). A reassignment (slice 3) also
   sends ``case.unassigned`` (``CaseSummary``), ``case.updated`` and her fresh
@@ -58,6 +59,7 @@ from cc_platform.domain.cases.events import (
     CaseClosed,
     CaseFirstResponded,
     CaseOpened,
+    CasePriorityChanged,
     CaseQueued,
     CaseRated,
     CaseRead,
@@ -98,6 +100,7 @@ _CASE_UPDATING = (
     CaseFirstResponded,
     CaseClosed,
     CaseRated,
+    CasePriorityChanged,
 )
 _CONVERSATION_UPDATING = (
     CaseOpened,

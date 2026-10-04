@@ -74,7 +74,7 @@ async def test_seed_links_first_responses_and_closures() -> None:
     assert hector is not None
     assert hector.closure is not None
     assert hector.closure.note == "Pregunta por un crédito hipotecario."
-    assert (hector.sla_due_at - hector.opened_at).total_seconds() == 60 * 60  # low priority
+    assert (hector.sla_due_at - hector.opened_at).total_seconds() == 15 * 60  # one fixed target
 
 
 async def test_seeding_is_idempotent_and_nobody_starts_available() -> None:

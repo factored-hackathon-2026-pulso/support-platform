@@ -3,7 +3,7 @@ import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CasesApi from '@/features/cases/api'
 import { fetchAvailability, fetchInbox, updateAvailability } from '@/features/cases/api'
-import { CaseListPanel, type InboxStatus } from '@/features/cases'
+import { CaseListPanel, type CaseSummary, type InboxStatus } from '@/features/cases'
 import { ApiProblem } from '@/lib/api'
 import {
   NOW,
@@ -214,9 +214,12 @@ describe('CaseListPanel', () => {
       'button',
       { name: /Héctor Villarreal Garza/ },
     )
-    // Icon-only and secondary: its name is in the card's name, the tooltip shows the word.
+    // Icon-only and secondary: its name is in the card's name; slice 8: the tooltip says
+    // "Calificación: Bien" too (the face alone on the card, no word).
     expect(hector).toHaveAccessibleName(/Calificación: Bien/)
-    expect(within(hector).getByText('Calificación: Bien')).toHaveClass('sr-only')
+    const named = within(hector).getAllByText('Calificación: Bien')
+    expect(named.map((node) => node.className.includes('sr-only'))).toEqual([true, false])
+    expect(named[1]).toHaveAttribute('aria-hidden', 'true')
     expect(hector.querySelector('.lucide-smile')).not.toBeNull()
     expect(card(/Patricia Lozano Vega/)).toHaveAccessibleName(/Calificación: Excelente/)
     expect(card(/Patricia Lozano Vega/).querySelector('.lucide-laugh')).not.toBeNull()
@@ -225,6 +228,37 @@ describe('CaseListPanel', () => {
     expect(claudia).not.toHaveAccessibleName(/Calificación/)
     // Never a dot-joined line.
     expect(hector.textContent).not.toContain('·')
+  })
+
+  it('flags a high or critical priority with its glyph, icon-only (slice 8)', async () => {
+    const inbox = makeInbox()
+    const levels: Record<string, CaseSummary['priority']> = {
+      'Marcela Quintana Pardo': 'critical',
+      'Beatriz Salcedo Prieto': 'high',
+      'Joaquín Ferreyra Paz': 'medium',
+    }
+    vi.mocked(fetchInbox).mockResolvedValue({
+      ...inbox,
+      items: inbox.items.map((item) => ({
+        ...item,
+        priority: levels[item.customer.displayName] ?? 'none',
+      })),
+    })
+    renderPanel()
+    const marcela = await within(await screen.findByRole('list', { name: 'Casos' })).findByRole(
+      'button',
+      { name: /Marcela Quintana Pardo/ },
+    )
+    expect(marcela).toHaveAccessibleName(/Prioridad crítica/)
+    expect(marcela.querySelector('svg[data-priority="critical"]')).not.toBeNull()
+    const beatriz = card(/Beatriz Salcedo Prieto/)
+    expect(beatriz).toHaveAccessibleName(/Prioridad alta/)
+    expect(beatriz.querySelector('svg[data-priority="high"]')).not.toBeNull()
+    // The tooltip says it; the card shows only the glyph.
+    expect(within(beatriz).getAllByText('Prioridad alta')[1]).toHaveAttribute('aria-hidden', 'true')
+    // Medium and none stay off the card.
+    expect(card(/Joaquín Ferreyra Paz/).querySelector('svg[data-priority]')).toBeNull()
+    expect(card(/Larissa Monteiro Alves/)).not.toHaveAccessibleName(/Prioridad|Sin prioridad/)
   })
 
   it('says when no case was closed in the last 7 days', async () => {

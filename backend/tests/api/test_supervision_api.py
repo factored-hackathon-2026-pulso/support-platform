@@ -242,6 +242,7 @@ def test_reassignment_keeps_the_previous_analyst_reading(
         "replyBlockedReason": "not_assignee",
         "canClose": False,
         "canAssign": False,
+        "canChangePriority": False,
     }
     cmid = str(uuid.uuid4())
     write = client.post(

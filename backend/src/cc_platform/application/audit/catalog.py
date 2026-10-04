@@ -19,7 +19,12 @@ from enum import StrEnum
 from cc_platform.application.cases import copy
 from cc_platform.application.events import StoredEvent
 from cc_platform.application.people.admin import copy as admin_copy
-from cc_platform.domain.cases.values import LANGUAGE_RULE_ID, AssignmentReason, CloseReason
+from cc_platform.domain.cases.values import (
+    LANGUAGE_RULE_ID,
+    AssignmentReason,
+    CasePriority,
+    CloseReason,
+)
 from cc_platform.domain.people.staff import Language
 from cc_platform.domain.shared.json import JsonObject
 
@@ -44,6 +49,7 @@ FAMILY: Mapping[str, AuditFamily] = {
     "case.first_responded": AuditFamily.CONVERSATION,
     "case.closed": AuditFamily.LIFECYCLE,
     "case.rated": AuditFamily.LIFECYCLE,
+    "case.priority_changed": AuditFamily.LIFECYCLE,
     "case.viewed": AuditFamily.ACCESS,
     "turn.created": AuditFamily.CONVERSATION,
     "staff.availability_changed": AuditFamily.AVAILABILITY,
@@ -85,6 +91,7 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "case.status_changed",
         "case.closed",
         "case.rated",
+        "case.priority_changed",
         "staff.availability_changed",
         "auth.account_locked",
         *ADMINISTRATION_TYPES,
@@ -222,6 +229,25 @@ def _case_rated(event: StoredEvent, _names: AuditNames) -> str:
     score = _int(event.payload, "score")
     label = RATING_LABEL.get(score or 0)
     return f"El cliente calificó el caso: {label}" if label else "El cliente calificó el caso"
+
+
+#: Slice 8: the priority levels in words (the frontend uses the same ones, ``CASE_PRIORITY``).
+PRIORITY_LABEL: Mapping[str, str] = {
+    CasePriority.NONE.value: "Sin prioridad",
+    CasePriority.LOW.value: "Baja",
+    CasePriority.MEDIUM.value: "Media",
+    CasePriority.HIGH.value: "Alta",
+    CasePriority.CRITICAL.value: "Crítica",
+}
+
+
+def _case_priority_changed(event: StoredEvent, _names: AuditNames) -> str:
+    """Next to the actor: "Daniela Ríos · Cambió la prioridad a Alta"."""
+    to = _text(event.payload, "to")
+    if to == CasePriority.NONE.value:
+        return "Quitó la prioridad"
+    label = PRIORITY_LABEL.get(to or "")
+    return f"Cambió la prioridad a {label}" if label else "Cambió la prioridad"
 
 
 def _case_viewed(_event: StoredEvent, _names: AuditNames) -> str:
@@ -389,6 +415,7 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "case.first_responded": _case_first_responded,
     "case.closed": _case_closed,
     "case.rated": _case_rated,
+    "case.priority_changed": _case_priority_changed,
     "case.viewed": _case_viewed,
     "turn.created": _turn_created,
     "staff.availability_changed": _availability_changed,

@@ -138,6 +138,8 @@ class CaseCapabilitiesView:
     can_close: bool
     can_assign: bool
     """The caller holds ``supervisor`` and the case is not closed ("Asignar"/"Reasignar")."""
+    can_change_priority: bool
+    """The caller is the assignee analyst or holds ``supervisor``, and the case is open."""
 
 
 @dataclass(frozen=True, slots=True)

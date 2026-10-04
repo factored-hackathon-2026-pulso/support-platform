@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SidePanel } from '@/components/layout'
 import { ApiProblem } from '@/lib/api'
@@ -15,7 +15,7 @@ import {
 import { analystStaff } from '@/test/fixtures'
 import { renderWithProviders } from '@/test/render'
 import * as api from '../api'
-import type { CaseDetail } from '../types'
+import type { CaseDetail, CasePriorityResult } from '../types'
 import { ConversationPane } from './ConversationPane'
 import { CustomerFile } from './CustomerFile'
 
@@ -27,6 +27,7 @@ vi.mock('../api', async (importOriginal) => {
     fetchTurns: vi.fn<typeof actual.fetchTurns>(),
     fetchCaseHistory: vi.fn<typeof actual.fetchCaseHistory>(),
     markCaseRead: vi.fn<typeof actual.markCaseRead>(),
+    changeCasePriority: vi.fn<typeof actual.changeCasePriority>(),
   }
 })
 
@@ -112,7 +113,12 @@ describe('CustomerFile ("Ficha del cliente")', () => {
     expect(panel.textContent).not.toContain('·')
     const thisCase = within(panel).getByRole('region', { name: 'Este caso' })
     expect(thisCase).toHaveTextContent('CanalChat web')
-    expect(thisCase).toHaveTextContent('PrioridadMedia')
+    // Slice 8: the priority is a menu button (the assignee may change it).
+    expect(
+      within(thisCase).getByRole('button', {
+        name: 'Prioridad: Media. Cambiar la prioridad',
+      }),
+    ).toHaveTextContent('Media')
     const status = within(thisCase).getByText('Por responder').parentElement!
     expect(status).not.toHaveClass('bg-warn-soft')
     expect(status.querySelector('svg')).toHaveAttribute('data-status-shape', 'pie-75')
@@ -130,11 +136,12 @@ describe('CustomerFile ("Ficha del cliente")', () => {
     // Each closed case shows its reason's icon and tone.
     expect(list.querySelectorAll('[data-reason="resolved"]')).toHaveLength(2)
     // …and how the customer rated it (slice 7).
-    expect(within(list).getByRole('button', { name: /Daniela Ríos/ })).toHaveTextContent(
-      'Calificó: Excelente',
-    )
-    expect(within(list).getByRole('button', { name: /Julián Ortega/ })).toHaveTextContent(
-      'Calificó: Bien',
+    // Slice 8: the face alone, named "Calificación: …" (tooltip and accessible text).
+    const danielas = within(list).getByRole('button', { name: /Daniela Ríos/ })
+    expect(danielas).toHaveAccessibleName(/Calificación: Excelente/)
+    expect(danielas).not.toHaveTextContent(/Calificó/)
+    expect(within(list).getByRole('button', { name: /Julián Ortega/ })).toHaveAccessibleName(
+      /Calificación: Bien/,
     )
     await user.click(within(list).getByRole('button', { name: /Julián Ortega/ }))
     expect(
@@ -229,5 +236,147 @@ describe('CustomerFile ("Ficha del cliente")', () => {
     )
     expect(await screen.findByText('No pudimos cargar la conversación')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+})
+
+describe('priority in "Este caso" (slice 8)', () => {
+  async function openFile() {
+    const rendered = renderWithProviders(<Harness />, { staff: analystStaff })
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Ver ficha de Marcela Quintana Pardo' }),
+    )
+    const thisCase = screen.getByRole('region', { name: 'Este caso' })
+    return { ...rendered, thisCase }
+  }
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    let reject!: (reason: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  it('changes it from the menu with the keyboard, at once and then from the server', async () => {
+    const answer = deferred<CasePriorityResult>()
+    vi.mocked(api.changeCasePriority).mockReturnValue(answer.promise)
+    const { user, thisCase } = await openFile()
+    const trigger = within(thisCase).getByRole('button', {
+      name: 'Prioridad: Media. Cambiar la prioridad',
+    })
+    expect(trigger.querySelector('svg[data-priority="medium"]')).not.toBeNull()
+    trigger.focus()
+    await user.keyboard('{Enter}')
+    const menu = screen.getByRole('menu', { name: 'Prioridad' })
+    expect(within(menu).getByRole('menuitemradio', { name: 'Media' })).toHaveFocus()
+    expect(within(menu).getByRole('menuitemradio', { name: 'Media' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await user.keyboard('{ArrowUp}{Enter}')
+    expect(api.changeCasePriority).toHaveBeenCalledWith(DETAIL.case.id, {
+      priority: 'high',
+      expectedVersion: DETAIL.case.version,
+    })
+    // Optimistic: the new level shows before the server answers, and the focus is back.
+    const changed = within(thisCase).getByRole('button', {
+      name: 'Prioridad: Alta. Cambiar la prioridad',
+    })
+    expect(changed).toHaveFocus()
+    answer.resolve({
+      changed: true,
+      case: { ...DETAIL.case, priority: 'high', version: DETAIL.case.version + 1 },
+    })
+    await waitFor(() => expect(api.changeCasePriority).toHaveBeenCalledTimes(1))
+    expect(
+      within(thisCase).getByRole('button', { name: 'Prioridad: Alta. Cambiar la prioridad' }),
+    ).toBeInTheDocument()
+    // The panel stayed open (Escape and Enter stayed inside the menu).
+    expect(screen.getByRole('complementary', { name: 'Ficha del cliente' })).toBeInTheDocument()
+  })
+
+  it('puts the previous level back and says why when the change fails', async () => {
+    vi.mocked(api.changeCasePriority).mockRejectedValue(
+      new ApiProblem({ status: 409, code: 'case_closed' }),
+    )
+    const { user, thisCase } = await openFile()
+    await user.click(
+      within(thisCase).getByRole('button', { name: 'Prioridad: Media. Cambiar la prioridad' }),
+    )
+    await user.click(screen.getByRole('menuitemradio', { name: 'Crítica' }))
+    expect(
+      await within(thisCase).findByRole('button', {
+        name: 'Prioridad: Media. Cambiar la prioridad',
+      }),
+    ).toBeInTheDocument()
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('No pudimos cambiar la prioridad')
+    expect(alert).toHaveTextContent('El caso ya está cerrado.')
+  })
+
+  it('sends it once more when only the version moved (a message arrived meanwhile)', async () => {
+    const moved = { ...DETAIL.case, version: DETAIL.case.version + 2 }
+    vi.mocked(api.changeCasePriority)
+      .mockRejectedValueOnce(
+        new ApiProblem({ status: 409, code: 'version_conflict', extensions: { current: moved } }),
+      )
+      .mockResolvedValueOnce({
+        changed: true,
+        case: { ...moved, priority: 'low', version: moved.version + 1 },
+      })
+    const { user, thisCase } = await openFile()
+    await user.click(
+      within(thisCase).getByRole('button', { name: 'Prioridad: Media. Cambiar la prioridad' }),
+    )
+    await user.click(screen.getByRole('menuitemradio', { name: 'Baja' }))
+    await waitFor(() => expect(api.changeCasePriority).toHaveBeenCalledTimes(2))
+    expect(api.changeCasePriority).toHaveBeenLastCalledWith(DETAIL.case.id, {
+      priority: 'low',
+      expectedVersion: moved.version,
+    })
+    expect(
+      await within(thisCase).findByRole('button', {
+        name: 'Prioridad: Baja. Cambiar la prioridad',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No pudimos cambiar la prioridad')).not.toBeInTheDocument()
+  })
+
+  it("shows someone else's change after a real conflict", async () => {
+    const theirs = {
+      ...DETAIL.case,
+      priority: 'critical' as const,
+      version: DETAIL.case.version + 1,
+    }
+    vi.mocked(api.changeCasePriority).mockRejectedValue(
+      new ApiProblem({ status: 409, code: 'version_conflict', extensions: { current: theirs } }),
+    )
+    const { user, thisCase } = await openFile()
+    await user.click(
+      within(thisCase).getByRole('button', { name: 'Prioridad: Media. Cambiar la prioridad' }),
+    )
+    await user.click(screen.getByRole('menuitemradio', { name: 'Baja' }))
+    expect(
+      await within(thisCase).findByRole('button', {
+        name: 'Prioridad: Crítica. Cambiar la prioridad',
+      }),
+    ).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Alguien más la cambió: ahora es Crítica.',
+    )
+    expect(api.changeCasePriority).toHaveBeenCalledTimes(1)
+  })
+
+  it('is glyph and word, no menu, when the viewer may not change it', async () => {
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue({
+      ...makeClosedDetail(),
+      case: { ...makeClosedDetail().case, priority: 'high' },
+    })
+    const { thisCase } = await openFile()
+    expect(within(thisCase).queryByRole('button', { name: /Prioridad/ })).not.toBeInTheDocument()
+    expect(thisCase).toHaveTextContent('PrioridadAlta')
+    expect(thisCase.querySelector('svg[data-priority="high"]')).not.toBeNull()
   })
 })

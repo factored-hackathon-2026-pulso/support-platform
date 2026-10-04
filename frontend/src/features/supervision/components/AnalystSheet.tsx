@@ -1,8 +1,13 @@
-import { Button, Sheet, Stat, Status, toneBorderLeft } from '@/components/ui'
+import { Button, Fact, FactList, Sheet, Stat, Status, toneBorderLeft } from '@/components/ui'
 import { caseStatus, formatSla } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { formatRelativeTime } from '@/lib/format'
-import { RECENT_RATING_HEADER, analystSheetDescription, caseRowLine } from '../model'
+import {
+  RECENT_RATING_HEADER,
+  analystSheetDescription,
+  casePriorityFact,
+  caseRowFacts,
+} from '../model'
 import { RecentRating } from './RecentRating'
 import type { CaseSummary, TeamAnalyst } from '../types'
 import { CaseLink } from './CaseLink'
@@ -114,7 +119,8 @@ function OpenCaseRow({ summary, now, onOpenCase, onReassign }: OpenCaseRowProps)
       <span className="flex items-center justify-between gap-2 text-12 text-muted">
         <span className="flex min-w-0 items-center gap-2.5">
           <Status {...status} size="sm" className="shrink-0" />
-          <span className="truncate">{caseRowLine(summary)}</span>
+          <Fact {...casePriorityFact(summary)} />
+          <FactList items={caseRowFacts(summary)} className="min-w-0" />
         </span>
         <span className="shrink-0">{formatRelativeTime(summary.lastInteractionAt, now)}</span>
       </span>

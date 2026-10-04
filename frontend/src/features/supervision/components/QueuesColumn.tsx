@@ -1,8 +1,9 @@
-import { Button, Card, QueryState, Skeleton, type QueryLike } from '@/components/ui'
+import { Button, Card, Fact, QueryState, Skeleton, type QueryLike } from '@/components/ui'
 import { formatSla } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import {
   atRiskCount,
+  casePriorityFact,
   queueOldestWait,
   queueRiskText,
   queuedWaitLabel,
@@ -153,13 +154,16 @@ function QueuedCaseRow({ summary, now, onAssign, onOpenCase }: QueuedCaseRowProp
     <li className="flex items-center gap-3 border-b border-border-soft py-2 last:border-b-0">
       <div className="flex min-w-0 grow flex-col gap-0.5">
         <span className="flex items-baseline justify-between gap-2">
-          <CaseLink
-            caseId={summary.id}
-            onOpen={onOpenCase}
-            className="truncate text-14 font-semibold"
-          >
-            {summary.customer.displayName}
-          </CaseLink>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Fact {...casePriorityFact(summary)} />
+            <CaseLink
+              caseId={summary.id}
+              onOpen={onOpenCase}
+              className="truncate text-14 font-semibold"
+            >
+              {summary.customer.displayName}
+            </CaseLink>
+          </span>
           {sla ? (
             <span
               className={cn(

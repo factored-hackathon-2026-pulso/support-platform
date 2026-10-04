@@ -3,10 +3,10 @@
  * aliases of the schemas generated from `backend/openapi.json` (`pnpm gen:api`),
  * plus the UI-only transcript cache.
  */
-import type { CaseChannel, CaseSummary, CloseReason } from '@/features/cases/core'
+import type { CaseChannel, CasePriority, CaseSummary, CloseReason } from '@/features/cases/core'
 import type { Schemas } from '@/lib/api'
 
-export type { CaseChannel, CaseSummary, CloseReason }
+export type { CaseChannel, CasePriority, CaseSummary, CloseReason }
 
 export type Language = Schemas['Language']
 export type TurnKind = Schemas['TurnKind']
@@ -34,6 +34,9 @@ export type PostAnalystTurnRequest = Schemas['PostAnalystTurnRequest']
 export type PostTurnResponse = Schemas['PostTurnResponse']
 export type MarkReadRequest = Schemas['MarkReadRequest']
 export type CloseCaseRequest = Schemas['CloseCaseRequest']
+/** Slice 8: PUT /cases/{caseId}/priority. */
+export type ChangePriorityRequest = Schemas['ChangePriorityRequest']
+export type CasePriorityResult = Schemas['CasePriorityResult']
 
 /** A message the analyst sent that the server has not confirmed yet (optimistic UI). */
 export interface PendingMessage {

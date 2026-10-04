@@ -34,11 +34,15 @@ import {
   isNewerCounts,
   normalizeSearch,
   patchInbox,
+  CASE_PRIORITY,
+  PRIORITY_OPTIONS,
+  casePriority,
+  isUrgentPriority,
+  priorityFact,
   priorityLabel,
+  priorityMenuLabel,
   slugFromInboxStatus,
   RATING_SCALE,
-  ratedByCustomerLabel,
-  ratedShortLabel,
   ratingFact,
   ratingLabel,
   ratingOption,
@@ -186,6 +190,8 @@ describe('labels', () => {
     expect(priorityLabel('medium')).toBe('Prioridad media')
     expect(priorityLabel('low')).toBe('Prioridad baja')
     expect(priorityLabel('high')).toBe('Prioridad alta')
+    expect(priorityLabel('critical')).toBe('Prioridad crítica')
+    expect(priorityLabel('none')).toBe('Sin prioridad')
     expect(countryName('MX')).toBe('México')
     expect(countryName('BR')).toBe('Brasil')
   })
@@ -200,7 +206,7 @@ describe('labels', () => {
       ),
     ).toEqual([
       { key: 'channel', icon: 'smartphone', text: 'App', label: 'Canal', iconOnly: true },
-      { key: 'priority', icon: 'flag', text: 'Prioridad alta', tone: 'warn', iconOnly: true },
+      { key: 'priority', icon: 'priority-high', text: 'Prioridad alta', iconOnly: true },
       {
         key: 'returned',
         icon: 'history',
@@ -209,10 +215,16 @@ describe('labels', () => {
         iconOnly: true,
       },
     ])
-    // Low and medium priorities are not shown.
-    expect(caseCardFacts(makeCaseSummary({ priority: 'low' })).map((f) => f.key)).toEqual([
-      'channel',
-    ])
+    // None, low and medium are not shown on a card; critical is.
+    for (const priority of ['none', 'low', 'medium'] as const) {
+      expect(caseCardFacts(makeCaseSummary({ priority })).map((f) => f.key)).toEqual(['channel'])
+    }
+    expect(caseCardFacts(makeCaseSummary({ priority: 'critical' }))[1]).toEqual({
+      key: 'priority',
+      icon: 'priority-critical',
+      text: 'Prioridad crítica',
+      iconOnly: true,
+    })
   })
 
   it('has the five close reasons in contract order', () => {
@@ -422,6 +434,39 @@ describe('changesInboxPlacement', () => {
   })
 })
 
+describe('priority (slice 8: the one map)', () => {
+  it('has five levels with their word, glyph and menu order', () => {
+    expect(PRIORITY_OPTIONS.map((option) => [option.value, option.label, option.icon])).toEqual([
+      ['none', 'Sin prioridad', 'priority-none'],
+      ['critical', 'Crítica', 'priority-critical'],
+      ['high', 'Alta', 'priority-high'],
+      ['medium', 'Media', 'priority-medium'],
+      ['low', 'Baja', 'priority-low'],
+    ])
+    expect(Object.keys(CASE_PRIORITY).sort()).toEqual(['critical', 'high', 'low', 'medium', 'none'])
+    expect(casePriority('nope' as 'none').label).toBe('Sin prioridad')
+  })
+
+  it('flags only high and critical on cards; supervision shows every level', () => {
+    expect(
+      ['none', 'low', 'medium', 'high', 'critical'].filter((p) => isUrgentPriority(p as 'none')),
+    ).toEqual(['high', 'critical'])
+    expect(priorityFact('medium')).toBeNull()
+    expect(priorityFact('medium', { onlyUrgent: false })).toEqual({
+      key: 'priority',
+      icon: 'priority-medium',
+      text: 'Prioridad media',
+      iconOnly: true,
+    })
+    expect(priorityFact('none', { onlyUrgent: false })?.text).toBe('Sin prioridad')
+  })
+
+  it('names the menu trigger with the value and the action', () => {
+    expect(priorityMenuLabel('high')).toBe('Prioridad: Alta. Cambiar la prioridad')
+    expect(priorityMenuLabel('none')).toBe('Prioridad: Sin prioridad. Cambiar la prioridad')
+  })
+})
+
 describe('urgency order (Inicio "Lo primero" and the Casos list)', () => {
   const overdue = makeCaseSummary({
     id: 'CASE-A',
@@ -469,29 +514,55 @@ describe('urgency order (Inicio "Lo primero" and the Casos list)', () => {
     lastInteractionAt: at(-5),
   })
 
-  it('groups: SLA overdue or at risk, SLA running, no SLA, waiting for the customer', () => {
+  // Slice 8: a critical case with its SLA still running, and a high one already answered.
+  const critical = makeCaseSummary({
+    ...running,
+    id: 'CASE-I',
+    slaDueAt: at(13),
+    priority: 'critical',
+  })
+  const high = makeCaseSummary({ ...answeredRecently, id: 'CASE-J', priority: 'high' })
+  const highOverdue = makeCaseSummary({
+    ...overdue,
+    id: 'CASE-K',
+    slaDueAt: at(-1),
+    priority: 'high',
+  })
+  const criticalWaiting = makeCaseSummary({ ...waiting, id: 'CASE-L', priority: 'critical' })
+
+  it('groups: overdue, critical, high, SLA running, no SLA, waiting for the customer', () => {
     expect(urgencyGroup(overdue, NOW)).toBe(0)
-    expect(urgencyGroup(atRisk, NOW)).toBe(0)
-    expect(urgencyGroup(running, NOW)).toBe(1)
-    expect(urgencyGroup(answeredLongAgo, NOW)).toBe(2)
-    expect(urgencyGroup(waiting, NOW)).toBe(3)
-    expect(urgencyGroup(waitingWithSla, NOW)).toBe(3)
-    expect(urgencyGroup(makeCaseSummary({ status: 'closed', inboxStatus: 'closed' }), NOW)).toBe(4)
+    expect(urgencyGroup(highOverdue, NOW)).toBe(0)
+    expect(urgencyGroup(critical, NOW)).toBe(1)
+    expect(urgencyGroup(high, NOW)).toBe(2)
+    expect(urgencyGroup(atRisk, NOW)).toBe(3)
+    expect(urgencyGroup(running, NOW)).toBe(3)
+    expect(urgencyGroup(answeredLongAgo, NOW)).toBe(4)
+    expect(urgencyGroup(waiting, NOW)).toBe(5)
+    expect(urgencyGroup(waitingWithSla, NOW)).toBe(5)
+    expect(urgencyGroup(criticalWaiting, NOW)).toBe(5) // the customer has the ball
+    expect(urgencyGroup(makeCaseSummary({ status: 'closed', inboxStatus: 'closed' }), NOW)).toBe(6)
   })
 
-  it('sorts by the nearest SLA, then the longest wait, waiting for the customer last', () => {
+  it('sorts overdue first, then critical and high, then the nearest SLA, waiting last', () => {
     const shuffled = [
       waiting,
       answeredRecently,
+      high,
       runningLater,
       atRisk,
       waitingWithSla,
+      critical,
       running,
       answeredLongAgo,
+      highOverdue,
       overdue,
     ]
     expect(sortByUrgency(shuffled, NOW).map((item) => item.id)).toEqual([
       'CASE-A',
+      'CASE-K',
+      'CASE-I',
+      'CASE-J',
       'CASE-B',
       'CASE-C',
       'CASE-D',
@@ -504,7 +575,7 @@ describe('urgency order (Inicio "Lo primero" and the Casos list)', () => {
   })
 
   it('moves a case up as its SLA comes due', () => {
-    const later = new Date(NOW.getTime() + 9 * 60_000)
+    const later = new Date(NOW.getTime() + 13 * 60_000)
     expect(urgencyGroup(running, later)).toBe(0)
     expect(sortByUrgency([answeredLongAgo, running], later).map((item) => item.id)).toEqual([
       'CASE-C',
@@ -592,21 +663,16 @@ describe('customer rating (slice 7)', () => {
     expect(ratingLabel({ score: 2 })).toBe('Regular')
   })
 
-  it('shows a rated closed card as an icon-only face with its name', () => {
+  it('shows a rating in a list as the colored face alone, named "Calificación: …"', () => {
     expect(ratingFact(null)).toBeNull()
     expect(ratingFact({ score: 3 })).toEqual({
       key: 'rating',
       icon: 'smile',
-      text: 'Bien',
-      label: 'Calificación',
+      text: 'Calificación: Bien',
       tone: 'success',
       iconOnly: true,
     })
+    expect(ratingFact({ score: 4 })?.text).toBe('Calificación: Excelente')
     expect(ratingFact({ score: 1 })?.tone).toBe('danger')
-  })
-
-  it('words the footer pill and the history row', () => {
-    expect(ratedByCustomerLabel({ score: 3 })).toBe('El cliente calificó: Bien')
-    expect(ratedShortLabel({ score: 4 })).toBe('Calificó: Excelente')
   })
 })

@@ -57,6 +57,22 @@ test.describe('Chat en vivo · analista ↔ cliente', () => {
     )
     await expect(chat.messages.filter({ hasText: ours })).toHaveText(order.map(containing))
     await expect(chat.status({ agent: firstName(analyst.name) })).toBeVisible()
+
+    // Slice 8: every case opens without a priority; the analyst sets it to Alta from the
+    // ficha and her card shows the flag (icon-only, named for screen readers).
+    await expect(workspace.caseCard(customer.name)).not.toHaveAccessibleName(/Prioridad/)
+    const panel = await workspace.openCustomerFile(customer.name)
+    await expect(
+      panel.getByRole('button', { name: 'Prioridad: Sin prioridad. Cambiar la prioridad' }),
+    ).toBeVisible()
+    await workspace.setPriority(panel, 'Alta')
+    await expect(workspace.caseCard(customer.name)).toHaveAccessibleName(/Prioridad alta/)
+    await expect(
+      workspace.caseCard(customer.name).locator('svg[data-priority="high"]'),
+    ).toBeVisible()
+    // Saved on the server: a reload keeps it.
+    await page.reload()
+    await expect(workspace.caseCard(customer.name)).toHaveAccessibleName(/Prioridad alta/)
   })
 
   test('closing with a reason, then a new linked case and "Casos anteriores"', async ({
@@ -184,8 +200,11 @@ test.describe('Chat en vivo · analista ↔ cliente', () => {
     await chat.rate('Excelente', comment)
     await expect(chat.page.getByRole('textbox', { name: 'Escribe tu mensaje' })).toBeVisible()
 
-    // Live in the analyst's window: the footer pill with the comment, the card's face.
-    await expect(footer.getByText('El cliente calificó: Excelente')).toBeVisible()
+    // Live in the analyst's window: the footer pill (the face and one word, slice 8) with the
+    // comment, the card's face.
+    await expect(footer.locator('[data-score="4"]')).toBeVisible()
+    await expect(footer).toContainText('Calificación del cliente: Excelente')
+    await expect(footer).not.toContainText('calificó')
     await expect(footer).toContainText(`“${comment}”`)
     await expect(workspace.caseCard(customer.name)).toHaveAccessibleName(/Calificación: Excelente/)
     const panel = await workspace.openCustomerFile(customer.name)

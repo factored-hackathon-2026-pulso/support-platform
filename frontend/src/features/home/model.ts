@@ -148,7 +148,7 @@ export interface FirstCaseRow {
   id: string
   name: string
   status: StatusAppearance
-  /** Channel, priority when high, "Volvió a escribir": icon-only (the cases card facts). */
+  /** Channel, priority when high or critical, "Volvió a escribir": icon-only (the card facts). */
   facts: FactItem[]
   preview: string
   /** The first-response SLA while pending (the shared level → icon/tone map). */

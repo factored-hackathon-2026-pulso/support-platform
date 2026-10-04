@@ -6,8 +6,8 @@
  * what the customer sees, failures), the result copy, the queue notice and the
  * URL state. No React, no I/O: unit-tested in model.test.ts.
  */
-import type { FactIcon, FactTone, StatusAppearance } from '@/components/ui'
-import { channelLabel, formatSla, priorityLabel, ratingOption } from '@/features/cases'
+import type { FactIcon, FactItem, FactTone, StatusAppearance } from '@/components/ui'
+import { channelFact, formatSla, priorityFact, ratingOption } from '@/features/cases'
 import {
   LANGUAGE_NAMES,
   QUEUE_LABEL,
@@ -263,15 +263,30 @@ export function analystSheetDescription(analyst: TeamAnalyst): string {
   ].join(' · ')
 }
 
-/** Case row line: "Prioridad media · Web · español". */
-export function caseRowLine(
-  summary: Pick<CaseSummary, 'priority' | 'channel' | 'language'>,
-): string {
+/**
+ * The priority in a supervision case row (slice 8): every level, icon-only (the glyph,
+ * the tooltip and accessible text "Prioridad alta" / "Sin prioridad"), in the status cell.
+ */
+export function casePriorityFact(summary: Pick<CaseSummary, 'priority'>): Omit<FactItem, 'key'> {
+  const { key: _key, ...fact } = priorityFact(summary.priority, { onlyUrgent: false }) as FactItem
+  return fact
+}
+
+/**
+ * The facts after the status of an analyst's case row (slice 8: no dot-joined line): the
+ * channel (icon-only) and the language ("Español").
+ */
+export function caseRowFacts(summary: Pick<CaseSummary, 'channel' | 'language'>): FactItem[] {
+  const language = LANGUAGE_NAMES[summary.language]
   return [
-    priorityLabel(summary.priority),
-    channelLabel(summary.channel),
-    LANGUAGE_NAMES[summary.language],
-  ].join(' · ')
+    channelFact(summary.channel),
+    {
+      key: 'language',
+      icon: 'languages',
+      text: language.charAt(0).toUpperCase() + language.slice(1),
+      label: 'Idioma',
+    },
+  ]
 }
 
 /** The `CaseSummary` of `caseId` in the cached overviews (queued or someone's open case). */

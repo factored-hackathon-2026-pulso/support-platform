@@ -14,8 +14,10 @@ from a presenter that renders the REST schemas). Sockets only *signal*: clients 
 - ``team.updated`` → ``supervision:team`` (``{staffIds}``, the analysts whose row may have
   changed): a message in an assigned case, an assignment (new and previous analyst), a
   status change, a first response, a close, an availability change, an analyst's session
-  starting or ending, and (slice 7) a customer rating, for the analyst who closed the case
-  ("Calificación 7 días").
+  starting or ending, (slice 7) a customer rating, for the analyst who closed the case
+  ("Calificación 7 días"), and (slice 8) a priority change, for the case's assignee (her open
+  cases show it). A priority change of a queued case sends ``queue.updated`` like any other
+  event of a queued case.
 
 Slice 4 (administration) adds signals, no new envelope:
 
@@ -51,6 +53,7 @@ from cc_platform.domain.cases.events import (
     CaseAssigned,
     CaseClosed,
     CaseFirstResponded,
+    CasePriorityChanged,
     CaseQueued,
     CaseRated,
     CaseStatusChanged,
@@ -95,7 +98,7 @@ SUPERVISION_EVENTS: tuple[type[DomainEvent], ...] = (
     *_TEAM_ROW_EVENTS,
 )
 
-_ASSIGNEE_ROW_EVENTS = (CaseStatusChanged, CaseFirstResponded, CaseClosed)
+_ASSIGNEE_ROW_EVENTS = (CaseStatusChanged, CaseFirstResponded, CaseClosed, CasePriorityChanged)
 
 
 class SupervisionRealtimePresenter(Protocol):

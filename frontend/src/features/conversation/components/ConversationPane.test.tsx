@@ -84,7 +84,8 @@ describe('ConversationPane · chat', () => {
     ).toBeInTheDocument()
     expect(screen.getByText(CASE_ID)).toBeInTheDocument()
     expect(
-      screen.getByText(/· Colombia · Barranquilla · chat web · prioridad media/),
+      // Slice 8: the priority left the meta line (it is a menu now).
+      screen.getByText(/· Colombia · Barranquilla · chat web$/),
     ).toBeInTheDocument()
     expect(screen.queryByText('Datos de ejemplo')).not.toBeInTheDocument()
     // Short facts, never a sentence (slice 6 UI rule).
@@ -426,8 +427,12 @@ describe('ConversationPane · states', () => {
       },
     })
     const footer = await screen.findByRole('note', { name: 'Solo lectura' })
-    const pill = within(footer).getByText('El cliente calificó: Bien')
+    // Slice 8: the face and one word; screen readers hear whose rating it is.
+    const pill = footer.querySelector<HTMLElement>('[data-score="3"]')!
+    expect(pill).toHaveTextContent(/^Calificación del cliente: Bien$/)
     expect(pill).toHaveClass('bg-success-soft')
+    expect(pill.querySelector('.sr-only')).toHaveTextContent('Calificación del cliente:')
+    expect(footer).not.toHaveTextContent(/calificó/i)
     expect(pill.querySelector('.lucide-smile')).not.toBeNull()
     expect(footer).toHaveTextContent('“Muy amable”')
     expect(footer.textContent).not.toContain('·')
@@ -453,9 +458,10 @@ describe('ConversationPane · states', () => {
         }),
       ),
     )
-    expect(await within(footer).findByText('El cliente calificó: Mal')).toHaveClass(
-      'bg-danger-soft',
-    )
+    await waitFor(() => expect(footer.querySelector('[data-score="1"]')).not.toBeNull())
+    const pill = footer.querySelector('[data-score="1"]')!
+    expect(pill).toHaveTextContent(/^Calificación del cliente: Mal$/)
+    expect(pill).toHaveClass('bg-danger-soft')
   })
 
   it("shows another analyst's case read-only (history access)", async () => {
@@ -481,6 +487,7 @@ describe('ConversationPane · states', () => {
           replyBlockedReason: 'not_assignee',
           canClose: false,
           canAssign: false,
+          canChangePriority: false,
         },
         assignment: { ...base.assignment!, analystId: 'STF-2', analystName: 'Julián Ortega' },
       }),
@@ -505,6 +512,7 @@ describe('ConversationPane · states', () => {
           replyBlockedReason: 'not_assignee',
           canClose: false,
           canAssign: false,
+          canChangePriority: false,
         },
         assignment: {
           ...base.assignment!,

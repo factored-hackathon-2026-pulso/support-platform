@@ -191,6 +191,30 @@ direction.
 - **`supervision`**: `recentRatingCell` / `RecentRating` (the "Calificación 7 días" column and a
   sheet stat). **`audit`**: `redactionNote` (message text or rating comment).
 
+### Case priority (slice 8, part 1)
+
+Contract: `docs/platform/api/slice-8-priority.md`. No new feature folder and no new dependency
+direction.
+
+- **`components/ui`**: `PriorityIcon` (Linear-style glyphs: none = three dotted bars, low /
+  medium / high = 1 / 2 / 3 of 3 bars, critical = an exclamation in a filled danger square;
+  `PRIORITY_LEVELS` in `priority-levels.ts`; also the fact icons `priority-*`) and `ChoiceMenu`
+  (menu button with `menuitemradio` items and the full keyboard model).
+- **`cases`**: the one map `CASE_PRIORITY` (word, long word, glyph, urgency rank),
+  `PRIORITY_OPTIONS`, `casePriority`, `priorityLabel`, `priorityMenuLabel`, `isUrgentPriority`,
+  `priorityFact` (cards and Inicio: only high / critical, icon-only), `PriorityMenu` (index).
+  The urgency order puts overdue first, then critical, then high, then the nearest SLA (cases
+  waiting for the customer keep their place). The rating in lists is the face alone
+  (`ratingFact`: tooltip and accessible text "Calificación: Bien").
+- **`conversation`**: `changeCasePriority` (api), `useChangePriority` (optimistic over the detail
+  and inbox caches; one silent retry when only the version moved; rollback or the server's case
+  - an alert toast from `describePriorityFailure`), `CasePriorityControl` (index: the menu when
+    `capabilities.canChangePriority`, else glyph + word) in the ficha's "Prioridad" row; the
+    supervisor meta line lost the priority; the closed footer pill says one word.
+- **`supervision`**: the supervisor case view puts `CasePriorityControl` in its header;
+  `casePriorityFact` (every level, icon-only) next to the status in the analyst sheet and the
+  queue rows; `caseRowFacts` replaces the dot-joined `caseRowLine`.
+
 ### Supervision and audit (slice 3)
 
 Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
@@ -499,6 +523,8 @@ it with `lazyRoute()` in the right role section. Until it is built, render
 | `QueryState`                                                   | `query`, `skeleton`, `empty`, `isEmpty`, `errorTitle`, `errorDescription`, `children(data)`                                             | loading / error-with-retry / empty / content for any TanStack query                                                                                                                                                     |
 | `SourceNote`                                                   | `variant` footer·inline                                                                                                                 | where the data comes from                                                                                                                                                                                               |
 | `Fact` / `FactList`                                            | `icon` (`FactIcon`), `text`, `tone`, `label`, `tag`, `iconOnly`, `tooltip`, `focusable` / `items`, `size`                               | slice 6: one short fact (icon + 1–3 words); icon-only facts keep the text for screen readers; never a dot-joined line                                                                                                   |
+| `PriorityIcon`                                                 | `level` (`PriorityLevel`), `size`, `className`                                                                                          | slice 8: decorative priority glyph (`data-priority`); the level is said next to it or in the control's name                                                                                                             |
+| `ChoiceMenu`                                                   | `value`, `options` (`value`, `label`, `icon`), `onChange`, `triggerLabel`, `menuLabel`, `align`, `disabled`                             | slice 8: menu button + `menuitemradio` (checked one marked); click/Enter/Space open on the checked option, arrows wrap, Home/End, letters, Escape kept from a panel, focus back to the trigger                          |
 | `Tooltip`                                                      | `content`, `focusable`                                                                                                                  | visual bubble on hover and `:focus-visible` (`aria-hidden`; the trigger carries the text); not focusable inside buttons/links                                                                                           |
 
 `RadioGroup` also has `variant="cards"` + `columns` (slice 6: options with `icon`, `tone`,

@@ -19,6 +19,7 @@ from cc_platform.application.audit.catalog import (
     AuditNames,
     describe,
     fallback_description,
+    family_of,
 )
 from cc_platform.application.audit.queries import (
     AuditActorKind,
@@ -117,6 +118,25 @@ def test_every_platform_event_type_is_in_the_catalog() -> None:
     assert set(FAMILY) >= CHANGES_STATE
     for event_type in types:
         assert describe(stored(event_type, {}), AuditNames()) != fallback_description(event_type)
+
+
+def test_a_priority_change_names_the_new_level() -> None:
+    """Slice 8: the log shows the actor next to it ("Daniela Ríos · Cambió la prioridad a
+    Alta"); the family is the case's lifecycle and it changes something."""
+    names = AuditNames()
+    expected = {
+        "low": "Cambió la prioridad a Baja",
+        "medium": "Cambió la prioridad a Media",
+        "high": "Cambió la prioridad a Alta",
+        "critical": "Cambió la prioridad a Crítica",
+        "none": "Quitó la prioridad",
+    }
+    for to, text in expected.items():
+        event = stored("case.priority_changed", {"from": "medium", "to": to})
+        assert describe(event, names) == text
+    assert describe(stored("case.priority_changed", {}), names) == "Cambió la prioridad"
+    assert family_of("case.priority_changed") is AuditFamily.LIFECYCLE
+    assert "case.priority_changed" in CHANGES_STATE
 
 
 async def emit_everything(container: Container) -> None:
@@ -373,6 +393,7 @@ async def test_filter_by_actor_kind_and_person(harness: Harness) -> None:
     assert len(staff) + len(customers) + len(system) == len(every)
     lucia = await search(harness, actor_id=LUCIA_ID)
     assert [e.description for e in lucia] == [
+        "Cambió la prioridad a Alta",  # Mauricio's queued case (slice 8)
         "Abrió la conversación en modo supervisión (solo lectura)",
         "Reasignó el caso de Paula Medina a Julián Ortega",
     ]
@@ -384,7 +405,7 @@ async def test_filter_by_case_family_and_changes(harness: Harness) -> None:
     case = await search(harness, case_id=seed_case_id(114))
     assert {e.case_ref.id for e in case if e.case_ref} == {seed_case_id(114)}
     assert {e.case_ref.customer_name for e in case if e.case_ref} == {"Esteban Morales Quiroga"}
-    assert len(case) == 12
+    assert len(case) == 13  # incl. Julián's case.priority_changed (slice 8)
     for family in AuditFamily:
         found = await search(harness, family=family)
         assert found, family

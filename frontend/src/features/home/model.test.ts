@@ -175,6 +175,33 @@ describe('Lo primero', () => {
       tooltip: 'Primera respuesta vencida',
     })
     expect(rows[0]!.facts.map((fact) => fact.key)).toEqual(['channel', 'priority'])
+    expect(rows[0]!.facts[1]).toMatchObject({ icon: 'priority-high', text: 'Prioridad alta' })
+  })
+
+  it('puts critical and high right after the overdue ones (slice 8)', () => {
+    const marcela = seededInbox.find((item) => item.id.endsWith('101'))!
+    const joaquin = seededInbox.find((item) => item.id.endsWith('107'))!
+    const overdue = makeCaseSummary({
+      id: 'CASE-OVERDUE',
+      firstResponseAt: null,
+      slaDueAt: minutesFrom(-1),
+    })
+    const items = [
+      ...seededInbox.filter((item) => item !== marcela && item !== joaquin),
+      { ...marcela, priority: 'high' as const },
+      { ...joaquin, priority: 'critical' as const }, // waiting for the customer: stays last
+      overdue,
+    ]
+    const rows = firstCases(items, NOW, 10)
+    expect(rows.map((row) => row.name)).toEqual([
+      overdue.customer.displayName,
+      'Marcela Quintana Pardo',
+      'Beatriz Salcedo Prieto',
+      'Patricia Lozano Vega',
+      'Larissa Monteiro Alves',
+      'Joaquín Ferreyra Paz',
+    ])
+    expect(rows[1]!.facts.at(-1)).toMatchObject({ key: 'priority', icon: 'priority-high' })
   })
 })
 

@@ -193,9 +193,9 @@ async def test_seeded_queues_match_the_contract() -> None:
         ("es", "Cola en español"),
         ("pt", "Cola en portugués"),
     ]
-    # Spanish: 111 (SLA in 4 min) and 112 (overdue) at risk. Nobody available speaks
-    # either language: that is why they wait (rule 3).
-    assert queue(overview, "es") == (2, 2, 0, 6, [seed_case_id(111), seed_case_id(112)])
+    # Spanish: 111 (SLA in 4 min) at risk; 112 is due in 7 min (slice 8: a fixed 15-minute
+    # target). Nobody available speaks either language: that is why they wait (rule 3).
+    assert queue(overview, "es") == (2, 1, 0, 6, [seed_case_id(111), seed_case_id(112)])
     assert queue(overview, "pt") == (1, 0, 0, 3, [seed_case_id(109)])
     spanish, portuguese = overview.queues
     assert spanish.oldest_queued_at == now - timedelta(minutes=11)

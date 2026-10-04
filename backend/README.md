@@ -224,7 +224,7 @@ Regenerate after every API change, then run `pnpm gen:api` in `frontend/`.
 ## Known gaps
 
 - **The copilot (slice 15):** answers are text (no structured suggested tools yet) and as good as agent-core's tools; no live listening mode; a call lost with its process is recovered by asking again with the same `clientMessageId`. Details: `docs/platform/api/slice-15-copilot.md` §6.
-- **The assistant (slice 14):** the second factor is simulated; agent-core's `grant_active` is not answered yet (delegations live 10 minutes); a background job lost with its process is only recovered when the customer writes again (no sweep yet); only `CC_ASSISTANT_LANGUAGES` start with the assistant; links to dataset customers come from a startup file (no endpoint). Details: `docs/platform/api/slice-14-assistant.md` §10.
+- **The assistant (slice 14):** the second factor is simulated; a sweep (`CC_ASSISTANT_SWEEP_SECONDS`) re-runs assistant work lost with its process; `GET /api/v1/internal/grants/{grantRef}` answers agent-core's `grant_active` (shared secret `CC_INTERNAL_SERVICE_TOKEN`, not in the public OpenAPI), but agent-core still needs an adapter that calls it (delegations live 10 minutes meanwhile); only `CC_ASSISTANT_LANGUAGES` start with the assistant; links to dataset customers come from a startup file (no endpoint). Details: `docs/platform/api/slice-14-assistant.md` §10.
 
 - **No migrations.** `metadata.create_all` runs at startup. A database created by an older
   build fails fast with `OutdatedSchemaError` (it names the missing tables or columns): delete

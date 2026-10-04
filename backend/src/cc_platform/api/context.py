@@ -48,3 +48,5 @@ class ApiContext:
     health_probes: Sequence[HealthProbe]
     build_info: BuildInfo
     realtime: RealtimeOptions = RealtimeOptions()
+    #: ``CC_INTERNAL_SERVICE_TOKEN``: unlocks the service-to-service routes (``/internal``).
+    internal_token: str | None = None

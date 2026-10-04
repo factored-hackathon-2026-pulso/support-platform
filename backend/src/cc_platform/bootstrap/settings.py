@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     assistant_languages: list[str] = ["es"]
     #: The analyst's copilot agent (``id``, ``id@alias`` or ``id@X.Y.Z``).
     copilot_agent: str = "copiloto-asesor@prod"
+    #: Shared secret of the service-to-service routes (``/api/v1/internal``): agent-core's
+    #: ``grant_active`` check. Unset = those routes do not exist.
+    internal_service_token: SecretStr | None = None
+    #: How often the sweep looks for assistant work lost with its process; 0 turns it off.
+    assistant_sweep_seconds: float = Field(default=30.0, ge=0)
     #: The simulated second factor (development stand-in; a real one replaces it).
     assistant_step_up_code: str = "000000"
     #: Private JSON ``{platform customer id: dataset customer id}``; never committed. Only linked

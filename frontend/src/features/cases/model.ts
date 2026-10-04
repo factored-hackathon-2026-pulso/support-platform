@@ -13,7 +13,6 @@ import type {
   CaseSummary,
   CloseReason,
   CountryCode,
-  Escalation,
   EscalationState,
   InboxCounts,
   InboxResponse,
@@ -638,74 +637,6 @@ export function emptyListCopy(filter: InboxStatus | null, searching: boolean): s
     default:
       return 'Nada pendiente.'
   }
-}
-
-export interface ToastCopy {
-  title: string
-  description: string
-  /** A small pill on the toast ("Supervisión"), never joined to the description. */
-  tag?: string
-}
-
-/**
- * Toast on `case.assigned` (slice 2 §9.1). A case a supervisor gave her
- * (`fromSupervisor`: the envelope actor is a supervisor, slice 3 §8.3) says so:
- * "Te asignaron un caso", the customer, and the "Supervisión" tag (slice 6: no
- * dot-joined description).
- */
-export function assignedToastCopy(
-  summary: Pick<CaseSummary, 'previousCaseId' | 'customer'>,
-  { fromSupervisor = false }: { fromSupervisor?: boolean } = {},
-): ToastCopy {
-  const name = summary.customer.displayName
-  if (fromSupervisor) {
-    return { title: 'Te asignaron un caso', description: name, tag: 'Supervisión' }
-  }
-  if (summary.previousCaseId) {
-    const first = name.trim().split(/\s+/)[0] ?? name
-    return { title: `${first} volvió a escribir`, description: name }
-  }
-  return { title: 'Te llegó un caso nuevo', description: name }
-}
-
-/**
- * Toast on `case.unassigned`: supervision gave one of her cases to someone else
- * (slice 3 §8.3). "leerlo" refers to "el caso", named in the same sentence.
- */
-export function unassignedToastCopy(summary: Pick<CaseSummary, 'customer'>): ToastCopy {
-  return {
-    title: 'Supervisión reasignó un caso',
-    description: `El caso de ${summary.customer.displayName} pasó a otra persona del equipo. Puedes leerlo, pero ya no responder.`,
-  }
-}
-
-/**
- * Toast when supervision acts on HER escalation (slice 9, `escalation.updated` on her inbox):
- * answered → "Lucía Herrera respondió tu escalamiento"; taken → "Felipe Echeverri tomó tu
- * caso". `null` otherwise: a reassignment already has the "Supervisión reasignó un caso" toast
- * (`case.unassigned`), and nothing else needs one.
- */
-export function escalationToastCopy(
-  escalation: Pick<Escalation, 'state' | 'escalatedById' | 'resolvedByName' | 'customerName'>,
-  meId: string,
-): ToastCopy | null {
-  if (escalation.escalatedById !== meId) return null
-  const name = escalation.resolvedByName ?? 'Supervisión'
-  if (escalation.state === 'answered') {
-    return {
-      title: `${name} respondió tu escalamiento`,
-      description: escalation.customerName,
-      tag: 'Supervisión',
-    }
-  }
-  if (escalation.state === 'taken') {
-    return {
-      title: `${name} tomó tu caso`,
-      description: escalation.customerName,
-      tag: 'Supervisión',
-    }
-  }
-  return null
 }
 
 // ─── Search ──────────────────────────────────────────────────────────────────

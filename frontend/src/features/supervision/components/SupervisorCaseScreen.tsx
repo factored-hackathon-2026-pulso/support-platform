@@ -19,7 +19,7 @@ import {
   useCaseDetail,
 } from '@/features/conversation'
 import { reassignedToastTitle, type CaseViewUrlState, type UrlStateChangeOptions } from '../model'
-import { useSupervisionNotices, useTeamOverview } from '../hooks'
+import { useTeamOverview } from '../hooks'
 import type { CaseSummary } from '../types'
 import { ReassignDialog } from './ReassignDialog'
 
@@ -48,7 +48,6 @@ export function SupervisorCaseScreen({
   backTo,
   backLabel,
 }: SupervisorCaseScreenProps) {
-  useSupervisionNotices()
   const detail = useCaseDetail(caseId)
   const { toast } = useToast()
   const customerName = detail.data?.customer.displayName ?? null

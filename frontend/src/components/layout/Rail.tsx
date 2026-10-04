@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import {
   isNavItemActive,
@@ -17,6 +18,11 @@ export interface RailProps {
   indicators?: RailIndicators
   /** Presence dot on the avatar (the analyst's availability); null/absent = none. */
   presence?: RailPresence | null
+  /**
+   * Slot above the avatar for every role: the notification bell (slice 10). The rail never
+   * imports a feature; the route table composes it (app/router.tsx).
+   */
+  notifications?: ReactNode
 }
 
 /** The count and dot of an item, or nothing when its indicator has no value. */
@@ -33,8 +39,11 @@ function navAccessibleName(label: string, { count, dot, noun }: RailIndicator): 
   return label
 }
 
-/** Dark 64px left rail: brand mark, the current role's destinations and the role switcher. */
-export function Rail({ role, indicators = {}, presence = null }: RailProps) {
+/**
+ * Dark 64px left rail: brand mark, the current role's destinations and, at the bottom, the
+ * notification bell above the role switcher.
+ */
+export function Rail({ role, indicators = {}, presence = null, notifications }: RailProps) {
   const { pathname } = useLocation()
   return (
     <nav
@@ -81,7 +90,10 @@ export function Rail({ role, indicators = {}, presence = null }: RailProps) {
           )
         })}
       </ul>
-      <RoleSwitcher currentRole={role} presence={presence} />
+      <div className="mt-auto flex flex-col items-center gap-2">
+        {notifications}
+        <RoleSwitcher currentRole={role} presence={presence} />
+      </div>
     </nav>
   )
 }

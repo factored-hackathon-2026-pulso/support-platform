@@ -37,7 +37,7 @@ describe('Toast', () => {
     // Live regions exist before any toast, so insertions are announced.
     const status = screen.getByRole('status')
     expect(status).toBeEmptyDOMElement()
-    expect(screen.getByRole('region', { name: 'Notificaciones' })).toContainElement(status)
+    expect(screen.getByRole('region', { name: 'Avisos' })).toContainElement(status)
 
     await user.click(screen.getByRole('button', { name: 'Avisar' }))
     expect(status).toHaveTextContent('Te llegó un caso nuevo')
@@ -122,7 +122,7 @@ describe('Toast', () => {
         <Page composer />
       </ToastProvider>,
     )
-    const region = screen.getByRole('region', { name: 'Notificaciones' })
+    const region = screen.getByRole('region', { name: 'Avisos' })
     // Dialog and Sheet backdrops are z-50.
     expect(region).toHaveClass('z-40')
     expect(region).toHaveStyle({ bottom: '152px' })

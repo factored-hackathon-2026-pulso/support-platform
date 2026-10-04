@@ -9,7 +9,7 @@ import {
 } from '@/features/admin'
 
 /**
- * /administracion/equipos — Equipos. The status pill, the selected team and
+ * /administracion/equipos — Equipos. The "Filtros" states, the selected team and
  * the create dialog live in the URL (`?estado=&equipo=&nuevo=`, slice-4-administration.md §10.11).
  */
 export default function TeamsRoute() {

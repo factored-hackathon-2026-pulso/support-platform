@@ -35,7 +35,6 @@ export {
   closeReasonOption,
   compareByUrgency,
   countryName,
-  escalationToastCopy,
   escalationWaitFact,
   isAttendedEscalation,
   filterChipLabel,
@@ -68,7 +67,6 @@ export type {
   RatingScore,
   SlaLevel,
   SlaDisplay,
-  ToastCopy,
 } from './model'
 export type {
   Availability,

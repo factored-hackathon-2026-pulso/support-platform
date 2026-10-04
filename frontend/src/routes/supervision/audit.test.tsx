@@ -92,13 +92,16 @@ describe('Auditoría', () => {
     )
     expect(router.state.location.search).toMatch(/^\?evento=EVT-/)
     const detail = aside()
-    expect(within(detail).getByText('11:02:05 · ASIGNACIÓN')).toBeInTheDocument()
+    expect(within(detail).getByText('11:02:05')).toBeInTheDocument()
+    expect(within(detail).getByText('ASIGNACIÓN')).toBeInTheDocument()
     expect(
       within(detail).getByRole('heading', {
         name: 'Reasignó el caso de Paula Medina a Julián Ortega',
       }),
     ).toBeInTheDocument()
-    expect(within(detail).getByText('Lucía Herrera · Supervisión')).toBeInTheDocument()
+    expect(within(detail).getByText('Lucía Herrera')).toBeInTheDocument()
+    expect(within(detail).getByText('Supervisión')).toBeInTheDocument()
+    expect(detail.querySelector('h2')!.parentElement!.textContent).not.toContain('·')
     expect(within(detail).getByText('case.assigned')).toBeInTheDocument()
     expect(within(detail).getByText(ESTEBAN_CASE)).toBeInTheDocument()
     // Ocurrió and Registrado.

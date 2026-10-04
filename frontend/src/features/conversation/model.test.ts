@@ -24,7 +24,7 @@ import {
   arrivalFacts,
   caseHeaderMeta,
   CLOSED_NOTICE,
-  closureLine,
+  closedFooter,
   closureNote,
   describeCaseLoadFailure,
   describeCloseFailure,
@@ -491,7 +491,7 @@ describe('supervision view (slice 3 §8.3)', () => {
       line: 'Sin asignar desde las 10:47: nadie disponible habla español',
       time: null,
     })
-    expect(supervisionFooter(queued(), ME)).toEqual([
+    expect(supervisionFooter(queued())).toEqual([
       'Sin asignar: le llega automáticamente a la primera persona disponible que hable español.',
     ])
   })
@@ -529,9 +529,7 @@ describe('supervision view (slice 3 §8.3)', () => {
         makeCaseDetail({ assignment: { ...manual, previousAnalystId: 'STF-2' } }),
       ),
     ).toEqual({ line: 'Lo atiende Daniela Ríos: se lo pasó Lucía Herrera', time: '5 mar, 10:46' })
-    expect(supervisionFooter(makeCaseDetail(), ME)).toEqual([
-      'Solo lectura: lo atiende Daniela Ríos.',
-    ])
+    expect(supervisionFooter(makeCaseDetail())).toEqual(['Solo lectura: lo atiende Daniela Ríos.'])
   })
 
   it('shows who attended a closed case and its closure', () => {
@@ -539,8 +537,14 @@ describe('supervision view (slice 3 §8.3)', () => {
       line: 'Lo atendió Julián Ortega',
       time: null,
     })
-    expect(supervisionFooter(makeJulianDetail(), 'STF-SUP')).toEqual([
-      'Caso cerrado el 13 feb, 10:15 por Julián Ortega · Resuelto',
+    // A closed case: no lines, the closure as separate facts (never " · " joined).
+    expect(supervisionFooter(makeJulianDetail())).toBeNull()
+    const julian = makeJulianDetail()
+    const footer = closedFooter({ closure: julian.closure!, case: julian.case }, 'STF-SUP')
+    expect(footer.reason).toBe('resolved')
+    expect(footer.facts.map((fact) => [fact.key, fact.text])).toEqual([
+      ['closed-at', '13 feb, 10:15'],
+      ['closed-by', 'Julián Ortega'],
     ])
   })
 
@@ -552,10 +556,15 @@ describe('supervision view (slice 3 §8.3)', () => {
 describe('closure and the read-only footer', () => {
   it('says when and why the case closed, and who closed it if it was not me', () => {
     const { closure } = makeClosedDetail()
-    expect(closureLine(closure!, ME)).toBe('Caso cerrado el 5 mar, 10:58 · Resuelto')
+    expect(closedFooter({ closure: closure! }, ME).facts.map((fact) => fact.text)).toEqual([
+      '5 mar, 10:58',
+    ])
     expect(
-      closureLine({ ...closure!, closedById: 'STF-2', closedByName: 'Julián Ortega' }, ME),
-    ).toBe('Caso cerrado el 5 mar, 10:58 por Julián Ortega · Resuelto')
+      closedFooter(
+        { closure: { ...closure!, closedById: 'STF-2', closedByName: 'Julián Ortega' } },
+        ME,
+      ).facts.map((fact) => fact.text),
+    ).toEqual(['5 mar, 10:58', 'Julián Ortega'])
     expect(closureNote(closure!)).toBe('Nota: Se explicó el plazo del reverso (5 días hábiles).')
     expect(closureNote({ note: null })).toBeNull()
     expect(closureNote({ note: '  ' })).toBeNull()

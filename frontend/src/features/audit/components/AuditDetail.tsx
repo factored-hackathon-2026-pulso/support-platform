@@ -7,6 +7,7 @@ import {
   Button,
   Callout,
   EmptyState,
+  Fact,
   KeyValueList,
   Kicker,
   LinkButton,
@@ -104,12 +105,22 @@ function EventDetail({
   const location = useLocation()
   const lines = payloadLines(event.payload)
   const caseRef = event.caseRef
+  const kicker = detailKicker(event)
+  const byline = detailByline(event.actor)
   return (
     <>
       <div className="flex flex-col gap-1 border-b border-border-soft px-5 pt-[18px] pb-3.5">
-        <Kicker>{detailKicker(event)}</Kicker>
+        <span className="flex items-center gap-3">
+          <Fact icon="clock" text={kicker.time} label="Hora" tone="muted" />
+          <Kicker>{kicker.family}</Kicker>
+        </span>
         <h2 className="m-0 text-18 leading-[1.3] font-semibold">{event.description}</h2>
-        <span className="text-13 text-ink-2">{detailByline(event.actor)}</span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Fact icon="user" text={byline.name} label="Quién" size="md" />
+          {byline.role ? (
+            <Fact icon="users" text={byline.role} label="Rol" tone="muted" size="md" />
+          ) : null}
+        </span>
       </div>
       <div className="flex flex-col gap-4 px-5 py-3.5">
         <KeyValueList

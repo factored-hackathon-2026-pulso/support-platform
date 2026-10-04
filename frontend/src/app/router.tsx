@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
-import { AppShell, AuthLayout } from '@/components/layout'
+import { AuthLayout } from '@/components/layout'
+import StaffShell from '@/routes/staff-shell'
 import { GuestOnly, RequireRole, RequireSession, RootRedirect } from './guards'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { RouteFallback } from './RouteFallback'
@@ -67,7 +68,7 @@ export const routes: RouteObject[] = [
     ErrorBoundary: RouteErrorBoundary,
     children: [
       {
-        Component: AppShell,
+        Component: StaffShell,
         ErrorBoundary: RouteErrorBoundary,
         children: [
           roleSection('analyst', '/analista', [

@@ -105,6 +105,7 @@ de verdad: `backend/src/cc_platform/bootstrap/settings.py`.
 | `CC_HOST`, `CC_PORT` | `127.0.0.1`, `8000` | Dirección de `uv run cc-api` |
 | `CC_REALTIME_QUEUE_SIZE` | `256` | Mensajes en cola por conexión WebSocket |
 | `CC_REALTIME_EXPIRY_CHECK_SECONDS` | `30` | Cada cuánto un socket inactivo revisa si su sesión venció |
+| `CC_NOTIFICATION_SWEEP_SECONDS` | `30` | Slice 10: cada cuánto se buscan casos por vencer sin primera respuesta (notificación "Caso por vencer sin respuesta" para Supervisión); también corre al arrancar. `0` lo apaga |
 | `CC_LOG_LEVEL` | `INFO` | Nivel de log |
 | `CC_LOG_FORMAT` | `json` | `console` para leer los logs en la terminal |
 
@@ -142,6 +143,14 @@ Todas usan la contraseña **`demo1234`** y el código de verificación **`000000
 | Andrés Villamil | `andres.villamil@` | Analista | español | Equipo Andes | **Desactivada** (Carolina la desactivó). No puede entrar |
 
 Además existe el equipo inactivo "Equipo Caribe", sin miembros.
+
+**Notificaciones sembradas (slice 10).** La historia de la semilla ya notificó a la gente: la
+campana de Daniela trae casos que le llegaron, "El cliente volvió a escribir", "Supervisión
+respondió tu escalamiento" (107) y calificaciones; la de cada persona de Supervisión, los
+escalamientos (101, 113 y los atendidos), "Un caso espera en la cola" (español y portugués) y
+"Caso por vencer sin respuesta" (al arrancar se revisan los casos a 5 minutos o menos de vencer);
+la de Valeria y Carolina, "Cuenta bloqueada: Mariana Duque". Lo que pasó hace más de 30 minutos
+empieza leído ("Anteriores"); lo más reciente, sin leer ("Nuevas").
 
 **Nadie empieza disponible.** Las colas sembradas tienen casos que nadie disponible podía tomar
 (regla 3), así que una analista disponible las contradiría. Cuando alguien pasa a "Disponible",
@@ -306,6 +315,16 @@ La SPA no alcanza la API. Revisa que el backend esté corriendo (`/api/v1/health
 `VITE_API_URL` apunte a él (reinicia `pnpm dev` después de cambiarla) y que el origen exacto de
 la SPA (`http://localhost:5173` no es lo mismo que `http://127.0.0.1:5173` ni que otro puerto)
 esté en `CC_CORS_ORIGINS`.
+
+### La campana no cambia
+
+Las notificaciones llegan por el mismo WebSocket (tema `staff:<id>`) y la lista se vuelve a pedir
+cada 60 s y al reconectarse. Si una acción no generó la notificación esperada, recuerda las
+reglas (`api/slice-10-notifications.md` §3): nadie recibe la de su propia acción; "Un caso espera
+en la cola" llega una vez por idioma mientras quede un caso más antiguo esperando; los avisos
+emergentes solo salen en las pantallas del rol (la campana guarda todos) y no salen cuando la
+pantalla ya muestra el caso. Con `CC_NOTIFICATION_SWEEP_SECONDS=0` no llegan las de "Caso por
+vencer sin respuesta".
 
 ### Cuenta bloqueada
 

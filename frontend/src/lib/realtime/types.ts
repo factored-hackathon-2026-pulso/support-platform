@@ -27,6 +27,9 @@ export type KnownRealtimeEventType =
   // Slice 9 (escalations, slice-9-supervision-v2.md): on `case:`, `inbox:` and
   // `supervision:escalations`
   | 'escalation.updated'
+  // Slice 10 (notification center, slice-10-notifications.md §4.4): on `staff:<id>` only
+  | 'notification.created'
+  | 'notifications.read'
 
 export type RealtimeEventType = KnownRealtimeEventType | ControlEnvelopeType | (string & {})
 

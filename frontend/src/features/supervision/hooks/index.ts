@@ -15,5 +15,4 @@ export {
   useRespondEscalation,
   useTakeEscalatedCase,
 } from './use-escalations'
-export { useSupervisionNotices } from './use-supervision-notices'
 export { useIsAssigning, useRefetchAssignmentData, useSetAssignee } from './use-set-assignee'

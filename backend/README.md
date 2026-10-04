@@ -7,8 +7,8 @@ CQRS-lite with an append-only event log.
 Read first: `docs/platform/ENGINEERING_BRIEF.md` (scope, rules, conventions),
 `docs/platform/adr/0001-architecture.md`, and the slice contracts in `docs/platform/api/`
 (slice 2 case life cycle, slice 3 supervision, slice 4 administration, slice 6 analyst home,
-slice 7 customer rating, slice 8 case priority, slice 9 supervision v2: Colas and escalations;
-a later slice wins).
+slice 7 customer rating, slice 8 case priority, slice 9 supervision v2: Colas and escalations,
+slice 10 notification center; a later slice wins).
 Operating the app (accounts, reset, troubleshooting) is in `docs/platform/RUNBOOK.md`.
 
 ## Run
@@ -65,6 +65,7 @@ re-read on every request.
 | Colas (slice 9) | `GET /supervision/open-cases?language=es\|pt`: every open case of a language and who holds it | supervisor |
 | Escalations (slice 9) | `POST /cases/{id}/escalations` (`{motive}` + `Idempotency-Key`), `POST /cases/{id}/escalations/{escId}/withdraw`, `POST /cases/{id}/escalations/{escId}/acknowledge` | analyst (the assignee; acknowledge: who escalated) |
 | Escalados (slice 9) | `GET /supervision/escalations`, `POST /supervision/escalations/{escId}/response` (`{note}`), `POST /supervision/escalations/{escId}/take` | supervisor (take: also Analista and speaks the language) |
+| Notifications (slice 10) | `GET /me/notifications?cursor=&limit=` (hers, newest first, `unreadCount`), `POST /me/notifications/{id}/read`, `POST /me/notifications/read-all` | any staff role, **her own only** (another person's id is 404) |
 | Audit | `GET /audit/events` (filters `actorKind, actorId, caseId, family, changesOnly, from, to, q`, cursor), `GET /audit/events/{id}` | supervisor, admin |
 | People | `GET /staff?role=&includeInactive=` | supervisor, admin |
 | Administration | `GET\|POST /admin/users`, `GET\|PATCH /admin/users/{id}`, `POST /admin/users/{id}/deactivate\|reactivate\|unlock\|password-reset`, `GET\|POST /admin/teams`, `GET\|PATCH /admin/teams/{id}`, `POST /admin/teams/{id}/deactivate\|reactivate` | admin |
@@ -92,6 +93,16 @@ Product rules enforced in the service layer (brief §4.3):
   `422 analyst_not_eligible` / `language_mismatch`) or reassigns it (`reassigned`); closing the
   case ends it (`closed`); anything on an ended one is `409 escalation_not_open`. Motive and note
   are redacted from the audit (`motive_length`, `note_length`).
+- Slice 10 (notifications, people-only, fixed mappings): `NotificationProjector` derives them from
+  committed events (assigned on arrival / from the queue / by supervision, reassigned away,
+  customer returned, escalation answered / taken / reassigned, case rated → that analyst; case
+  escalated and queued → every active Supervisión; account locked, invitation accepted →
+  every active Administración; never the actor, never an inactive person). `case_queued` is one
+  per language while its queue holds an older waiting case. `SweepSlaRisk` writes "Caso por vencer
+  sin respuesta" (open case, no first response, due in ≤ 5 min) once per case, at startup and
+  every `CC_NOTIFICATION_SWEEP_SECONDS` (30 s; 0 = off). `(recipient_id, source_key)` is unique
+  (idempotent); the newest 200 per person are kept. Notifications are not domain events and
+  never enter the event log.
 - Only the assignee writes; a closed case is read-only. A close needs a reason from a fixed
   list; the customer sees a notice, never the reason. Staff banners never reach customers.
 - Administration guard rails: nobody removes their own Administración, deactivates themself or
@@ -132,7 +143,7 @@ signal changes: REST and the event log stay the source of truth.
 | `customer:<customerId>` | that customer | `turn.created`, `conversation.updated` |
 | `supervision:queues`, `supervision:team`, `supervision:escalations` | supervisors | `queue.updated`, `queue.case_queued`, `team.updated`, `escalation.updated` |
 | `admin:directory` | admins | `directory.updated` |
-| `staff:<staffId>` | that person | `me.updated` |
+| `staff:<staffId>` | that person | `me.updated`, `notification.created` (`{notification, unreadCount}`), `notifications.read` (`{notificationIds \| null, unreadCount}`) |
 
 Close codes: `4401` sign in again (bad or expired token, logout, deactivation, password reset);
 `4409` the person's roles changed (refetch `/auth/me` and reconnect at once).
@@ -208,6 +219,9 @@ Regenerate after every API change, then run `pnpm gen:api` in `frontend/`.
 - Accepted assignment races (slice 2 §3.1, slice 3 §3.9): two cases opened at the same instant
   may pick the same least-loaded analyst; an analyst who pauses, is deactivated or loses a
   language at that instant may still get one (supervision reassigns it).
+- Notifications (slice 10) are written in-process after the commit of their fact: if the process
+  dies in between, that notification is lost (the fact stays in the log; no catch-up job). The SLA
+  sweep runs every 30 s, so "Caso por vencer" may be up to 30 s late (its `createdAt` is exact).
 - The directory (`GET /admin/users`) is not paginated (at most 500 rows, filtered in memory).
 - Team renames do not rewrite old audit payloads; no deletion of people or teams.
 - In-memory SQLite (`sqlite+aiosqlite:///:memory:`) shares one connection between Units of

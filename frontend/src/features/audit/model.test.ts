@@ -236,9 +236,13 @@ describe('rows', () => {
 describe('detail aside', () => {
   it('writes the kicker and the byline', () => {
     const event = makeAuditEvent()
-    expect(detailKicker(event)).toBe('11:02:05 · ASIGNACIÓN')
-    expect(detailByline(event.actor)).toBe('Lucía Herrera · Supervisión')
-    expect(detailByline({ role: 'system', id: 'system', name: null })).toBe('Plataforma')
+    // Separate parts, never joined with " · ".
+    expect(detailKicker(event)).toEqual({ time: '11:02:05', family: 'ASIGNACIÓN' })
+    expect(detailByline(event.actor)).toEqual({ name: 'Lucía Herrera', role: 'Supervisión' })
+    expect(detailByline({ role: 'system', id: 'system', name: null })).toEqual({
+      name: 'Plataforma',
+      role: null,
+    })
   })
 
   it('lists the payload, JSON for nested values, and flags the redacted text', () => {

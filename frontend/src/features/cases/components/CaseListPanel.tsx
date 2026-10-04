@@ -26,11 +26,6 @@ export interface CaseListPanelProps {
   query: string
   collapsed: boolean
   onSelectCase(caseId: string): void
-  /**
-   * "Ver caso" in the new-case toast (defaults to `onSelectCase`). The toast
-   * goes away, so the screen should also move the focus to the opened case.
-   */
-  onOpenNotifiedCase?(caseId: string): void
   onFilterChange(filter: InboxStatus | null): void
   onQueryChange(query: string): void
   onCollapsedChange(collapsed: boolean): void
@@ -55,14 +50,13 @@ export function CaseListPanel({
   query,
   collapsed,
   onSelectCase,
-  onOpenNotifiedCase,
   onFilterChange,
   onQueryChange,
   onCollapsedChange,
 }: CaseListPanelProps) {
   const q = normalizeSearch(useDebouncedValue(query, SEARCH_DEBOUNCE_MS))
   const inbox = useInbox({ status: filter, q })
-  useInboxLive(onOpenNotifiedCase ?? onSelectCase, selectedCaseId)
+  useInboxLive()
 
   const now = useNow(TICK_MS)
   const data = inbox.data

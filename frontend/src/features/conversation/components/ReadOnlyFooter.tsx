@@ -1,7 +1,14 @@
 import { Lock } from 'lucide-react'
 import { Fact } from '@/components/ui'
 import { type CaseRating, CloseReasonIcon, RatingBadge, closeReasonLabel } from '@/features/cases'
-import { footerFacts, ratingComment, supervisionFooter, type ConversationMode } from '../model'
+import {
+  closedFooter,
+  footerFacts,
+  ratingComment,
+  supervisionFooter,
+  type ConversationMode,
+  type FooterFacts,
+} from '../model'
 import type { CaseDetail } from '../types'
 
 export interface ReadOnlyFooterProps {
@@ -21,20 +28,22 @@ const frame =
  * and who closed it when it was someone else, then the internal note on its own
  * line, then (slice 7) the customer's rating as a pill with its face and one word
  * ("Bien"; screen readers hear "Calificación del cliente: Bien") and their comment in quotes; someone else's case shows [lock]
- * Solo lectura and [user] Lo atiende … . The supervisor view keeps its lines.
+ * Solo lectura and [user] Lo atiende … . The supervisor view keeps its lines for an open
+ * case ("Solo lectura: …", "Sin asignar: …"); a closed case shows the same closure facts there.
  */
 export function ReadOnlyFooter({ detail, meId, mode = 'workspace' }: ReadOnlyFooterProps) {
   if (mode === 'supervision') {
-    const lines = supervisionFooter(detail, meId)
+    if (detail.closure) {
+      return (
+        <FactsFooter footer={closedFooter({ closure: detail.closure, case: detail.case }, meId)} />
+      )
+    }
+    const lines = supervisionFooter(detail)
     if (!lines) return null
     const [first, ...rest] = lines
     return (
       <div role="note" aria-label="Solo lectura" className={frame}>
-        {detail.closure ? (
-          <CloseReasonIcon reason={detail.closure.reason} className="mt-px" />
-        ) : (
-          <Lock size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-muted" />
-        )}
+        <Lock size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-muted" />
         <div className="flex min-w-0 flex-col gap-0.5">
           <p className="m-0 font-semibold text-ink">{first}</p>
           {rest.map((line) => (
@@ -48,6 +57,10 @@ export function ReadOnlyFooter({ detail, meId, mode = 'workspace' }: ReadOnlyFoo
   }
   const footer = footerFacts(detail, meId)
   if (!footer) return null
+  return <FactsFooter footer={footer} />
+}
+
+function FactsFooter({ footer }: { footer: FooterFacts }) {
   return (
     <div role="note" aria-label="Solo lectura" className={frame}>
       <div className="flex min-w-0 flex-col gap-1.5">

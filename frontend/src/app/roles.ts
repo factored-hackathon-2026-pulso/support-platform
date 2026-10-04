@@ -184,6 +184,11 @@ export function supervisionEscalationPath(escalationId?: string | null): string 
     : '/supervision/escalados'
 }
 
+/** "Colas" of one language (slice 9: Spanish is the default, so it carries no param). */
+export function supervisionQueuesPath(language: 'es' | 'pt'): string {
+  return language === 'es' ? '/supervision/colas' : '/supervision/colas?idioma=pt'
+}
+
 /** "Usuarios y roles" with one person selected (slice 4 §10.1). */
 export function adminUserPath(staffId: string): string {
   return `/administracion/usuarios?${new URLSearchParams({ persona: staffId }).toString()}`

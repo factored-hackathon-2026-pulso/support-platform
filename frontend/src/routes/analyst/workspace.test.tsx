@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CasesApi from '@/features/cases/api'
+import type * as NotificationsApi from '@/features/notifications/api'
 import { fetchAvailability, fetchInbox, updateAvailability } from '@/features/cases/api'
 import { ApiProblem } from '@/lib/api'
 import {
@@ -13,7 +14,13 @@ import {
   seededInbox,
 } from '@/test/case-fixtures'
 import { analystStaff } from '@/test/fixtures'
+import {
+  makeNotification,
+  makeNotificationPage,
+  notificationCreated,
+} from '@/test/notification-fixtures'
 import { renderRoute } from '@/test/render'
+import { fetchNotifications, markNotificationRead } from '@/features/notifications/api'
 
 vi.mock('@/features/cases/api', async (importOriginal) => {
   const actual = await importOriginal<typeof CasesApi>()
@@ -22,6 +29,15 @@ vi.mock('@/features/cases/api', async (importOriginal) => {
     fetchInbox: vi.fn<typeof actual.fetchInbox>(),
     fetchAvailability: vi.fn<typeof actual.fetchAvailability>(),
     updateAvailability: vi.fn<typeof actual.updateAvailability>(),
+  }
+})
+
+vi.mock('@/features/notifications/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof NotificationsApi>()
+  return {
+    ...actual,
+    fetchNotifications: vi.fn<typeof actual.fetchNotifications>(),
+    markNotificationRead: vi.fn<typeof actual.markNotificationRead>(),
   }
 })
 
@@ -121,6 +137,12 @@ beforeEach(() => {
   vi.mocked(fetchInbox).mockResolvedValue(makeInbox())
   vi.mocked(fetchAvailability).mockResolvedValue(available)
   vi.mocked(updateAvailability).mockResolvedValue(available)
+  vi.mocked(fetchNotifications).mockResolvedValue(makeNotificationPage([]))
+  vi.mocked(markNotificationRead).mockImplementation(async (id) => ({
+    notification: makeNotification({ id, readAt: NOW.toISOString() }),
+    changed: true,
+    unreadCount: 0,
+  }))
 })
 
 afterEach(() => {
@@ -278,23 +300,22 @@ describe('/analista (Workspace)', () => {
     await waitFor(() => expect(empty).toHaveFocus())
   })
 
-  it('opens the case of the "Ver caso" toast and focuses it', async () => {
+  it('opens the case of a notification toast ("Abrir caso"), reads it and focuses it', async () => {
     const { router, user, sockets } = renderWorkspace()
     await screen.findByText(`Conversación ${FIRST}`)
-    const assigned = { ...seededInbox[1]!, version: 99 }
+    const assigned = makeNotification({ id: 'NTF-00000000000000000000000077', caseId: SECOND })
     act(() => {
       sockets.last()?.open()
-      sockets.last()?.receive({
-        type: 'case.assigned',
-        id: 'EVT-ASSIGNED-9',
-        occurredAt: NOW.toISOString(),
-        data: { entity: 'case', entityId: SECOND, caseId: SECOND, actor: null, payload: assigned },
-      })
+      sockets.last()?.receive(notificationCreated(assigned, 1))
     })
-    await user.click(await screen.findByRole('button', { name: 'Ver caso' }))
+    const toasts = screen.getByRole('region', { name: 'Avisos' })
+    expect(await within(toasts).findByText('Te llegó un caso nuevo')).toBeInTheDocument()
+    expect(within(toasts).getByText('Larissa Monteiro Alves')).toBeInTheDocument()
+    await user.click(within(toasts).getByRole('button', { name: 'Abrir caso' }))
     expect(searchOf(router).get('caso')).toBe(SECOND)
     const heading = await screen.findByRole('heading', { name: `Conversación ${SECOND}` })
     await waitFor(() => expect(heading).toHaveFocus())
+    expect(markNotificationRead).toHaveBeenCalledWith(assigned.id)
   })
 
   it('keeps a case assigned over the socket in the toast and never opens it on its own', async () => {
@@ -318,15 +339,48 @@ describe('/analista (Workspace)', () => {
           payload: assigned,
         },
       })
+      sockets.last()?.receive(
+        notificationCreated(
+          makeNotification({
+            id: 'NTF-00000000000000000000000078',
+            kind: 'assigned_by_supervisor',
+            caseId: SECOND,
+            customerName: 'Marcela Quintana Pardo',
+            actorName: 'Lucía Herrera',
+          }),
+          1,
+        ),
+      )
     })
-    expect(await screen.findByText('Te asignaron un caso')).toBeInTheDocument()
+    expect(await screen.findByText('Supervisión te asignó un caso')).toBeInTheDocument()
     const list = await screen.findByRole('list', { name: 'Casos' })
     await within(list).findByRole('button', { name: /Marcela Quintana Pardo/ })
     // Opening it would mark it read and log an open she never made: it stays Nuevo.
     expect(searchOf(router).get('caso')).toBeNull()
     expect(screen.queryByRole('region', { name: 'Conversación del caso' })).not.toBeInTheDocument()
-    expect(screen.getByText('Te asignaron un caso')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Ver caso' })).toBeInTheDocument()
+    const toasts = screen.getByRole('region', { name: 'Avisos' })
+    expect(within(toasts).getByRole('button', { name: 'Abrir caso' })).toBeInTheDocument()
+    expect(within(toasts).getByRole('button', { name: 'Más tarde' })).toBeInTheDocument()
+  })
+
+  it('never toasts a notification about the case already open', async () => {
+    const { sockets } = renderWorkspace(`/analista?caso=${FIRST}`)
+    await screen.findByText(`Conversación ${FIRST}`)
+    act(() => {
+      sockets.last()?.open()
+      sockets.last()?.receive(
+        notificationCreated(
+          makeNotification({
+            id: 'NTF-00000000000000000000000079',
+            kind: 'customer_returned',
+            caseId: FIRST,
+          }),
+          1,
+        ),
+      )
+    })
+    await waitFor(() => expect(fetchNotifications).toHaveBeenCalled())
+    expect(screen.queryByText('El cliente volvió a escribir')).not.toBeInTheDocument()
   })
 
   it('subscribes to the analyst inbox topic', async () => {

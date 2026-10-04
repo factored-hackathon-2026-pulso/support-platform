@@ -41,7 +41,7 @@ import {
   type UrlStateChangeOptions,
   withoutKey,
 } from '../model'
-import { useOpenCases, useQueueOverview, useSupervisionLive, useSupervisionNotices } from '../hooks'
+import { useOpenCases, useQueueOverview, useSupervisionLive } from '../hooks'
 import type { Language, LanguageOpenCases, OpenCaseRow } from '../types'
 import { CaseCustomerCell, CaseStatusCell } from './CaseCells'
 
@@ -63,7 +63,6 @@ export interface QueuesScreenProps {
  */
 export function QueuesScreen({ state, onStateChange, onOpenCase }: QueuesScreenProps) {
   useSupervisionLive()
-  useSupervisionNotices()
   const now = useNow(SUPERVISION_TICK_MS)
   const overview = useQueueOverview()
   const openCases = useOpenCases(state.language)

@@ -196,9 +196,15 @@ export interface UsersUrlState {
   create: boolean
 }
 
+/** A team state the "Filtros" dropdown of Equipos can check. */
+export type TeamState = 'active' | 'inactive'
+
 export interface TeamsUrlState {
-  /** `?estado=activos|inactivos|todos` (default activos). */
-  status: TeamStatusFilter
+  /**
+   * The checked "Estado" options of "Filtros" (`?estado=activos,inactivos`; absent = only
+   * the active teams; `todos` = nothing checked). None or both checked = every team.
+   */
+  statuses: TeamState[]
   /** `?equipo=TEAM-…`: the selected team (aside). */
   teamId: string | null
   /** `?nuevo=1`: the create dialog. */
@@ -225,11 +231,15 @@ const ACCOUNT_STATUS_SLUGS: Record<AccountStatus, string> = {
   inactive: 'desactivadas',
 }
 
-const TEAM_STATUS_SLUGS: Record<TeamStatusFilter, string> = {
+const TEAM_STATUS_SLUGS: Record<TeamState, string> = {
   active: 'activos',
   inactive: 'inactivos',
-  all: 'todos',
 }
+
+/** `?estado=todos`: nothing checked (every team). */
+const ALL_TEAMS_SLUG = 'todos'
+
+const TEAM_STATE_ORDER: readonly TeamState[] = ['active', 'inactive']
 
 /** Max length of `q` (the API accepts 1–80). */
 export const USER_SEARCH_MAX_LENGTH = 80
@@ -302,8 +312,15 @@ export function toUsersSearch(state: UsersUrlState): URLSearchParams {
 }
 
 export function parseTeamsSearch(params: URLSearchParams): TeamsUrlState {
+  const slugs = listParam(params, 'estado')
+  const known = inOrder(
+    TEAM_STATE_ORDER,
+    slugs.map((slug) => fromSlug(TEAM_STATUS_SLUGS, slug)),
+  )
+  const statuses: TeamState[] =
+    known.length > 0 ? known : slugs.includes(ALL_TEAMS_SLUG) ? [] : ['active']
   return {
-    status: fromSlug(TEAM_STATUS_SLUGS, params.get('estado')) ?? 'active',
+    statuses,
     teamId: trimmed(params.get('equipo')),
     create: params.get('nuevo') === '1',
   }
@@ -311,7 +328,17 @@ export function parseTeamsSearch(params: URLSearchParams): TeamsUrlState {
 
 export function toTeamsSearch(state: TeamsUrlState): URLSearchParams {
   const params = new URLSearchParams()
-  if (state.status !== 'active') params.set('estado', TEAM_STATUS_SLUGS[state.status])
+  const onlyActive = state.statuses.length === 1 && state.statuses[0] === 'active'
+  if (!onlyActive) {
+    params.set(
+      'estado',
+      state.statuses.length === 0
+        ? ALL_TEAMS_SLUG
+        : inOrder(TEAM_STATE_ORDER, state.statuses)
+            .map((status) => TEAM_STATUS_SLUGS[status])
+            .join(','),
+    )
+  }
   if (state.teamId) params.set('equipo', state.teamId)
   if (state.create) params.set('nuevo', '1')
   return params
@@ -484,16 +511,63 @@ export function usersShownLabel(shown: number, total: number): string {
   return shown === total ? all : `${shown} de ${all}`
 }
 
-/** Header subtitle: "Quién puede hacer qué en la plataforma · 13 personas". */
+/** Header subtitle (canvas `usersSub`): "13 personas en la plataforma" (never " · " joined). */
 export function usersSubtitle(total: number | undefined): string {
-  const base = 'Quién puede hacer qué en la plataforma'
-  return total === undefined ? base : `${base} · ${pluralize(total, 'persona')}`
+  return total === undefined
+    ? 'Quién puede hacer qué en la plataforma'
+    : `${pluralize(total, 'persona')} en la plataforma`
 }
 
-/** Header subtitle: "Cómo se agrupan las personas en la plataforma · 4 equipos". */
+/** Header subtitle (canvas `teamsSub`): "4 equipos en la plataforma" (never " · " joined). */
 export function teamsSubtitle(total: number | undefined): string {
-  const base = 'Cómo se agrupan las personas en la plataforma'
-  return total === undefined ? base : `${base} · ${pluralize(total, 'equipo')}`
+  return total === undefined
+    ? 'Cómo se agrupan las personas en la plataforma'
+    : `${pluralize(total, 'equipo')} en la plataforma`
+}
+
+// ── "Filtros" of Equipos (Admin.dc.html `tf`) ────────────────────────────────
+
+/** The one group key of the Equipos dropdown. */
+export const TEAM_FILTER_KEY = 'status'
+
+/** The status the API filters by: one checked state, or every team (none or both). */
+export function teamsQueryStatus(statuses: readonly TeamState[]): TeamStatusFilter {
+  return statuses.length === 1 ? statuses[0]! : 'all'
+}
+
+/** The URL state as the dropdown's selection. */
+export function teamFilterSelection(state: Pick<TeamsUrlState, 'statuses'>): FilterSelection {
+  return { [TEAM_FILTER_KEY]: [...state.statuses] }
+}
+
+/** The dropdown's selection back into the URL state (unknown values dropped). */
+export function teamsPatchOfSelection(selection: FilterSelection): Pick<TeamsUrlState, 'statuses'> {
+  return {
+    statuses: inOrder(TEAM_STATE_ORDER, (selection[TEAM_FILTER_KEY] ?? []) as TeamState[]),
+  }
+}
+
+/** "Estado": Activos / Inactivos, each with its count from the server. */
+export function teamFilterGroups(
+  counts: { active: number; inactive: number } | undefined,
+): FilterGroup[] {
+  return [
+    {
+      key: TEAM_FILTER_KEY,
+      legend: 'Estado',
+      options: TEAM_STATE_ORDER.map((status) => ({
+        value: status,
+        label: status === 'active' ? 'Activos' : 'Inactivos',
+        ...(counts ? { count: counts[status] } : {}),
+      })),
+    },
+  ]
+}
+
+/** "4 equipos", or "3 de 4 equipos" while a filter hides some (canvas `shownLabel`). */
+export function teamsShownLabel(shown: number, total: number): string {
+  const all = pluralize(total, 'equipo')
+  return shown === total ? all : `${shown} de ${all}`
 }
 
 // ── The user draft (contract §10.2–§10.4) ────────────────────────────────────

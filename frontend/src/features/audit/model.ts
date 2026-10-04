@@ -308,15 +308,26 @@ export function emptyLogCopy(filtered: boolean): string {
 
 // ── Detail aside ─────────────────────────────────────────────────────────────
 
-/** Kicker: "11:02:05 · ASIGNACIÓN". */
-export function detailKicker(event: Pick<AuditEvent, 'occurredAt' | 'family'>): string {
-  return `${eventTime(event.occurredAt)} · ${familyLabel(event.family).toUpperCase()}`
+/** Kicker parts, shown as separate elements (never " · " joined): "11:02:05", "ASIGNACIÓN". */
+export interface DetailKicker {
+  time: string
+  family: string
 }
 
-/** "Lucía Herrera · Supervisión"; the platform is just "Plataforma". */
-export function detailByline(actor: AuditActor): string {
-  if (actor.role === 'system') return 'Plataforma'
-  return `${actorName(actor)} · ${actorRoleLabel(actor.role)}`
+export function detailKicker(event: Pick<AuditEvent, 'occurredAt' | 'family'>): DetailKicker {
+  return { time: eventTime(event.occurredAt), family: familyLabel(event.family).toUpperCase() }
+}
+
+/** Byline parts: the name and the role word apart ("Lucía Herrera", "Supervisión"); the
+ * platform is just "Plataforma" (no role). */
+export interface DetailByline {
+  name: string
+  role: string | null
+}
+
+export function detailByline(actor: AuditActor): DetailByline {
+  if (actor.role === 'system') return { name: 'Plataforma', role: null }
+  return { name: actorName(actor), role: actorRoleLabel(actor.role) }
 }
 
 export interface PayloadLine {

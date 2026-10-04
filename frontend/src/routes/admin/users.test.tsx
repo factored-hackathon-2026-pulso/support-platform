@@ -73,9 +73,7 @@ describe('Usuarios y roles', () => {
     ).toBeInTheDocument()
     expect(document.title).toBe('Usuarios y roles · LATAM Bank Soporte')
     await screen.findByRole('table', { name: 'Personas' })
-    expect(
-      screen.getByText('Quién puede hacer qué en la plataforma · 13 personas'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('13 personas en la plataforma')).toBeInTheDocument()
     expect(screen.getByText('4 personas')).toBeInTheDocument()
     // One "Filtros" dropdown, never pill rows or selects (slice 9).
     expect(screen.queryByRole('radio')).toBeNull()

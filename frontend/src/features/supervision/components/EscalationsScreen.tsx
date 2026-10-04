@@ -12,7 +12,7 @@ import {
   type UrlStateChangeOptions,
   withoutKey,
 } from '../model'
-import { useEscalationOverview, useSupervisionLive, useSupervisionNotices } from '../hooks'
+import { useEscalationOverview, useSupervisionLive } from '../hooks'
 import type { EscalationItem, EscalationOverview } from '../types'
 import { AnalystAvatar } from './AnalystAvatar'
 import { EscalationPanel } from './EscalationPanel'
@@ -35,7 +35,6 @@ export interface EscalationsScreenProps {
  */
 export function EscalationsScreen({ state, onStateChange, onOpenCase }: EscalationsScreenProps) {
   useSupervisionLive()
-  useSupervisionNotices({ escalations: false })
   const overview = useEscalationOverview()
   const now = useNow(SUPERVISION_TICK_MS)
   const [result, setResult] = useState<{ message: string } | null>(null)

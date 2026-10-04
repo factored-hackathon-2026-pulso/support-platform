@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     realtime_queue_size: int = Field(default=256, ge=1)
     realtime_expiry_check_seconds: float = Field(default=30.0, gt=0)
 
+    # Notifications (slice 10): how often the SLA sweep looks for cases at risk without a
+    # first response ("Caso por vencer sin respuesta"); 0 turns it off (tests).
+    notification_sweep_seconds: float = Field(default=30.0, ge=0)
+
     # Logging
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"

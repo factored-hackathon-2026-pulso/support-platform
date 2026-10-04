@@ -14,6 +14,7 @@
 import { workspacePath } from '@/app/roles'
 import type { FactItem, StatusAppearance, Tone } from '@/components/ui'
 import {
+  ESCALATED_MARKER,
   INBOX_FILTERS,
   caseCardFacts,
   caseStatus,
@@ -148,6 +149,8 @@ export interface FirstCaseRow {
   id: string
   name: string
   status: StatusAppearance
+  /** "Escalado" (glyph + word, the Casos card marker) while an escalation is open; else null. */
+  escalated: StatusAppearance | null
   /** Channel, priority when high or critical, "Volvió a escribir": icon-only (the card facts). */
   facts: FactItem[]
   preview: string
@@ -182,6 +185,7 @@ export function firstCases(
         id: summary.id,
         name: summary.customer.displayName,
         status: caseStatus(summary.inboxStatus),
+        escalated: summary.escalated ? ESCALATED_MARKER : null,
         facts: caseCardFacts(summary),
         preview: summary.previewAuthorRole === 'analyst' ? `Tú: ${preview}` : preview,
         sla,

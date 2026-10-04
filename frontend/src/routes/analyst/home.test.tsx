@@ -131,6 +131,21 @@ describe('/analista/inicio (Inicio)', () => {
     ).toHaveAttribute('href', '/analista?caso=CASE-00000000000000000000000102&estado=por-responder')
   })
 
+  it('marks an escalated case in "Lo primero" with "Escalado" (glyph + word)', async () => {
+    vi.mocked(fetchInbox).mockResolvedValue(
+      makeInbox(
+        seededInbox.map((item) => (item.id.endsWith('101') ? { ...item, escalated: true } : item)),
+      ),
+    )
+    renderHome()
+    const section = await screen.findByRole('region', { name: 'Lo primero' })
+    const list = await within(section).findByRole('list', { name: 'Casos por urgencia' })
+    const marker = await within(list).findByText('Escalado')
+    expect(marker.parentElement!.querySelector('svg')).toHaveAttribute('data-status-shape', 'up')
+    expect(marker.closest('li')).toHaveTextContent('Marcela Quintana Pardo')
+    expect(within(list).getAllByText('Escalado')).toHaveLength(1)
+  })
+
   it('shows "Mientras no estabas": four rows, then every row with "Ver todo (n)"', async () => {
     const { user } = renderHome()
     const feed = await screen.findByRole('region', { name: 'Mientras no estabas' })

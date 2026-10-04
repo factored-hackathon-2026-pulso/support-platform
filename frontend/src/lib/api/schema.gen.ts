@@ -699,6 +699,63 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/me/notifications': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * My notifications, newest first
+     * @description Structured facts (no text): `kind` says what happened, the other members who and which case. Newest first by `createdAt` (when it happened), cursor pagination (`nextCursor`). `unreadCount` counts all her unread ones. Only the newest 200 per person are kept.
+     */
+    get: operations['notifications_list_my_notifications']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/me/notifications/read-all': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Mark all my notifications as read */
+    post: operations['notifications_mark_all_notifications_read']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/me/notifications/{notificationId}/read': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Mark one of my notifications as read
+     * @description Idempotent: an already read one answers `changed: false`. Someone else's (or an unknown) id answers 404.
+     */
+    post: operations['notifications_mark_notification_read']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/meta': {
     parameters: {
       query?: never
@@ -2195,6 +2252,137 @@ export interface components {
       code: string
       /** @default totp */
       method: components['schemas']['MfaMethod']
+    }
+    /** Notification */
+    Notification: {
+      /**
+       * Actorid
+       * @description Who acted: the supervisor (assigned_by_supervisor, reassigned_away, escalation_*), the analyst who escalated (case_escalated), the new person (invitation_accepted).
+       */
+      actorId: string | null
+      /** Actorname */
+      actorName: string | null
+      /**
+       * Caseid
+       * @description Every kind but account_locked, invitation_accepted.
+       */
+      caseId: string | null
+      /**
+       * Createdat
+       * Format: date-time
+       * @description When the fact happened (not when it was written).
+       */
+      createdAt: string
+      /** Customername */
+      customerName: string | null
+      /**
+       * Escalationid
+       * @description case_escalated, escalation_*: `ESC-…`.
+       */
+      escalationId: string | null
+      /**
+       * Failedattempts
+       * @description account_locked: attempts that locked it.
+       */
+      failedAttempts: number | null
+      /**
+       * Firstresponseat
+       * @description The case's first response, if any.
+       */
+      firstResponseAt: string | null
+      /**
+       * Id
+       * @description `NTF-…`
+       */
+      id: string
+      kind: components['schemas']['NotificationKind']
+      /** @description The case language (case kinds). */
+      language: components['schemas']['Language'] | null
+      /** Readat */
+      readAt: string | null
+      /** @description The role the kind belongs to: the SPA toasts it only on that role's screens. */
+      role: components['schemas']['StaffRole']
+      /**
+       * Score
+       * @description case_rated: the customer's score, 1–4.
+       */
+      score: number | null
+      /**
+       * Sladueat
+       * @description The case's first-response due time now.
+       */
+      slaDueAt: string | null
+      /**
+       * Targetid
+       * @description Who it is about: the new assignee (reassigned_away, escalation_taken, escalation_reassigned), the locked or invited person.
+       */
+      targetId: string | null
+      /** Targetname */
+      targetName: string | null
+    }
+    /**
+     * NotificationKind
+     * @description What happened. The value is the API vocabulary; the frontend renders the words.
+     * @enum {string}
+     */
+    NotificationKind:
+      | 'assigned_on_arrival'
+      | 'assigned_from_queue'
+      | 'assigned_by_supervisor'
+      | 'reassigned_away'
+      | 'customer_returned'
+      | 'escalation_answered'
+      | 'escalation_taken'
+      | 'escalation_reassigned'
+      | 'case_rated'
+      | 'case_escalated'
+      | 'case_queued'
+      | 'sla_at_risk'
+      | 'account_locked'
+      | 'invitation_accepted'
+    /** NotificationPage */
+    NotificationPage: {
+      /**
+       * Items
+       * @description Newest first (`createdAt`, then id).
+       */
+      items: components['schemas']['Notification'][]
+      /**
+       * Nextcursor
+       * @description Pass as `cursor` for the next (older) page.
+       */
+      nextCursor: string | null
+      /**
+       * Servertime
+       * Format: date-time
+       */
+      serverTime: string
+      /**
+       * Unreadcount
+       * @description All her unread notifications (not only this page).
+       */
+      unreadCount: number
+    }
+    /** NotificationReadResult */
+    NotificationReadResult: {
+      /**
+       * Changed
+       * @description False when it was already read (nothing changed).
+       */
+      changed: boolean
+      notification: components['schemas']['Notification']
+      /** Unreadcount */
+      unreadCount: number
+    }
+    /** NotificationsReadAllResult */
+    NotificationsReadAllResult: {
+      /** Unreadcount */
+      unreadCount: number
+      /**
+       * Updated
+       * @description How many were unread and are read now.
+       */
+      updated: number
     }
     /** OpenCaseCounts */
     OpenCaseCounts: {
@@ -5282,6 +5470,125 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  notifications_list_my_notifications: {
+    parameters: {
+      query?: {
+        cursor?: string | null
+        limit?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NotificationPage']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  notifications_mark_all_notifications_read: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NotificationsReadAllResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  notifications_mark_notification_read: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        notificationId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['NotificationReadResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
         headers: {
           [name: string]: unknown
         }

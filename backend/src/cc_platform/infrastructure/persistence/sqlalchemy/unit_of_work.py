@@ -25,6 +25,9 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.event_log import (
     SqlEventLogRepository,
 )
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.notifications import (
+    SqlNotificationRepository,
+)
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.people import (
     SqlAdminRosterRepository,
     SqlAnalystAvailabilityRepository,
@@ -61,6 +64,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     assignments: SqlAssignmentRepository
     case_slots: SqlCustomerCaseSlotRepository
     escalations: SqlEscalationRepository
+    notifications: SqlNotificationRepository
     event_log: SqlEventLogRepository
     analyst_home: SqlAnalystHomeReader
 
@@ -92,6 +96,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.assignments = SqlAssignmentRepository(session)
         self.case_slots = SqlCustomerCaseSlotRepository(session, self.track)
         self.escalations = SqlEscalationRepository(session, self.track)
+        self.notifications = SqlNotificationRepository(session, self.track)
         self.event_log = SqlEventLogRepository(session)
         self.analyst_home = SqlAnalystHomeReader(session)
 

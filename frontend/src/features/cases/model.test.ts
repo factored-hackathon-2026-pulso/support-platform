@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { NOW, makeCaseSummary, makeCounts, makeInbox } from '@/test/case-fixtures'
 import {
-  escalationToastCopy,
   ESCALATED_MARKER,
   ESCALATION_STATE,
   MAX_ESCALATION_TEXT,
@@ -15,8 +14,6 @@ import {
   caseStatus,
   RETURNED_TAG,
   SLA_AT_RISK_MS,
-  assignedToastCopy,
-  unassignedToastCopy,
   caseCardFacts,
   changesInboxPlacement,
   channelLabel,
@@ -309,35 +306,6 @@ describe('copy', () => {
     expect(emptyListCopy('waiting', false)).toBe('Ningún caso espera al cliente.')
     expect(emptyListCopy('closed', false)).toBe('No cerraste casos en los últimos 7 días.')
     expect(emptyListCopy('closed', true)).toBe('Ningún caso coincide con tu búsqueda.')
-  })
-
-  it('toasts a new case, or the customer who wrote again', () => {
-    expect(assignedToastCopy(makeCaseSummary())).toEqual({
-      title: 'Te llegó un caso nuevo',
-      description: 'Marcela Quintana Pardo',
-    })
-    expect(assignedToastCopy(makeCaseSummary({ previousCaseId: 'CASE-1' }))).toEqual({
-      title: 'Marcela volvió a escribir',
-      description: 'Marcela Quintana Pardo',
-    })
-  })
-
-  it('says when a supervisor assigned the case (slice 3)', () => {
-    expect(
-      assignedToastCopy(makeCaseSummary({ previousCaseId: 'CASE-1' }), { fromSupervisor: true }),
-    ).toEqual({
-      title: 'Te asignaron un caso',
-      description: 'Marcela Quintana Pardo',
-      tag: 'Supervisión',
-    })
-  })
-
-  it('explains a case supervision took away (case.unassigned)', () => {
-    expect(unassignedToastCopy(makeCaseSummary())).toEqual({
-      title: 'Supervisión reasignó un caso',
-      description:
-        'El caso de Marcela Quintana Pardo pasó a otra persona del equipo. Puedes leerlo, pero ya no responder.',
-    })
   })
 })
 
@@ -715,30 +683,5 @@ describe('escalations (slice 9)', () => {
     )
     expect(answered).toMatchObject({ level: 'normal', icon: 'clock', tone: 'muted', text: '4 min' })
     expect(answered.tooltip).toBe('Esperó 4 min')
-  })
-})
-
-describe('escalation toasts (slice 9)', () => {
-  const base = {
-    escalatedById: 'STF-ME',
-    resolvedByName: 'Lucía Herrera',
-    customerName: 'Marcela Quintana Pardo',
-  }
-
-  it('tells her when supervision answered or took her case', () => {
-    expect(escalationToastCopy({ ...base, state: 'answered' }, 'STF-ME')).toEqual({
-      title: 'Lucía Herrera respondió tu escalamiento',
-      description: 'Marcela Quintana Pardo',
-      tag: 'Supervisión',
-    })
-    expect(escalationToastCopy({ ...base, state: 'taken' }, 'STF-ME')?.title).toBe(
-      'Lucía Herrera tomó tu caso',
-    )
-  })
-
-  it('stays quiet otherwise (a reassignment has its own toast)', () => {
-    expect(escalationToastCopy({ ...base, state: 'reassigned' }, 'STF-ME')).toBeNull()
-    expect(escalationToastCopy({ ...base, state: 'open' }, 'STF-ME')).toBeNull()
-    expect(escalationToastCopy({ ...base, state: 'answered' }, 'STF-OTHER')).toBeNull()
   })
 })

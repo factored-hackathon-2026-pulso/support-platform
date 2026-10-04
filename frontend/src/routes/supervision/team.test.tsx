@@ -12,6 +12,7 @@ import { ApiProblem } from '@/lib/api'
 import { NOW, makeCaseSummary } from '@/test/case-fixtures'
 import { makeCaseDetail } from '@/test/conversation-fixtures'
 import { supervisorStaff } from '@/test/fixtures'
+import { makeNotification, notificationCreated } from '@/test/notification-fixtures'
 import { renderRoute } from '@/test/render'
 import {
   ANDES,
@@ -299,27 +300,28 @@ describe('Reasignar caso', () => {
 })
 
 describe('notices', () => {
-  it('toasts a new escalation once, with "Revisar"', async () => {
+  it('toasts a new escalation once from the notification stream, with "Revisar"', async () => {
     const { user, sockets, router } = renderTeam()
     await screen.findByRole('table', { name: 'Analistas' })
-    const envelope = {
-      type: 'escalation.updated',
-      id: 'EVT-ESC-1',
-      occurredAt: NOW.toISOString(),
-      data: {
-        entity: 'escalation',
-        entityId: camilaEscalation.escalation.id,
+    const envelope = notificationCreated(
+      makeNotification({
+        id: 'NTF-00000000000000000000000091',
+        kind: 'case_escalated',
+        role: 'supervisor',
         caseId: julianCamila.id,
-        actor: { role: 'analyst', id: JULIAN_ID },
-        payload: camilaEscalation.escalation,
-      },
-    }
+        customerName: 'Camila Torres Benavides',
+        actorId: JULIAN_ID,
+        actorName: 'Julián Ortega',
+        escalationId: camilaEscalation.escalation.id,
+      }),
+      1,
+    )
     act(() => {
       sockets.last()?.open()
       sockets.last()?.receive(envelope)
-      sockets.last()?.receive({ ...envelope, id: 'EVT-ESC-2' })
+      sockets.last()?.receive(envelope)
     })
-    const toasts = screen.getByRole('region', { name: 'Notificaciones' })
+    const toasts = screen.getByRole('region', { name: 'Avisos' })
     expect(await within(toasts).findByText('Julián Ortega escaló un caso')).toBeInTheDocument()
     expect(within(toasts).getAllByText('Julián Ortega escaló un caso')).toHaveLength(1)
     await user.click(within(toasts).getByRole('button', { name: 'Revisar' }))

@@ -12,8 +12,8 @@ import {
 /**
  * /administracion/auditoria — the same Auditoría screen in the admin section
  * (slice-4-administration.md §7.2, §10.6). An admin without Supervisión cannot
- * open the supervisor case view, so "Ver la conversación" is hidden for her. No
- * supervision toasts here (`useQueueNotices` is not mounted).
+ * open the supervisor case view, so "Ver la conversación" is hidden for her. Supervision
+ * notifications toast only on supervision screens (slice 10).
  */
 export default function AdminAuditRoute() {
   const [searchParams, setSearchParams] = useSearchParams()

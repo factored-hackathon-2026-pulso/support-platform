@@ -1,6 +1,6 @@
 # Modelo de datos de la plataforma
 
-Versión: slices 0 a 9 (slice 7: calificación del cliente; slice 8: prioridad del caso; slice 9: escalamientos a supervisión). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
+Versión: slices 0 a 10 (slice 7: calificación del cliente; slice 8: prioridad del caso; slice 9: escalamientos a supervisión; slice 10: notificaciones). Fuente de verdad: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tablas) y `backend/src/cc_platform/domain/` (reglas y valores permitidos). El contrato de la API está en `backend/openapi.json`.
 
 La plataforma es solo para personas: clientes y equipo de soporte conversan por chat. Guarda las conversaciones, quién atiende cada caso, las cuentas del equipo y el registro de eventos; nada más (la [última sección](#diferencias-con-contractsplatform_historyjson) compara este modelo con la muestra sintética).
 
@@ -8,7 +8,7 @@ La plataforma es solo para personas: clientes y equipo de soporte conversan por 
 
 - Base de datos SQLite por defecto, escrita con SQL portable para pasar a Postgres sin cambios.
 - **No hay migraciones todavía**: el esquema se crea al arrancar. Si cambia, se borra `backend/cc_platform.db` y se vuelve a crear con los datos de ejemplo.
-- Ids de texto con prefijo: `CASE-…`, `TRN-…` (mensaje), `ASG-…` (asignación), `CUS-…` (cliente), `STF-…` (persona del equipo), `SES-…` (sesión), `MFA-…`, `TEAM-…` (equipo), `EVT-…` (evento), `CSN-…` (sesión de cliente), `ESC-…` (escalamiento).
+- Ids de texto con prefijo: `CASE-…`, `TRN-…` (mensaje), `ASG-…` (asignación), `CUS-…` (cliente), `STF-…` (persona del equipo), `SES-…` (sesión), `MFA-…`, `TEAM-…` (equipo), `EVT-…` (evento), `CSN-…` (sesión de cliente), `ESC-…` (escalamiento), `NTF-…` (notificación).
 - Fechas en UTC (ISO-8601).
 - Las tablas con columna `version` usan control de concurrencia optimista: si dos personas cambian lo mismo a la vez, la segunda escritura se rechaza y se reintenta sobre datos frescos.
 - `turns` y `event_log` son de solo agregar: nunca se editan ni se borran filas.
@@ -32,6 +32,7 @@ erDiagram
     cases ||--o{ event_log : "case_id"
     cases ||--o{ escalations : "escalamientos (uno abierto a la vez)"
     staff ||--o{ escalations : "escalated_by_id"
+    staff ||--o{ notifications : "recipient_id (las últimas 200)"
 
     customers {
         string id PK "CUS-…"
@@ -162,6 +163,23 @@ erDiagram
         string staff_id PK
         string status "available paused"
         datetime since
+    }
+    notifications {
+        string id PK "NTF-…"
+        string recipient_id FK
+        string kind "14 tipos (slice 10)"
+        datetime created_at "cuándo pasó el hecho"
+        string source_key "EVT-… o sla:CASE-…"
+        string case_id
+        string customer_id
+        string actor_id
+        string target_id
+        string escalation_id
+        string language
+        int score
+        int failed_attempts
+        datetime read_at
+        int version
     }
     event_log {
         int sequence PK "orden total"
@@ -358,6 +376,44 @@ propia: se lee de `event_log`, `assignments` y `cases`.
 
 **`customer_case_slots`** · garantiza un solo caso abierto por cliente (`customer_id` PK, `open_case_id`, `version`).
 
+### Notificaciones (slice 10)
+
+**`notifications`** · lo que cada persona del equipo debe saber (la campana del riel). Se
+**derivan** de hechos que ya están en `event_log` (un proyector suscrito al bus de eventos) y del
+plazo de primera respuesta a punto de vencer (un barrido periódico). Solo datos estructurados: el
+texto en español lo pone el frontend con plantillas fijas. Sin IA.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | texto, PK | `NTF-…` |
+| `recipient_id` | FK → staff | a quién le llega |
+| `kind` | texto | Analista: `assigned_on_arrival`, `assigned_from_queue`, `assigned_by_supervisor`, `reassigned_away`, `customer_returned`, `escalation_answered`, `escalation_taken`, `escalation_reassigned`, `case_rated`; Supervisión: `case_escalated`, `case_queued`, `sla_at_risk`; Administración: `account_locked`, `invitation_accepted` |
+| `created_at` | fecha | cuándo pasó el hecho (la hora del evento de origen), no cuándo se escribió |
+| `source_key` | texto(80) | idempotencia: el id del evento de origen (`EVT-…`) o `sla:<caso>` del barrido; único por persona |
+| `case_id`, `customer_id` | texto, nulos | el caso y su cliente (tipos de caso) |
+| `actor_id` | texto, nulo | quién actuó (supervisión que asignó, respondió o tomó; la analista que escaló) |
+| `target_id` | texto, nulo | sobre quién (quien tiene el caso ahora; la persona bloqueada o invitada) |
+| `escalation_id` | texto, nulo | el escalamiento (`case_escalated`, `escalation_*`) |
+| `language` | texto, nulo | idioma del caso |
+| `score` | entero, nulo | `case_rated`: la calificación (1 a 4) |
+| `failed_attempts` | entero, nulo | `account_locked`: intentos fallidos |
+| `read_at` | fecha, nula | cuándo la leyó (una sola vez) |
+| `version` | entero | concurrencia optimista (leer una es compare-and-set; "Marcar todas" es un `UPDATE … WHERE read_at IS NULL` condicional) |
+
+Índices: único `(recipient_id, source_key)`; `(recipient_id, created_at, id)` (la lista, más nueva
+primero, con cursor; y la retención); `(recipient_id, read_at)` (cuántas sin leer).
+
+Reglas: nunca le llega a quien hizo la acción ni a una persona inactiva; de Supervisión y
+Administración, a todas las personas activas con ese rol. "Un caso espera en la cola" llega una vez
+por idioma mientras la cola no se vacíe. "Caso por vencer sin respuesta": un caso abierto sin
+primera respuesta a 5 minutos o menos de vencer, una vez por caso, revisado al arrancar y cada 30 s
+(`CC_NOTIFICATION_SWEEP_SECONDS`). **Retención (generada por el equipo):** se guardan las 200 más
+recientes por persona; las más viejas se borran al escribir una nueva.
+
+**Por qué no está en `event_log`.** Una notificación es una proyección de un hecho que ya está en el
+registro (`source_key` lo nombra) y "leída" es estado personal de la interfaz: registrarlas
+duplicaría la auditoría. Ver `api/slice-10-notifications.md`.
+
 ### Personas y acceso
 
 | Tabla | Para qué | Columnas principales |
@@ -406,6 +462,8 @@ Tipos de evento:
   arranca, con `medium` en sus casos y los plazos viejos).
 - Slice 9 agrega la tabla `escalations` y la columna `cases.open_escalation_id`: una base anterior
   falla al arrancar (`OutdatedSchemaError`) hasta borrarla.
+- Slice 10 agrega la tabla `notifications`: una base anterior falla al arrancar
+  (`OutdatedSchemaError`) hasta borrarla.
 - Pendiente conocido: no hay migraciones. Cualquier cambio futuro de esquema exige borrar `backend/cc_platform.db` hasta que se agreguen.
 
 ## Diferencias con `contracts/platform_history.json`

@@ -1,4 +1,5 @@
 export { AppShell } from './AppShell'
+export type { AppShellProps } from './AppShell'
 export { AuthLayout } from './AuthLayout'
 export { FullScreenStatus } from './FullScreenStatus'
 export type { FullScreenStatusProps } from './FullScreenStatus'

@@ -8,6 +8,7 @@ spawned by jobs (e.g. a queue drain whose commits trigger more work).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 
 import structlog
 
@@ -38,3 +39,42 @@ class AsyncioBackgroundTasks:
     @property
     def pending(self) -> int:
         return len(self._tasks)
+
+
+class PeriodicTask:
+    """Runs ``job`` every ``interval`` seconds on the running loop until ``stop`` (e.g. the
+    slice 10 SLA sweep). Not part of ``AsyncioBackgroundTasks``: ``drain()`` waits for
+    one-shot jobs only, and a loop never ends on its own. Failures are logged and the loop
+    keeps going."""
+
+    def __init__(self, name: str, interval: float, job: Job) -> None:
+        if interval <= 0:
+            raise ValueError("interval must be positive")
+        self._name = name
+        self._interval = interval
+        self._job = job
+        self._task: asyncio.Task[None] | None = None
+
+    def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.get_running_loop().create_task(self._loop(), name=self._name)
+
+    async def _loop(self) -> None:
+        while True:
+            await asyncio.sleep(self._interval)
+            try:
+                await self._job()
+            except Exception:
+                _log.exception("periodic_job_failed", job=self._name)
+
+    async def stop(self) -> None:
+        task, self._task = self._task, None
+        if task is None:
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    @property
+    def running(self) -> bool:
+        return self._task is not None and not self._task.done()

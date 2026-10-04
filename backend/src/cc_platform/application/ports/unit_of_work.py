@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         TurnRepository,
     )
     from cc_platform.application.customers.ports import CustomerRepository
+    from cc_platform.application.notifications.ports import NotificationRepository
     from cc_platform.application.people.ports import (
         AdminRosterRepository,
         AnalystAvailabilityRepository,
@@ -88,6 +89,11 @@ class UnitOfWork(Protocol):
 
     @property
     def escalations(self) -> EscalationRepository: ...
+
+    @property
+    def notifications(self) -> NotificationRepository:
+        """Each person's notifications (slice 10): a projection, not in the event log."""
+        ...
 
     @property
     def event_log(self) -> EventLogRepository: ...

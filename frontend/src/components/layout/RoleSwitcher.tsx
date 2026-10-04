@@ -52,7 +52,7 @@ export function RoleSwitcher({ currentRole, presence = null }: RoleSwitcherProps
   return (
     <div
       ref={rootRef}
-      className="relative mt-auto"
+      className="relative"
       onBlur={(event) => {
         // Tabbing out of the panel closes it (it would otherwise cover the page).
         const next = event.relatedTarget

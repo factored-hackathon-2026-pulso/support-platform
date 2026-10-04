@@ -3,9 +3,10 @@ import { Page, PageBody } from '@/components/layout'
 import {
   Button,
   EmptyState,
+  FilterChips,
+  FilterMenu,
   PageHeader,
   QueryState,
-  SegmentedControl,
   Skeleton,
   SourceNote,
   Status,
@@ -16,10 +17,22 @@ import {
   TRow,
   TRowSelect,
   Table,
+  activeFilterChips,
+  toggleFilter,
 } from '@/components/ui'
-import { teamStatus, teamsSubtitle, type TeamsUrlState, type UrlStateChangeOptions } from '../model'
+import {
+  teamFilterGroups,
+  teamFilterSelection,
+  teamStatus,
+  teamsPatchOfSelection,
+  teamsQueryStatus,
+  teamsShownLabel,
+  teamsSubtitle,
+  type TeamsUrlState,
+  type UrlStateChangeOptions,
+} from '../model'
 import { useAdminLive, useAdminTeams } from '../hooks'
-import type { AdminTeam, TeamStatusFilter } from '../types'
+import type { AdminTeam } from '../types'
 import { CreateTeamDialog } from './CreateTeamDialog'
 import { TeamPanel } from './TeamPanel'
 
@@ -31,14 +44,24 @@ export interface TeamsScreenProps {
 /**
  * Equipos (contract §10.5): the teams with their people and analysts, and the
  * selected team's aside (rename, members, "Agregar persona", deactivate /
- * reactivate). The URL holds the status pill, the selection and the create
+ * reactivate). One "Filtros" dropdown (Estado: Activos, Inactivos, with counts)
+ * and its removable chips, never a row of pills (slice 9 rule); states are glyph +
+ * word (`Status`). The URL holds the checked states, the selection and the create
  * dialog (`?estado=&equipo=&nuevo=`).
  */
 export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
   useAdminLive()
-  const list = useAdminTeams(state.status)
-  // The subtitle counts every team, whatever pill is selected.
+  const list = useAdminTeams(teamsQueryStatus(state.statuses))
+  // The subtitle counts every team, whatever the filter.
   const total = list.data?.statusCounts.all
+  const groups = teamFilterGroups(list.data?.statusCounts)
+  const selection = teamFilterSelection(state)
+  const replace = (patch: Partial<TeamsUrlState>) => onStateChange(patch, { replace: true })
+  const toggle = (group: string, value: string) =>
+    replace(teamsPatchOfSelection(toggleFilter(selection, group, value)))
+  const clear = () => replace({ statuses: [] })
+  const chips = activeFilterChips(groups, selection)
+  const shown = list.data?.items.length
 
   return (
     <Page
@@ -58,18 +81,14 @@ export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
         />
       }
       toolbar={
-        <div className="flex shrink-0 items-center border-b border-border px-7 py-3">
-          <SegmentedControl<TeamStatusFilter>
-            label="Estado"
-            variant="pills"
-            value={state.status}
-            onValueChange={(status) => onStateChange({ status }, { replace: true })}
-            options={[
-              { value: 'active', label: 'Activos', count: list.data?.statusCounts.active },
-              { value: 'inactive', label: 'Inactivos', count: list.data?.statusCounts.inactive },
-              { value: 'all', label: 'Todos', count: list.data?.statusCounts.all },
-            ]}
-          />
+        <div className="flex shrink-0 flex-col gap-2 border-b border-border px-7 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <FilterMenu groups={groups} selection={selection} onToggle={toggle} onClear={clear} />
+            {shown !== undefined && total !== undefined ? (
+              <span className="ml-auto text-13 text-muted">{teamsShownLabel(shown, total)}</span>
+            ) : null}
+          </div>
+          <FilterChips chips={chips} onRemove={toggle} onClear={clear} />
         </div>
       }
     >

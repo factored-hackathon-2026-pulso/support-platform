@@ -34,7 +34,11 @@ In scope:
   open case of a language, "Equipo" as one table with filters, the redesigned reassign dialog,
   escalations to supervision grounded only in the dataset's `was_escalated` (a motive and what
   supervision did: answer, take, reassign; no types, amounts, limits, levels or deadlines),
-  gender-neutral role names and the admin users filters.
+  gender-neutral role names and the admin users filters;
+- the notification center (done, slice 10): a bell in the rail for every role, notifications
+  persisted per person and derived from facts already in the event log (plus the first-response
+  SLA risk, from a periodic sweep), the toasts of those facts on every screen of the role with
+  "Más tarde"; no AI, fixed templates.
 
 The chat must work for real in two browser windows: the analyst Workspace and the customer simulator.
 
@@ -144,7 +148,7 @@ Keep it pragmatic: add no abstraction without a second caller or a named seam in
 - **Realtime:**
   - One WebSocket, `/api/v1/ws`, authenticated with the session token or the customer token as a query param.
   - The server pushes typed envelopes `{type, id, occurredAt, data}` derived from domain events (`turn.created`, `case.updated`, `case.assigned`, `inbox.counts`, `availability.updated`, `conversation.updated`, …).
-  - Clients subscribe to topics: `case:<id>`, `inbox:<staffId>` and `customer:<customerId>`. Supervision topics come in slice 3.
+  - Clients subscribe to topics: `case:<id>`, `inbox:<staffId>` and `customer:<customerId>`. Supervision topics come in slice 3; `staff:<staffId>` (slice 4) also carries her notifications (slice 10).
   - Sockets only *signal* changes. REST and the event log stay the source of truth.
 
 ### 4.5 Auth (dev mode)
@@ -255,6 +259,20 @@ Rules:
     flame > 15 min, red > 30 min) is visual only: no deadlines.
   - Alerts use `Callout` (icon tile, short title, one line, action right); role names are
     gender-neutral ("Supervisión"); facts are icon + short label, never " · " joined.
+- **Notification center (slice 10, user decision 2026-10-04).** Contract:
+  `api/slice-10-notifications.md`.
+  - A bell in the dark rail above the avatar, for every staff role: orange badge with the unread
+    count, accessible name "Notificaciones, N sin leer"; a panel anchored to it (380 px, ≤ 560 px,
+    scrolls inside): "Marcar todas como leídas", "Nuevas" / "Anteriores", items with an icon tile,
+    a short title, one line, the time, the unread dot, the primary action ("Abrir caso",
+    "Revisar", "Ver en la cola", "Ver usuarios") and "Marcar como leída"; empty: "Estás al día".
+  - Notifications are persisted per person and derived from facts (event log + SLA sweep); they
+    are not events themselves. Kinds and recipients are fixed (analyst: her cases; supervision and
+    administration: every active person of the role; never the actor).
+  - Toasts: ink at 88 % with a 12 px blur and a hairline border, region "Avisos". A live toast of
+    a notification has its action (opens it, marks it read) and "Más tarde" (it stays unread);
+    it shows on every screen of its role unless the screen already shows it. Confirmations of
+    one's own actions stay plain toasts.
 - **Layout and accessibility.** Desktop-first (1440×900 boards), but it must not break at 1280 width. Keyboard accessible, visible focus, aria labels as in the canvas.
 
 ## 6. Quality gates (must pass before a slice is done)
@@ -286,3 +304,4 @@ Test coverage required:
 | S7 | **Calificación del cliente (CSAT).** The customer rates a closed case once (1–4: Mal, Regular, Bien, Excelente; optional comment ≤ 500) from the simulator (survey in place of the composer, "Ahora no", thanks pill; es and pt-BR). `POST /customer/conversations/{caseId}/rating` (customer token, `Idempotency-Key`; 409 `case_not_closed` / `already_rated`, 404 for someone else's case), stored on the case (version CAS), `case.rated` in the event log and on the existing sockets. Staff: the closed footer pill + comment, the Cerrados card face, the ficha "Calificación" row and "Calificó: …" in "Casos anteriores"; no averages for analysts. Supervision: "Calificación 7 días" per analyst (who closed the case). Audit: "El cliente calificó el caso: Bien", never the comment. Seed: 104 (4, with comment), 106 (3), 110 (3); 105 unrated. | `api/slice-7-csat.md` | done. Gates 2026-10-04: backend `ruff check`, `ruff format --check` (241 files), `mypy src` (174 files), `pytest` 756 passed, `export_openapi --check` clean; frontend `typecheck`, `lint`, `test` 694 passed in 69 files, `build` (no rating copy in the entry chunk), `format:check`, `check:api`; `pnpm e2e` 10/10 twice in a row (new: the customer rates and the analyst sees it live). |
 | S8 | **Prioridad del caso (part 1).** `CasePriority` = none · low · medium · high · critical (every case opens with none); `PUT /cases/{caseId}/priority` (`{priority, expectedVersion}`; the assignee analyst or Supervisión on any open case; 409 `case_closed` / `version_conflict` with `current`; same level = `changed: false`), CAS + `retry_on_conflict`, `case.priority_changed {from, to}` in the event log, audit "Cambió la prioridad a Alta" (Casos family), `case.updated` / `team.updated` / `queue.updated` on the existing topics. The first-response SLA is a fixed 15 minutes for every case. Frontend: `PriorityIcon` + `ChoiceMenu` primitives, one `CASE_PRIORITY` map, the ficha menu (optimistic, rollback + toast), the supervisor header menu, card glyph for high/critical, supervision row glyphs, "Lo primero" order (overdue, critical, high, nearest SLA). Rating with less text in lists (face + tooltip) and in the ficha/footer (face + one word). Seed: 101 critical, 102 and 112 high, 106 and 114 low. | `api/slice-8-priority.md` | done. Gates 2026-10-04: see the slice report. |
 | S9 | **Supervisión v2 + escalamientos.** Rail Colas / Equipo / Escalados / Auditoría (landing `/supervision/colas`); "Colas" lists every open case of a language (`GET /supervision/open-cases`), no manual "Asignar"; "Equipo" one table with one "Filtros" dropdown (no team tabs) and the redesigned reassign dialog (only speakers, 3 suggestions, search, "+N más", paused people on demand); escalations as their own aggregate (`escalations`, one open per case through `cases.open_escalation_id`): escalate / withdraw / "Entendido" (analyst), answer / take / reassign (supervision), `escalation.*` events with motive and note redacted in the audit, `escalation.updated` on `case:`, `inbox:` and the new `supervision:escalations`; gender-neutral "Supervisión"; admin users list with search + "Filtros" + chips, "Nuevo usuario", language pills. | `api/slice-9-supervision-v2.md` | done. Gates 2026-10-04: backend `ruff check`, `ruff format --check` (250 files), `mypy src` (177 files), `pytest` 857 passed, `export_openapi --check` clean; frontend `typecheck`, `lint`, `test` 783 passed in 76 files, `build` (screen copy only in lazy chunks), `format:check`, `check:api`; `pnpm e2e` 11/11 twice in a row (new: an analyst escalates, supervision answers from Escalados and she sees it live). |
+| S10 | **Centro de notificaciones.** `Notification` aggregate + `notifications` table (`NTF-…`, structured data, `source_key` unique per person, newest 200 kept), `NotificationProjector` on the bus (assigned on arrival / from the queue / by supervision, reassigned away, customer returned, escalation answered / taken / reassigned, case rated; case escalated, queued (once per language while it waits); account locked; invitation accepted, defined for part 4), `SweepSlaRisk` (once at startup, then every 30 s), `GET /me/notifications`, `POST /me/notifications/{id}/read`, `POST /me/notifications/read-all`, `notification.created` / `notifications.read` on `staff:<id>`. SPA: `features/notifications` (bell + panel in the rail through `routes/staff-shell.tsx`, toasts from the stream on every screen of the role with "Más tarde"), the restyled toast ("Avisos"), the ad-hoc toasts of Casos and supervision removed. Part-2 leftovers: "Escalado" in "Lo primero", no " · " in the audit detail and the closed footer, Equipos with `Status` and "Filtros". | `api/slice-10-notifications.md` | done. Gates 2026-10-04: backend `ruff check`, `ruff format --check` (266 files), `mypy src` (190 files), `pytest` 911 passed, `export_openapi --check` clean; frontend `typecheck`, `lint`, `test` 811 passed in 79 files, `build` (the bell's copy is in the entry chunk on purpose: it is on every staff screen), `format:check`, `check:api`; `pnpm e2e` 12/12 twice in a row (new: supervision opens an escalation from the bell, the answer reaches the analyst's bell). |

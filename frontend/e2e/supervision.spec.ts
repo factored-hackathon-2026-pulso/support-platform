@@ -109,7 +109,8 @@ test.describe('Colas y supervisión', () => {
 
     // The first analyst watches it leave her list; the customer is told who took over.
     await expect(inbox.caseCard(customer.name)).toHaveCount(0)
-    await expect(analyst.shell.toast('Supervisión reasignó un caso')).toBeVisible()
+    // The notification stream says why (slice 10): it toasts even with the case open.
+    await expect(analyst.shell.toast('Supervisión reasignó tu caso')).toBeVisible()
     await expect(chat.status({ agent: firstName(next.name) })).toBeVisible()
     await expect(chat.messages.filter({ hasText: notice })).toHaveCount(1)
 
@@ -171,16 +172,78 @@ test.describe('Colas y supervisión', () => {
     await escalations.answer(customer.name, note)
     await expect(escalations.panel(customer.name).getByText('Respondiste a')).toBeVisible()
 
-    // The analyst sees it live: a toast and the answer card in the case, then "Entendido".
-    await expect(
-      analyst.shell.toast(`${SEEDED.supervisor.name} respondió tu escalamiento`),
-    ).toBeVisible()
+    // The analyst sees it live: the answer card in the open case (so no toast over it), then
+    // "Entendido". The bell has it too (next scenario).
     await expect(card.getByText(`${SEEDED.supervisor.name} respondió`)).toBeVisible()
+    await expect(analyst.shell.toast('Supervisión respondió tu escalamiento')).toHaveCount(0)
     await expect(card.getByText(note)).toBeVisible()
     await expect(inbox.caseCard(customer.name).getByText('Escalado')).toHaveCount(0)
     await inbox.acknowledgeEscalation(customer.name)
     // The case stayed with her and she can escalate again.
     await expect(inbox.composer(customer.name)).toBeVisible()
     await expect(inbox.escalateButton(customer.name)).toBeVisible()
+  })
+  test('the bell: supervision opens an escalation from it, the analyst gets the answer in hers', async ({
+    actors,
+    people,
+    customers,
+  }) => {
+    const customer = CUSTOMERS.natalia // es-CO
+    await customers.release(customer)
+    const person = await people.analyst(['es'])
+
+    const analyst = await actors.signedIn('analista', person)
+    const inbox = new WorkspacePage(analyst.page)
+    await inbox.goto()
+    await inbox.becomeAvailable()
+
+    const chat = await actors.customer('cliente', customer)
+    await chat.send(uniqueText('No me llegó la transferencia que hice ayer'))
+    await expect(inbox.caseCard(customer.name)).toBeVisible()
+    await inbox.openCase(customer.name)
+
+    // Supervision works on Colas; the bell counts what is new.
+    const supervisor = await actors.signedIn('supervisión', SEEDED.supervisor)
+    const queues = new QueuesPage(supervisor.page)
+    await queues.goto('Español')
+    await expect(supervisor.shell.bell).toBeVisible()
+    const before = await supervisor.shell.unreadCount()
+
+    const motive = uniqueText('La transferencia no aparece y pide hablar con supervisión')
+    await inbox.escalate(customer.name, motive)
+
+    // The bell goes up live; the panel lists it under "Nuevas" with "Revisar".
+    await expect
+      .poll(() => supervisor.shell.unreadCount(), { timeout: 10_000 })
+      .toBeGreaterThan(before)
+    const panel = await supervisor.shell.openNotifications()
+    await expect(panel.getByRole('heading', { level: 3, name: 'Nuevas' })).toBeVisible()
+    const row = supervisor.shell.notification(`${person.name} escaló un caso`, customer.name)
+    await expect(row).toHaveCount(1)
+    await expect(row.getByText('Sin leer')).toBeAttached()
+    await row.getByRole('link', { name: 'Revisar' }).click()
+
+    // "Revisar" lands on Escalados with that escalation open, and it is read.
+    await expect(supervisor.page).toHaveURL(/\/supervision\/escalados\?escalamiento=ESC-/)
+    const escalations = new EscalationsPage(supervisor.page)
+    await expect(escalations.panel(customer.name)).toBeVisible()
+    await expect(escalations.panel(customer.name)).toContainText(motive)
+    await expect(supervisor.shell.notifications).toHaveCount(0)
+
+    // Supervision answers; the analyst (her case open, so no toast) finds it in her bell.
+    const analystBefore = await analyst.shell.unreadCount()
+    await escalations.answer(customer.name, uniqueText('Ya la ubiqué: sigue tú con el cliente'))
+    await expect
+      .poll(() => analyst.shell.unreadCount(), { timeout: 10_000 })
+      .toBeGreaterThan(analystBefore)
+    await analyst.shell.openNotifications()
+    const answered = analyst.shell.notification(
+      'Supervisión respondió tu escalamiento',
+      `${SEEDED.supervisor.name} sobre ${customer.name}`,
+    )
+    await expect(answered).toHaveCount(1)
+    await expect(answered.getByRole('link', { name: 'Revisar' })).toBeVisible()
+    await answered.getByRole('button', { name: 'Marcar como leída' }).click()
+    await expect(answered.getByText('Sin leer')).toHaveCount(0)
   })
 })

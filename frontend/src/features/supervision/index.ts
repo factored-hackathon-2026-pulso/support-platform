@@ -14,7 +14,6 @@ export { EscalationsScreen } from './components/EscalationsScreen'
 export type { EscalationsScreenProps } from './components/EscalationsScreen'
 export { SupervisorCaseScreen } from './components/SupervisorCaseScreen'
 export type { SupervisorCaseScreenProps } from './components/SupervisorCaseScreen'
-export { useSupervisionNotices } from './hooks'
 export {
   ACTIVITY_META,
   backLabelFor,

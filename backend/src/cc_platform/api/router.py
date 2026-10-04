@@ -13,6 +13,7 @@ from cc_platform.api.routers import (
     cases,
     customer,
     home,
+    notifications,
     people,
     realtime,
     supervision,
@@ -29,6 +30,7 @@ def build_api_router() -> APIRouter:
     router.include_router(people.router)
     router.include_router(availability.router)
     router.include_router(home.router)
+    router.include_router(notifications.router)
     router.include_router(cases.router)
     router.include_router(supervision.router)
     router.include_router(audit.router)

@@ -18,6 +18,7 @@ from cc_platform.application.cases.ports import (
     RatingTotals,
 )
 from cc_platform.application.events import EventPage, EventRecord, StoredEvent
+from cc_platform.application.notifications.ports import NotificationCursor
 from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.case import Case
@@ -26,6 +27,7 @@ from cc_platform.domain.cases.escalation import Escalation, EscalationState
 from cc_platform.domain.cases.turn import Turn
 from cc_platform.domain.cases.values import OPEN_ASSIGNED_STATUSES, CaseStatus, TurnAudience
 from cc_platform.domain.customers.customer import Customer
+from cc_platform.domain.notifications.notification import Notification
 from cc_platform.domain.people.admin_roster import ROSTER_ID, AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability
 from cc_platform.domain.people.errors import EmailTakenError, TeamNameTakenError
@@ -560,6 +562,90 @@ class InMemoryEscalationRepository(_StagedRepository[Escalation]):
             if e.state is EscalationState.OPEN
             or (e.resolved_at is not None and e.resolved_at >= resolved_since)
         )
+
+
+class InMemoryNotificationRepository(_StagedRepository[Notification]):
+    """Slice 10. Same answers as ``SqlNotificationRepository``; deletions (retention) are
+    staged like writes and applied at commit."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, Notification], track: Tracker) -> None:
+        super().__init__(committed, lambda notification: notification.id, track)
+        self._deleted: set[str] = set()
+
+    def _unique_violation(self, aggregate: Notification, other: Notification) -> DomainError | None:
+        same = (aggregate.recipient_id, aggregate.source_key)
+        if same == (other.recipient_id, other.source_key):
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    def _all(self) -> list[Notification]:
+        return [item for item in super()._all() if item.id not in self._deleted]
+
+    def _mine(self, recipient_id: str) -> list[Notification]:
+        mine = [item for item in self._all() if item.recipient_id == recipient_id]
+        return sorted(mine, key=lambda item: (item.created_at, item.id), reverse=True)
+
+    async def get(self, notification_id: str) -> Notification | None:
+        if notification_id in self._deleted:
+            return None
+        return await self._get(notification_id)
+
+    async def recipients_with_key(
+        self, source_key: str, recipient_ids: Collection[str]
+    ) -> set[str]:
+        wanted = set(recipient_ids)
+        return {
+            item.recipient_id
+            for item in self._all()
+            if item.source_key == source_key and item.recipient_id in wanted
+        }
+
+    async def page(
+        self, recipient_id: str, *, before: NotificationCursor | None, limit: int
+    ) -> list[Notification]:
+        mine = self._mine(recipient_id)
+        if before is not None:
+            mark = (before.created_at, before.notification_id)
+            mine = [item for item in mine if (item.created_at, item.id) < mark]
+        found = mine[:limit]
+        for item in found:
+            self._track(item)
+        return found
+
+    async def unread_count(self, recipient_id: str) -> int:
+        mine = (item for item in self._all() if item.recipient_id == recipient_id)
+        return sum(1 for item in mine if item.is_unread)
+
+    async def mark_all_read(self, recipient_id: str, *, at: datetime) -> int:
+        updated = 0
+        for item in self._all():
+            if item.recipient_id != recipient_id or not item.is_unread:
+                continue
+            item.mark_read(at=at)
+            await self.save(item)
+            updated += 1
+        return updated
+
+    async def prune(self, recipient_id: str, *, keep: int) -> set[str]:
+        stale = {item.id for item in self._mine(recipient_id)[keep:]}
+        for key in stale:
+            self._staged.pop(key, None)
+            if key in self._committed:
+                self._deleted.add(key)
+            else:
+                self._base_versions.pop(key, None)
+        return stale
+
+    def apply(self) -> None:
+        for key in self._deleted:
+            self._committed.pop(key, None)
+        super().apply()
+
+    def discard(self) -> None:
+        self._deleted.clear()
+        super().discard()
 
 
 class InMemoryCustomerCaseSlotRepository(_StagedRepository[CustomerCaseSlot]):

@@ -42,7 +42,6 @@ import {
   escalatedAgo,
   escalationCaseFacts,
   escalationGroups,
-  escalationNoticeCopy,
   escalationOutcomeTitle,
   escalationResultCopy,
   filterAnalysts,
@@ -68,7 +67,6 @@ import {
   queueFiguresFromRows,
   queueFilterGroups,
   queueNavLabels,
-  queuedNoticeCopy,
   queuesPath,
   queuesStateFromSelection,
   reassignList,
@@ -517,20 +515,7 @@ describe('"Escalados"', () => {
   })
 })
 
-describe('notices and the case view', () => {
-  it('words the toasts without assignment, AI or approval wording', () => {
-    expect(queuedNoticeCopy(queuedRosa)).toEqual({
-      tag: 'Cola en español',
-      title: 'Un caso espera en la cola en español',
-      description: 'Rosa Elena Ibarra Méndez',
-    })
-    expect(escalationNoticeCopy(camilaEscalation.escalation)).toEqual({
-      title: 'Julián Ortega escaló un caso',
-      description: 'Camila Torres Benavides',
-      meta: '“Problema con la app al hacer una transferencia: no le llegó a su hermano.”',
-    })
-  })
-
+describe('the case view', () => {
   it('names "Volver" after the screen it came from and keeps the dialog in the URL', () => {
     expect(backLabelFor(null)).toBe('Volver a Colas')
     expect(backLabelFor('/supervision/colas?idioma=pt')).toBe('Volver a Colas')

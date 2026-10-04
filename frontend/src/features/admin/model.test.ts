@@ -38,6 +38,11 @@ import {
   openCaseBlocks,
   openCasesFact,
   parseTeamsSearch,
+  teamFilterGroups,
+  teamFilterSelection,
+  teamsPatchOfSelection,
+  teamsQueryStatus,
+  teamsShownLabel,
   parseUsersSearch,
   reactivatedToast,
   readAdminTeam,
@@ -119,9 +124,9 @@ describe('labels', () => {
     expect(userSummaryFacts({ ...daniela, languages: [] })[0]?.text).toBe('Sin idiomas')
     expect(openCasesFact(daniela.openCases)).toBe('5 · 4 en español · 1 en portugués')
     expect(openCasesFact({ total: 0, es: 0, pt: 0 })).toBe('0')
-    expect(usersSubtitle(13)).toBe('Quién puede hacer qué en la plataforma · 13 personas')
+    expect(usersSubtitle(13)).toBe('13 personas en la plataforma')
     expect(usersSubtitle(undefined)).toBe('Quién puede hacer qué en la plataforma')
-    expect(teamsSubtitle(1)).toBe('Cómo se agrupan las personas en la plataforma · 1 equipo')
+    expect(teamsSubtitle(1)).toBe('1 equipo en la plataforma')
   })
 })
 
@@ -194,14 +199,65 @@ describe('URL state', () => {
 
   it('parses and serializes the teams screen', () => {
     const state = parseTeamsSearch(new URLSearchParams('estado=inactivos&equipo=TEAM-4&nuevo=1'))
-    expect(state).toEqual({ status: 'inactive', teamId: 'TEAM-4', create: true })
+    expect(state).toEqual({ statuses: ['inactive'], teamId: 'TEAM-4', create: true })
     expect(toTeamsSearch(state).toString()).toBe('estado=inactivos&equipo=TEAM-4&nuevo=1')
+    // Unknown → the default (only the active teams); "todos" → nothing checked.
     expect(parseTeamsSearch(new URLSearchParams('estado=archivados'))).toEqual({
-      status: 'active',
+      statuses: ['active'],
       teamId: null,
       create: false,
     })
-    expect(toTeamsSearch({ status: 'active', teamId: null, create: false }).toString()).toBe('')
+    expect(parseTeamsSearch(new URLSearchParams('estado=todos')).statuses).toEqual([])
+    expect(parseTeamsSearch(new URLSearchParams('estado=inactivos,activos')).statuses).toEqual([
+      'active',
+      'inactive',
+    ])
+    expect(toTeamsSearch({ statuses: ['active'], teamId: null, create: false }).toString()).toBe('')
+    expect(toTeamsSearch({ statuses: [], teamId: null, create: false }).toString()).toBe(
+      'estado=todos',
+    )
+    expect(
+      toTeamsSearch({ statuses: ['inactive', 'active'], teamId: null, create: false }).get(
+        'estado',
+      ),
+    ).toBe('activos,inactivos')
+  })
+
+  it('maps the Equipos "Filtros" to the API status and back', () => {
+    expect(teamsQueryStatus(['active'])).toBe('active')
+    expect(teamsQueryStatus(['inactive'])).toBe('inactive')
+    expect(teamsQueryStatus([])).toBe('all')
+    expect(teamsQueryStatus(['active', 'inactive'])).toBe('all')
+    expect(teamFilterSelection({ statuses: ['active'] })).toEqual({ status: ['active'] })
+    expect(teamsPatchOfSelection({ status: ['inactive', 'nope', 'active'] })).toEqual({
+      statuses: ['active', 'inactive'],
+    })
+    expect(teamFilterGroups({ active: 3, inactive: 1 })).toEqual([
+      {
+        key: 'status',
+        legend: 'Estado',
+        options: [
+          { value: 'active', label: 'Activos', count: 3 },
+          { value: 'inactive', label: 'Inactivos', count: 1 },
+        ],
+      },
+    ])
+    expect(teamFilterGroups(undefined)[0]!.options[0]).toEqual({
+      value: 'active',
+      label: 'Activos',
+    })
+    expect(teamsShownLabel(4, 4)).toBe('4 equipos')
+    expect(teamsShownLabel(3, 4)).toBe('3 de 4 equipos')
+    expect(teamStatus({ active: true })).toEqual({
+      shape: 'check',
+      tone: 'success',
+      label: 'Activo',
+    })
+    expect(teamStatus({ active: false })).toEqual({
+      shape: 'cross',
+      tone: 'closed',
+      label: 'Inactivo',
+    })
   })
 
   it('asks the server for everyone (the search only); the groups filter here', () => {

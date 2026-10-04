@@ -7,15 +7,13 @@ import {
   type AuditStateChangeOptions,
   type AuditUrlState,
 } from '@/features/audit'
-import { useSupervisionNotices } from '@/features/supervision'
 
 /**
  * /supervision/auditoria — Auditoría. Filters, search and the selected event
- * live in the URL (slice-3-supervision.md §8.9). Like every supervision screen
- * it shows the supervision notices (the route composes both features).
+ * live in the URL (slice-3-supervision.md §8.9). The supervision notices come from the
+ * notification center in the shell (slice 10), like on every screen.
  */
 export default function AuditRoute() {
-  useSupervisionNotices()
   const [searchParams, setSearchParams] = useSearchParams()
   const state = useMemo(() => parseAuditSearch(searchParams), [searchParams])
 

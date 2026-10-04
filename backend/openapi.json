@@ -3040,6 +3040,308 @@
         "title": "MfaRequest",
         "type": "object"
       },
+      "Notification": {
+        "properties": {
+          "actorId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who acted: the supervisor (assigned_by_supervisor, reassigned_away, escalation_*), the analyst who escalated (case_escalated), the new person (invitation_accepted).",
+            "title": "Actorid"
+          },
+          "actorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actorname"
+          },
+          "caseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Every kind but account_locked, invitation_accepted.",
+            "title": "Caseid"
+          },
+          "createdAt": {
+            "description": "When the fact happened (not when it was written).",
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "customerName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customername"
+          },
+          "escalationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "case_escalated, escalation_*: `ESC-…`.",
+            "title": "Escalationid"
+          },
+          "failedAttempts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "account_locked: attempts that locked it.",
+            "title": "Failedattempts"
+          },
+          "firstResponseAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The case's first response, if any.",
+            "title": "Firstresponseat"
+          },
+          "id": {
+            "description": "`NTF-…`",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotificationKind"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Language"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The case language (case kinds)."
+          },
+          "readAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readat"
+          },
+          "role": {
+            "$ref": "#/components/schemas/StaffRole",
+            "description": "The role the kind belongs to: the SPA toasts it only on that role's screens."
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "case_rated: the customer's score, 1–4.",
+            "title": "Score"
+          },
+          "slaDueAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The case's first-response due time now.",
+            "title": "Sladueat"
+          },
+          "targetId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who it is about: the new assignee (reassigned_away, escalation_taken, escalation_reassigned), the locked or invited person.",
+            "title": "Targetid"
+          },
+          "targetName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetname"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "role",
+          "createdAt",
+          "readAt",
+          "caseId",
+          "customerName",
+          "actorId",
+          "actorName",
+          "targetId",
+          "targetName",
+          "escalationId",
+          "language",
+          "score",
+          "failedAttempts",
+          "slaDueAt",
+          "firstResponseAt"
+        ],
+        "title": "Notification",
+        "type": "object"
+      },
+      "NotificationKind": {
+        "description": "What happened. The value is the API vocabulary; the frontend renders the words.",
+        "enum": [
+          "assigned_on_arrival",
+          "assigned_from_queue",
+          "assigned_by_supervisor",
+          "reassigned_away",
+          "customer_returned",
+          "escalation_answered",
+          "escalation_taken",
+          "escalation_reassigned",
+          "case_rated",
+          "case_escalated",
+          "case_queued",
+          "sla_at_risk",
+          "account_locked",
+          "invitation_accepted"
+        ],
+        "title": "NotificationKind",
+        "type": "string"
+      },
+      "NotificationPage": {
+        "properties": {
+          "items": {
+            "description": "Newest first (`createdAt`, then id).",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the next (older) page.",
+            "title": "Nextcursor"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "title": "Servertime",
+            "type": "string"
+          },
+          "unreadCount": {
+            "description": "All her unread notifications (not only this page).",
+            "title": "Unreadcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "unreadCount",
+          "nextCursor",
+          "serverTime"
+        ],
+        "title": "NotificationPage",
+        "type": "object"
+      },
+      "NotificationReadResult": {
+        "properties": {
+          "changed": {
+            "description": "False when it was already read (nothing changed).",
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "notification": {
+            "$ref": "#/components/schemas/Notification"
+          },
+          "unreadCount": {
+            "title": "Unreadcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "notification",
+          "changed",
+          "unreadCount"
+        ],
+        "title": "NotificationReadResult",
+        "type": "object"
+      },
+      "NotificationsReadAllResult": {
+        "properties": {
+          "unreadCount": {
+            "title": "Unreadcount",
+            "type": "integer"
+          },
+          "updated": {
+            "description": "How many were unread and are read now.",
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated",
+          "unreadCount"
+        ],
+        "title": "NotificationsReadAllResult",
+        "type": "object"
+      },
       "OpenCaseCounts": {
         "properties": {
           "es": {
@@ -8192,6 +8494,192 @@
         "summary": "My home: activity since my previous session and my team's queues now",
         "tags": [
           "home"
+        ]
+      }
+    },
+    "/api/v1/me/notifications": {
+      "get": {
+        "description": "Structured facts (no text): `kind` says what happened, the other members who and which case. Newest first by `createdAt` (when it happened), cursor pagination (`nextCursor`). `unreadCount` counts all her unread ones. Only the newest 200 per person are kept.",
+        "operationId": "notifications_list_my_notifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "My notifications, newest first",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/me/notifications/read-all": {
+      "post": {
+        "operationId": "notifications_mark_all_notifications_read",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsReadAllResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Mark all my notifications as read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/me/notifications/{notificationId}/read": {
+      "post": {
+        "description": "Idempotent: an already read one answers `changed: false`. Someone else's (or an unknown) id answers 404.",
+        "operationId": "notifications_mark_notification_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notificationId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "NTF-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Notificationid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationReadResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Mark one of my notifications as read",
+        "tags": [
+          "notifications"
         ]
       }
     },

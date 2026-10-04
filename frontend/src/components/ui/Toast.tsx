@@ -27,7 +27,9 @@ const EDGE_GAP = 24
 const CLEARANCE_GAP = 12
 
 /**
- * Toast stack (bottom right, dark surface). The two live regions are always
+ * Toast stack (bottom right, dark translucent surface: ink at 88%, 12px backdrop blur and a
+ * hairline border, slice 10; the text keeps its contrast on the near-ink fill). The region is
+ * "Avisos" (the bell's panel is "Notificaciones"). The two live regions are always
  * mounted so screen readers announce toasts reliably: `status` (polite) and
  * `alert` (assertive). The stack rises above a bottom-docked element that
  * reserves the space (`useToastClearance`, e.g. the chat composer, so a toast
@@ -70,7 +72,7 @@ export function ToastProvider({ children, limit = 3 }: ToastProviderProps) {
       {children}
       {createPortal(
         <section
-          aria-label="Notificaciones"
+          aria-label="Avisos"
           data-toast-region
           style={{ bottom: clearance > 0 ? clearance + CLEARANCE_GAP : EDGE_GAP }}
           className="pointer-events-none fixed right-6 z-40 flex w-[380px] max-w-[calc(100vw-48px)] flex-col"
@@ -153,7 +155,7 @@ function ToastItem({ toast, dismiss }: ToastItemProps) {
       onFocus={onFocus}
       onBlur={onBlur}
       data-surface="dark"
-      className="pointer-events-auto flex flex-col gap-2.5 rounded-14 bg-ink px-4 py-3.5 text-white shadow-toast"
+      className="pointer-events-auto flex flex-col gap-2.5 rounded-14 border border-white/14 bg-ink/88 px-4 py-3.5 text-white shadow-toast backdrop-blur-[12px]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-2.5">
@@ -197,7 +199,7 @@ function ToastItem({ toast, dismiss }: ToastItemProps) {
                   'flex min-h-[34px] cursor-pointer items-center rounded-8 px-3 text-13 font-semibold focus-visible:outline-accent-muted',
                   variant === 'primary'
                     ? 'bg-white text-ink hover:bg-canvas'
-                    : 'border border-ink-2 bg-transparent text-white hover:bg-rail-active',
+                    : 'border border-white/32 bg-transparent text-white hover:bg-white/10',
                 )}
               >
                 {action.label}

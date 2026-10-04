@@ -260,6 +260,35 @@ escalations = Table(
     Index("ix_escalations_resolved", "resolved_at"),
 )
 
+# Slice 10: each staff member's notifications (a projection of facts already in the event
+# log, never part of it). ``source_key`` (the source event id, or ``sla:<case id>``) is unique
+# per recipient: a fact never notifies the same person twice. Only the newest 200 per person
+# are kept (``RETENTION_PER_PERSON``).
+notifications = Table(
+    "notifications",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("recipient_id", String(ID), ForeignKey("staff.id"), nullable=False),
+    Column("kind", String(40), nullable=False),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("source_key", String(80), nullable=False),
+    Column("case_id", String(ID), nullable=True),
+    Column("customer_id", String(ID), nullable=True),
+    Column("actor_id", String(ID), nullable=True),
+    Column("target_id", String(ID), nullable=True),
+    Column("escalation_id", String(ID), nullable=True),
+    Column("language", String(5), nullable=True),
+    Column("score", Integer, nullable=True),
+    Column("failed_attempts", Integer, nullable=True),
+    Column("read_at", UtcDateTime, nullable=True),
+    _version(),
+    UniqueConstraint("recipient_id", "source_key", name="uq_notifications_recipient_source"),
+    # Her list, newest first (keyset pagination and retention).
+    Index("ix_notifications_recipient_created", "recipient_id", "created_at", "id"),
+    # The bell: her unread count.
+    Index("ix_notifications_recipient_read", "recipient_id", "read_at"),
+)
+
 customer_case_slots = Table(
     "customer_case_slots",
     metadata,

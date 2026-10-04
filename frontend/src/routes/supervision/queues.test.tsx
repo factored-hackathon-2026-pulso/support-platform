@@ -10,6 +10,7 @@ import {
 import { ApiProblem } from '@/lib/api'
 import { NOW } from '@/test/case-fixtures'
 import { supervisorStaff } from '@/test/fixtures'
+import { makeNotification, notificationCreated } from '@/test/notification-fixtures'
 import { renderRoute } from '@/test/render'
 import {
   JULIAN_ID,
@@ -139,7 +140,7 @@ describe('Colas', () => {
     expect(await screen.findByText('No pudimos cargar los casos')).toBeInTheDocument()
   })
 
-  it('refetches on queue signals and toasts a queued case with "Ver en la cola"', async () => {
+  it('refetches on queue signals; the queued-case toast comes from the bell, with "Ver en la cola"', async () => {
     const { user, sockets, router } = renderQueues()
     await screen.findByRole('table', { name: 'Casos abiertos en español' })
     const calls = vi.mocked(fetchOpenCases).mock.calls.length
@@ -158,11 +159,28 @@ describe('Colas', () => {
         },
       })
     })
-    const toasts = screen.getByRole('region', { name: 'Notificaciones' })
+    await waitFor(() => expect(vi.mocked(fetchOpenCases).mock.calls.length).toBeGreaterThan(calls))
+    // The signal alone toasts nothing: the notification stream does (slice 10).
+    const toasts = screen.getByRole('region', { name: 'Avisos' })
+    expect(within(toasts).queryByText('Un caso espera en la cola en portugués')).toBeNull()
+    act(() => {
+      sockets.last()?.receive(
+        notificationCreated(
+          makeNotification({
+            id: 'NTF-00000000000000000000000090',
+            kind: 'case_queued',
+            role: 'supervisor',
+            caseId: queuedGabriela.id,
+            customerName: 'Gabriela Duarte Melo',
+            language: 'pt',
+          }),
+          1,
+        ),
+      )
+    })
     expect(
       await within(toasts).findByText('Un caso espera en la cola en portugués'),
     ).toBeInTheDocument()
-    await waitFor(() => expect(vi.mocked(fetchOpenCases).mock.calls.length).toBeGreaterThan(calls))
     await user.click(within(toasts).getByRole('button', { name: 'Ver en la cola' }))
     await waitFor(() => expect(router.state.location.search).toBe('?idioma=pt'))
   })

@@ -76,22 +76,30 @@ const table = () => screen.getByRole('table', { name: 'Equipos' })
 const aside = () => screen.getByRole('complementary', { name: 'Equipo seleccionado' })
 
 describe('Equipos', () => {
-  it('lists the active teams with their people, the pills and the rail', async () => {
-    renderTeams()
+  it('lists the active teams with their people, the Filtros dropdown and the rail', async () => {
+    const { user } = renderTeams()
     expect(await screen.findByRole('heading', { level: 1, name: 'Equipos' })).toBeInTheDocument()
     await screen.findByRole('table', { name: 'Equipos' })
-    expect(
-      screen.getByText('Cómo se agrupan las personas en la plataforma · 4 equipos'),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Activos 3' })).toBeChecked()
-    expect(screen.getByRole('radio', { name: 'Inactivos 1' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Todos 4' })).toBeInTheDocument()
+    expect(screen.getByText('4 equipos en la plataforma')).toBeInTheDocument()
+    expect(screen.getByText('2 de 4 equipos')).toBeInTheDocument()
+    // One "Filtros" dropdown with a chip, never a row of pills (slice 9 rule).
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Quitar filtro Activos' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Filtros 1 activos' }))
+    const panel = screen.getByRole('group', { name: 'Filtros' })
+    expect(within(panel).getByRole('checkbox', { name: 'Activos 3' })).toBeChecked()
+    expect(within(panel).getByRole('checkbox', { name: 'Inactivos 1' })).not.toBeChecked()
+    await user.keyboard('{Escape}')
     const andes = within(table()).getByRole('row', { name: /Equipo Andes/ })
     expect(
       within(andes)
         .getAllByRole('cell')
         .map((cell) => cell.textContent),
     ).toEqual(['Equipo Andes', '4', '3', 'Activo'])
+    // The state is a glyph + word (Status), not a pill.
+    const state = within(andes).getByText('Activo').parentElement!
+    expect(state.querySelector('svg')).toHaveAttribute('data-status-shape', 'check')
+    expect(state).not.toHaveClass('rounded-full')
     expect(within(table()).queryByText('Equipo Caribe')).not.toBeInTheDocument()
     expect(
       within(screen.getByRole('navigation', { name: 'Principal' })).getByRole('link', {
@@ -101,17 +109,36 @@ describe('Equipos', () => {
     expect(within(aside()).getByText('Elige un equipo para ver sus personas.')).toBeInTheDocument()
   })
 
-  it('switches to the inactive teams and says when a status has none', async () => {
+  it('filters by state from Filtros, replacing the history entry, and says when none match', async () => {
     const { user, router } = renderTeams()
     await screen.findByRole('table', { name: 'Equipos' })
-    await user.click(screen.getByRole('radio', { name: 'Inactivos 1' }))
+    await user.click(screen.getByRole('button', { name: 'Filtros 1 activos' }))
+    const panel = screen.getByRole('group', { name: 'Filtros' })
+    // Both states checked: every team.
+    await user.click(within(panel).getByRole('checkbox', { name: 'Inactivos 1' }))
+    expect(router.state.location.search).toBe('?estado=activos%2Cinactivos')
+    expect(router.state.historyAction).toBe('REPLACE')
+    await waitFor(() => expect(fetchAdminTeams).toHaveBeenLastCalledWith('all', expect.anything()))
+    // Only the inactive ones.
+    await user.click(within(panel).getByRole('checkbox', { name: 'Activos 3' }))
     expect(router.state.location.search).toBe('?estado=inactivos')
     const caribe = await within(table()).findByRole('row', { name: /Equipo Caribe/ })
-    expect(within(caribe).getByText('Inactivo')).toBeInTheDocument()
+    const inactive = within(caribe).getByText('Inactivo').parentElement!
+    expect(inactive.querySelector('svg')).toHaveAttribute('data-status-shape', 'cross')
+    await user.keyboard('{Escape}')
 
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    expect(router.state.location.search).toBe('?estado=todos')
+    expect(await within(table()).findByRole('row', { name: /Equipo Andes/ })).toBeInTheDocument()
+    expect(within(table()).getByRole('row', { name: /Equipo Caribe/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Quitar filtro/ })).toBeNull()
+  })
+
+  it('says when no team has the checked state', async () => {
     vi.mocked(fetchAdminTeams).mockResolvedValue(makeTeamList([]))
-    await user.click(screen.getByRole('radio', { name: /^Todos/ }))
+    renderTeams('/administracion/equipos?estado=inactivos')
     expect(await screen.findByText('No hay equipos en este estado.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Quitar filtro Inactivos' })).toBeInTheDocument()
   })
 
   it('shows the selected team with its members; deactivation is disabled with members', async () => {

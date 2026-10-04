@@ -26,7 +26,8 @@ export interface FirstCasesProps {
 
 /**
  * "Lo primero" (canvas `queue`): her open cases in urgency order (the same
- * `sortByUrgency` as the Casos list), each with its status stripe and status (glyph + word), the
+ * `sortByUrgency` as the Casos list), each with its status stripe and status (glyph + word), "Escalado" while an
+ * escalation is open (the Casos card marker), the
  * channel (and a high or critical priority glyph, "Volvió a escribir") as icons with a
  * tooltip, the last message, the SLA or the time, and "Abrir" (Casos with that
  * case open and its filter set, so the card is highlighted).
@@ -78,6 +79,7 @@ export function FirstCases({ inbox, now, paused }: FirstCasesProps) {
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate text-15 font-semibold">{row.name}</span>
                       <Status {...row.status} className="shrink-0" />
+                      {row.escalated ? <Status {...row.escalated} className="shrink-0" /> : null}
                       <FactList items={row.facts} className="shrink-0" />
                     </span>
                     <span className="truncate text-14 text-ink-2">{row.preview}</span>

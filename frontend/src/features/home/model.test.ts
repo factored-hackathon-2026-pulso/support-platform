@@ -178,6 +178,18 @@ describe('Lo primero', () => {
     expect(rows[0]!.facts[1]).toMatchObject({ icon: 'priority-high', text: 'Prioridad alta' })
   })
 
+  it('marks an escalated case with "Escalado", like the Casos card (slice 9)', () => {
+    const marcela = seededInbox.find((item) => item.id.endsWith('101'))!
+    const items = [
+      ...seededInbox.filter((item) => item !== marcela),
+      { ...marcela, escalated: true },
+    ]
+    const rows = firstCases(items, NOW, 10)
+    const escalated = rows.find((row) => row.name === 'Marcela Quintana Pardo')!
+    expect(escalated.escalated).toEqual({ shape: 'up', tone: 'warn', label: 'Escalado' })
+    expect(rows.filter((row) => row.escalated !== null)).toHaveLength(1)
+  })
+
   it('puts critical and high right after the overdue ones (slice 8)', () => {
     const marcela = seededInbox.find((item) => item.id.endsWith('101'))!
     const joaquin = seededInbox.find((item) => item.id.endsWith('107'))!

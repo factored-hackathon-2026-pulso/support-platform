@@ -39,7 +39,7 @@ describe('login (BoLogin)', () => {
   it('sends a forgotten password to Administración (no reset link exists)', async () => {
     const { user } = renderRoute('/login')
     await user.click(await screen.findByRole('button', { name: '¿La olvidaste?' }))
-    const toasts = screen.getByRole('region', { name: 'Notificaciones' })
+    const toasts = screen.getByRole('region', { name: 'Avisos' })
     expect(
       within(toasts).getByText(
         'Pide a Administración que la restablezca en Usuarios y roles: te dará una contraseña temporal.',

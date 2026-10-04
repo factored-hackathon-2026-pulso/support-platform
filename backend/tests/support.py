@@ -63,6 +63,8 @@ def make_settings(**overrides: Any) -> Settings:
         "log_level": "WARNING",
         "session_secret": TEST_SECRET,
         "build": "test-build",
+        # Slice 10: no periodic SLA sweep (tests run ``sweep_sla_risk.execute`` themselves).
+        "notification_sweep_seconds": 0,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # ignore a developer's backend/.env

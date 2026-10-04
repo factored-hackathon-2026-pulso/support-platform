@@ -702,6 +702,21 @@ describe('ConversationPane · supervision mode (slice 3)', () => {
     expect(api.markCaseRead).not.toHaveBeenCalled()
   })
 
+  it('shows a closed case as closure facts, never a " · " joined line', async () => {
+    const detail = makeJulianDetail()
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue(detail)
+    vi.mocked(api.fetchTurns).mockResolvedValue(page({ items: julianTurns(), lastSequence: 3 }))
+    renderWithProviders(<ConversationPane caseId={detail.case.id} mode="supervision" />, {
+      staff: analystStaff,
+    })
+    const footer = await screen.findByRole('note', { name: 'Solo lectura' })
+    expect(footer).toHaveTextContent('Resuelto')
+    expect(footer).toHaveTextContent('Cerrado: 13 feb, 10:15')
+    expect(footer).toHaveTextContent('Lo cerró: Julián Ortega')
+    expect(footer).not.toHaveTextContent('·')
+    expect(footer).not.toHaveTextContent('Caso cerrado el')
+  })
+
   it('says "Ya no puedes cerrarlo" when supervision reassigned the case meanwhile', async () => {
     vi.mocked(api.closeCase).mockRejectedValueOnce(
       new ApiProblem({ status: 403, code: 'case_not_assigned' }),

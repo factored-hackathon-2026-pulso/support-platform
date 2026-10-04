@@ -71,6 +71,15 @@ from cc_platform.application.customers.use_cases import (
     ListDemoCustomers,
     StartCustomerSession,
 )
+from cc_platform.application.notifications.projector import NotificationProjector
+from cc_platform.application.notifications.sweep import SweepSlaRisk
+from cc_platform.application.notifications.use_cases import (
+    ListMyNotifications,
+    MarkAllNotificationsRead,
+    MarkNotificationRead,
+    NotificationsUseCases,
+)
+from cc_platform.application.notifications.writer import NotificationSignals, NotificationWriter
 from cc_platform.application.people.admin.commands import (
     CreateUser,
     DeactivateUser,
@@ -126,7 +135,7 @@ from cc_platform.bootstrap.settings import Settings
 from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
-from cc_platform.infrastructure.background import AsyncioBackgroundTasks
+from cc_platform.infrastructure.background import AsyncioBackgroundTasks, PeriodicTask
 from cc_platform.infrastructure.clock import SystemClock
 from cc_platform.infrastructure.events.in_process_bus import InProcessEventBus
 from cc_platform.infrastructure.ids import UlidIdGenerator
@@ -145,6 +154,7 @@ from cc_platform.infrastructure.security.temporary_passwords import (
 from cc_platform.infrastructure.security.tokens import HmacSessionTokenService
 from cc_platform.infrastructure.seed.activity import seed_demo_activity
 from cc_platform.infrastructure.seed.customers import seed_demo_customers
+from cc_platform.infrastructure.seed.notifications import mark_seed_notifications_seen
 from cc_platform.infrastructure.seed.people import seed_demo_staff
 
 _log = structlog.get_logger(__name__)
@@ -168,6 +178,7 @@ class Container:
     drain_queue: DrainQueue
     database: Database | None = None
     health_probes: Sequence[HealthProbe] = field(default_factory=tuple)
+    sla_sweep: PeriodicTask | None = None
 
     def api_context(self) -> ApiContext:
         """The narrow view the HTTP/WebSocket layer gets (no adapters, no Unit of Work)."""
@@ -193,6 +204,10 @@ class Container:
         await ensure_admin_roster(self.uow)
         # No startup drain (contract §3.2): the queue drains when an analyst becomes
         # available (``QueueDrainer``) and, in slice 3, by hand.
+        if self.sla_sweep is not None:
+            # Slice 10: cases already at risk get their notification now, then every tick.
+            await self.use_cases.notifications.sweep_sla_risk.execute()
+            self.sla_sweep.start()
 
     async def seed_demo_data(self) -> None:
         """ "Datos de ejemplo": invented staff, customers, availability and the seeded cases."""
@@ -203,10 +218,17 @@ class Container:
                 self.uow, self.ids, self.clock, ttl=self.settings.session_ttl
             ),
         }
+        if created["cases"]:
+            # Slice 10: the story's older notifications start read.
+            created["notifications_seen"] = await mark_seed_notifications_seen(
+                self.uow, now=self.clock.now()
+            )
         if any(created.values()):
             _log.info("seed_demo_data", **created)
 
     async def shutdown(self) -> None:
+        if self.sla_sweep is not None:
+            await self.sla_sweep.stop()
         await self.background.drain()
         if self.database is not None:
             await self.database.dispose()
@@ -290,6 +312,12 @@ def build_container(
         event_types=SUPERVISION_EVENTS,
     )
     bus.subscribe(QueueDrainer(background, drain_queue), event_types=QUEUE_DRAINER_EVENTS)
+
+    # Slice 10: notifications are derived from committed events (and the SLA sweep).
+    notification_signals = NotificationSignals(hub, SchemaRealtimePresenter(), ids)
+    notification_writer = NotificationWriter(uow=uow, ids=ids, signals=notification_signals)
+    bus.subscribe(NotificationProjector(uow, notification_writer))
+    sweep_sla_risk = SweepSlaRisk(uow=uow, clock=clock, writer=notification_writer)
 
     lockout = LockoutPolicy(
         max_failed_attempts=settings.lockout_max_attempts,
@@ -388,6 +416,19 @@ def build_container(
             deactivate_team=DeactivateTeam(uow=uow, clock=clock),
             reactivate_team=ReactivateTeam(uow=uow, clock=clock),
         ),
+        notifications=NotificationsUseCases(
+            list_mine=ListMyNotifications(uow=uow, clock=clock),
+            mark_read=MarkNotificationRead(uow=uow, clock=clock, signals=notification_signals),
+            mark_all_read=MarkAllNotificationsRead(
+                uow=uow, clock=clock, signals=notification_signals
+            ),
+            sweep_sla_risk=sweep_sla_risk,
+        ),
+    )
+    sla_sweep = (
+        PeriodicTask("sla_sweep", settings.notification_sweep_seconds, sweep_sla_risk.execute)
+        if settings.notification_sweep_seconds > 0
+        else None
     )
 
     return Container(
@@ -407,4 +448,5 @@ def build_container(
         drain_queue=drain_queue,
         database=database,
         health_probes=tuple(probes),
+        sla_sweep=sla_sweep,
     )

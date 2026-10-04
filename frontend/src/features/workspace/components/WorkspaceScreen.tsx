@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router'
 import { MessageSquare, MousePointerClick } from 'lucide-react'
 import { useCurrentUser } from '@/app/session'
 import { DocumentTitle, EmptyState, Spinner } from '@/components/ui'
@@ -48,7 +49,8 @@ export interface WorkspaceScreenProps {
  * Owns the `<main>` landmark; the conversation renders inside it.
  *
  * Focus: when the screen switches case on its own (next case after "Cerrar
- * caso", "Ver caso" in the toast) the control that had the focus is gone, so
+ * caso", a notification's "Abrir caso" in the bell or a toast, which navigates here with
+ * `state.focus = 'notification'`) the control that had the focus is gone, so
  * the focus moves to the new case heading, or to the empty state's heading
  * when nothing is left. Picking a card keeps the focus on the card.
  */
@@ -106,13 +108,17 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
     [onStateChange, panelOpen],
   )
 
-  const openNotifiedCase = useCallback(
-    (caseId: string) => {
-      setFocusRequest({ kind: 'case', caseId })
-      onStateChange({ caseId, history: null, customerFile: panelOpen })
-    },
-    [onStateChange, panelOpen],
-  )
+  // Opened from a notification (slice 10): the bell's panel or the toast is gone.
+  const location = useLocation()
+  const fromNotification = (location.state as { focus?: string } | null)?.focus === 'notification'
+  const caseId = state.caseId
+  /** Once per navigation (``location.key``), not again when she picks another case. */
+  const focusedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!fromNotification || !caseId || focusedFor.current === location.key) return
+    focusedFor.current = location.key
+    setFocusRequest({ kind: 'case', caseId })
+  }, [fromNotification, caseId, location.key])
 
   const toggleCustomerFile = useCallback(() => {
     if (panelOpen) {
@@ -162,7 +168,6 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
         query={state.query}
         collapsed={state.listCollapsed}
         onSelectCase={selectCase}
-        onOpenNotifiedCase={openNotifiedCase}
         onFilterChange={(filter: InboxStatus | null) => onStateChange({ filter })}
         onQueryChange={(query) => onStateChange({ query }, { replace: true })}
         onCollapsedChange={(listCollapsed) => onStateChange({ listCollapsed }, { replace: true })}

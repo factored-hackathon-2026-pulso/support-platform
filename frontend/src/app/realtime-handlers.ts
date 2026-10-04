@@ -2,6 +2,7 @@ import { registerAdminRealtime } from '@/features/admin/core'
 import { registerCasesRealtime } from '@/features/cases/core'
 import { registerConversationRealtime } from '@/features/conversation/core'
 import { registerHomeRealtime } from '@/features/home/core'
+import { registerNotificationsRealtime } from '@/features/notifications/core'
 import { registerSupervisionRealtime } from '@/features/supervision/core'
 import {
   createEnvelopeHandlerRegistry,
@@ -31,6 +32,7 @@ export const FEATURE_REALTIME_REGISTRATIONS: readonly RealtimeRegistration[] = [
   registerSupervisionRealtime, // queue.updated, queue.case_queued, team.updated → team and queues
   registerAdminRealtime, // directory.updated → users and teams
   registerSessionRealtime, // me.updated → the signed-in staff member (roles, team, name)
+  registerNotificationsRealtime, // notification.created, notifications.read → the bell (slice 10)
 ]
 
 /** Builds a fresh registry with every feature's handlers (one per AppProviders). */

@@ -20,12 +20,7 @@ import {
   type TeamUrlState,
   type UrlStateChangeOptions,
 } from '../model'
-import {
-  useIsAssigning,
-  useSupervisionLive,
-  useSupervisionNotices,
-  useTeamOverview,
-} from '../hooks'
+import { useIsAssigning, useSupervisionLive, useTeamOverview } from '../hooks'
 import type { CaseSummary } from '../types'
 import { AnalystSheet } from './AnalystSheet'
 import { AnalystsPanel } from './AnalystsPanel'
@@ -52,7 +47,6 @@ export interface TeamScreenProps {
  */
 export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps) {
   useSupervisionLive()
-  useSupervisionNotices()
   const team = useTeamOverview()
   const now = useNow(SUPERVISION_TICK_MS)
   const [result, setResult] = useState<{ message: string } | null>(null)

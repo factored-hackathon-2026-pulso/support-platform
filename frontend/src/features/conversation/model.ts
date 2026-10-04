@@ -10,7 +10,6 @@ import type { FactIcon, FactItem, StatusAppearance, Tone } from '@/components/ui
 import {
   caseStatus,
   channelPhrase,
-  closeReasonLabel,
   countryName,
   isNewerCase,
   casePriority,
@@ -408,43 +407,24 @@ export function supervisionArrivalLine(
 
 // ── Read-only footer and closure (contract §9.3) ────────────────────────────
 
-/**
- * "Caso cerrado el 3 mar, 10:15 · Resuelto"; when someone else closed it:
- * "Caso cerrado el 3 mar, 10:15 por Julián Ortega · Resuelto".
- */
-export function closureLine(
-  closure: Pick<CaseClosure, 'closedAt' | 'closedById' | 'closedByName' | 'reason'>,
-  meId?: string,
-): string {
-  const when = formatDateTime(closure.closedAt, { withYear: false })
-  const by =
-    meId !== undefined && closure.closedById !== meId && closure.closedByName
-      ? ` por ${closure.closedByName}`
-      : ''
-  return `Caso cerrado el ${when}${by} · ${closeReasonLabel(closure.reason)}`
-}
-
-/** "Nota: …" under the closure line, or null without a note. */
+/** "Nota: …" under the closure facts, or null without a note. */
 export function closureNote(closure: Pick<CaseClosure, 'note'>): string | null {
   const note = closure.note?.trim()
   return note ? `Nota: ${note}` : null
 }
 
 /**
- * Footer of the supervisor's read-only case view (slice 3 §8.3), which never has a
- * composer. Slice 9 (assignment is automatic; supervision no longer assigns a queued case):
- * queued "Sin asignar: le llega automáticamente a la primera persona disponible que hable
- * español."; open "Solo lectura: lo atiende {analista}."; closed: the closure line (+ "Nota: …").
+ * Footer of the supervisor's read-only case view (slice 3 §8.3) for an open case, which never
+ * has a composer. Slice 9 (assignment is automatic; supervision no longer assigns a queued
+ * case): queued "Sin asignar: le llega automáticamente a la primera persona disponible que
+ * hable español."; open "Solo lectura: lo atiende {analista}.". A closed case has no lines:
+ * its footer is the closure as facts (`closedFooter`), the same as in the Workspace.
  */
 export function supervisionFooter(
   detail: Pick<CaseDetail, 'case' | 'closure' | 'assignment'>,
-  meId: string,
-): string[] {
+): string[] | null {
   const { case: summary, closure, assignment } = detail
-  if (closure) {
-    const note = closureNote(closure)
-    return note ? [closureLine(closure, meId), note] : [closureLine(closure, meId)]
-  }
+  if (closure) return null
   if (summary.status === 'queued' || !assignment) {
     return [
       `Sin asignar: le llega automáticamente a la primera persona disponible que hable ${LANGUAGE_NAMES[summary.language]}.`,
@@ -771,37 +751,51 @@ export function footerFacts(
 ): FooterFacts | null {
   const { capabilities, closure, assignment } = detail
   if (capabilities.canReply) return null
-  if (closure) {
-    const facts: FactItem[] = [
-      {
-        key: 'closed-at',
-        icon: 'clock',
-        text: formatDateTime(closure.closedAt, { withYear: false }),
-        label: 'Cerrado',
-        tooltip: 'Cerrado',
-      },
-    ]
-    if (closure.closedById !== meId && closure.closedByName) {
-      facts.push({
-        key: 'closed-by',
-        icon: 'user',
-        text: closure.closedByName,
-        label: 'Lo cerró',
-        tooltip: 'Lo cerró',
-      })
-    }
-    return {
-      reason: closure.reason,
-      facts,
-      note: closureNote(closure),
-      rating: detail.case?.rating ?? null,
-    }
-  }
+  if (closure) return closedFooter({ closure, case: detail.case }, meId)
   const facts: FactItem[] = [{ key: 'read-only', icon: 'lock', text: 'Solo lectura' }]
   if (assignment && assignment.analystId !== meId) {
     facts.push({ key: 'owner', icon: 'user', text: `Lo atiende ${assignment.analystName}` })
   }
   return { reason: null, facts, note: null, rating: null }
+}
+
+/**
+ * A closed case's footer as facts, in the Workspace and in the supervisor view (never a
+ * " · " joined line): the reason (icon + label, drawn by the component), [clock] when,
+ * [user] who closed it when it was someone else, the note, the customer's rating.
+ */
+export function closedFooter(
+  detail: {
+    closure: Pick<CaseClosure, 'closedAt' | 'closedById' | 'closedByName' | 'reason' | 'note'>
+    case?: Pick<CaseDetail['case'], 'rating'>
+  },
+  meId: string,
+): FooterFacts {
+  const { closure } = detail
+  const facts: FactItem[] = [
+    {
+      key: 'closed-at',
+      icon: 'clock',
+      text: formatDateTime(closure.closedAt, { withYear: false }),
+      label: 'Cerrado',
+      tooltip: 'Cerrado',
+    },
+  ]
+  if (closure.closedById !== meId && closure.closedByName) {
+    facts.push({
+      key: 'closed-by',
+      icon: 'user',
+      text: closure.closedByName,
+      label: 'Lo cerró',
+      tooltip: 'Lo cerró',
+    })
+  }
+  return {
+    reason: closure.reason,
+    facts,
+    note: closureNote(closure),
+    rating: detail.case?.rating ?? null,
+  }
 }
 
 /**

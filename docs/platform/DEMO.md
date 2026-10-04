@@ -166,14 +166,19 @@ muy molesto; quiere que alguien con más autoridad le responda." → **"Escalar"
 "Escalado a supervisión" (solo el equipo la ve) con "Retirar escalamiento"; la tarjeta de la lista
 dice "Escalado". El caso sigue con Felipe: puede seguir escribiendo.
 
-**Responder (C):** llega el aviso "Felipe Echeverri escaló un caso" → **"Revisar"**. En
+**Responder (C):** la campana del riel (abajo, sobre el avatar) sube su número y llega el aviso
+"Felipe Echeverri escaló un caso" con **"Revisar"** y **"Más tarde"**. Pulsa **"Más tarde"**: el
+aviso se va pero la notificación sigue sin leer. Abre la **campana** ("Notificaciones, N sin
+leer"): arriba "Nuevas" (el escalamiento de Felipe, "Caso por vencer sin respuesta", "Un caso
+espera en la cola…"), abajo "Anteriores". Pulsa **"Revisar"** en la fila de Felipe. En
 **"Escalados"** (badge 3 abiertos) se ve la fila de Mauricio: el motivo, cuánto espera (reloj; llama
 naranja después de 15 min, roja después de 30: solo énfasis, no hay plazos). El panel muestra el
 motivo, el caso y los últimos mensajes ("Ver caso completo"). Pulsa **"Responder"**, escribe "Ya lo
 revisé: el segundo cobro se reversa. Sigue tú con él." → **"Enviar respuesta"**.
 
-**Se ve en B:** el aviso "Lucía Herrera respondió tu escalamiento" y, en el caso, la tarjeta con su
-respuesta. Felipe pulsa **"Entendido"**.
+**Se ve en B:** en el caso abierto, la tarjeta con su respuesta (sin aviso encima: el caso ya lo
+muestra) y, en la campana, "Supervisión respondió tu escalamiento · Lucía Herrera sobre Mauricio…".
+Felipe pulsa **"Entendido"**.
 
 **Decir:** "El escalamiento existe en el dataset como sí o no: aquí es una persona pidiendo ayuda
 con un motivo, y supervisión responde, toma el caso o lo reasigna. Lucía no puede tomarlo porque no
@@ -190,7 +195,8 @@ tiene el rol de Analista."
    suma. Elige **Felipe Echeverri**. Señala "El cliente verá: Ahora te atiende Felipe, de nuestro
    equipo." Pulsa **"Reasignar a Felipe"**.
 
-**Se ve en B:** el aviso "Te asignaron un caso · Camila Torres Benavides · Supervisión". En
+**Se ve en B:** el aviso "Supervisión te asignó un caso" (Camila Torres Benavides) con **"Abrir
+caso"** y **"Más tarde"**, también si Felipe está en Inicio. En
 "Escalados", el escalamiento de Camila pasa a "Atendidos hoy" como **"Reasignado"**.
 
 ### 7. Auditoría (6:30 – 7:15)

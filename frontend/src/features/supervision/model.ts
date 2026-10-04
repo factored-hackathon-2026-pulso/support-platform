@@ -1064,37 +1064,6 @@ export function toEscalationsSearch(state: EscalationsUrlState): URLSearchParams
   return params
 }
 
-// ── Notices (toasts on every supervision screen) ─────────────────────────────
-
-/** Toast on `queue.case_queued`: "Un caso espera en la cola en portugués". */
-export function queuedNoticeCopy(summary: Pick<CaseSummary, 'language' | 'customer'>): {
-  tag: string
-  title: string
-  description: string
-} {
-  const label = QUEUE_LABEL[summary.language]
-  return {
-    tag: label,
-    title: `Un caso espera en la ${label.charAt(0).toLowerCase()}${label.slice(1)}`,
-    description: summary.customer.displayName,
-  }
-}
-
-/** Toast on a new escalation: "Daniela Ríos escaló un caso" + the customer + the motive. */
-export function escalationNoticeCopy(escalation: Escalation): {
-  title: string
-  description: string
-  meta: string
-} {
-  const motive =
-    escalation.motive.length > 90 ? `${escalation.motive.slice(0, 89)}…` : escalation.motive
-  return {
-    title: `${escalation.escalatedByName ?? 'Alguien del equipo'} escaló un caso`,
-    description: escalation.customerName,
-    meta: `“${motive}”`,
-  }
-}
-
 // ── Supervisor case view ─────────────────────────────────────────────────────
 
 export interface CaseViewUrlState {

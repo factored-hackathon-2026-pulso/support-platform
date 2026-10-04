@@ -108,3 +108,30 @@ describe('Rail indicators', () => {
     expect(screen.getByRole('link', { name: 'Cola' })).toBeInTheDocument()
   })
 })
+
+describe('Rail notifications slot (slice 10)', () => {
+  it('puts the bell above the avatar, for every role', () => {
+    renderWithProviders(
+      <Rail role={ROLES.admin} notifications={<button type="button">Notificaciones</button>} />,
+      { route: '/administracion/usuarios', staff: allRolesStaff },
+    )
+    const nav = within(screen.getByRole('navigation', { name: 'Principal' }))
+    const bell = nav.getByRole('button', { name: 'Notificaciones' })
+    const avatar = nav.getByRole('button', { name: /, cambiar de rol$/ })
+    expect(bell.compareDocumentPosition(avatar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('the staff shell composes the bell into the rail of every role', async () => {
+    for (const [path, heading] of [
+      ['/analista?caso=CASE-1', 'Casos'],
+      ['/supervision/auditoria', 'Auditoría'],
+      ['/administracion/usuarios', 'Usuarios y roles'],
+    ] as const) {
+      const { unmount } = renderRoute(path, { staff: allRolesStaff })
+      await screen.findByRole('heading', { level: 1, name: heading })
+      const nav = within(screen.getByRole('navigation', { name: 'Principal' }))
+      expect(nav.getByRole('button', { name: /^Notificaciones/ })).toBeInTheDocument()
+      unmount()
+    }
+  })
+})

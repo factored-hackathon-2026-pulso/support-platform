@@ -35,7 +35,7 @@ notice to the customer. The assistant is **never** a first response, and is neve
 
 Who is served by the assistant: only a **chat** case (`chat_app`/`chat_web`) of a customer that is
 **linked to a dataset customer** (§6) whose **case language** is in `CC_ASSISTANT_LANGUAGES` (default
-`es`; Portuguese goes straight to people, policy `H1`). Anything else behaves exactly as before.
+`es` and `pt`, policy `H1`; a language left out goes straight to people). Anything else behaves exactly as before.
 
 **Calls and emails cannot join an assistant conversation** (nobody would answer them): they answer
 `409 assistant_active`. The customer writes in the chat, or asks for a person first (§3.5).
@@ -49,7 +49,7 @@ The platform is people-only unless both are set (they go together):
 | `CC_AGENT_CORE_URL` | agent-core's runtime URL (`agentcore serve`) |
 | `CC_AGENT_KEYS_FILE` | the platform's private signing keys (`python -m cc_platform.scripts.gen_agent_keys`, RUNBOOK §4.1) |
 | `CC_ASSISTANT_AGENT` | the agent a conversation starts with, default `recepcion@prod` |
-| `CC_ASSISTANT_LANGUAGES` | JSON list of case languages the assistant serves, default `["es"]` |
+| `CC_ASSISTANT_LANGUAGES` | JSON list of case languages the assistant serves, default `["es", "pt"]` |
 | `CC_ASSISTANT_STEP_UP_CODE` | the simulated second-factor code, default `000000` (a development stand-in) |
 | `CC_BANK_CUSTOMER_LINKS_FILE` | private JSON `{ "<platform customer id>": "<dataset customer_id>" }`, read at startup |
 | `CC_AGENT_CORE_TIMEOUT_SECONDS` | how long one agent call may take, default 60 |
@@ -274,7 +274,7 @@ Things that are easy to get wrong:
   real tool service over `gold_restricted` is track T.
 - **First-response SLA**: decided that the assistant's reply does not stop it, and it restarts when the case
   reaches people.
-- **Language**: only `CC_ASSISTANT_LANGUAGES` (default Spanish) start with the assistant.
+- **Language**: only `CC_ASSISTANT_LANGUAGES` (default Spanish and Portuguese) start with the assistant.
 - **No customer-facing "which agent"**: after a transfer between agents (`recepcion` → `disputas`) the
   customer sees the same "Asistente virtual".
 

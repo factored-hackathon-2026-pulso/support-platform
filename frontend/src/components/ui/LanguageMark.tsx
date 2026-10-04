@@ -143,7 +143,7 @@ export function LanguageMarks({
     <Tooltip
       content={name}
       focusable={focusable}
-      className={cn('items-center gap-1.5 text-ink-2', className)}
+      className={cn('items-center gap-1.5 align-middle text-ink-2', className)}
     >
       <span className="sr-only" lang={only}>
         {name}

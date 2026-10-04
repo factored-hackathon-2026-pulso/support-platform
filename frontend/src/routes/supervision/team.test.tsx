@@ -100,8 +100,11 @@ describe('Equipo y colas', () => {
     const daniela = row(/Daniela Ríos/)
     // "Todos los equipos": the row names the team like the pills, full name in the title.
     expect(within(daniela).getByText('Equipo Andes')).toHaveAttribute('title', 'Equipo Andes')
-    expect(within(daniela).getByText('Atendiendo')).toBeInTheDocument()
-    expect(within(daniela).getByText('· sin sesión abierta')).toHaveAttribute(
+    // "Ahora" as glyph + word: the filled dot of someone attending cases.
+    const attending = within(daniela).getByText('Atendiendo').parentElement!
+    expect(attending.querySelector('svg')).toHaveAttribute('data-status-shape', 'dot')
+    expect(attending).not.toHaveClass('rounded-full')
+    expect(within(daniela).getByText('sin sesión abierta')).toHaveAttribute(
       'title',
       'Le siguen llegando casos aunque no haya iniciado sesión.',
     )
@@ -172,7 +175,14 @@ describe('Equipo y colas', () => {
     const sheet = await screen.findByRole('dialog', { name: 'Julián Ortega' })
     expect(sheet).toHaveAccessibleDescription('En pausa · español · Equipo Andes')
     expect(router.state.location.search).toBe(`?estado=en-pausa&analista=${JULIAN_ID}`)
-    expect(within(sheet).getByText('Esperando al cliente')).toBeInTheDocument()
+    // The stat, and each open case's status as glyph + word (no pill, no dot-joined line).
+    const waiting = within(sheet).getAllByText('Esperando al cliente')
+    expect(waiting.length).toBeGreaterThan(1)
+    const caseStatus = waiting.find((node) => node.parentElement?.querySelector('svg'))
+    expect(caseStatus?.parentElement?.querySelector('svg')).toHaveAttribute(
+      'data-status-shape',
+      'pie-50',
+    )
     // Slice 7: her 7-day rating among the stats.
     expect(within(sheet).getByText('Calificación 7 días')).toBeInTheDocument()
     expect(within(sheet).getByText('2,5')).toBeInTheDocument()

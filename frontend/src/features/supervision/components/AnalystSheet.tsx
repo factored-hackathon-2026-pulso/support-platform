@@ -1,5 +1,5 @@
-import { Button, Sheet, Stat, toneBorderLeft } from '@/components/ui'
-import { formatSla, inboxStatusMeta } from '@/features/cases'
+import { Button, Sheet, Stat, Status, toneBorderLeft } from '@/components/ui'
+import { caseStatus, formatSla } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { formatRelativeTime } from '@/lib/format'
 import { RECENT_RATING_HEADER, analystSheetDescription, caseRowLine } from '../model'
@@ -86,20 +86,17 @@ interface OpenCaseRowProps {
 }
 
 function OpenCaseRow({ summary, now, onOpenCase, onReassign }: OpenCaseRowProps) {
-  const meta = inboxStatusMeta(summary)
+  const status = caseStatus(summary.inboxStatus)
   const sla = formatSla(summary, now)
   return (
     <li
       className={cn(
         'flex flex-col gap-1 rounded-10 border border-l-4 border-border bg-surface py-2.5 pr-3 pl-3',
-        toneBorderLeft[meta.tone],
+        toneBorderLeft[status.tone],
       )}
     >
       <span className="flex items-baseline justify-between gap-2">
-        <span className="truncate text-15 font-semibold">
-          {summary.customer.displayName}
-          <span className="sr-only">, {meta.subLabel}</span>
-        </span>
+        <span className="truncate text-15 font-semibold">{summary.customer.displayName}</span>
         {sla ? (
           <span
             className={cn(
@@ -115,8 +112,9 @@ function OpenCaseRow({ summary, now, onOpenCase, onReassign }: OpenCaseRowProps)
         {summary.preview ?? 'Sin mensajes todavía'}
       </span>
       <span className="flex items-center justify-between gap-2 text-12 text-muted">
-        <span className="truncate">
-          {meta.subLabel} · {caseRowLine(summary)}
+        <span className="flex min-w-0 items-center gap-2.5">
+          <Status {...status} size="sm" className="shrink-0" />
+          <span className="truncate">{caseRowLine(summary)}</span>
         </span>
         <span className="shrink-0">{formatRelativeTime(summary.lastInteractionAt, now)}</span>
       </span>

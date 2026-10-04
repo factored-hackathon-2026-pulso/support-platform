@@ -6,12 +6,12 @@
  * docs/platform/api/slice-2-case-lifecycle.md §4, §9.3–§9.5 (transcript rules
  * unchanged from slice-1-cases.md §5).
  */
-import type { FactIcon, FactItem, Tone } from '@/components/ui'
+import type { FactIcon, FactItem, StatusAppearance, Tone } from '@/components/ui'
 import {
+  caseStatus,
   channelPhrase,
   closeReasonLabel,
   countryName,
-  inboxStatusMeta,
   isNewerCase,
   priorityLabel,
   ratingOption,
@@ -519,7 +519,9 @@ export interface FileRow {
   label: string
   text?: string
   mono?: boolean
-  /** The case status (or the customer's rating, with its face) as a colored pill. */
+  /** The case status as glyph + word (`caseStatus`, the cases map). */
+  status?: StatusAppearance
+  /** The customer's rating, with its face, as a colored pill. */
   pill?: { label: string; tone: Tone; icon?: FactIcon }
   /** Short facts as the value ("Primera respuesta"). */
   facts?: FactItem[]
@@ -575,10 +577,9 @@ export function firstResponseFacts(
   return sla ? [sla] : [{ key: 'result', icon: 'alert', text: 'Sin respuesta', tone: 'muted' }]
 }
 
-/** "Este caso": number, channel, priority, opened, status pill and the first response. */
+/** "Este caso": number, channel, priority, opened, status and the first response. */
 export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | number): FileRow[] {
   const { case: summary } = detail
-  const status = inboxStatusMeta(summary)
   return [
     { key: 'id', icon: 'hash', label: 'Número', text: summary.id, mono: true },
     {
@@ -598,7 +599,7 @@ export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | 
       key: 'status',
       icon: 'inbox',
       label: 'Estado',
-      pill: { label: status.subLabel, tone: status.tone },
+      status: caseStatus(summary.inboxStatus),
     },
     {
       key: 'first-response',
@@ -785,19 +786,17 @@ export function footerFacts(
 }
 
 /**
- * A row of "Casos anteriores" as facts: [calendar] date, the reason (or "Abierto"),
- * [user] who, and (slice 7) the customer's rating as [face] "Calificó: Excelente".
+ * A row of "Casos anteriores" as facts: [calendar] date, [user] who, and (slice 7)
+ * the customer's rating as [face] "Calificó: Excelente". The reason of a closed
+ * case, or the status of an open one (`caseLifecycleStatus`), is drawn before them.
  */
 export function historyItemFacts(
-  item: Pick<CaseHistoryItem, 'openedAt' | 'status' | 'analystName'> &
+  item: Pick<CaseHistoryItem, 'openedAt' | 'analystName'> &
     Partial<Pick<CaseHistoryItem, 'rating'>>,
 ): FactItem[] {
   const rating = item.rating ? ratingOption(item.rating.score) : null
   return [
     { key: 'date', icon: 'calendar', text: formatDate(item.openedAt), label: 'Abierto' },
-    ...(item.status === 'closed'
-      ? []
-      : [{ key: 'open', icon: 'inbox' as const, text: 'Abierto', tone: 'accent' as const }]),
     { key: 'analyst', icon: 'user', text: item.analystName ?? 'Sin asignar' },
     ...(rating
       ? [

@@ -7,6 +7,7 @@
  * around it is staff/dev chrome and stays in Spanish. Contract:
  * docs/platform/api/slice-2-case-lifecycle.md §6, §9.6.
  */
+import type { StatusAppearance } from '@/components/ui'
 import { formatDate } from '@/lib/format'
 import { isApiProblem } from '@/lib/api'
 import type {
@@ -512,15 +513,22 @@ export function placeLabel(city: string, country: CountryCode): string {
   return `${city}, ${COUNTRY_NAMES[country] ?? country}`
 }
 
-/** Picker badge: the open conversation, or who it is still waiting for. */
-export function pickerBadge(
+/**
+ * The picker's conversation status (glyph + word, the staff glyphs): still
+ * waiting for a person (dashed ring, nobody has it yet) or open with someone
+ * (half pie, in progress); null without an open conversation.
+ */
+export const PICKER_STATUS: Readonly<Record<'waiting' | 'open', StatusAppearance>> = {
+  waiting: { shape: 'dashed', tone: 'warn', label: 'Esperando a una persona', strong: true },
+  open: { shape: 'pie-50', tone: 'success', label: 'Conversación abierta' },
+}
+
+export function pickerStatus(
   customer: Pick<DemoCustomer, 'openConversation'>,
-): { text: string; tone: 'success' | 'warn' } | null {
+): StatusAppearance | null {
   const open = customer.openConversation
   if (!open) return null
-  return open.status === 'waiting_agent'
-    ? { text: 'Esperando a una persona', tone: 'warn' }
-    : { text: 'Conversación abierta', tone: 'success' }
+  return PICKER_STATUS[open.status === 'waiting_agent' ? 'waiting' : 'open']
 }
 
 /** "1 conversación anterior", "3 conversaciones anteriores"; null for none. */

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { CheckCircle2, LogIn, LogOut, MessageSquare, RotateCcw } from 'lucide-react'
-import { Badge, Button, Callout, Fact, FactList, Skeleton } from '@/components/ui'
+import { Button, Callout, Fact, FactList, Skeleton, Status } from '@/components/ui'
 import { CloseReasonIcon, closeReasonLabel } from '@/features/cases'
 import type { ApiProblem } from '@/lib/api'
 import { cn } from '@/lib/cn'
@@ -117,11 +117,7 @@ export function ActivityFeed({ home, now }: ActivityFeedProps) {
                   <span className="flex min-w-0 flex-col gap-1">
                     <span className="flex min-w-0 items-center gap-2">
                       <strong className="truncate text-14 font-semibold">{row.customerName}</strong>
-                      {row.status ? (
-                        <Badge tone={row.status.tone} size="sm">
-                          {row.status.label}
-                        </Badge>
-                      ) : null}
+                      {row.status ? <Status {...row.status} className="shrink-0" /> : null}
                     </span>
                     <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                       <span className="text-13 text-ink-2">{row.phrase}</span>

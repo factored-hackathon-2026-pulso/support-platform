@@ -12,7 +12,9 @@ import {
 import { NOW, minutesFrom } from '@/test/case-fixtures'
 import { TEAM_PACIFICO } from '@/test/fixtures'
 import {
+  ACCOUNT_STATUS,
   ACCOUNT_STATUS_LABEL,
+  TEAM_STATUS,
   EMPTY_USERS_STATE,
   EMPTY_USER_DRAFT,
   FIELD_ERROR,
@@ -58,6 +60,7 @@ import {
   validateTeamName,
   validateUserDraft,
   type UserDraft,
+  teamStatus,
 } from './model'
 
 const problem = (code: string, extensions: Record<string, unknown> = {}, status = 409) =>
@@ -72,6 +75,20 @@ describe('labels', () => {
       locked: 'Bloqueada',
       inactive: 'Desactivada',
     })
+  })
+
+  it('draws the account and team states from one map each: check, lock, x', () => {
+    expect(ACCOUNT_STATUS).toEqual({
+      active: { shape: 'check', tone: 'success', label: 'Activa' },
+      locked: { shape: 'lock', tone: 'warn', label: 'Bloqueada', strong: true },
+      inactive: { shape: 'cross', tone: 'closed', label: 'Desactivada' },
+    })
+    expect(TEAM_STATUS).toEqual({
+      active: { shape: 'check', tone: 'success', label: 'Activo' },
+      inactive: { shape: 'cross', tone: 'closed', label: 'Inactivo' },
+    })
+    expect(teamStatus({ active: false })).toBe(TEAM_STATUS.inactive)
+    expect(teamStatus({ active: true }).label).toBe('Activo')
   })
 
   it('joins lists in Spanish like the backend join_es', () => {

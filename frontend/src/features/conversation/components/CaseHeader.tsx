@@ -1,6 +1,7 @@
 import type { ReactNode, Ref } from 'react'
 import { Copy, History } from 'lucide-react'
-import { Badge, Button, IconButton, useToast } from '@/components/ui'
+import { Button, IconButton, Status, useToast } from '@/components/ui'
+import { caseStatus } from '@/features/cases'
 import {
   CUSTOMER_FILE_PANEL_ID,
   CUSTOMER_FILE_TRIGGER_ID,
@@ -34,7 +35,7 @@ export interface CaseHeaderProps {
  * Case header (contract §9.3): name; short id (copyable) · "{país} · {ciudad} ·
  * {canal} · {prioridad | en portugués}"; "Casos anteriores
  * (n)" when the customer has other cases; "Cerrar caso" for the assignee, or the
- * "Cerrado" badge on a closed case. The supervisor view adds its "Asignar" /
+ * "Cerrado" status on a closed case (the full header always shows the status). The supervisor view adds its "Asignar" /
  * "Reasignar" (`actions`) and never offers "Cerrar caso". The meta line wraps instead of being
  * truncated: "en portugués" is the only cue outside the transcript that the
  * analyst must reply in Portuguese (rule 3).
@@ -79,7 +80,9 @@ export function CaseHeader({
 
   const rightSide = (
     <div className="flex shrink-0 items-center gap-2">
-      {closed ? <Badge tone="closed">Cerrado</Badge> : null}
+      {closed || !customerFile ? (
+        <Status {...caseStatus(summary.inboxStatus)} srLabel="Estado" />
+      ) : null}
       {actions}
       {historyLabel && onOpenHistory && !customerFile ? (
         <Button

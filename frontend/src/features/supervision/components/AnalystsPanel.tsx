@@ -4,7 +4,7 @@ import {
   SegmentedControl,
   Skeleton,
   SourceNote,
-  StatusDot,
+  Status,
   TBody,
   TCell,
   TH,
@@ -190,11 +190,11 @@ function AnalystRow({ analyst, teamLabel, selected, now, onSelect }: AnalystRowP
         </span>
       </TCell>
       <TCell muted className={CELL_X}>
-        <span className="flex flex-wrap items-center gap-x-1.5">
-          <StatusDot tone={meta.tone} label={meta.label} />
+        <span className="flex flex-wrap items-center gap-x-2">
+          <Status {...meta} />
           {showsNoSessionHint(analyst) ? (
             <span className="text-12 text-muted" title={NO_SESSION_HINT.title}>
-              · {NO_SESSION_HINT.label}
+              {NO_SESSION_HINT.label}
             </span>
           ) : null}
         </span>

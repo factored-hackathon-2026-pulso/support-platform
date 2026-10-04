@@ -1,6 +1,7 @@
-import { Badge, Fact, ListItemButton } from '@/components/ui'
+import { Fact, ListItemButton, Status } from '@/components/ui'
 import {
   caseCardFacts,
+  caseStatus,
   closeReasonLabel,
   formatClosedAgo,
   formatLastInteraction,
@@ -22,9 +23,9 @@ export interface CaseCardProps {
  * One case of the list (contract §9.1; slice 6 UI rule: short facts, never a
  * dot-joined line). Open: left stripe = status, the name and the first-response
  * "SLA x" (clock, only while the first reply is pending) on top, the last
- * message, then the status pill, the channel, the priority when high and
+ * message, then the status (glyph + word), the channel, the priority when high and
  * "Volvió a escribir", and the time since the last interaction (clock). Closed
- * (Cerrados): when it closed, the last message, the "Cerrado" pill, the
+ * (Cerrados): when it closed, the last message, the "Cerrado" status, the
  * reason with its icon and, once the customer rated it (slice 7), the face alone
  * (tooltip "Bien", accessible "Calificación: Bien").
  */
@@ -71,9 +72,7 @@ export function CaseCard({ summary, selected, now, onSelect }: CaseCardProps) {
       </span>
       <span className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-          <Badge tone={meta.tone} size="sm">
-            {meta.subLabel}
-          </Badge>
+          <Status {...caseStatus(summary.inboxStatus)} />
           {closed ? (
             <>
               <span className="flex min-w-0 items-center gap-1.5 text-12 text-ink-2">

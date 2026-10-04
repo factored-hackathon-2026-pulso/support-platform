@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { PanelLeftClose, X } from 'lucide-react'
-import { IconButton, QueryState, SearchInput, Skeleton, type Tone } from '@/components/ui'
+import { IconButton, QueryState, SearchInput, Skeleton, StatusIcon } from '@/components/ui'
 import { useDebouncedValue, useNow } from '@/lib/hooks'
 import { useInbox, useInboxLive } from '../hooks'
 import {
   SEARCH_MAX_LENGTH,
   emptyListCopy,
+  caseStatus,
   filterChipLabel,
-  inboxStatusMeta,
   normalizeSearch,
   sortByUrgency,
 } from '../model'
@@ -34,17 +34,6 @@ export interface CaseListPanelProps {
   onFilterChange(filter: InboxStatus | null): void
   onQueryChange(query: string): void
   onCollapsedChange(collapsed: boolean): void
-}
-
-/** Dot of the filter chip, in the status tone (written out for Tailwind). */
-const CHIP_DOT: Record<Tone, string> = {
-  accent: 'bg-accent',
-  warn: 'bg-warn',
-  waiting: 'bg-waiting',
-  closed: 'bg-offline',
-  neutral: 'bg-offline',
-  success: 'bg-success',
-  danger: 'bg-danger',
 }
 
 /** Search waits for a short pause in typing before it hits the API. */
@@ -137,10 +126,7 @@ export function CaseListPanel({
               onClick={() => onFilterChange(null)}
               className="inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pr-1.5 pl-2.5 text-13 font-semibold text-ink hover:bg-subtle"
             >
-              <span
-                aria-hidden="true"
-                className={`size-2 rounded-full ${CHIP_DOT[inboxStatusMeta({ inboxStatus: filter }).tone]}`}
-              />
+              <StatusIcon shape={caseStatus(filter).shape} tone={caseStatus(filter).tone} />
               {chip}
               <X size={14} aria-hidden="true" className="text-muted" />
             </button>

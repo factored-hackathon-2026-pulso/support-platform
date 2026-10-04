@@ -12,5 +12,11 @@ export type { TeamScreenProps } from './components/TeamScreen'
 export { SupervisorCaseScreen } from './components/SupervisorCaseScreen'
 export type { SupervisorCaseScreenProps } from './components/SupervisorCaseScreen'
 export { useQueueNotices } from './hooks'
-export { parseCaseViewSearch, parseTeamSearch, toCaseViewSearch, toTeamSearch } from './model'
-export type { CaseViewUrlState, TeamUrlState, UrlStateChangeOptions } from './model'
+export {
+  ACTIVITY_META,
+  parseCaseViewSearch,
+  parseTeamSearch,
+  toCaseViewSearch,
+  toTeamSearch,
+} from './model'
+export type { ActivityMeta, CaseViewUrlState, TeamUrlState, UrlStateChangeOptions } from './model'

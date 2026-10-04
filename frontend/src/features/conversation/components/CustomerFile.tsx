@@ -8,6 +8,7 @@ import {
   FACT_ICONS,
   FactList,
   Skeleton,
+  Status,
   type FactIcon,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -114,7 +115,7 @@ function pillIcon(icon: FactIcon | undefined) {
   return <Icon size={13} aria-hidden="true" className="shrink-0" />
 }
 
-/** Label column (icon + label) and value column: text, a status pill or short facts. */
+/** Label column (icon + label) and value column: text, the status, a rating pill or short facts. */
 function FileRows({ rows }: { rows: readonly FileRow[] }) {
   return (
     <dl className="m-0 grid grid-cols-[148px_minmax(0,1fr)] gap-x-3 gap-y-2.5 text-14">
@@ -130,7 +131,9 @@ function FileRows({ rows }: { rows: readonly FileRow[] }) {
               className={cn('m-0 min-w-0 break-words', row.mono && 'truncate font-mono text-12')}
               title={row.mono ? row.text : undefined}
             >
-              {row.pill ? (
+              {row.status ? (
+                <Status {...row.status} />
+              ) : row.pill ? (
                 <Badge tone={row.pill.tone} size="sm" icon={pillIcon(row.pill.icon)}>
                   {row.pill.label}
                 </Badge>

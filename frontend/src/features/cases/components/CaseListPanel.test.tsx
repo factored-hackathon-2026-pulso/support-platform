@@ -115,17 +115,25 @@ describe('CaseListPanel', () => {
       'Marcela Quintana Pardo',
       'Joaquín Ferreyra Paz',
     ])
-    // Separate elements, never a dot-joined line: the status pill, the channel
+    // Separate elements, never a dot-joined line: the status (glyph + word), the channel
     // (icon-only, its name for screen readers), the time.
     const marcela = card(/Marcela Quintana Pardo/)
     expect(marcela).toHaveAttribute('title', 'Por responder')
-    expect(within(marcela).getByText('Por responder')).toHaveClass('bg-warn-soft')
+    expect(within(marcela).getByText('Por responder').parentElement).toHaveClass('text-warn-strong')
+    expect(
+      within(marcela).getByText('Por responder').parentElement!.querySelector('svg'),
+    ).toHaveAttribute('data-status-shape', 'pie-75')
+    expect(within(marcela).getByText('Por responder')).not.toHaveClass('bg-warn-soft')
     expect(within(marcela).getByText('Canal: Web')).toHaveClass('sr-only')
     expect(marcela).toHaveTextContent('Última actividad: hace 2 min')
     expect(marcela.textContent).not.toContain('·')
     expect(marcela).not.toHaveTextContent('Prioridad media') // only a high priority shows
     expect(card(/Larissa Monteiro Alves/)).toHaveTextContent('SLA de primera respuesta: 13 min')
-    expect(within(card(/Larissa Monteiro Alves/)).getByText('Nuevo')).toHaveClass('bg-accent-soft')
+    expect(
+      within(card(/Larissa Monteiro Alves/))
+        .getByText('Nuevo')
+        .parentElement!.querySelector('svg'),
+    ).toHaveAttribute('data-status-shape', 'ring')
     expect(
       within(card(/Joaquín Ferreyra Paz/)).getByText('Esperando al cliente'),
     ).toBeInTheDocument()
@@ -185,7 +193,10 @@ describe('CaseListPanel', () => {
     expect(within(caseList()).getAllByRole('button')).toHaveLength(3)
     expect(hector).toHaveClass('border-l-offline')
     expect(hector).toHaveTextContent('Cerrado: hace 3 h')
-    expect(within(hector).getByText('Cerrado')).toHaveClass('bg-panel')
+    expect(within(hector).getByText('Cerrado').parentElement!.querySelector('svg')).toHaveAttribute(
+      'data-status-shape',
+      'check',
+    )
     expect(hector).toHaveTextContent('Fuera de alcance')
     expect(hector.querySelector('[data-reason="out_of_scope"]')).toHaveClass('bg-warn-soft')
     expect(hector).not.toHaveTextContent(/SLA/)

@@ -1,12 +1,12 @@
 import { CheckCircle2 } from 'lucide-react'
 import {
-  Badge,
   EmptyState,
   Fact,
   FactList,
   LinkButton,
   QueryState,
   Skeleton,
+  Status,
   toneBorderLeft,
 } from '@/components/ui'
 import type { InboxResponse } from '@/features/cases'
@@ -26,7 +26,7 @@ export interface FirstCasesProps {
 
 /**
  * "Lo primero" (canvas `queue`): her open cases in urgency order (the same
- * `sortByUrgency` as the Casos list), each with its status stripe and pill, the
+ * `sortByUrgency` as the Casos list), each with its status stripe and status (glyph + word), the
  * channel (and the high-priority flag, "Volvió a escribir") as icons with a
  * tooltip, the last message, the SLA or the time, and "Abrir" (Casos with that
  * case open and its filter set, so the card is highlighted).
@@ -77,9 +77,7 @@ export function FirstCases({ inbox, now, paused }: FirstCasesProps) {
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate text-15 font-semibold">{row.name}</span>
-                      <Badge tone={row.status.tone} size="sm">
-                        {row.status.label}
-                      </Badge>
+                      <Status {...row.status} className="shrink-0" />
                       <FactList items={row.facts} className="shrink-0" />
                     </span>
                     <span className="truncate text-14 text-ink-2">{row.preview}</span>

@@ -71,12 +71,12 @@ import {
 } from './model'
 
 describe('"Ahora" (contract §2.2)', () => {
-  it('labels and tones every activity like the canvas', () => {
+  it('draws every activity with the dot language: dot, ring, pause, grey ring', () => {
     expect(ACTIVITY_META).toEqual({
-      busy: { label: 'Atendiendo', tone: 'success' },
-      available: { label: 'Disponible', tone: 'accent' },
-      paused: { label: 'En pausa', tone: 'warn' },
-      offline: { label: 'Sin conexión', tone: 'neutral' },
+      busy: { shape: 'dot', tone: 'success', label: 'Atendiendo' },
+      available: { shape: 'ring', tone: 'success', label: 'Disponible' },
+      paused: { shape: 'pause', tone: 'warn', label: 'En pausa' },
+      offline: { shape: 'ring', tone: 'neutral', label: 'Sin conexión' },
     })
   })
 

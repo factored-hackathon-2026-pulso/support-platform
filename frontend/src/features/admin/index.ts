@@ -10,5 +10,13 @@ export { UsersScreen } from './components/UsersScreen'
 export type { UsersScreenProps } from './components/UsersScreen'
 export { TeamsScreen } from './components/TeamsScreen'
 export type { TeamsScreenProps } from './components/TeamsScreen'
-export { parseTeamsSearch, parseUsersSearch, toTeamsSearch, toUsersSearch } from './model'
+export {
+  ACCOUNT_STATUS,
+  TEAM_STATUS,
+  parseTeamsSearch,
+  parseUsersSearch,
+  teamStatus,
+  toTeamsSearch,
+  toUsersSearch,
+} from './model'
 export type { TeamsUrlState, UrlStateChangeOptions, UsersUrlState } from './model'

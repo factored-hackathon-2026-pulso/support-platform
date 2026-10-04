@@ -7,7 +7,7 @@
  * model.test.ts.
  */
 import { sortRoles, type RoleId } from '@/app/roles'
-import type { FactItem } from '@/components/ui'
+import type { FactItem, StatusAppearance } from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
 import { formatTime, joinEs, pluralize } from '@/lib/format'
 import type {
@@ -47,15 +47,31 @@ export const LANGUAGES: readonly Language[] = ['es', 'pt']
 export const LANGUAGE_LABEL: Record<Language, string> = { es: 'Español', pt: 'Portugués' }
 export const LANGUAGE_IN_SENTENCE: Record<Language, string> = { es: 'español', pt: 'portugués' }
 
-/** Account status: they qualify "cuenta". */
-export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = {
-  active: 'Activa',
-  locked: 'Bloqueada',
-  inactive: 'Desactivada',
+/**
+ * The one account-status map (glyph + word; the words qualify "cuenta"): check =
+ * can sign in, lock = locked for a while (it asks for action), x = deactivated.
+ */
+export const ACCOUNT_STATUS: Readonly<Record<AccountStatus, StatusAppearance>> = {
+  active: { shape: 'check', tone: 'success', label: 'Activa' },
+  locked: { shape: 'lock', tone: 'warn', label: 'Bloqueada', strong: true },
+  inactive: { shape: 'cross', tone: 'closed', label: 'Desactivada' },
 }
 
-export function teamStatusLabel(team: Pick<AdminTeam, 'active'>): string {
-  return team.active ? 'Activo' : 'Inactivo'
+/** Account status words (selects, sentences). */
+export const ACCOUNT_STATUS_LABEL: Readonly<Record<AccountStatus, string>> = {
+  active: ACCOUNT_STATUS.active.label,
+  locked: ACCOUNT_STATUS.locked.label,
+  inactive: ACCOUNT_STATUS.inactive.label,
+}
+
+/** The one team-status map: the same glyphs as an account ("Activo" / "Inactivo"). */
+export const TEAM_STATUS: Readonly<Record<'active' | 'inactive', StatusAppearance>> = {
+  active: { shape: 'check', tone: 'success', label: 'Activo' },
+  inactive: { shape: 'cross', tone: 'closed', label: 'Inactivo' },
+}
+
+export function teamStatus(team: Pick<AdminTeam, 'active'>): StatusAppearance {
+  return TEAM_STATUS[team.active ? 'active' : 'inactive']
 }
 
 /** "español, portugués", or "—" without languages. */

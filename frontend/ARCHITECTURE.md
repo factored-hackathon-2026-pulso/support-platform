@@ -118,7 +118,7 @@ Contract: `docs/platform/api/slice-2-case-lifecycle.md` §9. Dependency directio
   and the `case.assigned` toast. Owns `CLOSE_REASONS` / `closeReasonLabel`.
 - **`conversation`**: one chat layout that takes the whole width (bubbles ≤ 70%
   of a readable column). Header (meta, "Casos anteriores (n)", "Cerrar caso" or
-  the "Cerrado" badge), `ArrivalNote` ("Cómo llegó a ti": the people-based
+  the "Cerrado" status), `ArrivalNote` ("Cómo llegó a ti": the people-based
   assignment only), the composer or `ReadOnlyFooter` (closed: "Caso cerrado el …
   · motivo" + note; someone else's case: "Solo lectura: …"), `CloseCaseDialog`
   (required reason, optional internal note ≤ 500, the customer notice
@@ -441,6 +441,15 @@ it with `lazyRoute()` in the right role section. Until it is built, render
   no color of its own: it is built on `offline` (stripe, dot) and `muted` (text).
   A status stripe outside a primitive uses `toneBorderLeft[tone]` from
   `@/components/ui` (the map `ListItemButton` and `FilterTile` use); never copy it.
+- **States are glyph + word, not pills** (Linear-style `Status`). Each domain keeps ONE map of
+  `StatusAppearance` (`shape`, `tone`, `label`, `strong`) in its pure model: case status
+  `CASE_STATUS` / `caseStatus` / `caseLifecycleStatus` (`features/cases`, core: Sin asignar =
+  dashed, Nuevo = ring, Por responder = ¾ pie, Esperando al cliente = ½ pie, Cerrado = check;
+  the same `tone` drives the stripes and the Inicio tiles), availability `ACTIVITY_META`
+  (`features/supervision`: Atendiendo = dot, Disponible = ring, En pausa = pause, Sin conexión =
+  grey ring), account and team `ACCOUNT_STATUS` / `TEAM_STATUS` (`features/admin`: check, lock,
+  x) and the simulator picker `PICKER_STATUS`. Pills stay for what is not a state: counts, roles,
+  the team, ratings, filter chips. Glyph colors: `toneIcon`; a `strong` label: `toneStrongText`.
 - Canvas values outside the Workspace have their own tokens instead of being
   normalized: `success-tint`/`success-ink` (Admin avatar, "Activo").
 - Dark surfaces (rail, toasts, auth brand panel) carry `data-surface="dark"`: the
@@ -484,7 +493,7 @@ it with `lazyRoute()` in the right role section. Until it is built, render
 | `KeyValueList`                                                 | `items[{ key, label, value, mono, strong }]`, `labelWidth`                                                                              |                                                                                                                                                                                                                         |
 | `Table`, `THead`, `TBody`, `TRow`, `TRowSelect`, `TH`, `TCell` | `stickyHeader`, `density` / `selected`, `onSelect` / `align`, `muted`, `numeric`, `truncate`                                            | native table; selectable rows put a `TRowSelect` button in the primary cell (keyboard + `aria-current`), a click on the row also selects                                                                                |
 | `Stat`                                                         | `label`, `value`, `hint`, `hintTone`, `valueTone`, `size`, `order`                                                                      |                                                                                                                                                                                                                         |
-| `StatusDot`                                                    | `tone`, `size` 8·10, `label`, `srLabel`                                                                                                 |                                                                                                                                                                                                                         |
+| `Status` / `StatusIcon`                                        | `shape`, `tone`, `label`, `strong`, `iconOnly`, `srLabel`, `size` sm·md, `title`, `focusable` / `shape`, `tone`, `size` 14·16           | a state as Linear shows it: stroked glyph (`StatusShape`: dashed, ring, pie-25/50/75, check, cross, dot, pause, lock) + plain word, never a pill; `iconOnly` keeps the word as tooltip and accessible text              |
 | `Avatar`                                                       | `name`, `initials`, `tone` accent·peach·success·neutral, `size`, `decorative`                                                           | success uses `success-tint` (Admin)                                                                                                                                                                                     |
 | `Spinner` / `Skeleton`                                         | `label`, `size` / `className`                                                                                                           |                                                                                                                                                                                                                         |
 | `QueryState`                                                   | `query`, `skeleton`, `empty`, `isEmpty`, `errorTitle`, `errorDescription`, `children(data)`                                             | loading / error-with-retry / empty / content for any TanStack query                                                                                                                                                     |

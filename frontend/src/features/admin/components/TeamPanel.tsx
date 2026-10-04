@@ -10,18 +10,20 @@ import {
   Input,
   Kicker,
   Spinner,
+  Status,
   useToast,
 } from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
 import { cn } from '@/lib/cn'
 import { formatDate } from '@/lib/format'
 import {
-  ACCOUNT_STATUS_LABEL,
+  ACCOUNT_STATUS,
   TEAM_NAME_MAX_LENGTH,
   languagesLabel,
   normalizeName,
   sortMembers,
   teamNotEmptyCopy,
+  teamStatus,
   validateTeamName,
 } from '../model'
 import { useAdminTeam, useFailureHandler, useReactivateTeam, useRenameTeam } from '../hooks'
@@ -153,8 +155,9 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
     <>
       <div className="flex flex-col gap-1 border-b border-border-soft px-5 pt-[18px] pb-3.5">
         <h2 className="m-0 text-18 font-semibold">{team.name}</h2>
-        <span className="text-13 text-ink-2">
-          {team.active ? 'Activo' : 'Inactivo'} · Creado el {formatDate(team.createdAt)}
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Status {...teamStatus(team)} srLabel="Estado" />
+          <span className="text-13 text-ink-2">Creado el {formatDate(team.createdAt)}</span>
         </span>
         <span className="font-mono text-12 text-muted">{team.id}</span>
       </div>
@@ -295,9 +298,7 @@ function MemberRow({ member }: { member: AdminTeamMember }) {
         >
           {member.name}
         </Link>
-        {inactive ? (
-          <span className="shrink-0 text-12">{ACCOUNT_STATUS_LABEL.inactive}</span>
-        ) : null}
+        {inactive ? <Status {...ACCOUNT_STATUS.inactive} size="sm" className="shrink-0" /> : null}
       </span>
       <span className="flex flex-wrap items-center gap-2 text-12">
         <RoleChips roles={member.roles} className={cn(inactive && 'opacity-70')} />

@@ -3,12 +3,13 @@
  * docs/platform/api/slice-2-case-lifecycle.md §4.1–§4.5, §9.1). No React, no
  * I/O: unit-tested in model.test.ts.
  */
-import type { FactIcon, FactItem, FactTone, Tone } from '@/components/ui'
+import type { FactIcon, FactItem, FactTone, StatusAppearance, Tone } from '@/components/ui'
 import { formatRelativeTime } from '@/lib/format'
 import type {
   CaseChannel,
   CasePriority,
   CaseRating,
+  CaseStatus,
   CaseSummary,
   CloseReason,
   CountryCode,
@@ -16,6 +17,64 @@ import type {
   InboxResponse,
   InboxStatus,
 } from './types'
+
+// ─── Case status: the one map (Linear-style glyph + word) ────────────────────
+
+/** An inbox status, or `queued`: in no analyst inbox yet (supervision's queue). */
+export type CaseStatusKey = InboxStatus | 'queued'
+
+export interface CaseStatusConfig extends StatusAppearance {
+  /** Tile / filter / bucket name, plural: "Nuevos", "Cerrados". */
+  bucket: string
+}
+
+/**
+ * Every place that shows a case's status reads this map (cards, Inicio, the
+ * ficha, the header, supervision): dashed ring = nobody has it, empty ring =
+ * new, ¾ pie = it needs you, ½ pie = the customer has the ball, check = closed.
+ * `tone` also drives the status stripes (`toneBorderLeft`).
+ */
+export const CASE_STATUS: Readonly<Record<CaseStatusKey, CaseStatusConfig>> = {
+  queued: { shape: 'dashed', tone: 'neutral', label: 'Sin asignar', bucket: 'Sin asignar' },
+  new: { shape: 'ring', tone: 'accent', label: 'Nuevo', bucket: 'Nuevos' },
+  to_reply: {
+    shape: 'pie-75',
+    tone: 'warn',
+    label: 'Por responder',
+    bucket: 'Por responder',
+    strong: true,
+  },
+  waiting: {
+    shape: 'pie-50',
+    tone: 'waiting',
+    label: 'Esperando al cliente',
+    bucket: 'Esperando al cliente',
+  },
+  closed: { shape: 'check', tone: 'closed', label: 'Cerrado', bucket: 'Cerrados' },
+}
+
+/** A past case still open, outside any inbox view ("Casos anteriores"). */
+export const OPEN_CASE_STATUS: StatusAppearance = {
+  shape: 'pie-25',
+  tone: 'accent',
+  label: 'Abierto',
+}
+
+function appearance({ shape, tone, label, strong }: CaseStatusConfig): StatusAppearance {
+  return strong ? { shape, tone, label, strong } : { shape, tone, label }
+}
+
+/** The status of a case as glyph + word (`null` inbox status = queued, "Sin asignar"). */
+export function caseStatus(inboxStatus: InboxStatus | null): StatusAppearance {
+  return appearance(CASE_STATUS[inboxStatus ?? 'queued'])
+}
+
+/** A case by its lifecycle status (past cases have no inbox status): queued, open or closed. */
+export function caseLifecycleStatus(status: CaseStatus): StatusAppearance {
+  if (status === 'queued') return appearance(CASE_STATUS.queued)
+  if (status === 'closed') return appearance(CASE_STATUS.closed)
+  return OPEN_CASE_STATUS
+}
 
 // ─── Filters (the status counters ARE the filters) ──────────────────────────
 
@@ -28,13 +87,20 @@ export interface InboxFilter {
   tone: Tone
 }
 
+const filterOf = (status: InboxStatus, slug: string): InboxFilter => ({
+  status,
+  label: CASE_STATUS[status].bucket,
+  slug,
+  tone: CASE_STATUS[status].tone,
+})
+
 /** Canvas order: Todos · Por responder · Nuevos · Esperando al cliente · Cerrados. */
 export const INBOX_FILTERS: readonly InboxFilter[] = [
   { status: null, label: 'Todos', slug: null, tone: 'neutral' },
-  { status: 'to_reply', label: 'Por responder', slug: 'por-responder', tone: 'warn' },
-  { status: 'new', label: 'Nuevos', slug: 'nuevos', tone: 'accent' },
-  { status: 'waiting', label: 'Esperando al cliente', slug: 'esperando', tone: 'waiting' },
-  { status: 'closed', label: 'Cerrados', slug: 'cerrados', tone: 'closed' },
+  filterOf('to_reply', 'por-responder'),
+  filterOf('new', 'nuevos'),
+  filterOf('waiting', 'esperando'),
+  filterOf('closed', 'cerrados'),
 ]
 
 /**
@@ -74,25 +140,10 @@ export interface InboxStatusMeta {
   tone: Tone
 }
 
-/** Bucket, sub-label and tone of a case (contract §4.1, §9.1). */
+/** Bucket, sub-label and tone of a case (contract §4.1, §9.1), from `CASE_STATUS`. */
 export function inboxStatusMeta(summary: Pick<CaseSummary, 'inboxStatus'>): InboxStatusMeta {
-  switch (summary.inboxStatus) {
-    case 'new':
-      return { label: 'Nuevos', subLabel: 'Nuevo', tone: 'accent' }
-    case 'to_reply':
-      return { label: 'Por responder', subLabel: 'Por responder', tone: 'warn' }
-    case 'waiting':
-      return {
-        label: 'Esperando al cliente',
-        subLabel: 'Esperando al cliente',
-        tone: 'waiting',
-      }
-    case 'closed':
-      return { label: 'Cerrados', subLabel: 'Cerrado', tone: 'closed' }
-    default:
-      // `null`: queued, in no analyst inbox yet (supervision's queue, slice 3).
-      return { label: 'Sin asignar', subLabel: 'En la cola', tone: 'neutral' }
-  }
+  const status = CASE_STATUS[summary.inboxStatus ?? 'queued']
+  return { label: status.bucket, subLabel: status.label, tone: status.tone }
 }
 
 // ─── Labels ──────────────────────────────────────────────────────────────────

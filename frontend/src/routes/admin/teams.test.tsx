@@ -121,7 +121,13 @@ describe('Equipos', () => {
     const panel = aside()
     expect(await within(panel).findByRole('heading', { name: 'Equipo Andes' })).toBeInTheDocument()
     expect(within(panel).getByText(teamAndes.id)).toBeInTheDocument()
-    expect(within(panel).getByText('Activo · Creado el 3 feb 2026')).toBeInTheDocument()
+    // The state as glyph + word, the creation date as its own text (never dot-joined).
+    expect(within(panel).getByText('Activo').parentElement).toHaveTextContent('Estado: Activo')
+    expect(within(panel).getByText('Activo').parentElement!.querySelector('svg')).toHaveAttribute(
+      'data-status-shape',
+      'check',
+    )
+    expect(within(panel).getByText('Creado el 3 feb 2026')).toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: daniela.name })).toHaveAttribute(
       'href',
       `/administracion/usuarios?persona=${daniela.id}`,

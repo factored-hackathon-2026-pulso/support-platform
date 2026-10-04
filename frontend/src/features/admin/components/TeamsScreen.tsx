@@ -8,6 +8,7 @@ import {
   SegmentedControl,
   Skeleton,
   SourceNote,
+  Status,
   TBody,
   TCell,
   TH,
@@ -16,13 +17,7 @@ import {
   TRowSelect,
   Table,
 } from '@/components/ui'
-import { cn } from '@/lib/cn'
-import {
-  teamStatusLabel,
-  teamsSubtitle,
-  type TeamsUrlState,
-  type UrlStateChangeOptions,
-} from '../model'
+import { teamStatus, teamsSubtitle, type TeamsUrlState, type UrlStateChangeOptions } from '../model'
 import { useAdminLive, useAdminTeams } from '../hooks'
 import type { AdminTeam, TeamStatusFilter } from '../types'
 import { CreateTeamDialog } from './CreateTeamDialog'
@@ -155,8 +150,8 @@ function TeamRow({
       </TCell>
       <TCell align="right">{team.memberCount}</TCell>
       <TCell align="right">{team.analystCount}</TCell>
-      <TCell className={cn('pr-7 text-13', team.active ? 'text-ink-2' : 'text-muted')}>
-        {teamStatusLabel(team)}
+      <TCell className="pr-7">
+        <Status {...teamStatus(team)} />
       </TCell>
     </TRow>
   )

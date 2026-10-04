@@ -89,14 +89,23 @@ describe('status tiles', () => {
         status: 'to_reply',
         label: 'Por responder',
         tone: 'warn',
+        shape: 'pie-75',
         count: 2,
         href: '/analista?estado=por-responder',
       },
-      { status: 'new', label: 'Nuevos', tone: 'accent', count: 2, href: '/analista?estado=nuevos' },
+      {
+        status: 'new',
+        label: 'Nuevos',
+        tone: 'accent',
+        shape: 'ring',
+        count: 2,
+        href: '/analista?estado=nuevos',
+      },
       {
         status: 'waiting',
         label: 'Esperando al cliente',
         tone: 'waiting',
+        shape: 'pie-50',
         count: 1,
         href: '/analista?estado=esperando',
       },
@@ -104,6 +113,7 @@ describe('status tiles', () => {
         status: 'closed',
         label: 'Cerrados',
         tone: 'closed',
+        shape: 'check',
         count: 3,
         href: '/analista?estado=cerrados',
       },
@@ -124,7 +134,7 @@ describe('Lo primero', () => {
     ])
     const [beatriz, patricia, larissa, marcela, joaquin] = rows
     expect(beatriz).toMatchObject({
-      status: { label: 'Por responder', tone: 'warn' },
+      status: { shape: 'pie-75', label: 'Por responder', tone: 'warn' },
       sla: { icon: 'flame', text: '3 min', tone: 'warn', tooltip: 'Vence en 3 min' },
       href: '/analista?caso=CASE-00000000000000000000000102&estado=por-responder',
     })
@@ -136,7 +146,7 @@ describe('Lo primero', () => {
     expect(larissa!.sla).toMatchObject({ icon: 'clock', text: '13 min', tone: 'muted' })
     expect(marcela).toMatchObject({ sla: null, last: { icon: 'clock', text: 'hace 2 min' } })
     expect(joaquin).toMatchObject({
-      status: { label: 'Esperando al cliente', tone: 'waiting' },
+      status: { shape: 'pie-50', label: 'Esperando al cliente', tone: 'waiting' },
       preview: 'Tú: Hola, Joaquín. Soy Daniela, de LATAM Bank.',
       last: { text: 'hace 40 min', tooltip: 'Sin respuesta del cliente' },
       href: '/analista?caso=CASE-00000000000000000000000107&estado=esperando',
@@ -208,7 +218,7 @@ describe('Mientras no estabas · templates', () => {
       reason: 'manual',
     })
     expect(given.phrase).toBe('Te lo asignaron')
-    expect(given.status).toEqual({ label: 'Nuevo', tone: 'accent' })
+    expect(given.status).toEqual({ shape: 'ring', tone: 'accent', label: 'Nuevo' })
     expect(given.facts).toEqual([
       {
         key: 'by',
@@ -258,7 +268,7 @@ describe('Mientras no estabas · templates', () => {
     ).toEqual([])
   })
 
-  it('customer messages: the count, then the status pill and the SLA now', () => {
+  it('customer messages: the count, then the status and the SLA now', () => {
     const messages = template({
       kind: 'customer_messages',
       messageCount: 2,
@@ -266,7 +276,12 @@ describe('Mientras no estabas · templates', () => {
       inboxStatus: 'to_reply',
     })
     expect(messages.phrase).toBe('Escribió 2 mensajes')
-    expect(messages.status).toEqual({ label: 'Por responder', tone: 'warn' })
+    expect(messages.status).toEqual({
+      shape: 'pie-75',
+      tone: 'warn',
+      label: 'Por responder',
+      strong: true,
+    })
     expect(texts(messages.facts)).toEqual(['1 min'])
     expect(template({ kind: 'customer_messages', messageCount: 1 }).phrase).toBe(
       'Escribió 1 mensaje',
@@ -277,7 +292,11 @@ describe('Mientras no estabas · templates', () => {
       inboxStatus: 'waiting',
       firstResponseAt: minutesFrom(-5),
     })
-    expect(answered.status).toEqual({ label: 'Esperando al cliente', tone: 'waiting' })
+    expect(answered.status).toEqual({
+      shape: 'pie-50',
+      tone: 'waiting',
+      label: 'Esperando al cliente',
+    })
     expect(answered.facts).toEqual([])
   })
 

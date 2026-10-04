@@ -113,7 +113,9 @@ describe('CustomerFile ("Ficha del cliente")', () => {
     const thisCase = within(panel).getByRole('region', { name: 'Este caso' })
     expect(thisCase).toHaveTextContent('CanalChat web')
     expect(thisCase).toHaveTextContent('PrioridadMedia')
-    expect(within(thisCase).getByText('Por responder')).toHaveClass('bg-warn-soft')
+    const status = within(thisCase).getByText('Por responder').parentElement!
+    expect(status).not.toHaveClass('bg-warn-soft')
+    expect(status.querySelector('svg')).toHaveAttribute('data-status-shape', 'pie-75')
     expect(thisCase).toHaveTextContent('Primera respuestaA tiempo')
     const arrival = within(panel).getByRole('region', { name: 'Cómo llegó a ti' })
     expect(

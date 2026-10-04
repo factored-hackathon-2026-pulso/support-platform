@@ -9,14 +9,14 @@
  *
  * UI rule (slice 6 §4.7): metadata is never a dot-joined string or a sentence.
  * Each fact is its own short item (`FactItem`: icon + 1–3 words), the status a
- * colored pill, the time its own element with a clock.
+ * glyph + word (`caseStatus`, the cases map), the time its own element with a clock.
  */
 import { workspacePath } from '@/app/roles'
-import type { FactItem, Tone } from '@/components/ui'
+import type { FactItem, StatusAppearance, Tone } from '@/components/ui'
 import {
   INBOX_FILTERS,
   caseCardFacts,
-  inboxStatusMeta,
+  caseStatus,
   slaFact,
   slugFromInboxStatus,
   sortByUrgency,
@@ -39,17 +39,6 @@ import {
 import type { AnalystHome, HomeActivityItem, HomeActivityKind, HomeQueue, HomeTeam } from './types'
 
 type DateInput = Date | string | number
-
-/** A status pill: the case status in its tone. */
-export interface StatusPill {
-  label: string
-  tone: Tone
-}
-
-function statusPill(inboxStatus: InboxStatus | null): StatusPill {
-  const meta = inboxStatusMeta({ inboxStatus })
-  return { label: meta.subLabel, tone: meta.tone }
-}
 
 // ─── Header ──────────────────────────────────────────────────────────────────
 
@@ -116,6 +105,8 @@ export interface StatusTile {
   status: InboxStatus
   label: string
   tone: Tone
+  /** The status glyph beside the label (the same as on the cards). */
+  shape: StatusAppearance['shape']
   count: number | null
   href: string
 }
@@ -136,6 +127,7 @@ export function statusTiles(counts: InboxCounts | undefined): StatusTile[] {
             status: filter.status,
             label: filter.label,
             tone: filter.tone,
+            shape: caseStatus(filter.status).shape,
             count: counts ? counts[COUNT_OF[filter.status]] : null,
             href: workspacePath({ filterSlug: slugFromInboxStatus(filter.status) }),
           },
@@ -155,7 +147,7 @@ export const FIRST_CASES_LIMIT = 6
 export interface FirstCaseRow {
   id: string
   name: string
-  status: StatusPill
+  status: StatusAppearance
   /** Channel, priority when high, "Volvió a escribir": icon-only (the cases card facts). */
   facts: FactItem[]
   preview: string
@@ -189,7 +181,7 @@ export function firstCases(
       return {
         id: summary.id,
         name: summary.customer.displayName,
-        status: statusPill(summary.inboxStatus),
+        status: caseStatus(summary.inboxStatus),
         facts: caseCardFacts(summary),
         preview: summary.previewAuthorRole === 'analyst' ? `Tú: ${preview}` : preview,
         sla,
@@ -221,8 +213,8 @@ export interface ActivityRow {
   customerName: string
   /** The fixed phrase of its kind: "Te llegó", "Escribió 2 mensajes". */
   phrase: string
-  /** The case status now, as a pill (rows where it matters). */
-  status: StatusPill | null
+  /** The case status now, glyph + word (rows where it matters). */
+  status: StatusAppearance | null
   /** One short fact each (icon + 1–3 words). */
   facts: FactItem[]
   /** "Volvió a escribir": how the case it continues was closed (icon + label in the UI). */
@@ -270,7 +262,7 @@ function itemSla(item: HomeActivityItem, now: DateInput): FactItem | null {
 const compact = (facts: (FactItem | null)[]): FactItem[] =>
   facts.filter((fact): fact is FactItem => fact !== null)
 
-/** The fixed template of each kind (contract §4.5, "Plantillas"): phrase, pill and facts. */
+/** The fixed template of each kind (contract §4.5, "Plantillas"): phrase, status and facts. */
 export function activityTemplate(
   item: HomeActivityItem,
   now: DateInput,
@@ -298,7 +290,7 @@ export function activityTemplate(
       return {
         ...base,
         phrase: 'Te lo asignaron',
-        status: statusPill(item.inboxStatus),
+        status: caseStatus(item.inboxStatus),
         facts: compact([
           {
             key: 'by',
@@ -354,14 +346,14 @@ export function activityTemplate(
       return {
         ...base,
         phrase: `Escribió ${pluralize(item.messageCount ?? 1, 'mensaje')}`,
-        status: statusPill(item.inboxStatus),
+        status: caseStatus(item.inboxStatus),
         facts: compact([itemSla(item, now)]),
       }
   }
 }
 
 /**
- * One row: icon, customer, phrase, pill and facts, time and the link. A case that
+ * One row: icon, customer, phrase, status and facts, time and the link. A case that
  * is no longer hers (`readOnly`) opens without a filter: the Workspace shows it
  * read-only ("Solo lectura: este caso es de …") through history access.
  */

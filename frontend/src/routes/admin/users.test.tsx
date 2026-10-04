@@ -95,8 +95,13 @@ describe('Usuarios y roles', () => {
     expect(within(carolinaRow).getByText('Supervisora')).toBeInTheDocument()
     expect(within(carolinaRow).getByText('Administración')).toBeInTheDocument()
     expect(within(carolinaRow).getByText('—')).toBeInTheDocument()
-    const locked = within(row(/Mariana Duque/)).getByText('Bloqueada')
+    // Account status as glyph + word: a lock, its end time on hover.
+    const locked = within(row(/Mariana Duque/)).getByText('Bloqueada').parentElement!
     expect(locked).toHaveAttribute('title', 'Hasta las 11:13')
+    expect(locked.querySelector('svg')).toHaveAttribute('data-status-shape', 'lock')
+    expect(
+      within(danielaRow).getByText('Activa').parentElement!.querySelector('svg'),
+    ).toHaveAttribute('data-status-shape', 'check')
 
     expect(
       within(screen.getByRole('navigation', { name: 'Principal' })).getByRole('link', {

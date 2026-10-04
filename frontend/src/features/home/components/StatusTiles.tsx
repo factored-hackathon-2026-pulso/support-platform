@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { toneBorderLeft } from '@/components/ui'
+import { StatusIcon, toneBorderLeft } from '@/components/ui'
 import type { InboxCounts } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { CLOSED_TILE_HINT, statusTiles } from '../model'
@@ -28,8 +28,11 @@ export function StatusTiles({ counts }: { counts: InboxCounts | undefined }) {
                 <span className="font-display text-26 font-bold tabular-nums" aria-hidden="true">
                   {tile.count ?? '–'}
                 </span>
-                <span className="flex items-baseline gap-2" aria-hidden="true">
-                  <span className="text-14 text-ink-2">{tile.label}</span>
+                <span className="flex items-center gap-2" aria-hidden="true">
+                  <span className="flex items-center gap-1.5 text-14 text-ink-2">
+                    <StatusIcon shape={tile.shape} tone={tile.tone} />
+                    {tile.label}
+                  </span>
                   {hint ? <span className="text-12 text-muted">{hint}</span> : null}
                 </span>
               </Link>

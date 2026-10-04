@@ -10,8 +10,9 @@ import {
   QueryState,
   Sheet,
   Skeleton,
+  Status,
 } from '@/components/ui'
-import { CloseReasonIcon, closeReasonLabel } from '@/features/cases'
+import { CloseReasonIcon, caseLifecycleStatus, closeReasonLabel } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { formatDateTime } from '@/lib/format'
 import {
@@ -192,7 +193,9 @@ function HistoryList({ caseId, onSelect, returnTo, headingLevel }: HistoryListPr
                             <CloseReasonIcon reason={item.closeReason} />
                             {closeReasonLabel(item.closeReason)}
                           </span>
-                        ) : null}
+                        ) : (
+                          <Status {...caseLifecycleStatus(item.status)} />
+                        )}
                         {historyItemFacts(item).map(({ key, ...fact }) => (
                           <Fact key={key} {...fact} focusable={false} />
                         ))}
@@ -310,7 +313,7 @@ function PastCase({ caseId, focusHeading, onBack, headingLevel: Heading }: PastC
             ) : null}
           </span>
         ) : (
-          <Fact icon="inbox" text="Abierto" tone="accent" />
+          <Status {...caseLifecycleStatus(detail.data.case.status)} />
         )
       ) : null}
       {closure?.note ? <p className="m-0 text-13 text-ink-2">Nota: {closure.note}</p> : null}

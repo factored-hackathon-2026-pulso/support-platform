@@ -9,9 +9,13 @@ export { availabilityKeys, caseKeys } from './api'
 export { useAvailabilityPresence, useToReplyCount } from './hooks/use-analyst-shell'
 export { applyCaseSummaryToInboxes, readCaseSummary, registerCasesRealtime } from './realtime'
 export {
+  CASE_STATUS,
   CLOSE_REASONS,
   INBOX_FILTERS,
+  OPEN_CASE_STATUS,
   caseCardFacts,
+  caseLifecycleStatus,
+  caseStatus,
   channelFact,
   channelLabel,
   channelPhrase,
@@ -38,6 +42,8 @@ export {
   urgencyGroup,
 } from './model'
 export type {
+  CaseStatusConfig,
+  CaseStatusKey,
   CloseReasonOption,
   InboxFilter,
   InboxStatusMeta,

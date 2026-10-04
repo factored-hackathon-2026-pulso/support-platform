@@ -1,7 +1,7 @@
 import { UserRound } from 'lucide-react'
-import { Badge, Callout, cardClasses, EmptyState, QueryState, Skeleton } from '@/components/ui'
+import { Callout, cardClasses, EmptyState, QueryState, Skeleton, Status } from '@/components/ui'
 import { cn } from '@/lib/cn'
-import { closedConversationsLine, localeLabel, pickerBadge, placeLabel } from '../model'
+import { closedConversationsLine, localeLabel, pickerStatus, placeLabel } from '../model'
 import { useDemoCustomers } from '../hooks'
 import type { DemoCustomer } from '../types'
 
@@ -80,7 +80,7 @@ function CustomerCard({
   disabled: boolean
   onPick: (customerId: string) => void
 }) {
-  const badge = pickerBadge(customer)
+  const status = pickerStatus(customer)
   const past = closedConversationsLine(customer.closedConversationCount)
   return (
     <button
@@ -96,11 +96,7 @@ function CustomerCard({
     >
       <span className="flex w-full items-start justify-between gap-2">
         <span className="text-16 font-semibold">{customer.displayName}</span>
-        {badge ? (
-          <Badge tone={badge.tone} size="sm">
-            {badge.text}
-          </Badge>
-        ) : null}
+        {status ? <Status {...status} className="mt-0.5 shrink-0" /> : null}
       </span>
       <span className="text-13 text-ink-2">{localeLabel(customer.locale)}</span>
       <span className="text-13 text-ink-2">{placeLabel(customer.city, customer.country)}</span>

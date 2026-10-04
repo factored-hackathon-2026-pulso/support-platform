@@ -617,7 +617,7 @@ describe('case history', () => {
     expect(historySheetTitle('')).toBe('Casos anteriores')
   })
 
-  it('describes each past case as facts: date, "Abierto" when open, and who held it', () => {
+  it('describes each past case as facts: date and who held it (the status is drawn apart)', () => {
     expect(historyItemFacts(makeHistoryItem()).map((fact) => fact.text)).toEqual([
       '3 mar 2026',
       'Daniela Ríos',
@@ -626,7 +626,7 @@ describe('case history', () => {
       historyItemFacts(
         makeHistoryItem({ status: 'in_progress', closeReason: null, analystName: null }),
       ).map((fact) => fact.text),
-    ).toEqual(['3 mar 2026', 'Abierto', 'Sin asignar'])
+    ).toEqual(['3 mar 2026', 'Sin asignar'])
   })
 
   it('notes when the list was capped at 20', () => {
@@ -744,7 +744,7 @@ describe('"Ficha del cliente" rows (slice 6 §5)', () => {
     ])
   })
 
-  it('lists this case: number, channel, priority, opened, status pill, first response', () => {
+  it('lists this case: number, channel, priority, opened, status, first response', () => {
     const rows = caseRows(makeCaseDetail(), now)
     expect(rows.map((row) => [row.icon, row.label])).toEqual([
       ['hash', 'Número'],
@@ -762,7 +762,13 @@ describe('"Ficha del cliente" rows (slice 6 §5)', () => {
       undefined,
       undefined,
     ])
-    expect(rows[4]!.pill).toEqual({ label: 'Por responder', tone: 'warn' })
+    expect(rows[4]!.status).toEqual({
+      shape: 'pie-75',
+      tone: 'warn',
+      label: 'Por responder',
+      strong: true,
+    })
+    expect(rows[4]!.pill).toBeUndefined()
     expect(rows[5]!.facts?.map((fact) => fact.text)).toEqual(['A tiempo', '5 mar, 10:50'])
     for (const row of rows) expect(row.text ?? '').not.toContain('·')
   })

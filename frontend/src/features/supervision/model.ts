@@ -6,7 +6,7 @@
  * what the customer sees, failures), the result copy, the queue notice and the
  * URL state. No React, no I/O: unit-tested in model.test.ts.
  */
-import type { FactIcon, FactTone, Tone } from '@/components/ui'
+import type { FactIcon, FactTone, StatusAppearance } from '@/components/ui'
 import { channelLabel, formatSla, priorityLabel, ratingOption } from '@/features/cases'
 import {
   LANGUAGE_NAMES,
@@ -50,16 +50,19 @@ function byName(a: { name: string }, b: { name: string }): number {
 
 // ── "Ahora" (contract §2.2) ──────────────────────────────────────────────────
 
-export interface ActivityMeta {
-  label: string
-  tone: Tone
-}
+/** What an analyst is doing now, as glyph + word (Status). */
+export type ActivityMeta = StatusAppearance
 
-export const ACTIVITY_META: Record<AnalystActivity, ActivityMeta> = {
-  busy: { label: 'Atendiendo', tone: 'success' },
-  available: { label: 'Disponible', tone: 'accent' },
-  paused: { label: 'En pausa', tone: 'warn' },
-  offline: { label: 'Sin conexión', tone: 'neutral' },
+/**
+ * The one availability map (the dot language, Linear-style): filled dot =
+ * attending cases, ring = free to take one, pause glyph = paused, grey ring =
+ * not connected.
+ */
+export const ACTIVITY_META: Readonly<Record<AnalystActivity, ActivityMeta>> = {
+  busy: { shape: 'dot', tone: 'success', label: 'Atendiendo' },
+  available: { shape: 'ring', tone: 'success', label: 'Disponible' },
+  paused: { shape: 'pause', tone: 'warn', label: 'En pausa' },
+  offline: { shape: 'ring', tone: 'neutral', label: 'Sin conexión' },
 }
 
 /** Hint of an available analyst without a session: cases keep landing on her. */

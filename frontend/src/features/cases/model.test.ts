@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { NOW, makeCaseSummary, makeCounts, makeInbox } from '@/test/case-fixtures'
 import {
+  CASE_STATUS,
   CLOSE_REASONS,
   INBOX_FILTERS,
+  OPEN_CASE_STATUS,
+  caseLifecycleStatus,
+  caseStatus,
   RETURNED_TAG,
   SLA_AT_RISK_MS,
   assignedToastCopy,
@@ -96,7 +100,7 @@ describe('countForFilter', () => {
   })
 })
 
-describe('inboxStatusMeta', () => {
+describe('case status (the one map)', () => {
   it.each([
     ['new', 'Nuevos', 'Nuevo', 'accent'],
     ['to_reply', 'Por responder', 'Por responder', 'warn'],
@@ -106,12 +110,67 @@ describe('inboxStatusMeta', () => {
     expect(inboxStatusMeta({ inboxStatus })).toEqual({ label, subLabel, tone })
   })
 
-  it('labels a queued case (in no inbox)', () => {
+  it('labels a queued case (in no inbox) "Sin asignar"', () => {
     expect(inboxStatusMeta({ inboxStatus: null })).toEqual({
       label: 'Sin asignar',
-      subLabel: 'En la cola',
+      subLabel: 'Sin asignar',
       tone: 'neutral',
     })
+  })
+
+  it('draws each status Linear-style: dashed, ring, ¾ pie, ½ pie, check', () => {
+    expect(
+      (['queued', 'new', 'to_reply', 'waiting', 'closed'] as const).map((key) => [
+        key,
+        CASE_STATUS[key].shape,
+        CASE_STATUS[key].tone,
+        CASE_STATUS[key].label,
+      ]),
+    ).toEqual([
+      ['queued', 'dashed', 'neutral', 'Sin asignar'],
+      ['new', 'ring', 'accent', 'Nuevo'],
+      ['to_reply', 'pie-75', 'warn', 'Por responder'],
+      ['waiting', 'pie-50', 'waiting', 'Esperando al cliente'],
+      ['closed', 'check', 'closed', 'Cerrado'],
+    ])
+    // Only the status that asks for her action is emphasized.
+    expect(Object.values(CASE_STATUS).filter((status) => status.strong)).toHaveLength(1)
+  })
+
+  it('hands the appearance to the Status primitive (no bucket) and reads null as queued', () => {
+    expect(caseStatus('to_reply')).toEqual({
+      shape: 'pie-75',
+      tone: 'warn',
+      label: 'Por responder',
+      strong: true,
+    })
+    expect(caseStatus('new')).toEqual({ shape: 'ring', tone: 'accent', label: 'Nuevo' })
+    expect(caseStatus(null)).toEqual({ shape: 'dashed', tone: 'neutral', label: 'Sin asignar' })
+  })
+
+  it('reads a past case by its lifecycle: queued, open ("Abierto") or closed', () => {
+    expect(caseLifecycleStatus('queued').label).toBe('Sin asignar')
+    expect(caseLifecycleStatus('assigned')).toEqual(OPEN_CASE_STATUS)
+    expect(caseLifecycleStatus('in_progress')).toEqual({
+      shape: 'pie-25',
+      tone: 'accent',
+      label: 'Abierto',
+    })
+    expect(caseLifecycleStatus('closed')).toEqual({
+      shape: 'check',
+      tone: 'closed',
+      label: 'Cerrado',
+    })
+  })
+
+  it('names and colors the filters from the same map', () => {
+    expect(INBOX_FILTERS.map((filter) => [filter.label, filter.tone])).toEqual([
+      ['Todos', 'neutral'],
+      ['Por responder', 'warn'],
+      ['Nuevos', 'accent'],
+      ['Esperando al cliente', 'waiting'],
+      ['Cerrados', 'closed'],
+    ])
   })
 })
 

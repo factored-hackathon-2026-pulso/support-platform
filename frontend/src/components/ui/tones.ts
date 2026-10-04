@@ -1,5 +1,5 @@
 /**
- * Semantic tones shared by Badge, StatusDot, FilterTile, ListItemButton…
+ * Semantic tones shared by Badge, Status / StatusIcon, FilterTile, ListItemButton…
  * Class strings are written out in full so Tailwind can detect them.
  *
  * Case statuses (brief §5.4): accent = Nuevos, warn = Por responder, waiting =
@@ -7,17 +7,6 @@
  * the existing `offline` / `muted` tokens (no color of its own).
  */
 export type Tone = 'neutral' | 'accent' | 'warn' | 'success' | 'danger' | 'waiting' | 'closed'
-
-/** Solid fill (dots, solid badges). */
-export const toneFill: Record<Tone, string> = {
-  neutral: 'bg-offline',
-  accent: 'bg-accent',
-  warn: 'bg-warn',
-  success: 'bg-success',
-  danger: 'bg-danger',
-  waiting: 'bg-waiting',
-  closed: 'bg-offline',
-}
 
 /** Soft pill: tinted background + strong text. */
 export const toneSoft: Record<Tone, string> = {
@@ -63,4 +52,29 @@ export const toneBorderLeft: Record<Tone, string> = {
   danger: 'border-l-danger',
   waiting: 'border-l-waiting',
   closed: 'border-l-offline',
+}
+
+/**
+ * Status glyph color (StatusIcon: rings, pies, dots). A graphic beside its text
+ * label, so `waiting` keeps its own grey here; `neutral` and `closed` use muted.
+ */
+export const toneIcon: Record<Tone, string> = {
+  neutral: 'text-muted',
+  accent: 'text-accent',
+  warn: 'text-warn',
+  success: 'text-success',
+  danger: 'text-danger',
+  waiting: 'text-waiting',
+  closed: 'text-muted',
+}
+
+/** Emphasized status label (Status `strong`): the tone's strong text (4.5:1 and up). */
+export const toneStrongText: Record<Tone, string> = {
+  neutral: 'text-ink',
+  accent: 'text-accent-strong',
+  warn: 'text-warn-strong',
+  success: 'text-success-strong',
+  danger: 'text-danger-strong',
+  waiting: 'text-ink-2',
+  closed: 'text-muted',
 }

@@ -32,7 +32,7 @@ import {
   pastBlocks,
   pastBlockTitle,
   pastConversationsButton,
-  pickerBadge,
+  pickerStatus,
   placeLabel,
   setPendingStatus,
   toChatItems,
@@ -340,9 +340,18 @@ describe('what the chat shows', () => {
 describe('picker', () => {
   it('badges an open conversation, or one still waiting for a person', () => {
     const [rafael, joaquin, claudia, gabriela] = demoCustomers
-    expect(pickerBadge(rafael!)).toBeNull()
-    expect(pickerBadge(joaquin!)).toEqual({ text: 'Conversación abierta', tone: 'success' })
-    expect(pickerBadge(gabriela!)).toEqual({ text: 'Esperando a una persona', tone: 'warn' })
+    expect(pickerStatus(rafael!)).toBeNull()
+    expect(pickerStatus(joaquin!)).toEqual({
+      shape: 'pie-50',
+      tone: 'success',
+      label: 'Conversación abierta',
+    })
+    expect(pickerStatus(gabriela!)).toEqual({
+      shape: 'dashed',
+      tone: 'warn',
+      label: 'Esperando a una persona',
+      strong: true,
+    })
     expect(closedConversationsLine(claudia!.closedConversationCount)).toBe(
       '1 conversación anterior',
     )

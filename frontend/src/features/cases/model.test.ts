@@ -32,7 +32,7 @@ import {
   formatClosedAgo,
   formatLastInteraction,
   formatSla,
-  inboxStatusFromSlug,
+  parseInboxStatus,
   inboxStatusMeta,
   isNewerCase,
   isNewerCounts,
@@ -45,7 +45,6 @@ import {
   priorityFact,
   priorityLabel,
   priorityMenuLabel,
-  slugFromInboxStatus,
   RATING_SCALE,
   ratingFact,
   ratingLabel,
@@ -78,24 +77,15 @@ describe('INBOX_FILTERS', () => {
   })
 })
 
-describe('slugs', () => {
-  it.each([
-    ['por-responder', 'to_reply'],
-    ['nuevos', 'new'],
-    ['esperando', 'waiting'],
-    ['cerrados', 'closed'],
-  ] as const)('%s ⇄ %s', (slug, status) => {
-    expect(inboxStatusFromSlug(slug)).toBe(status)
-    expect(slugFromInboxStatus(status)).toBe(slug)
+describe('parseInboxStatus', () => {
+  it.each(['to_reply', 'new', 'waiting', 'closed'] as const)('reads ?status=%s', (status) => {
+    expect(parseInboxStatus(status)).toBe(status)
   })
 
-  it('treats absent, unknown and old slugs as Todos', () => {
-    expect(inboxStatusFromSlug(null)).toBeNull()
-    expect(inboxStatusFromSlug('')).toBeNull()
-    for (const old of ['en-curso', 'por-llamar', 'en-espera', 'otra-cosa']) {
-      expect(inboxStatusFromSlug(old)).toBeNull()
+  it('treats absent and unknown values as Todos', () => {
+    for (const value of [null, undefined, '', 'queued', 'cerrados', 'otra-cosa']) {
+      expect(parseInboxStatus(value)).toBeNull()
     }
-    expect(slugFromInboxStatus(null)).toBeNull()
   })
 })
 

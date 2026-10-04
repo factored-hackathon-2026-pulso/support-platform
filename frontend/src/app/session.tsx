@@ -218,7 +218,7 @@ export function useCurrentUser(): SessionUser {
 }
 
 /**
- * Current role, derived from the URL (/analista, /supervision, /administracion).
+ * Current role, derived from the URL (/analyst, /supervision, /admin).
  * On shared pages (404) it falls back to the user's first role.
  * Must be used inside the router.
  */

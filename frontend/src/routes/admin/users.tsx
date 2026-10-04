@@ -10,9 +10,9 @@ import {
 } from '@/features/admin'
 
 /**
- * /administracion/usuarios — Usuarios y roles. Filters, the selected person
+ * /admin/users — Usuarios y roles. Filters, the selected person
  * and the create dialog live in the URL
- * (`?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=`, slice-4-administration.md §10.11).
+ * (`?role=&status=&team=&language=&q=&person=&new=`, slice-4-administration.md §10.11).
  */
 export default function UsersRoute() {
   const [searchParams, setSearchParams] = useSearchParams()

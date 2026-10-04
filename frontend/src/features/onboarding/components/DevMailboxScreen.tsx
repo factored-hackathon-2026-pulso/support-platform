@@ -1,5 +1,6 @@
 import { Inbox, Mail, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router'
+import { PATHS } from '@/app/paths'
 import {
   Badge,
   Button,
@@ -11,12 +12,13 @@ import {
 } from '@/components/ui'
 import { formatRelativeTime } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
-import { DEV_EMAIL_KIND_LABEL, inAppPath } from '../model'
+import { DEV_EMAIL_KIND_LABEL } from '../model'
+import { inAppPath } from '../url'
 import { useDevMailbox, useMeta } from '../hooks/use-onboarding'
 import type { DevEmail } from '../types'
 
 /**
- * "Correos de desarrollo" (`/dev/correos`, part 4): what the platform "sent" in this
+ * "Correos de desarrollo" (`/dev/mailbox`, part 4): what the platform "sent" in this
  * environment (the backend's dev mailbox), so a demo can open an invitation or reset
  * link without a real inbox. Only when `/meta` says the dev mailbox is on; it never
  * exists in production.
@@ -61,7 +63,7 @@ export function DevMailboxScreen() {
             title="No disponible"
             description="Este entorno no guarda correos de desarrollo."
             action={
-              <Link to="/login" className="text-14 text-link font-semibold">
+              <Link to={PATHS.login} className="text-14 text-link font-semibold">
                 Ir a Entrar
               </Link>
             }

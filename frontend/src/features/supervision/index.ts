@@ -14,9 +14,9 @@ export { EscalationsScreen } from './components/EscalationsScreen'
 export type { EscalationsScreenProps } from './components/EscalationsScreen'
 export { SupervisorCaseScreen } from './components/SupervisorCaseScreen'
 export type { SupervisorCaseScreenProps } from './components/SupervisorCaseScreen'
+export { ACTIVITY_META, backLabelFor } from './model'
+export type { ActivityMeta } from './model'
 export {
-  ACTIVITY_META,
-  backLabelFor,
   parseCaseViewSearch,
   parseEscalationsSearch,
   parseQueuesSearch,
@@ -25,12 +25,11 @@ export {
   toEscalationsSearch,
   toQueuesSearch,
   toTeamSearch,
-} from './model'
+} from './url'
 export type {
-  ActivityMeta,
   CaseViewUrlState,
   EscalationsUrlState,
   QueuesUrlState,
   TeamUrlState,
   UrlStateChangeOptions,
-} from './model'
+} from './url'

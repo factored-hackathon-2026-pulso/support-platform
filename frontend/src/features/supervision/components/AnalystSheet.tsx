@@ -24,7 +24,7 @@ export interface AnalystSheetProps {
 }
 
 /**
- * One analyst (`?analista=`): what she is doing now, her languages and team as facts,
+ * One analyst (`?analyst=`): what she is doing now, her languages and team as facts,
  * her figures, and each open case with "Ver conversación" (the read-only case view)
  * and "Reasignar" (the exception: assignment is automatic).
  */

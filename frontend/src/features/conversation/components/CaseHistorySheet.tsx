@@ -20,8 +20,10 @@ import {
   historyItemFacts,
   historySheetTitle,
   historyTruncatedNote,
+  PREVIOUS_CASES_LIST,
   shortCaseId,
   toTranscriptItems,
+  type PreviousCasesSelection,
 } from '../model'
 import { useCaseDetail, useCaseHistory, useCaseTurns, useLoadOlderTurns } from '../hooks'
 import type { CaseHistory } from '../types'
@@ -31,9 +33,9 @@ export interface CaseHistorySheetProps {
   /** The case open in the Workspace (its customer's other cases are listed). */
   caseId: string
   customerName: string
-  /** `'lista'` = the list; a case id = that past case's read-only transcript. */
-  selected: 'lista' | string
-  onSelect(selected: 'lista' | string): void
+  /** `PREVIOUS_CASES_LIST` = the list; a case id = that past case's read-only transcript. */
+  selected: PreviousCasesSelection
+  onSelect(selected: PreviousCasesSelection): void
   onClose(): void
 }
 
@@ -42,7 +44,7 @@ export interface CaseHistorySheetProps {
  * with the team, and the read-only transcript of the one picked. Conversation
  * history, not bank data. No composer, no read cursor, no `case:` subscription
  * (a past case is closed and does not change). The URL holds what is shown
- * (`?historial=lista | <CASE-id>`).
+ * (`?previous=list | <CASE-id>`).
  *
  * Focus (ARCHITECTURE.md §11): switching view replaces the focused control, so
  * opening a past case moves the focus to its heading, and going back to the
@@ -74,9 +76,9 @@ export function CaseHistorySheet({
 export interface CaseHistoryBrowserProps {
   /** The case on screen (its customer's other cases are listed). */
   caseId: string
-  /** `'lista'` = the list; a case id = that past case's read-only transcript. */
-  selected: 'lista' | string
-  onSelect(selected: 'lista' | string): void
+  /** `PREVIOUS_CASES_LIST` = the list; a case id = that past case's read-only transcript. */
+  selected: PreviousCasesSelection
+  onSelect(selected: PreviousCasesSelection): void
   /** Heading level of the past case and the empty state (h3 in the sheet, h4 in a panel section). */
   headingLevel?: 'h3' | 'h4'
 }
@@ -94,7 +96,7 @@ export function CaseHistoryBrowser({
   headingLevel = 'h3',
 }: CaseHistoryBrowserProps) {
   const previous = usePreviousView(selected)
-  return selected === 'lista' ? (
+  return selected === PREVIOUS_CASES_LIST ? (
     <HistoryList
       caseId={caseId}
       onSelect={onSelect}
@@ -106,7 +108,7 @@ export function CaseHistoryBrowser({
       key={selected}
       caseId={selected}
       focusHeading={previous !== null}
-      onBack={() => onSelect('lista')}
+      onBack={() => onSelect(PREVIOUS_CASES_LIST)}
       headingLevel={headingLevel}
     />
   )

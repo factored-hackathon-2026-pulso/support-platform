@@ -20,6 +20,7 @@ import {
   customerRows,
   describeCaseLoadFailure,
   previousCasesSectionTitle,
+  PREVIOUS_CASES_LIST,
   type FileRow,
 } from '../model'
 import type { CaseDetail } from '../types'
@@ -29,7 +30,7 @@ import { CasePriorityControl } from './CasePriorityControl'
 export interface CustomerFileProps {
   /** The case open in the Workspace. */
   caseId: string
-  /** "Casos anteriores": `'lista'` (default) or a past case id (`?historial=`). */
+  /** "Casos anteriores": the list (default) or a past case id (`?previous=`). */
   history: string | null
   onHistoryChange(history: string): void
 }
@@ -102,7 +103,7 @@ export function CustomerFile({ caseId, history, onHistoryChange }: CustomerFileP
       <SidePanelSection title={previousCasesSectionTitle(detail.data.previousCaseCount)}>
         <CaseHistoryBrowser
           caseId={caseId}
-          selected={history ?? 'lista'}
+          selected={history ?? PREVIOUS_CASES_LIST}
           onSelect={onHistoryChange}
           headingLevel="h4"
         />

@@ -31,7 +31,7 @@ export function useSetAssignee(caseId: string) {
  * Whether a PUT …/assignee of this case is in flight (from any dialog). While it
  * is, the screen keeps the dialog open even if the overviews briefly lose the
  * case (the queues refetch lands before the team's): closing it then would drop
- * the `mutate` callbacks that report the result and clear `?asignar=`.
+ * the `mutate` callbacks that report the result and clear `?reassign=`.
  */
 export function useIsAssigning(caseId: string | null): boolean {
   const count = useIsMutating({

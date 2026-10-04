@@ -9,7 +9,7 @@ export interface CreateTeamDialogProps {
   onCreated(team: AdminTeam): void
 }
 
-/** "Nuevo equipo" (`?nuevo=1`, contract §10.5), with one `Idempotency-Key` per open dialog. */
+/** "Nuevo equipo" (`?new=1`, contract §10.5), with one `Idempotency-Key` per open dialog. */
 export function CreateTeamDialog({ onClose, onCreated }: CreateTeamDialogProps) {
   const [idempotencyKey] = useState(() => crypto.randomUUID())
   const [name, setName] = useState('')

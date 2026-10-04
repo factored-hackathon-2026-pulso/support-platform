@@ -11,8 +11,8 @@ function CaseId() {
 describe('renderWithProviders', () => {
   it('mounts the UI at `path` so route params resolve', () => {
     renderWithProviders(<CaseId />, {
-      route: '/supervision/casos/CASE-1',
-      path: '/supervision/casos/:caseId',
+      route: '/supervision/cases/CASE-1',
+      path: '/supervision/cases/:caseId',
     })
     expect(screen.getByText('Caso CASE-1')).toBeInTheDocument()
   })

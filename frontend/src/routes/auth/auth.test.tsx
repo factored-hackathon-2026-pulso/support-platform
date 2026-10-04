@@ -13,7 +13,7 @@ vi.mock('@/features/auth/api', () => ({
 }))
 
 const mfaEntry = {
-  pathname: '/login/verificacion',
+  pathname: '/login/verify',
   state: { challengeId: 'CH-1', email: 'laura.mendez@example.com' },
 }
 
@@ -117,7 +117,7 @@ describe('login (BoLogin)', () => {
     })
     const { user, router } = renderRoute({
       pathname: '/login',
-      state: { from: '/supervision/auditoria' },
+      state: { from: '/supervision/audit' },
     })
     await user.type(
       await screen.findByRole('textbox', { name: 'Correo' }),
@@ -132,7 +132,7 @@ describe('login (BoLogin)', () => {
     expect(router.state.location.state).toEqual({
       challengeId: 'CH-9',
       email: 'laura.mendez@example.com',
-      from: '/supervision/auditoria',
+      from: '/supervision/audit',
     })
   })
 
@@ -156,13 +156,13 @@ describe('login (BoLogin)', () => {
         name: 'Tu cuenta está bloqueada por 15 minutos',
       }),
     ).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/login/bloqueada')
+    expect(router.state.location.pathname).toBe('/login/locked')
   })
 })
 
 describe('MFA (BoMfa)', () => {
   it('sends users without a challenge back to the login', async () => {
-    const { router } = renderRoute('/login/verificacion')
+    const { router } = renderRoute('/login/verify')
     expect(await screen.findByRole('heading', { level: 1, name: 'Entrar' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
   })
@@ -226,14 +226,14 @@ describe('MFA (BoMfa)', () => {
     })
     const { user, router } = renderRoute({
       ...mfaEntry,
-      state: { ...mfaEntry.state, from: '/supervision/auditoria' },
+      state: { ...mfaEntry.state, from: '/supervision/audit' },
     })
     await user.click(await screen.findByRole('textbox', { name: 'Dígito 1' }))
     await user.paste('000000')
     await user.click(screen.getByRole('button', { name: 'Entrar' }))
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Auditoría' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/supervision/auditoria')
+    expect(router.state.location.pathname).toBe('/supervision/audit')
     expect(sessionToken.get()).toBe('tkn-ok')
   })
 
@@ -278,7 +278,7 @@ describe('locked (BoLocked)', () => {
 
   it('counts down and then offers to sign in again', async () => {
     renderRoute({
-      pathname: '/login/bloqueada',
+      pathname: '/login/locked',
       state: { email: 'laura.mendez@example.com', unlockAt: '2026-10-02T15:47:00Z' },
     })
     expect(
@@ -326,7 +326,7 @@ describe('locked (BoLocked)', () => {
   })
 
   it('renders without countdown when the unlock time is unknown', async () => {
-    renderRoute('/login/bloqueada')
+    renderRoute('/login/locked')
     expect(
       await screen.findByRole('heading', {
         level: 1,

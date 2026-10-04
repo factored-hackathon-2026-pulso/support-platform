@@ -63,7 +63,7 @@ export function createSessionTokenStore(storageKey: string = STAFF_STORAGE_KEY):
 export const sessionToken = createSessionTokenStore()
 
 /**
- * Customer token of the /cliente simulator (audience `cc-customer`). Kept apart
+ * Customer token of the /customer simulator (audience `cc-customer`). Kept apart
  * from the staff session on purpose: the staff API client, socket and guards
  * never see it, and dropping it never signs the staff member out.
  */

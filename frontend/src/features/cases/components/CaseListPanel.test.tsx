@@ -72,7 +72,10 @@ function Harness({
 }
 
 function renderPanel(options: { collapsed?: boolean; filter?: InboxStatus | null } = {}) {
-  return renderWithProviders(<Harness {...options} />, { staff: analystStaff, route: '/analista' })
+  return renderWithProviders(<Harness {...options} />, {
+    staff: analystStaff,
+    route: '/analyst/cases',
+  })
 }
 
 const caseList = () => screen.getByRole('list', { name: 'Casos' })

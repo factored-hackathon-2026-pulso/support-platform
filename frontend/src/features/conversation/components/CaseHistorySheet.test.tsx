@@ -29,7 +29,7 @@ vi.mock('../api', async (importOriginal) => {
 const onClose = vi.fn<() => void>()
 
 /** Controlled like the Workspace does it through `?historial=`. */
-function Harness({ initial = 'lista' }: { initial?: string }) {
+function Harness({ initial = 'list' }: { initial?: string }) {
   const [selected, setSelected] = useState(initial)
   return (
     <CaseHistorySheet
@@ -47,7 +47,7 @@ function TriggerHarness() {
   const [selected, setSelected] = useState<string | null>(null)
   return (
     <>
-      <button type="button" onClick={() => setSelected('lista')}>
+      <button type="button" onClick={() => setSelected('list')}>
         Casos anteriores (2)
       </button>
       {selected ? (

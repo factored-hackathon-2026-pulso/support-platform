@@ -64,7 +64,7 @@ const COPY = {
 export type SimulatorChannel = 'Chat' | 'Llamar' | 'Escribir un correo'
 
 /**
- * The customer simulator (`/cliente`), speaking as one seeded customer by chat, call or email.
+ * The customer simulator (`/customer`), speaking as one seeded customer by chat, call or email.
  * The customer token lives in this tab's sessionStorage, so a reload keeps the chat.
  */
 export class CustomerSimulatorPage {
@@ -81,7 +81,7 @@ export class CustomerSimulatorPage {
 
   /** Opens the simulator, picks the customer and then the channel (the chat by default). */
   async open(channel: SimulatorChannel = 'Chat'): Promise<void> {
-    await this.page.goto('/cliente')
+    await this.page.goto('/customer')
     await this.page
       .getByRole('region', { name: 'Elige un cliente de ejemplo' })
       .getByRole('button', { name: startsWithName(this.customer.name) })
@@ -96,7 +96,7 @@ export class CustomerSimulatorPage {
       .getByRole('region', { name: /^¿Cómo se comunica .+ con el banco\?$/ })
       .getByRole('button', { name: new RegExp(`^${channel}`) })
       .click()
-    await expect(this.page).toHaveURL(/[?&]canal=/)
+    await expect(this.page).toHaveURL(/[?&]channel=/)
   }
 
   // ── Slice 12: the call ──────────────────────────────────────────────────────

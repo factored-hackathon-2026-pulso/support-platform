@@ -21,7 +21,7 @@ test.describe('Sign-in', () => {
       await expect(login.password).toHaveValue('')
     }
     await login.submitPassword(person.email, 'clave-equivocada')
-    await expect(page).toHaveURL(/\/login\/bloqueada/)
+    await expect(page).toHaveURL(/\/login\/locked/)
     await expect(
       page.getByRole('heading', { level: 1, name: 'Tu cuenta está bloqueada por 15 minutos' }),
     ).toBeVisible()
@@ -42,7 +42,7 @@ test.describe('Sign-in', () => {
     // Locked: even the right password is refused.
     await login.goto()
     await login.submitPassword(person.email, person.password)
-    await expect(page).toHaveURL(/\/login\/bloqueada/)
+    await expect(page).toHaveURL(/\/login\/locked/)
 
     // An admin sees the lock and lifts it.
     const admin = await actors.signedIn('administración', SEEDED.admin)
@@ -57,6 +57,6 @@ test.describe('Sign-in', () => {
 
     // She signs in with her password and the code of her authenticator.
     await login.signIn(person.email, person.password, person.totpSecret)
-    await expect(page).toHaveURL(/\/analista/)
+    await expect(page).toHaveURL(/\/analyst/)
   })
 })

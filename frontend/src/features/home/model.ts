@@ -11,7 +11,7 @@
  * Each fact is its own short item (`FactItem`: icon + 1–3 words), the status a
  * glyph + word (`caseStatus`, the cases map), the time its own element with a clock.
  */
-import { workspacePath } from '@/app/roles'
+import { workspacePath } from '@/app/paths'
 import type { FactItem, StatusAppearance, Tone } from '@/components/ui'
 import {
   ESCALATED_MARKER,
@@ -19,7 +19,6 @@ import {
   caseCardFacts,
   caseStatus,
   slaFact,
-  slugFromInboxStatus,
   sortByUrgency,
   type AvailabilityStatus,
   type CaseSummary,
@@ -130,7 +129,7 @@ export function statusTiles(counts: InboxCounts | undefined): StatusTile[] {
             tone: filter.tone,
             shape: caseStatus(filter.status).shape,
             count: counts ? counts[COUNT_OF[filter.status]] : null,
-            href: workspacePath({ filterSlug: slugFromInboxStatus(filter.status) }),
+            href: workspacePath({ status: filter.status }),
           },
         ]
       : [],
@@ -163,7 +162,7 @@ export interface FirstCaseRow {
 
 /** Workspace link of a case: open, with its status filter (its card is then on screen). */
 export function caseHref(caseId: string, inboxStatus: InboxStatus | null): string {
-  return workspacePath({ caseId, filterSlug: slugFromInboxStatus(inboxStatus) })
+  return workspacePath({ caseId, status: inboxStatus })
 }
 
 /**

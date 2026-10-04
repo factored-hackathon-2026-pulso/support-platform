@@ -170,18 +170,18 @@ a reconnect.
 
 | Kind | Tile | Title | Line | Action → where |
 |---|---|---|---|---|
-| `assigned_on_arrival`, `assigned_from_queue` | inbox, blue | Te llegó un caso nuevo | {cliente} | Abrir caso → `/analista?caso=` |
+| `assigned_on_arrival`, `assigned_from_queue` | inbox, blue | Te llegó un caso nuevo | {cliente} | Abrir caso → `/analyst/cases?case=` |
 | `assigned_by_supervisor` | inbox, blue | Supervisión te asignó un caso | {cliente} | Abrir caso |
 | `reassigned_away` | move, orange | Supervisión reasignó tu caso | {cliente} pasó a {persona} | Ver caso (read-only) |
 | `customer_returned` | back, blue | El cliente volvió a escribir | {cliente} | Abrir caso |
 | `escalation_answered` | reply, green | Supervisión respondió tu escalamiento | {supervisión} sobre {cliente} | Revisar |
 | `escalation_taken` | move, orange | Supervisión tomó tu caso | {cliente} pasó a {supervisión} | Ver caso |
 | `escalation_reassigned` | move, orange | Supervisión reasignó tu caso escalado | {cliente} pasó a {persona} | Ver caso |
-| `case_rated` | smile, green | El cliente calificó tu atención: {Excelente} | {cliente} | Ver caso → `?estado=cerrados` |
-| `case_escalated` | up, blue | {analista} escaló un caso | {cliente} | Revisar → `/supervision/escalados?escalamiento=` |
-| `case_queued` | clock, orange | Un caso espera en la cola en {español} | {cliente} | Ver en la cola → `/supervision/colas[?idioma=pt]` |
+| `case_rated` | smile, green | El cliente calificó tu atención: {Excelente} | {cliente} | Ver caso → `?status=closed` |
+| `case_escalated` | up, blue | {analista} escaló un caso | {cliente} | Revisar → `/supervision/escalations?escalation=` |
+| `case_queued` | clock, orange | Un caso espera en la cola en {español} | {cliente} | Ver en la cola → `/supervision/queues[?language=pt]` |
 | `sla_at_risk` | flame, red | Caso por vencer sin respuesta | {cliente}, vence en {n} min / vencido / ya tiene respuesta | Ver en la cola |
-| `account_locked` | lock, red | Cuenta bloqueada: {persona} | {n} intentos fallidos al entrar | Revisar → `/administracion/usuarios?persona=` |
+| `account_locked` | lock, red | Cuenta bloqueada: {persona} | {n} intentos fallidos al entrar | Revisar → `/admin/users?person=` |
 | `invitation_accepted` | user-check, green | Invitación aceptada: {persona} | Ya puede entrar a la plataforma | Ver usuarios |
 
 ### 6.1 Toasts
@@ -220,7 +220,7 @@ No migration: delete `backend/cc_platform.db` (a new table: an old database fail
 - Closed-case footer (Workspace and supervision): reason, when, who closed it, note and rating as
   separate facts (`closedFooter`; `closureLine` removed).
 - Admin "Equipos": the status is the `Status` glyph + word (`TEAM_STATUS`), and the status filter
-  is the "Filtros" dropdown with chips (no pill row; `?estado=` accepts a list, `todos` = none).
+  is the "Filtros" dropdown with chips (no pill row; `?status=` accepts a list, `all` = none).
 
 ## 9. Tests
 

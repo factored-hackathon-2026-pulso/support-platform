@@ -21,7 +21,7 @@ import { registerSessionRealtime } from './session-realtime'
  * This list is part of the main bundle, so it imports `core.ts`, never a feature's
  * `index.ts` (which re-exports the screens); architecture.test.ts enforces both.
  *
- * The customer simulator (/cliente) is not here: it runs its own socket with the
+ * The customer simulator (/customer) is not here: it runs its own socket with the
  * customer token and its own registry (`features/customer-chat`), so customer
  * envelopes never reach these handlers and vice versa.
  */

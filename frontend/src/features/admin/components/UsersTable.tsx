@@ -32,7 +32,7 @@ export interface UsersTableProps {
 /**
  * "Personas" (Admin `usuarios`, contract §10.2): one row per person with her
  * roles, languages, team and account status. Selecting a row opens her aside
- * (`?persona=`).
+ * (`?person=`).
  */
 export function UsersTable({
   query,

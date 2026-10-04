@@ -11,9 +11,8 @@ import {
   userFilterSelection,
   usersQueryOf,
   usersSubtitle,
-  type UrlStateChangeOptions,
-  type UsersUrlState,
 } from '../model'
+import type { UrlStateChangeOptions, UsersUrlState } from '../url'
 import { useAdminLive, useAdminTeams, useAdminUsers } from '../hooks'
 import type { InvitedUser } from '../types'
 import { CreateUserDialog } from './CreateUserDialog'
@@ -36,7 +35,7 @@ export interface UsersScreenProps {
  * Usuarios y roles (Admin.dc.html section `usuarios`, contract §10.2): the
  * directory with its filters and the selected person's aside, live through
  * `admin:directory`. The URL holds the filters, the selection and the create
- * dialog (`?rol=&estado=&equipo=&idioma=&q=&persona=&nueva=`). Part 4: creating a
+ * dialog (`?role=&status=&team=&language=&q=&person=&new=`). Part 4: creating a
  * person sends her an invitation by email ("Invitación enviada"); no password is
  * ever shown to administration.
  */

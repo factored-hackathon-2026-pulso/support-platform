@@ -4,7 +4,7 @@ import type { RoleLabel } from './app-shell'
 
 const LANGUAGE_LABEL: Record<Language, string> = { es: 'Español', pt: 'Portugués' }
 
-/** "Usuarios y roles" (`/administracion/usuarios`): table + the "Persona seleccionada" aside. */
+/** "Usuarios y roles" (`/admin/users`): table + the "Persona seleccionada" aside. */
 export class UsersPage {
   readonly table: Locator
   readonly aside: Locator
@@ -18,7 +18,7 @@ export class UsersPage {
   }
 
   async goto(): Promise<void> {
-    await this.page.goto('/administracion/usuarios')
+    await this.page.goto('/admin/users')
     await expect(
       this.page.getByRole('heading', { level: 1, name: 'Usuarios y roles' }),
     ).toBeVisible()

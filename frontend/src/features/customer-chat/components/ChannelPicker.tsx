@@ -6,7 +6,7 @@ import { CHANNEL_OPTIONS, type SimChannel } from '../channels'
 const ICONS: Record<SimChannel, LucideIcon> = {
   chat: MessageSquare,
   call: Phone,
-  mail: Mail,
+  email: Mail,
 }
 
 export interface ChannelPickerProps {

@@ -39,7 +39,7 @@ function renderSimulator() {
   const view = renderWithProviders(
     <CustomerSimulatorScreen createSocket={customerSockets.factory} channel="chat" />,
     {
-      route: '/cliente',
+      route: '/customer',
     },
   )
   return { ...view, customerSockets }
@@ -530,9 +530,9 @@ describe('CustomerSimulatorScreen · chat', () => {
   })
 })
 
-describe('/cliente route', () => {
+describe('/customer route', () => {
   it('renders the simulator outside the staff shell, without a staff session', async () => {
-    renderRoute('/cliente')
+    renderRoute('/customer')
     expect(await screen.findByRole('heading', { name: 'Simulador de cliente' })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Principal' })).not.toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /Rafael Nogueira Costa/ })).toBeInTheDocument()

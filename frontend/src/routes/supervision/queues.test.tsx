@@ -50,7 +50,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderQueues(path = '/supervision/colas') {
+function renderQueues(path = '/supervision/queues') {
   return renderRoute(path, { staff: supervisorStaff })
 }
 
@@ -82,7 +82,7 @@ describe('queues screen ("Colas")', () => {
     expect(within(row(/Esteban Morales Quiroga/)).getByText('Respondida')).toBeInTheDocument()
     expect(within(rosa).getByRole('link', { name: 'Rosa Elena Ibarra Méndez' })).toHaveAttribute(
       'href',
-      `/supervision/casos/${queuedRosa.id}`,
+      `/supervision/cases/${queuedRosa.id}`,
     )
   })
 
@@ -95,7 +95,7 @@ describe('queues screen ("Colas")', () => {
     const portuguese = within(nav).getByRole('button', { name: /Portugués/ })
     expect(within(portuguese).getByText('2 abiertos')).toBeInTheDocument()
     await user.click(portuguese)
-    expect(router.state.location.search).toBe('?idioma=pt')
+    expect(router.state.location.search).toBe('?language=pt')
     const ptTable = await screen.findByRole('table', { name: 'Casos abiertos en portugués' })
     expect(within(ptTable).getByText('Gabriela Duarte Melo')).toBeInTheDocument()
     expect(fetchOpenCases).toHaveBeenCalledWith('pt', expect.anything())
@@ -106,29 +106,29 @@ describe('queues screen ("Colas")', () => {
     await screen.findByRole('table', { name: 'Casos abiertos en español' })
     await user.click(screen.getByRole('button', { name: 'Filtros' }))
     await user.click(screen.getByRole('checkbox', { name: 'Julián Ortega 2' }))
-    expect(router.state.location.search).toBe(`?analista=${JULIAN_ID}`)
+    expect(router.state.location.search).toBe(`?analyst=${JULIAN_ID}`)
     await user.click(screen.getByRole('checkbox', { name: 'Por responder 1' }))
     expect(within(table()).getAllByRole('row')).toHaveLength(2)
     expect(screen.getByText(/^1 de \d+ casos abiertos$/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Listo' }))
     await user.click(screen.getByRole('button', { name: 'Quitar filtro Julián Ortega' }))
-    expect(router.state.location.search).toBe('?estado=por-responder')
+    expect(router.state.location.search).toBe('?status=to_reply')
 
     await user.click(row(/Camila Torres Benavides/).querySelector('td:nth-child(3)')!)
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe(`/supervision/casos/${julianCamila.id}`),
+      expect(router.state.location.pathname).toBe(`/supervision/cases/${julianCamila.id}`),
     )
-    expect(router.state.location.state).toEqual({ from: '/supervision/colas?estado=por-responder' })
+    expect(router.state.location.state).toEqual({ from: '/supervision/queues?status=to_reply' })
   })
 
   it('says when a queue is empty or nothing matches', async () => {
     vi.mocked(fetchOpenCases).mockResolvedValue({ ...portugueseOpenCases, cases: [] })
-    renderQueues('/supervision/colas?idioma=pt')
+    renderQueues('/supervision/queues?language=pt')
     expect(await screen.findByText('No hay casos abiertos en portugués')).toBeInTheDocument()
   })
 
   it('offers to clear filters that match nothing', async () => {
-    const { user, router } = renderQueues('/supervision/colas?prioridad=critica')
+    const { user, router } = renderQueues('/supervision/queues?priority=critical')
     expect(await screen.findByText('Ningún caso coincide con los filtros.')).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: 'Limpiar filtros' }).at(-1)!)
     await waitFor(() => expect(router.state.location.search).toBe(''))
@@ -182,6 +182,6 @@ describe('queues screen ("Colas")', () => {
       await within(toasts).findByText('Un caso espera en la cola en portugués'),
     ).toBeInTheDocument()
     await user.click(within(toasts).getByRole('button', { name: 'Ver en la cola' }))
-    await waitFor(() => expect(router.state.location.search).toBe('?idioma=pt'))
+    await waitFor(() => expect(router.state.location.search).toBe('?language=pt'))
   })
 })

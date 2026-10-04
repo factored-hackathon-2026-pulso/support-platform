@@ -166,7 +166,7 @@ async def test_the_whole_activation(container: Container, valeria: Actor) -> Non
     token = await latest_link(container, "ana.gil@latambank.example")
     messages = await container.dev_mailbox.latest(1) if container.dev_mailbox else []
     assert messages[0].kind is EmailKind.INVITATION
-    assert f"/activar?token={token}" in messages[0].link
+    assert f"/activate?token={token}" in messages[0].link
     assert "48 horas" in messages[0].text
     assert "contraseña" in messages[0].text
     assert INVITED_PASSWORD not in messages[0].text
@@ -358,7 +358,7 @@ async def test_the_whole_password_reset(container: Container, valeria: Actor) ->
     token = await latest_link(container, TOMAS.email)
     (message,) = [m for m in await container.dev_mailbox.latest(5) if m.to == TOMAS.email]
     assert message.kind is EmailKind.PASSWORD_RESET
-    assert "/restablecer?token=" in message.link
+    assert "/reset-password?token=" in message.link
     assert "1 hora" in message.text
 
     onboarding = container.use_cases.onboarding

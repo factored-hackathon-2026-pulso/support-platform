@@ -1,5 +1,6 @@
 import { Link2Off, Mail } from 'lucide-react'
 import { Link } from 'react-router'
+import { PATHS } from '@/app/paths'
 import { DocumentTitle } from '@/components/ui'
 import { INVALID_LINK_COPY, type LinkKind } from '../model'
 
@@ -33,7 +34,7 @@ export function LinkInvalid({ kind }: { kind: LinkKind }) {
       </div>
       <p className="m-0 text-14 text-ink-2">
         {kind === 'invitation' ? '¿Ya activaste tu cuenta? ' : '¿Ya tienes tu contraseña? '}
-        <Link to="/login" className="text-link font-semibold">
+        <Link to={PATHS.login} className="text-link font-semibold">
           Entra con tu correo
         </Link>
       </p>

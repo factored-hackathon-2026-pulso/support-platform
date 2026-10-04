@@ -40,7 +40,7 @@ export {
   isAttendedEscalation,
   filterChipLabel,
   formatSla,
-  inboxStatusFromSlug,
+  parseInboxStatus,
   inboxStatusMeta,
   isNewerCase,
   isUrgentPriority,
@@ -53,7 +53,6 @@ export {
   ratingLabel,
   ratingOption,
   slaFact,
-  slugFromInboxStatus,
   sortByUrgency,
   urgencyGroup,
 } from './model'

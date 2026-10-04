@@ -1,6 +1,6 @@
 /**
  * Simulator channel rules (slice 12, docs/platform/api/slice-12-channels.md §3.2): which channel
- * the customer picked (`?canal=`), the customer's view of a call (phase, title, timer, lines)
+ * the customer picked (`?channel=`), the customer's view of a call (phase, title, timer, lines)
  * and of the email thread, and their copy in the customer's language (es | pt). Pure and
  * unit-tested (channels.test.ts).
  */
@@ -17,25 +17,10 @@ import type {
 
 // ── The channel picked ───────────────────────────────────────────────────────
 
-export type SimChannel = 'chat' | 'call' | 'mail'
+/** The channel the customer picked (`?channel=`, url.ts). */
+export type SimChannel = 'chat' | 'call' | 'email'
 
-/** `?canal=` values (Spanish, like every URL of the app). */
-const CHANNEL_SLUGS: Record<SimChannel, string> = {
-  chat: 'chat',
-  call: 'llamada',
-  mail: 'correo',
-}
-
-export function channelFromSlug(slug: string | null): SimChannel | null {
-  const found = (Object.keys(CHANNEL_SLUGS) as SimChannel[]).find(
-    (channel) => CHANNEL_SLUGS[channel] === slug,
-  )
-  return found ?? null
-}
-
-export function slugFromChannel(channel: SimChannel): string {
-  return CHANNEL_SLUGS[channel]
-}
+export const SIM_CHANNELS: readonly SimChannel[] = ['chat', 'call', 'email']
 
 /** The three cards of "¿Cómo se comunica {nombre} con el banco?" (simulator chrome: Spanish). */
 export const CHANNEL_OPTIONS: readonly {
@@ -45,7 +30,7 @@ export const CHANNEL_OPTIONS: readonly {
 }[] = [
   { value: 'chat', title: 'Chat', description: 'Escribe desde la app' },
   { value: 'call', title: 'Llamar', description: 'Habla con una persona' },
-  { value: 'mail', title: 'Escribir un correo', description: 'Te responden por correo' },
+  { value: 'email', title: 'Escribir un correo', description: 'Te responden por correo' },
 ]
 
 // ── The call, as the customer lives it ───────────────────────────────────────

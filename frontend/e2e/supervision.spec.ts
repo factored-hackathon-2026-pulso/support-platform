@@ -121,7 +121,7 @@ test.describe('Queues and supervision', () => {
     await expect(away).toContainText(SEEDED.supervisor.name)
     await expect(away).toContainText(next.name)
     await away.click()
-    await expect(analyst.page).toHaveURL(new RegExp(`/analista\\?caso=${caseId}$`))
+    await expect(analyst.page).toHaveURL(new RegExp(`/analyst/cases\\?case=${caseId}$`))
     const readOnly = inbox.conversation(customer.name).getByRole('note', { name: 'Solo lectura' })
     await expect(readOnly).toContainText(`Lo atiende ${next.name}`)
     await expect(inbox.composer(customer.name)).toHaveCount(0)
@@ -224,7 +224,7 @@ test.describe('Queues and supervision', () => {
     await row.getByRole('link', { name: 'Revisar' }).click()
 
     // "Revisar" lands on Escalados with that escalation open, and it is read.
-    await expect(supervisor.page).toHaveURL(/\/supervision\/escalados\?escalamiento=ESC-/)
+    await expect(supervisor.page).toHaveURL(/\/supervision\/escalations\?escalation=ESC-/)
     const escalations = new EscalationsPage(supervisor.page)
     await expect(escalations.panel(customer.name)).toBeVisible()
     await expect(escalations.panel(customer.name)).toContainText(motive)

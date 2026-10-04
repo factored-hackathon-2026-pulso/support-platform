@@ -45,7 +45,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function renderCenter(route = '/analista/inicio', staff = analystStaff) {
+function renderCenter(route = '/analyst/home', staff = analystStaff) {
   return renderWithProviders(<NotificationCenter />, { route, staff })
 }
 
@@ -122,8 +122,8 @@ describe('NotificationCenter: the bell', () => {
     await user.click(
       within(item(panel, 'Te llegó un caso nuevo')).getByRole('link', { name: 'Abrir caso' }),
     )
-    await waitFor(() => expect(router.state.location.pathname).toBe('/analista'))
-    expect(router.state.location.search).toBe('?caso=CASE-00000000000000000000000103')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/analyst/cases'))
+    expect(router.state.location.search).toBe('?case=CASE-00000000000000000000000103')
     expect(router.state.location.state).toEqual({ focus: 'notification' })
     expect(markNotificationRead).toHaveBeenCalledWith('NTF-00000000000000000000000004')
     expect(screen.queryByRole('region', { name: 'Notificaciones' })).toBeNull()
@@ -218,12 +218,12 @@ describe('NotificationCenter: live', () => {
     })
     const toasts = within(screen.getByRole('region', { name: 'Avisos' }))
     await user.click(await toasts.findByRole('button', { name: 'Abrir caso' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/analista'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/analyst/cases'))
     expect(markNotificationRead).toHaveBeenCalledWith(fresh.id)
   })
 
   it('toasts only on the screens of its role (the bell still counts it)', async () => {
-    const { sockets } = renderCenter('/supervision/colas', allRolesStaff)
+    const { sockets } = renderCenter('/supervision/queues', allRolesStaff)
     await screen.findByRole('button', { name: 'Notificaciones, 3 sin leer' })
     act(() => {
       sockets.last()?.open()

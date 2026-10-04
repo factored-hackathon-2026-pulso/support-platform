@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
-import { supervisionCasePath } from '@/app/roles'
+import { supervisionCasePath } from '@/app/paths'
 import {
   EscalationsScreen,
   parseEscalationsSearch,
@@ -10,8 +10,8 @@ import {
 } from '@/features/supervision'
 
 /**
- * /supervision/escalados — "Escalados" (slice 9). The selected escalation and the reassign
- * dialog live in the URL (`?escalamiento=&reasignar=`).
+ * /supervision/escalations — "Escalados" (slice 9). The selected escalation and the reassign
+ * dialog live in the URL (`?escalation=&reassign=`).
  */
 export default function EscalationsRoute() {
   const [searchParams, setSearchParams] = useSearchParams()

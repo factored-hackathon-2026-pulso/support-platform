@@ -40,7 +40,7 @@ uv run cc-api    # http://127.0.0.1:8000 (reloads on code changes when CC_ENV=de
   the dev code `000000` works **only** for the seeded accounts without an authenticator. Seeded
   Tatiana Rojas (`tatiana.rojas@`, `demo1234`) uses TOTP key `JBSWY3DPEHPK3PXP`; Bruna Esteves is a
   pending invitation. With `CC_ENV=dev` the **dev mailbox** keeps every email:
-  `GET /api/v1/dev/mailbox` or the SPA page `/dev/correos` (runbook §5.1).
+  `GET /api/v1/dev/mailbox` or the SPA page `/dev/mailbox` (runbook §5.1).
 
 Sign-in from the command line:
 

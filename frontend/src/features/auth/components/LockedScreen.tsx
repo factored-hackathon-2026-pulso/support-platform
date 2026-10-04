@@ -1,4 +1,5 @@
 import { Lock } from 'lucide-react'
+import { PATHS } from '@/app/paths'
 import { Callout, LinkButton } from '@/components/ui'
 import { useCountdown } from '../hooks/use-countdown'
 import {
@@ -56,7 +57,7 @@ export function LockedScreen({ email, unlockAt }: LockedScreenProps) {
       ) : null}
 
       {unlocked ? (
-        <LinkButton to="/login" replace variant="primary" size="lg" block>
+        <LinkButton to={PATHS.login} replace variant="primary" size="lg" block>
           Volver a entrar
         </LinkButton>
       ) : (
@@ -64,7 +65,7 @@ export function LockedScreen({ email, unlockAt }: LockedScreenProps) {
           <Callout tone="info" title="¿Necesitas entrar ya?">
             {LOCKED_HELP} Cuando lo haga, puedes entrar sin esperar.
           </Callout>
-          <LinkButton to="/login" replace variant="secondary" size="lg" block>
+          <LinkButton to={PATHS.login} replace variant="secondary" size="lg" block>
             Volver al ingreso
           </LinkButton>
         </div>

@@ -349,7 +349,7 @@ def test_reset_password_response(client: TestClient, sign_in: SignIn) -> None:
         "password_reset",
         "Crea una contraseña nueva para la Plataforma CC",
     )
-    assert "/restablecer?token=" in email["link"]
+    assert "/reset-password?token=" in email["link"]
     login = client.post("/api/v1/auth/login", json={"email": MARIANA.email, "password": PASSWORD})
     assert login.status_code == 200
 

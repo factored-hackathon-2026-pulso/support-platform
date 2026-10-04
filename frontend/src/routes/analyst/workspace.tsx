@@ -9,8 +9,8 @@ import {
 } from '@/features/workspace'
 
 /**
- * /analista — Workspace. Shareable state lives in the URL:
- * `?caso=&estado=&q=&lista=&historial=` (slice-2-case-lifecycle.md §9.2).
+ * /analyst/cases — Workspace. Shareable state lives in the URL:
+ * `?case=&status=&q=&list=&panel=&previous=` (slice-2-case-lifecycle.md §9.2).
  */
 export default function WorkspaceRoute() {
   const [searchParams, setSearchParams] = useSearchParams()

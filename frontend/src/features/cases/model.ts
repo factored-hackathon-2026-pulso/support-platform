@@ -80,43 +80,31 @@ export function caseLifecycleStatus(status: CaseStatus): StatusAppearance {
 // ─── Filters (the status counters ARE the filters) ──────────────────────────
 
 export interface InboxFilter {
-  /** `null` = Todos. */
+  /** `null` = Todos; also the `?status=` value of "Casos" (the API `InboxStatus`). */
   status: InboxStatus | null
   label: string
-  /** URL slug (`?estado=`); `null` for Todos (no param). */
-  slug: string | null
   tone: Tone
 }
 
-const filterOf = (status: InboxStatus, slug: string): InboxFilter => ({
+const filterOf = (status: InboxStatus): InboxFilter => ({
   status,
   label: CASE_STATUS[status].bucket,
-  slug,
   tone: CASE_STATUS[status].tone,
 })
 
 /** Canvas order: Todos · Por responder · Nuevos · Esperando al cliente · Cerrados. */
 export const INBOX_FILTERS: readonly InboxFilter[] = [
-  { status: null, label: 'Todos', slug: null, tone: 'neutral' },
-  filterOf('to_reply', 'por-responder'),
-  filterOf('new', 'nuevos'),
-  filterOf('waiting', 'esperando'),
-  filterOf('closed', 'cerrados'),
+  { status: null, label: 'Todos', tone: 'neutral' },
+  filterOf('to_reply'),
+  filterOf('new'),
+  filterOf('waiting'),
+  filterOf('closed'),
 ]
 
-/**
- * `?estado=` slug → status; unknown or absent → `null` (Todos). Old slugs
- * (`en-curso`, `por-llamar`, `en-espera`) are unknown now, so they fall back to Todos.
- */
-export function inboxStatusFromSlug(slug: string | null | undefined): InboxStatus | null {
-  if (!slug) return null
-  return INBOX_FILTERS.find((filter) => filter.slug === slug)?.status ?? null
-}
-
-/** Status → `?estado=` slug; `null` (Todos) → `null` (no param). */
-export function slugFromInboxStatus(status: InboxStatus | null): string | null {
-  if (!status) return null
-  return INBOX_FILTERS.find((filter) => filter.status === status)?.slug ?? null
+/** A `?status=` value → the inbox status it filters by; unknown or absent → `null` (Todos). */
+export function parseInboxStatus(value: string | null | undefined): InboxStatus | null {
+  if (!value) return null
+  return INBOX_FILTERS.find((filter) => filter.status === value)?.status ?? null
 }
 
 const COUNT_FIELD: Record<InboxStatus, keyof Omit<InboxCounts, 'all' | 'computedAt'>> = {

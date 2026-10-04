@@ -12,8 +12,8 @@ import {
 } from '@/features/supervision'
 
 /**
- * /supervision/casos/:caseId — the supervisor's read-only case view
- * (slice-3-supervision.md §8.5). `?historial=&reasignar=` live in the URL; the
+ * /supervision/cases/:caseId — the supervisor's read-only case view
+ * (slice-3-supervision.md §8.5). `?previous=&reassign=` live in the URL; the
  * screen it came from arrives as `state.from` (one-shot hand-off, kept across
  * the view's own URL changes) and names the "Volver" link.
  */

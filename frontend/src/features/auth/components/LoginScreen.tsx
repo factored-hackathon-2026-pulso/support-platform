@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
+import { PATHS } from '@/app/paths'
 import { Button, Callout, Field, Input, useToast } from '@/components/ui'
 import type { LoginResponse } from '../api'
 import { useLoginMutation } from '../hooks/use-auth-mutations'
@@ -27,7 +28,7 @@ export interface LoginScreenProps {
   showDevHint?: boolean
   /**
    * Part 4: the backend runs the development mailbox (`/meta`): a footer link to
-   * "Correos de desarrollo" (`/dev/correos`), where the invitation links arrive.
+   * "Correos de desarrollo" (`/dev/mailbox`), where the invitation links arrive.
    */
   showDevMailbox?: boolean
 }
@@ -161,7 +162,7 @@ export function LoginScreen({
       {showDevMailbox ? (
         <p className="m-0 text-13 text-muted">
           Herramienta de desarrollo:{' '}
-          <Link to="/dev/correos" className="text-link font-semibold">
+          <Link to={PATHS.devMailbox} className="text-link font-semibold">
             Correos de desarrollo
           </Link>
         </p>

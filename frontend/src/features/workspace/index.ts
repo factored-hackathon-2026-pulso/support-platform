@@ -4,5 +4,5 @@
  */
 export { WorkspaceScreen } from './components/WorkspaceScreen'
 export type { WorkspaceScreenProps } from './components/WorkspaceScreen'
-export { parseWorkspaceSearch, toWorkspaceSearch } from './model'
-export type { WorkspaceStateChangeOptions, WorkspaceUrlState } from './model'
+export { parseWorkspaceSearch, toWorkspaceSearch } from './url'
+export type { WorkspaceStateChangeOptions, WorkspaceUrlState } from './url'

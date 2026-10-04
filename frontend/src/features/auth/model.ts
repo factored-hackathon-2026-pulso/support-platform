@@ -11,7 +11,7 @@ export const MFA_CODE_LENGTH = 6
 export const MAX_FAILED_ATTEMPTS = 5
 export const LOCKOUT_MINUTES = 15
 
-// ── Router state between /login, /login/verificacion and /login/bloqueada ──
+// ── Router state between /login, /login/verify and /login/locked ──
 
 export type MfaMethodId = Schemas['MfaMethod']
 

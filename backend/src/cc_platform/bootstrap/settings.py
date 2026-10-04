@@ -78,9 +78,9 @@ class Settings(BaseSettings):
     agent_keys_file: Path | None = None
     #: The agent a conversation starts with (``id``, ``id@alias`` or ``id@X.Y.Z``).
     assistant_agent: str = "recepcion@prod"
-    #: Case languages the assistant handles; other languages go straight to people (policy
-    #: ``H1``: a person serves Portuguese until the agent's language switch is real).
-    assistant_languages: list[str] = ["es"]
+    #: Case languages the assistant handles; other languages go straight to people. Policy
+    #: ``H1``: the assistant serves Spanish and Portuguese; its hand-overs follow rule 3.
+    assistant_languages: list[str] = ["es", "pt"]
     #: The analyst's copilot agent (``id``, ``id@alias`` or ``id@X.Y.Z``).
     copilot_agent: str = "copiloto-asesor@prod"
     #: The builder agent supervisors chat with (slice 16; ``id``, ``id@alias`` or ``id@X.Y.Z``).

@@ -119,7 +119,7 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_INTERNAL_SERVICE_TOKEN` | unset | S17: shared secret of `/api/v1/internal/*` (agent-core's `grant_active` check, bearer, constant-time compare). Unset = those routes answer 404. A long random value; never commit it |
 | `CC_COPILOT_AGENT` | `copiloto-asesor@prod` | Slice 15: the agent the analyst's copilot asks |
 | `CC_BUILDER_AGENT` | `constructor-chat@prod` | Slice 16: the builder agent supervisors chat with (`id`, `id@alias` or `id@X.Y.Z`) |
-| `CC_ASSISTANT_LANGUAGES` | `["es"]` | Slice 14: case languages the assistant serves (JSON list); others go straight to people (policy `H1`) |
+| `CC_ASSISTANT_LANGUAGES` | `["es", "pt"]` | Slice 14: case languages the assistant serves (JSON list, policy `H1`); others go straight to people |
 | `CC_ASSISTANT_STEP_UP_CODE` | `000000` | Slice 14: the **simulated** second-factor code (a development stand-in) |
 | `CC_BANK_CUSTOMER_LINKS_FILE` | unset | Slice 14: private JSON `{"CUS-…": "<dataset customer_id>"}` read at startup; only linked customers can talk to the assistant. Never commit it |
 | `CC_LOG_LEVEL` | `INFO` | Log level |

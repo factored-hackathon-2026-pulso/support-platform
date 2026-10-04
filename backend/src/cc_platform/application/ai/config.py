@@ -17,9 +17,12 @@ class AssistantConfig:
 
     entry_agent: str = "recepcion@prod"
     """Agent a conversation starts with (``id``, ``id@alias`` or ``id@X.Y.Z``)."""
-    languages: frozenset[Language] = field(default_factory=lambda: frozenset({Language.SPANISH}))
-    """Case languages the assistant handles. Anything else goes straight to people (policy
-    ``H1`` says a person serves Portuguese until the agent's language switch is real)."""
+    languages: frozenset[Language] = field(
+        default_factory=lambda: frozenset({Language.SPANISH, Language.PORTUGUESE})
+    )
+    """Case languages the assistant handles; anything else goes straight to people. Policy ``H1``:
+    the assistant serves Spanish and Portuguese, and a case it hands over goes to a person who
+    speaks the customer's language (rule 3)."""
     step_up_code: str = "000000"
     """The simulated second factor (a development stand-in until a real one exists)."""
     claim_timeout: timedelta = timedelta(minutes=2)

@@ -89,10 +89,10 @@ describe('queues screen ("Colas")', () => {
   it('shows each queue with its figures and switches language in the URL', async () => {
     const { user, router } = renderQueues()
     const nav = await screen.findByRole('navigation', { name: 'Idioma' })
-    // Each queue is its language mark (flag + code), named "Cola en …".
+    // Each queue is its language mark (globe + code), named "Cola en …".
     const spanish = within(nav).getByRole('button', { name: /^Cola en español/ })
     expect(spanish).toHaveTextContent(/^Cola en españolES/)
-    expect(spanish.querySelector('svg[data-language="es"]')).not.toBeNull()
+    expect(spanish.querySelector('[data-languages="es"] svg.lucide-globe')).not.toBeNull()
     expect(spanish).toHaveAttribute('aria-pressed', 'true')
     expect(await within(spanish).findByText('2 sin asignar')).toBeInTheDocument()
     const portuguese = within(nav).getByRole('button', { name: /^Cola en portugués/ })
@@ -101,7 +101,7 @@ describe('queues screen ("Colas")', () => {
     expect(router.state.location.search).toBe('?language=pt')
     const ptTable = await screen.findByRole('table', { name: 'Casos abiertos en portugués' })
     const title = screen.getByRole('heading', { level: 2, name: 'Cola en portugués' })
-    expect(title.querySelector('svg[data-language="pt"]')).not.toBeNull()
+    expect(title.querySelector('[data-languages="pt"] svg.lucide-globe')).not.toBeNull()
     expect(within(ptTable).getByText('Gabriela Duarte Melo')).toBeInTheDocument()
     expect(fetchOpenCases).toHaveBeenCalledWith('pt', expect.anything())
   })

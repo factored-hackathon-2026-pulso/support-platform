@@ -8,8 +8,8 @@ export interface FilterOption {
   /** How many rows match this option (with the other groups applied); absent = no count. */
   count?: number
   /**
-   * A language option: the row shows the flag and the language's own name, the chip
-   * its mark; `label` is then that name ("Português").
+   * A language option: the row shows only the language's own name (`label`,
+   * "Português"), the chip its mark (globe + code).
    */
   language?: LanguageCode
 }
@@ -26,7 +26,7 @@ export interface ActiveFilterChip {
   groupKey: string
   value: string
   label: string
-  /** A language chip shows its mark (flag + code); `label` names it. */
+  /** A language chip shows its mark (globe + code); `label` names it. */
   language?: LanguageCode
 }
 

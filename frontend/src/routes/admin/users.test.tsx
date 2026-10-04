@@ -87,12 +87,12 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     const danielaRow = row(/Daniela Ríos Medina/)
     expect(within(danielaRow).getByText('daniela.rios@latambank.example')).toBeInTheDocument()
     expect(within(danielaRow).getByText('Analista')).toBeInTheDocument()
-    // Her languages as marks (flag + code), named for screen readers.
+    // Her languages as one mark (one globe, then the codes), named for screen readers.
     expect(
       within(danielaRow).getByText('Español y Português', { selector: '.sr-only' }),
     ).toBeInTheDocument()
     expect(danielaRow).toHaveTextContent(/ESPT/)
-    expect(danielaRow.querySelectorAll('svg[data-language]')).toHaveLength(2)
+    expect(danielaRow.querySelectorAll('[data-languages="es pt"] svg')).toHaveLength(1)
     expect(within(danielaRow).getByText('Equipo Andes')).toBeInTheDocument()
     expect(within(danielaRow).getByText('Activa')).toBeInTheDocument()
     const carolinaRow = row(/Carolina Peña Ruiz/)
@@ -435,16 +435,16 @@ describe('users and roles screen ("Usuarios y roles")', () => {
       'ana.gil@latambank.example',
     )
     await user.click(within(dialog).getByRole('checkbox', { name: /^Analista/ }))
-    // Languages are option cards: the flag and the language's own name, a native
-    // checkbox inside each card (keyboard included) and a round check when selected.
+    // Languages are option cards: only the language's own name, a native checkbox
+    // inside each card (keyboard included) and a round check when selected.
     const spanish = within(dialog).getByRole('checkbox', { name: 'Español' })
     const card = spanish.closest('label')!
-    expect(card.querySelector('svg[data-language="es"]')).toHaveAttribute('width', '21')
+    expect(card.querySelector('svg')).toBeNull()
     expect(within(dialog).getByRole('checkbox', { name: 'Português' })).toBeInTheDocument()
     spanish.focus()
     await user.keyboard(' ')
     expect(spanish).toBeChecked()
-    expect(card.querySelectorAll('svg')).toHaveLength(2)
+    expect(card.querySelectorAll('svg')).toHaveLength(1)
     await user.click(spanish)
     expect(spanish).not.toBeChecked()
     await user.click(within(dialog).getByRole('checkbox', { name: 'Português' }))

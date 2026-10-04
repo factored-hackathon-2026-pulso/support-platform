@@ -1,13 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { languagesName, sortLanguages } from './language'
-import {
-  LanguageFlag,
-  LanguageMark,
-  LanguageMarks,
-  LanguageName,
-  LanguageOptionLabel,
-} from './LanguageMark'
+import { LanguageMark, LanguageMarks, LanguageName } from './LanguageMark'
 
 describe('language names', () => {
   it('keeps the known languages once, in canonical order', () => {
@@ -23,31 +17,26 @@ describe('language names', () => {
   })
 })
 
-describe('LanguageFlag / LanguageMark', () => {
-  it('draws a decorative 21:15 flag sized by its width, with no ids', () => {
-    const { container } = render(
-      <>
-        <LanguageFlag language="es" />
-        <LanguageFlag language="pt" width={21} />
-      </>,
-    )
-    const [es, pt] = Array.from(container.querySelectorAll('svg'))
-    expect(es).toHaveAttribute('aria-hidden', 'true')
-    expect(es).toHaveAttribute('width', '18')
-    expect(es).toHaveAttribute('height', '13')
-    expect(es).toHaveAttribute('data-language', 'es')
-    expect(pt).toHaveAttribute('width', '21')
-    expect(pt).toHaveAttribute('height', '15')
-    expect(pt).toHaveAttribute('data-language', 'pt')
-    expect(container.querySelector('[id]')).toBeNull()
+describe('LanguageMark', () => {
+  it('shows one decorative globe, then the codes in canonical order', () => {
+    const { container } = render(<LanguageMark languages={['pt', 'es']} />)
+    const mark = container.firstElementChild!
+    expect(mark).toHaveAttribute('aria-hidden', 'true')
+    expect(mark).toHaveAttribute('data-languages', 'es pt')
+    expect(mark).toHaveClass('text-12')
+    expect(mark).toHaveTextContent(/^ESPT$/)
+    const globes = mark.querySelectorAll('svg')
+    expect(globes).toHaveLength(1)
+    expect(globes[0]).toHaveClass('lucide-globe', 'text-muted')
+    expect(globes[0]).toHaveAttribute('width', '14')
   })
 
-  it('shows the flag with the code, never the flag alone', () => {
-    const { container } = render(<LanguageMark language="pt" />)
-    const mark = container.firstElementChild!
-    expect(mark).toHaveTextContent('PT')
-    expect(mark).toHaveAttribute('aria-hidden', 'true')
-    expect(mark.querySelector('svg[data-language="pt"]')).not.toBeNull()
+  it('scales the globe with the codes, and renders nothing for no known language', () => {
+    const { container } = render(<LanguageMark languages={['pt']} size="lg" />)
+    expect(container.firstElementChild).toHaveClass('text-16')
+    expect(container.querySelector('svg')).toHaveAttribute('width', '16')
+    const { container: empty } = render(<LanguageMark languages={['xx']} />)
+    expect(empty).toBeEmptyDOMElement()
   })
 })
 
@@ -58,10 +47,8 @@ describe('LanguageMarks', () => {
     const trigger = name.parentElement!
     expect(trigger).toHaveAttribute('tabindex', '0')
     expect(trigger).toHaveTextContent('ESPT')
-    const codes = Array.from(container.querySelectorAll('svg')).map((svg) =>
-      svg.getAttribute('data-language'),
-    )
-    expect(codes).toEqual(['es', 'pt'])
+    expect(trigger.querySelectorAll('svg')).toHaveLength(1)
+    expect(container.querySelector('[data-languages="es pt"]')).not.toBeNull()
     const bubble = container.querySelector('[aria-hidden="true"].group-hover\\/tooltip\\:block')
     expect(bubble).toHaveTextContent('Español y Português')
   })
@@ -78,13 +65,13 @@ describe('LanguageMarks', () => {
     expect(screen.getByText('Português', { selector: '.sr-only' })).toHaveAttribute('lang', 'pt')
   })
 
-  it('takes a name of its own, and a size for the marks', () => {
+  it('takes a name of its own, and a size', () => {
     const { container } = render(
-      <LanguageMarks languages={['es']} name="Cola en español" markClassName="text-16" />,
+      <LanguageMarks languages={['es']} name="Cola en español" size="lg" />,
     )
     const name = screen.getByText('Cola en español', { selector: '.sr-only' })
     expect(name).not.toHaveAttribute('lang')
-    expect(container.querySelector('[aria-hidden="true"].text-16')).toHaveTextContent('ES')
+    expect(container.querySelector('[data-languages="es"].text-16')).toHaveTextContent('ES')
   })
 
   it('renders nothing for no known language', () => {
@@ -93,23 +80,13 @@ describe('LanguageMarks', () => {
   })
 })
 
-describe('LanguageName / LanguageOptionLabel', () => {
-  it('shows the mark and only the native name', () => {
+describe('LanguageName', () => {
+  it('shows the globe and only the native name, no code', () => {
     const { container } = render(<LanguageName language="pt" />)
-    expect(container).toHaveTextContent(/^PTPortuguês$/)
+    expect(container).toHaveTextContent(/^Português$/)
     expect(screen.getByText('Português')).toHaveAttribute('lang', 'pt')
-  })
-
-  it('labels an option with the flag and the native name', () => {
-    render(
-      <label>
-        <input type="checkbox" />
-        <LanguageOptionLabel language="es" />
-      </label>,
-    )
-    const option = screen.getByRole('checkbox', { name: 'Español' })
-    const flag = option.parentElement!.querySelector('svg')
-    expect(flag).toHaveAttribute('width', '21')
-    expect(flag).toHaveAttribute('aria-hidden', 'true')
+    const globe = container.querySelector('[data-language="pt"] svg')
+    expect(globe).toHaveClass('lucide-globe')
+    expect(globe).toHaveAttribute('aria-hidden', 'true')
   })
 })

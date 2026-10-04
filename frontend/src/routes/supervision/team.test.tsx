@@ -98,11 +98,11 @@ describe('team screen ("Equipo")', () => {
     expect(within(danielaRow).getByText('Atendiendo')).toBeInTheDocument()
     expect(within(danielaRow).getByText('sin sesión abierta')).toBeInTheDocument()
     expect(within(danielaRow).getByText('Carga alta')).toBeInTheDocument()
-    // Her languages as marks, named for screen readers.
+    // Her languages as one mark (one globe, then the codes), named for screen readers.
     expect(
       within(danielaRow).getByText('Español y Português', { selector: '.sr-only' }),
     ).toBeInTheDocument()
-    expect(danielaRow.querySelectorAll('svg[data-language]')).toHaveLength(2)
+    expect(danielaRow.querySelectorAll('[data-languages="es pt"] svg')).toHaveLength(1)
     const julianRow = row(/Julián Ortega/)
     expect(within(julianRow).getByText('En pausa')).toBeInTheDocument()
     expect(within(row(/Paula Medina/)).getByText('Sin conexión')).toBeInTheDocument()
@@ -165,9 +165,9 @@ describe('team screen ("Equipo")', () => {
     const sheet = await screen.findByRole('dialog', { name: 'Julián Ortega' })
     expect(router.state.location.search).toBe(`?analyst=${JULIAN_ID}`)
     expect(within(sheet).getByText('Equipo Andes')).toBeInTheDocument()
-    // Her languages as marks: "Idiomas: Español" for screen readers.
+    // Her languages as a mark: "Idiomas: Español" for screen readers.
     expect(within(sheet).getByText('Idiomas:')).toBeInTheDocument()
-    expect(sheet.querySelector('svg[data-language="es"]')).not.toBeNull()
+    expect(sheet.querySelector('[data-languages="es"] svg.lucide-globe')).not.toBeNull()
     expect(within(sheet).getByText('2,5')).toBeInTheDocument()
     expect(within(sheet).getByText('Escalado')).toBeInTheDocument()
     expect(

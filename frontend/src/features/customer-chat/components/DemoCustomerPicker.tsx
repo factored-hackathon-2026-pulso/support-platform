@@ -106,7 +106,7 @@ function CustomerCard({
         <span className="text-16 font-semibold">{customer.displayName}</span>
         {status ? <Status {...status} className="mt-0.5 shrink-0" /> : null}
       </span>
-      {/* The language mark (pt-BR shows PT with Portugal's flag), named by the locale. */}
+      {/* The language mark (pt-BR shows PT), named by the locale. */}
       <LanguageMarks
         languages={[customer.language]}
         name={localeLabel(customer.locale)}

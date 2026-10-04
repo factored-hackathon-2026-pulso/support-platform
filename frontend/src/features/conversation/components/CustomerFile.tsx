@@ -121,7 +121,7 @@ function pillIcon(icon: FactIcon | undefined) {
 
 /**
  * Label column (icon + label) and value column: text, the status, a rating pill, short
- * facts, a language (mark + own name), or (slice 8) the priority menu of `detail`.
+ * facts, a language (globe + own name), or (slice 8) the priority menu of `detail`.
  */
 function FileRows({
   rows,

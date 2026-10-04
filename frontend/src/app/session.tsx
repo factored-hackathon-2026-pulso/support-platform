@@ -20,7 +20,7 @@ export type Staff = Schemas['StaffOut']
 
 /**
  * The person's summary as short icon rows (slice 6 UI rule: never a dot-joined
- * line): [users] the team, then her languages as marks ("[ES] [PT]", named
+ * line): [users] the team, then her languages as one mark ("[globe] ES PT", named
  * "Español y Português"; skipped when empty).
  */
 export function summaryFacts(staff: Pick<Staff, 'team' | 'languages'>): FactItem[] {

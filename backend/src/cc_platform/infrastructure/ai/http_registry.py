@@ -20,6 +20,7 @@ import httpx
 
 from cc_platform.application.ai.credentials import AgentCredentials
 from cc_platform.application.ai.registry import (
+    REASON_CODES,
     AgentRegistryError,
     AliasChange,
     AliasState,
@@ -34,11 +35,13 @@ from cc_platform.application.ai.registry import (
     EvalReport,
     EvalRun,
     GateItem,
+    LastDecision,
     Proposal,
     ProposalDetail,
     ProposalOrigin,
     ProposalPage,
     ProposalState,
+    ReasonCode,
     ReleaseDetail,
     ReleaseDiff,
     ReleaseSettingChange,
@@ -204,6 +207,22 @@ def _review(raw: Mapping[str, Any]) -> ApprovalReview:
     )
 
 
+def _last_decision(raw: object) -> LastDecision | None:
+    """agent-core's ``last_decision`` (PR 53); None when absent or not one of its two decisions.
+    A code outside the closed list reads as no code (the platform never shows an unknown one)."""
+    if not isinstance(raw, Mapping):
+        return None
+    decision = raw.get("decision")
+    if decision not in ("approved", "rejected") or raw.get("decided_at") is None:
+        return None
+    code = raw.get("reason_code")
+    return LastDecision(
+        decision=cast("Literal['approved', 'rejected']", decision),
+        reason_code=cast("ReasonCode", code) if code in REASON_CODES else None,
+        decided_at=_dt(raw["decided_at"]),
+    )
+
+
 def _release(raw: Mapping[str, Any]) -> ReleaseDetail:
     injection = raw.get("injection_ruleset")
     return ReleaseDetail(
@@ -357,6 +376,7 @@ class HttpAgentRegistry:
             changes=_drafts(data.get("changes")),
             last_eval=_eval_run(last_eval) if isinstance(last_eval, dict) else None,
             review=_review(review) if isinstance(review, dict) else None,
+            last_decision=_last_decision(data.get("last_decision")),
         )
 
     async def put_draft(
@@ -447,13 +467,21 @@ class HttpAgentRegistry:
         return _approval(data)
 
     async def reject(
-        self, credentials: AgentCredentials, *, proposal_id: str, reason: str
+        self,
+        credentials: AgentCredentials,
+        *,
+        proposal_id: str,
+        reason: str,
+        reason_code: ReasonCode | None = None,
     ) -> Proposal:
+        body: dict[str, Any] = {"reason": reason}
+        if reason_code is not None:
+            body["reason_code"] = reason_code
         data = await self._call(
             "POST",
             f"/proposals/{_segment(proposal_id)}/reject",
             credentials,
-            json={"reason": reason},
+            json=body,
         )
         return _proposal(data)
 

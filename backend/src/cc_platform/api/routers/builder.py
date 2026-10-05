@@ -301,14 +301,21 @@ async def approve_proposal(
     "/proposals/{proposalId}/reject",
     response_model=schemas.Proposal,
     summary="Reject the evaluated candidate: back to `draft`",
-    description=f"The reason is kept by the registry. {STEP_UP_NOTE}",
+    description=(
+        "The reason is kept by the registry; `reasonCode` (agent-core's closed list) also goes "
+        f"to the registry and into the audit. {STEP_UP_NOTE}"
+    ),
     responses=REGISTRY_ERRORS,
 )
 async def reject_proposal(
     proposal_id: ProposalId, body: schemas.RejectRequest, actor: Builder, api: ApiContextDep
 ) -> schemas.Proposal:
     proposal = await (await builder_use_cases(api)).registry.reject(
-        actor, proposal_id, reason=body.reason, step_up_code=body.step_up_code
+        actor,
+        proposal_id,
+        reason=body.reason,
+        step_up_code=body.step_up_code,
+        reason_code=body.reason_code,
     )
     return schemas.Proposal.model_validate(proposal)
 

@@ -5678,6 +5678,52 @@
         "title": "LanguageQueue",
         "type": "object"
       },
+      "LastDecision": {
+        "description": "The last human decision, as agent-core shows it (PR 53): never the free-text reason nor\nwho decided (the platform's history names her).",
+        "properties": {
+          "decidedAt": {
+            "format": "date-time",
+            "title": "Decidedat",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reasonCode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "insufficient_evidence",
+                  "wrong_target",
+                  "risk",
+                  "duplicate",
+                  "policy_conflict",
+                  "wording",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On a rejection, agent-core's closed-vocabulary reason when one was chosen.",
+            "title": "Reasoncode"
+          }
+        },
+        "required": [
+          "decision",
+          "reasonCode",
+          "decidedAt"
+        ],
+        "title": "LastDecision",
+        "type": "object"
+      },
       "LatestCopilotSuggestion": {
         "properties": {
           "available": {
@@ -7269,6 +7315,17 @@
             "title": "Changes",
             "type": "array"
           },
+          "lastDecision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastDecision"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last approval or rejection (null before one, or from an agent-core that does not report it)."
+          },
           "lastEval": {
             "anyOf": [
               {
@@ -7625,6 +7682,27 @@
             "minLength": 1,
             "title": "Reason",
             "type": "string"
+          },
+          "reasonCode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "insufficient_evidence",
+                  "wrong_target",
+                  "risk",
+                  "duplicate",
+                  "policy_conflict",
+                  "wording",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why, from agent-core's closed list (its PR 53): `insufficient_evidence`, `wrong_target`, `risk`, `duplicate`, `policy_conflict`, `wording`, `other`. Optional; sent to the registry and kept in the audit (the free-text `reason` is not).",
+            "title": "Reasoncode"
           },
           "stepUpCode": {
             "description": "A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.",
@@ -13590,7 +13668,7 @@
     },
     "/api/v1/builder/proposals/{proposalId}/reject": {
       "post": {
-        "description": "The reason is kept by the registry. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).",
+        "description": "The reason is kept by the registry; `reasonCode` (agent-core's closed list) also goes to the registry and into the audit. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).",
         "operationId": "builder_reject_proposal",
         "parameters": [
           {

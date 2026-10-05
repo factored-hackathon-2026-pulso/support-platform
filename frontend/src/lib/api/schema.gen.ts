@@ -701,7 +701,7 @@ export interface paths {
     put?: never
     /**
      * Reject the evaluated candidate: back to `draft`
-     * @description The reason is kept by the registry. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
+     * @description The reason is kept by the registry; `reasonCode` (agent-core's closed list) also goes to the registry and into the audit. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
      */
     post: operations['builder_reject_proposal']
     delete?: never
@@ -4696,6 +4696,38 @@ export interface components {
       /** Waiting */
       waiting: number
     }
+    /**
+     * LastDecision
+     * @description The last human decision, as agent-core shows it (PR 53): never the free-text reason nor
+     *     who decided (the platform's history names her).
+     */
+    LastDecision: {
+      /**
+       * Decidedat
+       * Format: date-time
+       */
+      decidedAt: string
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: 'approved' | 'rejected'
+      /**
+       * Reasoncode
+       * @description On a rejection, agent-core's closed-vocabulary reason when one was chosen.
+       */
+      reasonCode:
+        | (
+            | 'insufficient_evidence'
+            | 'wrong_target'
+            | 'risk'
+            | 'duplicate'
+            | 'policy_conflict'
+            | 'wording'
+            | 'other'
+          )
+        | null
+    }
     /** LatestCopilotSuggestion */
     LatestCopilotSuggestion: {
       /**
@@ -5459,6 +5491,8 @@ export interface components {
        * @description The draft: what the proposal changes.
        */
       changes: components['schemas']['EntityDraft'][]
+      /** @description The last approval or rejection (null before one, or from an agent-core that does not report it). */
+      lastDecision?: components['schemas']['LastDecision'] | null
       /** @description The evaluation of the current candidate (null before one, and after a failed gate: the proposal is back in draft; that report came with the 409). */
       lastEval: components['schemas']['EvalRun'] | null
       proposal: components['schemas']['Proposal']
@@ -5606,6 +5640,21 @@ export interface components {
     RejectRequest: {
       /** Reason */
       reason: string
+      /**
+       * Reasoncode
+       * @description Why, from agent-core's closed list (its PR 53): `insufficient_evidence`, `wrong_target`, `risk`, `duplicate`, `policy_conflict`, `wording`, `other`. Optional; sent to the registry and kept in the audit (the free-text `reason` is not).
+       */
+      reasonCode?:
+        | (
+            | 'insufficient_evidence'
+            | 'wrong_target'
+            | 'risk'
+            | 'duplicate'
+            | 'policy_conflict'
+            | 'wording'
+            | 'other'
+          )
+        | null
       /**
        * Stepupcode
        * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.

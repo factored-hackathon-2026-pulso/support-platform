@@ -17,13 +17,26 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, Protocol
+from typing import Literal, Protocol, get_args
 
 from cc_platform.application.ai.credentials import AgentCredentials
 from cc_platform.domain.shared.json import JsonObject, JsonValue
 
 Verdict = Literal["pass", "fail", "failed_infra"]
 ReleaseStatus = Literal["active", "revoked"]
+#: Why a supervisor rejects a proposal: agent-core's closed vocabulary (``registry/models.py``
+#: ``ReasonCode``, PR 53). Optional on a rejection; the free-text reason stays mandatory and is
+#: never exposed by the registry.
+ReasonCode = Literal[
+    "insufficient_evidence",
+    "wrong_target",
+    "risk",
+    "duplicate",
+    "policy_conflict",
+    "wording",
+    "other",
+]
+REASON_CODES: tuple[ReasonCode, ...] = get_args(ReasonCode)
 
 
 class ProposalOrigin(StrEnum):
@@ -191,11 +204,23 @@ class ApprovalReview:
 
 
 @dataclass(frozen=True, slots=True)
+class LastDecision:
+    """The last human decision on a proposal, as agent-core shows it: the closed-vocabulary code,
+    never the free-text reason nor who decided (only that an approver did)."""
+
+    decision: Literal["approved", "rejected"]
+    reason_code: ReasonCode | None
+    decided_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class ProposalDetail:
     proposal: Proposal
     changes: tuple[EntityDraft, ...]
     last_eval: EvalRun | None
     review: ApprovalReview | None
+    last_decision: LastDecision | None = None
+    """Null before any decision, and from an agent-core older than its PR 53."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,9 +444,15 @@ class AgentRegistryClient(Protocol):
         ...
 
     async def reject(
-        self, credentials: AgentCredentials, *, proposal_id: str, reason: str
+        self,
+        credentials: AgentCredentials,
+        *,
+        proposal_id: str,
+        reason: str,
+        reason_code: ReasonCode | None = None,
     ) -> Proposal:
-        """``POST .../reject``: back to ``draft``. Needs a human ``aprobador`` at ``step_up``."""
+        """``POST .../reject``: back to ``draft``. Needs a human ``aprobador`` at ``step_up``.
+        ``reason_code`` is sent only when given (an older agent-core never sees it)."""
         ...
 
     async def publish(

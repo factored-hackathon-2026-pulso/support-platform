@@ -310,6 +310,9 @@ class BuilderProposalRejected(DomainEvent):
     agent_id: str
     reason_length: int
     step_up: bool
+    reason_code: str | None = None
+    """agent-core's closed-vocabulary code (PR 53), when the supervisor chose one; the free text
+    itself is never in the event."""
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)

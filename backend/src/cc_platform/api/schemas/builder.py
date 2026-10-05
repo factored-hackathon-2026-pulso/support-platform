@@ -18,7 +18,7 @@ from pydantic import ConfigDict, Field, StringConstraints
 from cc_platform.api.schemas.cases import ClientMessageId
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.application.ai.builder import BuilderStatus as BuilderStatusView
-from cc_platform.application.ai.registry import ProposalOrigin, ProposalState
+from cc_platform.application.ai.registry import ProposalOrigin, ProposalState, ReasonCode
 
 StepUpCode = Annotated[
     str,
@@ -215,6 +215,17 @@ class ProposalList(ViewModel):
     )
 
 
+class LastDecision(ViewModel):
+    """The last human decision, as agent-core shows it (PR 53): never the free-text reason nor
+    who decided (the platform's history names her)."""
+
+    decision: Literal["approved", "rejected"]
+    reason_code: ReasonCode | None = Field(
+        description="On a rejection, agent-core's closed-vocabulary reason when one was chosen."
+    )
+    decided_at: datetime
+
+
 class ProposalDetail(ViewModel):
     proposal: Proposal
     changes: list[EntityDraft] = Field(description="The draft: what the proposal changes.")
@@ -223,6 +234,11 @@ class ProposalDetail(ViewModel):
         "failed gate: the proposal is back in draft; that report came with the 409)."
     )
     review: ApprovalReview | None = Field(description="Present once there is an evaluation.")
+    last_decision: LastDecision | None = Field(
+        default=None,
+        description="The last approval or rejection (null before one, or from an agent-core "
+        "that does not report it).",
+    )
 
 
 class ValidationReport(ViewModel):
@@ -379,6 +395,12 @@ class ApproveRequest(RequestModel):
 class RejectRequest(RequestModel):
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
     step_up_code: StepUpCode
+    reason_code: ReasonCode | None = Field(
+        default=None,
+        description="Why, from agent-core's closed list (its PR 53): `insufficient_evidence`, "
+        "`wrong_target`, `risk`, `duplicate`, `policy_conflict`, `wording`, `other`. Optional; "
+        "sent to the registry and kept in the audit (the free-text `reason` is not).",
+    )
 
 
 class PublishRequest(RequestModel):

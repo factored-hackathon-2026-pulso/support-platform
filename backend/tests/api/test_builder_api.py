@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import anyio
 import pytest
 from fastapi.testclient import TestClient
 
@@ -23,6 +24,7 @@ from cc_platform.infrastructure.ai.memory_runtime import InMemoryAgentRuntime
 from cc_platform.infrastructure.clock import FixedClock
 from cc_platform.infrastructure.ids import SequentialIdGenerator
 from tests.assistant_support import turn
+from tests.builder_support import builder_events
 from tests.support import ADMIN_ONLY, ANALYST, SUPERVISOR, bearer, make_settings
 
 CODE = "000000"
@@ -311,6 +313,61 @@ def test_reject_sends_the_proposal_back_to_draft(
     assert rejected.json()["state"] == "draft"
     reopened = client.post(f"{API}/proposals/{proposal_id}/reopen", headers=supervisor)
     assert reopened.status_code == 409  # already in draft: nothing to reopen
+
+
+def test_reject_sends_the_reason_code_to_the_registry_and_the_audit(
+    client: TestClient,
+    supervisor: dict[str, str],
+    registry: InMemoryAgentRegistry,
+    container: Container,
+) -> None:
+    proposal_id, _ = evaluated(client, supervisor)
+
+    rejected = client.post(
+        f"{API}/proposals/{proposal_id}/reject",
+        headers=supervisor,
+        json={"reason": "Ya hay otra igual", "stepUpCode": CODE, "reasonCode": "duplicate"},
+    )
+
+    assert rejected.status_code == 200, rejected.text
+    (call,) = [c for c in registry.calls if c.operation == "reject"]
+    assert call.arguments["reason_code"] == "duplicate"
+    detail = client.get(f"{API}/proposals/{proposal_id}", headers=supervisor).json()
+    assert detail["lastDecision"]["decision"] == "rejected"
+    assert detail["lastDecision"]["reasonCode"] == "duplicate"
+    events = anyio.run(builder_events, container)
+    (audited,) = [p for t, p, _, _ in events if t == "builder.proposal_rejected"]
+    assert audited["reason_code"] == "duplicate"
+    assert "Ya hay otra igual" not in str(audited)
+
+
+def test_reject_without_a_reason_code_sends_none_and_an_unknown_one_is_refused(
+    client: TestClient, supervisor: dict[str, str], registry: InMemoryAgentRegistry
+) -> None:
+    proposal_id, _ = evaluated(client, supervisor)
+    base = f"{API}/proposals/{proposal_id}/reject"
+
+    unknown = client.post(
+        base, headers=supervisor, json={"reason": "x", "stepUpCode": CODE, "reasonCode": "because"}
+    )
+    plain = client.post(base, headers=supervisor, json={"reason": "x", "stepUpCode": CODE})
+
+    assert unknown.status_code == 422
+    assert plain.status_code == 200, plain.text
+    (call,) = [c for c in registry.calls if c.operation == "reject"]
+    assert call.arguments["reason_code"] is None
+    detail = client.get(f"{API}/proposals/{proposal_id}", headers=supervisor).json()
+    assert detail["lastDecision"]["reasonCode"] is None
+
+
+def test_a_proposal_without_a_decision_has_no_last_decision(
+    client: TestClient, supervisor: dict[str, str]
+) -> None:
+    proposal_id = start(client, supervisor)
+
+    detail = client.get(f"{API}/proposals/{proposal_id}", headers=supervisor).json()
+
+    assert detail["lastDecision"] is None
 
 
 def test_a_proposal_made_elsewhere_is_listed_from_agent_core_and_tracked_by_id(

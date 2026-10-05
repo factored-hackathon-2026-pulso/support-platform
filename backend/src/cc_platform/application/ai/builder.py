@@ -53,6 +53,7 @@ from cc_platform.application.ai.registry import (
     ProposalDetail,
     ProposalOrigin,
     ProposalPage,
+    ReasonCode,
     ReleaseDetail,
     ReleaseDiff,
     ValidationReport,
@@ -746,12 +747,25 @@ class AgentBuilder:
         return approval
 
     async def reject(
-        self, actor: Actor, proposal_id: str, *, reason: str, step_up_code: str
+        self,
+        actor: Actor,
+        proposal_id: str,
+        *,
+        reason: str,
+        step_up_code: str,
+        reason_code: ReasonCode | None = None,
     ) -> Proposal:
+        """Back to draft. ``reason_code`` (agent-core's closed list) travels to the registry and
+        into the audit; the free-text ``reason`` only to the registry (the audit keeps its size)."""
         self._ensure(actor)
         credentials = await self._step_up_credentials(actor, step_up_code)
         proposal = await guarded(
-            self.registry.reject(credentials, proposal_id=proposal_id, reason=reason.strip())
+            self.registry.reject(
+                credentials,
+                proposal_id=proposal_id,
+                reason=reason.strip(),
+                reason_code=reason_code,
+            )
         )
         ref, now = self._ref(actor), self.clock.now()
         await self._settle(
@@ -766,6 +780,7 @@ class AgentBuilder:
                     agent_id=agent,
                     reason_length=len(reason.strip()),
                     step_up=True,
+                    reason_code=reason_code,
                 )
             ],
             proposal=proposal,

@@ -38,11 +38,13 @@ from cc_platform.application.ai.registry import (
     EvalReport,
     EvalRun,
     GateItem,
+    LastDecision,
     Proposal,
     ProposalDetail,
     ProposalOrigin,
     ProposalPage,
     ProposalState,
+    ReasonCode,
     ReleaseDetail,
     ReleaseDiff,
     ValidationReport,
@@ -90,6 +92,7 @@ class InMemoryAgentRegistry:
     _changes: dict[str, tuple[EntityDraft, ...]] = field(default_factory=dict)
     _evals: dict[str, EvalRun] = field(default_factory=dict)
     _approved: set[str] = field(default_factory=set)
+    _decisions: dict[str, LastDecision] = field(default_factory=dict)
     _releases: dict[str, ReleaseDetail] = field(default_factory=dict)
     _aliases: dict[tuple[str, str], str] = field(default_factory=dict)
     _publish_keys: dict[str, tuple[str, str]] = field(default_factory=dict)
@@ -277,7 +280,11 @@ class InMemoryAgentRegistry:
         proposal = self._get(proposal_id)
         last = self._evals.get(proposal_id) if proposal.candidate_hash else None
         return ProposalDetail(
-            proposal=proposal, changes=self._changes[proposal_id], last_eval=last, review=None
+            proposal=proposal,
+            changes=self._changes[proposal_id],
+            last_eval=last,
+            review=None,
+            last_decision=self._decisions.get(proposal_id),
         )
 
     async def put_draft(
@@ -446,6 +453,9 @@ class InMemoryAgentRegistry:
             )
         self._set(proposal, state=ProposalState.APPROVED)
         self._approved.add(proposal_id)
+        self._decisions[proposal_id] = LastDecision(
+            decision="approved", reason_code=None, decided_at=self.clock.now()
+        )
         return Approval(
             proposal_id=proposal_id,
             candidate_hash=candidate_hash,
@@ -457,14 +467,26 @@ class InMemoryAgentRegistry:
         )
 
     async def reject(
-        self, credentials: AgentCredentials, *, proposal_id: str, reason: str
+        self,
+        credentials: AgentCredentials,
+        *,
+        proposal_id: str,
+        reason: str,
+        reason_code: ReasonCode | None = None,
     ) -> Proposal:
         principal = self._enter(
-            "reject", credentials, proposal_id=proposal_id, reason_length=len(reason)
+            "reject",
+            credentials,
+            proposal_id=proposal_id,
+            reason_length=len(reason),
+            reason_code=reason_code,
         )
         self._require_human_step_up(principal, "aprobador")
         proposal = self._get(proposal_id)
         self._expect(proposal, ProposalState.EVALUATED)
+        self._decisions[proposal_id] = LastDecision(
+            decision="rejected", reason_code=reason_code, decided_at=self.clock.now()
+        )
         return self._set(
             proposal, state=ProposalState.DRAFT, candidate_hash=None, rev=proposal.rev + 1
         )

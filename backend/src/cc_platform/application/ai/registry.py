@@ -250,6 +250,15 @@ class AliasState:
 
 
 @dataclass(frozen=True, slots=True)
+class AgentPause:
+    """agent-core's word on whether an agent is paused (out of ``recepcion``'s directory)."""
+
+    agent_id: str
+    paused: bool
+    release_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class AliasChange:
     agent_id: str
     alias: str
@@ -444,6 +453,19 @@ class AgentRegistryClient(Protocol):
         ``aprobador`` at ``step_up``."""
         ...
 
+    async def pause_agent(
+        self, credentials: AgentCredentials, *, agent_id: str, reason: str = ""
+    ) -> AgentPause:
+        """``POST /v1/registry/agents/{id}/pause``: out of the directory, ``prod`` untouched.
+        Needs a human ``aprobador`` at ``step_up``."""
+        ...
+
+    async def resume_agent(
+        self, credentials: AgentCredentials, *, agent_id: str, reason: str = ""
+    ) -> AgentPause:
+        """``POST /v1/registry/agents/{id}/resume``. Needs a human ``aprobador`` at ``step_up``."""
+        ...
+
     async def revoke(
         self, credentials: AgentCredentials, *, release_id: str, reason: str
     ) -> ReleaseDetail:
@@ -483,4 +505,6 @@ class AgentRegistryClient(Protocol):
 
 
 #: Operations the registry only lets a human at ``step_up`` do (agent-core ``registry/roles.py``).
-STEP_UP_OPERATIONS = frozenset({"approve", "reject", "publish", "promote", "revoke"})
+STEP_UP_OPERATIONS = frozenset(
+    {"approve", "reject", "publish", "promote", "revoke", "pause", "resume"}
+)

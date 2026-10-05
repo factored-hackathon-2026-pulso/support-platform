@@ -79,7 +79,8 @@ def _drafts(items: list[schemas.EntityDraftRequest]) -> list[EntityDraft]:
         "agent-core is not configured or the AI switch is off (slice 18; hide the section; "
         "every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which "
         "controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive "
-        "calls ask for."
+        "calls ask for. `reachable: false` (deploy brief P4) while agent-core is configured but "
+        "down: the calls that need it answer 503 `agent_core_unavailable` at once."
     ),
     responses=problem_responses(401, 403),
 )
@@ -87,7 +88,8 @@ async def get_status(actor: Builder, api: ApiContextDep) -> schemas.BuilderStatu
     assistant = api.use_cases.assistant
     if assistant is None or assistant.builder is None or not await ai_is_on(api):
         return schemas.BuilderStatus.unavailable()
-    return schemas.BuilderStatus.from_view(assistant.builder.registry.status(actor))
+    view = assistant.builder.registry.status(actor)
+    return schemas.BuilderStatus.from_view(view, reachable=await api.core_status() == "ok")
 
 
 # ----------------------------------------------------------------------------- proposals

@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 
+from cc_platform.application.ai.availability import CoreStatusCheck, core_status_unknown
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.health import HealthProbe, ReadinessProbe
 from cc_platform.application.ports.ids import IdGenerator
@@ -61,3 +62,6 @@ class ApiContext:
     #: ``CC_INTERNAL_SERVICE_TOKEN``: unlocks the service-to-service routes (``/internal``).
     internal_token: str | None = None
     readiness: ReadinessOptions = ReadinessOptions()
+    #: Deploy brief P4: ``await core_status()`` → ``ok`` / ``degraded``, the Core's state for
+    #: ``/readyz`` (degraded, never fatal: the non-AI screens keep working without the Core).
+    core_status: CoreStatusCheck = core_status_unknown

@@ -140,6 +140,7 @@ CATALOG: Final[Mapping[str, str]] = {
     "audit.copilot.suggestionNone": "El copiloto no tenía nada que sugerir",
     "audit.copilot.suggestionFailed": "No se pudo preparar la sugerencia del copiloto",
     "audit.copilot.toolUsed": "Usó una herramienta que propuso el copiloto",
+    "audit.copilot.itemDecided": "Decidió sobre una recomendación del copiloto",
     "audit.suggestion.escalation": "Escaló el caso con la recomendación del copiloto",
     "audit.suggestion.used": "Usó el borrador del copiloto tal cual",
     "audit.suggestion.edited": "Usó el borrador del copiloto con cambios",
@@ -155,6 +156,9 @@ CATALOG: Final[Mapping[str, str]] = {
     "audit.stage.proposalWithdrawn": "Retiró la propuesta de agente de {type}",
     "audit.stage.agentReady": "Propuso un agente para {type}",
     "audit.stage.agentActivated": "Activó el agente de {type}",
+    "audit.stage.agentRenamed": "Cambió el nombre del agente de {type}",
+    "audit.stage.agentPaused": "Pausó el agente de {type}",
+    "audit.stage.agentResumed": "Reanudó el agente de {type}",
     # the agent builder (slice 16)
     "audit.builder.proposalCreated": "Creó una propuesta de cambio de un agente",
     "audit.builder.proposalTracked": "Agregó una propuesta del constructor a la lista",

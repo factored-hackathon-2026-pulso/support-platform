@@ -50,10 +50,18 @@ class BuilderStatus(ViewModel):
         description="How the second factor is asked: a code from the authenticator app."
     )
     step_up_digits: int | None = Field(description="How many digits the code has.")
+    reachable: bool = Field(
+        description=(
+            "Deploy brief P4: false while agent-core is configured but down (its circuit breaker "
+            "is open or it does not answer its health check): show that the agents service is "
+            "not available; the screens that only read the platform keep working."
+        ),
+    )
 
     @classmethod
-    def from_view(cls, view: BuilderStatusView) -> BuilderStatus:
+    def from_view(cls, view: BuilderStatusView, *, reachable: bool) -> BuilderStatus:
         return cls(
+            reachable=reachable,
             available=True,
             can_approve=view.can_approve,
             can_revoke=view.can_revoke,
@@ -65,6 +73,7 @@ class BuilderStatus(ViewModel):
     def unavailable(cls) -> BuilderStatus:
         return cls(
             available=False,
+            reachable=True,  # nothing to reach: the builder is off, not down
             can_approve=False,
             can_revoke=False,
             step_up_method=None,

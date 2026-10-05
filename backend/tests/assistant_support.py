@@ -24,6 +24,7 @@ from cc_platform.infrastructure.ai.ed25519_issuer import Ed25519AgentCredentialI
 from cc_platform.infrastructure.ai.keys import AgentSigningKeys
 from cc_platform.infrastructure.ai.memory_runtime import InMemoryAgentRuntime
 from cc_platform.infrastructure.clock import FixedClock
+from cc_platform.infrastructure.core.resilience import CoreGuard
 from cc_platform.infrastructure.ids import SequentialIdGenerator
 from cc_platform.infrastructure.seed.customers import DEMO_CUSTOMERS
 from tests.support import make_settings
@@ -110,8 +111,10 @@ async def assistant_world(
     runtime: InMemoryAgentRuntime,
     *,
     link: bool = True,
+    guard: CoreGuard | None = None,
     **settings: object,
 ) -> AsyncIterator[Container]:
+    """``guard`` puts the runtime behind the Core's resilience layer (deploy brief P4)."""
     overrides: dict[str, object] = {"persistence": persistence, **settings}
     if persistence == "sqlalchemy":
         overrides["database_url"] = f"sqlite+aiosqlite:///{tmp_path / 'assistant.db'}"
@@ -122,7 +125,7 @@ async def assistant_world(
         clock=clock,
         ids=SequentialIdGenerator(),
         agent_core=AgentCoreServices(
-            issuer=Ed25519AgentCredentialIssuer(keys, clock), runtime=runtime
+            issuer=Ed25519AgentCredentialIssuer(keys, clock), runtime=runtime, guard=guard
         ),
     )
     await container.startup()

@@ -122,6 +122,7 @@ def test_a_supervisor_takes_a_proposal_from_draft_to_prod(
         "canRevoke": False,
         "stepUpMethod": "authenticator",
         "stepUpDigits": 6,
+        "reachable": True,  # deploy brief P4: agent-core answers
     }
     proposal_id = start(client, supervisor)
     base = f"{API}/proposals/{proposal_id}"
@@ -646,6 +647,52 @@ def test_supervision_activates_the_agent_of_a_ready_type(
     assert client.post(url, headers=analyst, json=body).status_code == 403
     bad = client.post(url, headers=supervisor, json={**body, "agentId": "Con Espacios"})
     assert bad.status_code == 422
+
+
+def test_supervision_pauses_and_resumes_the_agent_of_a_type(
+    client: TestClient, supervisor: dict[str, str], sign_in: Callable[[str], str]
+) -> None:
+    release_id = published(client, supervisor, "cobros")
+    activate = "/api/v1/supervision/ai/stages/undue_charge/agent"
+    client.post(
+        activate,
+        headers=supervisor,
+        json={"agentId": "cobros", "releaseId": release_id, "stepUpCode": CODE},
+    )
+    pause = f"{activate}/pause"
+    resume = f"{activate}/resume"
+    body = {"stepUpCode": CODE, "reason": "revisar el prompt"}
+
+    wrong = client.post(pause, headers=supervisor, json={**body, "stepUpCode": "123456"})
+    assert (wrong.status_code, wrong.json()["code"]) == (422, "builder_step_up_invalid")
+    paused = client.post(pause, headers=supervisor, json=body)
+
+    assert paused.status_code == 200, paused.text
+    assert paused.json()["agentPaused"] is True
+    agents = client.get("/api/v1/ai/agents", headers=supervisor).json()["agents"]
+    assert next(a for a in agents if a["agentId"] == "cobros")["paused"] is True
+    again = client.post(pause, headers=supervisor, json=body)  # a paused agent: nothing changes
+    assert again.status_code == 200
+    assert again.json()["agentPaused"] is True
+    assert client.get(f"{API}/aliases/cobros/prod", headers=supervisor).json()["releaseId"] == (
+        release_id
+    )  # prod is untouched
+
+    resumed = client.post(resume, headers=supervisor, json=body)
+    assert resumed.status_code == 200
+    assert resumed.json()["agentPaused"] is False
+    audit = client.get("/api/v1/audit/events?family=agents&limit=100", headers=supervisor).json()
+    types = [e["type"] for e in audit["items"]]
+    assert "ai.agent_paused" in types
+    assert "ai.agent_resumed" in types
+    row = next(e for e in audit["items"] if e["type"] == "ai.agent_paused")
+    assert row["description"] == "Pausó el agente de Cobro indebido"
+
+    analyst = bearer(sign_in(ANALYST.email))
+    assert client.post(pause, headers=analyst, json=body).status_code == 403
+    none = "/api/v1/supervision/ai/stages/app_issue/agent/pause"
+    missing = client.post(none, headers=supervisor, json=body)  # no agent serves that type
+    assert (missing.status_code, missing.json()["code"]) == (404, "not_found")
 
 
 # ----------------------------------------------------------------------------- the audit

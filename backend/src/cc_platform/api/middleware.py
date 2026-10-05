@@ -11,6 +11,9 @@
 - Marks every ``/api/`` response ``Cache-Control: no-store`` unless the route set its own:
   they carry per-person data, and no cache between the browser and the API (CloudFront, the
   reverse proxy) may keep them.
+- Carries the W3C trace (deploy brief P4): a valid incoming ``traceparent`` (and its
+  ``tracestate``) is kept, otherwise a new trace starts; its id is bound as ``trace_id`` on every
+  log line of the request, and the calls to the Core send it on (``application/tracing.py``).
 
 ``UnhandledErrorMiddleware`` (innermost, *inside* CORS): turns an unexpected exception into
 a 500 problem+json. Starlette's own catch-all runs outside every user middleware, so its
@@ -30,6 +33,13 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from cc_platform.api.errors import internal_error_response
+from cc_platform.application.tracing import (
+    TRACEPARENT,
+    TRACESTATE,
+    new_trace,
+    parse_trace,
+    use_trace,
+)
 
 REQUEST_ID_HEADER = "X-Request-ID"
 CORRELATION_ID_HEADER = "X-Correlation-ID"
@@ -60,6 +70,7 @@ class RequestContextMiddleware:
         state = scope.setdefault("state", {})
         state["request_id"] = request_id
         state["correlation_id"] = correlation_id
+        trace = parse_trace(headers.get(TRACEPARENT), headers.get(TRACESTATE)) or new_trace()
 
         status_code = 500
         started = time.perf_counter()
@@ -77,8 +88,11 @@ class RequestContextMiddleware:
                     response_headers["Cache-Control"] = "no-store"
             await send(message)
 
-        with structlog.contextvars.bound_contextvars(
-            request_id=request_id, correlation_id=correlation_id
+        with (
+            use_trace(trace),
+            structlog.contextvars.bound_contextvars(
+                request_id=request_id, correlation_id=correlation_id, trace_id=trace.trace_id
+            ),
         ):
             try:
                 await self.app(scope, receive, send_with_ids)

@@ -119,7 +119,15 @@ REPEAT_CUSTOMER_SHARE = 0.1
 COPILOT_AGENT = "copiloto-asesor@prod"
 SUGGESTIONS_AGENT = "copiloto-sugerencias@prod"
 ENTRY_AGENT = "recepcion@prod"
-TYPE_AGENT = "disputas@1.3.0"
+TYPE_AGENT_VERSION = "1.3.0"
+
+
+def type_agent(agent_id: str) -> str:
+    """The agent that serves a case type, as agent-core names the one that answered
+    (``id@version``). Its id is the one the type's ``case_type_maturity`` row holds."""
+    return f"{agent_id}@{TYPE_AGENT_VERSION}"
+
+
 #: The suggestions agent changed release mid-history (so the engine can slice by release).
 SUGGESTION_RELEASES: tuple[tuple[int, str], ...] = (
     (45, "rel-sug-2026.07.2"),

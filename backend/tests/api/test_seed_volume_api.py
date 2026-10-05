@@ -212,3 +212,59 @@ def test_events_reach_the_log_with_the_platform_envelope(
         assert role in {"analyst", "customer", "system"}
         assert actor
         assert isinstance(json.loads(payload), dict)
+
+
+def test_the_assistant_is_the_actor_of_its_own_events(
+    seeded: tuple[Path, list[dict[str, Any]]],
+) -> None:
+    """ADR 0003: ``recepcion`` starts the session and the type's agent answers it, as actors."""
+    path, _runs = seeded
+    rows = _query(
+        path,
+        "SELECT event_type, actor_role, actor_id FROM event_log WHERE case_id >= ? "
+        "AND event_type IN ('assistant.session_started', 'assistant.turn_answered')",
+        FIRST_VOLUME_CASE,
+    )
+    assert rows
+    assert {role for _type, role, _actor in rows} == {"assistant"}
+    started = {actor for kind, _role, actor in rows if kind == "assistant.session_started"}
+    answered = {actor for kind, _role, actor in rows if kind == "assistant.turn_answered"}
+    assert started == {cat.ENTRY_AGENT}
+    assert answered == {cat.type_agent("disputas")}
+
+
+def test_the_items_the_analyst_set_aside_are_recorded_per_suggestion(
+    seeded: tuple[Path, list[dict[str, Any]]],
+) -> None:
+    path, _runs = seeded
+    rows = _query(
+        path,
+        "SELECT e.payload, c.case_type FROM event_log e JOIN cases c ON c.id = e.case_id "
+        "WHERE e.event_type = 'copilot.item_decided' AND c.id >= ?",
+        FIRST_VOLUME_CASE,
+    )
+    assert rows
+    payloads = [json.loads(payload) for payload, _type in rows]
+    assert {p["item"] for p in payloads} == {"tool", "escalate"}
+    assert {p["decision"] for p in payloads} == {"dismissed"}
+    assert all(p["ref"] for p in payloads if p["item"] == "tool")
+    # Tools are proposed from stage 2: never in a type below it.
+    assert not {"virtual_card", "branch_service", "service_quality"} & {t for _p, t in rows}
+
+
+def test_the_agent_catalog_names_the_agent_and_counts_its_results(client: TestClient) -> None:
+    lucia = _sign_in(client, SUPERVISOR.email)
+    catalog = client.get("/api/v1/ai/agents", headers=lucia)
+    assert catalog.status_code == 200, catalog.text
+    agents = {row["agentId"]: row for row in catalog.json()["agents"]}
+    disputas = agents["disputas"]
+    assert disputas["displayName"] == "Asistente de disputas"
+    assert disputas["caseType"] == "unrecognized_charge"
+    assert disputas["paused"] is False
+    results = disputas["results"]
+    assert results["sessions"] >= 20
+    assert results["resolved"] > 0
+    assert results["handedToPeople"] > 0
+    stages = client.get("/api/v1/ai/stages", headers=lucia).json()["types"]
+    served = next(row for row in stages if row["caseType"] == "unrecognized_charge")
+    assert (served["agentId"], served["agentName"]) == ("disputas", "Asistente de disputas")

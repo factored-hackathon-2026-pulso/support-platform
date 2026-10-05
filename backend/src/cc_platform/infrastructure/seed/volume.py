@@ -12,7 +12,8 @@ How it is written: like the demo story (``cases._Story``), every case goes throu
 escalations, ``AssistantSession``, ``CopilotThread``, ``CopilotSuggestion``) and its events reach
 the event log through the Unit of Work (``SeedTimeline.record_into`` → ``UnitOfWork.commit``),
 the same path a request takes, so they carry whatever envelope the log adds. The only events
-built here by hand are ``copilot.tool_used`` (the use case records it loose too); they go
+built here by hand are ``copilot.tool_used`` and ``copilot.item_decided`` (the use case records
+them loose too); they go
 through the same ``UnitOfWork.record``. Writes are batched (``BATCH_SIZE`` cases per Unit of
 Work). The Unit of Work it gets should publish to **no** subscriber: replaying 90 days must not
 notify anyone, move a stage or call agent-core (``scripts.seed`` builds it so).
@@ -20,11 +21,12 @@ notify anyone, move a stage or call agent-core (``scripts.seed`` builds it so).
 The AI part follows each type's stage at the time (slice 21, read from ``case_type_maturity``):
 no copilot at stage 0, questions from stage 1, tool proposals (and their use) from stage 2,
 drafts and their decisions from stage 3, and for a type an agent serves (Cargo no reconocido in
-the demo) chat conversations that start with the assistant, which resolves some and hands the
-rest over. The types still climbing stay below the team rule's next step, and once the cases
-are in, each type's signals are recomputed from the volume (what ``MaturityProjector`` would
-have counted since the type reached its stage), so the Automatización panorama agrees with the
-log.
+the demo, the agent and name its ``case_type_maturity`` row holds) chat conversations that start
+with the assistant (``recepcion``, then the type's agent, both as the audit actor), which resolves
+some and hands the rest over. The types still climbing stay below the team rule's next step, and
+once the cases are in, each type's signals are recomputed from the volume (what
+``MaturityProjector`` would have counted since the type reached its stage), so the Automatización
+panorama agrees with the log.
 
 Idempotent: the plan is deterministic (case numbers, customers, choices) and anchored on the
 first run's time (read back from the first stored case), cases that exist are skipped, and the
@@ -54,7 +56,7 @@ from cc_platform.domain.ai.maturity import (
     StageRule,
     StageSignals,
 )
-from cc_platform.domain.ai.maturity_events import CopilotToolUsed
+from cc_platform.domain.ai.maturity_events import CopilotItemDecided, CopilotToolUsed
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.ai.suggestion import (
     DRAFT_TTL,
@@ -309,6 +311,8 @@ class TypeTimeline:
     reached: Mapping[int, datetime] = field(default_factory=dict)
     agent_since: datetime | None = None
     """When an agent started serving the type (only while it serves it now)."""
+    agent_id: str | None = None
+    """agent-core's id of that agent (the type's ``case_type_maturity.agent_id``)."""
     current: int = 0
 
     def stage_at(self, at: datetime) -> int:
@@ -328,6 +332,7 @@ class TypeTimeline:
         return cls(
             reached=dict(maturity.stage_since),
             agent_since=maturity.agent_since if active else None,
+            agent_id=maturity.agent_id if active else None,
             current=int(maturity.stage),
         )
 
@@ -380,6 +385,14 @@ class _Signals:
     def timeline(self, case_type: CaseType) -> TypeTimeline:
         return self.timelines.get(case_type, TypeTimeline())
 
+    def serving(self, at: datetime) -> tuple[CaseType, str] | None:
+        """The type with an agent at ``at`` and that agent's id: ``recepcion`` routes the
+        conversations it classifies as that type to it (ADR 0009)."""
+        for case_type, tl in self.timelines.items():
+            if tl.agent_id is not None and tl.agent_at(at):
+                return case_type, tl.agent_id
+        return None
+
     def asks(self, case_type: CaseType, at: datetime) -> bool:
         tl = self.timeline(case_type)
         if case_type is CaseType.NONE or tl.stage_at(at) < MaturityStage.ANALYST_ASKS:
@@ -413,7 +426,9 @@ class _VolumeStory(_Story):
     sessions: list[AssistantSession] = field(default_factory=list)
     threads: list[CopilotThread] = field(default_factory=list)
     suggestions: list[CopilotSuggestion] = field(default_factory=list)
-    loose: list[CopilotToolUsed] = field(default_factory=list)
+    loose: list[CopilotToolUsed | CopilotItemDecided] = field(default_factory=list)
+    type_agent: str = cat.type_agent("disputas")
+    """``id@version`` of the agent of the case's type that answers the assistant's turns."""
     asked: bool = False
     tools_proposed: bool = False
     tool_used: bool = False
@@ -444,12 +459,12 @@ class _VolumeStory(_Story):
         session.link_run(
             agent_session_id=f"ses-vol-{self._tag()}",
             run_id=f"run-vol-{self._tag()}",
-            agent=cat.TYPE_AGENT,
+            agent=self.type_agent,
             at=at,
             release=cat.ASSISTANT_RELEASE,
         )
         self._turn(
-            at, text, kind=TurnKind.MESSAGE, role=TurnAuthorRole.ASSISTANT, author=cat.TYPE_AGENT
+            at, text, kind=TurnKind.MESSAGE, role=TurnAuthorRole.ASSISTANT, author=self.type_agent
         )
         session.apply_answer(
             turn_id=chosen.turn_id,
@@ -459,7 +474,7 @@ class _VolumeStory(_Story):
             trace_id=f"trace-vol-{self._tag()}-{n}",
             messages=1,
             run_id=session.run_id,
-            agent=cat.TYPE_AGENT,
+            agent=self.type_agent,
             outcome=None if status == "open" else "resolved",
             confirmation=None,
             step_up=None,
@@ -469,7 +484,7 @@ class _VolumeStory(_Story):
         self.sessions[-1].resolve(at=at)
         self._turn(at, copy.NOTICE_CLOSED[self.case.language], kind=TurnKind.NOTICE,
                    role=TurnAuthorRole.SYSTEM, author=None)  # fmt: skip
-        self.case.close_by_assistant(actor=ActorRef(ActorRole.ASSISTANT, cat.TYPE_AGENT), at=at)
+        self.case.close_by_assistant(actor=ActorRef(ActorRole.ASSISTANT, self.type_agent), at=at)
 
     def assistant_hands_over(self, at: datetime, staff: int) -> None:
         """The agent escalates with its handoff and the case reaches an analyst, as
@@ -477,7 +492,7 @@ class _VolumeStory(_Story):
         ref = f"handoff-{self._tag()}"
         self.sessions[-1].escalate(handoff_ref=ref, at=at)
         self.case.release_from_assistant(
-            actor=ActorRef(ActorRole.ASSISTANT, cat.TYPE_AGENT),
+            actor=ActorRef(ActorRole.ASSISTANT, self.type_agent),
             at=at,
             sla_due_at=SLA.due_at(opened_at=at),
             reason="escalated",
@@ -576,6 +591,23 @@ class _VolumeStory(_Story):
         )
         self.tool_used = True
 
+    def dismiss_item(
+        self, at: datetime, suggestion: CopilotSuggestion, item: str, ref: str
+    ) -> None:
+        """She set aside a tool or the escalation recommendation (``RecordItemDecision``:
+        ``copilot.item_decided``, a record next to the suggestion that changes nothing in it)."""
+        self.loose.append(
+            CopilotItemDecided(
+                occurred_at=at,
+                actor=self._analyst_ref(),
+                entity_id=suggestion.id,
+                case_id=self.case.id,
+                item=item,
+                ref=ref,
+                decision="dismissed",
+            )
+        )
+
     def decide(
         self, at: datetime, suggestion: CopilotSuggestion, decision: str, *, sent: str = ""
     ) -> None:
@@ -654,11 +686,13 @@ class _Builder:
             previous_case_id=seed_case_id(spec.previous) if spec.previous else None,
             assistant=None if session_id is None else (session_id, cat.ENTRY_AGENT),
         )
+        serving = self.signals.serving(opened)
         return _VolumeStory(
             ids=self.ids,
             case=case,
             customer_first_name=customer.name.split()[0],
             staff_name=self.staff_name,
+            type_agent=cat.type_agent(serving[1]) if serving else cat.type_agent("disputas"),
         )
 
     def _release(self, at: datetime) -> str:
@@ -676,7 +710,7 @@ class _Builder:
     def build(self, spec: Spec) -> _VolumeStory:
         rng = random.Random(spec.number)
         opened = self.t - spec.opened_ago
-        agent_serves = self.signals.timeline(CaseType.UNRECOGNIZED_CHARGE).agent_at(opened)
+        agent_serves = self.signals.serving(opened) is not None
         if spec.kind is Kind.QUEUED or (spec.kind is Kind.WITH_ASSISTANT and not agent_serves):
             story = self._queued(spec, opened, rng)
         elif spec.kind is Kind.WITH_ASSISTANT:
@@ -722,7 +756,9 @@ class _Builder:
                 at=opened,
             )
         )
-        story.customer(opened, _pick(rng, cat.OPENERS[CaseType.UNRECOGNIZED_CHARGE][spec.language]))
+        served = self.signals.serving(opened)
+        topic = served[0] if served else CaseType.UNRECOGNIZED_CHARGE
+        story.customer(opened, _pick(rng, cat.OPENERS[topic][spec.language]))
         story.assistant_answers(
             opened + timedelta(seconds=6), cat.ASSISTANT_REPLY[spec.language], status="open", n=1
         )
@@ -754,11 +790,8 @@ class _Builder:
         def at(fraction: float) -> datetime:
             return opened + span * fraction
 
-        via_assistant = (
-            spec.case_type is CaseType.UNRECOGNIZED_CHARGE
-            and spec.channel.is_chat
-            and self.signals.timeline(spec.case_type).agent_at(opened)
-        )
+        served = self.signals.serving(opened)
+        via_assistant = served is not None and spec.case_type is served[0] and spec.channel.is_chat
         if via_assistant:
             story = self._start_assistant(spec, opened, rng)
             story.assistant_hands_over(opened + timedelta(seconds=40), staff)
@@ -845,6 +878,10 @@ class _Builder:
             story.tool_decided = True
             if self.signals.uses_tool(spec.case_type):
                 story.use_tool(when + timedelta(seconds=40), suggestion)
+            elif spec.number % 2 == 0:  # half of the others say so (the rest just ignore it)
+                story.dismiss_item(
+                    when + timedelta(seconds=40), suggestion, "tool", suggestion.tool_ids[0]
+                )
         if escalate and suggestion.recommends_escalation:
             story.recommended_escalation = suggestion
         return suggestion
@@ -900,7 +937,9 @@ class _Builder:
         trigger = (
             SuggestionTrigger.HANDOVER if story.sessions else SuggestionTrigger.CUSTOMER_MESSAGE
         )
-        self._analyst_writes(story, ctx, at(0.2), first, trigger=trigger, escalate=escalates)
+        # A few conversations get the recommendation to escalate without ending up escalated.
+        recommend = escalates or spec.number % 17 == 0
+        self._analyst_writes(story, ctx, at(0.2), first, trigger=trigger, escalate=recommend)
         story.customer(at(0.4), _pick(rng, cat.FOLLOW_UPS[language]))
         if not closing and spec.number % 4 == 1:
             return  # "Por responder"
@@ -960,6 +999,9 @@ class _Builder:
             else _pick(rng, (CloseReason.OUT_OF_SCOPE, CloseReason.DUPLICATE))
         )
         story.ignore_pending(end)
+        recommended = story.recommended_escalation
+        if recommended is not None and not recommended.escalation_accepted:
+            story.dismiss_item(end - timedelta(minutes=1), recommended, "escalate", "")
         story.close(end, reason)
         if story.sessions:
             # The analyst labels the assistant's handoff when she closes (``CloseCase``). Today

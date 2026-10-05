@@ -369,12 +369,18 @@ reason, 723 CSAT ratings, 488 simulated calls (holds, notes), emails with the fr
 escalations answered by Lucía, Martín or Renata (6 more still open), and the AI side **as each
 type's stage was at the time** (slice 21): no copilot for a type at stage 0, copilot questions from
 stage 1 (321), suggestions with tools and their use from stage 2 (712 requested, 209
-`copilot.tool_used`), drafts and their decisions from stage 3 (286 `copilot.suggestion_decided`:
+`copilot.tool_used`; the tools she sets aside and the escalation recommendations she does not follow
+are `copilot.item_decided` with `dismissed`), drafts and their decisions from stage 3 (286 `copilot.suggestion_decided`:
 used, edited with the edit distance, discarded, ignored, escalation accepted), and for Cargo no
 reconocido, once its agent is active, chat conversations that start with the assistant
-(`assistant.*`): it resolves some and hands the rest over (`case.assistant_released`, assigned as
+(`assistant.*`; `recepcion` and then the agent the type's `case_type_maturity` row holds act as the
+assistant, ADR 0003): it resolves some and hands the rest over (`case.assistant_released`, assigned as
 `assistant_handoff`; the analyst's handoff label is recorded on the session). Suggestions older
 than 24 hours are purged like the platform does (no draft text kept).
+
+The agent catalog (slice 25) reads from the same data: the demo story's agent for Cargo no
+reconocido has a sample name ("Asistente de disputas", set by Lucía), and `GET /ai/agents` counts
+its sessions from the volume (resolved, handed to people). Both are synthetic.
 
 After the cases, each type's stage **signals** are recomputed from the volume (what the stage
 projector counts since the type reached its stage), so Automatización shows the volume's
@@ -389,8 +395,8 @@ drafts sent as is.
 
 **How it is written.** Everything goes through the domain aggregates and the repositories, so it
 works on SQLite and Postgres alike, and the events reach `event_log` through
-`UnitOfWork.commit` with the envelope the log adds (no hand-written rows; the one event built by
-the seed, `copilot.tool_used`, is recorded loose through the Unit of Work exactly as its use case
+`UnitOfWork.commit` with the envelope the log adds (no hand-written rows; the events built by
+the seed, `copilot.tool_used` and `copilot.item_decided`, are recorded loose through the Unit of Work exactly as its use case
 does). The Unit of Work publishes to **no** subscriber: replaying 90 days notifies no one, moves
 no stage and never calls agent-core (so the volume adds no notifications). Writes go in batches of
 100 cases per transaction. On a laptop the volume takes about 15-35 s on SQLite and under a

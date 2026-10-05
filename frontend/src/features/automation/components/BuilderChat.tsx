@@ -68,7 +68,7 @@ export function BuilderChatSheet({
       initialFocusRef={inputRef}
       footer={
         <form id={formId} onSubmit={submit} className="flex w-full flex-col gap-2">
-          <ComposerFrame>
+          <ComposerFrame className="px-3 py-2.5">
             <Textarea
               ref={inputRef}
               variant="bare"

@@ -123,7 +123,7 @@ function Panorama({ stages, selected, onSelect }: PanoramaProps) {
           </ul>
         </div>
         <div className="overflow-hidden rounded-12 border border-border bg-surface">
-          <Table aria-label={t('panorama.table')}>
+          <Table aria-label={t('panorama.table')} density="comfortable">
             <THead>
               <tr>
                 <TH>{t('panorama.columns.type')}</TH>
@@ -173,7 +173,7 @@ function TypeRow({ type, entry, signal, selected, onSelect }: TypeRowProps) {
       <TCell>
         <TRowSelect aria-current={selected ? 'true' : undefined}>
           <span className="flex flex-col">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-ink">
+            <span className="inline-flex items-center gap-1.5 font-semibold whitespace-nowrap text-ink">
               <Tag size={13} aria-hidden="true" className="shrink-0" />
               {typeName(type)}
             </span>
@@ -182,7 +182,7 @@ function TypeRow({ type, entry, signal, selected, onSelect }: TypeRowProps) {
         </TRowSelect>
       </TCell>
       <TCell>
-        <span className="inline-flex items-center gap-2" title={view.tip}>
+        <span className="inline-flex items-center gap-2 whitespace-nowrap" title={view.tip}>
           <StageBars bars={view.bars} agent={view.agent} />
           <span>{view.label}</span>
           <span className="sr-only">{view.tip}</span>

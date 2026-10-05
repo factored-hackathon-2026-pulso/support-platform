@@ -77,7 +77,7 @@ export function TypePanel({ type, entry, rule, onClose }: TypePanelProps) {
         {lastChange ? <p className="m-0 text-13 text-muted">{lastChange}</p> : null}
         <AgentSection type={type} entry={entry} />
       </div>
-      <footer className="border-t border-border px-5 py-3">
+      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-5 py-3">
         {options.length > 0 ? (
           <Button variant="secondary" size="sm" onClick={() => setMovingBack(true)}>
             {t('type.moveBack')}
@@ -85,6 +85,7 @@ export function TypePanel({ type, entry, rule, onClose }: TypePanelProps) {
         ) : entry.agent === 'active' ? (
           <p className="m-0 text-13 text-ink-2">{t('type.moveBackBlocked')}</p>
         ) : null}
+        {entry.agent === 'ready' ? <ProposeButton type={type} entry={entry} /> : null}
       </footer>
       {movingBack ? (
         <MoveBackDialog type={type} entry={entry} onClose={() => setMovingBack(false)} />
@@ -204,7 +205,6 @@ function RulesSection({ lines }: { lines: RuleLine[] }) {
 function AgentSection({ type, entry }: { type: MaturingType; entry: CaseTypeStage }) {
   const { t } = useTranslation('automation')
   const builder = useBuilderAvailable()
-  const chat = useBuilderChatPanel()
   const agentId = agentIdFor(entry)
   const proposals = useProposals({ enabled: builder && entry.agent !== 'none' })
   const forAgent = (proposals.data?.items ?? []).filter((p) => p.agentId === agentId)
@@ -229,19 +229,7 @@ function AgentSection({ type, entry }: { type: MaturingType; entry: CaseTypeStag
       ) : null}
       {entry.agent === 'ready' ? (
         builder ? (
-          <div className="flex flex-col gap-3">
-            <p className="m-0 text-13 text-ink-2">{t('type.proposeText')}</p>
-            <div>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Bot size={16} />}
-                onClick={() => chat.open(newAgentRequest(type, agentId, entry), type)}
-              >
-                {t('type.propose')}
-              </Button>
-            </div>
-          </div>
+          <p className="m-0 text-13 text-ink-2">{t('type.proposeText')}</p>
         ) : (
           <EngineMissing />
         )
@@ -267,6 +255,24 @@ function AgentSection({ type, entry }: { type: MaturingType; entry: CaseTypeStag
         </div>
       ) : null}
     </section>
+  )
+}
+
+/** "Proponer un agente": the builder chat with the type's first message (agent-core needed). */
+function ProposeButton({ type, entry }: { type: MaturingType; entry: CaseTypeStage }) {
+  const { t } = useTranslation('automation')
+  const builder = useBuilderAvailable()
+  const chat = useBuilderChatPanel()
+  if (!builder) return null
+  return (
+    <Button
+      variant="primary"
+      size="sm"
+      icon={<Bot size={16} />}
+      onClick={() => chat.open(newAgentRequest(type, agentIdFor(entry), entry), type)}
+    >
+      {t('type.propose')}
+    </Button>
   )
 }
 

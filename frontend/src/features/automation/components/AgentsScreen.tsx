@@ -76,7 +76,7 @@ export function AgentsScreen() {
             />
           ) : (
             <div className="overflow-hidden rounded-12 border border-border bg-surface">
-              <Table aria-label={t('agents.table')}>
+              <Table aria-label={t('agents.table')} density="comfortable">
                 <THead>
                   <tr>
                     <TH>{t('agents.columns.agent')}</TH>

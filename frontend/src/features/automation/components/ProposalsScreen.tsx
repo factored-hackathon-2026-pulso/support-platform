@@ -86,7 +86,7 @@ function ProposalTable({ data }: { data: ProposalList }) {
   }
   return (
     <div className="overflow-hidden rounded-12 border border-border bg-surface">
-      <Table aria-label={t('proposals.table')}>
+      <Table aria-label={t('proposals.table')} density="comfortable">
         <THead>
           <tr>
             <TH>{t('proposals.columns.proposal')}</TH>

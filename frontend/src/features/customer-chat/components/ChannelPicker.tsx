@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Mail, MessageSquare, Phone, type LucideIcon } from 'lucide-react'
 import { Callout, cardClasses } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -14,6 +15,8 @@ export interface ChannelPickerProps {
   /** The channel being opened (its card shows a busy state: "Llamar" starts the call). */
   busy: SimChannel | null
   error: string | null
+  /** An action under the failure (slice 19: "Hablar con una persona" when the assistant has the chat). */
+  errorAction?: ReactNode
   onPick(channel: SimChannel): void
 }
 
@@ -21,7 +24,7 @@ export interface ChannelPickerProps {
  * "¿Cómo se comunica {nombre} con el banco?" (slice 12, Main.dc.html "canal"): Chat, Llamar
  * or Escribir un correo, as three cards with their icon.
  */
-export function ChannelPicker({ firstName, busy, error, onPick }: ChannelPickerProps) {
+export function ChannelPicker({ firstName, busy, error, errorAction, onPick }: ChannelPickerProps) {
   return (
     <section
       aria-labelledby="canal-title"
@@ -37,7 +40,7 @@ export function ChannelPicker({ firstName, busy, error, onPick }: ChannelPickerP
         </p>
       </div>
       {error ? (
-        <Callout tone="danger" title="No se pudo llamar">
+        <Callout tone="danger" title="No se pudo llamar" actions={errorAction}>
           {error}
         </Callout>
       ) : null}

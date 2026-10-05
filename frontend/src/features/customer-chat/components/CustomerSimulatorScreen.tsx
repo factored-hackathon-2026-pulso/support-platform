@@ -3,6 +3,7 @@ import { ArrowLeftRight, LogOut } from 'lucide-react'
 import { Page, PageBody } from '@/components/layout'
 import { Badge, Button, LanguageMarks, PageHeader } from '@/components/ui'
 import { RealtimeProvider, type WebSocketFactory } from '@/lib/realtime'
+import { isAssistantActive } from '../assistant'
 import { describeCustomerCallFailure, isCustomerCallActive, type SimChannel } from '../channels'
 import { describeStartFailure, localeLabel } from '../model'
 import {
@@ -16,6 +17,7 @@ import {
 } from '../hooks'
 import { createCustomerChatHandlers } from '../realtime'
 import { createCustomerRealtimeClient } from '../realtime-client'
+import { AskPersonButton } from './AssistantControls'
 import { ChannelPicker } from './ChannelPicker'
 import { CustomerCallView } from './CustomerCallView'
 import { CustomerChat } from './CustomerChat'
@@ -194,6 +196,16 @@ function SimulatorBody({
           firstName={me?.displayName.split(' ')[0] ?? 'el cliente'}
           busy={startCall.isPending ? 'call' : null}
           error={startCall.isError ? describeCustomerCallFailure(startCall.error, 'es') : null}
+          errorAction={
+            startCall.isError && isAssistantActive(startCall.error) ? (
+              <AskPersonButton
+                customerId={customerId}
+                language="es"
+                compact
+                onDone={() => startCall.reset()}
+              />
+            ) : undefined
+          }
           onPick={pick}
         />
       ) : (

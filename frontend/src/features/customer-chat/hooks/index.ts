@@ -19,3 +19,4 @@ export {
   useStartCustomerCall,
 } from './use-customer-channels'
 export { useSimulatorAiEnabled } from './use-simulator-platform'
+export { useAnswerConfirmation, useRequestPerson, useVerifyStepUp } from './use-assistant'

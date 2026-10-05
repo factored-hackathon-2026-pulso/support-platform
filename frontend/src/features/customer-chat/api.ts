@@ -23,6 +23,7 @@ import type {
   RateConversationRequest,
   CustomerConversation,
   CustomerPlatformSettings,
+  ConfirmationAnswer,
 } from './types'
 
 /** Query keys (frozen by the contract §9.6). */
@@ -45,6 +46,10 @@ export const customerChatMutationKeys = {
   rate: (customerId: string) => ['customer-chat', customerId, 'rate'] as const,
   call: (customerId: string) => ['customer-chat', customerId, 'call'] as const,
   email: (customerId: string) => ['customer-chat', customerId, 'email'] as const,
+  /** Slice 19: the assistant's confirmation, second factor and "Hablar con una persona". */
+  confirm: (customerId: string) => ['customer-chat', customerId, 'assistant', 'confirm'] as const,
+  stepUp: (customerId: string) => ['customer-chat', customerId, 'assistant', 'step-up'] as const,
+  person: (customerId: string) => ['customer-chat', customerId, 'assistant', 'person'] as const,
 }
 
 /** Bearer = customer token; a 401 for it clears it (back to the picker). */
@@ -186,4 +191,26 @@ export async function sendCustomerEmail(body: SendEmailRequest): Promise<SendEma
       body,
     }),
   )
+}
+
+// ── Slice 19: the assistant (docs/platform/api/slice-14-assistant.md §3.3–§3.5) ──
+
+/** POST /customer/conversation/confirmation: "Sí" / "No" to what the assistant is about to do. */
+export async function answerConfirmation(
+  token: string,
+  answer: ConfirmationAnswer,
+): Promise<CustomerConversation> {
+  return unwrap(
+    customerApi.POST('/api/v1/customer/conversation/confirmation', { body: { token, answer } }),
+  )
+}
+
+/** POST /customer/conversation/step-up: the second-factor code (simulated in development). */
+export async function verifyStepUp(code: string): Promise<CustomerConversation> {
+  return unwrap(customerApi.POST('/api/v1/customer/conversation/step-up', { body: { code } }))
+}
+
+/** POST /customer/conversation/human: "Hablar con una persona" (the case goes to people). */
+export async function requestPerson(): Promise<CustomerConversation> {
+  return unwrap(customerApi.POST('/api/v1/customer/conversation/human'))
 }

@@ -80,3 +80,6 @@ export interface CustomerChatCache {
 
 /** Slice 18: the platform settings the simulator reads (the AI switch). */
 export type CustomerPlatformSettings = Schemas['PlatformSettings']
+
+/** Slice 19: "Sí" / "No" to the assistant's confirmation. */
+export type ConfirmationAnswer = Schemas['AnswerConfirmationRequest']['answer']

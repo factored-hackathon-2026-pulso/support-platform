@@ -1,11 +1,12 @@
-import { CircleAlert } from 'lucide-react'
+import { Bot, CircleAlert } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { formatTime } from '@/lib/format'
 import type { ChatItem, CustomerChatCopy } from '../model'
 
 /**
  * One message of the customer's chat: their own on the right in brand green,
- * the analyst's on the left with "{Nombre}, de LATAM Bank", platform notices
+ * the analyst's on the left with "{Nombre}, de LATAM Bank", the assistant's on the left in
+ * a pale blue bubble under its bot mark and "Asistente virtual" (slice 19), platform notices
  * centred. `onRetry` is absent in read-only past conversations. `copy` is the
  * customer's language.
  */
@@ -22,17 +23,25 @@ export function ChatBubble({
     return <li className="self-center px-4 text-center text-12 text-app-muted">{item.text}</li>
   }
   const mine = item.side === 'customer'
+  const assistant = item.side === 'assistant'
   return (
     <li
       className={cn('flex max-w-[86%] flex-col gap-1', mine ? 'items-end self-end' : 'self-start')}
     >
-      {item.author ? <span className="text-12 text-app-muted">{item.author}</span> : null}
+      {item.author ? (
+        <span className="inline-flex items-center gap-[5px] text-12 text-app-muted">
+          {assistant ? <Bot size={13} aria-hidden="true" className="shrink-0" /> : null}
+          {item.author}
+        </span>
+      ) : null}
       <div
         className={cn(
           'px-3.5 py-2.5 text-15 leading-[1.45] break-words whitespace-pre-line',
           mine
             ? 'rounded-[16px_16px_4px_16px] bg-app-brand text-white'
-            : 'rounded-[16px_16px_16px_4px] bg-white',
+            : assistant
+              ? 'rounded-[16px_16px_16px_4px] border border-accent-border bg-assistant-bubble'
+              : 'rounded-[16px_16px_16px_4px] bg-white',
         )}
       >
         {mine ? <span className="sr-only">{copy.you}: </span> : null}

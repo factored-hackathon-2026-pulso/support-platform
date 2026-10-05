@@ -30,6 +30,7 @@ import {
   PhoneOutgoing,
   Smartphone,
   Smile,
+  Tag,
   User,
   Users,
   type LucideProps,
@@ -98,6 +99,7 @@ export const FACT_ICONS = {
   'priority-critical': priorityGlyph('critical'),
   smartphone: Smartphone,
   smile: Smile,
+  tag: Tag,
   user: User,
   users: Users,
 } as const satisfies Record<string, ComponentType<LucideProps>>

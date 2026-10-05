@@ -6,6 +6,8 @@ import type { Schemas } from '@/lib/api'
 
 export type CaseChannel = Schemas['CaseChannel']
 export type CasePriority = Schemas['CasePriority']
+/** What the case is about (slice 18): a dataset complaint subcategory, or none. */
+export type CaseType = Schemas['CaseType']
 export type CaseStatus = Schemas['CaseStatus']
 /** Team-generated close reasons (contract §4.4). */
 export type CloseReason = Schemas['CloseReason']

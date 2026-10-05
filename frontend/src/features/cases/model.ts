@@ -10,6 +10,7 @@ import type {
   CasePriority,
   CaseRating,
   CaseStatus,
+  CaseType,
   CaseSummary,
   CloseReason,
   CountryCode,
@@ -251,6 +252,45 @@ export function priorityMenuLabel(priority: CasePriority): string {
 /** Only critical and high show on a card (slice 8 UI rule): the rest is noise there. */
 export function isUrgentPriority(priority: CasePriority): boolean {
   return priority === 'critical' || priority === 'high'
+}
+
+// ─── Case type (slice 18: the dataset's complaints.subcategory + "Sin tipo") ───
+
+export interface CaseTypeConfig {
+  value: CaseType
+  /** The type as a value: "Cobro indebido", "Sin tipo" (ficha, menu, supervisor view). */
+  label: string
+}
+
+/**
+ * The one case-type map of the staff UI (slice 18, ADR 0005): the AI matures per case type.
+ * The names are the dataset's complaint subcategories (`complaints.subcategory`, from
+ * data-lab's aggregate report); "Tarjeta virtual" is team-generated (a new product the demo
+ * shows maturing from zero). Menu order as Linear: none first, then the dataset's order by
+ * share, then the team-generated one. Shown only while the AI switch is on.
+ */
+export const CASE_TYPE: Readonly<Record<CaseType, CaseTypeConfig>> = {
+  none: { value: 'none', label: 'Sin tipo' },
+  unrecognized_charge: { value: 'unrecognized_charge', label: 'Cargo no reconocido' },
+  undue_charge: { value: 'undue_charge', label: 'Cobro indebido' },
+  app_issue: { value: 'app_issue', label: 'Problema con app' },
+  branch_service: { value: 'branch_service', label: 'Atención en sucursal' },
+  service_quality: { value: 'service_quality', label: 'Calidad de servicio' },
+  // Team-generated: not a dataset subcategory.
+  virtual_card: { value: 'virtual_card', label: 'Tarjeta virtual' },
+}
+
+/** The options of the case-type menu, in menu order. */
+export const CASE_TYPE_OPTIONS: readonly CaseTypeConfig[] = Object.values(CASE_TYPE)
+
+/** The config of a type (an unknown value reads as "Sin tipo"). */
+export function caseType(value: CaseType): CaseTypeConfig {
+  return CASE_TYPE[value] ?? CASE_TYPE.none
+}
+
+/** The trigger of the case-type menu: the value, then what it does. */
+export function caseTypeMenuLabel(value: CaseType): string {
+  return `Tipo de caso: ${caseType(value).label}. Cambiar el tipo de caso`
 }
 
 const COUNTRY_NAMES: Record<CountryCode, string> = {

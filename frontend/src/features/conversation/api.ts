@@ -1,7 +1,7 @@
 /**
  * Conversation calls (docs/platform/api/slice-2-case-lifecycle.md §5.1): case
  * detail, turns, analyst replies, read cursor, close, the customer's other
- * cases ("Casos anteriores") and (slice 8) the priority. The only module of the feature that
+ * cases ("Casos anteriores"), (slice 8) the priority and (slice 18) the case type. The only module of the feature that
  * talks to the API client; tests mock it with `vi.mock('@/features/conversation/api')`.
  */
 import { api, unwrap } from '@/lib/api'
@@ -12,6 +12,8 @@ import type {
   CaseHistory,
   CasePriorityResult,
   CaseSummary,
+  CaseTypeResult,
+  ChangeCaseTypeRequest,
   ChangePriorityRequest,
   CloseCaseRequest,
   EmailReplyRequest,
@@ -37,6 +39,7 @@ export const conversationMutationKeys = {
   read: (caseId: string) => ['conversation', caseId, 'read'] as const,
   close: (caseId: string) => ['conversation', caseId, 'close'] as const,
   priority: (caseId: string) => ['conversation', caseId, 'priority'] as const,
+  caseType: (caseId: string) => ['conversation', caseId, 'case-type'] as const,
   escalate: (caseId: string) => ['conversation', caseId, 'escalate'] as const,
   withdrawEscalation: (caseId: string) => ['conversation', caseId, 'escalation-withdraw'] as const,
   acknowledgeEscalation: (caseId: string) =>
@@ -124,6 +127,18 @@ export async function changeCasePriority(
   body: ChangePriorityRequest,
 ): Promise<CasePriorityResult> {
   return unwrap(api.PUT('/api/v1/cases/{caseId}/priority', { params: { path: { caseId } }, body }))
+}
+
+/**
+ * PUT /cases/{caseId}/type (slice 18): the assignee or supervision, the priority's rules. The
+ * same type is a no-op (`changed: false`); a stale `expectedVersion` is `version_conflict`
+ * with `current`.
+ */
+export async function changeCaseType(
+  caseId: string,
+  body: ChangeCaseTypeRequest,
+): Promise<CaseTypeResult> {
+  return unwrap(api.PUT('/api/v1/cases/{caseId}/type', { params: { path: { caseId } }, body }))
 }
 
 /**

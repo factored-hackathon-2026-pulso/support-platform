@@ -1,3 +1,4 @@
+import { useAiEnabled } from '@/app/platform'
 import { useCurrentUser } from '@/app/session'
 import { SidePanelSection } from '@/components/layout'
 import {
@@ -27,6 +28,7 @@ import {
 import type { CaseDetail } from '../types'
 import { CaseHistoryBrowser } from './CaseHistorySheet'
 import { CasePriorityControl } from './CasePriorityControl'
+import { CaseTypeControl } from './CaseTypeControl'
 
 export interface CustomerFileProps {
   /** The case open in the Workspace. */
@@ -45,10 +47,12 @@ const TICK_MS = 30_000
  * is, this case, how it reached her, and "Casos anteriores (n)" with their
  * read-only transcripts. One fact per row (icon + label, a short value, the
  * status as a pill, times with a clock); never a dot-joined line or a sentence.
- * No bank data, no AI, no placeholders.
+ * No bank data, no placeholders. The only AI element (slice 18) is the "Tipo de caso"
+ * row, shown only while the AI switch is on.
  */
 export function CustomerFile({ caseId, history, onHistoryChange }: CustomerFileProps) {
   const me = useCurrentUser()
+  const aiEnabled = useAiEnabled()
   const now = useNow(TICK_MS)
   const detail = useCaseDetail(caseId)
 
@@ -85,7 +89,7 @@ export function CustomerFile({ caseId, history, onHistoryChange }: CustomerFileP
         <FileRows rows={customerRows(detail.data)} />
       </SidePanelSection>
       <SidePanelSection title="Este caso">
-        <FileRows rows={caseRows(detail.data, now)} detail={detail.data} />
+        <FileRows rows={caseRows(detail.data, now, { aiEnabled })} detail={detail.data} />
       </SidePanelSection>
       {arrival ? (
         <SidePanelSection title={arrival.heading}>
@@ -121,7 +125,8 @@ function pillIcon(icon: FactIcon | undefined) {
 
 /**
  * Label column (icon + label) and value column: text, the status, a rating pill, short
- * facts, a language (globe + own name), or (slice 8) the priority menu of `detail`.
+ * facts, a language (globe + own name), or the priority menu (slice 8) and the case-type
+ * menu (slice 18) of `detail`.
  */
 function FileRows({
   rows,
@@ -146,6 +151,8 @@ function FileRows({
             >
               {row.priority && detail ? (
                 <CasePriorityControl detail={detail} align="end" />
+              ) : row.caseType && detail ? (
+                <CaseTypeControl detail={detail} align="end" />
               ) : row.status ? (
                 <Status {...row.status} />
               ) : row.pill ? (

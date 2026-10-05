@@ -6,6 +6,7 @@ export { useConversationLive } from './use-conversation-live'
 export { useMarkRead } from './use-mark-read'
 export { useSendMessage } from './use-send-message'
 export { useChangePriority } from './use-change-priority'
+export { useChangeCaseType } from './use-change-case-type'
 export {
   storeEscalationResult,
   useAcknowledgeEscalation,

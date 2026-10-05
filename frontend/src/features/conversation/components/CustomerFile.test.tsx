@@ -15,7 +15,7 @@ import {
 import { analystStaff } from '@/test/fixtures'
 import { renderWithProviders } from '@/test/render'
 import * as api from '../api'
-import type { CaseDetail, CasePriorityResult } from '../types'
+import type { CaseDetail, CasePriorityResult, CaseTypeResult } from '../types'
 import { ConversationPane } from './ConversationPane'
 import { CustomerFile } from './CustomerFile'
 
@@ -28,6 +28,7 @@ vi.mock('../api', async (importOriginal) => {
     fetchCaseHistory: vi.fn<typeof actual.fetchCaseHistory>(),
     markCaseRead: vi.fn<typeof actual.markCaseRead>(),
     changeCasePriority: vi.fn<typeof actual.changeCasePriority>(),
+    changeCaseType: vi.fn<typeof actual.changeCaseType>(),
   }
 })
 
@@ -380,5 +381,88 @@ describe('priority in "Este caso" (slice 8)', () => {
     expect(within(thisCase).queryByRole('button', { name: /Prioridad/ })).not.toBeInTheDocument()
     expect(thisCase).toHaveTextContent('PrioridadAlta')
     expect(thisCase.querySelector('svg[data-priority="high"]')).not.toBeNull()
+  })
+})
+
+describe('case type in "Este caso" (slice 18)', () => {
+  async function openFile(aiEnabled: boolean) {
+    const rendered = renderWithProviders(<Harness />, { staff: analystStaff, aiEnabled })
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Ver ficha de Marcela Quintana Pardo' }),
+    )
+    const thisCase = screen.getByRole('region', { name: 'Este caso' })
+    return { ...rendered, thisCase }
+  }
+
+  it('is not there while the AI switch is off (the people-only ficha)', async () => {
+    const { thisCase } = await openFile(false)
+    expect(within(thisCase).queryByText('Tipo de caso')).not.toBeInTheDocument()
+    expect(within(thisCase).queryByRole('button', { name: /^Tipo de caso:/ })).toBeNull()
+  })
+
+  it('changes it from the menu, at once and then from the server', async () => {
+    let resolve!: (value: CaseTypeResult) => void
+    vi.mocked(api.changeCaseType).mockReturnValue(
+      new Promise<CaseTypeResult>((res) => {
+        resolve = res
+      }),
+    )
+    const { user, thisCase } = await openFile(true)
+    expect(within(thisCase).getByText('Tipo de caso')).toBeInTheDocument()
+    await user.click(
+      within(thisCase).getByRole('button', {
+        name: 'Tipo de caso: Sin tipo. Cambiar el tipo de caso',
+      }),
+    )
+    const menu = screen.getByRole('menu', { name: 'Tipo de caso' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitemradio')
+        .map((item) => item.textContent),
+    ).toEqual([
+      'Sin tipo',
+      'Cargo no reconocido',
+      'Cobro indebido',
+      'Problema con app',
+      'Atención en sucursal',
+      'Calidad de servicio',
+      'Tarjeta virtual',
+    ])
+    await user.click(within(menu).getByRole('menuitemradio', { name: 'Cobro indebido' }))
+    expect(api.changeCaseType).toHaveBeenCalledWith(DETAIL.case.id, {
+      caseType: 'undue_charge',
+      expectedVersion: DETAIL.case.version,
+    })
+    expect(
+      within(thisCase).getByRole('button', {
+        name: 'Tipo de caso: Cobro indebido. Cambiar el tipo de caso',
+      }),
+    ).toBeInTheDocument()
+    resolve({
+      changed: true,
+      case: { ...DETAIL.case, caseType: 'undue_charge', version: DETAIL.case.version + 1 },
+    })
+    await waitFor(() => expect(api.changeCaseType).toHaveBeenCalledTimes(1))
+  })
+
+  it('puts the previous type back and says why when the change fails', async () => {
+    vi.mocked(api.changeCaseType).mockRejectedValue(
+      new ApiProblem({ status: 403, code: 'case_not_assigned' }),
+    )
+    const { user, thisCase } = await openFile(true)
+    await user.click(
+      within(thisCase).getByRole('button', {
+        name: 'Tipo de caso: Sin tipo. Cambiar el tipo de caso',
+      }),
+    )
+    await user.click(screen.getByRole('menuitemradio', { name: 'Problema con app' }))
+    expect(
+      await within(thisCase).findByRole('button', {
+        name: 'Tipo de caso: Sin tipo. Cambiar el tipo de caso',
+      }),
+    ).toBeInTheDocument()
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('No pudimos cambiar el tipo de caso')
+    expect(alert).toHaveTextContent('Ya no puedes cambiar el tipo de este caso.')
   })
 })

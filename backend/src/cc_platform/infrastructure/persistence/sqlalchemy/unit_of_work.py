@@ -48,6 +48,7 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.people impor
     SqlLoginAccountRepository,
     SqlMfaChallengeRepository,
     SqlPasswordResetRepository,
+    SqlStaffPreferencesRepository,
     SqlStaffRepository,
     SqlStaffSessionRepository,
     SqlTeamRepository,
@@ -80,6 +81,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     mfa_challenges: SqlMfaChallengeRepository
     sessions: SqlStaffSessionRepository
     availability: SqlAnalystAvailabilityRepository
+    preferences: SqlStaffPreferencesRepository
     invitations: SqlInvitationRepository
     password_resets: SqlPasswordResetRepository
     customers: SqlCustomerRepository
@@ -123,6 +125,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.mfa_challenges = SqlMfaChallengeRepository(session, self.track)
         self.sessions = SqlStaffSessionRepository(session, self.track)
         self.availability = SqlAnalystAvailabilityRepository(session, self.track)
+        self.preferences = SqlStaffPreferencesRepository(session, self.track)
         self.invitations = SqlInvitationRepository(session, self.track)
         self.password_resets = SqlPasswordResetRepository(session, self.track)
         self.customers = SqlCustomerRepository(session)

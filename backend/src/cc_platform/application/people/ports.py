@@ -12,6 +12,7 @@ from cc_platform.domain.people.invitation import Invitation
 from cc_platform.domain.people.login_account import FailedAttemptCounter, LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.password_reset import PasswordReset
+from cc_platform.domain.people.preferences import StaffPreferences
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff, StaffRole
 from cc_platform.domain.people.team import Team
@@ -152,6 +153,18 @@ class AnalystAvailabilityRepository(Protocol):
         ...
 
     async def save(self, availability: AnalystAvailability) -> None: ...
+
+
+class StaffPreferencesRepository(Protocol):
+    """Slice 23: a person's own settings (``None`` = never changed: the defaults)."""
+
+    async def get(self, staff_id: str) -> StaffPreferences | None: ...
+
+    async def add(self, preferences: StaffPreferences) -> None:
+        """Insert; a concurrent insert for the same person raises ``ConcurrentUpdateError``."""
+        ...
+
+    async def save(self, preferences: StaffPreferences) -> None: ...
 
 
 class InvitationRepository(Protocol):

@@ -54,6 +54,7 @@ if TYPE_CHECKING:
         LoginAccountRepository,
         MfaChallengeRepository,
         PasswordResetRepository,
+        StaffPreferencesRepository,
         StaffRepository,
         StaffSessionRepository,
         TeamRepository,
@@ -89,6 +90,11 @@ class UnitOfWork(Protocol):
 
     @property
     def availability(self) -> AnalystAvailabilityRepository: ...
+
+    @property
+    def preferences(self) -> StaffPreferencesRepository:
+        """Slice 23: each person's own settings (the UI language)."""
+        ...
 
     @property
     def invitations(self) -> InvitationRepository:

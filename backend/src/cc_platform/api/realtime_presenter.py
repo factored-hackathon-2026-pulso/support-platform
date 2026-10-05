@@ -1,6 +1,6 @@
 """``CaseRealtimePresenter`` / ``SupervisionRealtimePresenter`` /
 ``AdministrationRealtimePresenter`` / ``NotificationPresenter`` /
-``PlatformRealtimePresenter`` adapter: socket payloads
+``PlatformRealtimePresenter`` / ``PreferencesRealtimePresenter`` adapter: socket payloads
 rendered by the REST schemas.
 
 The realtime projection (application layer) builds views; this module turns them into the
@@ -19,6 +19,7 @@ from cc_platform.api.schemas.customer import CustomerConversation, CustomerTurn
 from cc_platform.api.schemas.notifications import Notification
 from cc_platform.api.schemas.people import StaffOut
 from cc_platform.api.schemas.platform import PlatformSettings
+from cc_platform.api.schemas.preferences import Preferences
 from cc_platform.api.schemas.supervision import QueueCounts
 from cc_platform.application.cases.dto import (
     CallView,
@@ -34,6 +35,7 @@ from cc_platform.application.cases.supervision import QueueCountsView
 from cc_platform.application.notifications.dto import NotificationView
 from cc_platform.application.people.availability import AvailabilityView
 from cc_platform.application.people.dto import StaffView
+from cc_platform.domain.people.preferences import UiLanguage
 from cc_platform.domain.shared.json import JsonObject
 
 
@@ -45,6 +47,10 @@ class SchemaRealtimePresenter:
     def platform_settings(self, *, ai_enabled: bool) -> JsonObject:
         """Slice 18: ``platform.updated`` carries the public ``PlatformSettings``."""
         return _json(PlatformSettings(ai_enabled=ai_enabled))
+
+    def preferences(self, *, ui_language: UiLanguage) -> JsonObject:
+        """Slice 23: ``preferences.updated`` carries her ``Preferences``."""
+        return _json(Preferences.of(ui_language))
 
     def case_summary(self, view: CaseSummaryView) -> JsonObject:
         return _json(CaseSummary.from_view(view))

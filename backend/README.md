@@ -67,6 +67,7 @@ re-read on every request.
 | Onboarding (slice 11) | `POST /onboarding/invitations/check\|password\|activate`, `POST /onboarding/password-resets/check\|complete` (token in the body; 410 `link_invalid` for any unusable link, 429 `rate_limited` per client) | public (the link's token) |
 | Dev mailbox (slice 11) | `GET /dev/mailbox?limit=` (404 unless `CC_DEV_MAILBOX`; never in prod) | public, development only |
 | Availability | `GET\|PUT /me/availability` (Disponible / En pausa) | analyst |
+| Preferences (slice 23) | `GET\|PUT /me/preferences` (`{uiLanguage: "es" \| "pt-BR"}`; also in `GET /auth/me`; audited `staff.ui_language_changed`; `preferences.updated` on `staff:<id>`) | any staff role, her own |
 | Home (slice 6) | `GET /me/home`: `since` (end of her previous session, else now − 8 h), activity rows from the event log (structured, no text), her team's availability and queues (counts) | analyst |
 | Cases | `GET /cases/inbox?status=&q=` (`closed` = last 7 days), `GET /cases/{id}`, `GET /cases/{id}/history`, `GET\|POST /cases/{id}/turns`, `POST /cases/{id}/read`, `POST /cases/{id}/close` (`{reason, note}`) | analyst; supervisors read any case (audited `case.viewed`) |
 | Case priority (slice 8) | `PUT /cases/{id}/priority` (`{priority, expectedVersion}` → `{changed, case}`) | the assignee analyst, or a supervisor on any open case |

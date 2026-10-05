@@ -203,6 +203,11 @@ from cc_platform.application.people.onboarding.dev_mailbox import ListDevMailbox
 from cc_platform.application.people.onboarding.links import AppLinks
 from cc_platform.application.people.onboarding.mailer import OnboardingMailer
 from cc_platform.application.people.onboarding.use_cases import OnboardingUseCases
+from cc_platform.application.people.preferences import GetMyPreferences, SetMyPreferences
+from cc_platform.application.people.preferences_realtime import (
+    PREFERENCES_EVENTS,
+    PreferencesRealtimeProjector,
+)
 from cc_platform.application.people.queries import GetCurrentStaff, ListStaff
 from cc_platform.application.people.use_cases import PeopleUseCases
 from cc_platform.application.platform.realtime import PlatformRealtimeProjector
@@ -457,6 +462,7 @@ def _wire_realtime(
     mapper.suppress(*ADMIN_OWNED_EVENTS)  # the administration projection signals them
     mapper.suppress(*PLATFORM_EVENTS)  # the platform projection signals them (slice 18)
     mapper.suppress(*MATURITY_EVENTS)  # the stages projection signals them (slice 21)
+    mapper.suppress(*PREFERENCES_EVENTS)  # the preferences projection signals them (slice 23)
     bus.subscribe(RealtimeProjector(hub, mapper))
     bus.subscribe(SessionTerminator(hub), event_types=[SessionEnded])
     bus.subscribe(AccessTerminator(hub), event_types=[StaffRolesChanged])
@@ -477,6 +483,10 @@ def _wire_realtime(
         PlatformRealtimeProjector(hub, SchemaRealtimePresenter()), event_types=PLATFORM_EVENTS
     )
     bus.subscribe(MaturityRealtimeProjector(hub), event_types=STAGE_EVENTS)
+    bus.subscribe(
+        PreferencesRealtimeProjector(hub, SchemaRealtimePresenter()),
+        event_types=PREFERENCES_EVENTS,
+    )
     return hub, mapper
 
 
@@ -854,6 +864,8 @@ def build_container(
             list_staff=ListStaff(uow=uow),
             get_availability=GetMyAvailability(uow=uow, clock=clock),
             set_availability=SetMyAvailability(uow=uow, clock=clock),
+            get_preferences=GetMyPreferences(uow=uow),
+            set_preferences=SetMyPreferences(uow=uow, clock=clock),
         ),
         cases=CasesUseCases(
             inbox=GetInbox(uow=uow, clock=clock),

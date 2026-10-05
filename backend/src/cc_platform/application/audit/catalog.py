@@ -105,6 +105,8 @@ FAMILY: Mapping[str, AuditFamily] = {
     "call.mute_changed": AuditFamily.CONVERSATION,
     "call.ended": AuditFamily.CONVERSATION,
     "staff.availability_changed": AuditFamily.AVAILABILITY,
+    # slice 23: her own settings (the UI language), next to her other self changes
+    "staff.ui_language_changed": AuditFamily.ACCESS,
     "customer.session_started": AuditFamily.ACCESS,
     "auth.password_accepted": AuditFamily.ACCESS,
     "auth.mfa_challenge_issued": AuditFamily.ACCESS,
@@ -190,6 +192,7 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "call.mute_changed",
         "call.ended",
         "staff.availability_changed",
+        "staff.ui_language_changed",
         "auth.account_locked",
         "staff.invitation_accepted",
         "staff.mfa_enrolled",
@@ -573,6 +576,16 @@ def _availability_changed(event: StoredEvent, names: AuditNames) -> str:
     return "Pasó a Disponible" if to_status == "available" else "Pasó a En pausa"
 
 
+#: Slice 23: each UI language by its own name (as the language menu shows it).
+UI_LANGUAGE_NAME: Mapping[str, str] = {"es": "Español", "pt-BR": "Português"}
+
+
+def _ui_language_changed(event: StoredEvent, _names: AuditNames) -> str:
+    to_language = _text(event.payload, "to_language") or ""
+    name = UI_LANGUAGE_NAME.get(to_language, to_language)
+    return f"Cambió el idioma de la plataforma a {name}"
+
+
 def _customer_session(event: StoredEvent, _names: AuditNames) -> str:
     channel = "web" if _text(event.payload, "channel") == CaseChannel.CHAT_WEB.value else "app"
     return f"Abrió el chat ({channel})"
@@ -775,6 +788,7 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "call.mute_changed": _call_mute_changed,
     "call.ended": _call_ended,
     "staff.availability_changed": _availability_changed,
+    "staff.ui_language_changed": _ui_language_changed,
     "customer.session_started": _customer_session,
     "auth.password_accepted": _fixed("Ingresó la contraseña correcta"),
     "auth.mfa_challenge_issued": _fixed("Se le pidió el código de verificación"),

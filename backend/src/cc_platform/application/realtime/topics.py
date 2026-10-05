@@ -15,8 +15,8 @@ Topics (brief §4.4):
   supervisors only.
 - ``admin:directory``: people and teams of the directory that may have changed
   (``directory.updated``); admins only (slice 4).
-- ``staff:<STF-id>``: one person's own profile and roles (``me.updated``); only that person,
-  whatever her roles (slice 4).
+- ``staff:<STF-id>``: one person's own profile and roles (``me.updated``) and, slice 23, her
+  own preferences (``preferences.updated``); only that person, whatever her roles (slice 4).
 - ``platform:settings``: the platform-wide settings (``platform.updated``, the AI switch,
   slice 18); every staff member and every customer session may follow it.
 - ``ai:stages``: a case type changed stage (``ai.stage_updated``, slice 21); analysts and

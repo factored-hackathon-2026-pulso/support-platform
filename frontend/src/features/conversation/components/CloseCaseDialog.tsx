@@ -16,8 +16,6 @@ import {
 } from '../model'
 import { closeNoticeChannel } from '../channels'
 import {
-  HANDOFF_QUALITY_HINT,
-  HANDOFF_QUALITY_LEGEND,
   HANDOFF_QUALITY_OPTIONS,
   toggleHandoffQuality,
   type HandoffQualityOption,
@@ -26,16 +24,22 @@ import { useCaseHandoff } from '../hooks/use-handoff'
 import { useCloseCase } from '../hooks/use-close-case'
 import type { CaseDetail, CaseSummary, HandoffQuality } from '../types'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 
-/** The reason cards: label, meaning, tone and icon from the one reason map (cases). */
-const REASON_CARDS = CLOSE_REASONS.map((reason) => ({
-  value: reason.value,
-  label: reason.label,
-  description: reason.meaning,
-  tone: reason.tone,
-  icon: <CloseReasonIcon reason={reason.value} size="md" />,
-  wide: reason.value === 'other',
-}))
+/**
+ * The reason cards: label, meaning, tone and icon from the one reason map (cases). Built when
+ * the dialog renders, so the words follow the UI language.
+ */
+function reasonCards() {
+  return CLOSE_REASONS.map((reason) => ({
+    value: reason.value,
+    label: reason.label,
+    description: reason.meaning,
+    tone: reason.tone,
+    icon: <CloseReasonIcon reason={reason.value} size="md" />,
+    wide: reason.value === 'other',
+  }))
+}
 
 export interface CloseCaseDialogProps {
   summary: CaseSummary
@@ -62,6 +66,8 @@ export function CloseCaseDialog({
   onOpenChange,
   onClosed,
 }: CloseCaseDialogProps) {
+  // `cases` too: the reason cards are the shared case vocabulary.
+  const { t } = useTranslation(['conversation', 'cases'])
   const close = useCloseCase(summary.id)
   const { handoff } = useCaseHandoff({ case: summary, assignment })
   const asksHandoff = handoff.status === 'success'
@@ -121,7 +127,7 @@ export function CloseCaseDialog({
     <Dialog
       open={open}
       onOpenChange={changeOpen}
-      title="Cerrar caso"
+      title={t('close.title')}
       description={
         <span className="inline-flex flex-wrap items-center gap-x-2">
           <span>{summary.customer.displayName}</span>
@@ -133,10 +139,10 @@ export function CloseCaseDialog({
       footer={
         <>
           <Button variant="secondary" onClick={() => changeOpen(false)}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button variant="primary" loading={close.isPending} onClick={submit}>
-            Cerrar caso
+            {t('close.submit')}
           </Button>
         </>
       }
@@ -144,22 +150,20 @@ export function CloseCaseDialog({
       <div className="flex flex-col gap-4">
         <div ref={reasonsRef}>
           <RadioGroup<CloseReason>
-            label="Motivo"
+            label={t('close.reason')}
             required
             variant="cards"
             columns={2}
-            options={REASON_CARDS}
+            options={reasonCards()}
             value={form.reason}
             error={errors.reason}
             onValueChange={(reason) => update({ reason })}
           />
         </div>
         <Field
-          label="Nota interna (opcional)"
-          hint="Solo la ve el equipo."
-          error={
-            errors.note ?? (noteTooLong ? 'La nota puede tener hasta 500 caracteres.' : undefined)
-          }
+          label={t('close.note')}
+          hint={t('close.noteHint')}
+          error={errors.note ?? (noteTooLong ? t('close.noteTooLong') : undefined)}
           labelAside={
             <span className={noteTooLong ? 'text-12 text-danger-strong' : 'text-12 text-muted'}>
               {noteCounter(form.note)}
@@ -182,15 +186,13 @@ export function CloseCaseDialog({
         {noticeChannel === 'call' ? null : (
           <Callout
             tone="neutral"
-            title={
-              noticeChannel === 'email' ? 'El cliente lo recibe por correo' : 'El cliente verá'
-            }
+            title={noticeChannel === 'email' ? t('close.noticeByEmail') : t('close.noticeOnScreen')}
           >
             <span lang={summary.language}>{CLOSED_NOTICE[summary.language]}</span>
           </Callout>
         )}
         {close.isError ? (
-          <Callout tone="danger" title="No se cerró el caso">
+          <Callout tone="danger" title={t('close.failedTitle')}>
             {describeCloseFailure(close.error)}
           </Callout>
         ) : null}
@@ -228,11 +230,13 @@ function HandoffQualityField({
   value: HandoffQuality | null
   onChange(value: HandoffQuality | null): void
 }) {
+  const { t } = useTranslation('conversation')
   const hintId = useId()
   return (
     <fieldset aria-describedby={hintId} className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
       <legend className="mb-2 p-0 text-14 font-semibold">
-        {HANDOFF_QUALITY_LEGEND} <span className="font-normal text-muted">(opcional)</span>
+        {t('handoff.quality.legend')}{' '}
+        <span className="font-normal text-muted">{t('close.optional')}</span>
       </legend>
       <div className="grid grid-cols-3 gap-2">
         {HANDOFF_QUALITY_OPTIONS.map((option) => {
@@ -268,7 +272,7 @@ function HandoffQualityField({
         })}
       </div>
       <p id={hintId} className="m-0 text-12 text-muted">
-        {HANDOFF_QUALITY_HINT}
+        {t('handoff.quality.hint')}
       </p>
     </fieldset>
   )

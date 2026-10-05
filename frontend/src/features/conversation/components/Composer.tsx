@@ -1,6 +1,7 @@
 import { useId, useImperativeHandle, useRef, type KeyboardEvent, type Ref } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Button, ComposerFrame, Textarea } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { MAX_MESSAGE_LENGTH, normalizeMessage } from '../model'
 
 /** Slice 20: where the copilot's draft leaves the focus ("Editar": the box; "Usar": "Enviar"). */
@@ -27,6 +28,7 @@ export interface ComposerProps {
  * Shown only when the viewer may reply (`ReadOnlyFooter` otherwise).
  */
 export function Composer({ value: text, onChange: setText, onSend, ref }: ComposerProps) {
+  const { t } = useTranslation('conversation')
   const id = useId()
   const hintId = `${id}-hint`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -61,14 +63,14 @@ export function Composer({ value: text, onChange: setText, onSend, ref }: Compos
   return (
     <ComposerFrame className="flex flex-col gap-2 px-3 py-2.5">
       <label htmlFor={id} className="sr-only">
-        Escribe al cliente
+        {t('composer.label')}
       </label>
       <Textarea
         ref={textareaRef}
         id={id}
         variant="bare"
         rows={3}
-        placeholder="Escribe al cliente"
+        placeholder={t('composer.label')}
         value={text}
         aria-describedby={hintId}
         aria-invalid={tooLong || undefined}
@@ -77,9 +79,7 @@ export function Composer({ value: text, onChange: setText, onSend, ref }: Compos
       />
       <div className="flex items-center justify-between gap-2">
         <span id={hintId} className={tooLong ? 'text-12 text-danger-strong' : 'text-12 text-muted'}>
-          {tooLong
-            ? 'El mensaje pasa de 4.000 caracteres.'
-            : 'Enter envía. Shift + Enter agrega una línea.'}
+          {tooLong ? t('composer.tooLong') : t('composer.hint')}
         </span>
         <Button
           ref={sendRef}
@@ -88,7 +88,7 @@ export function Composer({ value: text, onChange: setText, onSend, ref }: Compos
           aria-disabled={!message || undefined}
           onClick={submit}
         >
-          Enviar
+          {t('composer.send')}
         </Button>
       </div>
     </ComposerFrame>

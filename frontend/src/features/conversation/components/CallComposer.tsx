@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { MessageSquareText, StickyNote } from 'lucide-react'
 import { Button, Input } from '@/components/ui'
+import { i18n, useTranslation } from '@/lib/i18n'
 import { describeWriteFailure } from '../channels'
 import { useAddNote, useCallLine } from '../hooks'
 import { newClientMessageId } from '../hooks/use-send-message'
@@ -23,6 +24,7 @@ export interface CallComposerProps {
  * while talking; the box says why it waits otherwise) and "Nota interna" (staff only).
  */
 export function CallComposer({ caseId, call, canNote }: CallComposerProps) {
+  const { t } = useTranslation('conversation')
   const line = useCallLine(caseId, call?.id ?? null)
   const note = useAddNote(caseId)
   const talking = call?.state === 'in_call'
@@ -30,11 +32,11 @@ export function CallComposer({ caseId, call, canNote }: CallComposerProps) {
     <div className="flex flex-col gap-2.5">
       {call ? (
         <WriteBox
-          label="Lo que dices"
+          label={t('call.composer.say')}
           icon={<MessageSquareText size={13} aria-hidden="true" />}
-          placeholder={talking ? 'Escribe lo que le dices al cliente' : ''}
+          placeholder={talking ? t('call.composer.sayPlaceholder') : ''}
           hint={sayHint(call)}
-          submitLabel="Decir"
+          submitLabel={t('call.composer.sayButton')}
           submitVariant="primary"
           maxLength={MAX_MESSAGE_LENGTH}
           enabled={talking}
@@ -43,11 +45,11 @@ export function CallComposer({ caseId, call, canNote }: CallComposerProps) {
       ) : null}
       {canNote ? (
         <WriteBox
-          label="Nota interna"
+          label={t('call.composer.note')}
           icon={<StickyNote size={13} aria-hidden="true" />}
-          placeholder="Solo la ve el equipo"
+          placeholder={t('call.composer.notePlaceholder')}
           hint={null}
-          submitLabel="Guardar nota"
+          submitLabel={t('call.composer.saveNote')}
           submitVariant="secondary"
           maxLength={MAX_NOTE_LENGTH}
           enabled
@@ -59,13 +61,14 @@ export function CallComposer({ caseId, call, canNote }: CallComposerProps) {
 }
 
 function sayHint(call: Call): string | null {
+  const t = i18n.getFixedT(null, 'conversation')
   switch (call.state) {
     case 'ringing':
       return call.direction === 'inbound'
-        ? 'Contesta para hablar con el cliente.'
-        : 'Esperando a que el cliente conteste.'
+        ? t('call.composer.answerHint')
+        : t('call.composer.waitingHint')
     case 'on_hold':
-      return 'La llamada está en espera. Retómala para seguir hablando.'
+      return t('call.composer.holdHint')
     default:
       return null
   }

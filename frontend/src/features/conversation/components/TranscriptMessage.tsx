@@ -2,6 +2,7 @@ import { Bot, CircleAlert, Clock, Pause, PhoneOff, Play, StickyNote } from 'luci
 import { Avatar } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { formatTime } from '@/lib/format'
+import { useTranslation } from '@/lib/i18n'
 import type { CallEventKind } from '../channels'
 import { noticeLabel, type TranscriptItem } from '../model'
 import { EmailCard } from './EmailCard'
@@ -27,6 +28,7 @@ const BUBBLE: Record<'customer' | 'own' | 'analyst' | 'assistant', string> = {
  * notes. Bubbles take at most 70% of the column.
  */
 export function TranscriptMessage({ item, onRetry }: TranscriptMessageProps) {
+  const { t } = useTranslation('conversation')
   if (item.variant === 'line') return <CallLine item={item} />
   if (item.variant === 'call-event') return <CallEvent item={item} />
   if (item.variant === 'note') return <NoteItem item={item} />
@@ -35,7 +37,7 @@ export function TranscriptMessage({ item, onRetry }: TranscriptMessageProps) {
     return (
       <li className="flex justify-center">
         <p className="m-0 max-w-[90%] rounded-10 bg-accent-soft px-3 py-2 text-center text-13 whitespace-pre-line text-ink">
-          <span className="sr-only">Nota interna: </span>
+          <span className="sr-only">{t('transcript.internalNoteLead')} </span>
           {item.text}
         </p>
       </li>
@@ -75,13 +77,14 @@ export function TranscriptMessage({ item, onRetry }: TranscriptMessageProps) {
 }
 
 function MessageMeta({ item, onRetry }: TranscriptMessageProps) {
+  const { t } = useTranslation(['conversation', 'common'])
   if (item.delivery === 'sending') {
     // Visual only: the transcript log announces the message itself once, and a
     // failure is announced by its alert; a transient "Enviando…" would be noise.
     return (
       <span className="flex items-center gap-1 text-12 text-muted" aria-hidden="true">
         <Clock size={12} aria-hidden="true" />
-        Enviando…
+        {t('transcript.sending')}
       </span>
     )
   }
@@ -92,7 +95,7 @@ function MessageMeta({ item, onRetry }: TranscriptMessageProps) {
         role="alert"
       >
         <CircleAlert size={13} aria-hidden="true" />
-        {item.error ?? 'No se envió'}
+        {item.error ?? t('transcript.notSent')}
         {item.retryable && item.clientMessageId && onRetry ? (
           <>
             <button
@@ -100,7 +103,7 @@ function MessageMeta({ item, onRetry }: TranscriptMessageProps) {
               className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-accent underline-offset-2 hover:underline"
               onClick={() => onRetry(item.clientMessageId ?? '')}
             >
-              Reintentar
+              {t('common:actions.retry')}
             </button>
           </>
         ) : null}
@@ -182,17 +185,18 @@ function CallEvent({ item }: { item: TranscriptItem }) {
 
 /** A staff-only note: accent tint, "Nota interna" for screen readers, who wrote it and when. */
 function NoteItem({ item }: { item: TranscriptItem }) {
+  const { t } = useTranslation('conversation')
   return (
     <li className="flex flex-col items-center gap-1">
       <p className="m-0 flex max-w-[90%] items-start gap-2 rounded-10 bg-accent-soft px-3 py-2 text-13 whitespace-pre-line text-ink">
         <StickyNote size={13} aria-hidden="true" className="mt-0.5 shrink-0 text-accent-strong" />
         <span>
-          <span className="sr-only">Nota interna: </span>
+          <span className="sr-only">{t('transcript.internalNoteLead')} </span>
           {item.text}
         </span>
       </p>
       <span className="flex items-center gap-2 text-12 text-muted" aria-hidden="true">
-        <span>Nota interna</span>
+        <span>{t('transcript.internalNote')}</span>
         <span>{item.author}</span>
         <span className="inline-flex items-center gap-1">
           <Clock size={12} aria-hidden="true" />

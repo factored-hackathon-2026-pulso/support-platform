@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { PhoneOutgoing, Users } from 'lucide-react'
 import { Button, Callout, Dialog, Field, Textarea } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { MAX_CALL_REASON, describeCallFailure, validateCallReason } from '../channels'
 import { useStartCall } from '../hooks'
 import { shortCaseId } from '../model'
@@ -22,6 +23,7 @@ function newKey(): string {
  * `Idempotency-Key` per opening: a retry after a lost answer replays the same call.
  */
 export function StartCallDialog({ summary, open, onOpenChange }: StartCallDialogProps) {
+  const { t } = useTranslation('conversation')
   const start = useStartCall(summary.id)
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -52,7 +54,7 @@ export function StartCallDialog({ summary, open, onOpenChange }: StartCallDialog
     <Dialog
       open={open}
       onOpenChange={changeOpen}
-      title="Llamar al cliente"
+      title={t('call.start.title')}
       description={
         <span className="inline-flex flex-wrap items-center gap-x-2">
           <span>{summary.customer.displayName}</span>
@@ -64,7 +66,7 @@ export function StartCallDialog({ summary, open, onOpenChange }: StartCallDialog
       footer={
         <>
           <Button variant="secondary" onClick={() => changeOpen(false)}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -72,20 +74,20 @@ export function StartCallDialog({ summary, open, onOpenChange }: StartCallDialog
             icon={<PhoneOutgoing size={15} aria-hidden="true" />}
             onClick={submit}
           >
-            Llamar
+            {t('call.start.submit')}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
         <Field
-          label="Por qué llamas"
+          label={t('call.reason')}
           required
           error={error ?? undefined}
           hint={
             <span className="inline-flex items-center gap-1">
               <Users size={13} aria-hidden="true" />
-              Lo ve el equipo. El cliente no.
+              {t('call.start.visibility')}
             </span>
           }
           labelAside={
@@ -98,7 +100,7 @@ export function StartCallDialog({ summary, open, onOpenChange }: StartCallDialog
             ref={reasonRef}
             rows={3}
             maxLength={MAX_CALL_REASON}
-            placeholder="Qué quieres resolver en la llamada"
+            placeholder={t('call.start.placeholder')}
             value={reason}
             onChange={(event) => {
               setReason(event.target.value)
@@ -107,7 +109,7 @@ export function StartCallDialog({ summary, open, onOpenChange }: StartCallDialog
           />
         </Field>
         {start.isError ? (
-          <Callout tone="danger" title="No se hizo la llamada">
+          <Callout tone="danger" title={t('call.start.failedTitle')}>
             {describeCallFailure(start.error)}
           </Callout>
         ) : null}

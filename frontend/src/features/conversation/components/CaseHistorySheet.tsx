@@ -15,6 +15,7 @@ import {
 import { CloseReasonIcon, caseLifecycleStatus, closeReasonLabel } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { formatDateTime } from '@/lib/format'
+import { useActiveLocale, useTranslation } from '@/lib/i18n'
 import {
   describeCaseLoadFailure,
   historyItemFacts,
@@ -58,6 +59,7 @@ export function CaseHistorySheet({
   onSelect,
   onClose,
 }: CaseHistorySheetProps) {
+  const { t } = useTranslation('conversation')
   return (
     <Sheet
       open
@@ -65,7 +67,7 @@ export function CaseHistorySheet({
         if (!open) onClose()
       }}
       title={historySheetTitle(customerName)}
-      description="Conversaciones que tuvo con el equipo. Solo lectura."
+      description={t('history.description')}
       width={600}
     >
       <CaseHistoryBrowser caseId={caseId} selected={selected} onSelect={onSelect} />
@@ -139,6 +141,8 @@ interface HistoryListProps {
 }
 
 function HistoryList({ caseId, onSelect, returnTo, headingLevel }: HistoryListProps) {
+  // `cases` too: the rows show the shared case vocabulary (reason, status, rating).
+  const { t } = useTranslation(['conversation', 'cases'])
   const history = useCaseHistory(caseId)
   const rows = useRef(new Map<string, HTMLButtonElement>())
   const pendingFocus = useRef(returnTo)
@@ -159,18 +163,18 @@ function HistoryList({ caseId, onSelect, returnTo, headingLevel }: HistoryListPr
       empty={
         <EmptyState
           icon={<FolderOpen size={36} strokeWidth={1.6} aria-hidden="true" />}
-          title="No tiene otros casos."
+          title={t('history.empty')}
           as={headingLevel}
           size={headingLevel === 'h4' ? 'compact' : 'default'}
         />
       }
-      errorTitle="No pudimos cargar los casos anteriores"
+      errorTitle={t('history.loadFailed')}
     >
       {(data) => {
         const note = historyTruncatedNote(data.items.length, data.total)
         return (
           <div className="flex flex-col gap-3">
-            <ul aria-label="Casos anteriores" className="m-0 flex list-none flex-col gap-2 p-0">
+            <ul aria-label={t('history.list')} className="m-0 flex list-none flex-col gap-2 p-0">
               {data.items.map((item) => (
                 <li key={item.id}>
                   <button
@@ -203,7 +207,7 @@ function HistoryList({ caseId, onSelect, returnTo, headingLevel }: HistoryListPr
                         ))}
                       </span>
                       <span className="truncate text-13 text-ink-2">
-                        {item.preview ?? 'Sin mensajes'}
+                        {item.preview ?? t('history.noMessages')}
                       </span>
                     </span>
                     <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-muted" />
@@ -228,13 +232,17 @@ interface PastCaseProps {
 }
 
 function PastCase({ caseId, focusHeading, onBack, headingLevel: Heading }: PastCaseProps) {
+  const { t } = useTranslation(['conversation', 'cases', 'common'])
+  const locale = useActiveLocale()
   const me = useCurrentUser()
   const detail = useCaseDetail(caseId)
   const turns = useCaseTurns(caseId, detail.data?.case.lastSequence)
   const older = useLoadOlderTurns(caseId)
+  // The locale too: the items carry translated words ("Tú").
   const items = useMemo(
     () => (turns.data ? toTranscriptItems(turns.data, me.id) : []),
-    [turns.data, me.id],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the locale changes the items' words
+    [turns.data, me.id, locale],
   )
   const headingRef = useRef<HTMLHeadingElement>(null)
 
@@ -250,7 +258,7 @@ function PastCase({ caseId, focusHeading, onBack, headingLevel: Heading }: PastC
       tabIndex={-1}
       className="m-0 text-15 font-semibold text-ink focus-visible:outline-offset-4"
     >
-      Caso <span className="font-mono text-14">{shortCaseId(caseId)}</span>
+      {t('history.caseHeading')} <span className="font-mono text-14">{shortCaseId(caseId)}</span>
     </Heading>
   )
 
@@ -262,7 +270,7 @@ function PastCase({ caseId, focusHeading, onBack, headingLevel: Heading }: PastC
       onClick={onBack}
       className="self-start"
     >
-      Todos los casos anteriores
+      {t('history.back')}
     </Button>
   )
 
@@ -283,7 +291,7 @@ function PastCase({ caseId, focusHeading, onBack, headingLevel: Heading }: PastC
                 void turns.refetch()
               }}
             >
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
           }
         >
@@ -307,18 +315,25 @@ function PastCase({ caseId, focusHeading, onBack, headingLevel: Heading }: PastC
             <Fact
               icon="clock"
               text={formatDateTime(closure.closedAt, { withYear: false })}
-              label="Cerrado"
-              tooltip="Cerrado"
+              label={t('footer.closedAt')}
+              tooltip={t('footer.closedAt')}
             />
             {closure.closedByName ? (
-              <Fact icon="user" text={closure.closedByName} label="Lo cerró" tooltip="Lo cerró" />
+              <Fact
+                icon="user"
+                text={closure.closedByName}
+                label={t('footer.closedBy')}
+                tooltip={t('footer.closedBy')}
+              />
             ) : null}
           </span>
         ) : (
           <Status {...caseLifecycleStatus(detail.data.case.status)} />
         )
       ) : null}
-      {closure?.note ? <p className="m-0 text-13 text-ink-2">Nota: {closure.note}</p> : null}
+      {closure?.note ? (
+        <p className="m-0 text-13 text-ink-2">{t('footer.note', { note: closure.note })}</p>
+      ) : null}
       {turns.status === 'pending' || detail.status === 'pending' ? (
         <div aria-busy="true" className="flex flex-col gap-3">
           <Skeleton className="h-10 w-2/3" />
@@ -334,16 +349,16 @@ function PastCase({ caseId, focusHeading, onBack, headingLevel: Heading }: PastC
                 loading={older.isPending}
                 onClick={() => older.mutate()}
               >
-                Cargar mensajes anteriores
+                {t('transcript.loadOlder')}
               </Button>
               {older.isError ? (
                 <span className="text-12 text-danger-strong" role="alert">
-                  No pudimos cargar los mensajes anteriores. Inténtalo de nuevo.
+                  {t('transcript.loadOlderFailed')}
                 </span>
               ) : null}
             </div>
           ) : null}
-          <ChatTranscript items={items} label="Mensajes del caso anterior" />
+          <ChatTranscript items={items} label={t('history.transcript')} />
         </>
       )}
     </div>

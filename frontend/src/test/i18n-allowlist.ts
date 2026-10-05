@@ -21,7 +21,5 @@ export interface PendingArea {
 export const LOCALE_DATA_FILES: readonly string[] = ['src/lib/format.ts', 'src/lib/i18n/locale.ts']
 
 export const PENDING_AREAS: readonly PendingArea[] = [
-  // ── conversation: the open case, transcript, channels, close/escalate dialogs, handoff
-  { area: 'conversation', paths: ['src/features/conversation/'], strings: 398 },
   // ── end of the pending areas
 ]

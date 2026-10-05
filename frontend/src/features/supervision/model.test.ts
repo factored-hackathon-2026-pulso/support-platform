@@ -55,6 +55,9 @@ import {
   needsPauseConfirmation,
   noMatchCopy,
   openCaseStatus,
+  describeReleaseFailure,
+  takeFromAssistantLabel,
+  takenFromAssistantToast,
   openCasesCell,
   openEscalationsLabel,
   pausedWarning,
@@ -146,13 +149,16 @@ describe('"Colas"', () => {
 
   it('counts open, unassigned and at-risk cases from the rows', () => {
     const figures = queueFiguresFromRows(rows, NOW)
-    expect(figures).toEqual({ open: rows.length, unassigned: 2, atRisk: 4 })
+    expect(figures).toEqual({ open: rows.length, unassigned: 2, atRisk: 4, withAssistant: 0 })
     expect(queueNavLabels(figures)).toEqual({
       open: `${rows.length} abiertos`,
       unassigned: '2 sin asignar',
       atRisk: '4 en riesgo',
+      withAssistant: '0 con el asistente',
     })
-    expect(queueNavLabels({ open: 1, unassigned: 0, atRisk: 0 }).open).toBe('1 abierto')
+    expect(queueNavLabels({ open: 1, unassigned: 0, atRisk: 0, withAssistant: 0 }).open).toBe(
+      '1 abierto',
+    )
     expect(shownCasesLabel(2, 9, true)).toBe('2 de 9 casos abiertos')
     expect(shownCasesLabel(1, 1, false)).toBe('1 caso abierto')
   })
@@ -503,5 +509,67 @@ describe('fixture sanity', () => {
   it('keeps Felipe and Paula as Spanish-only analysts', () => {
     expect(felipe.languages).toEqual(['es'])
     expect(paula.languages).toEqual(['es'])
+  })
+})
+
+describe('"Colas" with the assistant (slice 19)', () => {
+  const base = makeOpenCases().cases
+  const held = {
+    case: {
+      ...queuedRosa,
+      id: 'CASE-00000000000000000000000119',
+      status: 'with_assistant' as const,
+      inboxStatus: null,
+    },
+    assigneeName: null,
+  }
+  const rows = [...base, held]
+  const state: QueuesUrlState = { language: 'es', statuses: [], priorities: [], analysts: [] }
+
+  it('marks the case "Con el asistente" with no running first response', () => {
+    expect(openCaseStatus(held.case)).toEqual({
+      shape: 'bot',
+      tone: 'accent',
+      label: 'Con el asistente',
+    })
+    expect(firstResponseFact(held.case, NOW)).toMatchObject({
+      text: 'No corre',
+      tone: 'muted',
+      tooltip: 'No corre mientras lo atiende el asistente',
+    })
+  })
+
+  it('counts it apart from the open cases people have', () => {
+    const figures = queueFiguresFromRows(rows, NOW)
+    expect(figures).toEqual({ open: base.length, unassigned: 2, atRisk: 4, withAssistant: 1 })
+    expect(queueNavLabels(figures).withAssistant).toBe('1 con el asistente')
+  })
+
+  it('filters by "Con el asistente" only while AI is on', () => {
+    const offStatuses = queueFilterGroups(rows, state)[0]!.options.map((o) => o.value)
+    expect(offStatuses).not.toContain('with_assistant')
+    const on = queueFilterGroups(rows, state, { aiEnabled: true })[0]!.options
+    expect(on.find((o) => o.value === 'with_assistant')).toEqual({
+      value: 'with_assistant',
+      label: 'Con el asistente',
+      count: 1,
+    })
+    expect(
+      filterOpenCases(rows, { ...state, statuses: ['with_assistant'] }).map((r) => r.case.id),
+    ).toEqual([held.case.id])
+  })
+
+  it('words "Tomar el caso" and its outcome', () => {
+    expect(takeFromAssistantLabel('Ximena Robles')).toBe('Tomar el caso de Ximena Robles')
+    expect(takenFromAssistantToast({ status: 'queued', language: 'pt' })).toEqual({
+      title: 'Tomaste el caso del asistente',
+      description: 'Quedó en la cola en portugués: le llega a la primera persona disponible.',
+    })
+    expect(takenFromAssistantToast({ status: 'assigned', language: 'es' }).description).toBe(
+      'Ya lo tiene una persona del equipo.',
+    )
+    expect(
+      describeReleaseFailure(new ApiProblem({ status: 409, code: 'assistant_not_active' })).title,
+    ).toBe('El asistente ya no tiene este caso')
   })
 })

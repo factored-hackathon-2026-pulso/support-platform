@@ -6,6 +6,7 @@ import {
   fetchOpenCases,
   fetchQueueOverview,
   fetchTeamOverview,
+  releaseFromAssistant,
 } from '@/features/supervision/api'
 import { ApiProblem } from '@/lib/api'
 import { NOW } from '@/test/case-fixtures'
@@ -32,6 +33,7 @@ vi.mock('@/features/supervision/api', async (importOriginal) => {
     fetchQueueOverview: vi.fn<typeof actual.fetchQueueOverview>(),
     fetchEscalations: vi.fn<typeof actual.fetchEscalations>(),
     fetchOpenCases: vi.fn<typeof actual.fetchOpenCases>(),
+    releaseFromAssistant: vi.fn<typeof actual.releaseFromAssistant>(),
   }
 })
 
@@ -188,5 +190,67 @@ describe('queues screen ("Colas")', () => {
     ).toBeInTheDocument()
     await user.click(within(toasts).getByRole('button', { name: 'Ver en la cola' }))
     await waitFor(() => expect(router.state.location.search).toBe('?language=pt'))
+  })
+})
+
+describe('queues screen with the assistant (slice 19)', () => {
+  const ximena = {
+    ...queuedRosa,
+    id: 'CASE-00000000000000000000000119',
+    customer: { ...queuedRosa.customer, displayName: 'Ximena Robles Treviño' },
+    status: 'with_assistant' as const,
+    inboxStatus: null,
+  }
+  const withAssistant = () => {
+    const open = makeOpenCases()
+    return { ...open, cases: [...open.cases, { case: ximena, assigneeName: null }] }
+  }
+
+  beforeEach(() => {
+    vi.mocked(fetchOpenCases).mockImplementation((language) =>
+      Promise.resolve(language === 'pt' ? portugueseOpenCases : withAssistant()),
+    )
+    vi.mocked(releaseFromAssistant).mockReset()
+  })
+
+  it('lists the case last, held by "Asistente virtual", and takes it into the queue', async () => {
+    vi.mocked(releaseFromAssistant).mockResolvedValue({ ...ximena, status: 'queued' })
+    const { user } = renderRoute('/supervision/queues', { staff: supervisorStaff, aiEnabled: true })
+    await screen.findByRole('table', { name: 'Casos abiertos en español' })
+    const rows = within(table()).getAllByRole('row')
+    const last = rows[rows.length - 1]!
+    expect(last).toHaveAccessibleName(/Ximena Robles Treviño/)
+    expect(within(last).getByText('Con el asistente')).toBeInTheDocument()
+    expect(within(last).getByText('No corre')).toBeInTheDocument()
+    expect(within(last).getByText('Asistente virtual')).toBeInTheDocument()
+    expect(within(last).queryByText('Sin asignar')).not.toBeInTheDocument()
+    expect(last.querySelector('[data-status-shape="bot"]')).not.toBeNull()
+    // The language card counts it apart.
+    expect(screen.getByRole('button', { name: /Cola en español/ })).toHaveTextContent(
+      '1 con el asistente',
+    )
+
+    const fetches = vi.mocked(fetchOpenCases).mock.calls.length
+    await user.click(
+      within(last).getByRole('button', { name: 'Tomar el caso de Ximena Robles Treviño' }),
+    )
+    expect(releaseFromAssistant).toHaveBeenCalledWith(ximena.id)
+    expect(await screen.findByText('Tomaste el caso del asistente')).toBeInTheDocument()
+    expect(
+      screen.getByText('Quedó en la cola en español: le llega a la primera persona disponible.'),
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(vi.mocked(fetchOpenCases).mock.calls.length).toBeGreaterThan(fetches),
+    )
+  })
+
+  it('says when the assistant no longer has the case', async () => {
+    vi.mocked(releaseFromAssistant).mockRejectedValue(
+      new ApiProblem({ status: 409, code: 'assistant_not_active' }),
+    )
+    const { user } = renderRoute('/supervision/queues', { staff: supervisorStaff, aiEnabled: true })
+    await screen.findByRole('table', { name: 'Casos abiertos en español' })
+    await user.click(screen.getByRole('button', { name: 'Tomar el caso de Ximena Robles Treviño' }))
+    expect(await screen.findByText('El asistente ya no tiene este caso')).toBeInTheDocument()
   })
 })

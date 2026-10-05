@@ -35,6 +35,9 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.cases import
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.event_log import (
     SqlEventLogRepository,
 )
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.maturity import (
+    SqlCaseTypeMaturityRepository,
+)
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.notifications import (
     SqlNotificationRepository,
 )
@@ -90,6 +93,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     assistant_sessions: SqlAssistantSessionRepository
     copilot_threads: SqlCopilotThreadRepository
     copilot_suggestions: SqlCopilotSuggestionRepository
+    case_type_maturity: SqlCaseTypeMaturityRepository
     builder_threads: SqlBuilderThreadRepository
     builder_proposals: SqlBuilderProposalRepository
     bank_links: SqlBankCustomerLinks
@@ -132,6 +136,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.assistant_sessions = SqlAssistantSessionRepository(session, self.track)
         self.copilot_threads = SqlCopilotThreadRepository(session, self.track)
         self.copilot_suggestions = SqlCopilotSuggestionRepository(session, self.track)
+        self.case_type_maturity = SqlCaseTypeMaturityRepository(session, self.track)
         self.builder_threads = SqlBuilderThreadRepository(session, self.track)
         self.builder_proposals = SqlBuilderProposalRepository(session, self.track)
         self.bank_links = SqlBankCustomerLinks(session)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cc_platform.application.ai.maturity import MaturityUseCases
 from cc_platform.application.ai.use_cases import AssistantUseCases
 from cc_platform.application.audit.use_cases import AuditUseCases
 from cc_platform.application.cases.use_cases import CasesUseCases, ChannelsUseCases
@@ -31,5 +32,7 @@ class UseCases:
     onboarding: OnboardingUseCases
     platform: PlatformUseCases
     """Slice 18: the platform-wide settings (the AI switch)."""
+    maturity: MaturityUseCases
+    """Slice 21: the AI stages per case type (platform data: with or without agent-core)."""
     assistant: AssistantUseCases | None = None
     """ADR 0003: ``None`` while agent-core is not configured."""

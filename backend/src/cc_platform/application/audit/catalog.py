@@ -73,6 +73,7 @@ FAMILY: Mapping[str, AuditFamily] = {
     "copilot.suggestion_none": AuditFamily.CONVERSATION,
     "copilot.suggestion_failed": AuditFamily.CONVERSATION,
     "copilot.suggestion_decided": AuditFamily.CONVERSATION,
+    "copilot.tool_used": AuditFamily.CONVERSATION,
     # the agent builder (slice 16): who changed which agent, and who approved and published it
     "builder.proposal_created": AuditFamily.AGENTS,
     "builder.proposal_tracked": AuditFamily.AGENTS,
@@ -130,6 +131,11 @@ FAMILY: Mapping[str, AuditFamily] = {
     "staff.invitation_resent": AuditFamily.ADMINISTRATION,
     "staff.invitation_cancelled": AuditFamily.ADMINISTRATION,
     "staff.password_reset_link_sent": AuditFamily.ADMINISTRATION,
+    # the AI maturity per case type (slice 21): the rule advances it, Supervisión moves it back
+    "ai.stage_advanced": AuditFamily.AGENTS,
+    "ai.stage_moved_back": AuditFamily.AGENTS,
+    "ai.agent_ready": AuditFamily.AGENTS,
+    "ai.agent_activated": AuditFamily.AGENTS,
     # the AI switch (slice 18): a platform-wide setting of Administración
     "platform.ai_toggled": AuditFamily.ADMINISTRATION,
     # …and what the person does with the link (her own access)
@@ -167,6 +173,10 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "builder.proposal_published",
         "builder.alias_promoted",
         "builder.release_revoked",
+        "ai.stage_advanced",
+        "ai.stage_moved_back",
+        "ai.agent_ready",
+        "ai.agent_activated",
         "escalation.opened",
         "escalation.withdrawn",
         "escalation.answered",
@@ -460,6 +470,40 @@ def _suggestion_decided(event: StoredEvent, _names: AuditNames) -> str:
     )
 
 
+# --------------------------------------------------------------------------- stages (slice 21)
+#: What a case type's copilot does at each stage (ADR 0006 §1); the frontend uses the same words.
+STAGE_TEXT: Mapping[int, str] = {
+    0: "solo personas",
+    1: "el copiloto responde",
+    2: "el copiloto propone herramientas",
+    3: "el copiloto propone respuestas",
+}
+
+
+def _stage_type(event: StoredEvent) -> str:
+    return CASE_TYPE_LABEL.get(_text(event.payload, "case_type") or "", "un tipo de caso")
+
+
+def _stage(event: StoredEvent) -> str:
+    stage = event.payload.get("to_stage")
+    if not isinstance(stage, int) or stage not in STAGE_TEXT:
+        return "otra etapa"
+    return f"la etapa {stage}: {STAGE_TEXT[stage]}"
+
+
+def _stage_advanced(event: StoredEvent, _names: AuditNames) -> str:
+    """By the system: "Subió Cobro indebido a la etapa 3: el copiloto propone respuestas"."""
+    return f"Subió {_stage_type(event)} a {_stage(event)}"
+
+
+def _stage_moved_back(event: StoredEvent, _names: AuditNames) -> str:
+    """Next to the supervisor: "Devolvió Problema con app a la etapa 1: el copiloto responde"
+    (or, from "ready for an agent" back to stage 3, "Retiró la propuesta de agente de …")."""
+    if event.payload.get("from_stage") == event.payload.get("to_stage"):
+        return f"Retiró la propuesta de agente de {_stage_type(event)}"
+    return f"Devolvió {_stage_type(event)} a {_stage(event)}"
+
+
 # ----------------------------------------------------------------------------- builder (slice 16)
 _VERDICT_TEXT: Mapping[str, str] = {
     "pass": "La evaluación de la propuesta pasó el gate",
@@ -693,6 +737,12 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "copilot.suggestion_none": _fixed("El copiloto no tenía nada que sugerir"),
     "copilot.suggestion_failed": _fixed("No se pudo preparar la sugerencia del copiloto"),
     "copilot.suggestion_decided": _suggestion_decided,
+    "copilot.tool_used": _fixed("Usó una herramienta que propuso el copiloto"),
+    # slice 21: the stages per case type (the rule's steps are the system's)
+    "ai.stage_advanced": _stage_advanced,
+    "ai.stage_moved_back": _stage_moved_back,
+    "ai.agent_ready": lambda event, _names: f"Propuso un agente para {_stage_type(event)}",
+    "ai.agent_activated": lambda event, _names: f"Activó el agente de {_stage_type(event)}",
     # slice 16: the agent builder (the audit never shows a draft, a reason or a chat text)
     "builder.proposal_created": _fixed("Creó una propuesta de cambio de un agente"),
     "builder.proposal_tracked": _fixed("Agregó una propuesta del constructor a la lista"),

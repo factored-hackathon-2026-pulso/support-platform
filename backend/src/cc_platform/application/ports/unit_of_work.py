@@ -27,6 +27,7 @@ from cc_platform.domain.shared.events import DomainEvent
 if TYPE_CHECKING:
     # Annotations only: importing the context packages at runtime would be circular
     # (their use cases import this module).
+    from cc_platform.application.ai.maturity import CaseTypeMaturityRepository
     from cc_platform.application.ai.ports import (
         AssistantSessionRepository,
         BankCustomerLinks,
@@ -135,6 +136,11 @@ class UnitOfWork(Protocol):
     @property
     def copilot_suggestions(self) -> CopilotSuggestionRepository:
         """ADR 0005: what the copilot proposed for a case and what the analyst did with it."""
+        ...
+
+    @property
+    def case_type_maturity(self) -> CaseTypeMaturityRepository:
+        """Slice 21: how far the AI matured for each case type (stage, signals)."""
         ...
 
     @property

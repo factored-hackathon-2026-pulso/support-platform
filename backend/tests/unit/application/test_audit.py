@@ -226,6 +226,8 @@ async def emit_everything(container: Container) -> None:
     # Slice 9: every escalation outcome (the seed opened, answered and reassigned some).
     await cases.acknowledge_escalation.execute(daniela, seed_case_id(107), seed_escalation_id(107))
     await cases.withdraw_escalation.execute(daniela, seed_case_id(101), seed_escalation_id(101))
+    # Slice 21: Supervisión moves a seeded type back (the seed climbed the others).
+    await container.use_cases.maturity.move_back.execute(lucia, "app_issue", to_stage=1)
     taken = await cases.escalate.execute(
         daniela, seed_case_id(108), EscalateCommand("Pide hablar con supervisión.", "esc-key-01")
     )
@@ -317,6 +319,7 @@ async def test_every_emitted_event_has_a_description() -> None:
     assistant_types = {
         "case.assistant_started",
         "case.assistant_released",
+        "copilot.tool_used",  # slice 21: needs a suggestion (``test_maturity.py``)
         *(
             event.event_type
             for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS, *SUGGESTION_EVENTS, *BUILDER_EVENTS)
@@ -361,6 +364,10 @@ async def test_every_emitted_event_has_a_description() -> None:
         "Reasignó el caso escalado de Julián Ortega a Daniela Ríos",
         "El escalamiento terminó porque se cerró el caso",
         "Leyó lo que hizo supervisión con su escalamiento",
+        "Subió Cobro indebido a la etapa 3: el copiloto propone respuestas",
+        "Propuso un agente para Cobro indebido",
+        "Activó el agente de Cargo no reconocido",
+        "Devolvió Problema con app a la etapa 1: el copiloto responde",
     } <= descriptions
     assert any(
         d.startswith("Asignó el caso a Daniela Ríos desde la cola en español después de ")

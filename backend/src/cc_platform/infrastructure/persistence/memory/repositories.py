@@ -22,6 +22,7 @@ from cc_platform.application.notifications.ports import NotificationCursor
 from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.ai.builder import BuilderProposal, BuilderThread
 from cc_platform.domain.ai.copilot import CopilotThread
+from cc_platform.domain.ai.maturity import CaseTypeMaturity
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.ai.suggestion import CopilotSuggestion, SuggestionStatus
 from cc_platform.domain.cases.assignment import Assignment
@@ -829,6 +830,22 @@ class InMemoryCopilotThreadRepository(_StagedRepository[CopilotThread]):
     async def get_for(self, case_id: str, analyst_id: str) -> CopilotThread | None:
         found = [t for t in self._all() if (t.case_id, t.analyst_id) == (case_id, analyst_id)]
         return await self._get(found[0].id) if found else None
+
+
+class InMemoryCaseTypeMaturityRepository(_StagedRepository[CaseTypeMaturity]):
+    """Slice 21. Same answers as ``SqlCaseTypeMaturityRepository`` (one per case type)."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, CaseTypeMaturity], track: Tracker) -> None:
+        super().__init__(committed, lambda maturity: maturity.case_type.value, track)
+
+    async def get(self, case_type: str) -> CaseTypeMaturity | None:
+        return await self._get(str(case_type))
+
+    async def list(self) -> list[CaseTypeMaturity]:
+        found = sorted(self._all(), key=lambda maturity: maturity.case_type.value)
+        return [m for m in [await self._get(m.case_type.value) for m in found] if m is not None]
 
 
 class InMemoryCopilotSuggestionRepository(_StagedRepository[CopilotSuggestion]):

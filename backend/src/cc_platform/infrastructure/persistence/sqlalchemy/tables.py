@@ -456,6 +456,25 @@ copilot_suggestions = Table(
     Index("ix_copilot_suggestions_status_created", "status", "created_at"),
 )
 
+# Slice 21 (ADR 0006): how far the AI matured for each case type. One row per type, created the
+# first time something happens to it (absent = stage 0). ``signals`` is a JSON object (the
+# counters since the current stage, ``StageSignals``); ``stage_since`` maps a reached stage (1-3)
+# to when it was reached.
+case_type_maturity = Table(
+    "case_type_maturity",
+    metadata,
+    Column("case_type", String(40), primary_key=True),
+    Column("stage", Integer, nullable=False),
+    Column("agent", String(20), nullable=False),
+    Column("signals", JSON, nullable=False),
+    Column("stage_since", JSON, nullable=False),
+    Column("agent_since", UtcDateTime, nullable=True),
+    Column("changed_at", UtcDateTime, nullable=True),
+    Column("changed_by_id", String(ID), nullable=True),
+    Column("last_change", String(20), nullable=True),
+    _version(),
+)
+
 # ADR 0003 (slice 16): a supervisor's conversation with the builder agent. One per person.
 # ``messages`` is a JSON list (``[{id, role, text, created_at, client_message_id, answers}]``,
 # newest 200), like ``copilot_threads``.

@@ -1,12 +1,18 @@
 import { createContext, useContext } from 'react'
 import type { MaturingType } from '../types'
 
+export interface BuilderChatRequest {
+  /** A first message in the composer; she can edit it. */
+  prefill?: string
+  /** The case type the conversation is about (the proposal links carry it). */
+  type?: MaturingType | null
+  /** Start a new conversation instead of continuing her thread ("Proponer un agente"). */
+  fresh?: boolean
+}
+
 export interface BuilderChatControl {
-  /**
-   * Open the chat with the builder agent, optionally with a first message in the composer and the
-   * case type it is about (the proposal links carry it).
-   */
-  open(prefill?: string, type?: MaturingType | null): void
+  /** Open the chat with the builder agent. */
+  open(request?: BuilderChatRequest): void
 }
 
 /** Provided by `AutomationFrame`: any Automatización screen can open the builder chat. */

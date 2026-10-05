@@ -65,7 +65,12 @@ from cc_platform.application.ports.realtime import RealtimeHub
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.realtime.projector import derived_envelope
 from cc_platform.application.realtime.topics import Topic
-from cc_platform.domain.ai.events import ASSISTANT_EVENTS, BUILDER_EVENTS, COPILOT_EVENTS
+from cc_platform.domain.ai.events import (
+    ASSISTANT_EVENTS,
+    BUILDER_EVENTS,
+    COPILOT_EVENTS,
+    SUGGESTION_EVENTS,
+)
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.events import (
     CALL_EVENTS,
@@ -114,7 +119,12 @@ _CUSTOMER_VISIBLE_ROLES = frozenset(
 )
 
 #: Audited reads: recorded in the event log, never sent on any socket.
-SILENT_EVENTS: tuple[type[DomainEvent], ...] = (CaseViewed, *COPILOT_EVENTS, *BUILDER_EVENTS)
+SILENT_EVENTS: tuple[type[DomainEvent], ...] = (
+    CaseViewed,
+    *COPILOT_EVENTS,
+    *SUGGESTION_EVENTS,
+    *BUILDER_EVENTS,
+)
 
 _CASE_UPDATING = (
     TurnCreated,

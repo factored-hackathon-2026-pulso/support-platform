@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Protocol
 
 from cc_platform.domain.ai.builder import BuilderProposal, BuilderThread
 from cc_platform.domain.ai.copilot import CopilotThread
 from cc_platform.domain.ai.session import AssistantSession
+from cc_platform.domain.ai.suggestion import CopilotSuggestion
 
 
 class AssistantSessionRepository(Protocol):
@@ -34,6 +36,33 @@ class CopilotThreadRepository(Protocol):
     async def add(self, thread: CopilotThread) -> None: ...
 
     async def save(self, thread: CopilotThread) -> None: ...
+
+
+class CopilotSuggestionRepository(Protocol):
+    """The suggestions of the copilot, one row per run (optimistic concurrency)."""
+
+    async def get(self, suggestion_id: str) -> CopilotSuggestion | None: ...
+
+    async def get_by_request_key(
+        self, case_id: str, analyst_id: str, request_key: str
+    ) -> CopilotSuggestion | None:
+        """The manual request that came with this ``Idempotency-Key`` (a retry finds it)."""
+        ...
+
+    async def latest_for(self, case_id: str, analyst_id: str) -> CopilotSuggestion | None:
+        """The newest suggestion of that analyst on that case, whatever its status."""
+        ...
+
+    async def list_expired(
+        self, *, created_before: datetime, limit: int
+    ) -> list[CopilotSuggestion]:
+        """Ready suggestions whose texts are still stored and were made before the instant
+        (the purge of drafts, oldest first)."""
+        ...
+
+    async def add(self, suggestion: CopilotSuggestion) -> None: ...
+
+    async def save(self, suggestion: CopilotSuggestion) -> None: ...
 
 
 class BuilderThreadRepository(Protocol):

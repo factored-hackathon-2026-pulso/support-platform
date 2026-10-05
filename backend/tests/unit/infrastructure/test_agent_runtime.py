@@ -15,6 +15,7 @@ from cc_platform.application.ai import (
     AgentRuntimeError,
     AgentRuntimeUnavailableError,
 )
+from cc_platform.domain.ai.suggestion import ReplySuggestion
 from cc_platform.infrastructure.ai.http_runtime import HttpAgentRuntime
 from cc_platform.infrastructure.ai.memory_runtime import InMemoryAgentRuntime, escalated_turn
 
@@ -229,3 +230,96 @@ async def test_the_in_memory_fake_follows_the_same_port() -> None:
 
     assert turn.escalated
     assert [call.operation for call in fake.calls[:2]] == ["start_run", "post_turn"]
+
+
+async def test_a_task_run_sends_its_input_and_maps_the_suggestions() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            201,
+            json={
+                "run_id": "run-9",
+                "release": "rel-1",
+                "status": "closed",
+                "outcome": "completed",
+                "trace_id": "trace-9",
+                "suggestions": [
+                    {
+                        "type": "reply",
+                        "text": "Hola, Lorena.",
+                        "citations": ["f1"],
+                        "language": "es",
+                    },
+                    {
+                        "type": "tool",
+                        "tool": "leer_movimientos@1",
+                        "label": "Movimientos",
+                        "why": "x",
+                    },
+                    {"type": "action", "tool": "radicar_pqr@1", "summary": "Radicar una disputa"},
+                    {
+                        "type": "escalate",
+                        "reason_code": "policy:fraude",
+                        "evidence": ["Pidió supervisión"],
+                        "motive_draft": "Pide supervisión",
+                    },
+                    {"type": "something-new", "text": "ignored"},
+                    "not an object",
+                ],
+            },
+        )
+
+    run = await runtime(handler).start_run(
+        ADVISOR,
+        agent="copiloto-sugerencias@prod",
+        idempotency_key="cps-1",
+        lang="es",
+        input={"turnos": [{"rol": "cliente", "texto": "hola"}]},
+    )
+
+    body = json.loads(seen[0].content)
+    assert body == {
+        "agent": "copiloto-sugerencias@prod",
+        "lang": "es",
+        "input": {"turnos": [{"rol": "cliente", "texto": "hola"}]},
+    }
+    assert [s.kind for s in run.suggestions] == ["reply", "tool", "action", "escalate"]
+    assert run.suggestions[3].reason_code == "policy:fraude"  # type: ignore[union-attr]
+    assert run.session_id is None
+    assert run.outcome is AgentOutcome.COMPLETED
+
+
+async def test_a_run_without_suggestions_maps_to_none_and_a_chat_run_sends_no_input() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            201,
+            json={"run_id": "r", "release": "rel", "status": "open", "trace_id": "t"},
+        )
+
+    run = await runtime(handler).start_run(CUSTOMER, agent="recepcion", idempotency_key="k")
+
+    assert run.suggestions == ()
+    assert "input" not in json.loads(seen[0].content)
+
+
+async def test_the_fake_answers_a_task_run_from_its_suggestion_script() -> None:
+    reply = ReplySuggestion(text="Hola")
+    fake = InMemoryAgentRuntime(suggestion_script=[(reply,), AgentRuntimeUnavailableError("down")])
+
+    first = await fake.start_run(ADVISOR, agent="cs", idempotency_key="a", input={"turnos": []})
+    with pytest.raises(AgentRuntimeUnavailableError):
+        await fake.start_run(ADVISOR, agent="cs", idempotency_key="b", input={"turnos": []})
+    empty = await fake.start_run(ADVISOR, agent="cs", idempotency_key="c", input={"turnos": []})
+    chat = await fake.start_run(CUSTOMER, agent="recepcion", idempotency_key="d")
+
+    assert first.suggestions == (reply,)
+    assert first.session_id is None
+    assert empty.suggestions == ()
+    assert chat.first_turn is not None  # a chat run is as before
+    assert fake.calls[0].arguments["input"] == {"turnos": []}
+    assert "input" not in fake.calls[3].arguments

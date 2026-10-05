@@ -112,6 +112,87 @@ class CopilotAnswered(DomainEvent):
 COPILOT_EVENTS: tuple[type[DomainEvent], ...] = (CopilotQueryAsked, CopilotAnswered)
 
 
+# --------------------------------------------------------------------------- suggestions (ADR 0005)
+# ``entity`` is ``copilot`` and ``entity_id`` the suggestion id (``CPS-…``); ``case_id`` is set.
+# Payloads carry ids, enums and counters only: never a draft, a motive, an evidence line or a tool's
+# arguments. Audited and silent on sockets; the one signal an analyst receives (``ready``) is built
+# by ``SuggestionSignal`` from these events and carries the suggestion id and status only.
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotSuggestionRequested(DomainEvent):
+    """A suggestion is being prepared (``trigger``: customer_message, manual or handover)."""
+
+    event_type = "copilot.suggestion_requested"
+    entity = "copilot"
+
+    analyst_id: str
+    trigger: str
+    based_on_sequence: int
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotSuggestionReady(DomainEvent):
+    """agent-core proposed something: the kinds (``reply``, ``tool``, ``action``, ``escalate``)."""
+
+    event_type = "copilot.suggestion_ready"
+    entity = "copilot"
+
+    analyst_id: str
+    agent: str
+    kinds: tuple[str, ...]
+    count: int
+    run_id: str | None
+    trace_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotSuggestionNone(DomainEvent):
+    """agent-core answered that there is nothing to propose (a normal answer, not an error)."""
+
+    event_type = "copilot.suggestion_none"
+    entity = "copilot"
+
+    analyst_id: str
+    agent: str
+    run_id: str | None
+    trace_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotSuggestionFailed(DomainEvent):
+    """The call failed: ``failure_code`` is ours or agent-core's problem code, never a message."""
+
+    event_type = "copilot.suggestion_failed"
+    entity = "copilot"
+
+    analyst_id: str
+    failure_code: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotSuggestionDecided(DomainEvent):
+    """What happened to a suggestion. ``subject`` is ``reply`` (``decision``: used, edited,
+    discarded, ignored; ``edit_distance_permille`` when edited) or ``escalation`` (``accepted``)."""
+
+    event_type = "copilot.suggestion_decided"
+    entity = "copilot"
+
+    subject: str
+    decision: str
+    edit_distance_permille: int | None = None
+
+
+#: Every suggestion event: audited and silent on sockets.
+SUGGESTION_EVENTS: tuple[type[DomainEvent], ...] = (
+    CopilotSuggestionRequested,
+    CopilotSuggestionReady,
+    CopilotSuggestionNone,
+    CopilotSuggestionFailed,
+    CopilotSuggestionDecided,
+)
+
+
 # ----------------------------------------------------------------------------- agent builder (S16)
 # ``entity`` is ``builder``; ``entity_id`` is the proposal id (agent-core's), the agent id (an alias
 # change), the release id (a revocation) or the chat thread id. Payloads carry ids, states and

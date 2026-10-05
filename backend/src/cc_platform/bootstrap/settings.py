@@ -83,6 +83,15 @@ class Settings(BaseSettings):
     assistant_languages: list[str] = ["es", "pt"]
     #: The analyst's copilot agent (``id``, ``id@alias`` or ``id@X.Y.Z``).
     copilot_agent: str = "copiloto-asesor@prod"
+    #: The agent that proposes suggestions for a case (ADR 0005; ``id@alias``). Unset = the
+    #: platform makes no suggestions (the panel answers ``available: false``).
+    copilot_suggestions_agent: str | None = None
+    #: Suggest on its own when a customer writes or a case reaches an analyst (off: only *Sugerir*).
+    copilot_suggestions_auto: bool = True
+    #: A customer's burst of messages makes one suggestion: it waits this long for the last one.
+    copilot_suggestions_coalesce_seconds: float = Field(default=3.0, ge=0)
+    #: How often the drafts older than 24 hours are purged; 0 turns it off.
+    copilot_suggestions_purge_seconds: float = Field(default=600.0, ge=0)
     #: The builder agent supervisors chat with (slice 16; ``id``, ``id@alias`` or ``id@X.Y.Z``).
     builder_agent: str = "constructor-chat@prod"
     #: Shared secret of the service-to-service routes (``/api/v1/internal``): agent-core's

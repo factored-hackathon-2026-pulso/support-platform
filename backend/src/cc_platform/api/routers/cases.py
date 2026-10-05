@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from fastapi.exceptions import RequestValidationError
 
 from cc_platform.api.dependencies import ApiContextDep, require_roles
-from cc_platform.api.routers._assistant import assistant_use_cases
+from cc_platform.api.routers._assistant import assistant_use_cases, suggestion_use_cases
 from cc_platform.api.schemas.cases import (
     AskCopilotRequest,
     CaseDetail,
@@ -27,13 +27,17 @@ from cc_platform.api.schemas.cases import (
     ChangePriorityRequest,
     CloseCaseRequest,
     CopilotExchange,
+    CopilotSuggestion,
     CopilotThread,
     EscalateRequest,
     EscalationResult,
     InboxResponse,
+    LatestCopilotSuggestion,
     MarkReadRequest,
     PostAnalystTurnRequest,
     PostTurnResponse,
+    RequestSuggestionRequest,
+    SuggestionFeedbackRequest,
     TurnPage,
 )
 from cc_platform.api.schemas.common import problem_responses
@@ -216,6 +220,11 @@ async def post_turn(
     result = await api.use_cases.cases.post_analyst_turn.execute(
         actor, case_id, PostTurnCommand(text=body.text, client_message_id=body.client_message_id)
     )
+    suggestions = api.use_cases.assistant.suggestions if api.use_cases.assistant else None
+    if body.copilot_suggestion_id and suggestions is not None:  # best effort: never fails the reply
+        await suggestions.link.reply_sent(
+            actor, case_id, body.copilot_suggestion_id, sent_text=result.turn.text
+        )
     if result.replayed:
         response.status_code = status.HTTP_200_OK
         response.headers[REPLAYED_HEADER] = "true"
@@ -335,6 +344,93 @@ async def ask_copilot(
     return CopilotExchange.from_view(exchange)
 
 
+@router.get(
+    "/{caseId}/copilot/suggestions/latest",
+    response_model=LatestCopilotSuggestion,
+    summary="The copilot's newest suggestion for this case",
+    description=(
+        "ADR 0005. Only the case's assignee analyst (403 `case_not_assigned` otherwise). "
+        "`available: false` hides the suggestions (agent-core, the suggestions agent or the "
+        "dataset link is missing); `suggestion: null` means none yet or its texts expired "
+        "(24 hours). `stale: true` once the customer wrote after the turns it read. A "
+        "suggestion that is `preparing` is on its way: ask again or wait for the "
+        "`copilot.suggestion_ready` signal on `inbox:<staffId>`."
+    ),
+    responses=problem_responses(401, 403, 404),
+)
+async def latest_copilot_suggestion(
+    case_id: CaseId, actor: Analyst, api: ApiContextDep
+) -> LatestCopilotSuggestion:
+    suggestions = assistant_use_cases(api).suggestions
+    if suggestions is None:
+        return LatestCopilotSuggestion(available=False, suggestion=None)
+    return LatestCopilotSuggestion.from_view(await suggestions.latest.execute(actor, case_id))
+
+
+@router.post(
+    "/{caseId}/copilot/suggestions",
+    response_model=CopilotSuggestion,
+    status_code=status.HTTP_201_CREATED,
+    summary="Ask the copilot for a suggestion about this case",
+    description=(
+        "ADR 0005. The copilot reads the recent turns and answers a typed list that may be "
+        "empty (`status: none` is a normal answer): a draft reply, reads to look at, a prepared "
+        "action that is **not executable**, and a recommendation to escalate. Nothing is sent "
+        "or run. The call waits for the model (seconds). Idempotent on `Idempotency-Key`: a "
+        "retry of a request that has its answer is 200 with `Idempotent-Replayed: true` and "
+        "asks nothing; after a failure the same key asks again. Only the assignee, only on an "
+        "open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); "
+        "409 `copilot_busy` while one is being prepared; 404 `assistant_disabled` without "
+        "agent-core or the suggestions agent; 503/502 when agent-core does not answer."
+    ),
+    responses={
+        200: {"description": "Replay of a request already answered", "model": CopilotSuggestion},
+        **problem_responses(401, 403, 404, 409, 422, 502, 503),
+    },
+)
+async def request_copilot_suggestion(
+    *,
+    case_id: CaseId,
+    idempotency_key: IdempotencyKey,
+    actor: Analyst,
+    api: ApiContextDep,
+    response: Response,
+    body: RequestSuggestionRequest | None = None,
+) -> CopilotSuggestion:
+    view = await suggestion_use_cases(api).request.execute(
+        actor, case_id, request_key=idempotency_key
+    )
+    if view.replayed:
+        response.status_code = status.HTTP_200_OK
+        response.headers[REPLAYED_HEADER] = "true"
+    return CopilotSuggestion.from_view(view)
+
+
+@router.post(
+    "/{caseId}/copilot/suggestions/{suggestionId}/feedback",
+    response_model=CopilotSuggestion,
+    summary="Dismiss the copilot's draft",
+    description=(
+        "ADR 0005. `discarded` (the analyst dismissed the draft) or `ignored` (she left it). "
+        "The draft leaves the list; the rest of the suggestion stays. `used` and `edited` are "
+        "derived when she replies with `copilotSuggestionId`. 404 for an id that is not hers."
+    ),
+    responses=problem_responses(401, 403, 404, 422),
+)
+async def decide_copilot_suggestion(
+    *,
+    case_id: CaseId,
+    suggestion_id: Annotated[str, Path(alias="suggestionId", max_length=64, examples=["CPS-01J…"])],
+    body: SuggestionFeedbackRequest,
+    actor: Analyst,
+    api: ApiContextDep,
+) -> CopilotSuggestion:
+    view = await suggestion_use_cases(api).decide.execute(
+        actor, case_id, suggestion_id, decision=body.decision
+    )
+    return CopilotSuggestion.from_view(view)
+
+
 @router.put(
     "/{caseId}/priority",
     response_model=CasePriorityResult,
@@ -397,6 +493,9 @@ async def escalate_case(
     result = await api.use_cases.cases.escalate.execute(
         actor, case_id, EscalateCommand(motive=body.motive, idempotency_key=idempotency_key)
     )
+    suggestions = api.use_cases.assistant.suggestions if api.use_cases.assistant else None
+    if body.copilot_suggestion_id and suggestions is not None:  # best effort: never fails it
+        await suggestions.link.escalated(actor, case_id, body.copilot_suggestion_id)
     if result.replayed:
         response.status_code = status.HTTP_200_OK
         response.headers[REPLAYED_HEADER] = "true"

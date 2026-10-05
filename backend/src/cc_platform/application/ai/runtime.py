@@ -10,12 +10,14 @@ callers run it outside a Unit of Work (ADR 0003 §4).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal, Protocol
 
 from cc_platform.application.ai.credentials import AgentCredentials
+from cc_platform.domain.ai.suggestion import Suggestion
 
 
 class AgentAwaiting(StrEnum):
@@ -97,6 +99,8 @@ class AgentRun:
     outcome: AgentOutcome | None = None
     handoff_ref: str | None = None
     first_turn: AgentTurn | None = None
+    suggestions: tuple[Suggestion, ...] = ()
+    """What a ``task`` run proposed (ADR 0005). Empty for a conversation or for nothing."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,9 +152,11 @@ class AgentRuntime(Protocol):
         agent: str,
         idempotency_key: str,
         lang: str | None = None,
+        input: Mapping[str, object] | None = None,
     ) -> AgentRun:
         """``POST /v1/runs``. ``agent`` is ``id``, ``id@alias`` or ``id@X.Y.Z``; the subject is
-        derived by agent-core from the credential, never sent."""
+        derived by agent-core from the credential, never sent. ``input`` is the validated input of
+        a ``task`` agent (the copilot's suggestions: the recent turns and the case facts)."""
         ...
 
     async def post_turn(

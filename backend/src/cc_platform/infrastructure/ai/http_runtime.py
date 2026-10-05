@@ -9,6 +9,7 @@ with its stable ``code``.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Literal, cast
 
@@ -29,6 +30,13 @@ from cc_platform.application.ai.runtime import (
     HandoffResolutionResult,
     SessionLineage,
     SessionLineageRun,
+)
+from cc_platform.domain.ai.suggestion import (
+    ActionSuggestion,
+    EscalationSuggestion,
+    ReplySuggestion,
+    Suggestion,
+    ToolSuggestion,
 )
 
 DEFAULT_TIMEOUT_SECONDS = 60.0
@@ -52,6 +60,55 @@ def _ref(value: object) -> str | None:
     if isinstance(value, dict):
         return f"{value['id']}@{value['version']}"
     return str(value)
+
+
+def _text(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def _texts(value: object) -> tuple[str, ...]:
+    return tuple(v for v in value if isinstance(v, str)) if isinstance(value, list) else ()
+
+
+def _suggestions(value: object) -> tuple[Suggestion, ...]:
+    """agent-core's ``suggestions`` (agent-core ADR 0026, snake_case), tolerant: an item it does
+    not know is dropped, and the domain cleans the rest."""
+    if not isinstance(value, list):
+        return ()
+    found: list[Suggestion] = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            continue
+        kind = raw.get("type")
+        if kind == "reply":
+            found.append(
+                ReplySuggestion(
+                    text=_text(raw.get("text")),
+                    citations=_texts(raw.get("citations")),
+                    language=_text(raw.get("language")) or "es",
+                )
+            )
+        elif kind == "tool":
+            found.append(
+                ToolSuggestion(
+                    tool=_text(raw.get("tool")),
+                    label=_text(raw.get("label")),
+                    why=_text(raw.get("why")),
+                )
+            )
+        elif kind == "action":
+            found.append(
+                ActionSuggestion(tool=_text(raw.get("tool")), summary=_text(raw.get("summary")))
+            )
+        elif kind == "escalate":
+            found.append(
+                EscalationSuggestion(
+                    reason_code=_text(raw.get("reason_code")),
+                    evidence=_texts(raw.get("evidence")),
+                    motive_draft=_text(raw.get("motive_draft")),
+                )
+            )
+    return tuple(found)
 
 
 def _turn(data: dict[str, Any]) -> AgentTurn:
@@ -141,10 +198,13 @@ class HttpAgentRuntime:
         agent: str,
         idempotency_key: str,
         lang: str | None = None,
+        input: Mapping[str, object] | None = None,
     ) -> AgentRun:
         body: dict[str, Any] = {"agent": agent}
         if lang is not None:
             body["lang"] = lang
+        if input is not None:
+            body["input"] = dict(input)
         data = await self._call(
             "POST",
             "/v1/runs",
@@ -162,6 +222,7 @@ class HttpAgentRuntime:
             outcome=_outcome(data.get("outcome")),
             handoff_ref=data.get("handoff_ref"),
             first_turn=_turn(first_turn) if isinstance(first_turn, dict) else None,
+            suggestions=_suggestions(data.get("suggestions")),
         )
 
     async def post_turn(

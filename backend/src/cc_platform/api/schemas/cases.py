@@ -14,6 +14,7 @@ from cc_platform.application.ai.copilot import (
     CopilotMessageView,
     CopilotThreadView,
 )
+from cc_platform.application.ai.suggestions import LatestSuggestionView, SuggestionView
 from cc_platform.application.cases.dto import (
     AssignmentView,
     CallView,
@@ -35,6 +36,11 @@ from cc_platform.application.cases.dto import (
 )
 from cc_platform.application.cases.escalations import EscalationResult as EscalationResultView
 from cc_platform.application.cases.priority import PriorityResultView
+from cc_platform.domain.ai.suggestion import (
+    ActionSuggestion,
+    ReplySuggestion,
+    ToolSuggestion,
+)
 from cc_platform.domain.cases.call import CallDirection, CallEndReason, CallState
 from cc_platform.domain.cases.case import MAX_CLOSE_NOTE
 from cc_platform.domain.cases.escalation import MAX_ESCALATION_TEXT, EscalationState
@@ -57,6 +63,7 @@ from cc_platform.domain.shared.actor import ActorRole
 TurnText = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_TURN_TEXT)
 ]
+CopilotSuggestionId = Annotated[str, StringConstraints(min_length=8, max_length=64)]
 ClientMessageId = Annotated[
     str,
     StringConstraints(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9-]+$"),
@@ -529,6 +536,11 @@ class TurnPage(ApiModel):
 class PostAnalystTurnRequest(RequestModel):
     text: TurnText
     client_message_id: ClientMessageId
+    copilot_suggestion_id: CopilotSuggestionId | None = Field(
+        default=None,
+        description="ADR 0005: the copilot suggestion this reply came from; the platform derives "
+        "`used` or `edited` from it. A wrong or already decided id never fails the reply.",
+    )
 
 
 class PostTurnResponse(ApiModel):
@@ -639,6 +651,138 @@ class CopilotExchange(ApiModel):
         )
 
 
+# ------------------------------------------------------------------ copilot suggestions (ADR 0005)
+class SuggestionReply(ApiModel):
+    type: Literal["reply"]
+    text: str = Field(
+        description="A draft for the customer. The analyst sends it; nothing is sent."
+    )
+    citations: list[str]
+    language: str
+
+
+class SuggestionTool(ApiModel):
+    type: Literal["tool"]
+    tool: str = Field(description="A read of the copilot's catalog (`id@version`).")
+    label: str
+    why: str
+
+
+class SuggestionAction(ApiModel):
+    type: Literal["action"]
+    tool: str
+    summary: str = Field(description="What would be done, in plain words.")
+    executable: Literal[False] = Field(
+        description="Always false in this stage: it is information, the copilot does not run it."
+    )
+
+
+class SuggestionEscalation(ApiModel):
+    type: Literal["escalate"]
+    reason_code: str = Field(description="agent-core's reason code (`policy:…`, `rule:…`).")
+    evidence: list[str]
+    motive_draft: str = Field(description="To pre-fill the escalation dialog (at most 500).")
+
+
+SuggestionItem = Annotated[
+    SuggestionReply | SuggestionTool | SuggestionAction | SuggestionEscalation,
+    Field(discriminator="type"),
+]
+
+
+class CopilotSuggestion(ApiModel):
+    id: str
+    case_id: str
+    trigger: Literal["customer_message", "manual", "handover"]
+    status: Literal["preparing", "ready", "none", "failed"] = Field(
+        description="`none`: the copilot had nothing to propose (a normal answer, show nothing)."
+    )
+    stale: bool = Field(description="The customer wrote after the turns it read.")
+    created_at: datetime
+    reply_decision: Literal["used", "edited", "discarded", "ignored"] | None = Field(
+        description="What happened to the draft once decided (it then leaves `suggestions`)."
+    )
+    escalation_accepted: bool
+    failure_code: str | None
+    suggestions: list[SuggestionItem] = Field(
+        description="Empty when there is nothing to propose, and once the texts expired."
+    )
+
+    @classmethod
+    def from_view(cls, view: SuggestionView) -> CopilotSuggestion:
+        s = view.suggestion
+        items: list[Any] = []
+        for item in s.items:
+            if isinstance(item, ReplySuggestion):
+                items.append(
+                    SuggestionReply(
+                        type="reply",
+                        text=item.text,
+                        citations=list(item.citations),
+                        language=item.language,
+                    )
+                )
+            elif isinstance(item, ToolSuggestion):
+                items.append(
+                    SuggestionTool(type="tool", tool=item.tool, label=item.label, why=item.why)
+                )
+            elif isinstance(item, ActionSuggestion):
+                items.append(
+                    SuggestionAction(
+                        type="action", tool=item.tool, summary=item.summary, executable=False
+                    )
+                )
+            else:
+                items.append(
+                    SuggestionEscalation(
+                        type="escalate",
+                        reason_code=item.reason_code,
+                        evidence=list(item.evidence),
+                        motive_draft=item.motive_draft,
+                    )
+                )
+        return cls(
+            id=s.id,
+            case_id=s.case_id,
+            trigger=s.trigger.value,
+            status=s.status.value,
+            stale=view.stale,
+            created_at=s.created_at,
+            reply_decision=s.reply_decision.value if s.reply_decision is not None else None,
+            escalation_accepted=s.escalation_accepted,
+            failure_code=s.failure_code,
+            suggestions=items,
+        )
+
+
+class LatestCopilotSuggestion(ApiModel):
+    available: bool = Field(
+        description="False while agent-core or the suggestions agent is not configured, or the "
+        "customer is not linked to the dataset: hide the suggestions."
+    )
+    suggestion: CopilotSuggestion | None = Field(
+        description="The newest one; null when none was made yet or its texts expired (24 hours)."
+    )
+
+    @classmethod
+    def from_view(cls, view: LatestSuggestionView) -> LatestCopilotSuggestion:
+        return cls(
+            available=view.available,
+            suggestion=CopilotSuggestion.from_view(view.latest) if view.latest else None,
+        )
+
+
+class RequestSuggestionRequest(RequestModel):
+    trigger: Literal["manual"] = "manual"
+
+
+class SuggestionFeedbackRequest(RequestModel):
+    decision: Literal["discarded", "ignored"] = Field(
+        description="The analyst dismissed the draft (`discarded`) or left it (`ignored`). "
+        "`used` and `edited` are not posted: send `copilotSuggestionId` with the reply."
+    )
+
+
 # ----------------------------------------------------------------------------- priority (slice 8)
 class ChangePriorityRequest(RequestModel):
     priority: CasePriority
@@ -665,6 +809,11 @@ EscalationText = Annotated[
 
 class EscalateRequest(RequestModel):
     motive: EscalationText = Field(description="Why (required, trimmed, at most 500).")
+    copilot_suggestion_id: CopilotSuggestionId | None = Field(
+        default=None,
+        description="ADR 0005: the copilot suggestion that recommended escalating; recorded as "
+        "accepted. A wrong or already decided id never fails the escalation.",
+    )
 
 
 class RespondEscalationRequest(RequestModel):

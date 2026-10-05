@@ -3,6 +3,7 @@ import { Bell, CircleCheck, X } from 'lucide-react'
 import { Button, Callout, CountBadge, Kicker, Spinner } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import {
   useMarkAllNotificationsRead,
   useNotifications,
@@ -28,6 +29,7 @@ const TIME_TICK_MS = 30_000
  * button give the focus back to the bell).
  */
 export function NotificationCenter() {
+  const { t } = useTranslation('notifications')
   const query = useNotifications()
   const items = useMemo(() => allNotifications(query.data), [query.data])
   const unread = unreadCountOf(query.data)
@@ -83,7 +85,7 @@ export function NotificationCenter() {
         aria-label={bellLabel(unread)}
         aria-expanded={open}
         aria-controls={panelId}
-        title="Notificaciones"
+        title={t('bell.label')}
         onClick={() => setOpen((value) => !value)}
         className={cn(
           'relative flex size-11 cursor-pointer items-center justify-center rounded-10 transition-colors focus-visible:outline-white',
@@ -129,6 +131,7 @@ function NotificationPanel({
   unread,
   onClose,
 }: NotificationPanelProps) {
+  const { t } = useTranslation(['notifications', 'common'])
   const now = useNow(TIME_TICK_MS)
   const read = useReadNotification()
   const markAll = useMarkAllNotificationsRead()
@@ -148,7 +151,7 @@ function NotificationPanel({
           tabIndex={-1}
           className="m-0 font-display text-18 font-bold tracking-display outline-none"
         >
-          Notificaciones
+          {t('panel.heading')}
         </h2>
         <span className="flex items-center gap-0.5">
           {unread > 0 ? (
@@ -157,13 +160,13 @@ function NotificationPanel({
               onClick={() => markAll.mutate()}
               className="min-h-8 cursor-pointer rounded-8 px-2 text-13 font-semibold text-accent-strong hover:bg-accent-wash focus-visible:outline-accent"
             >
-              Marcar todas como leídas
+              {t('panel.markAllRead')}
             </button>
           ) : null}
           <button
             type="button"
-            aria-label="Cerrar notificaciones"
-            title="Cerrar"
+            aria-label={t('panel.close')}
+            title={t('common:actions.close')}
             onClick={() => onClose({ restoreFocus: true })}
             className="flex size-8 cursor-pointer items-center justify-center rounded-8 text-ink-2 hover:bg-panel focus-visible:outline-accent"
           >
@@ -174,27 +177,27 @@ function NotificationPanel({
       <div className="min-h-0 grow overflow-y-auto pt-1 pb-2.5">
         {query.status === 'pending' ? (
           <div className="flex justify-center py-8">
-            <Spinner label="Cargando notificaciones" />
+            <Spinner label={t('panel.loading')} />
           </div>
         ) : query.status === 'error' ? (
           <div className="p-3">
             <Callout
               tone="danger"
-              title="No pudimos cargar tus notificaciones"
+              title={t('panel.errorTitle')}
               actions={
                 <Button size="sm" onClick={() => void query.refetch()}>
-                  Reintentar
+                  {t('common:actions.retry')}
                 </Button>
               }
             >
-              Revisa tu conexión.
+              {t('panel.errorText')}
             </Callout>
           </div>
         ) : (
           <>
             {unread === 0 ? <UpToDate /> : null}
             {sections.map((section) => (
-              <div key={section.title} className="flex flex-col">
+              <div key={section.id} className="flex flex-col">
                 <Kicker as="h3" size="sm" className="px-4 pt-2.5 pb-1.5">
                   {section.title}
                 </Kicker>
@@ -222,7 +225,7 @@ function NotificationPanel({
                   loading={query.isFetchingNextPage}
                   onClick={() => void query.fetchNextPage()}
                 >
-                  Cargar más
+                  {t('panel.loadMore')}
                 </Button>
               </div>
             ) : null}
@@ -235,6 +238,7 @@ function NotificationPanel({
 
 /** "Estás al día": nothing unread (canvas `notificacionesVacia`); read ones stay below. */
 function UpToDate() {
+  const { t } = useTranslation('notifications')
   return (
     <div className="flex flex-col items-center gap-1.5 px-6 pt-6 pb-4 text-center">
       <span
@@ -243,8 +247,8 @@ function UpToDate() {
       >
         <CircleCheck size={22} />
       </span>
-      <span className="text-16 font-semibold">Estás al día</span>
-      <span className="text-13 text-ink-2">No tienes notificaciones nuevas.</span>
+      <span className="text-16 font-semibold">{t('panel.upToDateTitle')}</span>
+      <span className="text-13 text-ink-2">{t('panel.upToDateText')}</span>
     </div>
   )
 }

@@ -84,9 +84,13 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 (run `uv run cc-api` inside `backend/`). Template: `backend/.env.example`. Source of truth:
 `backend/src/cc_platform/bootstrap/settings.py`.
 
+Deployed environments (`CC_ENV=staging` or `prod`): the complete, generated list with what is
+required and secret, the startup checks, `/healthz` and `/readyz`, graceful shutdown and the
+edge requirements are in [deploy-env.md](./deploy-env.md) and [deploy/edge.md](./deploy/edge.md).
+
 | Variable | Default | What it does |
 |---|---|---|
-| `CC_ENV` | `dev` | `dev` reloads the code and turns on the dev mailbox; `test` does not reload; `prod` refuses to start (a real email adapter is missing; it also requires its own `CC_SESSION_SECRET` and `CC_TOTP_SECRET_KEY`, `CC_SEED_DEMO_DATA=false` and no dev mailbox) |
+| `CC_ENV` | `dev` | `dev` reloads the code and turns on the dev mailbox; `test` does not reload; `staging` is the shared deployed environment (synthetic data, real secrets, see deploy-env.md); `prod` refuses to start (a real email adapter is missing; it also requires its own `CC_SESSION_SECRET` and `CC_TOTP_SECRET_KEY`, `CC_SEED_DEMO_DATA=false` and no dev mailbox) |
 | `CC_BUILD` | `dev` | Build identifier shown by `GET /api/v1/meta` |
 | `CC_PERSISTENCE` | `sqlalchemy` | `memory` runs without a database (everything is lost on stop) |
 | `CC_DATABASE_URL` | `sqlite+aiosqlite:///<repo>/backend/cc_platform.db` | Another SQLite database (absolute path: `sqlite+aiosqlite:////tmp/demo.db`) |

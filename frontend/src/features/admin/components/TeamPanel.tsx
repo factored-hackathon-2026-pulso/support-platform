@@ -17,6 +17,7 @@ import {
 import { isApiProblem } from '@/lib/api'
 import { cn } from '@/lib/cn'
 import { formatDate } from '@/lib/format'
+import { useTranslation } from '@/lib/i18n'
 import {
   ACCOUNT_STATUS,
   TEAM_NAME_MAX_LENGTH,
@@ -40,6 +41,7 @@ export interface TeamPanelProps {
 /** "Equipo seleccionado" (contract §10.5). */
 export function TeamPanel({ teamId }: TeamPanelProps) {
   const query = useAdminTeam(teamId)
+  const { t } = useTranslation(['admin', 'common'])
   let body
   if (!teamId) {
     body = (
@@ -47,7 +49,7 @@ export function TeamPanel({ teamId }: TeamPanelProps) {
         size="compact"
         as="h2"
         icon={<UsersRound size={32} strokeWidth={1.6} />}
-        title="Elige un equipo para ver sus personas."
+        title={t('team.none')}
         className="grow"
       />
     )
@@ -55,32 +57,32 @@ export function TeamPanel({ teamId }: TeamPanelProps) {
     body = <TeamDetail key={query.data.team.id} detail={query.data} />
   } else if (query.isError) {
     body = isApiProblem(query.error, 'not_found') ? (
-      <EmptyState size="compact" as="h2" title="No encontramos ese equipo." className="grow" />
+      <EmptyState size="compact" as="h2" title={t('team.notFound')} className="grow" />
     ) : (
       <div className="p-5">
         <Callout
           tone="danger"
-          title="No pudimos cargar el equipo"
+          title={t('team.loadError')}
           actions={
             <Button size="sm" loading={query.isFetching} onClick={() => void query.refetch()}>
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
           }
         >
-          Revisa tu conexión e inténtalo de nuevo.
+          {t('common:query.errorDescription')}
         </Callout>
       </div>
     )
   } else {
     body = (
       <div className="flex grow items-center justify-center text-muted">
-        <Spinner label="Cargando el equipo" size={24} />
+        <Spinner label={t('team.loading')} size={24} />
       </div>
     )
   }
   return (
     <aside
-      aria-label="Equipo seleccionado"
+      aria-label={t('team.aside')}
       className="flex w-[400px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface"
     >
       {body}
@@ -91,6 +93,7 @@ export function TeamPanel({ teamId }: TeamPanelProps) {
 function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
   const { team } = detail
   const { toast } = useToast()
+  const { t } = useTranslation('admin')
   const rename = useRenameTeam(team.id)
   const reactivate = useReactivateTeam(team.id)
   const handleFailure = useFailureHandler()
@@ -121,7 +124,7 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
         onSuccess: () => {
           setDraft(null)
           setNameError(null)
-          toast({ title: 'Nombre guardado' })
+          toast({ title: t('toast.teamRenamed') })
         },
         onError: (problem) => {
           const failure = handleFailure(problem, { kind: 'team', id: team.id })
@@ -142,7 +145,7 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
   function onReactivate() {
     setMessage(null)
     reactivate.mutate(team.version, {
-      onSuccess: () => toast({ title: 'Equipo reactivado' }),
+      onSuccess: () => toast({ title: t('toast.teamReactivated') }),
       onError: (problem) =>
         setMessage({
           tone: 'danger',
@@ -156,8 +159,10 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
       <div className="flex flex-col gap-1 border-b border-border-soft px-5 pt-[18px] pb-3.5">
         <h2 className="m-0 text-18 font-semibold">{team.name}</h2>
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Status {...teamStatus(team)} srLabel="Estado" />
-          <span className="text-13 text-ink-2">Creado el {formatDate(team.createdAt)}</span>
+          <Status {...teamStatus(team)} srLabel={t('team.status')} />
+          <span className="text-13 text-ink-2">
+            {t('team.created', { date: formatDate(team.createdAt) })}
+          </span>
         </span>
         <span className="font-mono text-12 text-muted">{team.id}</span>
       </div>
@@ -170,14 +175,14 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
         ) : null}
         <form
           noValidate
-          aria-label="Nombre del equipo"
+          aria-label={t('team.nameLabel')}
           className="flex items-end gap-2"
           onSubmit={(event) => {
             event.preventDefault()
             saveName()
           }}
         >
-          <Field label="Nombre del equipo" error={nameError} className="grow">
+          <Field label={t('team.nameLabel')} error={nameError} className="grow">
             <Input
               ref={nameRef}
               value={name}
@@ -196,14 +201,14 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
             loading={rename.isPending}
             className={cn(nameError && 'mb-[26px]')}
           >
-            Guardar nombre
+            {t('team.saveName')}
           </Button>
         </form>
 
         <section aria-labelledby={`${hintId}-members`} className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <Kicker as="h3" id={`${hintId}-members`}>
-              Personas ({team.memberCount})
+              {t('team.members', { total: team.memberCount })}
             </Kicker>
             {team.active ? (
               <Button
@@ -212,12 +217,12 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
                 icon={<UserPlus size={14} aria-hidden="true" />}
                 onClick={() => setDialog('add')}
               >
-                Agregar persona
+                {t('team.addMember')}
               </Button>
             ) : null}
           </div>
           {members.length === 0 ? (
-            <p className="m-0 text-14 text-muted">Este equipo no tiene personas.</p>
+            <p className="m-0 text-14 text-muted">{t('team.noMembers')}</p>
           ) : (
             <ul className="m-0 flex list-none flex-col p-0">
               {members.map((member) => (
@@ -238,7 +243,7 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
               aria-describedby={team.memberCount > 0 ? `${hintId}-not-empty` : undefined}
               onClick={() => setDialog('deactivate')}
             >
-              Desactivar equipo
+              {t('team.deactivate')}
             </Button>
             {team.memberCount > 0 ? (
               <span id={`${hintId}-not-empty`} className="text-12 text-muted">
@@ -253,14 +258,14 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
             loading={reactivate.isPending}
             onClick={onReactivate}
           >
-            Reactivar equipo
+            {t('team.reactivate')}
           </Button>
         )}
         <Link
           to={adminAuditPath(team.id)}
           className="self-start text-13 font-semibold text-accent hover:text-accent-strong"
         >
-          Ver en auditoría
+          {t('actions.seeInAudit')}
         </Link>
       </div>
 
@@ -271,7 +276,7 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
           onClose={() => setDialog(null)}
           onDone={() => {
             setDialog(null)
-            toast({ title: 'Equipo desactivado' })
+            toast({ title: t('toast.teamDeactivated') })
           }}
         />
       ) : null}
@@ -281,6 +286,7 @@ function TeamDetail({ detail }: { detail: AdminTeamDetail }) {
 
 function MemberRow({ member }: { member: AdminTeamMember }) {
   const inactive = member.status === 'inactive'
+  const { t } = useTranslation('admin')
   return (
     <li
       className={cn(
@@ -308,7 +314,7 @@ function MemberRow({ member }: { member: AdminTeamMember }) {
             className={cn(inactive && 'text-muted opacity-70')}
           />
         ) : (
-          <span title="Sin idiomas" className={inactive ? 'text-muted' : 'text-ink-2'}>
+          <span title={t('noLanguages')} className={inactive ? 'text-muted' : 'text-ink-2'}>
             —
           </span>
         )}

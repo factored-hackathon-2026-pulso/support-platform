@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button, Callout, Dialog, Field, Select, Skeleton, useToast } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { addMemberCandidates } from '../model'
 import { useAdminUsers, useFailureHandler, useMoveToTeam } from '../hooks'
 import type { AdminTeam } from '../types'
@@ -16,6 +17,7 @@ export interface AddMemberDialogProps {
  */
 export function AddMemberDialog({ team, onClose }: AddMemberDialogProps) {
   const { toast } = useToast()
+  const { t } = useTranslation('admin')
   const users = useAdminUsers({})
   const move = useMoveToTeam()
   const handleFailure = useFailureHandler()
@@ -29,14 +31,14 @@ export function AddMemberDialog({ team, onClose }: AddMemberDialogProps) {
   function confirm() {
     setError(null)
     if (!chosen) {
-      setPickError('Elige a quién mover.')
+      setPickError(t('team.addPick'))
       return
     }
     move.mutate(
       { user: chosen, teamId: team.id },
       {
         onSuccess: (change) => {
-          toast({ title: `${change.user.name} pasó a ${team.name}` })
+          toast({ title: t('toast.moved', { name: change.user.name, team: team.name }) })
           onClose()
         },
         onError: (problem) =>
@@ -52,14 +54,14 @@ export function AddMemberDialog({ team, onClose }: AddMemberDialogProps) {
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title={`Agregar a ${team.name}`}
+      title={t('team.addTitle', { team: team.name })}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button variant="primary" loading={move.isPending} onClick={confirm}>
-            {`Mover a ${team.name}`}
+            {t('team.addSubmit', { team: team.name })}
           </Button>
         </>
       }
@@ -67,10 +69,10 @@ export function AddMemberDialog({ team, onClose }: AddMemberDialogProps) {
       {users.status === 'pending' ? (
         <Skeleton className="h-10 w-full" />
       ) : (
-        <Field label="Persona" error={pickError}>
+        <Field label={t('team.addField')} error={pickError}>
           <Select
             value={chosenId}
-            placeholder="Elige a una persona"
+            placeholder={t('team.addPlaceholder')}
             options={candidates.map(({ value, label }) => ({ value, label }))}
             onChange={(event) => {
               setPickError(null)
@@ -81,12 +83,10 @@ export function AddMemberDialog({ team, onClose }: AddMemberDialogProps) {
       )}
       {chosen ? (
         <p className="m-0 text-14 text-ink-2">
-          Pasa de {chosen.team.name} a {team.name}.
+          {t('team.addMove', { from: chosen.team.name, to: team.name })}
         </p>
       ) : null}
-      {users.isError ? (
-        <Callout tone="danger">No pudimos cargar las personas. Inténtalo de nuevo.</Callout>
-      ) : null}
+      {users.isError ? <Callout tone="danger">{t('team.addLoadError')}</Callout> : null}
       {error ? <Callout tone="danger">{error}</Callout> : null}
     </Dialog>
   )

@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react'
 import { Mail, UserPlus } from 'lucide-react'
 import { Button, Callout, Dialog } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import {
   EMPTY_USER_DRAFT,
   INVITATION_INFO,
@@ -46,6 +47,7 @@ export function CreateUserDialog({
   const formId = useId()
   const create = useCreateUser()
   const handleFailure = useFailureHandler()
+  const { t } = useTranslation('admin')
 
   function focusField(field: UserDraftField | null) {
     if (field) controls.current[field]?.focus()
@@ -91,13 +93,13 @@ export function CreateUserDialog({
           >
             <UserPlus size={18} />
           </span>
-          Nuevo usuario
+          {t('users.create')}
         </span>
       }
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button
             type="submit"
@@ -106,7 +108,7 @@ export function CreateUserDialog({
             icon={<Mail size={16} aria-hidden="true" />}
             loading={create.isPending}
           >
-            Enviar invitación
+            {t('invitation.send')}
           </Button>
         </>
       }
@@ -114,7 +116,7 @@ export function CreateUserDialog({
       <form
         id={formId}
         noValidate
-        aria-label="Nuevo usuario"
+        aria-label={t('users.create')}
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault()

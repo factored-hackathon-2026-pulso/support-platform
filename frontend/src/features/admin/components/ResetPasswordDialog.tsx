@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button, Callout, Dialog } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { resetLinkCopy } from '../model'
 import { useFailureHandler, useSendPasswordResetLink } from '../hooks'
 import type { AdminUser, PasswordResetLinkSent } from '../types'
@@ -19,6 +20,7 @@ export function ResetPasswordDialog({ user, onClose, onDone }: ResetPasswordDial
   const send = useSendPasswordResetLink(user.id)
   const handleFailure = useFailureHandler()
   const [error, setError] = useState<string | null>(null)
+  const { t } = useTranslation('admin')
   const copy = resetLinkCopy(user.name, user.email)
 
   function confirm() {
@@ -40,10 +42,10 @@ export function ResetPasswordDialog({ user, onClose, onDone }: ResetPasswordDial
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button variant="primary" loading={send.isPending} onClick={confirm}>
-            Enviar enlace
+            {t('resetDialog.confirm')}
           </Button>
         </>
       }

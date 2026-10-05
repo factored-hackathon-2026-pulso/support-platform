@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
+import { formatList } from '@/lib/format'
 import {
   andres,
   bruna,
@@ -19,7 +20,7 @@ import {
   EMPTY_USERS_STATE,
   EMPTY_USER_DRAFT,
   FIELD_ERROR,
-  LAST_ADMIN_HINT,
+  lastAdminHint,
   ROLE_DESCRIPTION,
   SELF_CHANGE_COPY,
   accountStatusAt,
@@ -32,7 +33,6 @@ import {
   firstInvalidField,
   hasUserFilters,
   isDraftDirty,
-  joinEs,
   lockedUntilTitle,
   normalizeName,
   openCaseBlocks,
@@ -52,7 +52,7 @@ import {
   teamsSubtitle,
   INVITATION_INFO,
   INVITATION_STEPS,
-  INVITATION_EXPIRY_SENTENCE,
+  invitationExpirySentence,
   cancelInvitationCopy,
   cancelledInvitationToast,
   invitationExpired,
@@ -115,10 +115,10 @@ describe('labels', () => {
   })
 
   it('joins lists in Spanish like the backend join_es', () => {
-    expect(joinEs([])).toBe('')
-    expect(joinEs(['A'])).toBe('A')
-    expect(joinEs(['A', 'B'])).toBe('A y B')
-    expect(joinEs(['A', 'B', 'C'])).toBe('A, B y C')
+    expect(formatList([])).toBe('')
+    expect(formatList(['A'])).toBe('A')
+    expect(formatList(['A', 'B'])).toBe('A y B')
+    expect(formatList(['A', 'B', 'C'])).toBe('A, B y C')
   })
 
   it('names languages and teams', () => {
@@ -420,7 +420,7 @@ describe('guard rails', () => {
   it('protects the last active admin', () => {
     const last = { ...carolina, guards: { isSelf: false, lastActiveAdmin: true } }
     expect(userGuardState(last)).toEqual({
-      adminLocked: LAST_ADMIN_HINT,
+      adminLocked: lastAdminHint(),
       deactivateBlocked: 'Es la única persona activa con Administración.',
       resetBlocked: null,
     })
@@ -614,7 +614,7 @@ describe('invitations and reset links (part 4)', () => {
       'Configura la verificación en dos pasos',
       'Su cuenta queda activa y empieza En pausa',
     ])
-    expect(INVITATION_EXPIRY_SENTENCE).toBe('El enlace vence en 48 horas.')
+    expect(invitationExpirySentence()).toBe('El enlace vence en 48 horas.')
   })
 
   it('shows when an invitation was sent and when it expires (or expired)', () => {

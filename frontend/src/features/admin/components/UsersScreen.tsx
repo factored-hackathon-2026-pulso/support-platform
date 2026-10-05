@@ -3,6 +3,7 @@ import { UserPlus } from 'lucide-react'
 import { Page, PageBody } from '@/components/layout'
 import { Button, PageHeader } from '@/components/ui'
 import { useNow } from '@/lib/hooks'
+import { useActiveLocale, useTranslation } from '@/lib/i18n'
 import {
   clearUserFilters,
   filterUsers,
@@ -41,6 +42,8 @@ export interface UsersScreenProps {
  */
 export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersScreenProps) {
   useAdminLive()
+  const { t } = useTranslation(['admin', 'shell'])
+  const locale = useActiveLocale()
   const now = useNow(USERS_TICK_MS)
   const filters = useMemo(() => usersQueryOf(state), [state])
   const users = useAdminUsers(filters)
@@ -51,7 +54,9 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
   const found = users.data?.items
   const groups = useMemo(
     () => userFilterGroups(found ?? [], teams, selection, now),
-    [found, teams, selection, now],
+    // `locale`: the legends and labels are copy read when this runs (slice 23).
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [found, teams, selection, now, locale],
   )
   const shown = useMemo(
     () => (found ? filterUsers(found, selection, now) : undefined),
@@ -86,7 +91,7 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
     <Page
       header={
         <PageHeader
-          title="Usuarios y roles"
+          title={t('shell:nav.users')}
           subtitle={usersSubtitle(users.data?.statusCounts.all)}
           actions={
             <Button
@@ -94,7 +99,7 @@ export function UsersScreen({ state, onStateChange, canOpenSupervision }: UsersS
               icon={<UserPlus size={16} aria-hidden="true" />}
               onClick={() => onStateChange({ create: true })}
             >
-              Nuevo usuario
+              {t('users.create')}
             </Button>
           }
         />

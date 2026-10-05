@@ -15,6 +15,7 @@ import {
   Table,
   type QueryLike,
 } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import type { AdminUser, AdminUserList } from '../types'
 import { AccountStatusText } from './AccountStatusText'
 import { RoleChips } from './RoleChips'
@@ -42,24 +43,25 @@ export function UsersTable({
   onSelect,
   onClearFilters,
 }: UsersTableProps) {
+  const { t } = useTranslation(['admin', 'common'])
   return (
-    <section aria-label="Personas" className="flex min-w-0 grow flex-col">
+    <section aria-label={t('users.table')} className="flex min-w-0 grow flex-col">
       {/* The error Callout of QueryState gets the page gutter. */}
       <div className="flex min-h-0 grow flex-col [&>[role=alert]]:mx-7 [&>[role=alert]]:my-4">
         <QueryState
           query={query}
           skeleton={<RowsSkeleton />}
-          errorTitle="No pudimos cargar las personas"
+          errorTitle={t('users.loadError')}
           isEmpty={(list) => list.items.length === 0}
           empty={
             <EmptyState
               size="compact"
               icon={<SearchX size={36} strokeWidth={1.6} />}
-              title={filtered ? 'Nadie coincide con estos filtros.' : 'Todavía no hay personas.'}
+              title={filtered ? t('users.emptyFiltered') : t('users.empty')}
               action={
                 filtered ? (
                   <Button variant="secondary" onClick={onClearFilters}>
-                    Limpiar filtros
+                    {t('common:filters.clear')}
                   </Button>
                 ) : null
               }
@@ -67,14 +69,14 @@ export function UsersTable({
           }
         >
           {(list) => (
-            <Table aria-label="Personas" stickyHeader wrapperClassName="grow">
+            <Table aria-label={t('users.table')} stickyHeader wrapperClassName="grow">
               <THead>
                 <TRow>
-                  <TH className="pl-7">Persona</TH>
-                  <TH className="w-[220px]">Roles</TH>
-                  <TH className="w-[150px]">Idiomas</TH>
-                  <TH className="w-[200px]">Equipo</TH>
-                  <TH className="w-[120px] pr-7">Cuenta</TH>
+                  <TH className="pl-7">{t('users.columns.person')}</TH>
+                  <TH className="w-[220px]">{t('users.columns.roles')}</TH>
+                  <TH className="w-[150px]">{t('common:fields.languages')}</TH>
+                  <TH className="w-[200px]">{t('common:fields.team')}</TH>
+                  <TH className="w-[120px] pr-7">{t('users.columns.account')}</TH>
                 </TRow>
               </THead>
               <TBody>
@@ -92,9 +94,7 @@ export function UsersTable({
           )}
         </QueryState>
       </div>
-      <SourceNote className="px-7">
-        Personas, roles, idiomas y equipos: directorio de la plataforma (datos de ejemplo).
-      </SourceNote>
+      <SourceNote className="px-7">{t('users.source')}</SourceNote>
     </section>
   )
 }
@@ -107,6 +107,7 @@ interface UserRowProps {
 }
 
 function UserRow({ user, selected, now, onSelect }: UserRowProps) {
+  const { t } = useTranslation('admin')
   return (
     <TRow selected={selected} onSelect={onSelect}>
       <TCell className="max-w-[280px] pl-7">
@@ -122,7 +123,7 @@ function UserRow({ user, selected, now, onSelect }: UserRowProps) {
         {user.languages.length > 0 ? (
           <LanguageMarks languages={user.languages} />
         ) : (
-          <span title="Sin idiomas">—</span>
+          <span title={t('noLanguages')}>—</span>
         )}
       </TCell>
       <TCell muted className="max-w-[200px] truncate" title={user.team.name}>

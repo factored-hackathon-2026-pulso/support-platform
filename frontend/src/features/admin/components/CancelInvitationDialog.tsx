@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button, Callout, Dialog } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { cancelInvitationCopy } from '../model'
 import { useCancelInvitation, useFailureHandler } from '../hooks'
 import type { AdminUser, AdminUserChange } from '../types'
@@ -15,6 +16,7 @@ export function CancelInvitationDialog({ user, onClose, onDone }: CancelInvitati
   const cancel = useCancelInvitation(user.id)
   const handleFailure = useFailureHandler()
   const [error, setError] = useState<string | null>(null)
+  const { t } = useTranslation('admin')
   const copy = cancelInvitationCopy(user.name)
 
   function confirm() {
@@ -36,10 +38,10 @@ export function CancelInvitationDialog({ user, onClose, onDone }: CancelInvitati
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Volver
+            {t('cancelDialog.back')}
           </Button>
           <Button variant="danger" loading={cancel.isPending} onClick={confirm}>
-            Cancelar invitación
+            {t('person.cancelInvitation')}
           </Button>
         </>
       }

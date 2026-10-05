@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { Button, Callout, Dialog, Field, Input } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { TEAM_NAME_MAX_LENGTH, normalizeName, validateTeamName } from '../model'
 import { useCreateTeam, useFailureHandler } from '../hooks'
 import type { AdminTeam } from '../types'
@@ -19,6 +20,7 @@ export function CreateTeamDialog({ onClose, onCreated }: CreateTeamDialogProps) 
   const formId = useId()
   const create = useCreateTeam()
   const handleFailure = useFailureHandler()
+  const { t } = useTranslation('admin')
 
   function submit() {
     setFormError(null)
@@ -52,15 +54,15 @@ export function CreateTeamDialog({ onClose, onCreated }: CreateTeamDialogProps) 
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title="Nuevo equipo"
+      title={t('teams.create')}
       initialFocusRef={inputRef}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button type="submit" form={formId} variant="primary" loading={create.isPending}>
-            Crear equipo
+            {t('team.createSubmit')}
           </Button>
         </>
       }
@@ -68,7 +70,7 @@ export function CreateTeamDialog({ onClose, onCreated }: CreateTeamDialogProps) 
       <form
         id={formId}
         noValidate
-        aria-label="Nuevo equipo"
+        aria-label={t('teams.create')}
         className="flex flex-col gap-3"
         onSubmit={(event) => {
           event.preventDefault()
@@ -76,7 +78,7 @@ export function CreateTeamDialog({ onClose, onCreated }: CreateTeamDialogProps) 
         }}
       >
         {formError ? <Callout tone="danger">{formError}</Callout> : null}
-        <Field label="Nombre" error={nameError}>
+        <Field label={t('team.createName')} error={nameError}>
           <Input
             ref={inputRef}
             value={name}

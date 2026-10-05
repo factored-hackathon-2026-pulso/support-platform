@@ -11,7 +11,7 @@ import { closedTileHint, statusTileLabel, statusTiles } from '../model'
  * (`/analyst/cases?status=…`). The Casos list itself has no tiles (slice 6 §4.3).
  */
 export function StatusTiles({ counts }: { counts: InboxCounts | undefined }) {
-  const { t } = useTranslation('home')
+  const { t } = useTranslation(['home', 'cases'])
   return (
     <nav aria-label={t('tiles.nav')}>
       <ul className="m-0 grid list-none grid-cols-4 gap-3 p-0">

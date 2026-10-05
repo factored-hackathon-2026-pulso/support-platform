@@ -34,7 +34,7 @@ export interface FirstCasesProps {
  * case open and its filter set, so the card is highlighted).
  */
 export function FirstCases({ inbox, now, paused }: FirstCasesProps) {
-  const { t } = useTranslation('home')
+  const { t } = useTranslation(['home', 'cases'])
   return (
     <section
       aria-labelledby="home-first"

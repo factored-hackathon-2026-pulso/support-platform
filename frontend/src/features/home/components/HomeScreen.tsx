@@ -26,7 +26,7 @@ const TICK_MS = 30_000
  * landmark.
  */
 export function HomeScreen() {
-  const { t } = useTranslation('home')
+  const { t } = useTranslation(['home', 'cases'])
   const user = useCurrentUser()
   const now = useNow(TICK_MS)
   const inbox = useInbox({ status: null, q: '' })

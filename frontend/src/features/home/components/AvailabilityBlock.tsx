@@ -17,7 +17,7 @@ export interface AvailabilityBlockProps {
  * keeps both in sync).
  */
 export function AvailabilityBlock({ openCases }: AvailabilityBlockProps) {
-  const { t } = useTranslation(['home', 'common'])
+  const { t } = useTranslation(['home', 'cases', 'common'])
   const availability = useAvailability()
   const update = useUpdateAvailability()
   const { toast } = useToast()

@@ -59,7 +59,7 @@ export function AnalystsPanel({
   onSelectAnalyst,
   onClearFilters,
 }: AnalystsPanelProps) {
-  const { t } = useTranslation(['supervision', 'common'])
+  const { t } = useTranslation(['supervision', 'cases', 'conversation', 'common'])
   const figures = analystsFigures(analysts, now)
   return (
     <section
@@ -151,7 +151,7 @@ interface AnalystRowProps {
 }
 
 function AnalystRow({ analyst, selected, now, onSelect }: AnalystRowProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const atRisk = atRiskCount(analyst.openCases, now)
   return (
     <TRow selected={selected} onSelect={onSelect}>

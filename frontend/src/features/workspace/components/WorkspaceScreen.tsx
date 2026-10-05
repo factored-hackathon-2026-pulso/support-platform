@@ -82,7 +82,7 @@ export interface WorkspaceScreenProps {
  * when nothing is left. Picking a card keeps the focus on the card.
  */
 export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) {
-  const { t } = useTranslation('workspace')
+  const { t } = useTranslation(['workspace', 'cases'])
   const user = useCurrentUser()
   useRealtimeSubscription(topics.inbox(user.id))
 
@@ -343,7 +343,7 @@ function SupportPanel({
   copilotMode,
   returnFocusTo,
 }: SupportPanelProps) {
-  const { t } = useTranslation('workspace')
+  const { t } = useTranslation(['workspace', 'cases'])
   const detail = useCaseDetail(caseId)
   const { handoff, available } = useCaseHandoff(detail.data)
   // The tab shows while the packet loads, once it loaded, and with a retry for an agent-core

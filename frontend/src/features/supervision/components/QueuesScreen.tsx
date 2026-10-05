@@ -76,7 +76,7 @@ export interface QueuesScreenProps {
  * a row opens the case view. Filters: one "Filtros" dropdown + chips, in the URL.
  */
 export function QueuesScreen({ state, onStateChange, onOpenCase }: QueuesScreenProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   useSupervisionLive()
   const now = useNow(SUPERVISION_TICK_MS)
   const aiEnabled = useAiEnabled()
@@ -163,7 +163,7 @@ interface QueueButtonProps {
 }
 
 function QueueButton({ language, figures, selected, onSelect }: QueueButtonProps) {
-  useTranslation('supervision') // the figures' copy follows a language switch
+  useTranslation(['supervision', 'cases', 'conversation']) // the figures' copy follows a language switch
   const labels = figures ? queueNavLabels(figures) : null
   return (
     <button
@@ -223,7 +223,7 @@ interface QueueCasesProps {
 }
 
 function QueueCases({ query, state, now, aiEnabled, onStateChange, onOpenCase }: QueueCasesProps) {
-  const { t } = useTranslation(['supervision', 'common'])
+  const { t } = useTranslation(['supervision', 'cases', 'conversation', 'common'])
   const title = QUEUE_LABEL[state.language]
   const rows = query.data?.cases ?? []
   const groups = queueFilterGroups(rows, state, { aiEnabled })
@@ -332,7 +332,7 @@ interface OpenCaseTableRowProps {
 }
 
 function OpenCaseTableRow({ row, now, onOpenCase }: OpenCaseTableRowProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const summary = row.case
   const firstResponse = firstResponseFact(summary, now)
   return (
@@ -392,7 +392,7 @@ function RowsSkeleton() {
  * row itself still opens the case view (its transcript shows the assistant's turns).
  */
 function AssistantHolder({ summary }: { summary: OpenCaseRow['case'] }) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const release = useReleaseFromAssistant(summary.id)
   const { toast } = useToast()
   return (

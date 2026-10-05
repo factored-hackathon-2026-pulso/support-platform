@@ -29,7 +29,7 @@ export interface AnalystSheetProps {
  * and "Reasignar" (the exception: assignment is automatic).
  */
 export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: AnalystSheetProps) {
-  const { t } = useTranslation(['supervision', 'common'])
+  const { t } = useTranslation(['supervision', 'cases', 'conversation', 'common'])
   return (
     <Sheet
       open
@@ -107,7 +107,7 @@ interface OpenCaseItemProps {
 }
 
 function OpenCaseItem({ summary, now, onOpenCase, onReassign }: OpenCaseItemProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const status = caseStatus(summary.inboxStatus)
   const firstResponse = firstResponseFact(summary, now)
   return (

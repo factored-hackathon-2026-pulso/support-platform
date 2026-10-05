@@ -37,7 +37,7 @@ export function useNotificationToasts(unreadIds: ReadonlySet<string> | null): vo
   const navigate = useNavigate()
   const location = useLocation()
   const read = useReadNotification()
-  const { t } = useTranslation('notifications')
+  const { t } = useTranslation(['notifications', 'cases', 'conversation'])
 
   const latest = useRef({ location, navigate, read, t })
   useEffect(() => {

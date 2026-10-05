@@ -79,7 +79,7 @@ export interface NotificationItemProps {
  * ambiguous for a screen reader.
  */
 export function NotificationItem({ notification, now, onOpen, onMarkRead }: NotificationItemProps) {
-  const { t } = useTranslation('notifications')
+  const { t } = useTranslation(['notifications', 'cases', 'conversation'])
   const copy = notificationCopy(notification, now)
   const unread = !notification.readAt
   const titleId = useId()

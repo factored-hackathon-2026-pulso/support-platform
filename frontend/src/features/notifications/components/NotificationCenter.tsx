@@ -29,7 +29,7 @@ const TIME_TICK_MS = 30_000
  * button give the focus back to the bell).
  */
 export function NotificationCenter() {
-  const { t } = useTranslation('notifications')
+  const { t } = useTranslation(['notifications', 'cases', 'conversation'])
   const query = useNotifications()
   const items = useMemo(() => allNotifications(query.data), [query.data])
   const unread = unreadCountOf(query.data)
@@ -131,7 +131,7 @@ function NotificationPanel({
   unread,
   onClose,
 }: NotificationPanelProps) {
-  const { t } = useTranslation(['notifications', 'common'])
+  const { t } = useTranslation(['notifications', 'cases', 'conversation', 'common'])
   const now = useNow(TIME_TICK_MS)
   const read = useReadNotification()
   const markAll = useMarkAllNotificationsRead()
@@ -238,7 +238,7 @@ function NotificationPanel({
 
 /** "Estás al día": nothing unread (canvas `notificacionesVacia`); read ones stay below. */
 function UpToDate() {
-  const { t } = useTranslation('notifications')
+  const { t } = useTranslation(['notifications', 'cases', 'conversation'])
   return (
     <div className="flex flex-col items-center gap-1.5 px-6 pt-6 pb-4 text-center">
       <span

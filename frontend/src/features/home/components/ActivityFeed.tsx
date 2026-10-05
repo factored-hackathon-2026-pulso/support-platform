@@ -56,7 +56,7 @@ export interface ActivityFeedProps {
  * live region: the feed is not announced as it refreshes.
  */
 export function ActivityFeed({ home, now, aiEnabled = false }: ActivityFeedProps) {
-  const { t } = useTranslation(['home', 'common'])
+  const { t } = useTranslation(['home', 'cases', 'common'])
   const [expanded, setExpanded] = useState(false)
   const data = home.data
   const summary = aiEnabled ? assistantSummary(data?.assistant) : null

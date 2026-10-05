@@ -30,7 +30,7 @@ export interface EscalationsScreenProps {
  * facts, the last messages, and Responder / Tomar el caso / Reasignar.
  */
 export function EscalationsScreen({ state, onStateChange, onOpenCase }: EscalationsScreenProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   useSupervisionLive()
   const overview = useEscalationOverview()
   const now = useNow(SUPERVISION_TICK_MS)
@@ -123,7 +123,7 @@ interface EscalationListProps {
 }
 
 function EscalationList({ data, now, selectedId, onSelect }: EscalationListProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const groups = escalationGroups(data.items, now)
   if (groups.length === 0) {
     return (
@@ -184,7 +184,7 @@ interface EscalationRowProps {
 }
 
 function EscalationRow({ item, now, selected, onSelect }: EscalationRowProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const { escalation } = item
   const wait = escalationWaitFact(escalation, now)
   const analyst = escalation.escalatedByName ?? t('someoneFromTeam')

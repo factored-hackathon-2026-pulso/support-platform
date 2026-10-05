@@ -52,7 +52,7 @@ export function SupervisorCaseScreen({
   backTo,
   backLabel,
 }: SupervisorCaseScreenProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const detail = useCaseDetail(caseId)
   const { toast } = useToast()
   const customerName = detail.data?.customer.displayName ?? null
@@ -173,7 +173,7 @@ interface ReassignLoaderProps {
 
 /** The reassign dialog once the team (the candidates) is loaded; loading and error inside a dialog. */
 function ReassignLoader({ summary, holderName, onClose, onReassigned }: ReassignLoaderProps) {
-  const { t } = useTranslation(['supervision', 'common'])
+  const { t } = useTranslation(['supervision', 'cases', 'conversation', 'common'])
   const team = useTeamOverview()
   if (team.data) {
     return (

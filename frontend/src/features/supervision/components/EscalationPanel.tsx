@@ -58,7 +58,7 @@ export function EscalationPanel({
   onOpenCase,
   onResult,
 }: EscalationPanelProps) {
-  const { t } = useTranslation(['supervision', 'common'])
+  const { t } = useTranslation(['supervision', 'cases', 'conversation', 'common'])
   const { escalation } = item
   const me = useCurrentUser()
   // Reading the case here is a supervision read: the server audits it (case.viewed).
@@ -344,7 +344,7 @@ export function EscalationPanel({
 }
 
 function LastTurns({ turns, loading }: { turns: Turn[] | undefined; loading: boolean }) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   if (loading) return <Skeleton className="h-24 w-full" />
   const items = (turns ?? []).slice(-4)
   if (items.length === 0) {

@@ -19,7 +19,7 @@ export interface TeamNowProps {
  * in that queue and the oldest wait (its own clock fact). Nobody else's cases.
  */
 export function TeamNow({ team, failed, meAvailable, now, withAssistant = null }: TeamNowProps) {
-  const { t } = useTranslation('home')
+  const { t } = useTranslation(['home', 'cases'])
   return (
     <section
       aria-labelledby="home-team"

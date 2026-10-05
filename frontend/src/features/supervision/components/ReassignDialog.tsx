@@ -63,7 +63,7 @@ export function ReassignDialog({
   onClose,
   onReassigned,
 }: ReassignDialogProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const assign = useSetAssignee(summary.id)
   const refetch = useRefetchAssignmentData(summary.id)
   const { toast } = useToast()

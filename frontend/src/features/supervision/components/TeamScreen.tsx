@@ -46,7 +46,7 @@ export interface TeamScreenProps {
  * cases with "Reasignar".
  */
 export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps) {
-  const { t } = useTranslation('supervision')
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   useSupervisionLive()
   const team = useTeamOverview()
   const now = useNow(SUPERVISION_TICK_MS)

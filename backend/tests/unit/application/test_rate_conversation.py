@@ -84,7 +84,12 @@ async def test_the_customer_rates_her_closed_conversation(world: Container) -> N
     assert rated.conversation.status.value == "closed"
     rated_events = [p for t, p in await events_of(world, CLAUDIA_CLOSED) if t == "case.rated"]
     assert rated_events == [
-        {"score": 2, "comment": "Tardaron en contestar.", "analyst_id": DANIELA_ID}
+        {
+            "score": 2,
+            "comment": "Tardaron en contestar.",
+            "analyst_id": DANIELA_ID,
+            "schema_version": 1,
+        }
     ]
     # The staff side reads the same rating (summary and detail).
     detail = await world.use_cases.cases.detail.execute(actor_for(ANALYST), CLAUDIA_CLOSED)

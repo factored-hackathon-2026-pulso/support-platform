@@ -48,6 +48,12 @@ class NotificationRepository(Protocol):
 
     async def unread_count(self, recipient_id: str) -> int: ...
 
+    async def improvement_for(self, proposal_id: str) -> Notification | None:
+        """ADR 0007: the oldest ``improvement_proposed`` notification of that proposal, whoever
+        got it (they all carry the same dossier: the first announcement wins). None when the
+        engine never announced it, nobody was notified, or retention pruned every copy."""
+        ...
+
     async def mark_all_read(self, recipient_id: str, *, at: datetime) -> int:
         """Read every unread one of hers in one conditional statement (``read_at IS NULL``,
         version bumped); returns how many changed. No read-modify-write: two concurrent

@@ -3,7 +3,7 @@ import { Button, Spinner } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
 import { suggestionView } from '../model'
-import { useDiscardDraft, useLatestSuggestion } from '../hooks/use-suggestions'
+import { useDiscardDraft, useLatestSuggestion, useReportShown } from '../hooks/use-suggestions'
 
 /** How the draft went into the composer: as it is ("Usar") or to change it ("Editar"). */
 export type DraftTakeMode = 'use' | 'edit'
@@ -34,8 +34,9 @@ export function CopilotDraft({ caseId, enabled, taken, onTake }: CopilotDraftPro
   const { t } = useTranslation('copilot')
   const latest = useLatestSuggestion(caseId, enabled)
   const discard = useDiscardDraft(caseId)
-  if (!enabled) return null
   const view = suggestionView(latest.data)
+  useReportShown(caseId, view, enabled && !taken && Boolean(view?.reply))
+  if (!enabled) return null
 
   if (taken) {
     return (

@@ -15,6 +15,7 @@ from cc_platform.domain.ai.suggestion import (
     ActionSuggestion,
     CopilotSuggestion,
     EscalationSuggestion,
+    IgnoreCause,
     ReplyDecision,
     ReplySuggestion,
     SuggestionStatus,
@@ -364,3 +365,58 @@ def test_a_discard_or_an_escalation_has_no_turn() -> None:
 
     assert discarded.pull_events()[-1].payload()["turn_id"] is None
     assert escalated.pull_events()[-1].payload()["turn_id"] is None
+
+
+# ------------------------------------------------------------- event catalog 1.3.0
+def test_ahora_no_dismisses_the_recommendation_once_and_keeps_the_rest() -> None:
+    s = ready()
+
+    assert s.dismiss_escalation(at=NOW) is True
+    assert s.dismiss_escalation(at=NOW) is False
+    assert s.escalation_taken(at=NOW) is False  # dismissed: it cannot be taken any more
+
+    assert [i.kind for i in s.items] == ["reply", "tool"]
+    (decided,) = [e for e in s.pull_events() if e.event_type == "copilot.suggestion_decided"]
+    assert decided.payload()["decision"] == "dismissed"
+    assert decided.payload()["reason_code"] == "policy:escalamiento-disputa-monto"
+
+
+def test_a_reason_code_that_is_not_a_code_is_recorded_as_unrecognized() -> None:
+    s = ready([EscalationSuggestion(reason_code="la clienta está muy molesta")])
+
+    s.escalation_taken(at=NOW)
+
+    assert s.pull_events()[-1].payload()["reason_code"] == "unrecognized"
+
+
+def test_a_reply_decision_has_no_reason_code() -> None:
+    s = ready()
+    s.discard_reply(at=NOW)
+    assert s.pull_events()[-1].payload()["reason_code"] is None
+
+
+def test_shown_and_ignored_say_what_was_on_it_without_a_text() -> None:
+    s = ready()
+    s.pull_events()
+
+    assert s.record_shown(stale=True, at=NOW) is True
+    assert s.record_ignored(cause=IgnoreCause.REPLACED, shown=True, at=NOW) is True
+
+    shown, ignored = (e.payload() for e in s.pull_events())
+    assert shown == {
+        "analyst_id": ANALYST,
+        "agent": "copiloto-sugerencias@prod",
+        "kinds": ["reply", "tool", "escalate"],
+        "count": 3,
+        "stale": True,
+        "release": None,
+    }
+    assert ignored["cause"] == "replaced"
+    assert ignored["shown"] is True
+    assert DRAFT not in json.dumps([shown, ignored])
+
+
+def test_nothing_is_shown_or_ignored_unless_it_is_ready() -> None:
+    none = ready([])
+    assert none.record_shown(stale=False, at=NOW) is False
+    assert none.record_ignored(cause=IgnoreCause.EXPIRED, shown=False, at=NOW) is False

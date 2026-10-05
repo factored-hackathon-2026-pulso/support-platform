@@ -59,6 +59,7 @@ from cc_platform.application.ai.maturity import (
 )
 from cc_platform.application.ai.priority import ApplyHandoffPriority, HandoffPriorityProcess
 from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
+from cc_platform.application.ai.proposal_record import GetProposalRecord
 from cc_platform.application.ai.registry import AgentRegistryClient
 from cc_platform.application.ai.staff import (
     AiOffHandoverProcess,
@@ -71,14 +72,17 @@ from cc_platform.application.ai.staff import (
 from cc_platform.application.ai.suggestion_process import (
     SUGGESTION_PROCESS_EVENTS,
     SUGGESTION_SIGNAL_EVENTS,
+    SuggestionCloser,
     SuggestionProcess,
     SuggestionSignal,
 )
 from cc_platform.application.ai.suggestions import (
     DecideSuggestion,
+    EndSuggestionsOnClose,
     GetLatestSuggestion,
     LinkSuggestion,
     PurgeSuggestionDrafts,
+    RecordSuggestionShown,
     RequestSuggestion,
     SuggestionService,
 )
@@ -264,6 +268,7 @@ from cc_platform.application.use_cases import UseCases
 from cc_platform.bootstrap.settings import Settings
 from cc_platform.domain.ai.events import AssistantEnded
 from cc_platform.domain.ai.maturity_events import MATURITY_EVENTS, STAGE_EVENTS
+from cc_platform.domain.cases.events import CaseClosed
 from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
@@ -721,6 +726,10 @@ def _build_assistant(
                 event_types=SUGGESTION_PROCESS_EVENTS,
             )
         bus.subscribe(SuggestionSignal(hub), event_types=SUGGESTION_SIGNAL_EVENTS)
+        bus.subscribe(  # catalog 1.3.0: a case that closes ends its newest suggestion
+            SuggestionCloser(background, EndSuggestionsOnClose(uow=uow, clock=clock)),
+            event_types=[CaseClosed],
+        )
     return _AssistantParts(
         gate=AssistantGate(config, switch=ai_switch, core=agent_core.guard),
         engine=engine,
@@ -777,6 +786,7 @@ def _build_suggestions(
         decide=DecideSuggestion(uow=uow, clock=clock),
         link=LinkSuggestion(uow=uow, clock=clock),
         purge=PurgeSuggestionDrafts(uow=uow, clock=clock),
+        shown=RecordSuggestionShown(uow=uow, clock=clock),
     )
 
 
@@ -823,6 +833,7 @@ def _build_builder(
             agent=settings.builder_agent,
         ),
         announce=AnnounceImprovement(uow=uow, clock=clock, builder=registry, writer=notifications),
+        record=GetProposalRecord(uow=uow),
     )
 
 

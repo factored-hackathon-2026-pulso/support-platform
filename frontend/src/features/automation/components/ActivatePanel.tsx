@@ -15,7 +15,7 @@ import {
 import { useAiStages } from '@/features/copilot/core'
 import { useTranslation } from '@/lib/i18n'
 import { useActivateAgent, useAlias, useRelease } from '../hooks/use-automation'
-import { agentName, isMaturing, readyTypes, typeName, typeStage } from '../model'
+import { agentDisplayName, agentName, isMaturing, readyTypes, typeName, typeStage } from '../model'
 import { describeBuilderFailure, draftLanguages, reportView } from '../proposals'
 import type { MaturingType, ProposalDetail } from '../types'
 import { StepUpDialog } from './StepUpDialog'
@@ -82,7 +82,7 @@ export function ActivatePanel({ detail, type, onTypeChosen }: ActivatePanelProps
     >
       <div className="flex flex-col gap-1">
         <h2 id="activate-title" className="m-0 text-17 font-semibold">
-          {t('activate.title', { agent: agentName(proposal.agentId) })}
+          {t('activate.title', { agent: agentDisplayName(stages.data, proposal.agentId) })}
         </h2>
         <p className="m-0 text-14 text-ink-2">{t('activate.intro')}</p>
       </div>
@@ -167,7 +167,7 @@ export function ActivatePanel({ detail, type, onTypeChosen }: ActivatePanelProps
           onOpenChange={(open) => {
             if (!open) setConfirming(false)
           }}
-          title={t('activate.title', { agent: agentName(proposal.agentId) })}
+          title={t('activate.title', { agent: agentDisplayName(stages.data, proposal.agentId) })}
           description={type ? typeName(type) : undefined}
           confirmLabel={t('activate.submit')}
           pending={activate.isPending}

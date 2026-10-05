@@ -106,7 +106,10 @@ def test_fans_out_committed_events_to_case_subscribers_only(
         assert envelope["occurredAt"].endswith("Z")
         assert envelope["data"]["caseId"] == CASE_A
         assert envelope["data"]["actor"] == {"role": "customer", "id": "CUS-" + "0" * 25 + "1"}
-        assert envelope["data"]["payload"] == {"text": "Hola, no reconozco un cargo"}
+        assert envelope["data"]["payload"] == {
+            "text": "Hola, no reconozco un cargo",
+            "schema_version": 1,  # event catalog 1.3.0
+        }
 
         # The other socket got nothing: its next message is the reply to its own ping.
         other.send_json({"action": "ping"})

@@ -3,7 +3,7 @@ import { CircleArrowUp, ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import { escalationReason, suggestionView } from '../model'
-import { useLatestSuggestion } from '../hooks/use-suggestions'
+import { useDismissEscalation, useLatestSuggestion, useReportShown } from '../hooks/use-suggestions'
 
 export interface EscalationPrefill {
   suggestionId: string
@@ -22,17 +22,20 @@ export interface EscalationSuggestionProps {
  * The copilot recommends escalating (slice 20; ADR 0005 §3-4: from agent-core's rules, with its
  * reason and evidence so she can disagree). It only recommends: "Revisar y escalar" opens the
  * usual dialog with `motiveDraft` filled in, and she confirms or edits; the escalation then
- * carries `copilotSuggestionId`. "Ahora no" hides it for this suggestion (there is no feedback
- * for it in the API).
+ * carries `copilotSuggestionId`. "Ahora no" hides it at once and posts the feedback (`subject:
+ * escalation`, `dismissed`), so it does not come back. Shown on screen, it reports the suggestion
+ * as shown (event catalog 1.3.0).
  */
 export function EscalationSuggestion({ caseId, enabled, onReview }: EscalationSuggestionProps) {
   const { t } = useTranslation('copilot')
   const latest = useLatestSuggestion(caseId, enabled)
+  const dismiss = useDismissEscalation(caseId)
   const [hiddenFor, setHiddenFor] = useState<string | null>(null)
-  if (!enabled) return null
   const view = suggestionView(latest.data)
   const escalation = view?.escalation
-  if (!view || !escalation || hiddenFor === view.id) return null
+  const visible = enabled && Boolean(view && escalation) && hiddenFor !== view?.id
+  useReportShown(caseId, view, visible)
+  if (!enabled || !view || !escalation || hiddenFor === view.id) return null
 
   return (
     <div className="shrink-0 px-6 pt-3">
@@ -49,7 +52,14 @@ export function EscalationSuggestion({ caseId, enabled, onReview }: EscalationSu
             <span className="text-13 text-ink-2">{escalationReason(escalation.reasonCode)}</span>
           </div>
           <span className="flex shrink-0 items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setHiddenFor(view.id)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setHiddenFor(view.id)
+                dismiss.mutate(view.id)
+              }}
+            >
               {t('escalation.notNow')}
             </Button>
             <Button

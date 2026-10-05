@@ -52,6 +52,7 @@ import type {
   CaseSummary,
   CloseCaseRequest,
   HandoffQuality,
+  HandoffReask,
   Escalation,
   Language,
   PendingMessage,
@@ -1296,9 +1297,19 @@ export interface CloseCaseForm {
    * loaded). null = not answered: nothing is sent, the platform never guesses a label.
    */
   handoffQuality: HandoffQuality | null
+  /**
+   * Event catalog 1.3.0: with `incomplete` only, what she had to ask the customer again
+   * (optional, a closed list). Sent as `handoffReasked` only when something is ticked.
+   */
+  handoffReasked: HandoffReask[]
 }
 
-export const INITIAL_CLOSE_FORM: CloseCaseForm = { reason: null, note: '', handoffQuality: null }
+export const INITIAL_CLOSE_FORM: CloseCaseForm = {
+  reason: null,
+  note: '',
+  handoffQuality: null,
+  handoffReasked: [],
+}
 
 export type CloseFormErrors = Partial<Record<keyof CloseCaseForm, string>>
 
@@ -1313,11 +1324,16 @@ export function validateCloseForm(form: CloseCaseForm): CloseFormErrors {
 
 /**
  * `{ reason, note: trimmed || null }`, plus `handoffQuality` only when she answered it (slice
- * 19). Call it only after `validateCloseForm` passed.
+ * 19) and `handoffReasked` only for `incomplete` with something ticked (catalog 1.3.0). Call it
+ * only after `validateCloseForm` passed.
  */
 export function toCloseRequest(form: CloseCaseForm & { reason: CloseReason }): CloseCaseRequest {
   const request: CloseCaseRequest = { reason: form.reason, note: form.note.trim() || null }
-  return form.handoffQuality ? { ...request, handoffQuality: form.handoffQuality } : request
+  if (!form.handoffQuality) return request
+  const reasked = form.handoffQuality === 'incomplete' ? form.handoffReasked : []
+  return reasked.length > 0
+    ? { ...request, handoffQuality: form.handoffQuality, handoffReasked: reasked }
+    : { ...request, handoffQuality: form.handoffQuality }
 }
 
 /** "{n}/500" under the note (trimmed length, as the server counts it). */

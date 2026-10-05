@@ -196,6 +196,7 @@ async def test_create_user_invites_her_without_any_password(
         "languages": ["pt"],
         "team_id": PACIFICO,
         "team_name": "Equipo Pacífico",
+        "schema_version": 1,
     }
     # No login account, only the token's hash; the email carries the link.
     async with container.uow() as uow:
@@ -400,6 +401,7 @@ async def test_update_applies_every_change_in_order(container: Container, valeri
         "from_team_name": "Equipo Pacífico",
         "to_team_id": ANDES,
         "to_team_name": "Equipo Andes",
+        "schema_version": 1,
     }
 
 
@@ -449,7 +451,12 @@ async def test_removing_analyst_pauses_her_and_keeps_her_sessions(
         "staff.availability_changed",
     ]
     paused = (await payloads(container, "staff.availability_changed"))[-1]
-    assert paused == {"from_status": "available", "to_status": "paused", "reason": "role_removed"}
+    assert paused == {
+        "from_status": "available",
+        "to_status": "paused",
+        "reason": "role_removed",
+        "schema_version": 1,
+    }
     # No session ends: the role change applies on his next request.
     actor = await container.use_cases.people.authenticate.execute(token)
     assert actor.roles == {S}
@@ -558,12 +565,15 @@ async def test_deactivate_ends_sessions_and_pauses(container: Container, valeria
         "staff.availability_changed",
         "auth.session_ended",
     ]
-    assert (await payloads(container, "staff.deactivated"))[-1] == {"revoked_sessions": 1}
+    assert (await payloads(container, "staff.deactivated"))[-1] == {
+        "revoked_sessions": 1,
+        "schema_version": 1,
+    }
     assert (await payloads(container, "staff.availability_changed"))[-1]["reason"] == (
         "deactivated"
     )
     ended = (await payloads(container, "auth.session_ended"))[-1]
-    assert ended == {"staff_id": TOMAS_ID, "reason": "revoked"}
+    assert ended == {"staff_id": TOMAS_ID, "reason": "revoked", "schema_version": 1}
     with pytest.raises(AuthenticationRequiredError):
         await container.use_cases.people.authenticate.execute(token)
     with pytest.raises(InvalidCredentialsError):  # same answer as an unknown email
@@ -646,6 +656,7 @@ async def test_unlock_mariana(container: Container, valeria: Actor) -> None:
     assert (await payloads(container, "staff.account_unlocked"))[-1] == {
         "was_locked": True,
         "failed_attempts": 5,
+        "schema_version": 1,
     }
     again = await container.use_cases.administration.unlock_user.execute(valeria, MARIANA_ID)
     assert not again.changed
@@ -673,7 +684,13 @@ async def test_send_password_reset_link(
     (sent,) = await payloads(container, "staff.password_reset_link_sent")
     assert sent["revoked_sessions"] == 0
     assert sent["cleared_lock"] is True
-    assert set(sent) == {"reset_id", "expires_at", "revoked_sessions", "cleared_lock"}
+    assert set(sent) == {
+        "reset_id",
+        "expires_at",
+        "revoked_sessions",
+        "cleared_lock",
+        "schema_version",
+    }
     # The link went to her email; her old password still works until she sets a new one.
     token = await latest_link(container, MARIANA.email)
     assert token == tokens.issued[-1]

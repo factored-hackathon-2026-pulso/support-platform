@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { CircleMinus, Puzzle, ThumbsUp } from 'lucide-react'
-import { Button, Callout, Dialog, Field, RadioGroup, Textarea } from '@/components/ui'
+import { Button, Callout, Checkbox, Dialog, Field, RadioGroup, Textarea } from '@/components/ui'
 import { CLOSE_REASONS, CloseReasonIcon, type CloseReason } from '@/features/cases'
 import {
   CLOSED_NOTICE,
@@ -17,12 +17,15 @@ import {
 import { closeNoticeChannel } from '../channels'
 import {
   HANDOFF_QUALITY_OPTIONS,
+  HANDOFF_REASK_OPTIONS,
+  handoffReaskLabel,
   toggleHandoffQuality,
+  toggleHandoffReask,
   type HandoffQualityOption,
 } from '../handoff'
 import { useCaseHandoff } from '../hooks/use-handoff'
 import { useCloseCase } from '../hooks/use-close-case'
-import type { CaseDetail, CaseSummary, HandoffQuality } from '../types'
+import type { CaseDetail, CaseSummary, HandoffQuality, HandoffReask } from '../types'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
 
@@ -57,7 +60,8 @@ export interface CloseCaseDialogProps {
  * of the notice the customer will get, in the case language. The customer never
  * sees the reason or the note. Slice 19: for a case the assistant handed over (AI on, and only
  * once its handoff loaded) the optional "¿Te sirvió el traspaso del asistente?" (Útil,
- * Incompleto, Innecesario), sent as `handoffQuality` only when answered.
+ * Incompleto, Innecesario), sent as `handoffQuality` only when answered; with "Incompleto", the
+ * optional "¿Qué tuviste que volver a preguntar?" (a closed list, sent as `handoffReasked`).
  */
 export function CloseCaseDialog({
   summary,
@@ -114,6 +118,7 @@ export function CloseCaseDialog({
       reason: form.reason,
       // Never sent for a handoff that did not load (the question was not on screen).
       handoffQuality: asksHandoff ? form.handoffQuality : null,
+      handoffReasked: asksHandoff ? form.handoffReasked : [],
     })
     close.mutate(request, {
       onSuccess: () => {
@@ -180,7 +185,19 @@ export function CloseCaseDialog({
         {asksHandoff ? (
           <HandoffQualityField
             value={form.handoffQuality}
-            onChange={(handoffQuality) => update({ handoffQuality })}
+            onChange={(handoffQuality) =>
+              // What she re-asked only goes with an incomplete handoff.
+              update({
+                handoffQuality,
+                handoffReasked: handoffQuality === 'incomplete' ? form.handoffReasked : [],
+              })
+            }
+          />
+        ) : null}
+        {asksHandoff && form.handoffQuality === 'incomplete' ? (
+          <HandoffReaskedField
+            value={form.handoffReasked}
+            onChange={(handoffReasked) => update({ handoffReasked })}
           />
         ) : null}
         {noticeChannel === 'call' ? null : (
@@ -273,6 +290,43 @@ function HandoffQualityField({
       </div>
       <p id={hintId} className="m-0 text-12 text-muted">
         {t('handoff.quality.hint')}
+      </p>
+    </fieldset>
+  )
+}
+
+/**
+ * "¿Qué tuviste que volver a preguntar? (opcional)": with an incomplete handoff, what she had to
+ * ask the customer again, from a closed list (no free text: it feeds the engine's aggregates).
+ */
+function HandoffReaskedField({
+  value,
+  onChange,
+}: {
+  value: HandoffReask[]
+  onChange(value: HandoffReask[]): void
+}) {
+  const { t } = useTranslation('conversation')
+  const hintId = useId()
+  return (
+    <fieldset aria-describedby={hintId} className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
+      <legend className="mb-2 p-0 text-14 font-semibold">
+        {t('handoff.quality.reasked.legend')}{' '}
+        <span className="font-normal text-muted">{t('close.optional')}</span>
+      </legend>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {HANDOFF_REASK_OPTIONS.map((option) => (
+          <Checkbox
+            key={option}
+            variant="card"
+            label={handoffReaskLabel(option)}
+            checked={value.includes(option)}
+            onChange={() => onChange(toggleHandoffReask(value, option))}
+          />
+        ))}
+      </div>
+      <p id={hintId} className="m-0 text-12 text-muted">
+        {t('handoff.quality.reasked.hint')}
       </p>
     </fieldset>
   )

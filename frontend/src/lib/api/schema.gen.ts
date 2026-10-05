@@ -710,6 +710,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/builder/proposals/{proposalId}/record': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The engine's dossier and the history of the decisions on a proposal
+     * @description What the platform keeps about a proposal, without calling agent-core: the improvement engine's dossier (ADR 0007) with each evidence case resolved (`available: false` when the id names no case here), and the history from the platform's audit (evaluated, approved, rejected with its `reasonCode`, published, promoted to `staging` / `prod`). An id nobody announced or acted on answers an empty record.
+     */
+    get: operations['builder_get_proposal_record']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/builder/proposals/{proposalId}/reject': {
     parameters: {
       query?: never
@@ -721,7 +741,7 @@ export interface paths {
     put?: never
     /**
      * Reject the evaluated candidate: back to `draft`
-     * @description The reason is kept by the registry. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
+     * @description The reason is kept by the registry; `reasonCode` (agent-core's closed list) also goes to the registry and into the audit. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
      */
     post: operations['builder_reject_proposal']
     delete?: never
@@ -1149,8 +1169,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Dismiss the copilot's draft
-     * @description ADR 0005. `discarded` (the analyst dismissed the draft) or `ignored` (she left it). The draft leaves the list; the rest of the suggestion stays. `used` and `edited` are derived when she replies with `copilotSuggestionId`. 404 for an id that is not hers.
+     * Dismiss the copilot's draft or its recommendation to escalate
+     * @description ADR 0005. For the draft (`subject: reply`): `discarded` (the analyst dismissed it) or `ignored` (she left it). For the recommendation (`subject: escalation`): `dismissed` ("Ahora no"). What was decided leaves the list; the rest of the suggestion stays. `used` and `edited` are derived when she replies with `copilotSuggestionId`; `accepted` when she escalates with it. 404 for an id that is not hers.
      */
     post: operations['cases_decide_copilot_suggestion']
     delete?: never
@@ -1173,6 +1193,26 @@ export interface paths {
      * @description Slice 24. `item` is `tool`, `action` or `escalate` (`ref` is the item's `tool`, empty for `escalate`); `decision` is `used` or `dismissed`. A used tool is `copilot.tool_used` (the stage 2 signal); anything else is `copilot.item_decided`. Both are audited and the suggestion is not changed. Her own suggestion (`ready`), an item it holds: 404 otherwise. AI off: 404 `assistant_disabled`.
      */
     post: operations['ai-stages_record_item_decision']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/shown': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * The analyst's screen showed the copilot's suggestion
+     * @description Event catalog 1.3.0. Send it when a `ready` suggestion is on screen (the draft, the recommendation to escalate or "Herramientas"). Records `copilot.suggestion_shown` once per suggestion (audited, no text); a repeat, or one with nothing left to show, records nothing and is still 204. 404 for an id that is not hers.
+     */
+    post: operations['cases_copilot_suggestion_shown']
     delete?: never
     options?: never
     head?: never
@@ -3656,6 +3696,12 @@ export interface components {
        * @description ADR 0003: only for a case that came from the assistant. How useful its handoff was (`useful`, `incomplete`, `unnecessary`); sent to agent-core as the label of that handoff. Left out, nothing is sent.
        */
       handoffQuality?: ('useful' | 'incomplete' | 'unnecessary') | null
+      /**
+       * Handoffreasked
+       * @description Only with `handoffQuality: incomplete`: what the analyst had to ask the customer again (closed list; a repeated value counts once). Recorded in the audit event `case.handoff_rated`; not sent to agent-core. 422 with another quality.
+       */
+      handoffReasked?:
+        ('identity' | 'amount' | 'merchant' | 'date' | 'product' | 'reason' | 'other')[] | null
       /** Note */
       note: string | null
       reason: components['schemas']['CloseReason']
@@ -4474,6 +4520,25 @@ export interface components {
       /** Suiteversion */
       suiteVersion?: string | null
     }
+    /**
+     * EvidenceCase
+     * @description An evidence link of the engine's dossier, resolved against the platform's cases.
+     */
+    EvidenceCase: {
+      /**
+       * Available
+       * @description False when the id names no case here (stale or never existed): show it without a link; the other facts are null.
+       */
+      available: boolean
+      /** Caseid */
+      caseId: string
+      caseType: components['schemas']['CaseType'] | null
+      channel: components['schemas']['CaseChannel'] | null
+      language: components['schemas']['Language'] | null
+      /** Openedat */
+      openedAt: string | null
+      status: components['schemas']['CaseStatus'] | null
+    }
     /** GateItem */
     GateItem: {
       /** Basevalue */
@@ -4881,6 +4946,38 @@ export interface components {
       speakers: number
       /** Waiting */
       waiting: number
+    }
+    /**
+     * LastDecision
+     * @description The last human decision, as agent-core shows it (PR 53): never the free-text reason nor
+     *     who decided (the platform's history names her).
+     */
+    LastDecision: {
+      /**
+       * Decidedat
+       * Format: date-time
+       */
+      decidedAt: string
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: 'approved' | 'rejected'
+      /**
+       * Reasoncode
+       * @description On a rejection, agent-core's closed-vocabulary reason when one was chosen.
+       */
+      reasonCode:
+        | (
+            | 'insufficient_evidence'
+            | 'wrong_target'
+            | 'risk'
+            | 'duplicate'
+            | 'policy_conflict'
+            | 'wording'
+            | 'other'
+          )
+        | null
     }
     /** LatestCopilotSuggestion */
     LatestCopilotSuggestion: {
@@ -5658,11 +5755,130 @@ export interface components {
        * @description The draft: what the proposal changes.
        */
       changes: components['schemas']['EntityDraft'][]
+      /** @description The last approval or rejection (null before one, or from an agent-core that does not report it). */
+      lastDecision: components['schemas']['LastDecision'] | null
       /** @description The evaluation of the current candidate (null before one, and after a failed gate: the proposal is back in draft; that report came with the 409). */
       lastEval: components['schemas']['EvalRun'] | null
       proposal: components['schemas']['Proposal']
       /** @description Present once there is an evaluation. */
       review: components['schemas']['ApprovalReview'] | null
+    }
+    /**
+     * ProposalHistoryEntry
+     * @description One step of the proposal, from the platform's audit (oldest first). Only the members of
+     *     its `kind` are set; the others are null.
+     */
+    ProposalHistoryEntry: {
+      /**
+       * Actorid
+       * @description A staff id; null for the engine or the system.
+       */
+      actorId: string | null
+      /** Actorname */
+      actorName: string | null
+      /**
+       * Alias
+       * @description `promoted`: which alias.
+       */
+      alias: ('staging' | 'prod') | null
+      /**
+       * At
+       * Format: date-time
+       */
+      at: string
+      /**
+       * Items
+       * @description `evaluated`: how many gate items.
+       */
+      items: number | null
+      /**
+       * Itemsfailed
+       * @description `evaluated`: how many failed.
+       */
+      itemsFailed: number | null
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind:
+        | 'created'
+        | 'tracked'
+        | 'frozen'
+        | 'evaluated'
+        | 'approved'
+        | 'rejected'
+        | 'reopened'
+        | 'published'
+        | 'promoted'
+      /**
+       * Reasoncode
+       * @description `rejected`: agent-core's code, if any.
+       */
+      reasonCode:
+        | (
+            | 'insufficient_evidence'
+            | 'wrong_target'
+            | 'risk'
+            | 'duplicate'
+            | 'policy_conflict'
+            | 'wording'
+            | 'other'
+          )
+        | null
+      /**
+       * Releaseid
+       * @description `published` / `promoted`: the release.
+       */
+      releaseId: string | null
+      /**
+       * Source
+       * @description `tracked`: who brought it here (`chat`, `tracked`, `engine`).
+       */
+      source: string | null
+      /**
+       * Suiteid
+       * @description `evaluated`: the suite it ran.
+       */
+      suiteId: string | null
+      /**
+       * Verdict
+       * @description `evaluated`: the gate's verdict.
+       */
+      verdict: ('pass' | 'fail' | 'failed_infra') | null
+    }
+    /**
+     * ProposalImprovement
+     * @description The improvement engine's dossier (ADR 0007), as it announced it. Plain text: render it as
+     *     such (no markup), keeping line breaks.
+     */
+    ProposalImprovement: {
+      /**
+       * Announcedat
+       * Format: date-time
+       */
+      announcedAt: string
+      /** Evidence */
+      evidence: string
+      /**
+       * Evidencecases
+       * @description The announce's `evidenceLinks` (0-8), in its order.
+       */
+      evidenceCases: components['schemas']['EvidenceCase'][]
+      /** Expectedeffect */
+      expectedEffect: string
+      /**
+       * Language
+       * @description The language the engine wrote it in: the announce carries Spanish only.
+       * @constant
+       */
+      language: 'es'
+      /** Problem */
+      problem: string
+      /**
+       * Title
+       * @description At most 120 characters.
+       */
+      title: string
     }
     /** ProposalList */
     ProposalList: {
@@ -5679,6 +5895,16 @@ export interface components {
      * @enum {string}
      */
     ProposalOrigin: 'manual' | 'builder_chat' | 'auto_detect' | 'import'
+    /** ProposalRecord */
+    ProposalRecord: {
+      /**
+       * History
+       * @description Oldest first. Only what happened through the platform: the registry has no history read.
+       */
+      history: components['schemas']['ProposalHistoryEntry'][]
+      /** @description Null when the improvement engine did not announce this proposal (or its notifications were all pruned). */
+      improvement: components['schemas']['ProposalImprovement'] | null
+    }
     /**
      * ProposalState
      * @enum {string}
@@ -5805,6 +6031,21 @@ export interface components {
     RejectRequest: {
       /** Reason */
       reason: string
+      /**
+       * Reasoncode
+       * @description Why, from agent-core's closed list (its PR 53): `insufficient_evidence`, `wrong_target`, `risk`, `duplicate`, `policy_conflict`, `wording`, `other`. Optional; sent to the registry and kept in the audit (the free-text `reason` is not).
+       */
+      reasonCode?:
+        | (
+            | 'insufficient_evidence'
+            | 'wrong_target'
+            | 'risk'
+            | 'duplicate'
+            | 'policy_conflict'
+            | 'wording'
+            | 'other'
+          )
+        | null
       /**
        * Stepupcode
        * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
@@ -6279,10 +6520,17 @@ export interface components {
     SuggestionFeedbackRequest: {
       /**
        * Decision
-       * @description The analyst dismissed the draft (`discarded`) or left it (`ignored`). `used` and `edited` are not posted: send `copilotSuggestionId` with the reply.
+       * @description `reply`: the analyst dismissed the draft (`discarded`) or left it (`ignored`); `used` and `edited` are not posted: send `copilotSuggestionId` with the reply. `escalation`: she answered "Ahora no" (`dismissed`): the recommendation leaves the suggestion. Any other pair is 422.
        * @enum {string}
        */
-      decision: 'discarded' | 'ignored'
+      decision: 'discarded' | 'ignored' | 'dismissed'
+      /**
+       * Subject
+       * @description What the decision is about: the draft (`reply`, the default) or the recommendation to escalate (`escalation`).
+       * @default reply
+       * @enum {string}
+       */
+      subject: 'reply' | 'escalation'
     }
     /** SuggestionReply */
     SuggestionReply: {
@@ -9537,6 +9785,64 @@ export interface operations {
       }
     }
   }
+  builder_get_proposal_record: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProposalRecord']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   builder_reject_proposal: {
     parameters: {
       query?: never
@@ -11389,6 +11695,63 @@ export interface operations {
         'application/json': components['schemas']['ItemDecisionRequest']
       }
     }
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_copilot_suggestion_shown: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        suggestionId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
     responses: {
       /** @description Successful Response */
       204: {

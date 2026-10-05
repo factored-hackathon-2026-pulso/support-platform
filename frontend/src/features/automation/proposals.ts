@@ -11,7 +11,9 @@ import type {
   EntityDraft,
   EvalReport,
   GateItem,
+  ProposalHistoryEntry,
   ProposalState,
+  ReasonCode,
   ReleaseDetail,
   Violation,
   YardstickChange,
@@ -57,16 +59,53 @@ export interface ProposalStep {
 }
 
 /**
- * The stepper: Borrador, Lista para probar, Probada, Aprobada, Publicada, Activa. `active` is
- * true once the agent serves the type (the last step done).
+ * What ends a published proposal. `activate`: the first agent of a case type ("Activar": `prod`
+ * points at the release and the type records that the agent serves it). `promote`: a new version
+ * of an agent that already runs in production ("Pasar a producción": only `prod` moves; the
+ * improvement engine's proposals patch such agents).
  */
-export function proposalSteps(state: string, active: boolean): ProposalStep[] {
+export type EndStep = 'activate' | 'promote'
+
+export interface EndStepFacts {
+  /** The agent state of the case type the URL names (null without one). */
+  typeAgent: string | null
+  /** That type is served by this proposal's agent. */
+  servesThisAgent: boolean
+  /** The agent's `prod` alias points somewhere (undefined while unknown). */
+  inProduction: boolean | undefined
+  /** `prod` points at this proposal's release (null when its release is not known). */
+  prodHoldsThisRelease: boolean | null
+}
+
+/**
+ * A type waiting for an agent is an activation, and so is the type this agent serves once it was
+ * activated with this proposal (its done view). Otherwise an agent already in production is
+ * promoted ("Pasar a producción"); one that never ran is activated.
+ */
+export function endStepFor(facts: EndStepFacts): EndStep {
+  if (facts.typeAgent === 'ready') return 'activate'
+  if (facts.servesThisAgent && facts.prodHoldsThisRelease !== false) return 'activate'
+  return facts.inProduction ? 'promote' : 'activate'
+}
+
+/**
+ * The stepper: Borrador, Lista para probar, Probada, Aprobada, Publicada, then Activa (`activate`)
+ * or En producción (`promote`). `done` is true once that last step happened.
+ */
+export function proposalSteps(
+  state: string,
+  done: boolean,
+  endStep: EndStep = 'activate',
+): ProposalStep[] {
   const index = isProposalState(state) ? PROPOSAL_STATES.indexOf(state) : 0
   const keys: StepKey[] = [...PROPOSAL_STATES, 'active']
-  const current = active ? keys.length : index
+  const current = done ? keys.length : index
   return keys.map((key, position) => ({
     key,
-    label: t(`proposals.state.${key}`),
+    label:
+      key === 'active' && endStep === 'promote'
+        ? t('proposals.state.prod')
+        : t(`proposals.state.${key}`),
     state: position < current ? 'done' : position === current ? 'current' : 'later',
   }))
 }
@@ -206,47 +245,200 @@ export interface ReportView {
   /** "3 de 4 criterios". */
   summary: string
   passedCount: number
+  failedCount: number
   total: number
+  /** What the gate decided, in words: it can be approved, it went back to draft, or no result. */
+  decision: string
+  decisionTone: 'success' | 'danger' | 'warn'
+  /** Failed items first, then the passed ones, each in the report's order. */
   items: GateItemView[]
 }
 
 export interface GateItemView {
   key: string
   metric: string
+  /** "Vara actual", "Vara nueva", "Plataforma". */
+  phase: string
   passed: boolean
   /** "Cumple" / "No cumple". */
   verdict: string
-  /** "Valor 0.92", "Mínimo 0.85", "Antes 0.90": each its own fact. */
-  facts: string[]
+  /** The base release's value ("Sin medir" when not measured). */
+  base: string
+  /** The proposal's value. */
+  candidate: string
+  /** The floor it must reach ("Sin mínimo" when there is none). */
+  floor: string
   reason: string
 }
 
+const PHASES = ['base_yardstick', 'new_yardstick', 'platform'] as const
+
+function phaseLabel(phase: string): string {
+  return (PHASES as readonly string[]).includes(phase)
+    ? t(`proposal.phase.${phase as (typeof PHASES)[number]}`)
+    : t('proposal.phase.other')
+}
+
 function itemView(item: GateItem, index: number): GateItemView {
-  const facts: (string | null)[] = [
-    item.value !== null ? t('proposal.criterion.value', { value: item.value }) : null,
-    item.floor !== null ? t('proposal.criterion.floor', { floor: item.floor }) : null,
-    item.baseValue !== null ? t('proposal.criterion.base', { value: item.baseValue }) : null,
-  ]
   return {
     key: `${item.metricId}:${item.phase}:${index}`,
     metric: item.metricId,
+    phase: phaseLabel(item.phase),
     passed: item.passed,
     verdict: item.passed ? t('proposal.criterion.passed') : t('proposal.criterion.failed'),
-    facts: facts.filter((fact): fact is string => fact !== null),
+    base: item.baseValue ?? t('proposal.criterion.notMeasured'),
+    candidate: item.value ?? t('proposal.criterion.notMeasured'),
+    floor: item.floor ?? t('proposal.criterion.noFloor'),
     reason: item.reason,
   }
 }
 
-/** The test report, each gate item apart (never a composite score). */
+/**
+ * The test report, base against candidate item by item (never a composite score), the failed
+ * items first, and what the gate decided.
+ */
 export function reportView(report: EvalReport): ReportView {
   const passedCount = report.items.filter((item) => item.passed).length
+  const failedCount = report.items.length - passedCount
+  const views = report.items.map(itemView)
+  const decision =
+    report.verdict === 'pass'
+      ? { decision: t('proposal.gate.pass'), decisionTone: 'success' as const }
+      : report.verdict === 'fail'
+        ? {
+            decision: t('proposal.gate.fail', { count: failedCount }),
+            decisionTone: 'danger' as const,
+          }
+        : { decision: t('proposal.gate.infra'), decisionTone: 'warn' as const }
   return {
     passed: report.verdict === 'pass',
     summary: t('proposal.criteria', { passed: passedCount, total: report.items.length }),
     passedCount,
+    failedCount,
     total: report.items.length,
-    items: report.items.map(itemView),
+    ...decision,
+    items: [...views.filter((v) => !v.passed), ...views.filter((v) => v.passed)],
   }
+}
+
+/** agent-core's closed list of rejection reasons (its PR 53), in the order the dialog offers. */
+export const REASON_CODES: readonly ReasonCode[] = [
+  'insufficient_evidence',
+  'wrong_target',
+  'risk',
+  'duplicate',
+  'policy_conflict',
+  'wording',
+  'other',
+]
+
+export function isReasonCode(value: string): value is ReasonCode {
+  return (REASON_CODES as readonly string[]).includes(value)
+}
+
+/** A rejection reason in words ("Falta evidencia"). */
+export function reasonCodeLabel(code: ReasonCode): string {
+  return t(`reasonCode.${code}`)
+}
+
+export type HistoryIcon =
+  | 'created'
+  | 'engine'
+  | 'frozen'
+  | 'passed'
+  | 'failed'
+  | 'approved'
+  | 'rejected'
+  | 'reopened'
+  | 'published'
+  | 'prod'
+
+export interface HistoryItemView {
+  key: string
+  icon: HistoryIcon
+  /** "Lucía Gómez la aprobó", "El motor de mejora la anunció". */
+  text: string
+  /** A short tag: the rejection reason, or the criteria of an evaluation. */
+  tag: string | null
+  tagTone: 'neutral' | 'success' | 'danger' | 'warn'
+  /** The release it published or promoted (shown as an id). */
+  releaseId: string | null
+  /** When (ISO): the screen formats it. */
+  at: string
+}
+
+function who(entry: ProposalHistoryEntry): string {
+  return entry.actorName ?? t('history.someone')
+}
+
+function historyText(entry: ProposalHistoryEntry): { icon: HistoryIcon; text: string } {
+  const name = who(entry)
+  switch (entry.kind) {
+    case 'created':
+      return { icon: 'created', text: t('history.created', { name }) }
+    case 'tracked':
+      if (entry.source === 'engine') return { icon: 'engine', text: t('history.engine') }
+      if (entry.source === 'chat') return { icon: 'created', text: t('history.chat', { name }) }
+      return { icon: 'created', text: t('history.tracked', { name }) }
+    case 'frozen':
+      return { icon: 'frozen', text: t('history.frozen', { name }) }
+    case 'evaluated':
+      if (entry.verdict === 'pass') return { icon: 'passed', text: t('history.passed', { name }) }
+      if (entry.verdict === 'fail') return { icon: 'failed', text: t('history.failed', { name }) }
+      return { icon: 'failed', text: t('history.infra', { name }) }
+    case 'approved':
+      return { icon: 'approved', text: t('history.approved', { name }) }
+    case 'rejected':
+      return { icon: 'rejected', text: t('history.rejected', { name }) }
+    case 'reopened':
+      return { icon: 'reopened', text: t('history.reopened', { name }) }
+    case 'published':
+      return { icon: 'published', text: t('history.published', { name }) }
+    case 'promoted':
+      return entry.alias === 'prod'
+        ? { icon: 'prod', text: t('history.prod', { name }) }
+        : { icon: 'published', text: t('history.staging', { name }) }
+  }
+}
+
+function historyTag(entry: ProposalHistoryEntry): Pick<HistoryItemView, 'tag' | 'tagTone'> {
+  if (entry.kind === 'rejected' && entry.reasonCode) {
+    return { tag: reasonCodeLabel(entry.reasonCode), tagTone: 'neutral' }
+  }
+  if (entry.kind === 'evaluated' && entry.items !== null && entry.verdict !== 'failed_infra') {
+    const total = entry.items
+    const passed = total - (entry.itemsFailed ?? 0)
+    return {
+      tag: t('proposal.criteria', { passed, total }),
+      tagTone: entry.verdict === 'pass' ? 'success' : 'danger',
+    }
+  }
+  return { tag: null, tagTone: 'neutral' }
+}
+
+/**
+ * The verdict story, oldest first: how it got here, each test and its result, the decisions
+ * (with agent-core's rejection reason) and the way to production. From the platform's audit.
+ */
+export function historyView(entries: readonly ProposalHistoryEntry[]): HistoryItemView[] {
+  return entries.map((entry, index) => ({
+    key: `${entry.kind}:${entry.at}:${index}`,
+    ...historyText(entry),
+    ...historyTag(entry),
+    releaseId: entry.kind === 'published' || entry.kind === 'promoted' ? entry.releaseId : null,
+    at: entry.at,
+  }))
+}
+
+/** The release this proposal published last (from its history), or null. */
+export function publishedReleaseOf(entries: readonly ProposalHistoryEntry[]): string | null {
+  const published = entries.filter((e) => e.kind === 'published' && e.releaseId)
+  return published.at(-1)?.releaseId ?? null
+}
+
+/** Whether the improvement engine brought it here (its history says so). */
+export function announcedByEngine(entries: readonly ProposalHistoryEntry[]): boolean {
+  return entries.some((e) => e.kind === 'tracked' && e.source === 'engine')
 }
 
 /** The agent's version inside a release (`kind: agent`, the release's agent), or null. */

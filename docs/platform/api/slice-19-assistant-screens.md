@@ -164,6 +164,13 @@ callout, the call view) and under the email composer, each with "Hablar con una 
   on. The page object's `customerPanel()` matches either name. The assistant's own flows need agent-core
   (Playwright runs the backend without it), so they are covered by the component tests above.
 
+**Manual smoke check (read-only)** against the local stack (`../stack`, platform `origin/main` + a real
+agent-core): a real packet from `GET /cases/{id}/handoff` has `agent` as `{id, version}`, `reason_code`
+`interrupt:fraude`, `priority` `critical`, `target_queue` `fraude`, empty fact lists and a generic summary in
+the customer's language ("Foi acionada uma interrupção que exige atendimento humano…"). `readHandoff` reads
+it as "Detectó algo que debe atender una persona" (Fraude), Crítica, cola "Fraude", "Nada verificado", and
+the empty lines of each section; the test pins that reason code.
+
 ## 7. Known gaps
 
 - **No browser e2e of an assistant conversation, of the AI-off release or of "Colas" rows**: they need a
@@ -179,5 +186,6 @@ callout, the call view) and under the email composer, each with "Hablar con una 
   mensaje y te atiende el asistente virtual"): the demo list does not say which customers are linked.
 - **The audit has no "Asistente virtual" family or "Quién" filter** (IaSuAudit): the backend's families and
   actor kinds are unchanged; the assistant's events stay in their families.
-- **Fact names** in the handoff are agent-core's keys, humanized, not translated.
+- **Fact names** in the handoff are agent-core's keys, humanized, not translated; the summary is in the
+  case language (Portuguese for a Brazilian customer), shown as agent-core wrote it.
 - Classifying the case type from the handoff is S21.

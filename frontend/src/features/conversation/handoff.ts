@@ -93,8 +93,9 @@ export function handoffReason(code: string | null): { reason: string; detail: st
       return { reason: 'Una política pide que lo atienda una persona', detail }
     case 'rule':
       return { reason: 'Una regla del asistente lo pasó a una persona', detail }
+    // agent-core interrupts the flow on a situation only a person may handle ("interrupt:fraude").
     case 'interrupt':
-      return { reason: 'El asistente se interrumpió', detail }
+      return { reason: 'Detectó algo que debe atender una persona', detail }
     default:
       return { reason: humanizeKey(code), detail: null }
   }

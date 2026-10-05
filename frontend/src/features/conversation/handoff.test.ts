@@ -111,7 +111,11 @@ describe('words for agent-core codes', () => {
       reason: 'Una regla del asistente lo pasó a una persona',
       detail: 'Monto alto',
     })
-    expect(handoffReason('interrupt:timeout').reason).toBe('El asistente se interrumpió')
+    // As a real agent-core sends it for a possible fraud.
+    expect(handoffReason('interrupt:fraude')).toEqual({
+      reason: 'Detectó algo que debe atender una persona',
+      detail: 'Fraude',
+    })
     expect(handoffReason('something_new')).toEqual({ reason: 'Something new', detail: null })
     expect(handoffReason(null).reason).toBe('El asistente lo pasó a una persona')
   })

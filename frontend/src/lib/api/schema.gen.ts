@@ -352,6 +352,418 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/builder/aliases/{agentId}/{alias}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Which release an alias (`staging`, `prod`) points to
+     * @description 404 `registry_not_found` when the alias points nowhere.
+     */
+    get: operations['builder_get_alias']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/aliases/{agentId}/{alias}/promote': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Point an alias (`staging` or `prod`) at a release
+     * @description Promoting to `prod` is what customers feel. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
+     */
+    post: operations['builder_promote_alias']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/chat': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The caller's conversation with the builder agent
+     * @description One thread per person. `available: false` (no messages, status 200) while agent-core is not configured: hide the chat.
+     */
+    get: operations['builder_get_chat']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/chat/messages': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Tell the builder agent what to change
+     * @description The agent (`constructor-chat`) reads the current version, drafts the change, creates a proposal, writes the draft and validates it. It only proposes: freezing, evaluating, approving and publishing are the screens' steps, and approving and publishing are a person's. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`), like the analyst's copilot: a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Proposals the answer mentions are tracked and returned in `proposals`. 409 `builder_busy` while it answers a previous message; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the message stays in the thread: send it again with the same `clientMessageId`).
+     */
+    post: operations['builder_ask_builder']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/entities/{kind}/{entityId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * An entity version with its full content
+     * @description The latest version, or `?version=X.Y.Z`. `entityId` may contain `/`.
+     */
+    get: operations['builder_get_entity']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The proposals to change agents, newest first
+     * @description agent-core's registry has no list call, so this is the platform's index: the proposals created here, found through the builder chat or tracked by id. With `refresh` (default) each row is re-read from the registry (`live: true`); a row the registry did not answer for keeps its cached state (`live: false`). At most 50.
+     */
+    get: operations['builder_list_proposals']
+    put?: never
+    /**
+     * Start a proposal to change an agent
+     * @description Creates a proposal in `draft`, based on the agent's `staging` release. The next steps are `PUT .../draft`, `validate`, `freeze`, `evaluate`, then a person approves and publishes.
+     */
+    post: operations['builder_create_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/track': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Bring a proposal agent-core already has into the list
+     * @description For a proposal made outside this screen (the builder chat's answer names the id, or someone made it by hand). Idempotent. 404 `registry_not_found` if the registry does not know it.
+     */
+    post: operations['builder_track_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** One proposal: its draft, the last evaluation and the approver's review */
+    get: operations['builder_get_proposal']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}/approve': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Approve the evaluated candidate (`evaluated` → `approved`)
+     * @description A person's decision, never the builder agent's. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`). `candidateHash` must be the proposal's current one (409 `registry_conflict`, `candidate_changed`). A proposal that loosens the yardstick needs `acceptYardstickLoosened` (409 `registry_loosening_not_accepted` lists what it loosens).
+     */
+    post: operations['builder_approve_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}/draft': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Write the draft: the entities this proposal changes
+     * @description Replaces the whole draft (only while the proposal is in `draft`). `expectedRev` must be the proposal's current `rev` (409 `registry_conflict`, `registryCode: proposal_stale`). Each change is a full entity (`kind`, `content` with its own `id` and `version`, `docs`). agent-core checks its limits and refuses edits to the platform's guardrails (403 `registry_forbidden`).
+     */
+    put: operations['builder_save_draft']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}/evaluate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Run the agent's evaluation suite on the candidate (`candidate` → `evaluated`)
+     * @description Waits for the evaluation (it runs the real agent: seconds to minutes). `200` with the report: the verdict is `pass` (the proposal is `evaluated`) or `failed_infra`. A failed gate is `409 registry_gate_failed` with the `report` (the proposal went back to `draft`). An agent without an `eval_suite` cannot be evaluated: 404 `registry_not_found` or 422 `registry_validation_failed`, and so it cannot be approved or published.
+     */
+    post: operations['builder_evaluate_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}/freeze': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Freeze the draft into a candidate (`draft` → `candidate`)
+     * @description The candidate is identified by its hash; evaluation and approval bind to it, and any edit makes another one. 422 `registry_validation_failed` (with `violations`) if the draft is not valid.
+     */
+    post: operations['builder_freeze_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}/publish': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Publish the approved candidate as a release (`approved` → `published`)
+     * @description `staging` now points at the release; promoting to `prod` is a separate step. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`). Idempotent on `Idempotency-Key`. If `staging` moved since the proposal was made it goes back to `draft` (409 `registry_conflict`, `proposal_stale`): freeze and evaluate again.
+     */
+    post: operations['builder_publish_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}/reject': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Reject the evaluated candidate: back to `draft`
+     * @description The reason is kept by the registry. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
+     */
+    post: operations['builder_reject_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}/reopen': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Back to `draft` to edit (from `candidate`, `evaluated` or `approved`) */
+    post: operations['builder_reopen_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/proposals/{proposalId}/validate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Check the draft: the violations, or the candidate hash
+     * @description Always 200: `violations` empty means the draft can be frozen. Changes nothing.
+     */
+    post: operations['builder_validate_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/releases/{a}/diff/{b}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** What changed between two releases */
+    get: operations['builder_diff_releases']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/releases/{releaseId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** A release: the exact versions it holds */
+    get: operations['builder_get_release']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/releases/{releaseId}/revoke': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Withdraw a release at once (Administración)
+     * @description No gate. Refused while `prod` points at the release (409 `registry_conflict`: promote another first). Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
+     */
+    post: operations['builder_revoke_release']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/status': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Whether the agent builder is available, and what the caller may do
+     * @description Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured (hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for.
+     */
+    get: operations['builder_get_status']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/builder/versions/{kind}/{entityId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The versions of an entity, oldest first
+     * @description `entityId` may contain `/` (`t/saludo`).
+     */
+    get: operations['builder_list_versions']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/cases/inbox': {
     parameters: {
       query?: never
@@ -544,6 +956,46 @@ export interface paths {
      * @description Assignee only, from `assigned` or `in_progress`. The note is internal (trimmed, blank becomes null, at most 500 characters); the customer never sees the reason or the note. Their next message opens a new case linked to this one.
      */
     post: operations['cases_close_case']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/copilot': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The analyst's conversation with the copilot about this case
+     * @description Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` (with no messages) while agent-core is not configured or the customer is not linked to the dataset: hide the panel, it is not an error.
+     */
+    get: operations['cases_get_copilot']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/copilot/messages': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Ask the copilot something about this case
+     * @description Slice 15 (ADR 0003). The copilot reads and calculates (it suggests what to look up and never acts) and answers as the analyst: agent-core decides what she may see. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; 404 `assistant_disabled` without agent-core; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the question stays in the thread: ask again with the same `clientMessageId`).
+     */
+    post: operations['cases_ask_copilot']
     delete?: never
     options?: never
     head?: never
@@ -1732,6 +2184,40 @@ export interface components {
       /** @description Over every filter except status. */
       statusCounts: components['schemas']['UserStatusCounts']
     }
+    /** AliasChange */
+    AliasChange: {
+      /** Actor */
+      actor: string
+      /** After */
+      after: string
+      /** Agentid */
+      agentId: string
+      /** Alias */
+      alias: string
+      /**
+       * At
+       * Format: date-time
+       */
+      at: string
+      /** Before */
+      before: string | null
+      /** Reason */
+      reason: string
+    }
+    /** AliasState */
+    AliasState: {
+      /** Agentid */
+      agentId: string
+      /** Alias */
+      alias: string
+      /** Releaseid */
+      releaseId: string
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: 'active' | 'revoked'
+    }
     /**
      * AnalystActivity
      * @description What an analyst is doing now ("Ahora"), derived from availability, sessions and load.
@@ -1782,6 +2268,87 @@ export interface components {
        * @description The `token` of the pending confirmation.
        */
       token: string
+    }
+    /** Approval */
+    Approval: {
+      /** Actor */
+      actor: string
+      /**
+       * At
+       * Format: date-time
+       */
+      at: string
+      /** Candidatehash */
+      candidateHash: string
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: 'approved' | 'rejected'
+      /** Proposalid */
+      proposalId: string
+      /** Reason */
+      reason: string | null
+      /** Yardstickloosened */
+      yardstickLoosened: components['schemas']['YardstickChange'][]
+    }
+    /**
+     * ApprovalReview
+     * @description What the approver reviews, as three separate elements.
+     */
+    ApprovalReview: {
+      /** Functionalchanges */
+      functionalChanges: components['schemas']['EntityDraft'][]
+      /** Gate */
+      gate: components['schemas']['GateItem'][]
+      /** Releasechanges */
+      releaseChanges: components['schemas']['ReleaseSettingChange'][]
+      suite: components['schemas']['VersionRef']
+      /** Suitechanges */
+      suiteChanges: components['schemas']['EntityDraft'][]
+      /** Yardstickloosened */
+      yardstickLoosened: components['schemas']['YardstickChange'][]
+    }
+    /** ApproveRequest */
+    ApproveRequest: {
+      /**
+       * Acceptyardstickloosened
+       * @description Required when the proposal loosens the evaluation yardstick (409 `registry_loosening_not_accepted` lists what).
+       * @default false
+       */
+      acceptYardstickLoosened: boolean
+      /**
+       * Candidatehash
+       * @description From `CandidateView` / the proposal.
+       */
+      candidateHash: string
+      /**
+       * Stepupcode
+       * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
+       */
+      stepUpCode: string
+    }
+    /** AskBuilderRequest */
+    AskBuilderRequest: {
+      /**
+       * Clientmessageid
+       * @description Client-generated id (UUID v4); also the Idempotency-Key header.
+       * @example 0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10
+       */
+      clientMessageId: string
+      /** Text */
+      text: string
+    }
+    /** AskCopilotRequest */
+    AskCopilotRequest: {
+      /**
+       * Clientmessageid
+       * @description Client-generated id (UUID v4); also the Idempotency-Key header.
+       * @example 0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10
+       */
+      clientMessageId: string
+      /** Text */
+      text: string
     }
     /** AssignmentOut */
     AssignmentOut: {
@@ -1993,6 +2560,7 @@ export interface components {
       | 'access'
       | 'administration'
       | 'escalation'
+      | 'agents'
       | 'other'
     /** Availability */
     Availability: {
@@ -2008,6 +2576,88 @@ export interface components {
      * @enum {string}
      */
     AvailabilityStatus: 'available' | 'paused'
+    /** BuilderExchange */
+    BuilderExchange: {
+      /**
+       * Answers
+       * @description What the builder answered (one or more messages); empty if it said nothing.
+       */
+      answers: components['schemas']['BuilderMessage'][]
+      message: components['schemas']['BuilderMessage']
+      /**
+       * Proposals
+       * @description Proposals the answer mentions that the registry confirmed, now in the list.
+       */
+      proposals: components['schemas']['ProposalSummary'][]
+      /**
+       * Replayed
+       * @description A retry of a message that was already answered.
+       */
+      replayed: boolean
+    }
+    /** BuilderMessage */
+    BuilderMessage: {
+      /**
+       * Answers
+       * @description On an agent message: the `id` of the person's message it answers.
+       */
+      answers: string | null
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      /** Id */
+      id: string
+      /**
+       * Role
+       * @enum {string}
+       */
+      role: 'person' | 'agent'
+      /** Text */
+      text: string
+    }
+    /** BuilderStatus */
+    BuilderStatus: {
+      /**
+       * Available
+       * @description False while agent-core is not configured: hide the agent builder.
+       */
+      available: boolean
+      /**
+       * Canapprove
+       * @description Approve, reject, publish and promote (needs step-up).
+       */
+      canApprove: boolean
+      /**
+       * Canrevoke
+       * @description Revoke a release (Administración; needs step-up).
+       */
+      canRevoke: boolean
+      /**
+       * Stepupdigits
+       * @description How many digits the code has.
+       */
+      stepUpDigits: number | null
+      /**
+       * Stepupmethod
+       * @description How the second factor is asked: a code from the authenticator app.
+       */
+      stepUpMethod: 'authenticator' | null
+    }
+    /** BuilderThread */
+    BuilderThread: {
+      /**
+       * Available
+       * @description False while agent-core is not configured.
+       */
+      available: boolean
+      /**
+       * Messages
+       * @description Oldest first (the newest 200).
+       */
+      messages: components['schemas']['BuilderMessage'][]
+    }
     /**
      * Call
      * @description A simulated phone call (slice 12) as staff see it. Its transcript is the case's
@@ -2121,6 +2771,22 @@ export interface components {
      * @enum {string}
      */
     CallState: 'ringing' | 'in_call' | 'on_hold' | 'ended'
+    /** CandidateView */
+    CandidateView: {
+      /** Autobumped */
+      autoBumped: components['schemas']['VersionRef'][]
+      /**
+       * Candidatehash
+       * @description Send it to approve: the approval binds to it.
+       */
+      candidateHash: string
+      /** Newversions */
+      newVersions: components['schemas']['VersionRef'][]
+      /** Proposalid */
+      proposalId: string
+      /** Releaseidpreview */
+      releaseIdPreview: string
+    }
     /** CaseCapabilities */
     CaseCapabilities: {
       /**
@@ -2395,6 +3061,12 @@ export interface components {
       expectedVersion: number
       priority: components['schemas']['CasePriority']
     }
+    /** ChangedRef */
+    ChangedRef: {
+      after: components['schemas']['VersionRef']
+      before: components['schemas']['VersionRef']
+      docs: components['schemas']['VersionDocs']
+    }
     /** CloseCaseRequest */
     CloseCaseRequest: {
       /**
@@ -2412,6 +3084,57 @@ export interface components {
      * @enum {string}
      */
     CloseReason: 'resolved' | 'customer_unresponsive' | 'duplicate' | 'out_of_scope' | 'other'
+    /** CopilotExchange */
+    CopilotExchange: {
+      /**
+       * Answers
+       * @description What the copilot answered (one or more messages); empty if it said nothing.
+       */
+      answers: components['schemas']['CopilotMessage'][]
+      question: components['schemas']['CopilotMessage']
+      /**
+       * Replayed
+       * @description A retry of a question that was already asked.
+       */
+      replayed: boolean
+    }
+    /** CopilotMessage */
+    CopilotMessage: {
+      /**
+       * Answers
+       * @description On a copilot message: the `id` of the analyst's question it answers.
+       */
+      answers: string | null
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      /** Id */
+      id: string
+      /**
+       * Role
+       * @enum {string}
+       */
+      role: 'analyst' | 'copilot'
+      /** Text */
+      text: string
+    }
+    /** CopilotThread */
+    CopilotThread: {
+      /**
+       * Available
+       * @description False while agent-core is not configured or the customer is not linked to the dataset: hide the copilot panel.
+       */
+      available: boolean
+      /** Caseid */
+      caseId: string
+      /**
+       * Messages
+       * @description The analyst's thread for this case, oldest first (the newest 200).
+       */
+      messages: components['schemas']['CopilotMessage'][]
+    }
     /**
      * CountryCode
      * @enum {string}
@@ -2426,6 +3149,16 @@ export interface components {
       channel?: ('chat_app' | 'chat_web') | null
       /** Customerid */
       customerId: string
+    }
+    /** CreateProposalRequest */
+    CreateProposalRequest: {
+      /**
+       * Agentid
+       * @description The agent to change (agent-core's id).
+       */
+      agentId: string
+      /** Title */
+      title: string
     }
     /** CreateTeamRequest */
     CreateTeamRequest: {
@@ -2858,6 +3591,66 @@ export interface components {
        */
       subject: string | null
     }
+    /** EntityDraft */
+    EntityDraft: {
+      /**
+       * Content
+       * @description The entity as agent-core defines it (it carries its own `id` and `version`).
+       */
+      content: {
+        [key: string]: unknown
+      }
+      docs: components['schemas']['VersionDocs']
+      /**
+       * Kind
+       * @description `agent`, `flow`, `prompt`, `tool`... or `release_settings`.
+       */
+      kind: string
+    }
+    /** EntityDraftRequest */
+    EntityDraftRequest: {
+      /** Content */
+      content: {
+        [key: string]: unknown
+      }
+      docs: components['schemas']['VersionDocsRequest']
+      /** Kind */
+      kind: string
+    }
+    /** EntityInRelease */
+    EntityInRelease: {
+      /** Changedvsbase */
+      changedVsBase: boolean
+      /** Contenthash */
+      contentHash: string
+      docs: components['schemas']['VersionDocs']
+      ref: components['schemas']['VersionRef']
+    }
+    /** EntityRef */
+    EntityRef: {
+      /** Id */
+      id: string
+      /** Version */
+      version: string
+    }
+    /** EntityVersion */
+    EntityVersion: {
+      /** Content */
+      content: {
+        [key: string]: unknown
+      }
+      /** Contenthash */
+      contentHash: string
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      /** Createdby */
+      createdBy: string
+      docs: components['schemas']['VersionDocs']
+      ref: components['schemas']['VersionRef']
+    }
     /** EscalateRequest */
     EscalateRequest: {
       /**
@@ -2963,6 +3756,101 @@ export interface components {
      * @enum {string}
      */
     EscalationState: 'open' | 'answered' | 'taken' | 'reassigned' | 'withdrawn' | 'closed'
+    /** EvalReport */
+    EvalReport: {
+      /** Detail */
+      detail: string | null
+      /**
+       * Items
+       * @description Each gate item apart: there is no composite score.
+       */
+      items: components['schemas']['GateItem'][]
+      /**
+       * Judgenotes
+       * @description Informative notes, never in the verdict.
+       */
+      judgeNotes: {
+        [key: string]: unknown
+      }[]
+      /**
+       * Results
+       * @description Result of each scenario run, passed through.
+       */
+      results: {
+        [key: string]: unknown
+      }[]
+      /**
+       * Runs
+       * @description agent-core's measurements per run (`base_on_old`, `cand_on_old`, `cand_on_new`), passed through.
+       */
+      runs: {
+        [key: string]: unknown
+      } | null
+      /**
+       * Verdict
+       * @enum {string}
+       */
+      verdict: 'pass' | 'fail' | 'failed_infra'
+      /** Yardstickchanges */
+      yardstickChanges: components['schemas']['YardstickChange'][]
+    }
+    /** EvalRun */
+    EvalRun: {
+      /**
+       * At
+       * Format: date-time
+       */
+      at: string
+      /** Basereleaseid */
+      baseReleaseId: string | null
+      /** Candidatehash */
+      candidateHash: string
+      /** Evalrunid */
+      evalRunId: string
+      /** Proposalid */
+      proposalId: string
+      report: components['schemas']['EvalReport']
+      suite: components['schemas']['VersionRef']
+      /**
+       * Verdict
+       * @enum {string}
+       */
+      verdict: 'pass' | 'fail' | 'failed_infra'
+    }
+    /** EvaluateRequest */
+    EvaluateRequest: {
+      /** Suiteid */
+      suiteId: string
+      /** Suiteversion */
+      suiteVersion?: string | null
+    }
+    /** GateItem */
+    GateItem: {
+      /** Basevalue */
+      baseValue: string | null
+      /** Floor */
+      floor: string | null
+      /** Metricid */
+      metricId: string
+      /** Noisemargin */
+      noiseMargin: string | null
+      /** Passed */
+      passed: boolean
+      /**
+       * Phase
+       * @description base_yardstick, new_yardstick or platform.
+       */
+      phase: string
+      /** Reason */
+      reason: string
+      /** Role */
+      role: string | null
+      /**
+       * Value
+       * @description Exact decimal as text; null = not measured.
+       */
+      value: string | null
+    }
     /** HealthResponse */
     HealthResponse: {
       /** Checks */
@@ -3651,8 +4539,19 @@ export interface components {
       | 'step_up_not_pending'
       | 'invalid_step_up_code'
       | 'handoff_unavailable'
+      | 'copilot_unavailable'
+      | 'copilot_busy'
       | 'agent_core_unavailable'
       | 'agent_core_rejected'
+      | 'builder_step_up_invalid'
+      | 'builder_busy'
+      | 'registry_validation_failed'
+      | 'registry_gate_failed'
+      | 'registry_loosening_not_accepted'
+      | 'registry_conflict'
+      | 'registry_forbidden'
+      | 'registry_not_found'
+      | 'registry_quota_exceeded'
       | 'analyst_not_eligible'
       | 'language_mismatch'
       | 'analyst_paused'
@@ -3777,6 +4676,12 @@ export interface components {
        */
       escalationId: string | null
       /**
+       * Evalrunid
+       * @description registry_gate_failed: the run the registry stored it under.
+       * @default null
+       */
+      evalRunId: string | null
+      /**
        * Field
        * @description invalid_value, email_taken, team_name_taken: the request field at fault (name, email, roles, languages, teamId).
        * @default null
@@ -3812,11 +4717,25 @@ export interface components {
        */
       reasons: components['schemas']['PasswordRule'][] | null
       /**
+       * Registrycode
+       * @description registry_*: agent-core's own code (validation_failed, gate_failed, proposal_stale, candidate_changed, illegal_transition, forbidden_role, step_up_required, not_found, loosening_not_accepted, idempotency_conflict, quota_exceeded).
+       * @default null
+       */
+      registryCode: string | null
+      /**
        * Remainingattempts
-       * @description invalid_credentials, mfa_invalid, totp_invalid: failed attempts left before the lock.
+       * @description invalid_credentials, mfa_invalid, totp_invalid, builder_step_up_invalid: failed attempts left before the lock.
        * @default null
        */
       remainingAttempts: number | null
+      /**
+       * Report
+       * @description registry_gate_failed: the failed evaluation (`EvalReport`, camelCase).
+       * @default null
+       */
+      report: {
+        [key: string]: unknown
+      } | null
       /**
        * Requestid
        * @default null
@@ -3849,8 +4768,158 @@ export interface components {
        * @default null
        */
       unlockAt: string | null
+      /**
+       * Violations
+       * @description registry_validation_failed: the rules the draft breaks (`Violation`, camelCase: rule, flow, nodeId, path, message).
+       * @default null
+       */
+      violations:
+        | {
+            [key: string]: unknown
+          }[]
+        | null
+      /**
+       * Yardstickloosened
+       * @description registry_loosening_not_accepted: what the proposal loosens (`YardstickChange`: kind, target, message).
+       * @default null
+       */
+      yardstickLoosened:
+        | {
+            [key: string]: unknown
+          }[]
+        | null
     } & {
       [key: string]: unknown
+    }
+    /** PromoteRequest */
+    PromoteRequest: {
+      /**
+       * Reason
+       * @default
+       */
+      reason: string
+      /** Releaseid */
+      releaseId: string
+      /**
+       * Stepupcode
+       * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
+       */
+      stepUpCode: string
+    }
+    /** Proposal */
+    Proposal: {
+      /** Agentid */
+      agentId: string
+      /** Basereleaseid */
+      baseReleaseId: string | null
+      /**
+       * Candidatehash
+       * @description Set from `candidate` on.
+       */
+      candidateHash: string | null
+      /**
+       * Createdby
+       * @description A staff id, or the builder agent's service identity.
+       */
+      createdBy: string
+      origin: components['schemas']['ProposalOrigin']
+      /** Proposalid */
+      proposalId: string
+      /**
+       * Rev
+       * @description The draft revision: send it back as `expectedRev` to save.
+       */
+      rev: number
+      state: components['schemas']['ProposalState']
+      /** Title */
+      title: string
+      /**
+       * Updatedat
+       * Format: date-time
+       */
+      updatedAt: string
+    }
+    /** ProposalDetail */
+    ProposalDetail: {
+      /**
+       * Changes
+       * @description The draft: what the proposal changes.
+       */
+      changes: components['schemas']['EntityDraft'][]
+      /** @description The evaluation of the current candidate (null before one, and after a failed gate: the proposal is back in draft; that report came with the 409). */
+      lastEval: components['schemas']['EvalRun'] | null
+      proposal: components['schemas']['Proposal']
+      /** @description Present once there is an evaluation. */
+      review: components['schemas']['ApprovalReview'] | null
+    }
+    /** ProposalList */
+    ProposalList: {
+      /** Items */
+      items: components['schemas']['ProposalSummary'][]
+    }
+    /**
+     * ProposalOrigin
+     * @enum {string}
+     */
+    ProposalOrigin: 'manual' | 'builder_chat' | 'auto_detect' | 'import'
+    /**
+     * ProposalState
+     * @enum {string}
+     */
+    ProposalState: 'draft' | 'candidate' | 'evaluated' | 'approved' | 'published'
+    /** ProposalSummary */
+    ProposalSummary: {
+      /** Agentid */
+      agentId: string
+      /** Basereleaseid */
+      baseReleaseId: string | null
+      /** Candidatehash */
+      candidateHash: string | null
+      /** Createdby */
+      createdBy: string
+      /**
+       * Live
+       * @description True when `state` was just read from the registry; false when it is the cached value (the registry did not answer for this row).
+       */
+      live: boolean
+      origin: components['schemas']['ProposalOrigin']
+      /** Proposalid */
+      proposalId: string
+      /**
+       * Refreshedat
+       * Format: date-time
+       * @description When the platform last read it from the registry.
+       */
+      refreshedAt: string
+      /**
+       * Registeredby
+       * @description The staff member who brought it into this list.
+       */
+      registeredBy: string
+      /** Rev */
+      rev: number
+      /**
+       * Source
+       * @description Created here, found through the builder chat, or tracked by id.
+       * @enum {string}
+       */
+      source: 'platform' | 'chat' | 'tracked'
+      state: components['schemas']['ProposalState']
+      /** Title */
+      title: string
+      /**
+       * Updatedat
+       * Format: date-time
+       */
+      updatedAt: string
+    }
+    /** PublishRequest */
+    PublishRequest: {
+      /**
+       * Stepupcode
+       * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
+       */
+      stepUpCode: string
     }
     /** QueueCount */
     QueueCount: {
@@ -3915,6 +4984,78 @@ export interface components {
        */
       count: number
     }
+    /** RejectRequest */
+    RejectRequest: {
+      /** Reason */
+      reason: string
+      /**
+       * Stepupcode
+       * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
+       */
+      stepUpCode: string
+    }
+    /** ReleaseDetail */
+    ReleaseDetail: {
+      /** Agentid */
+      agentId: string
+      /** Basereleaseid */
+      baseReleaseId: string | null
+      /** Entities */
+      entities: components['schemas']['EntityInRelease'][]
+      /** Evalsuiterefs */
+      evalSuiteRefs: components['schemas']['VersionRef'][]
+      injectionRuleset: components['schemas']['EntityRef'] | null
+      /**
+       * Interrupts
+       * @description agent-core's interrupts, passed through.
+       */
+      interrupts: {
+        [key: string]: unknown
+      }[]
+      /** Knowledgesnapshot */
+      knowledgeSnapshot: string | null
+      languageDetection: components['schemas']['EntityRef']
+      /** Maxinputchars */
+      maxInputChars: number
+      /** Proposalid */
+      proposalId: string | null
+      /**
+       * Publishedat
+       * Format: date-time
+       */
+      publishedAt: string
+      /** Publishedby */
+      publishedBy: string
+      /** Releaseid */
+      releaseId: string
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: 'active' | 'revoked'
+    }
+    /** ReleaseDiff */
+    ReleaseDiff: {
+      /** A */
+      a: string
+      /** Added */
+      added: components['schemas']['VersionRef'][]
+      /** B */
+      b: string
+      /** Changed */
+      changed: components['schemas']['ChangedRef'][]
+      /** Removed */
+      removed: components['schemas']['VersionRef'][]
+    }
+    /** ReleaseSettingChange */
+    ReleaseSettingChange: {
+      /** After */
+      after: unknown
+      /** Before */
+      before: unknown
+      /** Field */
+      field: string
+    }
     /** RenameTeamRequest */
     RenameTeamRequest: {
       /**
@@ -3941,6 +5082,16 @@ export interface components {
        */
       note: string
     }
+    /** RevokeRequest */
+    RevokeRequest: {
+      /** Reason */
+      reason: string
+      /**
+       * Stepupcode
+       * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
+       */
+      stepUpCode: string
+    }
     /** RoleCounts */
     RoleCounts: {
       /** Admin */
@@ -3951,6 +5102,19 @@ export interface components {
       analyst: number
       /** Supervisor */
       supervisor: number
+    }
+    /** SaveDraftRequest */
+    SaveDraftRequest: {
+      /**
+       * Changes
+       * @description The whole draft: it replaces the previous one.
+       */
+      changes: components['schemas']['EntityDraftRequest'][]
+      /**
+       * Expectedrev
+       * @description The `rev` the caller saw (stale = 409).
+       */
+      expectedRev: number
     }
     /**
      * SelfChangeAction
@@ -4206,6 +5370,11 @@ export interface components {
        */
       secret: string
     }
+    /** TrackProposalRequest */
+    TrackProposalRequest: {
+      /** Proposalid */
+      proposalId: string
+    }
     /** Turn */
     Turn: {
       audience: components['schemas']['TurnAudience']
@@ -4335,6 +5504,18 @@ export interface components {
       /** Type */
       type: string
     }
+    /** ValidationReport */
+    ValidationReport: {
+      /** Autobumped */
+      autoBumped: components['schemas']['VersionRef'][]
+      /**
+       * Candidatehash
+       * @description Null while there are violations.
+       */
+      candidateHash: string | null
+      /** Violations */
+      violations: components['schemas']['Violation'][]
+    }
     /** VerifyStepUpRequest */
     VerifyStepUpRequest: {
       /**
@@ -4343,6 +5524,44 @@ export interface components {
        */
       code: string
     }
+    /** VersionDocs */
+    VersionDocs: {
+      /** Changelog */
+      changelog: string
+      /** Description */
+      description: string
+      /**
+       * Rationale
+       * @description Why this entity changes.
+       */
+      rationale: string
+    }
+    /** VersionDocsRequest */
+    VersionDocsRequest: {
+      /** Changelog */
+      changelog: string
+      /** Description */
+      description: string
+      /** Rationale */
+      rationale: string
+    }
+    /** VersionList */
+    VersionList: {
+      /**
+       * Items
+       * @description Oldest first.
+       */
+      items: components['schemas']['VersionSummary'][]
+    }
+    /** VersionRef */
+    VersionRef: {
+      /** Id */
+      id: string
+      /** Kind */
+      kind: string
+      /** Version */
+      version: string
+    }
     /** VersionRequest */
     VersionRequest: {
       /**
@@ -4350,6 +5569,48 @@ export interface components {
        * @description The version the admin saw.
        */
       expectedVersion: number
+    }
+    /** VersionSummary */
+    VersionSummary: {
+      /** Contenthash */
+      contentHash: string
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      /** Createdby */
+      createdBy: string
+      docs: components['schemas']['VersionDocs']
+      ref: components['schemas']['VersionRef']
+    }
+    /** Violation */
+    Violation: {
+      /** Flow */
+      flow: string | null
+      /** Message */
+      message: string
+      /** Nodeid */
+      nodeId: string | null
+      /** Path */
+      path: string | null
+      /**
+       * Rule
+       * @description agent-core's rule id (G0-05, REG-PROPOSAL...).
+       */
+      rule: string
+    }
+    /** YardstickChange */
+    YardstickChange: {
+      /**
+       * Kind
+       * @description metric_removed, floor_loosened, noise_widened...
+       */
+      kind: string
+      /** Message */
+      message: string
+      /** Target */
+      target: string
     }
   }
   responses: never
@@ -5681,6 +6942,1978 @@ export interface operations {
       }
     }
   }
+  builder_get_alias: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        agentId: string
+        alias: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AliasState']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_promote_alias: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        agentId: string
+        alias: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PromoteRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AliasChange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_get_chat: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BuilderThread']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_ask_builder: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Must equal the body `clientMessageId`; a retry with it is a replay. */
+        'Idempotency-Key': string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AskBuilderRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of a message already answered */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BuilderExchange']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BuilderExchange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_get_entity: {
+    parameters: {
+      query?: {
+        version?: string | null
+      }
+      header?: never
+      path: {
+        kind: string
+        entityId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EntityVersion']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_list_proposals: {
+    parameters: {
+      query?: {
+        agentId?: string | null
+        /** @description Filter by the proposal state. */
+        state?: components['schemas']['ProposalState'] | null
+        limit?: number
+        /** @description Re-read each row from the registry. */
+        refresh?: boolean
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProposalList']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_create_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateProposalRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Proposal']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_track_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TrackProposalRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProposalSummary']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_get_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProposalDetail']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_approve_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ApproveRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Approval']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_save_draft: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SaveDraftRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Proposal']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_evaluate_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EvaluateRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EvalReport']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_freeze_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CandidateView']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_publish_proposal: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description One key per publication the caller means to make: a retry with it returns the same release (the registry de-duplicates it). */
+        'Idempotency-Key': string
+      }
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PublishRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReleaseDetail']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_reject_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RejectRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Proposal']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_reopen_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Proposal']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_validate_proposal: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ValidationReport']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_diff_releases: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        a: string
+        b: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReleaseDiff']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_get_release: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        releaseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReleaseDetail']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_revoke_release: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        releaseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RevokeRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReleaseDetail']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_get_status: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BuilderStatus']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_list_versions: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        kind: string
+        entityId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['VersionList']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   cases_get_inbox: {
     parameters: {
       query?: {
@@ -6422,6 +9655,165 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_get_copilot: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CopilotThread']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_ask_copilot: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Must equal the body `clientMessageId`; a retry with it is a replay. */
+        'Idempotency-Key': string
+      }
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AskCopilotRequest']
+      }
+    }
+    responses: {
+      /** @description Replay of a question already answered */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CopilotExchange']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CopilotExchange']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
         headers: {
           [name: string]: unknown
         }

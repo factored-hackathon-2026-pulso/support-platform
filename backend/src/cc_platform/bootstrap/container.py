@@ -32,10 +32,12 @@ from cc_platform.application.ai.priority import ApplyHandoffPriority, HandoffPri
 from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
 from cc_platform.application.ai.registry import AgentRegistryClient
 from cc_platform.application.ai.staff import (
+    AiOffHandoverProcess,
     GetCaseHandoff,
     LinkBankCustomers,
     RecordHandoffResolution,
     ReleaseAssistantCase,
+    ReleaseAssistantCasesOnAiOff,
 )
 from cc_platform.application.ai.suggestion_process import (
     SUGGESTION_PROCESS_EVENTS,
@@ -229,7 +231,7 @@ from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
 from cc_platform.domain.people.staff import Language
-from cc_platform.domain.platform.events import PLATFORM_EVENTS
+from cc_platform.domain.platform.events import PLATFORM_EVENTS, PlatformAiToggled
 from cc_platform.infrastructure.ai.ed25519_issuer import Ed25519AgentCredentialIssuer
 from cc_platform.infrastructure.ai.http_registry import HttpAgentRegistry
 from cc_platform.infrastructure.ai.http_runtime import HttpAgentRuntime
@@ -513,6 +515,13 @@ def _build_assistant(
             ),
         ),
         event_types=[AssistantEnded],
+    )
+    # Slice 19: turning AI off hands the assistant's open conversations to people.
+    bus.subscribe(
+        AiOffHandoverProcess(
+            background, ReleaseAssistantCasesOnAiOff(uow=uow, clock=clock, handover=handover)
+        ),
+        event_types=[PlatformAiToggled],
     )
     use_cases = AssistantUseCases(
         confirm=AnswerAssistantConfirmation(uow=uow, clock=clock, ids=ids),

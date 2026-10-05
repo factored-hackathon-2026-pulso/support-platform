@@ -1,8 +1,9 @@
 """The urgency the assistant saw becomes the case's priority (ADR 0003, slice 14 follow-up).
 
 When the assistant escalates, agent-core's handoff packet carries a ``priority`` (``low`` ..
-``critical``, or ``normal`` when its flow set none, which the platform reads as ``medium``). The platform copies it to the case, so the analyst sees the urgency before opening
-it: a stolen card arrives ``critical``. It runs in the background after the hand-over (reading the
+``critical``, or ``normal`` when its flow set none, which the platform reads as ``medium``).
+The platform copies it to the case, so the analyst sees the urgency before opening it: a stolen
+card arrives ``critical``. It runs in the background after the hand-over (reading the
 packet is a call to agent-core, never inside the hand-over's Unit of Work), with the customer's own
 credential (the packet's priority and queue are not personal data), and is best effort: no packet,
 an unknown value or a case already closed changes nothing.

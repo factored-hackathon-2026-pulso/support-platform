@@ -299,6 +299,7 @@ _ASSISTANT_RELEASE_TEXT: dict[str, str] = {
     "failed": "El asistente no pudo seguir atendiendo ({code}). El caso pasa a una persona.",
     "supervision": "{who} tomó el caso del asistente.",
     "customer_request": "El cliente pidió hablar con una persona.",
+    "ai_disabled": "IA desactivada: el caso pasó del asistente a una persona.",
 }
 
 

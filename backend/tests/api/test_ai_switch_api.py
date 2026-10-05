@@ -166,7 +166,7 @@ def test_off_the_builder_is_unavailable(client: TestClient, sign_in: SignIn) -> 
     assert (listed.status_code, listed.json()["code"]) == (404, "assistant_disabled")
 
 
-def test_off_a_conversation_the_assistant_holds_can_still_reach_a_person(
+def test_off_hands_the_assistant_s_open_conversations_to_people(
     *,
     client: TestClient,
     sign_in: SignIn,
@@ -177,11 +177,80 @@ def test_off_a_conversation_the_assistant_holds_can_still_reach_a_person(
 ) -> None:
     runtime.script.append(turn("Hola, ¿en qué te ayudo?"))
     token = customer_session(NATALIA)
+    case_id = write(client, token)["caseId"]
+    drain()
+    available(DANIELA)
+
+    set_ai(client, sign_in, False)
+    drain()
+
+    seen = client.get("/api/v1/customer/conversation", headers=bearer(token)).json()
+    assert seen["conversation"]["status"] == "with_agent"  # Daniela was available
+    assert seen["conversation"]["assistant"] is None
+    texts = [t["text"] for t in seen["turns"]]
+    assert "Te paso con una persona del equipo para que siga con tu caso." in texts
+    assert not any("IA desactivada" in text for text in texts)  # the banner is staff-only
+
+    analyst = bearer(sign_in(ANALYST.email))
+    detail = client.get(f"/api/v1/cases/{case_id}", headers=analyst).json()
+    assert detail["case"]["status"] == "assigned"
+    assert detail["assignment"]["reason"] == "assistant_handoff"
+    page = client.get(f"/api/v1/cases/{case_id}/turns", headers=analyst).json()
+    banners = [t["text"] for t in page["items"] if t["kind"] == "routing"]
+    assert banners[0] == "IA desactivada: el caso pasó del asistente a una persona."
+
+    supervisor = bearer(sign_in(SUPERVISOR.email))
+    events = client.get(
+        "/api/v1/audit/events", headers=supervisor, params={"case": case_id, "limit": 50}
+    ).json()["items"]
+    released = [e for e in events if e["type"] == "case.assistant_released"]
+    assert [(e["actor"]["role"], e["description"]) for e in released] == [
+        ("system", "El caso pasó a una persona porque se apagaron las funciones de IA")
+    ]
+
+    # nothing is left with the assistant: asking for a person now has nobody to leave
+    person = client.post("/api/v1/customer/conversation/human", headers=bearer(token))
+    assert (person.status_code, person.json()["code"]) == (409, "assistant_not_active")
+
+
+def test_off_with_nobody_available_the_conversation_waits_in_the_queue(
+    *,
+    client: TestClient,
+    sign_in: SignIn,
+    customer_session: Callable[..., str],
+    drain: Callable[[], None],
+    runtime: InMemoryAgentRuntime,
+) -> None:
+    runtime.script.append(turn("Hola, ¿en qué te ayudo?"))
+    token = customer_session(NATALIA)
+    write(client, token)
+    drain()
+
+    set_ai(client, sign_in, False)
+    drain()
+
+    seen = client.get("/api/v1/customer/conversation", headers=bearer(token)).json()
+    assert seen["conversation"]["status"] == "waiting_agent"
+
+
+def test_turning_it_on_again_or_repeating_off_releases_nothing_more(
+    *,
+    client: TestClient,
+    sign_in: SignIn,
+    customer_session: Callable[..., str],
+    drain: Callable[[], None],
+    runtime: InMemoryAgentRuntime,
+) -> None:
+    set_ai(client, sign_in, False)
+    drain()
+    set_ai(client, sign_in, True)
+    runtime.script.append(turn("Hola, ¿en qué te ayudo?"))
+    token = customer_session(NATALIA)
     assert write(client, token)["status"] == "with_assistant"
     drain()
-    set_ai(client, sign_in, False)
-    available(DANIELA)
-    person = client.post("/api/v1/customer/conversation/human", headers=bearer(token))
-    assert person.status_code == 200, person.text
+
+    set_ai(client, sign_in, True)  # already on: no event, nothing released
     drain()
-    assert person.json()["status"] in {"waiting_agent", "with_agent"}
+
+    seen = client.get("/api/v1/customer/conversation", headers=bearer(token)).json()
+    assert seen["conversation"]["status"] == "with_assistant"

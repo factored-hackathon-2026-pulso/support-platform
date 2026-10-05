@@ -423,6 +423,7 @@ _RELEASE_TEXT: Mapping[str, str] = {
     "failed": "El asistente no pudo seguir y el caso pasó a una persona",
     "supervision": "Tomó el caso del asistente",
     "customer_request": "Pidió hablar con una persona",
+    "ai_disabled": "El caso pasó a una persona porque se apagaron las funciones de IA",
 }
 
 _ASSISTANT_END_TEXT: Mapping[str, str] = {
@@ -430,7 +431,7 @@ _ASSISTANT_END_TEXT: Mapping[str, str] = {
     "escalated": "El asistente terminó: escaló el caso a una persona",
     "ended": "El asistente terminó su atención sin resolver",
     "failed": "El asistente dejó de atender por una falla",
-    "released": "La atención del asistente terminó porque otra persona tomó el caso",
+    "released": "La atención del asistente terminó: el caso pasó a una persona",
 }
 
 

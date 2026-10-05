@@ -20,7 +20,7 @@ import {
   useProposal,
   useProposalRecord,
 } from '../hooks/use-automation'
-import { agentName, typeName, typeStage } from '../model'
+import { agentDisplayName, typeName, typeStage } from '../model'
 import {
   announcedByEngine,
   changeView,
@@ -124,7 +124,7 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
       <ul className="m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-2 p-0 text-14 text-ink-2">
         <li className="inline-flex items-center gap-1.5">
           <Bot size={15} aria-hidden="true" />
-          {t('proposal.agent', { agent: agentName(proposal.agentId) })}
+          {t('proposal.agent', { agent: agentDisplayName(stages.data, proposal.agentId) })}
         </li>
         {type ? (
           <li className="inline-flex items-center gap-1.5">

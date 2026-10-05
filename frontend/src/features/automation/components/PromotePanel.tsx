@@ -4,7 +4,8 @@ import { automationAgentPath } from '@/app/paths'
 import { Button, Callout, Card, Checkbox, LinkButton, Skeleton, useToast } from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import { useAlias, usePromoteProd, useRelease } from '../hooks/use-automation'
-import { agentName } from '../model'
+import { useAiStages } from '@/features/copilot/core'
+import { agentDisplayName } from '../model'
 import { describeBuilderFailure, reportView } from '../proposals'
 import type { AliasState, ProposalDetail } from '../types'
 import { StepUpDialog } from './StepUpDialog'
@@ -26,7 +27,8 @@ export interface PromotePanelProps {
 export function PromotePanel({ detail, prod, publishedReleaseId }: PromotePanelProps) {
   const { t } = useTranslation('automation')
   const { proposal } = detail
-  const agent = agentName(proposal.agentId)
+  const stages = useAiStages()
+  const agent = agentDisplayName(stages.data, proposal.agentId)
   // Without a recorded publication, the release `staging` points at, if it is this proposal's.
   const staging = useAlias(publishedReleaseId ? null : proposal.agentId, 'staging')
   const stagingRelease = useRelease(staging.data?.releaseId ?? null)

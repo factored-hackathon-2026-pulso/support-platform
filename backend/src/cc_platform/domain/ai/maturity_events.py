@@ -72,6 +72,20 @@ class CopilotToolUsed(DomainEvent):
     tool: str
 
 
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotItemDecided(DomainEvent):
+    """What the analyst did with one item of a suggestion beyond a sent draft: she used or
+    dismissed a ``tool``, an ``action`` or the ``escalate`` recommendation (``ref`` is empty for
+    ``escalate``). A platform-side record next to the suggestion, which it does not change."""
+
+    event_type = "copilot.item_decided"
+    entity = "copilot"
+
+    item: str
+    ref: str
+    decision: str
+
+
 #: The stage changes of a case type: audited and signalled on ``ai:stages``.
 STAGE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseTypeStageAdvanced,
@@ -81,4 +95,8 @@ STAGE_EVENTS: tuple[type[DomainEvent], ...] = (
 )
 
 #: Every event of the maturity model (the stage changes and the tool feedback).
-MATURITY_EVENTS: tuple[type[DomainEvent], ...] = (*STAGE_EVENTS, CopilotToolUsed)
+MATURITY_EVENTS: tuple[type[DomainEvent], ...] = (
+    *STAGE_EVENTS,
+    CopilotToolUsed,
+    CopilotItemDecided,
+)

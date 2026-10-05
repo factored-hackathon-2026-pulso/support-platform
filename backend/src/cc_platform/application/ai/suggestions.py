@@ -25,6 +25,7 @@ from functools import partial
 
 from cc_platform.application.ai.credentials import AgentCredentialIssuer, AgentCredentials
 from cc_platform.application.ai.errors import AgentCoreRejectedError, AgentCoreUnavailableError
+from cc_platform.application.ai.maturity import mode_allows
 from cc_platform.application.ai.runtime import (
     AgentRun,
     AgentRuntime,
@@ -40,6 +41,7 @@ from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor, ensure_any_role
 from cc_platform.domain.ai.errors import CopilotBusyError, CopilotUnavailableError
+from cc_platform.domain.ai.maturity import CopilotMode
 from cc_platform.domain.ai.suggestion import (
     DRAFT_TTL,
     CopilotSuggestion,
@@ -199,6 +201,8 @@ class SuggestionService:
     issuer: AgentCredentialIssuer
     agent: str
     """The suggestions agent (``id@alias``), e.g. ``copiloto-sugerencias@prod``."""
+    stage_gate: bool = False
+    """Slice 21: a manual suggestion only for a case whose type is at stage 2 or more."""
 
     # ------------------------------------------------------------------ 1. prepare
     async def prepare_manual(self, actor: Actor, case_id: str, *, request_key: str) -> Prepared:
@@ -215,6 +219,8 @@ class SuggestionService:
             case = await load_case_for(uow, actor, case_id, write=True)
             analyst = actor.staff_id
             if await uow.bank_links.get(case.customer_id) is None:
+                raise CopilotUnavailableError()
+            if self.stage_gate and not await mode_allows(uow, case.case_type, CopilotMode.TOOLS):
                 raise CopilotUnavailableError()
             now = self.clock.now()
             existing = await uow.copilot_suggestions.get_by_request_key(
@@ -457,12 +463,15 @@ class GetLatestSuggestion:
 
     uow: UnitOfWorkFactory
     clock: Clock
+    stage_gate: bool = False
 
     async def execute(self, actor: Actor, case_id: str) -> LatestSuggestionView:
         ensure_any_role(actor, {StaffRole.ANALYST})
         async with self.uow() as uow:
             case = await load_case_for(uow, actor, case_id, write=True)
             if await uow.bank_links.get(case.customer_id) is None:
+                return LatestSuggestionView(available=False, latest=None)
+            if self.stage_gate and not await mode_allows(uow, case.case_type, CopilotMode.TOOLS):
                 return LatestSuggestionView(available=False, latest=None)
             latest = await uow.copilot_suggestions.latest_for(case.id, actor.staff_id)
             if latest is None or latest.purged_at is not None:

@@ -23,6 +23,7 @@ from functools import partial
 
 from cc_platform.application.ai.credentials import AgentCredentialIssuer, AgentCredentials
 from cc_platform.application.ai.errors import AgentCoreRejectedError, AgentCoreUnavailableError
+from cc_platform.application.ai.maturity import mode_allows
 from cc_platform.application.ai.runtime import (
     AgentRuntime,
     AgentRuntimeError,
@@ -38,6 +39,7 @@ from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
 from cc_platform.application.security import Actor, ensure_any_role
 from cc_platform.domain.ai.copilot import CopilotMessage, CopilotThread
 from cc_platform.domain.ai.errors import CopilotBusyError, CopilotUnavailableError
+from cc_platform.domain.ai.maturity import CopilotMode
 from cc_platform.domain.cases.errors import CaseClosedError
 from cc_platform.domain.people.staff import StaffRole
 from cc_platform.domain.shared.errors import NotFoundError
@@ -87,6 +89,8 @@ class GetCopilotThread:
     """``GET /cases/{caseId}/copilot``: the analyst's thread (empty before her first question)."""
 
     uow: UnitOfWorkFactory
+    stage_gate: bool = False
+    """Slice 21: the thread exists from stage 1 (``answer``); below it the copilot is not there."""
 
     async def execute(self, actor: Actor, case_id: str) -> CopilotThreadView:
         ensure_any_role(actor, {StaffRole.ANALYST})
@@ -94,6 +98,8 @@ class GetCopilotThread:
             case = await load_case_for(uow, actor, case_id, write=True)  # only her assignee
             thread = await uow.copilot_threads.get_for(case.id, actor.staff_id)
             linked = await uow.bank_links.get(case.customer_id) is not None
+            if self.stage_gate and not await mode_allows(uow, case.case_type, CopilotMode.ANSWER):
+                linked = False
         return CopilotThreadView(
             case_id=case_id,
             available=linked,
@@ -132,6 +138,8 @@ class AskCopilot:
     issuer: AgentCredentialIssuer
     agent: str
     """The copilot agent (``id@alias``), e.g. ``copiloto-asesor@prod``."""
+    stage_gate: bool = False
+    """Slice 21: a case whose type is below stage 1 gets no answers."""
 
     async def execute(
         self, actor: Actor, case_id: str, *, text: str, client_message_id: str
@@ -164,6 +172,8 @@ class AskCopilot:
             case = await load_case_for(uow, actor, case_id, write=True)
             bank_id = await uow.bank_links.get(case.customer_id)
             if bank_id is None:
+                raise CopilotUnavailableError()
+            if self.stage_gate and not await mode_allows(uow, case.case_type, CopilotMode.ANSWER):
                 raise CopilotUnavailableError()
             now = self.clock.now()
             thread = await uow.copilot_threads.get_for(case.id, actor.staff_id)

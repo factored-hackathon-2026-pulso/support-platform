@@ -54,8 +54,6 @@ export const PENDING_AREAS: readonly PendingArea[] = [
   { area: 'supervision', paths: ['src/features/supervision/'], strings: 214 },
   // ── cases: the Casos list, cards, priority, case type, close reasons, ratings
   { area: 'cases', paths: ['src/features/cases/'], strings: 123 },
-  // ── home: Inicio
-  { area: 'home', paths: ['src/features/home/'], strings: 90 },
   // ── audit: Auditoría
   { area: 'audit', paths: ['src/features/audit/'], strings: 81 },
   // ── notifications: the bell, its panel and the live toasts

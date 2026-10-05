@@ -11,6 +11,7 @@ import {
 } from '@/components/ui'
 import type { InboxResponse } from '@/features/cases'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { firstCases } from '../model'
 
 export interface FirstCasesProps {
@@ -33,6 +34,7 @@ export interface FirstCasesProps {
  * case open and its filter set, so the card is highlighted).
  */
 export function FirstCases({ inbox, now, paused }: FirstCasesProps) {
+  const { t } = useTranslation('home')
   return (
     <section
       aria-labelledby="home-first"
@@ -40,9 +42,9 @@ export function FirstCases({ inbox, now, paused }: FirstCasesProps) {
     >
       <div className="flex items-baseline justify-between px-5 pt-4 pb-2.5">
         <h2 id="home-first" className="m-0 text-17 font-semibold">
-          Lo primero
+          {t('first.title')}
         </h2>
-        <span className="text-13 text-muted">Ordenado por lo que vence antes</span>
+        <span className="text-13 text-muted">{t('first.subtitle')}</span>
       </div>
       <div className="min-h-0 scrollbar-thin overflow-y-auto [&>[role=alert]]:mx-5 [&>[role=alert]]:mb-4">
         <QueryState<InboxResponse>
@@ -55,18 +57,14 @@ export function FirstCases({ inbox, now, paused }: FirstCasesProps) {
               size="compact"
               className="border-t border-border-soft py-8"
               icon={<CheckCircle2 size={32} strokeWidth={1.6} aria-hidden="true" />}
-              title="No tienes casos abiertos"
-              description={
-                paused
-                  ? 'Cuando empieces a atender, los casos que te lleguen aparecen aquí.'
-                  : 'Cuando un cliente escriba y te corresponda, aparece aquí.'
-              }
+              title={t('first.emptyTitle')}
+              description={paused ? t('first.emptyPaused') : t('first.emptyAvailable')}
             />
           }
-          errorTitle="No pudimos cargar tus casos"
+          errorTitle={t('first.loadError')}
         >
           {(data) => (
-            <ul aria-label="Casos por urgencia" className="m-0 list-none p-0">
+            <ul aria-label={t('first.listLabel')} className="m-0 list-none p-0">
               {firstCases(data.items, now).map((row) => (
                 <li
                   key={row.id}
@@ -109,9 +107,9 @@ export function FirstCases({ inbox, now, paused }: FirstCasesProps) {
                     variant="secondary"
                     size="sm"
                     className="justify-self-end"
-                    aria-label={`Abrir el caso de ${row.name}`}
+                    aria-label={t('first.openLabel', { name: row.name })}
                   >
-                    Abrir
+                    {t('first.open')}
                   </LinkButton>
                 </li>
               ))}

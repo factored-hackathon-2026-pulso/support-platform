@@ -4,8 +4,9 @@
  * in model.test.ts.
  *
  * "Mientras no estabas" is deterministic: every row comes from one structured
- * fact the server sends (`HomeActivityItem`) and one fixed Spanish template per
- * `kind` below. Nothing is summarised, ranked or generated.
+ * fact the server sends (`HomeActivityItem`) and one fixed template per `kind`
+ * below (catalog `home`, read when a function runs). Nothing is summarised,
+ * ranked or generated.
  *
  * UI rule (slice 6 §4.7): metadata is never a dot-joined string or a sentence.
  * Each fact is its own short item (`FactItem`: icon + 1–3 words), the status a
@@ -34,8 +35,8 @@ import {
   formatTime,
   localDayKey,
   localHour,
-  pluralize,
 } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type {
   AnalystHome,
   HomeActivityItem,
@@ -47,19 +48,21 @@ import type {
 
 type DateInput = Date | string | number
 
+const t = i18n.getFixedT(null, 'home')
+
 // ─── Header ──────────────────────────────────────────────────────────────────
 
 /** "Buenos días" 05:00–11:59 · "Buenas tardes" 12:00–18:59 · "Buenas noches" otherwise. */
 export function greetingFor(hour: number): string {
-  if (hour >= 5 && hour < 12) return 'Buenos días'
-  if (hour >= 12 && hour < 19) return 'Buenas tardes'
-  return 'Buenas noches'
+  if (hour >= 5 && hour < 12) return t('header.morning')
+  if (hour >= 12 && hour < 19) return t('header.afternoon')
+  return t('header.evening')
 }
 
 /** "Buenas noches, Daniela" at the viewer's local time. */
 export function greeting(name: string, now: DateInput): string {
   const first = name.trim().split(/\s+/)[0] ?? name
-  return `${greetingFor(localHour(now))}, ${first}`
+  return t('header.greeting', { greeting: greetingFor(localHour(now)), name: first })
 }
 
 /** Above the greeting: the date as text and her team as a pill (never joined). */
@@ -91,19 +94,29 @@ export function availabilityBlockCopy(
   const paused = status === 'paused'
   const facts: FactItem[] = [
     paused
-      ? { key: 'new', icon: 'pause', text: 'Sin casos nuevos', tone: 'warn' }
-      : { key: 'new', icon: 'check', text: 'Recibes casos nuevos', tone: 'success' },
+      ? { key: 'new', icon: 'pause', text: t('availability.noNewCases'), tone: 'warn' }
+      : { key: 'new', icon: 'check', text: t('availability.receivesNewCases'), tone: 'success' },
   ]
   if (openCases !== null) {
     facts.push({
       key: 'open',
       icon: 'inbox',
-      text: pluralize(openCases, 'caso abierto', 'casos abiertos'),
+      text: t('availability.openCases', { count: openCases }),
     })
   }
   return paused
-    ? { title: 'Estás en pausa', facts, action: 'Empezar a atender', tone: 'warn' }
-    : { title: 'Estás disponible', facts, action: 'Pausar casos nuevos', tone: 'success' }
+    ? {
+        title: t('availability.pausedTitle'),
+        facts,
+        action: t('availability.start'),
+        tone: 'warn',
+      }
+    : {
+        title: t('availability.availableTitle'),
+        facts,
+        action: t('availability.pause'),
+        tone: 'success',
+      }
 }
 
 // ─── Status tiles (links to Casos with the filter) ───────────────────────────
@@ -144,7 +157,20 @@ export function statusTiles(counts: InboxCounts | undefined): StatusTile[] {
 }
 
 /** The small hint under the Cerrados tile (its own element, not joined to the label). */
-export const CLOSED_TILE_HINT = 'Últimos 7 días'
+export function closedTileHint(): string {
+  return t('tiles.closedHint')
+}
+
+/** Accessible name of a tile link: "2 Por responder. Ver en Casos". */
+export function statusTileLabel(tile: StatusTile, hint: string | null): string {
+  const subject =
+    tile.count === null
+      ? t('tiles.noCount', { label: tile.label })
+      : t('tiles.count', { count: tile.count, label: tile.label })
+  return hint
+    ? t('tiles.linkWithHint', { subject, hint: hint.toLowerCase() })
+    : t('tiles.link', { subject })
+}
 
 // ─── "Lo primero" ────────────────────────────────────────────────────────────
 
@@ -185,7 +211,7 @@ export function firstCases(
   return sortByUrgency(open, now)
     .slice(0, limit)
     .map((summary) => {
-      const preview = summary.preview ?? 'Sin mensajes todavía'
+      const preview = summary.preview ?? t('first.noMessages')
       const sla = slaFact(summary, now)
       return {
         id: summary.id,
@@ -193,15 +219,19 @@ export function firstCases(
         status: caseStatus(summary.inboxStatus),
         escalated: summary.escalated ? ESCALATED_MARKER : null,
         facts: caseCardFacts(summary),
-        preview: summary.previewAuthorRole === 'analyst' ? `Tú: ${preview}` : preview,
+        preview:
+          summary.previewAuthorRole === 'analyst'
+            ? t('first.ownPreview', { text: preview })
+            : preview,
         sla,
         last: {
           key: 'last',
           icon: 'clock',
           text: formatRelativeTime(summary.lastInteractionAt, now),
-          label: summary.inboxStatus === 'waiting' ? 'Sin respuesta desde' : 'Última actividad',
+          label:
+            summary.inboxStatus === 'waiting' ? t('first.waitingSince') : t('first.lastActivity'),
           tooltip:
-            summary.inboxStatus === 'waiting' ? 'Sin respuesta del cliente' : 'Última actividad',
+            summary.inboxStatus === 'waiting' ? t('first.waitingTooltip') : t('first.lastActivity'),
           tone: 'muted',
         },
         href: caseHref(summary.id, summary.inboxStatus),
@@ -256,9 +286,9 @@ export function languageFact(language: Language): FactItem {
     key: 'language',
     icon: 'languages',
     text: '',
-    label: 'Por idioma',
+    label: t('feed.fact.byLanguage'),
     languages: [language],
-    ...(language === 'pt' ? { tag: 'Regla 3' } : {}),
+    ...(language === 'pt' ? { tag: t('feed.fact.rule3') } : {}),
   }
 }
 
@@ -279,36 +309,36 @@ export function activityTemplate(
   now: DateInput,
 ): Pick<ActivityRow, 'phrase' | 'status' | 'facts' | 'lastCloseReason'> {
   const base = { status: null, facts: [], lastCloseReason: null }
-  const supervisor = item.actorName ?? 'Supervisión'
+  const supervisor = item.actorName ?? t('feed.fact.supervision')
   switch (item.kind) {
     case 'assigned_on_arrival':
-      return { ...base, phrase: 'Te llegó', facts: [languageFact(item.language)] }
+      return { ...base, phrase: t('feed.phrase.arrived'), facts: [languageFact(item.language)] }
     case 'assigned_from_queue':
       return {
         ...base,
-        phrase: 'Te llegó desde la cola',
+        phrase: t('feed.phrase.fromQueue'),
         facts: compact([
           item.waitedSeconds === null
             ? null
             : {
                 key: 'waited',
                 icon: 'hourglass',
-                text: `Esperó ${waitMinutes(item.waitedSeconds)} min`,
+                text: t('feed.fact.waited', { minutes: waitMinutes(item.waitedSeconds) }),
               },
         ]),
       }
     case 'assigned_by_supervisor':
       return {
         ...base,
-        phrase: 'Te lo asignaron',
+        phrase: t('feed.phrase.assigned'),
         status: caseStatus(item.inboxStatus),
         facts: compact([
           {
             key: 'by',
             icon: 'users',
             text: supervisor,
-            label: 'Asignado por',
-            tooltip: 'Asignado por',
+            label: t('feed.fact.assignedBy'),
+            tooltip: t('feed.fact.assignedBy'),
           },
           itemSla(item, now),
         ]),
@@ -316,37 +346,37 @@ export function activityTemplate(
     case 'reassigned_away':
       return {
         ...base,
-        phrase: 'Ya no es tuyo',
+        phrase: t('feed.phrase.reassignedAway'),
         facts: [
           {
             key: 'by',
             icon: 'users',
             text: supervisor,
-            label: 'Lo reasignó',
-            tooltip: 'Lo reasignó',
+            label: t('feed.fact.reassignedBy'),
+            tooltip: t('feed.fact.reassignedBy'),
           },
           {
             key: 'to',
             icon: 'user',
-            text: item.targetName ?? 'Otra persona',
-            label: 'Ahora lo atiende',
-            tooltip: 'Ahora lo atiende',
+            text: item.targetName ?? t('feed.fact.otherPerson'),
+            label: t('feed.fact.nowWith'),
+            tooltip: t('feed.fact.nowWith'),
           },
-          { key: 'read-only', icon: 'eye', text: 'Solo lectura' },
+          { key: 'read-only', icon: 'eye', text: t('feed.fact.readOnly') },
         ],
       }
     case 'customer_returned': {
       const count = item.previousCasesCount ?? 0
       return {
         ...base,
-        phrase: 'Volvió a escribir',
+        phrase: t('feed.phrase.returned'),
         facts: compact([
           count > 0
             ? {
                 key: 'previous',
                 icon: 'history',
-                text: pluralize(count, 'caso antes', 'casos antes'),
-                label: 'Casos anteriores',
+                text: t('feed.fact.previousCases', { count }),
+                label: t('feed.fact.previousCasesLabel'),
               }
             : null,
         ]),
@@ -356,7 +386,7 @@ export function activityTemplate(
     case 'customer_messages':
       return {
         ...base,
-        phrase: `Escribió ${pluralize(item.messageCount ?? 1, 'mensaje')}`,
+        phrase: t('feed.phrase.messages', { count: item.messageCount ?? 1 }),
         status: caseStatus(item.inboxStatus),
         facts: compact([itemSla(item, now)]),
       }
@@ -364,7 +394,7 @@ export function activityTemplate(
     case 'assigned_by_assistant':
       return {
         ...base,
-        phrase: 'El asistente te lo pasó',
+        phrase: t('feed.phrase.fromAssistant'),
         status: caseStatus(item.inboxStatus),
         facts: compact([itemSla(item, now)]),
       }
@@ -379,10 +409,12 @@ export function activityTemplate(
 export function assistantSummary(assistant: HomeAssistant | null | undefined): string | null {
   if (!assistant) return null
   const { resolved, handedToYou } = assistant
-  const resolvedText = `Resolvió ${pluralize(resolved, 'conversación', 'conversaciones')} de tus idiomas`
-  if (resolved > 0 && handedToYou > 0) return `${resolvedText} y te pasó ${handedToYou}`
+  const resolvedText = t('feed.assistant.resolved', { count: resolved })
+  if (resolved > 0 && handedToYou > 0) {
+    return t('feed.assistant.resolvedAndHanded', { resolved: resolvedText, handed: handedToYou })
+  }
   if (resolved > 0) return resolvedText
-  if (handedToYou > 0) return `Te pasó ${pluralize(handedToYou, 'caso', 'casos')}`
+  if (handedToYou > 0) return t('feed.assistant.handed', { count: handedToYou })
   return null
 }
 
@@ -411,11 +443,15 @@ export function activityLinkLabel(row: ActivityRow, reasonLabel?: string): strin
   const parts = [
     row.status?.label,
     ...facts,
-    reasonLabel ? `Último cierre: ${reasonLabel}` : null,
+    reasonLabel ? t('feed.link.lastClose', { reason: reasonLabel }) : null,
     row.when,
   ].filter(Boolean)
-  const target = row.readOnly ? 'Abrir en solo lectura' : 'Abrir el caso'
-  return `${row.customerName}: ${row.phrase}. ${parts.join(', ')}. ${target}`
+  return t('feed.link.label', {
+    name: row.customerName,
+    phrase: row.phrase,
+    details: parts.join(', '),
+    target: row.readOnly ? t('feed.link.openReadOnly') : t('feed.link.open'),
+  })
 }
 
 /** Under "Mientras no estabas": [log-out] Cerraste sesión, [clock] hoy 11:20; or the fallback. */
@@ -428,8 +464,8 @@ export function sinceFacts(
       {
         key: 'since',
         icon: 'clock',
-        text: 'Últimas 8 horas',
-        tooltip: 'No hay una sesión tuya anterior',
+        text: t('feed.since.fallback'),
+        tooltip: t('feed.since.fallbackTooltip'),
       },
     ]
   }
@@ -438,27 +474,29 @@ export function sinceFacts(
   const nowDate = now instanceof Date ? now : new Date(now)
   const yesterday = new Date(nowDate.getTime() - 24 * 60 * 60 * 1000)
   let when: string
-  if (day === localDayKey(nowDate)) when = `hoy ${time}`
-  else if (day === localDayKey(yesterday)) when = `ayer ${time}`
-  else when = `${formatDate(home.since, { withYear: false })}, ${time}`
+  if (day === localDayKey(nowDate)) when = t('feed.since.today', { time })
+  else if (day === localDayKey(yesterday)) when = t('feed.since.yesterday', { time })
+  else when = t('feed.since.dateTime', { date: formatDate(home.since, { withYear: false }), time })
   return [
-    { key: 'logout', icon: 'log-out', text: 'Cerraste sesión' },
-    { key: 'since', icon: 'clock', text: when, label: 'Desde' },
+    { key: 'logout', icon: 'log-out', text: t('feed.since.signedOut') },
+    { key: 'since', icon: 'clock', text: when, label: t('feed.since.label') },
   ]
 }
 
 /** "Ver todo (n)" while collapsed; "Ver menos" when expanded; null when everything fits. */
 export function feedToggleLabel(shown: number, total: number, expanded: boolean): string | null {
-  if (expanded) return 'Ver menos'
-  return total > shown ? `Ver todo (${total})` : null
+  if (expanded) return t('feed.showLess')
+  return total > shown ? t('feed.showAll', { total }) : null
 }
 
 /** The server sends at most 10 rows; say so when there were more. */
 export function feedTruncatedNote(returned: number, total: number): string | null {
-  return total > returned ? `Se muestran las ${returned} más recientes de ${total}.` : null
+  return total > returned ? t('feed.truncated', { shown: returned, total }) : null
 }
 
-export const EMPTY_FEED_COPY = 'Nada nuevo desde tu última sesión'
+export function emptyFeedCopy(): string {
+  return t('feed.empty')
+}
 
 // ─── "Tu equipo ahora" ───────────────────────────────────────────────────────
 
@@ -477,7 +515,7 @@ export interface TeamRow {
 
 /** Available analysts of her team: "1 de 4", counts only, no names. */
 export function availableValue(team: HomeTeam): string {
-  return `${team.availableCount} de ${team.analystCount}`
+  return t('team.availableValue', { available: team.availableCount, total: team.analystCount })
 }
 
 /** The oldest wait of a queue, or null when nobody waits. */
@@ -487,8 +525,8 @@ export function queueWait(queue: HomeQueue, now: DateInput): FactItem | null {
     key: 'wait',
     icon: 'clock',
     text: formatRelativeTime(queue.oldestQueuedAt, now),
-    label: 'El más antiguo',
-    tooltip: 'El más antiguo',
+    label: t('team.oldest'),
+    tooltip: t('team.oldest'),
     tone: 'muted',
   }
 }
@@ -507,16 +545,16 @@ export function teamRows(
     {
       key: 'available',
       icon: 'users',
-      label: 'Disponibles',
+      label: t('team.available'),
       value: availableValue(team),
-      tag: meAvailable ? 'Tú' : null,
+      tag: meAvailable ? t('team.you') : null,
       wait: null,
     },
     ...team.queues.map((queue) => ({
       key: `queue-${queue.language}`,
       icon: 'inbox' as const,
       language: queue.language,
-      label: 'Esperan en la cola',
+      label: t('team.waiting'),
       value: String(queue.waiting),
       tag: null,
       wait: queueWait(queue, now),
@@ -527,7 +565,7 @@ export function teamRows(
           {
             key: 'assistant',
             icon: 'bot' as const,
-            label: 'Con el asistente ahora',
+            label: t('team.withAssistant'),
             value: String(withAssistant),
             tag: null,
             wait: null,
@@ -537,4 +575,6 @@ export function teamRows(
 }
 
 /** The note under the team rows while she is paused. */
-export const TEAM_PAUSED_NOTE = 'Al empezar, la cola de tus idiomas se reparte primero contigo.'
+export function teamPausedNote(): string {
+  return t('team.pausedNote')
+}

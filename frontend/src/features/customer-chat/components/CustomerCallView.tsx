@@ -111,6 +111,7 @@ export function CustomerCallView({ customerId, language }: CustomerCallViewProps
           )}
         >
           {phase === 'live' || phase === 'hold' ? (
+            // i18n-ignore-next-line: the brand's initials, not copy
             getInitials(call?.agentName ?? 'LATAM Bank')
           ) : phase === 'ended' || phase === 'none' ? (
             <PhoneOff size={24} />
@@ -301,8 +302,8 @@ export function CustomerCallView({ customerId, language }: CustomerCallViewProps
         </div>
       ) : null}
       {callQuery.isError ? (
-        <Callout tone="danger" title="No pudimos cargar la llamada">
-          Revisa tu conexión e inténtalo de nuevo.
+        <Callout tone="danger" title={copy.loadErrorTitle}>
+          {copy.loadErrorBody}
         </Callout>
       ) : null}
     </section>

@@ -20,3 +20,4 @@ export {
 } from './use-customer-channels'
 export { useSimulatorAiEnabled } from './use-simulator-platform'
 export { useAnswerConfirmation, useRequestPerson, useVerifyStepUp } from './use-assistant'
+export { useCustomerCatalogs } from './use-customer-catalogs'

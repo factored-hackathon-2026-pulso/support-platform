@@ -23,8 +23,6 @@ export const LOCALE_DATA_FILES: readonly string[] = ['src/lib/format.ts', 'src/l
 export const PENDING_AREAS: readonly PendingArea[] = [
   // ── conversation: the open case, transcript, channels, close/escalate dialogs, handoff
   { area: 'conversation', paths: ['src/features/conversation/'], strings: 398 },
-  // ── customer: the customer simulator (its language follows the customer: getFixedT)
-  { area: 'customer', paths: ['src/features/customer-chat/'], strings: 310 },
   // ── admin: Usuarios y roles, Equipos ("Plataforma" is migrated: platform.ts)
   {
     area: 'admin',

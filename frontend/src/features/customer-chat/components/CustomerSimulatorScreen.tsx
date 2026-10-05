@@ -2,12 +2,15 @@ import { useState } from 'react'
 import { ArrowLeftRight, LogOut } from 'lucide-react'
 import { Page, PageBody } from '@/components/layout'
 import { Badge, Button, LanguageMarks, PageHeader } from '@/components/ui'
+import { Trans, useActiveLocale, useTranslation } from '@/lib/i18n'
 import { RealtimeProvider, type WebSocketFactory } from '@/lib/realtime'
 import { isAssistantActive } from '../assistant'
 import { describeCustomerCallFailure, isCustomerCallActive, type SimChannel } from '../channels'
+import { languageOfLocale } from '../locale'
 import { describeStartFailure, localeLabel } from '../model'
 import {
   useCustomerCall,
+  useCustomerCatalogs,
   useCustomerChatLive,
   useCustomerSession,
   useDemoCustomers,
@@ -41,12 +44,16 @@ export interface CustomerSimulatorScreenProps {
  * customer, then how they reach the bank (chat, a call, an email; slice 12), and answer from
  * the Workspace in another window. It runs its own customer session, API client and socket,
  * apart from any staff session in the same tab.
+ *
+ * Its chrome speaks the UI language; the phone frame, the customer's (slice 23).
  */
 export function CustomerSimulatorScreen({
   createSocket,
   channel: channelProp = null,
   onChannelChange,
 }: CustomerSimulatorScreenProps = {}) {
+  const { t } = useTranslation('customer')
+  useCustomerCatalogs()
   const { session, start, end } = useCustomerSession()
   const [ownChannel, setOwnChannel] = useState<SimChannel | null>(channelProp)
   const channel = onChannelChange ? channelProp : ownChannel
@@ -56,9 +63,9 @@ export function CustomerSimulatorScreen({
       <Page
         header={
           <PageHeader
-            title="Simulador de cliente"
-            subtitle="Actúa como un cliente y responde desde el Workspace en otra ventana"
-            actions={<Badge tone="accent">Herramienta de desarrollo</Badge>}
+            title={t('simulator.title')}
+            subtitle={t('simulator.subtitle')}
+            actions={<Badge tone="accent">{t('simulator.devTool')}</Badge>}
             className="bg-surface"
           />
         }
@@ -130,6 +137,9 @@ function SimulatorBody({
   onChannelChange(channel: SimChannel | null): void
   onLeave: () => void
 }) {
+  const { t } = useTranslation('customer')
+  // The chrome's own failures (the channel picker) speak the UI language.
+  const uiLanguage = languageOfLocale(useActiveLocale())
   useCustomerChatLive(customerId)
   const aiEnabled = useSimulatorAiEnabled()
   const customers = useDemoCustomers()
@@ -152,10 +162,12 @@ function SimulatorBody({
       <div className="mx-auto flex w-full max-w-[880px] flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-14 text-ink-2">
           <p className="m-0">
-            Hablando como{' '}
-            <span className="font-semibold text-ink">
-              {me?.displayName ?? 'cliente de ejemplo'}
-            </span>
+            <Trans
+              t={t}
+              i18nKey="simulator.speakingAs"
+              values={{ name: me?.displayName ?? t('simulator.sampleCustomer') }}
+              components={{ name: <span className="font-semibold text-ink" /> }}
+            />
           </p>
           {me ? <LanguageMarks languages={[me.language]} name={localeLabel(me.locale)} /> : null}
           <span className="font-mono text-12 text-muted">{customerId}</span>
@@ -168,7 +180,7 @@ function SimulatorBody({
               icon={<ArrowLeftRight size={14} aria-hidden="true" />}
               onClick={() => onChannelChange(null)}
             >
-              Cambiar de canal
+              {t('simulator.changeChannel')}
             </Button>
           ) : null}
           <Button
@@ -177,7 +189,7 @@ function SimulatorBody({
             icon={<LogOut size={14} aria-hidden="true" />}
             onClick={onLeave}
           >
-            Cambiar de cliente
+            {t('simulator.changeCustomer')}
           </Button>
         </div>
       </div>
@@ -193,14 +205,16 @@ function SimulatorBody({
         switch language once it arrives. */}
       {customers.isPending ? null : channel === null ? (
         <ChannelPicker
-          firstName={me?.displayName.split(' ')[0] ?? 'el cliente'}
+          firstName={me?.displayName.split(' ')[0] ?? t('channels.theCustomer')}
           busy={startCall.isPending ? 'call' : null}
-          error={startCall.isError ? describeCustomerCallFailure(startCall.error, 'es') : null}
+          error={
+            startCall.isError ? describeCustomerCallFailure(startCall.error, uiLanguage) : null
+          }
           errorAction={
             startCall.isError && isAssistantActive(startCall.error) ? (
               <AskPersonButton
                 customerId={customerId}
-                language="es"
+                language={uiLanguage}
                 compact
                 onDone={() => startCall.reset()}
               />

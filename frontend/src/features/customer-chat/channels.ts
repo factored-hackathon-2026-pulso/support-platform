@@ -1,12 +1,13 @@
 /**
  * Simulator channel rules (slice 12, docs/platform/api/slice-12-channels.md §3.2): which channel
  * the customer picked (`?channel=`), the customer's view of a call (phase, title, timer, lines)
- * and of the email thread, and their copy in the customer's language (es | pt). Pure and
- * unit-tested (channels.test.ts).
+ * and of the email thread, and their copy in the customer's language (es | pt, the `customer`
+ * catalog through `customerT`). Pure and unit-tested (channels.test.ts).
  */
 import { isApiProblem } from '@/lib/api'
 import { assistantActiveMessage } from './assistant'
 import { formatTimer } from '@/lib/format'
+import { chromeT, customerT } from './locale'
 import type {
   CustomerCall,
   CustomerChatCache,
@@ -23,16 +24,27 @@ export type SimChannel = 'chat' | 'call' | 'email'
 
 export const SIM_CHANNELS: readonly SimChannel[] = ['chat', 'call', 'email']
 
-/** The three cards of "¿Cómo se comunica {nombre} con el banco?" (simulator chrome: Spanish). */
-export const CHANNEL_OPTIONS: readonly {
+export interface ChannelOption {
   value: SimChannel
-  title: string
-  description: string
-}[] = [
-  { value: 'chat', title: 'Chat', description: 'Escribe desde la app' },
-  { value: 'call', title: 'Llamar', description: 'Habla con una persona' },
-  { value: 'email', title: 'Escribir un correo', description: 'Te responden por correo' },
-]
+  /** In the UI language (simulator chrome), read when shown. */
+  readonly title: string
+  readonly description: string
+}
+
+function channelOption(value: SimChannel): ChannelOption {
+  return {
+    value,
+    get title() {
+      return chromeT(`channels.option.${value}.title`)
+    },
+    get description() {
+      return chromeT(`channels.option.${value}.description`)
+    },
+  }
+}
+
+/** The three cards of "¿Cómo se comunica {nombre} con el banco?" (simulator chrome). */
+export const CHANNEL_OPTIONS: readonly ChannelOption[] = SIM_CHANNELS.map(channelOption)
 
 // ── The call, as the customer lives it ───────────────────────────────────────
 
@@ -114,99 +126,75 @@ export interface CustomerCallCopy {
   incoming: string
   incomingHint: string
   durationLabel: string
-}
-
-const CALL_COPY: Record<Language, CustomerCallCopy> = {
-  es: {
-    section: 'Llamada con el banco',
-    line: 'Línea de atención LATAM Bank',
-    transcriptTitle: 'Lo que se dice en la llamada',
-    transcriptLabel: 'Transcripción de la llamada',
-    empty: 'Cuando te atiendan, aquí aparece lo que dicen.',
-    sayLabel: 'Lo que dices',
-    sayPlaceholder: 'Escribe lo que le dices',
-    mutedPlaceholder: 'Estás en silencio',
-    send: 'Enviar',
-    mute: 'Silenciar',
-    muted: 'En silencio',
-    hangUp: 'Colgar',
-    answer: 'Contestar',
-    reject: 'Rechazar',
-    callAgain: 'Volver a llamar',
-    you: 'Tú',
-    incoming: 'LATAM Bank te está llamando',
-    incomingHint: 'Una persona del equipo quiere hablar contigo sobre tu caso.',
-    durationLabel: 'Duración',
-  },
-  pt: {
-    section: 'Ligação com o banco',
-    line: 'Central de atendimento LATAM Bank',
-    transcriptTitle: 'O que se fala na ligação',
-    transcriptLabel: 'Transcrição da ligação',
-    empty: 'Quando te atenderem, aqui aparece o que é dito.',
-    sayLabel: 'O que você diz',
-    sayPlaceholder: 'Escreva o que você diz',
-    mutedPlaceholder: 'Você está no mudo',
-    send: 'Enviar',
-    mute: 'Silenciar',
-    muted: 'No mudo',
-    hangUp: 'Desligar',
-    answer: 'Atender',
-    reject: 'Recusar',
-    callAgain: 'Ligar de novo',
-    you: 'Você',
-    incoming: 'O LATAM Bank está te ligando',
-    incomingHint: 'Uma pessoa da equipe quer falar com você sobre o seu caso.',
-    durationLabel: 'Duração',
-  },
+  loadErrorTitle: string
+  loadErrorBody: string
 }
 
 export function customerCallCopy(language: Language): CustomerCallCopy {
-  return CALL_COPY[language] ?? CALL_COPY.es
+  const t = customerT(language)
+  return {
+    section: t('call.section'),
+    line: t('call.line'),
+    transcriptTitle: t('call.transcriptTitle'),
+    transcriptLabel: t('call.transcriptLabel'),
+    empty: t('call.empty'),
+    sayLabel: t('call.sayLabel'),
+    sayPlaceholder: t('call.sayPlaceholder'),
+    mutedPlaceholder: t('call.mutedPlaceholder'),
+    send: t('call.send'),
+    mute: t('call.mute'),
+    muted: t('call.muted'),
+    hangUp: t('call.hangUp'),
+    answer: t('call.answer'),
+    reject: t('call.reject'),
+    callAgain: t('call.callAgain'),
+    you: t('call.you'),
+    incoming: t('call.incoming'),
+    incomingHint: t('call.incomingHint'),
+    durationLabel: t('call.durationLabel'),
+    loadErrorTitle: t('call.loadErrorTitle'),
+    loadErrorBody: t('call.loadErrorBody'),
+  }
 }
 
 /** The call screen's title: "Llamando…", "Te atiende Daniela", "Llamada terminada, 4 min 2 s". */
 export function customerCallTitle(call: CustomerCall | null, language: Language): string {
-  const pt = language === 'pt'
-  const agent = call?.agentName ?? (pt ? 'uma pessoa da equipe' : 'una persona del equipo')
+  const t = customerT(language)
+  const name = call?.agentName ?? t('someone')
   switch (customerCallPhase(call)) {
     case 'none':
-      return pt ? 'Ligue para o banco' : 'Llama al banco'
+      return t('call.title.none')
     case 'dialing':
-      return pt ? 'Ligando…' : 'Llamando…'
+      return t('call.title.dialing')
     case 'incoming':
-      return CALL_COPY[pt ? 'pt' : 'es'].incoming
+      return t('call.incoming')
     case 'live':
-      return pt ? `Você está falando com ${agent}` : `Te atiende ${agent}`
+      return t('call.title.live', { name })
     case 'hold':
-      return pt ? `${agent} colocou você em espera` : `${agent} te puso en espera`
+      return t('call.title.hold', { name })
     case 'ended': {
       const ended = call as CustomerCall
-      if (ended.endReason === 'rejected')
-        return pt ? 'Você recusou a ligação' : 'Rechazaste la llamada'
+      if (ended.endReason === 'rejected') return t('call.title.rejected')
       if (ended.endReason === 'cancelled' || ended.answeredAt === null) {
-        return pt ? 'Ligação encerrada sem resposta' : 'Llamada terminada sin respuesta'
+        return t('call.title.unanswered')
       }
-      const length = ended.durationSeconds !== null ? `, ${duration(ended.durationSeconds)}` : ''
-      return pt ? `Ligação encerrada${length}` : `Llamada terminada${length}`
+      return ended.durationSeconds !== null
+        ? t('call.title.endedAfter', { duration: duration(ended.durationSeconds) })
+        : t('call.title.ended')
     }
   }
 }
 
 /** The line under the title (who is on the other side, what happens next). */
 export function customerCallSubline(call: CustomerCall | null, language: Language): string | null {
-  const pt = language === 'pt'
+  const t = customerT(language)
   switch (customerCallPhase(call)) {
     case 'dialing':
-      return CALL_COPY[pt ? 'pt' : 'es'].line
+      return t('call.line')
     case 'hold':
-      return pt ? 'Aguarde na linha, já voltam.' : 'Espera en línea, ya vuelven contigo.'
+      return t('call.holdHint')
     case 'ended':
-      return call?.answeredAt
-        ? pt
-          ? 'Seu caso continua aberto. Se precisar de algo mais, ligue de novo.'
-          : 'Tu caso sigue abierto. Si necesitas algo más, vuelve a llamar.'
-        : null
+      return call?.answeredAt ? t('call.endedHint') : null
     default:
       return null
   }
@@ -260,19 +248,15 @@ export function customerCallLines(
 
 /** A failed call action or line, in the customer's language. */
 export function describeCustomerCallFailure(error: unknown, language: Language): string {
-  const pt = language === 'pt'
+  const t = customerT(language)
   // Slice 19: the assistant holds the chat; a call cannot join it (contract §1, §3.5).
   if (isApiProblem(error, 'assistant_active')) return assistantActiveMessage(language)
-  if (isApiProblem(error, 'call_in_progress')) {
-    return pt ? 'Você já tem uma ligação em andamento.' : 'Ya tienes una llamada en curso.'
-  }
+  if (isApiProblem(error, 'call_in_progress')) return t('call.failure.inProgress')
   if (isApiProblem(error, 'call_not_active') || isApiProblem(error, 'invalid_transition')) {
-    return pt ? 'A ligação já não está ativa.' : 'La llamada ya no está activa.'
+    return t('call.failure.notActive')
   }
-  if (isApiProblem(error, 'network_error')) {
-    return pt ? 'Sem conexão. Tente de novo.' : 'No hay conexión. Inténtalo de nuevo.'
-  }
-  return pt ? 'Não foi possível. Tente de novo.' : 'No se pudo. Inténtalo de nuevo.'
+  if (isApiProblem(error, 'network_error')) return t('networkFailure')
+  return t('call.failure.generic')
 }
 
 // ── The email thread, as the customer reads it ───────────────────────────────
@@ -351,14 +335,12 @@ export function validateCustomerEmail(
   body: string,
   language: Language,
 ): string | null {
-  const pt = language === 'pt'
+  const t = customerT(language)
   if (mode === 'new' && (!subject.trim() || !body.trim())) {
-    return pt ? 'Escreva o assunto e a mensagem.' : 'Escribe el asunto y el mensaje.'
+    return t('mail.validation.subjectAndBody')
   }
-  if (!body.trim()) return pt ? 'Escreva sua resposta.' : 'Escribe tu respuesta.'
-  if (subject.trim().length > MAX_EMAIL_SUBJECT) {
-    return pt ? 'O assunto é muito longo.' : 'El asunto es muy largo.'
-  }
+  if (!body.trim()) return t('mail.validation.body')
+  if (subject.trim().length > MAX_EMAIL_SUBJECT) return t('mail.validation.subjectTooLong')
   return null
 }
 
@@ -394,55 +376,35 @@ export interface CustomerMailCopy {
   support: string
 }
 
-const MAIL_COPY: Record<Language, CustomerMailCopy> = {
-  es: {
-    newHeading: 'Nuevo correo',
-    composeNew: 'Escribe tu correo',
-    composeReply: 'Responder',
-    subjectLabel: 'Asunto',
-    bodyLabel: 'Mensaje',
-    newPlaceholder: 'Cuéntanos qué pasó',
-    replyPlaceholder: 'Escribe tu respuesta',
-    empty: 'Escribe tu consulta. Te responde una persona del equipo en este mismo hilo.',
-    send: 'Enviar',
-    threadLabel: 'Correos del hilo',
-    replyHint: 'Te responden en este hilo',
-    newMark: 'Nuevo',
-    support: 'Soporte LATAM Bank',
-  },
-  pt: {
-    newHeading: 'Novo e-mail',
-    composeNew: 'Escreva seu e-mail',
-    composeReply: 'Responder',
-    subjectLabel: 'Assunto',
-    bodyLabel: 'Mensagem',
-    newPlaceholder: 'Conte o que aconteceu',
-    replyPlaceholder: 'Escreva sua resposta',
-    empty: 'Escreva sua dúvida. Uma pessoa da equipe responde neste mesmo e-mail.',
-    send: 'Enviar',
-    threadLabel: 'E-mails da conversa',
-    replyHint: 'A resposta chega aqui',
-    newMark: 'Novo',
-    support: 'Suporte LATAM Bank',
-  },
-}
-
 export function customerMailCopy(language: Language): CustomerMailCopy {
-  return MAIL_COPY[language] ?? MAIL_COPY.es
+  const t = customerT(language)
+  return {
+    newHeading: t('mail.newHeading'),
+    composeNew: t('mail.composeNew'),
+    composeReply: t('mail.composeReply'),
+    subjectLabel: t('mail.subjectLabel'),
+    bodyLabel: t('mail.bodyLabel'),
+    newPlaceholder: t('mail.newPlaceholder'),
+    replyPlaceholder: t('mail.replyPlaceholder'),
+    empty: t('mail.empty'),
+    send: t('mail.send'),
+    threadLabel: t('mail.threadLabel'),
+    replyHint: t('mail.replyHint'),
+    newMark: t('mail.newMark'),
+    support: t('mail.support'),
+  }
 }
 
 /** A failed email, in the customer's language. */
 export function describeCustomerEmailFailure(error: unknown, language: Language): string {
-  const pt = language === 'pt'
+  const t = customerT(language)
   // Slice 19: the assistant holds the chat; an email cannot join it (contract §1, §3.5).
   if (isApiProblem(error, 'assistant_active')) return assistantActiveMessage(language)
-  if (isApiProblem(error, 'network_error')) {
-    return pt ? 'Sem conexão. Tente de novo.' : 'No hay conexión. Inténtalo de nuevo.'
-  }
+  if (isApiProblem(error, 'network_error')) return t('networkFailure')
   if (isApiProblem(error, 'validation_error') || isApiProblem(error, 'invalid_value')) {
-    return pt ? 'Revise o assunto e a mensagem.' : 'Revisa el asunto y el mensaje.'
+    return t('mail.failure.invalid')
   }
-  return pt ? 'Não foi possível enviar. Tente de novo.' : 'No se envió. Inténtalo de nuevo.'
+  return t('mail.failure.generic')
 }
 
 /** The chat view shows chat messages and notices only (calls and emails have their own view). */

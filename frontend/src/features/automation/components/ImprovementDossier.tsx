@@ -109,6 +109,12 @@ function EvidenceCases({ cases }: { cases: EvidenceCase[] }) {
   )
 }
 
+/** The channel as an icon-only fact (its key stays out of the spread props). */
+function ChannelFact({ channel }: { channel: NonNullable<EvidenceCase['channel']> }) {
+  const { key: _key, ...fact } = channelFact(channel)
+  return <Fact {...fact} />
+}
+
 function EvidenceRow({ evidence }: { evidence: EvidenceCase }) {
   const { t } = useTranslation('automation')
   if (!evidence.available) {
@@ -132,7 +138,7 @@ function EvidenceRow({ evidence }: { evidence: EvidenceCase }) {
       {evidence.caseType ? (
         <span className="text-13 text-ink-2">{caseType(evidence.caseType).label}</span>
       ) : null}
-      {evidence.channel ? <Fact {...channelFact(evidence.channel)} /> : null}
+      {evidence.channel ? <ChannelFact channel={evidence.channel} /> : null}
       {evidence.language ? <LanguageMarks languages={[evidence.language]} /> : null}
     </>
   )

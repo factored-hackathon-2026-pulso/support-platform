@@ -2,11 +2,11 @@ import { useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { PATHS } from '@/app/paths'
 import { Button, Callout, Field, Input, useToast } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import type { LoginResponse } from '../api'
 import { useLoginMutation } from '../hooks/use-auth-mutations'
 import {
   describeLoginFailure,
-  FORGOT_PASSWORD_HELP,
   LOCKOUT_MINUTES,
   MAX_FAILED_ATTEMPTS,
   validateLogin,
@@ -46,6 +46,7 @@ export function LoginScreen({
   const [failure, setFailure] = useState<string | null>(null)
   const loginMutation = useLoginMutation()
   const { toast } = useToast()
+  const { t } = useTranslation('auth')
   const emailRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
 
@@ -90,48 +91,44 @@ export function LoginScreen({
 
   return (
     <>
-      <AuthHeading
-        title="Entrar"
-        subtitle="Tu rol (Analista, Supervisión o Administración) se asigna a tu cuenta."
-      />
+      <AuthHeading title={t('login.title')} subtitle={t('login.subtitle')} />
 
       <form
         noValidate
         onSubmit={handleSubmit}
-        aria-label="Entrar con correo"
+        aria-label={t('login.form')}
         className="flex flex-col gap-3.5"
       >
         {failure ? <Callout tone="danger">{failure}</Callout> : null}
         {!failure && notice ? <Callout tone="warn">{notice}</Callout> : null}
         {showDevHint ? (
-          <Callout tone="info" title="Entorno de desarrollo">
-            Usa una cuenta sembrada (@latambank.example) con la contraseña demo1234. Datos de
-            ejemplo.
+          <Callout tone="info" title={t('login.devTitle')}>
+            {t('login.devHint')}
           </Callout>
         ) : null}
-        <Field label="Correo" error={errors.email}>
+        <Field label={t('login.email')} error={errors.email}>
           <Input
             ref={emailRef}
             type="email"
             size="lg"
             autoComplete="username"
-            placeholder="nombre.apellido@latambank.example"
+            placeholder={t('login.emailPlaceholder')}
             value={values.email}
             onChange={(event) => update('email', event.target.value)}
           />
         </Field>
         <Field
-          label="Contraseña"
+          label={t('login.password')}
           error={errors.password}
           labelAside={
             <button
               type="button"
               className="cursor-pointer text-14 text-link"
               onClick={() =>
-                toast({ title: '¿Olvidaste tu contraseña?', description: FORGOT_PASSWORD_HELP })
+                toast({ title: t('login.forgotTitle'), description: t('login.forgotHelp') })
               }
             >
-              ¿La olvidaste?
+              {t('login.forgot')}
             </button>
           }
         >
@@ -146,24 +143,23 @@ export function LoginScreen({
           />
         </Field>
         <Button type="submit" variant="primary" size="lg" block loading={loginMutation.isPending}>
-          Continuar
+          {t('login.submit')}
         </Button>
       </form>
 
       <AuthNote>
-        <span>Después de la contraseña siempre pedimos el código de tu app de autenticación.</span>
+        <span>{t('login.noteMfa')}</span>
         <span>
-          Después de {MAX_FAILED_ATTEMPTS} intentos fallidos la cuenta se bloquea {LOCKOUT_MINUTES}{' '}
-          minutos. Cada ingreso queda registrado.
+          {t('login.noteLockout', { attempts: MAX_FAILED_ATTEMPTS, minutes: LOCKOUT_MINUTES })}
         </span>
       </AuthNote>
 
       <AuthHelpFooter />
       {showDevMailbox ? (
         <p className="m-0 text-13 text-muted">
-          Herramienta de desarrollo:{' '}
+          {t('login.devMailboxLead')}{' '}
           <Link to={PATHS.devMailbox} className="text-link font-semibold">
-            Correos de desarrollo
+            {t('login.devMailbox')}
           </Link>
         </p>
       ) : null}

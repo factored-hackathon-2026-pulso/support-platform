@@ -381,3 +381,63 @@ describe('/dev/mailbox', () => {
     expect(screen.queryByRole('link', { name: 'Correos de desarrollo' })).not.toBeInTheDocument()
   })
 })
+
+describe('in Brazilian Portuguese (slice 23)', () => {
+  it('activates an invitation in Portuguese', async () => {
+    vi.mocked(checkInvitation).mockResolvedValue(invitation)
+    vi.mocked(setInvitationPassword).mockResolvedValue(enrollment)
+    const { user } = renderRoute('/activate?token=tok', { locale: 'pt-BR' })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Ative sua conta' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Etapas para ativar sua conta' })).toBeInTheDocument()
+    expect(screen.getByText(/Olá, Bruna\. A Administração convidou você/)).toBeInTheDocument()
+    const requirements = screen.getByRole('list', { name: 'Requisitos da senha' })
+    expect(within(requirements).getByText('Pelo menos 12 caracteres')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Nova senha'), 'Cielo-Pacifico-31')
+    await user.type(screen.getByLabelText('Repita a senha'), 'Cielo-Pacifico-31')
+    await user.click(screen.getByRole('button', { name: 'Continuar' }))
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Configure a verificação em duas etapas',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Código QR para o seu app autenticador' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Ativar conta' }))
+    expect(await screen.findByText('Digite os 6 dígitos que o seu app mostra.')).toBeInTheDocument()
+  })
+
+  it('says a link is no longer valid in Portuguese', async () => {
+    vi.mocked(checkPasswordReset).mockRejectedValue(linkInvalid())
+    renderRoute('/reset-password?token=used', { locale: 'pt-BR' })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'O link venceu ou já foi usado' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Peça um novo link à administração')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Entre com seu e-mail' })).toBeInTheDocument()
+  })
+
+  it('resets a password in Portuguese', async () => {
+    vi.mocked(checkPasswordReset).mockResolvedValue({
+      name: 'Tomás Arango',
+      email: 'tomas.arango@latambank.example',
+      expiresAt: '2026-10-03T17:00:00Z',
+      passwordRules: RULES as never,
+    })
+    renderRoute('/reset-password?token=rst', { locale: 'pt-BR' })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Crie uma nova senha' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Salvar senha' })).toBeInTheDocument()
+  })
+
+  it('lists the dev mailbox in Portuguese', async () => {
+    vi.mocked(fetchDevMailbox).mockResolvedValue({ items: [] })
+    renderRoute('/dev/mailbox', { locale: 'pt-BR' })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'E-mails de desenvolvimento' }),
+    ).toBeInTheDocument()
+    expect(await screen.findByText('Ainda não há e-mails')).toBeInTheDocument()
+  })
+})

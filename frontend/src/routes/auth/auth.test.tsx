@@ -340,3 +340,59 @@ describe('locked (BoLocked)', () => {
     )
   })
 })
+
+describe('in Brazilian Portuguese (slice 23)', () => {
+  it('signs in with every step in Portuguese', async () => {
+    vi.mocked(login).mockRejectedValueOnce(
+      ApiProblem.fromResponse(401, { code: 'invalid_credentials', remainingAttempts: 1 }),
+    )
+    const { user } = renderRoute('/login', { locale: 'pt-BR' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Entrar' })).toBeInTheDocument()
+    expect(document.title).toBe('Entrar · LATAM Bank Suporte')
+    expect(
+      screen.getByText('Atendimento ao cliente por chat, do início ao fim.'),
+    ).toBeInTheDocument()
+    const form = screen.getByRole('form', { name: 'Entrar com e-mail' })
+    await user.type(within(form).getByRole('textbox', { name: 'E-mail' }), 'laura@example.com')
+    await user.type(within(form).getByLabelText('Senha'), 'errada')
+    await user.click(within(form).getByRole('button', { name: 'Continuar' }))
+    expect(await within(form).findByRole('alert')).toHaveTextContent(
+      'O e-mail ou a senha não conferem. Resta 1 tentativa antes de a conta ser bloqueada por 15 minutos.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Esqueceu?' }))
+    expect(
+      within(screen.getByRole('region', { name: 'Avisos' })).getByText('Esqueceu sua senha?'),
+    ).toBeInTheDocument()
+  })
+
+  it('asks for the code in Portuguese', async () => {
+    const { user } = renderRoute(mfaEntry, { locale: 'pt-BR' })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Confirme que é você' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Não sou eu' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Código de 6 dígitos' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+    expect(screen.getByText('Digite os 6 dígitos.')).toBeInTheDocument()
+  })
+
+  it('explains a lockout in Portuguese', async () => {
+    renderRoute(
+      {
+        pathname: '/login/locked',
+        state: { email: 'laura@example.com', unlockAt: '2026-10-02T15:47:00Z' },
+      },
+      { locale: 'pt-BR' },
+    )
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: /Sua conta está bloqueada|Você já pode/,
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Houve 5 tentativas sem sucesso para laura@example\.com\./),
+    ).toBeInTheDocument()
+    expect(screen.getByText('As tentativas ficaram registradas na auditoria.')).toBeInTheDocument()
+  })
+})

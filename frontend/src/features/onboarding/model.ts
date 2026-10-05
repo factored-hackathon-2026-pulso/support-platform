@@ -3,12 +3,16 @@
  * password policy shown live (a mirror of the backend's
  * `domain/people/password_policy.py`, pinned by model.test.ts), the steps of the
  * activation, the manual key grouping, the problem → copy mapping and the dev
- * mailbox labels. No React, no I/O: unit-tested in model.test.ts.
+ * mailbox labels. No React, no I/O: unit-tested in model.test.ts. Copy comes from the
+ * `onboarding` catalog, read when a function runs (the UI language of that moment).
  */
 import { ROLE_LABEL, sortRoles } from '@/app/roles'
 import { isApiProblem } from '@/lib/api'
-import { formatTime } from '@/lib/format'
+import { formatList, formatTime } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type { DevEmail, StaffRole } from './types'
+
+const t = i18n.getFixedT(null, 'onboarding')
 
 // ── Password policy (mirror of the backend; the server checks it again) ──────
 
@@ -67,17 +71,11 @@ export interface PasswordCheck {
   srState: string
 }
 
-export const PASSWORD_CHECK_LABEL: Record<PasswordCheckKey, string> = {
-  length: `Al menos ${PASSWORD_MIN_LENGTH} caracteres`,
-  personal: 'No incluye tu nombre ni tu correo',
-  common: 'No es una contraseña común',
-  match: 'Las dos contraseñas coinciden',
-}
+const PASSWORD_CHECK_KEYS: readonly PasswordCheckKey[] = ['length', 'personal', 'common', 'match']
 
-const SR_STATE: Record<RuleState, string> = {
-  ok: ': cumple',
-  bad: ': no cumple',
-  pending: ': pendiente',
+/** "Al menos 12 caracteres", "No incluye tu nombre ni tu correo"… */
+export function passwordCheckLabel(key: PasswordCheckKey): string {
+  return t(`password.rule.${key}`, { min: PASSWORD_MIN_LENGTH })
 }
 
 export interface PasswordOwner {
@@ -104,9 +102,14 @@ export function passwordChecks(
     match: confirmation.length > 0 && confirmation === password,
   }
   const touched = { length: typed, personal: typed, common: typed, match: confirmation.length > 0 }
-  return (Object.keys(PASSWORD_CHECK_LABEL) as PasswordCheckKey[]).map((key) => {
+  return PASSWORD_CHECK_KEYS.map((key) => {
     const state: RuleState = ok[key] ? 'ok' : touched[key] ? 'bad' : 'pending'
-    return { key, label: PASSWORD_CHECK_LABEL[key], state, srState: SR_STATE[state] }
+    return {
+      key,
+      label: passwordCheckLabel(key),
+      state,
+      srState: t(`password.ruleState.${state}`),
+    }
   })
 }
 
@@ -121,18 +124,18 @@ export function firstPasswordField(checks: readonly PasswordCheck[]): 'password'
     : 'confirm'
 }
 
-export const MISMATCH_ERROR = 'Las dos contraseñas no coinciden.'
-
 /** "Las dos contraseñas no coinciden." while the confirmation differs (never while empty). */
 export function confirmationError(password: string, confirmation: string): string | null {
-  return confirmation.length > 0 && confirmation !== password ? MISMATCH_ERROR : null
+  return confirmation.length > 0 && confirmation !== password ? t('password.mismatch') : null
 }
 
-const RULE_COPY: Record<string, string> = {
-  min_length: `tiene menos de ${PASSWORD_MIN_LENGTH} caracteres`,
-  max_length: `tiene más de ${PASSWORD_MAX_LENGTH} caracteres`,
-  personal_info: 'incluye tu nombre o tu correo',
-  common: 'es una contraseña común',
+/** The backend's `password_rejected` reasons. */
+const REJECTION_REASONS = ['min_length', 'max_length', 'personal_info', 'common'] as const
+
+type RejectionReason = (typeof REJECTION_REASONS)[number]
+
+function isRejectionReason(value: string): value is RejectionReason {
+  return (REJECTION_REASONS as readonly string[]).includes(value)
 }
 
 // ── Activation steps (BoActivar `steps`) ─────────────────────────────────────
@@ -150,20 +153,14 @@ export interface StepItem {
 
 export function activationSteps(step: ActivationStep): StepItem[] {
   const current = step === 'password' ? 0 : 1
-  return (
-    [
-      ['password', 'Contraseña'],
-      ['verification', 'Verificación en dos pasos'],
-    ] as const
-  ).map(([key, label], index) => {
+  return (['password', 'verification'] as const).map((key, index) => {
     const status = index < current ? 'done' : index === current ? 'current' : 'pending'
     return {
       key,
       number: index + 1,
-      label,
+      label: t(`steps.${key}`),
       status,
-      srState:
-        status === 'done' ? ', listo' : status === 'current' ? ', paso actual' : ', pendiente',
+      srState: t(`steps.${status}`),
     }
   })
 }
@@ -184,7 +181,11 @@ export function groupKey(secret: string): string {
 }
 
 export const CODE_LENGTH = 6
-export const CODE_REQUIRED_ERROR = 'Escribe los 6 dígitos que muestra tu app.'
+
+/** "Escribe los 6 dígitos que muestra tu app." */
+export function codeRequiredError(): string {
+  return t('activation.codeRequired', { length: CODE_LENGTH })
+}
 
 // ── Problems → what the screen does ──────────────────────────────────────────
 
@@ -196,15 +197,12 @@ export type OnboardingFailure =
   /** A message for a field (`password`, `code`) or the form. */
   | { kind: 'message'; message: string; field?: 'password' | 'code' }
 
-export const GENERIC_ONBOARDING_ERROR = 'No pudimos completar este paso. Inténtalo de nuevo.'
-
-function attempts(remaining: number | null): string {
-  if (remaining === null || remaining <= 0) return ''
-  return remaining === 1 ? ' Te queda 1 intento.' : ` Te quedan ${remaining} intentos.`
+function genericFailure(): OnboardingFailure {
+  return { kind: 'message', message: t('failure.generic') }
 }
 
 export function describeOnboardingFailure(error: unknown): OnboardingFailure {
-  if (!isApiProblem(error)) return { kind: 'message', message: GENERIC_ONBOARDING_ERROR }
+  if (!isApiProblem(error)) return genericFailure()
   switch (error.code) {
     case 'link_invalid':
       return { kind: 'invalid' }
@@ -213,46 +211,55 @@ export function describeOnboardingFailure(error: unknown): OnboardingFailure {
       return {
         kind: 'message',
         message: unlockAt
-          ? `Demasiados intentos. Vuelve a intentarlo a las ${formatTime(unlockAt)}.`
-          : 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.',
+          ? t('failure.rateLimitedAt', { time: formatTime(unlockAt) })
+          : t('failure.rateLimited'),
       }
     }
     case 'password_rejected': {
       const reasons = Array.isArray(error.extensions.reasons)
         ? error.extensions.reasons.filter((r): r is string => typeof r === 'string')
         : []
-      const parts = reasons.map((reason) => RULE_COPY[reason]).filter(Boolean)
+      const parts = reasons
+        .filter(isRejectionReason)
+        .map((reason) =>
+          t(`password.reason.${reason}`, { min: PASSWORD_MIN_LENGTH, max: PASSWORD_MAX_LENGTH }),
+        )
       return {
         kind: 'message',
         field: 'password',
         message:
           parts.length > 0
-            ? `La contraseña ${parts.join(' y ')}. Elige otra.`
-            : 'La contraseña no cumple los requisitos. Elige otra.',
+            ? t('password.rejected', { reasons: formatList(parts) })
+            : t('password.rejectedGeneric'),
       }
     }
-    case 'totp_invalid':
+    case 'totp_invalid': {
+      const remaining = error.numberExtension('remainingAttempts')
       return {
         kind: 'message',
         field: 'code',
-        message: `El código no coincide. Escribe el código que muestra ahora tu app.${attempts(error.numberExtension('remainingAttempts'))}`,
+        message:
+          remaining !== null && remaining > 0
+            ? t('failure.totpInvalidAttempts', { count: remaining })
+            : t('failure.totpInvalid'),
       }
+    }
     case 'account_locked': {
       const unlockAt = error.stringExtension('unlockAt')
       return {
         kind: 'message',
         field: 'code',
         message: unlockAt
-          ? `Escribiste un código equivocado demasiadas veces. Vuelve a intentarlo a las ${formatTime(unlockAt)}.`
-          : 'Escribiste un código equivocado demasiadas veces. Espera 15 minutos.',
+          ? t('failure.lockedAt', { time: formatTime(unlockAt) })
+          : t('failure.locked'),
       }
     }
     case 'invalid_transition':
-      return { kind: 'restart', message: 'Vuelve a crear tu contraseña para continuar.' }
+      return { kind: 'restart', message: t('failure.restart') }
     case 'network_error':
       return { kind: 'message', message: error.title }
     default:
-      return { kind: 'message', message: GENERIC_ONBOARDING_ERROR }
+      return genericFailure()
   }
 }
 
@@ -260,25 +267,24 @@ export function describeOnboardingFailure(error: unknown): OnboardingFailure {
 
 export type LinkKind = 'invitation' | 'reset'
 
-export const INVALID_LINK_COPY: Record<
-  LinkKind,
-  { text: string; askTitle: string; askText: string }
-> = {
-  invitation: {
-    text: 'Los enlaces de invitación duran 48 horas y sirven una sola vez.',
-    askTitle: 'Pide una nueva invitación a administración',
-    askText: 'Te llega un correo con un enlace nuevo.',
-  },
-  reset: {
-    text: 'Los enlaces para restablecer la contraseña duran 1 hora y sirven una sola vez.',
-    askTitle: 'Pide un enlace nuevo a administración',
-    askText: 'Te llega un correo con un enlace nuevo.',
-  },
+/** "El enlace venció o ya se usó": what the link was and who sends a new one. */
+export function invalidLinkCopy(kind: LinkKind): {
+  text: string
+  askTitle: string
+  askText: string
+  done: string
+} {
+  return {
+    text: t(`link.${kind}Text`),
+    askTitle: t(`link.${kind}Ask`),
+    askText: t('link.askText'),
+    done: t(`link.${kind}Done`),
+  }
 }
 
 // ── Dev mailbox (development tool) ───────────────────────────────────────────
 
-export const DEV_EMAIL_KIND_LABEL: Record<DevEmail['kind'], string> = {
-  invitation: 'Invitación',
-  password_reset: 'Restablecer contraseña',
+/** "Invitación", "Restablecer contraseña". */
+export function devEmailKindLabel(kind: DevEmail['kind']): string {
+  return t(`mailbox.kind.${kind}`)
 }

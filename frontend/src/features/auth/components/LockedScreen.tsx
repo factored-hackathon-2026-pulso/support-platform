@@ -1,10 +1,10 @@
 import { Lock } from 'lucide-react'
 import { PATHS } from '@/app/paths'
 import { Callout, LinkButton } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { useCountdown } from '../hooks/use-countdown'
 import {
   formatCountdown,
-  LOCKED_HELP,
   LOCKOUT_MINUTES,
   lockedDescription,
   type LockedRouteState,
@@ -23,6 +23,7 @@ export type LockedScreenProps = LockedRouteState
 export function LockedScreen({ email, unlockAt }: LockedScreenProps) {
   const remaining = useCountdown(unlockAt)
   const unlocked = remaining === 0
+  const { t } = useTranslation('auth')
 
   return (
     <>
@@ -34,9 +35,7 @@ export function LockedScreen({ email, unlockAt }: LockedScreenProps) {
       </span>
       <AuthHeading
         title={
-          unlocked
-            ? 'Ya puedes volver a intentar'
-            : `Tu cuenta está bloqueada por ${LOCKOUT_MINUTES} minutos`
+          unlocked ? t('locked.unlockedTitle') : t('locked.title', { minutes: LOCKOUT_MINUTES })
         }
         subtitle={lockedDescription({ email, unlockAt })}
       />
@@ -45,37 +44,35 @@ export function LockedScreen({ email, unlockAt }: LockedScreenProps) {
         <div className="flex items-baseline gap-2.5 rounded-12 border border-border bg-surface p-4">
           <span
             role="timer"
-            aria-label={`Faltan ${formatCountdown(remaining)} para desbloquear`}
+            aria-label={t('locked.timer', { time: formatCountdown(remaining) })}
             className="font-mono text-[28px] font-medium tabular"
           >
             {formatCountdown(remaining)}
           </span>
           <span aria-hidden="true" className="text-14 text-ink-2">
-            para desbloquear
+            {t('locked.untilUnlock')}
           </span>
         </div>
       ) : null}
 
       {unlocked ? (
         <LinkButton to={PATHS.login} replace variant="primary" size="lg" block>
-          Volver a entrar
+          {t('locked.signInAgain')}
         </LinkButton>
       ) : (
         <div className="flex flex-col gap-2.5">
-          <Callout tone="info" title="¿Necesitas entrar ya?">
-            {LOCKED_HELP} Cuando lo haga, puedes entrar sin esperar.
+          <Callout tone="info" title={t('locked.needNow')}>
+            {t('locked.help')}
           </Callout>
           <LinkButton to={PATHS.login} replace variant="secondary" size="lg" block>
-            Volver al ingreso
+            {t('locked.backToSignIn')}
           </LinkButton>
         </div>
       )}
 
       <AuthNote>
-        <span>
-          ¿No fuiste tú? Avísale a Administración: alguien pudo intentar entrar con tu correo.
-        </span>
-        <span>Los intentos quedaron registrados en la auditoría.</span>
+        <span>{t('locked.notYou')}</span>
+        <span>{t('locked.audited')}</span>
       </AuthNote>
 
       <AuthHelpFooter />

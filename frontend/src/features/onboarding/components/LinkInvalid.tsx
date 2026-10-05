@@ -2,17 +2,19 @@ import { Link2Off, Mail } from 'lucide-react'
 import { Link } from 'react-router'
 import { PATHS } from '@/app/paths'
 import { DocumentTitle } from '@/components/ui'
-import { INVALID_LINK_COPY, type LinkKind } from '../model'
+import { useTranslation } from '@/lib/i18n'
+import { invalidLinkCopy, type LinkKind } from '../model'
 
 /**
  * "El enlace venció o ya se usó" (BoActivar `vencido`): one screen for an unknown,
  * expired, used or cancelled link (the server never says which).
  */
 export function LinkInvalid({ kind }: { kind: LinkKind }) {
-  const copy = INVALID_LINK_COPY[kind]
+  const { t } = useTranslation('onboarding')
+  const copy = invalidLinkCopy(kind)
   return (
     <>
-      <DocumentTitle title="El enlace venció o ya se usó" />
+      <DocumentTitle title={t('link.invalidTitle')} />
       <span
         aria-hidden="true"
         className="flex size-14 items-center justify-center rounded-16 bg-warn-soft text-warn-strong"
@@ -21,7 +23,7 @@ export function LinkInvalid({ kind }: { kind: LinkKind }) {
       </span>
       <div className="flex flex-col gap-2">
         <h1 className="m-0 font-display text-30 font-bold text-balance">
-          El enlace venció o ya se usó
+          {t('link.invalidTitle')}
         </h1>
         <p className="m-0 text-15 leading-[1.5] text-ink-2">{copy.text}</p>
       </div>
@@ -33,9 +35,9 @@ export function LinkInvalid({ kind }: { kind: LinkKind }) {
         </span>
       </div>
       <p className="m-0 text-14 text-ink-2">
-        {kind === 'invitation' ? '¿Ya activaste tu cuenta? ' : '¿Ya tienes tu contraseña? '}
+        {copy.done}{' '}
         <Link to={PATHS.login} className="text-link font-semibold">
-          Entra con tu correo
+          {t('link.signIn')}
         </Link>
       </p>
     </>

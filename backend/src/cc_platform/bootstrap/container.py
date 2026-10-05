@@ -17,7 +17,11 @@ from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
 from cc_platform.application.ai.builder import AgentBuilder
-from cc_platform.application.ai.builder_chat import AskBuilder, GetBuilderThread
+from cc_platform.application.ai.builder_chat import (
+    AskBuilder,
+    GetBuilderThread,
+    RestartBuilderThread,
+)
 from cc_platform.application.ai.builder_step_up import BuilderStepUp
 from cc_platform.application.ai.config import AssistantConfig, AssistantGate
 from cc_platform.application.ai.copilot import AskCopilot, GetCopilotThread
@@ -667,6 +671,7 @@ def _build_builder(
             builder=registry,
             agent=settings.builder_agent,
         ),
+        restart=RestartBuilderThread(uow=uow, clock=clock),
     )
 
 

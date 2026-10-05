@@ -480,6 +480,33 @@ def test_a_failed_chat_call_keeps_the_message_and_a_retry_works(
     assert ok.json()["answers"][0]["text"] == "ahora sí"
 
 
+def test_a_new_conversation_starts_over_and_the_next_message_starts_another_run(
+    client: TestClient, supervisor: dict[str, str], runtime: InMemoryAgentRuntime
+) -> None:
+    runtime.script.append(turn("¿Qué agente quieres cambiar?"))
+    assert chat(client, supervisor, "Quiero un agente nuevo", "msg-00000011").status_code == 201
+    starts = sum(c.operation == "start_run" for c in runtime.calls)
+
+    restarted = client.post(f"{API}/chat/restart", headers=supervisor)
+
+    assert restarted.status_code == 200, restarted.text
+    assert restarted.json() == {"available": True, "messages": []}
+    assert client.get(f"{API}/chat", headers=supervisor).json()["messages"] == []
+    runtime.script.append(turn("Cuéntame qué cambio quieres."))
+    assert chat(client, supervisor, "Otra cosa", "msg-00000012").status_code == 201
+    # a new run, not the old one
+    assert sum(c.operation == "start_run" for c in runtime.calls) == starts + 1
+    assert [
+        m["role"] for m in client.get(f"{API}/chat", headers=supervisor).json()["messages"]
+    ] == [
+        "person",
+        "agent",
+    ]
+    again = client.post(f"{API}/chat/restart", headers=supervisor)
+    assert again.status_code == 200  # safe to repeat
+    assert client.post(f"{API}/chat/restart", headers=supervisor).status_code == 200
+
+
 # ----------------------------------------------------------------------------- activation (S22)
 def published(client: TestClient, headers: dict[str, str], agent_id: str) -> str:
     created = client.post(
@@ -604,6 +631,7 @@ def test_without_agent_core_the_builder_is_off(tmp_path: Path, clock: FixedClock
             client.get(f"{API}/proposals", headers=headers),
             client.post(f"{API}/proposals", headers=headers, json={"agentId": "x", "title": "y"}),
             chat(client, headers, "hola", "msg-00000009"),
+            client.post(f"{API}/chat/restart", headers=headers),
             client.post(
                 "/api/v1/supervision/ai/stages/undue_charge/agent",
                 headers=headers,

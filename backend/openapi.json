@@ -12044,6 +12044,63 @@
         ]
       }
     },
+    "/api/v1/builder/chat/restart": {
+      "post": {
+        "description": "Slice 22, \"Nueva conversación\": the caller's thread starts over, empty (the transcript stays in agent-core), and her next message starts another run of the builder agent, whatever state the current one is in. Proposals already made stay in the list. Safe to repeat. AI off or no agent-core: 404 `assistant_disabled`.",
+        "operationId": "builder_restart_chat",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuilderThread"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Start a new conversation with the builder agent",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/builder/entities/{kind}/{entityId}": {
       "get": {
         "description": "The latest version, or `?version=X.Y.Z`. `entityId` may contain `/`.",

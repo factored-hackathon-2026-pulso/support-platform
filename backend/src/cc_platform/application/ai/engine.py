@@ -8,7 +8,9 @@ and applies each answer to the case. Three rules shape it:
   calls agent-core with no transaction open, then applies the answer in another unit.
 - **A call that goes wrong never leaves the customer in silence.** agent-core unreachable,
   refusing, or ending its run without resolving: the case goes to the language queue and
-  ``AssignCase`` places it like any arrival (rule 3), with a staff banner that says why.
+  ``AssignCase`` places it like any arrival (rule 3), with a staff banner that says why. When
+  agent-core is down (unreachable, past its timeout, or its circuit breaker open: deploy brief
+  P4) the customer is told the assistant cannot answer right now.
 - **Replays are harmless.** The ``client_turn_id`` is the platform turn id (and the run's
   idempotency key the session id): agent-core answers a repeated call from its own record.
 
@@ -61,6 +63,8 @@ from cc_platform.domain.shared.ids import IdPrefix
 
 #: How many unanswered customer messages one claim looks at (a flood is answered in rounds).
 _PENDING_WINDOW = 50
+#: The failure code of a call agent-core did not answer (down, timed out, breaker open).
+_UNAVAILABLE = "unavailable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,8 +115,10 @@ class AssistantHandover:
         code: str | None = None,
         who: str | None = None,
         notify_customer: bool = True,
+        customer_notice: str | None = None,
     ) -> bool:
-        """Release ``case`` and place it. Returns True when an analyst got it now."""
+        """Release ``case`` and place it. Returns True when an analyst got it now.
+        ``customer_notice`` replaces the customer's default hand-over notice."""
         now = self.clock.now()
         case.release_from_assistant(
             actor=actor,
@@ -140,7 +146,7 @@ class AssistantHandover:
                 audience=TurnAudience.EVERYONE,
                 author_role=TurnAuthorRole.SYSTEM,
                 author_id=None,
-                text=copy.assistant_handover_notice(case.language),
+                text=customer_notice or copy.assistant_handover_notice(case.language),
                 created_at=now,
             )
             await uow.turns.add(notice)
@@ -278,7 +284,7 @@ class AssistantEngine:
                 lang=work.language.value,
             )
         except AgentRuntimeUnavailableError:
-            return _Result(failure="unavailable")
+            return _Result(failure=_UNAVAILABLE)
         except AgentRuntimeError as error:
             return _Result(failure=error.code)
         return _Result(turn=turn, started=started)
@@ -435,6 +441,9 @@ class AssistantEngine:
             reason="failed",
             actor=ActorRef(ActorRole.ASSISTANT, _agent_ref(session)),
             code=code,
+            customer_notice=copy.assistant_unavailable_notice(case.language)
+            if code == _UNAVAILABLE
+            else None,
         )
 
     async def _recover(self, case_id: str, *, code: str) -> None:

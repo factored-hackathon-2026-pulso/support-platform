@@ -122,6 +122,7 @@ def test_a_supervisor_takes_a_proposal_from_draft_to_prod(
         "canRevoke": False,
         "stepUpMethod": "authenticator",
         "stepUpDigits": 6,
+        "reachable": True,  # deploy brief P4: agent-core answers
     }
     proposal_id = start(client, supervisor)
     base = f"{API}/proposals/{proposal_id}"

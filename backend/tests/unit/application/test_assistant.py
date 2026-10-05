@@ -343,7 +343,11 @@ async def test_agent_core_down_hands_the_case_to_people_with_a_notice(
     assert session.state is AssistantState.FAILED
     assert session.failure_code == "unavailable"
     texts = {t.text for t in turns}
-    assert "Te paso con una persona del equipo para que siga con tu caso." in texts
+    # deploy brief P4: the customer is told the assistant cannot answer right now
+    assert (
+        "En este momento no puedo responderte. Te paso con una persona del equipo para que siga "
+        "con tu caso." in texts
+    )
     assert any("no pudo seguir atendiendo (unavailable)" in t.text for t in turns)
 
 

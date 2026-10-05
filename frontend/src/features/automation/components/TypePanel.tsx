@@ -6,7 +6,12 @@ import { Button, Dialog, IconButton, RadioGroup, Status, useToast } from '@/comp
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
 import { agentRequest } from '../builder-chat'
-import { useBuilderAvailable, useMoveStageBack, useProposals } from '../hooks/use-automation'
+import {
+  useAgentsServiceDown,
+  useBuilderAvailable,
+  useMoveStageBack,
+  useProposals,
+} from '../hooks/use-automation'
 import {
   agentIdFor,
   agentName,
@@ -266,8 +271,10 @@ function AgentSection({ type, entry }: { type: MaturingType; entry: CaseTypeStag
 function ProposeButton({ type, entry }: { type: MaturingType; entry: CaseTypeStage }) {
   const { t } = useTranslation('automation')
   const builder = useBuilderAvailable()
+  const serviceDown = useAgentsServiceDown()
   const chat = useBuilderChatPanel()
-  if (!builder) return null
+  // P4: while the agents service is down the frame says so and the chat waits for it.
+  if (!builder || serviceDown) return null
   return (
     <Button
       variant="primary"

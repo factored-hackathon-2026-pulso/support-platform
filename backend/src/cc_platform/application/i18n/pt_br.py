@@ -151,6 +151,8 @@ CATALOG: Final[Mapping[str, str]] = {
     "audit.stage.agentReady": "Propôs um agente para {type}",
     "audit.stage.agentActivated": "Ativou o agente de {type}",
     "audit.stage.agentRenamed": "Mudou o nome do agente de {type}",
+    "audit.stage.agentPaused": "Pausou o agente de {type}",
+    "audit.stage.agentResumed": "Retomou o agente de {type}",
     # the agent builder
     "audit.builder.proposalCreated": "Criou uma proposta de mudança de um agente",
     "audit.builder.proposalTracked": "Adicionou uma proposta do construtor à lista",

@@ -22,6 +22,7 @@ from cc_platform.api.schemas.ai_stages import (
     CaseTypeStage,
     MoveStageBackRequest,
     MoveStageBackResult,
+    PauseAgentRequest,
     RenameAgentRequest,
     ToolUsedRequest,
 )
@@ -171,4 +172,48 @@ async def rename_agent(
     api: ApiContextDep,
 ) -> CaseTypeStage:
     view = await api.use_cases.agent_catalog.rename.execute(actor, case_type, name=body.name)
+    return CaseTypeStage.from_view(view)
+
+
+@router.post(
+    "/supervision/ai/stages/{caseType}/agent/pause",
+    response_model=CaseTypeStage,
+    summary="Pause the agent of a case type (Supervisión)",
+    description=(
+        "ADR 0009 §2. The agent leaves the reception directory: new cases do not reach it, "
+        "open ones carry on, `prod` is untouched. Needs her authenticator code. Audited "
+        "(`ai.agent_paused`), live on `ai:stages`. Pausing a paused agent: 200, nothing changes. "
+        "404 `not_found` (no agent), `assistant_disabled` (AI off or no agent-core); "
+        "422 `builder_step_up_invalid`; `registry_*`; 502/503."
+    ),
+    responses=problem_responses(401, 403, 404, 422, 423, 502, 503),
+)
+async def pause_agent(
+    case_type: Annotated[str, Path(alias="caseType", max_length=40, examples=["undue_charge"])],
+    body: PauseAgentRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> CaseTypeStage:
+    view = await api.use_cases.agent_catalog.pause.execute(
+        actor, case_type, paused=True, reason=body.reason, step_up_code=body.step_up_code
+    )
+    return CaseTypeStage.from_view(view)
+
+
+@router.post(
+    "/supervision/ai/stages/{caseType}/agent/resume",
+    response_model=CaseTypeStage,
+    summary="Resume the agent of a case type (Supervisión)",
+    description="ADR 0009 §2. The reverse of `pause`; the same rules and problems.",
+    responses=problem_responses(401, 403, 404, 422, 423, 502, 503),
+)
+async def resume_agent(
+    case_type: Annotated[str, Path(alias="caseType", max_length=40, examples=["undue_charge"])],
+    body: PauseAgentRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> CaseTypeStage:
+    view = await api.use_cases.agent_catalog.pause.execute(
+        actor, case_type, paused=False, reason=body.reason, step_up_code=body.step_up_code
+    )
     return CaseTypeStage.from_view(view)

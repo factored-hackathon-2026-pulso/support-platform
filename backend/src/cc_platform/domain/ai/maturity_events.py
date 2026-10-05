@@ -75,6 +75,26 @@ class CaseTypeAgentRenamed(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CaseTypeAgentPaused(DomainEvent):
+    """Supervisión paused the agent of the type (out of ``recepcion``'s directory, ADR 0009 §2)."""
+
+    event_type = "ai.agent_paused"
+    entity = "case_type"
+
+    case_type: str
+    agent_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CaseTypeAgentResumed(DomainEvent):
+    event_type = "ai.agent_resumed"
+    entity = "case_type"
+
+    case_type: str
+    agent_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CopilotToolUsed(DomainEvent):
     """The analyst used a ``tool`` the copilot proposed ("Usar" in Herramientas)."""
 
@@ -91,6 +111,8 @@ STAGE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseTypeAgentReady,
     CaseTypeAgentActivated,
     CaseTypeAgentRenamed,
+    CaseTypeAgentPaused,
+    CaseTypeAgentResumed,
 )
 
 #: Every event of the maturity model (the stage changes and the tool feedback).

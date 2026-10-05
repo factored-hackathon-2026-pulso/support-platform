@@ -40,6 +40,7 @@ from cc_platform.application.ai.errors import (
     translate_registry_error,
 )
 from cc_platform.application.ai.registry import (
+    AgentPause,
     AgentRegistryClient,
     AgentRegistryError,
     AliasChange,
@@ -837,6 +838,17 @@ class AgentBuilder:
             )
         )
         return change
+
+    async def set_paused(
+        self, actor: Actor, agent_id: str, *, paused: bool, reason: str, step_up_code: str
+    ) -> AgentPause:
+        """Pause or resume an agent in the registry (out of ``recepcion``'s directory; ``prod``
+        untouched). Her fresh authenticator code, like a promotion. The platform's audit is the
+        case type's (``ai.agent_paused`` / ``ai.agent_resumed``)."""
+        self._ensure(actor)
+        credentials = await self._step_up_credentials(actor, step_up_code)
+        call = self.registry.pause_agent if paused else self.registry.resume_agent
+        return await guarded(call(credentials, agent_id=agent_id, reason=reason.strip()))
 
     async def revoke(
         self, actor: Actor, release_id: str, *, reason: str, step_up_code: str

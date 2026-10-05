@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import partial
 
+from cc_platform.application.ai.builder import AgentBuilder
 from cc_platform.application.ai.errors import AssistantDisabledError
 from cc_platform.application.ai.maturity import (
     CaseTypeStageView,
@@ -47,6 +48,7 @@ class AgentRow:
     display_name: str
     case_type: CaseType | None
     results: AgentResults
+    paused: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +106,7 @@ class GetAgents:
                     else humanize(agent_id)
                 ),
                 case_type=serving[agent_id].case_type if agent_id in serving else None,
+                paused=agent_id in serving and serving[agent_id].agent_paused,
                 results=results.get(agent_id, AgentResults()),
             )
             for agent_id in sorted(set(results) | set(serving))
@@ -141,6 +144,53 @@ class RenameAgent:
 
 
 @dataclass(frozen=True, slots=True)
+class SetAgentPaused:
+    """Supervisión pauses (or resumes) the agent of a type, with her authenticator code (ADR 0009).
+
+    agent-core takes the agent out of ``recepcion``'s directory (``prod`` untouched, open cases
+    carry on); the type records it (``ai.agent_paused`` / ``ai.agent_resumed``, live on
+    ``ai:stages``). The registry is called first: a refusal leaves the type as it was. Idempotent:
+    pausing a paused agent answers with the type unchanged."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+    switch: AiSwitch
+    builder: AgentBuilder | None
+
+    async def execute(
+        self, actor: Actor, case_type: str, *, paused: bool, reason: str, step_up_code: str
+    ) -> CaseTypeStageView:
+        ensure_any_role(actor, {StaffRole.SUPERVISOR})
+        kind = maturing_type(case_type)
+        if self.builder is None:
+            raise AssistantDisabledError()
+        async with self.uow() as uow:
+            if not await self.switch.is_on_in(uow):
+                raise AssistantDisabledError()
+            maturity, _ = await load_maturity(uow, kind)
+            if maturity.agent_id is None:
+                raise NotFoundError("Ese tipo de caso no tiene un agente.")
+            agent_id = maturity.agent_id
+            if maturity.agent_paused == paused:
+                return await _view(uow, maturity)
+        await self.builder.set_paused(
+            actor, agent_id, paused=paused, reason=reason, step_up_code=step_up_code
+        )
+        return await retry_on_conflict(partial(self._record, actor, kind, paused))
+
+    async def _record(self, actor: Actor, kind: CaseType, paused: bool) -> CaseTypeStageView:
+        async with self.uow() as uow:
+            maturity, new = await load_maturity(uow, kind)
+            if maturity.set_agent_paused(
+                paused, actor=actor.acting_as({StaffRole.SUPERVISOR}), at=self.clock.now()
+            ):
+                await store_maturity(uow, maturity, new=new)
+                await uow.commit()
+            return await _view(uow, maturity)
+
+
+@dataclass(frozen=True, slots=True)
 class AgentCatalogUseCases:
     agents: GetAgents
     rename: RenameAgent
+    pause: SetAgentPaused

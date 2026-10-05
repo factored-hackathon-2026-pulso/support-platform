@@ -125,6 +125,9 @@ class CaseTypeStage(ApiModel):
         description="agent-core's id of the agent that serves the type (set while `agent` is "
         "`active`, slice 22)."
     )
+    agent_paused: bool = Field(
+        description="Supervisión paused the agent: new cases do not reach it, open ones carry on."
+    )
     agent_name: str | None = Field(
         description="The name Supervisión gave the agent (ADR 0009); null: show the humanized id."
     )
@@ -149,6 +152,7 @@ class CaseTypeStage(ApiModel):
             agent_since=m.agent_since,
             agent_id=m.agent_id,
             agent_name=m.agent_name,
+            agent_paused=m.agent_paused,
             last_change=last,
             version=m.version,
         )
@@ -204,6 +208,7 @@ class AgentRow(ApiModel):
     display_name: str = Field(description="Supervisión's name for it, or the id humanized.")
     case_type: CaseType | None = Field(description="The type it serves; null: serves none.")
     results: AgentResults
+    paused: bool = Field(description="Out of the reception directory (ADR 0009 section 2).")
 
 
 class AiAgents(ApiModel):
@@ -219,6 +224,7 @@ class AiAgents(ApiModel):
                     agent_id=a.agent_id,
                     display_name=a.display_name,
                     case_type=a.case_type,
+                    paused=a.paused,
                     results=AgentResults(
                         sessions=a.results.sessions,
                         active=a.results.active,
@@ -233,6 +239,11 @@ class AiAgents(ApiModel):
 
 class RenameAgentRequest(RequestModel):
     name: Annotated[str, StringConstraints(min_length=1, max_length=80, strip_whitespace=True)]
+
+
+class PauseAgentRequest(RequestModel):
+    step_up_code: StepUpCode
+    reason: Annotated[str, StringConstraints(max_length=500)] = ""
 
 
 class ActivateAgentRequest(RequestModel):

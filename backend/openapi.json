@@ -682,6 +682,11 @@
             "title": "Displayname",
             "type": "string"
           },
+          "paused": {
+            "description": "Out of the reception directory (ADR 0009 section 2).",
+            "title": "Paused",
+            "type": "boolean"
+          },
           "results": {
             "$ref": "#/components/schemas/AgentResults"
           }
@@ -690,7 +695,8 @@
           "agentId",
           "displayName",
           "caseType",
-          "results"
+          "results",
+          "paused"
         ],
         "title": "AgentRow",
         "type": "object"
@@ -2830,6 +2836,11 @@
             "description": "The name Supervisión gave the agent (ADR 0009); null: show the humanized id.",
             "title": "Agentname"
           },
+          "agentPaused": {
+            "description": "Supervisión paused the agent: new cases do not reach it, open ones carry on.",
+            "title": "Agentpaused",
+            "type": "boolean"
+          },
           "agentSince": {
             "anyOf": [
               {
@@ -2898,6 +2909,7 @@
           "reached",
           "agentSince",
           "agentId",
+          "agentPaused",
           "agentName",
           "lastChange",
           "version"
@@ -6592,6 +6604,29 @@
           "rules"
         ],
         "title": "PasswordRules",
+        "type": "object"
+      },
+      "PauseAgentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Reason",
+            "type": "string"
+          },
+          "stepUpCode": {
+            "description": "A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.",
+            "maxLength": 12,
+            "minLength": 4,
+            "title": "Stepupcode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stepUpCode"
+        ],
+        "title": "PauseAgentRequest",
         "type": "object"
       },
       "PlatformSettings": {
@@ -20392,6 +20427,250 @@
           }
         ],
         "summary": "Name the agent that serves a case type (Supervisión)",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/stages/{caseType}/agent/pause": {
+      "post": {
+        "description": "ADR 0009 §2. The agent leaves the reception directory: new cases do not reach it, open ones carry on, `prod` is untouched. Needs her authenticator code. Audited (`ai.agent_paused`), live on `ai:stages`. Pausing a paused agent: 200, nothing changes. 404 `not_found` (no agent), `assistant_disabled` (AI off or no agent-core); 422 `builder_step_up_invalid`; `registry_*`; 502/503.",
+        "operationId": "ai-stages_pause_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseType",
+            "required": true,
+            "schema": {
+              "examples": [
+                "undue_charge"
+              ],
+              "maxLength": 40,
+              "title": "Casetype",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseTypeStage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "423": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Pause the agent of a case type (Supervisión)",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/stages/{caseType}/agent/resume": {
+      "post": {
+        "description": "ADR 0009 §2. The reverse of `pause`; the same rules and problems.",
+        "operationId": "ai-stages_resume_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseType",
+            "required": true,
+            "schema": {
+              "examples": [
+                "undue_charge"
+              ],
+              "maxLength": 40,
+              "title": "Casetype",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseTypeStage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "423": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Resume the agent of a case type (Supervisión)",
         "tags": [
           "ai-stages"
         ]

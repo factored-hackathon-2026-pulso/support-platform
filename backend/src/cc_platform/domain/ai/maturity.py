@@ -34,8 +34,10 @@ from enum import IntEnum, StrEnum
 
 from cc_platform.domain.ai.maturity_events import (
     CaseTypeAgentActivated,
+    CaseTypeAgentPaused,
     CaseTypeAgentReady,
     CaseTypeAgentRenamed,
+    CaseTypeAgentResumed,
     CaseTypeStageAdvanced,
     CaseTypeStageMovedBack,
 )
@@ -215,6 +217,8 @@ class CaseTypeMaturity(AggregateRoot):
     agent_since: datetime | None = None
     agent_id: str | None = None
     """The agent-core agent that serves the type (set when Supervisión activates it, slice 22)."""
+    agent_paused: bool = False
+    """The agent is out of ``recepcion``'s directory (ADR 0009 §2): new cases do not reach it."""
     agent_name: str | None = None
     """The name shown for that agent (ADR 0009; ``None``: the screens humanize the id)."""
     changed_at: datetime | None = None
@@ -316,6 +320,7 @@ class CaseTypeMaturity(AggregateRoot):
         self.agent_since = None
         self.agent_id = None
         self.agent_name = None
+        self.agent_paused = False
         self.stage_since = {k: v for k, v in self.stage_since.items() if k <= int(to_stage)}
         self.signals = StageSignals()
         self._changed(StageChange.MOVED_BACK, actor.actor_id, at)
@@ -358,6 +363,25 @@ class CaseTypeMaturity(AggregateRoot):
         self._changed(StageChange.AGENT_ACTIVE, actor.actor_id, at)
         self._record(
             CaseTypeAgentActivated(
+                occurred_at=at,
+                actor=actor,
+                entity_id=self.case_type.value,
+                case_type=self.case_type.value,
+                agent_id=self.agent_id,
+            )
+        )
+        return True
+
+    def set_agent_paused(self, paused: bool, *, actor: ActorRef, at: datetime) -> bool:
+        """The registry paused (or resumed) the type's agent. False: it already was."""
+        if self.agent is not AgentStatus.ACTIVE or self.agent_id is None:
+            raise InvalidTransitionError("The type has no agent to pause.")
+        if paused == self.agent_paused:
+            return False
+        self.agent_paused = paused
+        event = CaseTypeAgentPaused if paused else CaseTypeAgentResumed
+        self._record(
+            event(
                 occurred_at=at,
                 actor=actor,
                 entity_id=self.case_type.value,

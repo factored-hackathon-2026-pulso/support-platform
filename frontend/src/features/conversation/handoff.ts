@@ -20,6 +20,8 @@ export interface HandoffItem {
   key: string
   text: string
   detail: string | null
+  /** A nested value (a list, an object) as readable lines under the text, one per item. */
+  lines?: readonly string[]
 }
 
 export interface HandoffView {
@@ -67,6 +69,54 @@ export function formatValue(value: unknown): string | null {
   if (typeof value === 'string') return value.trim() || null
   const json = JSON.stringify(value)
   return json.length > 120 ? `${json.slice(0, 119)}…` : json
+}
+
+/** At most this many lines of a nested value (then "y N más"). */
+export const MAX_VALUE_LINES = 8
+const MAX_LINE = 160
+
+const clip = (text: string) => (text.length > MAX_LINE ? `${text.slice(0, MAX_LINE - 1)}…` : text)
+
+/** A value inside a line: scalars as words, a list joined with commas, an object as pairs. */
+function inlineValue(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const parts = value.map(inlineValue).filter((part): part is string => part !== null)
+    return parts.length ? parts.join(', ') : null
+  }
+  const record = asRecord(value)
+  if (record) {
+    const pairs = Object.entries(record).flatMap(([key, inner]) => {
+      const text = inlineValue(inner)
+      return text ? [`${humanizeKey(key)}: ${text}`] : []
+    })
+    return pairs.length ? pairs.join(', ') : null
+  }
+  if (value === null || value === undefined) return null
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No'
+  if (typeof value === 'number') return String(value)
+  return typeof value === 'string' ? value.trim() || null : null
+}
+
+/**
+ * A nested fact value as readable lines (keys humanized, one line per item): a list gives one
+ * line per element (`Transaction id: TX-1, Amount: 120`), an object one per key (`Amount: 120`).
+ * `null` for a scalar (it stays on the fact's own line). Long lists end with "y N más".
+ */
+export function valueLines(value: unknown): string[] | null {
+  let lines: string[]
+  if (Array.isArray(value)) {
+    lines = value.map(inlineValue).filter((line): line is string => line !== null)
+  } else {
+    const record = asRecord(value)
+    if (!record) return null
+    lines = Object.entries(record).flatMap(([key, inner]) => {
+      const text = inlineValue(inner)
+      return text ? [`${humanizeKey(key)}: ${text}`] : []
+    })
+  }
+  const shown = lines.slice(0, MAX_VALUE_LINES).map(clip)
+  const rest = lines.length - shown.length
+  return rest > 0 ? [...shown, rest === 1 ? 'y 1 más' : `y ${rest} más`] : shown
 }
 
 /** agent-core's reason codes (`ReasonCode`) → why the analyst has the case. */
@@ -136,11 +186,14 @@ function toolName(tool: unknown): string {
   return text ? humanizeKey(text) : 'Una acción'
 }
 
-function namedValue(entry: Json): string | null {
+/** A named fact or claim: "Monto: 120", or the name with its nested value as lines. */
+function namedValue(entry: Json): { text: string; lines?: string[] } | null {
   const name = asText(entry.name)
   if (!name) return null
+  const lines = valueLines(entry.value)
+  if (lines !== null) return lines.length ? { text: humanizeKey(name), lines } : null
   const value = formatValue(entry.value)
-  return value ? `${humanizeKey(name)}: ${value}` : humanizeKey(name)
+  return { text: value ? `${humanizeKey(name)}: ${value}` : humanizeKey(name) }
 }
 
 /** The packet → the analyst's view. Anything unreadable is left out. */
@@ -150,21 +203,21 @@ export function readHandoff(packet: Json): HandoffView {
   const queue = asText(packet.target_queue)
   const verified = asList(packet.verified_facts).flatMap((raw, index): HandoffItem[] => {
     const entry = asRecord(raw)
-    const text = entry ? namedValue(entry) : null
-    if (!entry || !text) return []
+    const named = entry ? namedValue(entry) : null
+    if (!entry || !named) return []
     const kind = asText(asRecord(entry.source)?.kind)
     return [
       {
         key: asText(entry.fact_id) ?? `fact-${index}`,
-        text,
+        ...named,
         detail: kind ? (FACT_SOURCES[kind] ?? null) : null,
       },
     ]
   })
   const claimed = asList(packet.claimed_not_verified).flatMap((raw, index): HandoffItem[] => {
     const entry = asRecord(raw)
-    const text = entry ? namedValue(entry) : null
-    return entry && text ? [{ key: `claim-${index}`, text, detail: null }] : []
+    const named = entry ? namedValue(entry) : null
+    return entry && named ? [{ key: `claim-${index}`, ...named, detail: null }] : []
   })
   const actions = asList(packet.actions_taken).flatMap((raw, index): HandoffItem[] => {
     const entry = asRecord(raw)

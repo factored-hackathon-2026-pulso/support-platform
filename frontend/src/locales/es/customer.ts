@@ -73,6 +73,8 @@ export default {
   networkFailure: 'No hay conexión. Inténtalo de nuevo.',
   chat: {
     support: 'Soporte',
+    /** Who wrote a bank bubble: "Daniela, de LATAM Bank". */
+    bankAuthor: '{{name}}, de LATAM Bank',
     loading: 'Cargando…',
     greeting: 'Hola, ¿en qué te podemos ayudar?',
     loadErrorTitle: 'No pudimos cargar la conversación',

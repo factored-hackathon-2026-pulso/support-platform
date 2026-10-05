@@ -65,6 +65,7 @@ export default {
   networkFailure: 'Sem conexão. Tente de novo.',
   chat: {
     support: 'Suporte',
+    bankAuthor: '{{name}}, do LATAM Bank',
     loading: 'Carregando…',
     greeting: 'Olá, como podemos ajudar?',
     loadErrorTitle: 'Não foi possível carregar a conversa',

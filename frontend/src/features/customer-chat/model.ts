@@ -194,7 +194,7 @@ export interface ChatItem {
    */
   key: string
   side: ChatSide
-  /** "Daniela, de LATAM Bank", "Asistente virtual"; null for the customer and notices. */
+  /** "Daniela, de LATAM Bank" / "Daniela, do LATAM Bank", "Asistente virtual"; null for the customer and notices. */
   author: string | null
   text: string
   createdAt: string
@@ -202,8 +202,10 @@ export interface ChatItem {
   clientMessageId: string | null
 }
 
-function bankAuthor(turn: CustomerTurn): string {
-  return turn.authorName ? `${turn.authorName}, de LATAM Bank` : 'LATAM Bank'
+function bankAuthor(turn: CustomerTurn, language: Language): string {
+  return turn.authorName
+    ? customerT(language)('chat.bankAuthor', { name: turn.authorName })
+    : 'LATAM Bank'
 }
 
 function chatSide(turn: CustomerTurn): ChatSide {
@@ -216,11 +218,14 @@ function chatSide(turn: CustomerTurn): ChatSide {
  * Customer bubbles right, the analyst left (first name), the assistant left with its own
  * name (slice 19), platform notices centred.
  *
- * The author line is the same in both customer languages ("Daniela, de LATAM Bank"; the
- * assistant's name comes from the server), as before slice 23: kept out of the catalog on
- * purpose so the pt chat is unchanged.
+ * The author line follows the customer's language ("Daniela, de LATAM Bank" / "Daniela, do
+ * LATAM Bank"); the assistant's name comes from the server, else "Asistente virtual" /
+ * "Assistente virtual".
  */
-export function toChatItems(cache: Pick<CustomerChatCache, 'turns' | 'pending'>): ChatItem[] {
+export function toChatItems(
+  cache: Pick<CustomerChatCache, 'turns' | 'pending'>,
+  language: Language,
+): ChatItem[] {
   const confirmed = cache.turns.map((turn): ChatItem => {
     const side = chatSide(turn)
     return {
@@ -228,9 +233,9 @@ export function toChatItems(cache: Pick<CustomerChatCache, 'turns' | 'pending'>)
       side,
       author:
         side === 'bank'
-          ? bankAuthor(turn)
+          ? bankAuthor(turn, language)
           : side === 'assistant'
-            ? (turn.authorName ?? 'Asistente virtual')
+            ? (turn.authorName ?? customerT(language)('assistant.name'))
             : null,
       text: turn.text,
       createdAt: turn.createdAt,

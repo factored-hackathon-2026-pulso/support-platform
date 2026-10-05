@@ -159,7 +159,8 @@ const ROLE_LABELS: Record<ActorRole, string> = {
   admin: 'Administración',
   customer: 'Cliente',
   system: 'Plataforma',
-  assistant: 'Asistente',
+  // Slice 19: agent-core's assistant, by the name customers and staff see.
+  assistant: 'Asistente virtual',
 }
 
 /** Kind badge of the "Quién" column. */
@@ -172,6 +173,14 @@ export function actorTone(role: ActorRole): Tone {
   if (role === 'customer') return 'accent'
   if (role === 'system' || role === 'assistant') return 'neutral'
   return 'warn'
+}
+
+/**
+ * Whether the row shows a name next to the badge: the platform and the assistant are named by
+ * their badge alone (the assistant's agent reference stays in the detail's "Quién").
+ */
+export function showsActorName(role: ActorRole): boolean {
+  return role !== 'system' && role !== 'assistant'
 }
 
 /** The name next to the badge: the person, "Plataforma", or the id when no name is known. */
@@ -262,6 +271,7 @@ export interface DetailByline {
 
 export function detailByline(actor: AuditActor): DetailByline {
   if (actor.role === 'system') return { name: 'Plataforma', role: null }
+  if (actor.role === 'assistant') return { name: actorRoleLabel('assistant'), role: null }
   return { name: actorName(actor), role: actorRoleLabel(actor.role) }
 }
 

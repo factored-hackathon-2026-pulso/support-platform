@@ -22,8 +22,10 @@ import {
   useSkippedRatings,
   useStartCustomerCall,
 } from '../hooks'
+import { isAssistantActive } from '../assistant'
 import { chatLang, normalizeCustomerMessage } from '../model'
 import type { Language } from '../types'
+import { AskPersonButton } from './AssistantControls'
 import { ConversationSurvey } from './ConversationSurvey'
 
 export interface CustomerCallViewProps {
@@ -235,9 +237,14 @@ export function CustomerCallView({ customerId, language }: CustomerCallViewProps
       </div>
 
       {failure ? (
-        <p role="alert" className="m-0 bg-white px-5 pt-3 text-13 text-danger">
-          {describeCustomerCallFailure(failure, language)}
-        </p>
+        <div className="flex flex-col gap-2 bg-white px-5 pt-3">
+          <p role="alert" className="m-0 text-13 text-danger">
+            {describeCustomerCallFailure(failure, language)}
+          </p>
+          {isAssistantActive(failure) ? (
+            <AskPersonButton customerId={customerId} language={language} />
+          ) : null}
+        </div>
       ) : null}
       {phase === 'live' || phase === 'hold' ? (
         <form

@@ -48,6 +48,8 @@
   --color-accent-soft: #e4e9fa;
   --color-accent-border: #c3cdf2;
   --color-accent-wash: #f5f7fe;
+  /* Slice 19: the assistant's pale blue bubble (IaWorkspace, IaMain); ink on it is above 15:1. */
+  --color-assistant-bubble: #eef1fb;
   /* Light accent: focus ring on dark surfaces (7.1:1 on the rail) and accents on ink. */
   --color-accent-muted: #8ea2e8;
 

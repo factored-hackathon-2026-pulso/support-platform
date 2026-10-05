@@ -16,3 +16,4 @@ export {
   useTakeEscalatedCase,
 } from './use-escalations'
 export { useIsAssigning, useRefetchAssignmentData, useSetAssignee } from './use-set-assignee'
+export { useReleaseFromAssistant } from './use-release-assistant'

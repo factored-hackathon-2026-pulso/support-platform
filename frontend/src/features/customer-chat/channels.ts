@@ -5,6 +5,7 @@
  * unit-tested (channels.test.ts).
  */
 import { isApiProblem } from '@/lib/api'
+import { assistantActiveMessage } from './assistant'
 import { formatTimer } from '@/lib/format'
 import type {
   CustomerCall,
@@ -260,6 +261,8 @@ export function customerCallLines(
 /** A failed call action or line, in the customer's language. */
 export function describeCustomerCallFailure(error: unknown, language: Language): string {
   const pt = language === 'pt'
+  // Slice 19: the assistant holds the chat; a call cannot join it (contract §1, §3.5).
+  if (isApiProblem(error, 'assistant_active')) return assistantActiveMessage(language)
   if (isApiProblem(error, 'call_in_progress')) {
     return pt ? 'Você já tem uma ligação em andamento.' : 'Ya tienes una llamada en curso.'
   }
@@ -431,6 +434,8 @@ export function customerMailCopy(language: Language): CustomerMailCopy {
 /** A failed email, in the customer's language. */
 export function describeCustomerEmailFailure(error: unknown, language: Language): string {
   const pt = language === 'pt'
+  // Slice 19: the assistant holds the chat; an email cannot join it (contract §1, §3.5).
+  if (isApiProblem(error, 'assistant_active')) return assistantActiveMessage(language)
   if (isApiProblem(error, 'network_error')) {
     return pt ? 'Sem conexão. Tente de novo.' : 'No hay conexión. Inténtalo de nuevo.'
   }

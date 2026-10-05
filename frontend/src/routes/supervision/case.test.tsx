@@ -12,7 +12,12 @@ import {
 import { priorityMenuLabel } from '@/features/cases'
 import type { CaseDetail } from '@/features/conversation'
 import type * as SupervisionApi from '@/features/supervision/api'
-import { fetchQueueOverview, fetchTeamOverview, setCaseAssignee } from '@/features/supervision/api'
+import {
+  fetchQueueOverview,
+  fetchTeamOverview,
+  releaseFromAssistant,
+  setCaseAssignee,
+} from '@/features/supervision/api'
 import { ApiProblem } from '@/lib/api'
 import { NOW } from '@/test/case-fixtures'
 import { CASE_ID, makeCaseDetail, patriciaHistory, seededTurns } from '@/test/conversation-fixtures'
@@ -45,6 +50,7 @@ vi.mock('@/features/supervision/api', async (importOriginal) => {
     fetchTeamOverview: vi.fn<typeof actual.fetchTeamOverview>(),
     fetchQueueOverview: vi.fn<typeof actual.fetchQueueOverview>(),
     setCaseAssignee: vi.fn<typeof actual.setCaseAssignee>(),
+    releaseFromAssistant: vi.fn<typeof actual.releaseFromAssistant>(),
   }
 })
 
@@ -297,5 +303,46 @@ describe('supervisor case view', () => {
     renderRoute(casePath(), { staff: supervisorStaff })
     expect(await screen.findByText('No encontramos este caso')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /signar/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('supervisor case view of a case the assistant holds (slice 19)', () => {
+  it("shows the assistant's turns, explains who holds it and takes it", async () => {
+    const queued = queuedDetail()
+    const held: CaseDetail = {
+      ...queued,
+      case: { ...queued.case, status: 'with_assistant', inboxStatus: null },
+    }
+    vi.mocked(fetchCaseDetail).mockResolvedValue(held)
+    vi.mocked(fetchTurns).mockResolvedValue({
+      items: [
+        ...seededTurns().slice(0, 1),
+        {
+          ...seededTurns()[0]!,
+          id: 'TRN-ASSIST',
+          sequence: 2,
+          authorRole: 'assistant',
+          authorId: 'recepcion@1.0.0',
+          authorName: 'Asistente virtual',
+          text: 'Hola, soy el asistente virtual.',
+        },
+      ],
+      olderCursor: null,
+      lastSequence: 2,
+    })
+    vi.mocked(releaseFromAssistant).mockResolvedValue({ ...held.case, status: 'queued' })
+    const { user } = renderRoute(`/supervision/cases/${held.case.id}`, {
+      staff: supervisorStaff,
+      aiEnabled: true,
+    })
+    expect(await screen.findByText('Hola, soy el asistente virtual.')).toBeInTheDocument()
+    expect(screen.getByText(/^Lo atiende el asistente virtual desde las/)).toBeInTheDocument()
+    expect(
+      screen.getByText('Lo atiende el asistente virtual. Si lo tomas, pasa a la cola en español.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reasignar' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Tomar el caso' }))
+    expect(releaseFromAssistant).toHaveBeenCalledWith(held.case.id)
+    expect(await screen.findByText('Tomaste el caso del asistente')).toBeInTheDocument()
   })
 })

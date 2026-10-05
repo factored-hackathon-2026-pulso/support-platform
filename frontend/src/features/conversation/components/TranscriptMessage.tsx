@@ -1,4 +1,4 @@
-import { CircleAlert, Clock, Pause, PhoneOff, Play, StickyNote } from 'lucide-react'
+import { Bot, CircleAlert, Clock, Pause, PhoneOff, Play, StickyNote } from 'lucide-react'
 import { Avatar } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { formatTime } from '@/lib/format'
@@ -11,15 +11,18 @@ export interface TranscriptMessageProps {
   onRetry?: (clientMessageId: string) => void
 }
 
-const BUBBLE: Record<'customer' | 'own' | 'analyst', string> = {
+const BUBBLE: Record<'customer' | 'own' | 'analyst' | 'assistant', string> = {
   customer: 'self-start border-border bg-surface text-ink',
   own: 'self-end border-ink bg-ink text-white',
   analyst: 'self-end border-ink-2 bg-ink-2 text-white',
+  // Slice 19: the virtual assistant, on the bank's side in a pale blue bubble.
+  assistant: 'self-end border-accent-border bg-assistant-bubble text-ink',
 }
 
 /**
  * One turn of the chat transcript (Workspace.dc.html): customer bubbles on the
- * left, the analyst's own on the right in ink, another analyst's in ink-2;
+ * left, the analyst's own on the right in ink, another analyst's in ink-2, the virtual
+ * assistant's on the right in pale blue under its bot mark (slice 19);
  * the staff-only assignment banner centred in accent, notices as centred muted
  * notes. Bubbles take at most 70% of the column.
  */
@@ -106,7 +109,14 @@ function MessageMeta({ item, onRetry }: TranscriptMessageProps) {
   }
   return (
     <span className="flex items-center gap-2 text-12 text-muted" aria-hidden="true">
-      <span>{item.author}</span>
+      {item.variant === 'assistant' ? (
+        <span className="inline-flex items-center gap-1 font-semibold text-ink-2">
+          <Bot size={13} aria-hidden="true" />
+          {item.author}
+        </span>
+      ) : (
+        <span>{item.author}</span>
+      )}
       <span className="inline-flex items-center gap-1">
         <Clock size={12} aria-hidden="true" />
         {formatTime(item.createdAt)}

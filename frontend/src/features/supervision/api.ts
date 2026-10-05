@@ -8,6 +8,7 @@
 import { api, unwrap } from '@/lib/api'
 import type {
   AssignmentResult,
+  CaseSummary,
   EscalationOverview,
   EscalationResult,
   Language,
@@ -34,6 +35,8 @@ export const supervisionMutationKeys = {
   assign: (caseId: string) => ['supervision', caseId, 'assign'] as const,
   respond: (escalationId: string) => ['supervision', escalationId, 'respond'] as const,
   take: (escalationId: string) => ['supervision', escalationId, 'take'] as const,
+  /** Slice 19: "Tomar el caso" from the assistant. */
+  release: (caseId: string) => ['supervision', caseId, 'assistant-release'] as const,
 }
 
 /** GET /supervision/open-cases?language= (slice 9, "Colas"): every open case of a language. */
@@ -110,6 +113,20 @@ export async function setCaseAssignee(
     api.PUT('/api/v1/supervision/cases/{caseId}/assignee', {
       params: { path: { caseId } },
       body,
+    }),
+  )
+}
+
+/**
+ * POST /supervision/cases/{caseId}/assistant/release (slice 19; contract slice-14-assistant.md
+ * §4.2): Supervisión takes a case from the assistant. It goes to its language queue and is placed
+ * like any arrival (`queued`, or `assigned` when someone was available). `assistant_not_active`
+ * when the assistant no longer holds it.
+ */
+export async function releaseFromAssistant(caseId: string): Promise<CaseSummary> {
+  return unwrap(
+    api.POST('/api/v1/supervision/cases/{caseId}/assistant/release', {
+      params: { path: { caseId } },
     }),
   )
 }

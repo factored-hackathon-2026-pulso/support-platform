@@ -6,6 +6,9 @@ is done and tested (`tests/unit/application/test_assistant.py`, `tests/unit/doma
 to wire the two apps, §7 for the checklist of what changes in the contract you already generate types
 from.
 
+**Screens: built in slice 19** (`slice-19-assistant-screens.md`), which also hands the assistant's open
+conversations to people when Administración turns AI off.
+
 Out of scope here (later slices): the analyst copilot (S15), the agent builder screens (S16),
 production hardening (S17), the tool backend (track T, a separate service).
 

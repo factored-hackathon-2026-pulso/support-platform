@@ -84,9 +84,17 @@ export class WorkspacePage {
     })
     await trigger.click()
     await expect(trigger).toHaveAttribute('aria-expanded', 'true')
-    const panel = this.page.getByRole('complementary', { name: 'Ficha del cliente' })
+    const panel = this.customerPanel()
     await expect(panel).toBeVisible()
     return panel
+  }
+
+  /**
+   * The right panel: "Ficha del cliente", or with AI on (slice 19) "Apoyo del caso", whose
+   * "Cliente" tab holds the same sections.
+   */
+  customerPanel(): Locator {
+    return this.page.getByRole('complementary', { name: /^(Ficha del cliente|Apoyo del caso)$/ })
   }
 
   /**

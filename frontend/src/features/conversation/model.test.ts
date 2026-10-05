@@ -755,22 +755,47 @@ describe('composer', () => {
 describe('close dialog', () => {
   it('requires a reason and caps the note at 500 characters', () => {
     expect(validateCloseForm(INITIAL_CLOSE_FORM)).toEqual({ reason: 'Elige un motivo.' })
-    expect(validateCloseForm({ reason: 'other', note: '' })).toEqual({})
-    expect(validateCloseForm({ reason: 'resolved', note: `  ${'a'.repeat(500)}  ` })).toEqual({})
-    expect(validateCloseForm({ reason: 'resolved', note: 'a'.repeat(501) })).toEqual({
+    expect(validateCloseForm({ ...INITIAL_CLOSE_FORM, reason: 'other' })).toEqual({})
+    expect(
+      validateCloseForm({
+        ...INITIAL_CLOSE_FORM,
+        reason: 'resolved',
+        note: `  ${'a'.repeat(500)}  `,
+      }),
+    ).toEqual({})
+    expect(
+      validateCloseForm({ ...INITIAL_CLOSE_FORM, reason: 'resolved', note: 'a'.repeat(501) }),
+    ).toEqual({
       note: 'La nota puede tener hasta 500 caracteres.',
     })
   })
 
   it('builds the request with a trimmed note, null when blank', () => {
-    expect(toCloseRequest({ reason: 'duplicate', note: '  Mismo caso que el 104.  ' })).toEqual({
+    expect(
+      toCloseRequest({
+        ...INITIAL_CLOSE_FORM,
+        reason: 'duplicate',
+        note: '  Mismo caso que el 104.  ',
+      }),
+    ).toEqual({
       reason: 'duplicate',
       note: 'Mismo caso que el 104.',
     })
-    expect(toCloseRequest({ reason: 'resolved', note: '   ' })).toEqual({
+    expect(toCloseRequest({ ...INITIAL_CLOSE_FORM, reason: 'resolved', note: '   ' })).toEqual({
       reason: 'resolved',
       note: null,
     })
+  })
+
+  it('sends the handoff label only when she answered it (slice 19)', () => {
+    expect(toCloseRequest({ reason: 'resolved', note: '', handoffQuality: 'incomplete' })).toEqual({
+      reason: 'resolved',
+      note: null,
+      handoffQuality: 'incomplete',
+    })
+    expect(
+      toCloseRequest({ reason: 'resolved', note: '', handoffQuality: null }),
+    ).not.toHaveProperty('handoffQuality')
   })
 
   it('counts the trimmed note', () => {
@@ -1039,5 +1064,52 @@ describe('escalation to supervision (slice 9)', () => {
         NOW,
       ),
     ).toBeNull()
+  })
+})
+
+describe('the assistant (slice 19)', () => {
+  const handoffDetail = () => {
+    const detail = makeCaseDetail()
+    return {
+      ...detail,
+      assignment: { ...detail.assignment!, reason: 'assistant_handoff' as const },
+    }
+  }
+
+  it('shows the assistant as its own speaker in the transcript', () => {
+    const turn = makeTurn({
+      authorRole: 'assistant',
+      authorId: 'recepcion@1.0.0',
+      authorName: 'Asistente virtual',
+      text: 'Hola, soy el asistente virtual de LATAM Bank.',
+    })
+    expect(turnVariant(turn, ME)).toBe('assistant')
+    const [item] = toTranscriptItems(mergeTurns(emptyTranscript(), [turn]), ME)
+    expect(item).toMatchObject({ variant: 'assistant', author: 'Asistente virtual' })
+  })
+
+  it('explains "Cómo llegó a ti" after the assistant handed it over', () => {
+    expect(arrivalFacts(handoffDetail(), ME)?.facts).toEqual([
+      { key: 'assistant', icon: 'bot', text: 'Tras el traspaso del asistente', tone: 'accent' },
+      { key: 'language', icon: 'languages', text: 'Hablas', languages: ['es'] },
+    ])
+  })
+
+  it('says who holds it in the supervisor view', () => {
+    const detail = makeCaseDetail()
+    const held = {
+      ...detail,
+      case: { ...detail.case, status: 'with_assistant' as const, inboxStatus: null },
+      assignment: null,
+    }
+    expect(supervisionArrivalLine(held)?.line).toMatch(
+      /^Lo atiende el asistente virtual desde las \d\d:\d\d$/,
+    )
+    expect(supervisionFooter(held)).toEqual([
+      'Lo atiende el asistente virtual. Si lo tomas, pasa a la cola en español.',
+    ])
+    expect(supervisionArrivalLine(handoffDetail())?.line).toBe(
+      'Lo atiende Daniela Ríos: le llegó tras el traspaso del asistente',
+    )
   })
 })

@@ -14,8 +14,10 @@ import {
   type MailItem,
 } from '../channels'
 import { useCustomerConversation, useSendCustomerEmail, useSkippedRatings } from '../hooks'
+import { isAssistantActive } from '../assistant'
 import { MAX_CUSTOMER_MESSAGE_LENGTH, chatLang, surveyState } from '../model'
 import type { Language } from '../types'
+import { AskPersonButton } from './AssistantControls'
 import { ConversationSurvey } from './ConversationSurvey'
 
 export interface CustomerMailViewProps {
@@ -185,6 +187,14 @@ export function CustomerMailView({ customerId, customerName, language }: Custome
             <p role="alert" className="m-0 text-13 text-danger">
               {message}
             </p>
+          ) : null}
+          {send.isError && isAssistantActive(send.error) ? (
+            <AskPersonButton
+              customerId={customerId}
+              language={language}
+              compact
+              onDone={() => send.reset()}
+            />
           ) : null}
           <div className="flex items-center justify-between gap-2">
             <span className="text-12 text-app-muted">{copy.replyHint}</span>

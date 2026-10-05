@@ -52,11 +52,15 @@ export function useQueueOverview({ enabled = true }: { enabled?: boolean } = {})
  * GET /supervision/open-cases?language= ("Colas", slice 9): every open case of one
  * language, kept fresh by the queue and team signals (realtime.ts) and every 60 s.
  */
-export function useOpenCases(language: Language): UseQueryResult<LanguageOpenCases, ApiProblem> {
+export function useOpenCases(
+  language: Language,
+  { enabled = true }: { enabled?: boolean } = {},
+): UseQueryResult<LanguageOpenCases, ApiProblem> {
   return useQuery<LanguageOpenCases, ApiProblem>({
     queryKey: supervisionKeys.openCasesOf(language),
     queryFn: ({ signal }) => fetchOpenCases(language, signal),
     refetchInterval: OVERVIEW_REFETCH_MS,
+    enabled,
   })
 }
 

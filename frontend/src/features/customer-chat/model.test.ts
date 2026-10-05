@@ -511,3 +511,53 @@ describe('satisfaction survey (slice 7)', () => {
     expect(stored.at(-1)).toBe('CASE-59')
   })
 })
+
+describe('the assistant in the chat (slice 19)', () => {
+  const assistantTurn = makeCustomerTurn({
+    sequence: 2,
+    authorRole: 'assistant',
+    authorName: 'Asistente virtual',
+    text: 'Hola, soy el asistente virtual de LATAM Bank.',
+  })
+
+  it('puts the assistant on the bank side with its own name', () => {
+    const [, item] = toChatItems({ turns: [makeCustomerTurn(), assistantTurn], pending: [] })
+    expect(item).toMatchObject({ side: 'assistant', author: 'Asistente virtual' })
+  })
+
+  it('says who attends while the assistant has it, and during the hand-over', () => {
+    const withAssistant = makeCustomerConversation({ status: 'with_assistant' })
+    expect(conversationStatusLine(withAssistant, 'es')).toBe('Te atiende el asistente virtual')
+    expect(conversationStatusLine(withAssistant, 'pt')).toBe(
+      'Você está falando com o assistente virtual',
+    )
+    const waiting = makeCustomerConversation({ status: 'waiting_agent' })
+    expect(conversationStatusLine(waiting, 'es', [assistantTurn])).toBe(
+      'Te estamos pasando con una persona del equipo…',
+    )
+    // Without the assistant, the people-only line stays.
+    expect(conversationStatusLine(waiting, 'es', [makeCustomerTurn()])).toBe(
+      'Buscando a una persona del equipo…',
+    )
+  })
+
+  it('asks about the assistant when it resolved the conversation', () => {
+    expect(rm.ratingSurveyCopy('Asistente virtual', 'es').title).toBe(
+      '¿Cómo te atendió el asistente virtual?',
+    )
+    expect(rm.ratingSurveyCopy('Assistente virtual', 'pt').title).toBe(
+      'Como foi o atendimento do assistente virtual?',
+    )
+    expect(pastBlockByline({ agentName: 'Asistente virtual' }, 'es')).toBe(
+      'Te atendió el asistente virtual',
+    )
+  })
+
+  it('marks a sample customer the assistant is attending', () => {
+    expect(
+      pickerStatus({
+        openConversation: { caseId: 'CASE-1', channel: 'chat_app', status: 'with_assistant' },
+      }),
+    ).toEqual({ shape: 'bot', tone: 'accent', label: 'Con el asistente virtual' })
+  })
+})

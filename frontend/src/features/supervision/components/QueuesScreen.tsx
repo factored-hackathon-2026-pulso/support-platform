@@ -1,4 +1,5 @@
-import { Flame, Info } from 'lucide-react'
+import { Bot, Flame, Info } from 'lucide-react'
+import { useAiEnabled } from '@/app/platform'
 import { Page, PageBody } from '@/components/layout'
 import {
   Avatar,
@@ -20,11 +21,17 @@ import {
   Table,
   activeFilterChips,
   toggleFilter,
+  useToast,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/lib/hooks'
 import {
+  ASSISTANT_HOLDER,
   AUTOMATIC_ASSIGNMENT_NOTE,
+  describeReleaseFailure,
+  isWithAssistant,
+  takeFromAssistantLabel,
+  takenFromAssistantToast,
   QUEUE_LABEL,
   QUEUE_LANGUAGES,
   emptyQueueTitle,
@@ -42,7 +49,12 @@ import {
   withoutKey,
 } from '../model'
 import type { QueuesUrlState, UrlStateChangeOptions } from '../url'
-import { useOpenCases, useQueueOverview, useSupervisionLive } from '../hooks'
+import {
+  useOpenCases,
+  useQueueOverview,
+  useReleaseFromAssistant,
+  useSupervisionLive,
+} from '../hooks'
 import type { Language, LanguageOpenCases, OpenCaseRow } from '../types'
 import { CaseCustomerCell, CaseStatusCell } from './CaseCells'
 
@@ -65,15 +77,27 @@ export interface QueuesScreenProps {
 export function QueuesScreen({ state, onStateChange, onOpenCase }: QueuesScreenProps) {
   useSupervisionLive()
   const now = useNow(SUPERVISION_TICK_MS)
+  const aiEnabled = useAiEnabled()
   const overview = useQueueOverview()
   const openCases = useOpenCases(state.language)
+  // Slice 19: with AI on, the other queue's rows too, so its card says "N con el asistente".
+  const other = QUEUE_LANGUAGES.find((language) => language !== state.language) ?? 'pt'
+  const otherCases = useOpenCases(other, { enabled: aiEnabled })
   const rows = openCases.data?.cases
 
   function figuresOf(language: Language): QueueNavFigures | null {
     if (language === state.language && rows) return queueFiguresFromRows(rows, now)
+    if (language === other && aiEnabled && otherCases.data) {
+      return queueFiguresFromRows(otherCases.data.cases, now)
+    }
     const queue = overview.data?.queues.find((q) => q.language === language)
     return queue
-      ? { open: queue.openCases, unassigned: queue.waiting, atRisk: queue.openAtRisk }
+      ? {
+          open: queue.openCases,
+          unassigned: queue.waiting,
+          atRisk: queue.openAtRisk,
+          withAssistant: 0,
+        }
       : null
   }
 
@@ -120,6 +144,7 @@ export function QueuesScreen({ state, onStateChange, onOpenCase }: QueuesScreenP
           query={openCases}
           state={state}
           now={now}
+          aiEnabled={aiEnabled}
           onStateChange={onStateChange}
           onOpenCase={onOpenCase}
         />
@@ -162,6 +187,12 @@ function QueueButton({ language, figures, selected, onSelect }: QueueButtonProps
           <span className={cn(figures.unassigned > 0 ? 'font-semibold text-danger' : 'text-ink-2')}>
             {labels.unassigned}
           </span>
+          {figures.withAssistant > 0 ? (
+            <span className="inline-flex items-center gap-1 text-accent-strong">
+              <Bot size={14} aria-hidden="true" />
+              {labels.withAssistant}
+            </span>
+          ) : null}
           <span
             className={cn(
               'inline-flex items-center gap-1',
@@ -183,14 +214,15 @@ interface QueueCasesProps {
   query: ReturnType<typeof useOpenCases>
   state: QueuesUrlState
   now: number
+  aiEnabled: boolean
   onStateChange(patch: Partial<QueuesUrlState>, options?: UrlStateChangeOptions): void
   onOpenCase(caseId: string): void
 }
 
-function QueueCases({ query, state, now, onStateChange, onOpenCase }: QueueCasesProps) {
+function QueueCases({ query, state, now, aiEnabled, onStateChange, onOpenCase }: QueueCasesProps) {
   const title = QUEUE_LABEL[state.language]
   const rows = query.data?.cases ?? []
-  const groups = queueFilterGroups(rows, state)
+  const groups = queueFilterGroups(rows, state, { aiEnabled })
   const selection = queuesSelection(state)
   const chips = activeFilterChips(groups, selection)
   const update = (next: ReturnType<typeof toggleFilter>) =>
@@ -325,7 +357,9 @@ function OpenCaseTableRow({ row, now, onOpenCase }: OpenCaseTableRowProps) {
         />
       </TCell>
       <TCell className={CELL_X}>
-        {row.assigneeName ? (
+        {isWithAssistant(summary) ? (
+          <AssistantHolder summary={summary} />
+        ) : row.assigneeName ? (
           <span className="flex min-w-0 items-center gap-2">
             <Avatar name={row.assigneeName} size="sm" tone="neutral" decorative />
             <span className="truncate text-14">{row.assigneeName}</span>
@@ -348,5 +382,43 @@ function RowsSkeleton() {
         <Skeleton key={key} className="h-9 w-full" />
       ))}
     </div>
+  )
+}
+
+/**
+ * "Lo tiene" of a case the assistant holds (slice 19, IaSuColas): the bot avatar, "Asistente
+ * virtual" and "Tomar el caso" (`POST …/assistant/release`: it goes to its language queue). The
+ * row itself still opens the case view (its transcript shows the assistant's turns).
+ */
+function AssistantHolder({ summary }: { summary: OpenCaseRow['case'] }) {
+  const release = useReleaseFromAssistant(summary.id)
+  const { toast } = useToast()
+  return (
+    <span className="flex min-w-0 items-center justify-between gap-2">
+      <span className="flex min-w-0 items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-strong"
+        >
+          <Bot size={14} />
+        </span>
+        <span className="truncate text-14">{ASSISTANT_HOLDER}</span>
+      </span>
+      <Button
+        variant="secondary"
+        size="sm"
+        className="shrink-0"
+        loading={release.isPending}
+        aria-label={takeFromAssistantLabel(summary.customer.displayName)}
+        onClick={() =>
+          release.mutate(undefined, {
+            onSuccess: (taken) => toast(takenFromAssistantToast(taken)),
+            onError: (error) => toast({ ...describeReleaseFailure(error), politeness: 'alert' }),
+          })
+        }
+      >
+        Tomar el caso
+      </Button>
+    </span>
   )
 }

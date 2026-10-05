@@ -20,9 +20,9 @@ import {
   shortCaseId,
   useCaseDetail,
 } from '@/features/conversation'
-import { reassignedToastTitle } from '../model'
+import { describeReleaseFailure, reassignedToastTitle, takenFromAssistantToast } from '../model'
 import type { CaseViewUrlState, UrlStateChangeOptions } from '../url'
-import { useTeamOverview } from '../hooks'
+import { useReleaseFromAssistant, useTeamOverview } from '../hooks'
 import type { CaseSummary } from '../types'
 import { ReassignDialog } from './ReassignDialog'
 
@@ -55,8 +55,15 @@ export function SupervisorCaseScreen({
   const { toast } = useToast()
   const customerName = detail.data?.customer.displayName ?? null
   const summary = detail.data?.case
-  const held = summary !== undefined && summary.status !== 'queued' && summary.status !== 'closed'
+  // Slice 19: a case the assistant holds is taken ("Tomar el caso"), never reassigned.
+  const withAssistant = summary?.status === 'with_assistant'
+  const held =
+    summary !== undefined &&
+    summary.status !== 'queued' &&
+    summary.status !== 'closed' &&
+    !withAssistant
   const canReassign = held && (detail.data?.capabilities.canAssign ?? false)
+  const release = useReleaseFromAssistant(caseId)
 
   // ?reassign=1 on a case that cannot be reassigned (queued, closed, not a supervisor).
   const cannotReassign = state.reassign && detail.status === 'success' && !canReassign
@@ -81,6 +88,20 @@ export function SupervisorCaseScreen({
       {canReassign ? (
         <Button variant="secondary" onClick={openReassign}>
           Reasignar
+        </Button>
+      ) : null}
+      {withAssistant ? (
+        <Button
+          variant="secondary"
+          loading={release.isPending}
+          onClick={() =>
+            release.mutate(undefined, {
+              onSuccess: (taken) => toast(takenFromAssistantToast(taken)),
+              onError: (error) => toast({ ...describeReleaseFailure(error), politeness: 'alert' }),
+            })
+          }
+        >
+          Tomar el caso
         </Button>
       ) : null}
     </>

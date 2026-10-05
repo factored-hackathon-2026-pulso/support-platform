@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import { MessageSquare, MousePointerClick } from 'lucide-react'
+import { useAiEnabled } from '@/app/platform'
 import { useCurrentUser } from '@/app/session'
 import { DocumentTitle, EmptyState, Spinner } from '@/components/ui'
 import {
@@ -10,18 +11,23 @@ import {
   useInbox,
   type InboxStatus,
 } from '@/features/cases'
-import { SidePanel } from '@/components/layout'
+import { SidePanel, TabbedSidePanel, type SidePanelTab } from '@/components/layout'
 import {
   CUSTOMER_FILE_PANEL_ID,
   CUSTOMER_FILE_TRIGGER_ID,
   ConversationPane,
   CustomerFile,
+  HandoffPanel,
+  describeHandoffFailure,
+  useCaseDetail,
+  useCaseHandoff,
 } from '@/features/conversation'
 import { useNow } from '@/lib/hooks'
 import { topics, useRealtimeSubscription } from '@/lib/realtime'
 import { emptyWorkspaceCopy, firstSelectableCase, nextCaseAfterClose } from '../model'
 import {
-  isCustomerFileOpen,
+  openPanel,
+  type WorkspacePanel,
   type WorkspaceStateChangeOptions,
   type WorkspaceUrlState,
 } from '../url'
@@ -40,7 +46,9 @@ export interface WorkspaceScreenProps {
  * Analyst Workspace (Workspace.dc.html, contract §9.2): the "Casos" list
  * (collapsible to a rail), the conversation, and, on demand, the right panel
  * "Ficha del cliente" (slice 6 §5: the customer, this case and "Casos
- * anteriores"; `?panel=customer`, opened from the customer's name). All shareable state
+ * anteriores"; `?panel=customer`, opened from the customer's name). Slice 19: with AI on the
+ * panel has tabs ("Traspaso" for a case the assistant handed over, `?panel=handoff`, opened by
+ * the card's "Ver todo"; "Cliente", the ficha); with AI off it is the ficha, as before. All shareable state
  * lives in the URL (`state`); the screen reports changes through
  * `onStateChange` and the route writes them back.
  *
@@ -98,12 +106,17 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
     onStateChange({ caseId: first }, { replace: true })
   }, [state.caseId, state.filter, ready, items, onStateChange])
 
+  // Slice 19: the "Traspaso" tab exists only while AI is on; with AI off it is the old ficha.
+  const aiEnabled = useAiEnabled()
+  const requested = openPanel(state)
+  const panel: WorkspacePanel | null = requested === 'handoff' && !aiEnabled ? null : requested
+  const panelOpen = panel !== null
   // Another case resets "Casos anteriores": it belongs to the previous customer. The
   // panel itself stays open (the next customer's file).
-  const panelOpen = isCustomerFileOpen(state)
   const selectCase = useCallback(
-    (caseId: string) => onStateChange({ caseId, history: null, customerFile: panelOpen }),
-    [onStateChange, panelOpen],
+    (caseId: string) =>
+      onStateChange({ caseId, history: null, panel: panel === 'handoff' ? 'customer' : panel }),
+    [onStateChange, panel],
   )
 
   // Opened from a notification (slice 10): the bell's panel or the toast is gone.
@@ -118,16 +131,29 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
     setFocusRequest({ kind: 'case', caseId })
   }, [fromNotification, caseId, location.key])
 
+  const fileOpen = panel === 'customer'
   const toggleCustomerFile = useCallback(() => {
-    if (panelOpen) {
-      onStateChange({ customerFile: false, history: null })
+    if (fileOpen) {
+      onStateChange({ panel: null, history: null })
       return
     }
     setPanelOpenedHere(true)
-    onStateChange({ customerFile: true })
-  }, [panelOpen, onStateChange])
+    onStateChange({ panel: 'customer' })
+  }, [fileOpen, onStateChange])
   const closeCustomerFile = useCallback(
-    () => onStateChange({ customerFile: false, history: null }),
+    () => onStateChange({ panel: null, history: null }),
+    [onStateChange],
+  )
+  const openHandoff = useCallback(() => {
+    setPanelOpenedHere(true)
+    onStateChange({ panel: 'handoff', history: null })
+  }, [onStateChange])
+  const selectPanel = useCallback(
+    (next: string) =>
+      onStateChange(
+        { panel: next === 'handoff' ? 'handoff' : 'customer', history: null },
+        { replace: true },
+      ),
     [onStateChange],
   )
   const selectHistory = useCallback(
@@ -176,7 +202,8 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
           <ConversationPane
             caseId={state.caseId}
             onClosed={handleClosed}
-            customerFile={{ open: panelOpen, onToggle: toggleCustomerFile }}
+            customerFile={{ open: fileOpen, onToggle: toggleCustomerFile }}
+            onOpenHandoff={aiEnabled ? openHandoff : undefined}
             focusOnLoad={focusRequest?.kind === 'case' && focusRequest.caseId === state.caseId}
             onFocused={clearFocusRequest}
           />
@@ -202,7 +229,18 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
         )}
       </main>
 
-      {state.caseId && panelOpen ? (
+      {state.caseId && panelOpen && aiEnabled ? (
+        <SupportPanel
+          key={state.caseId}
+          caseId={state.caseId}
+          panel={panel}
+          history={state.history}
+          onHistoryChange={selectHistory}
+          onPanelChange={selectPanel}
+          onClose={closeCustomerFile}
+          focusOnOpen={panelOpenedHere}
+        />
+      ) : state.caseId && panelOpen ? (
         <SidePanel
           id={CUSTOMER_FILE_PANEL_ID}
           title="Ficha del cliente"
@@ -220,5 +258,61 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
         </SidePanel>
       ) : null}
     </div>
+  )
+}
+
+interface SupportPanelProps {
+  caseId: string
+  panel: WorkspacePanel
+  history: string | null
+  onHistoryChange(history: string): void
+  onPanelChange(panel: string): void
+  onClose(): void
+  focusOnOpen: boolean
+}
+
+/**
+ * The right panel with AI on (slice 19, IaWorkspace "Apoyo del caso"): "Traspaso" for a case
+ * the assistant handed to her (while the handoff loads, or can be retried), then "Cliente" (the
+ * ficha). S20 adds "Copiloto" and "Herramientas" here.
+ */
+function SupportPanel({
+  caseId,
+  panel,
+  history,
+  onHistoryChange,
+  onPanelChange,
+  onClose,
+  focusOnOpen,
+}: SupportPanelProps) {
+  const detail = useCaseDetail(caseId)
+  const { handoff, available } = useCaseHandoff(detail.data)
+  // The tab shows while the packet loads, once it loaded, and with a retry for an agent-core
+  // outage; a handoff that cannot be read at all (403, 404) has no tab.
+  const showsHandoff =
+    available && (handoff.status !== 'error' || describeHandoffFailure(handoff.error).retry)
+  const tabs: SidePanelTab[] = [
+    ...(showsHandoff && detail.data
+      ? [{ value: 'handoff', label: 'Traspaso', content: <HandoffPanel detail={detail.data} /> }]
+      : []),
+    {
+      value: 'customer',
+      label: 'Cliente',
+      content: <CustomerFile caseId={caseId} history={history} onHistoryChange={onHistoryChange} />,
+    },
+  ]
+  return (
+    <TabbedSidePanel
+      id={CUSTOMER_FILE_PANEL_ID}
+      label="Apoyo del caso"
+      tabsLabel="Apoyo"
+      tabs={tabs}
+      value={panel}
+      onValueChange={onPanelChange}
+      closeLabel="Cerrar el panel de apoyo"
+      onClose={onClose}
+      focusOnOpen={focusOnOpen}
+      returnFocusTo={CUSTOMER_FILE_TRIGGER_ID}
+    />
   )
 }

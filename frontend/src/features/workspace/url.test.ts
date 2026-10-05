@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { workspacePath } from '@/app/paths'
 import {
   isCustomerFileOpen,
+  openPanel,
   parseWorkspaceSearch,
   toWorkspaceSearch,
   type WorkspaceUrlState,
@@ -12,7 +13,7 @@ const defaults: WorkspaceUrlState = {
   filter: null,
   query: '',
   listCollapsed: false,
-  customerFile: false,
+  panel: null,
   history: null,
 }
 
@@ -26,9 +27,19 @@ describe('parseWorkspaceSearch', () => {
       filter: 'closed',
       query: 'Marcela',
       listCollapsed: true,
-      customerFile: true,
+      panel: 'customer',
       history: 'list',
     })
+  })
+
+  it('reads the handoff tab (slice 19) and keeps "Casos anteriores" on the customer tab', () => {
+    const handoff = parseWorkspaceSearch(new URLSearchParams('case=C&panel=handoff'))
+    expect(handoff.panel).toBe('handoff')
+    expect(openPanel(handoff)).toBe('handoff')
+    expect(isCustomerFileOpen(handoff)).toBe(false)
+    expect(
+      openPanel(parseWorkspaceSearch(new URLSearchParams('panel=handoff&previous=list'))),
+    ).toBe('customer')
   })
 
   it('opens "Ficha del cliente" with panel=customer or a previous deep link', () => {
@@ -67,7 +78,7 @@ describe('toWorkspaceSearch', () => {
       filter: 'waiting',
       query: 'Joaquín',
       listCollapsed: true,
-      customerFile: true,
+      panel: 'customer',
       history: 'CASE-00000000000000000000000110',
     }
     const params = toWorkspaceSearch(state)

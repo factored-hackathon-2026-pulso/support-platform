@@ -16,3 +16,4 @@ export {
 export { storeCall, storeCallResult, useCallCommand, useCaseCalls, useStartCall } from './use-calls'
 export type { CallAction } from './use-calls'
 export { useAddNote, useCallLine, useEmailReply } from './use-channel-writes'
+export { useCaseHandoff } from './use-handoff'

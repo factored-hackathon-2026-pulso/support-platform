@@ -1,5 +1,6 @@
 import { createElement, type ComponentType } from 'react'
 import {
+  Bot,
   Calendar,
   CalendarClock,
   CircleAlert,
@@ -64,6 +65,7 @@ function FlameFilled(props: LucideProps) {
  */
 export const FACT_ICONS = {
   alert: CircleAlert,
+  bot: Bot,
   calendar: Calendar,
   'calendar-clock': CalendarClock,
   check: CircleCheck,

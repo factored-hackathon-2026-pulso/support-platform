@@ -23,6 +23,7 @@ import {
 import {
   CASE_PRIORITY,
   CASE_STATUS,
+  WITH_ASSISTANT_STATUS,
   PRIORITY_OPTIONS,
   caseChannel,
   channelFact,
@@ -194,6 +195,17 @@ export function firstResponseFact(
   summary: Pick<CaseSummary, 'status' | 'slaDueAt' | 'firstResponseAt'>,
   now: DateInput,
 ): FactItem {
+  // Slice 19: the first-response SLA is a person's; it starts when the case leaves the assistant.
+  if (summary.status === 'with_assistant') {
+    return {
+      key: 'first-response',
+      icon: 'pause',
+      tone: 'muted',
+      text: 'No corre',
+      label: 'Primera respuesta',
+      tooltip: 'No corre mientras lo atiende el asistente',
+    }
+  }
   const sla = slaFact(summary, now)
   if (!sla) {
     return {
@@ -225,8 +237,21 @@ export function firstResponseFact(
   }
 }
 
-/** Status of an open case for supervision: "Sin asignar" while nobody holds it. */
-export function openCaseStatus(summary: Pick<CaseSummary, 'inboxStatus'>): StatusAppearance {
+/** The assistant's name where Supervisión sees who holds a case ("Lo tiene"). */
+export const ASSISTANT_HOLDER = 'Asistente virtual'
+
+export function isWithAssistant(summary: Pick<CaseSummary, 'status'>): boolean {
+  return summary.status === 'with_assistant'
+}
+
+/**
+ * Status of an open case for supervision: "Sin asignar" while nobody holds it, "Con el
+ * asistente" while the assistant does (slice 19; such a case has no `inboxStatus`).
+ */
+export function openCaseStatus(
+  summary: Pick<CaseSummary, 'inboxStatus'> & Partial<Pick<CaseSummary, 'status'>>,
+): StatusAppearance {
+  if (summary.status === 'with_assistant') return WITH_ASSISTANT_STATUS
   const config = CASE_STATUS[summary.inboxStatus ?? 'queued']
   return config.strong
     ? { shape: config.shape, tone: config.tone, label: config.label, strong: true }
@@ -240,11 +265,15 @@ export function openForText(summary: Pick<CaseSummary, 'openedAt'>, now: DateInp
 
 // ── "Colas" (slice 9) ────────────────────────────────────────────────────────
 
-/** A queue in the left list: "11 abiertos", "2 sin asignar", "3 en riesgo". */
+/**
+ * A queue in the left list: "11 abiertos", "2 sin asignar", "3 en riesgo"; slice 19: "2 con el
+ * asistente" (its cases are not counted as open for people, as `GET /supervision/queues` does).
+ */
 export interface QueueNavFigures {
   open: number
   unassigned: number
   atRisk: number
+  withAssistant: number
 }
 
 /** The figures of one language from its rows (the selected queue, with the live clock). */
@@ -252,13 +281,15 @@ export function queueFiguresFromRows(
   rows: readonly OpenCaseRow[],
   now: DateInput,
 ): QueueNavFigures {
+  const people = rows.filter((row) => !isWithAssistant(row.case))
   return {
-    open: rows.length,
-    unassigned: rows.filter((row) => row.case.status === 'queued').length,
+    open: people.length,
+    unassigned: people.filter((row) => row.case.status === 'queued').length,
     atRisk: atRiskCount(
-      rows.map((row) => row.case),
+      people.map((row) => row.case),
       now,
     ),
+    withAssistant: rows.length - people.length,
   }
 }
 
@@ -266,11 +297,13 @@ export function queueNavLabels(figures: QueueNavFigures): {
   open: string
   unassigned: string
   atRisk: string
+  withAssistant: string
 } {
   return {
     open: pluralize(figures.open, 'abierto'),
     unassigned: `${figures.unassigned} sin asignar`,
     atRisk: `${figures.atRisk} en riesgo`,
+    withAssistant: `${figures.withAssistant} con el asistente`,
   }
 }
 
@@ -293,19 +326,28 @@ export function emptyQueueTitle(language: Language): string {
   return `No hay casos abiertos en ${LANGUAGE_NAMES[language]}`
 }
 
-/** Status options of "Colas" (the statuses an open case can have, `queued` = Sin asignar). */
-export type OpenCaseStatusKey = 'queued' | 'new' | 'to_reply' | 'waiting'
+/**
+ * Status options of "Colas" (the statuses an open case can have, `queued` = Sin asignar;
+ * slice 19: `with_assistant` = Con el asistente, offered only while AI is on).
+ */
+export type OpenCaseStatusKey = 'queued' | 'new' | 'to_reply' | 'waiting' | 'with_assistant'
 
 export const OPEN_CASE_STATUS_KEYS: readonly OpenCaseStatusKey[] = [
   'queued',
   'new',
   'to_reply',
   'waiting',
+  'with_assistant',
 ]
 
-function statusKeyOf(summary: Pick<CaseSummary, 'inboxStatus'>): OpenCaseStatusKey {
+function statusKeyOf(summary: Pick<CaseSummary, 'inboxStatus' | 'status'>): OpenCaseStatusKey {
+  if (summary.status === 'with_assistant') return 'with_assistant'
   const status = summary.inboxStatus
   return status === 'new' || status === 'to_reply' || status === 'waiting' ? status : 'queued'
+}
+
+function statusOptionLabel(key: OpenCaseStatusKey): string {
+  return key === 'with_assistant' ? WITH_ASSISTANT_STATUS.label : CASE_STATUS[key].label
 }
 
 /** The checked filters of "Colas" as a `FilterSelection` (the FilterMenu's input). */
@@ -370,6 +412,7 @@ export function filterOpenCases(
 export function queueFilterGroups(
   rows: readonly OpenCaseRow[],
   state: QueuesUrlState,
+  { aiEnabled = false }: { aiEnabled?: boolean } = {},
 ): FilterGroup[] {
   const selection = queuesSelection(state)
   const count = (key: keyof typeof QUEUE_TESTS, value: string) =>
@@ -384,9 +427,11 @@ export function queueFilterGroups(
     {
       key: 'status',
       legend: 'Estado',
-      options: OPEN_CASE_STATUS_KEYS.map((key) => ({
+      options: OPEN_CASE_STATUS_KEYS.filter(
+        (key) => key !== 'with_assistant' || aiEnabled || state.statuses.includes('with_assistant'),
+      ).map((key) => ({
         value: key,
-        label: CASE_STATUS[key].label,
+        label: statusOptionLabel(key),
         count: count('status', key),
       })),
     },
@@ -985,4 +1030,41 @@ export function teamNames(teams: readonly TeamSummary[]): Record<string, string>
 export function withoutKey<T extends { key: string }>(fact: T): Omit<T, 'key'> {
   const { key: _key, ...rest } = fact
   return rest
+}
+
+// ── "Tomar el caso" from the assistant (slice 19) ────────────────────────────
+
+/** "Tomar el caso de Ximena Robles" (the row button's accessible name). */
+export function takeFromAssistantLabel(customerName: string): string {
+  return `Tomar el caso de ${customerName}`
+}
+
+/** The confirmation toast: where the case went. */
+export function takenFromAssistantToast(summary: Pick<CaseSummary, 'status' | 'language'>): {
+  title: string
+  description: string
+} {
+  return {
+    title: 'Tomaste el caso del asistente',
+    description:
+      summary.status === 'queued'
+        ? `Quedó en la cola en ${LANGUAGE_NAMES[summary.language]}: le llega a la primera persona disponible.`
+        : 'Ya lo tiene una persona del equipo.',
+  }
+}
+
+export function describeReleaseFailure(error: unknown): { title: string; description: string } {
+  if (isApiProblem(error, 'assistant_not_active')) {
+    return {
+      title: 'El asistente ya no tiene este caso',
+      description: 'Ya pasó a una persona o terminó. La lista se actualizó.',
+    }
+  }
+  if (isApiProblem(error, 'network_error')) {
+    return {
+      title: 'No pudimos tomar el caso',
+      description: 'Revisa tu conexión e inténtalo de nuevo.',
+    }
+  }
+  return { title: 'No pudimos tomar el caso', description: 'Inténtalo de nuevo en un momento.' }
 }

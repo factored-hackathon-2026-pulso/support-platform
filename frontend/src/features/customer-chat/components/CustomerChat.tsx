@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent }
 import { ArrowRight } from 'lucide-react'
 import { Button, Callout, Skeleton } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { assistantView } from '../assistant'
 import { chatTurns } from '../channels'
 import {
   chatLang,
@@ -23,6 +24,7 @@ import {
   useSkippedRatings,
 } from '../hooks'
 import type { Language } from '../types'
+import { AskPersonButton, AssistantTyping, ConfirmationCard, StepUpCard } from './AssistantControls'
 import { ChatBubble } from './ChatBubble'
 import { PastConversations } from './PastConversations'
 import { RatedPill, RatingSurvey } from './RatingSurvey'
@@ -59,7 +61,13 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
   const items = useMemo(() => (chat.data ? toChatItems(chatTurns(chat.data)) : []), [chat.data])
   const scrollRef = useScrollToEnd(items)
   const conversation = chat.data?.conversation ?? null
-  const chips = chat.status === 'success' ? visibleSuggestions(suggestions, chat.data) : []
+  // Slice 19: the assistant's typing pill, confirmation, second factor and "Hablar con una persona".
+  const assistant = assistantView(conversation)
+  const assistantCard = assistant.confirmation !== null || assistant.stepUp !== null
+  const chips =
+    chat.status === 'success' && !assistant.working && !assistantCard
+      ? visibleSuggestions(suggestions, chat.data)
+      : []
   const message = normalizeCustomerMessage(text)
   const { skipped, skip } = useSkippedRatings()
   const rate = useRateConversation(customerId)
@@ -96,9 +104,12 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
           <span className="text-16 font-semibold">{copy.support}</span>
           <span className="text-12 text-app-muted" aria-live="polite">
             {chat.status === 'success'
-              ? conversationStatusLine(conversation, language)
+              ? conversationStatusLine(conversation, language, chat.data.turns)
               : copy.loading}
           </span>
+          {assistant.canAskPerson ? (
+            <AskPersonButton customerId={customerId} language={language} compact />
+          ) : null}
         </span>
       </header>
 
@@ -143,6 +154,25 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
             </div>
           </>
         )}
+        {/* Mounted with the chat (empty while idle), so "escribiendo…" is announced. */}
+        <output className="flex flex-col">
+          {assistant.working ? <AssistantTyping language={language} /> : null}
+        </output>
+        {assistant.confirmation ? (
+          <ConfirmationCard
+            key={assistant.confirmation.token}
+            customerId={customerId}
+            confirmation={assistant.confirmation}
+            language={language}
+          />
+        ) : assistant.stepUp && conversation ? (
+          <StepUpCard
+            key={conversation.caseId}
+            customerId={customerId}
+            stepUp={assistant.stepUp}
+            language={language}
+          />
+        ) : null}
         {/* <output> is a polite status region mounted with the chat, so the thanks is
           announced when it appears. */}
         <output className="flex flex-col">

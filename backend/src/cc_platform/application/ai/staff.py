@@ -27,6 +27,8 @@ from cc_platform.application.cases.dto import CaseSummaryView
 from cc_platform.application.cases.queries import load_case_access, load_case_for
 from cc_platform.application.cases.read_model import CaseReader
 from cc_platform.application.concurrency import retry_on_conflict
+from cc_platform.application.events import EventRecord
+from cc_platform.application.ports.background import BackgroundTasks
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor, ensure_any_role
@@ -35,6 +37,8 @@ from cc_platform.domain.ai.session import HANDOFF_QUALITIES
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.values import CaseStatus
 from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.platform.events import PlatformAiToggled
+from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import InvalidValueError
 
 #: A delegation lives minutes, not for the whole case: it is minted per call, so there is
@@ -128,6 +132,62 @@ class ReleaseAssistantCase:
             summary = await CaseReader(uow).summary(case)
             await uow.commit()
         return summary
+
+
+@dataclass(frozen=True, slots=True)
+class ReleaseAssistantCasesOnAiOff:
+    """Slice 19 (lead decision): when Administración turns the AI functions off, every open
+    conversation the assistant holds goes to people, the way Supervisión takes one: released to
+    the language queue and placed like any arrival (rule 3), with a staff banner ("IA
+    desactivada") and the public notice to the customer. Nobody is left talking to an assistant
+    that is off. One case per Unit of Work: a race on one case (the customer asked for a person,
+    the agent escalated) never blocks the others."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+    handover: AssistantHandover
+
+    async def execute(self) -> int:
+        """Release every active assistant conversation; returns how many went to people."""
+        async with self.uow() as uow:
+            case_ids = [s.case_id for s in await uow.assistant_sessions.list_active()]
+        released = 0
+        for case_id in case_ids:
+            if await retry_on_conflict(partial(self._release, case_id)):
+                released += 1
+        return released
+
+    async def _release(self, case_id: str) -> bool:
+        async with self.uow() as uow:
+            session = await uow.assistant_sessions.get_by_case(case_id)
+            case = await uow.cases.get(case_id)
+            if (
+                session is None
+                or case is None
+                or not session.is_active
+                or case.status is not CaseStatus.WITH_ASSISTANT
+            ):
+                return False  # it left the assistant meanwhile
+            actor = ActorRef.system()
+            session.release(actor=actor, at=self.clock.now())
+            await uow.assistant_sessions.save(session)
+            await self.handover.to_people(uow, case, reason="ai_disabled", actor=actor)
+            await uow.commit()
+        return True
+
+
+class AiOffHandoverProcess:
+    """A bus subscriber: ``platform.ai_toggled`` off spawns ``ReleaseAssistantCasesOnAiOff``
+    (in the background, after the switch's own Unit of Work committed)."""
+
+    def __init__(self, tasks: BackgroundTasks, release: ReleaseAssistantCasesOnAiOff) -> None:
+        self._tasks = tasks
+        self._release = release
+
+    async def __call__(self, record: EventRecord) -> None:
+        event = record.event
+        if isinstance(event, PlatformAiToggled) and not event.enabled:
+            self._tasks.spawn("assistant_ai_off", self._release.execute)
 
 
 @dataclass(frozen=True, slots=True)

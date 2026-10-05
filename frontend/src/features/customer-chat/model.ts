@@ -8,6 +8,7 @@
  * docs/platform/api/slice-2-case-lifecycle.md §6, §9.6.
  */
 import type { StatusAppearance } from '@/components/ui'
+import { assistantCopy, hadAssistant, isAssistantName } from './assistant'
 import { formatDate } from '@/lib/format'
 import { isApiProblem } from '@/lib/api'
 import type {
@@ -181,7 +182,8 @@ export function setPendingStatus(
 
 // ── What the chat shows ─────────────────────────────────────────────────────
 
-export type ChatSide = 'customer' | 'bank' | 'notice'
+/** Slice 19: `assistant` is the virtual assistant (bot icon, pale blue bubble). */
+export type ChatSide = 'customer' | 'bank' | 'assistant' | 'notice'
 
 export interface ChatItem {
   /**
@@ -191,7 +193,7 @@ export interface ChatItem {
    */
   key: string
   side: ChatSide
-  /** "Daniela, de LATAM Bank"; null for the customer and notices. */
+  /** "Daniela, de LATAM Bank", "Asistente virtual"; null for the customer and notices. */
   author: string | null
   text: string
   createdAt: string
@@ -203,19 +205,28 @@ function bankAuthor(turn: CustomerTurn): string {
   return turn.authorName ? `${turn.authorName}, de LATAM Bank` : 'LATAM Bank'
 }
 
-/** Customer bubbles right, the analyst left (first name), platform notices centred. */
+function chatSide(turn: CustomerTurn): ChatSide {
+  if (turn.kind === 'notice' || turn.authorRole === 'system') return 'notice'
+  if (turn.authorRole === 'customer') return 'customer'
+  return turn.authorRole === 'assistant' ? 'assistant' : 'bank'
+}
+
+/**
+ * Customer bubbles right, the analyst left (first name), the assistant left with its own
+ * name (slice 19), platform notices centred.
+ */
 export function toChatItems(cache: Pick<CustomerChatCache, 'turns' | 'pending'>): ChatItem[] {
   const confirmed = cache.turns.map((turn): ChatItem => {
-    const side: ChatSide =
-      turn.kind === 'notice' || turn.authorRole === 'system'
-        ? 'notice'
-        : turn.authorRole === 'customer'
-          ? 'customer'
-          : 'bank'
+    const side = chatSide(turn)
     return {
       key: turn.clientMessageId ?? turn.id,
       side,
-      author: side === 'bank' ? bankAuthor(turn) : null,
+      author:
+        side === 'bank'
+          ? bankAuthor(turn)
+          : side === 'assistant'
+            ? (turn.authorName ?? 'Asistente virtual')
+            : null,
       text: turn.text,
       createdAt: turn.createdAt,
       delivery: 'sent',
@@ -310,10 +321,15 @@ export function chatLang(language: Language): string {
   return language === 'pt' ? 'pt-BR' : 'es'
 }
 
-/** Header state line ("Soporte" / "Suporte" + this). */
+/**
+ * Header state line ("Soporte" / "Suporte" + this). Slice 19: "Te atiende el asistente
+ * virtual" while it holds the conversation, and "Te estamos pasando con una persona del
+ * equipo…" when it handed it over and nobody took it yet (`turns`: the conversation's own).
+ */
 export function conversationStatusLine(
   conversation: CustomerConversation | null,
   language: Language,
+  turns: readonly Pick<CustomerTurn, 'authorRole'>[] = [],
 ): string {
   const pt = language === 'pt'
   if (!conversation) {
@@ -322,7 +338,10 @@ export function conversationStatusLine(
       : 'Escribe tu mensaje y te responde una persona del equipo'
   }
   switch (conversation.status) {
+    case 'with_assistant':
+      return assistantCopy(language).statusLine
     case 'waiting_agent':
+      if (hadAssistant(turns)) return assistantCopy(language).handingOver
       return pt ? 'Procurando uma pessoa da equipe…' : 'Buscando a una persona del equipo…'
     case 'with_agent': {
       const who = conversation.agentName ?? (pt ? 'uma pessoa da equipe' : 'una persona del equipo')
@@ -443,12 +462,16 @@ export function pastBlockTitle(
   return language === 'pt' ? `Conversa de ${date}` : `Conversación del ${date}`
 }
 
-/** "Te atendió Daniela" / "Atendida por Daniela" under the title, or null (nobody took it). */
+/**
+ * "Te atendió Daniela" / "Atendida por Daniela" under the title, or null (nobody took it);
+ * "Te atendió el asistente virtual" when the assistant closed it (slice 19).
+ */
 export function pastBlockByline(
   conversation: Pick<CustomerConversationSummary, 'agentName'>,
   language: Language,
 ): string | null {
   if (!conversation.agentName) return null
+  if (isAssistantName(conversation.agentName)) return assistantCopy(language).attendedBy
   return language === 'pt'
     ? `Atendida por ${conversation.agentName}`
     : `Te atendió ${conversation.agentName}`
@@ -516,9 +539,11 @@ export function placeLabel(city: string, country: CountryCode): string {
  * waiting for a person (dashed ring, nobody has it yet) or open with someone
  * (half pie, in progress); null without an open conversation.
  */
-export const PICKER_STATUS: Readonly<Record<'waiting' | 'open', StatusAppearance>> = {
+export const PICKER_STATUS: Readonly<Record<'waiting' | 'open' | 'assistant', StatusAppearance>> = {
   waiting: { shape: 'dashed', tone: 'warn', label: 'Esperando a una persona', strong: true },
   open: { shape: 'pie-50', tone: 'success', label: 'Conversación abierta' },
+  // Slice 19: the assistant holds the open conversation.
+  assistant: { shape: 'bot', tone: 'accent', label: 'Con el asistente virtual' },
 }
 
 export function pickerStatus(
@@ -526,6 +551,7 @@ export function pickerStatus(
 ): StatusAppearance | null {
   const open = customer.openConversation
   if (!open) return null
+  if (open.status === 'with_assistant') return PICKER_STATUS.assistant
   return PICKER_STATUS[open.status === 'waiting_agent' ? 'waiting' : 'open']
 }
 
@@ -622,11 +648,17 @@ export interface RatingSurveyCopy {
   pickFirst: string
 }
 
-/** "¿Cómo te atendió Daniela?" / "Como foi o atendimento de Daniela?" and the rest. */
+/**
+ * "¿Cómo te atendió Daniela?" / "Como foi o atendimento de Daniela?" and the rest; for a
+ * conversation the assistant resolved (slice 19), "¿Cómo te atendió el asistente virtual?".
+ */
 export function ratingSurveyCopy(agentName: string | null, language: Language): RatingSurveyCopy {
+  const assistant = isAssistantName(agentName)
   if (language === 'pt') {
     return {
-      title: `Como foi o atendimento de ${agentName ?? 'nossa equipe'}?`,
+      title: assistant
+        ? assistantCopy('pt').surveyTitle
+        : `Como foi o atendimento de ${agentName ?? 'nossa equipe'}?`,
       legend: 'Avalie o atendimento',
       commentLabel: 'Quer contar algo mais? (opcional)',
       commentPlaceholder: 'O que podemos melhorar',
@@ -636,7 +668,9 @@ export function ratingSurveyCopy(agentName: string | null, language: Language): 
     }
   }
   return {
-    title: `¿Cómo te atendió ${agentName ?? 'nuestro equipo'}?`,
+    title: assistant
+      ? assistantCopy('es').surveyTitle
+      : `¿Cómo te atendió ${agentName ?? 'nuestro equipo'}?`,
     legend: 'Califica la atención',
     commentLabel: '¿Quieres contarnos algo más? (opcional)',
     commentPlaceholder: 'Qué podemos mejorar o qué te gustó',

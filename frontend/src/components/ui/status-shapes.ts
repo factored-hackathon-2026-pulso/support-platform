@@ -11,6 +11,7 @@
  * - `lock`: ring with a lock ("Bloqueada")
  * - `up`: ring with an up arrow (slice 9: "Escalado" to supervision)
  * - `forward`: ring with a right arrow (slice 9: an escalation that ended "Reasignado")
+ * - `bot`: the assistant's stroke bot (slice 19: "Con el asistente", held by the assistant)
  */
 export type StatusShape =
   | 'dashed'
@@ -25,6 +26,7 @@ export type StatusShape =
   | 'lock'
   | 'up'
   | 'forward'
+  | 'bot'
 
 export const STATUS_SHAPES: readonly StatusShape[] = [
   'dashed',
@@ -39,4 +41,5 @@ export const STATUS_SHAPES: readonly StatusShape[] = [
   'lock',
   'up',
   'forward',
+  'bot',
 ]

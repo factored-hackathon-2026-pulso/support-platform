@@ -166,7 +166,12 @@ async def test_commit_appends_events_then_publishes(harness: Harness) -> None:
     assert stored.actor_role == "analyst"
     assert stored.ingested_at == harness.clock.now()
     assert stored.event_time.tzinfo is not None
-    assert stored.payload == {"factor": "password", "failed_attempts": 1, "remaining_attempts": 4}
+    assert stored.payload == {
+        "factor": "password",
+        "failed_attempts": 1,
+        "remaining_attempts": 4,
+        "schema_version": 1,  # event catalog 1.3.0: every logged payload carries it
+    }
     assert harness.published.event_types == ["auth.login_failed"]
     assert harness.published.records[0].event_id == stored.event_id
 

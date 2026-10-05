@@ -99,7 +99,7 @@ async def test_the_assignee_sets_the_type(world: Container) -> None:
     assert result.case.case_type is CaseType.UNDUE_CHARGE
     assert result.case.version == version + 1
     assert await type_events(world, PATRICIA) == [
-        ("analyst", {"from": "none", "to": "undue_charge"})
+        ("analyst", {"from": "none", "to": "undue_charge", "schema_version": 1})
     ]
     detail = await world.use_cases.cases.detail.execute(actor_for(ANALYST), PATRICIA)
     assert detail.case.case_type is CaseType.UNDUE_CHARGE
@@ -141,11 +141,11 @@ async def test_supervision_changes_any_open_case_even_a_queued_one(world: Contai
         assert result.changed is True
         assert result.case.case_type is case_type
     assert await type_events(world, ROSA) == [
-        ("supervisor", {"from": "none", "to": "virtual_card"})
+        ("supervisor", {"from": "none", "to": "virtual_card", "schema_version": 1})
     ]
     assert (await type_events(world, CAMILA))[-1] == (
         "supervisor",
-        {"from": "app_issue", "to": "service_quality"},
+        {"from": "app_issue", "to": "service_quality", "schema_version": 1},
     )
 
 

@@ -289,4 +289,91 @@ describe('RealtimeClient', () => {
       'case.updated/EVT-2',
     ])
   })
+
+  it('reconnects with backoff after a server restart (1012) and replays the topics', () => {
+    const { client, sockets, onAuthError } = setup()
+    client.subscribe('case:CASE-1')
+    client.connect()
+    sockets.last()?.open()
+
+    sockets.last()?.serverClose(1012)
+    expect(client.getStatus()).toBe('reconnecting')
+    expect(onAuthError).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(100)
+    sockets.last()?.open()
+
+    expect(sockets.sockets).toHaveLength(2)
+    expect(sockets.last()?.messages()).toEqual([{ action: 'subscribe', topic: 'case:CASE-1' }])
+    expect(client.getStatus()).toBe('open')
+  })
+
+  it('keeps heartbeats away from the listeners', () => {
+    const { client, sockets } = setup()
+    const received: string[] = []
+    client.onEnvelope((envelope) => received.push(envelope.type))
+    client.connect()
+    sockets.last()?.open()
+
+    sockets.last()?.receive(heartbeat('CTL-1'))
+    sockets.last()?.receive({ type: 'pong', id: 'CTL-2', occurredAt: NOW, data: {} })
+
+    expect(received).toEqual(['pong'])
+  })
+
+  it('replaces a socket that misses its heartbeats, at once and without backoff', () => {
+    const { client, sockets, statuses } = setup()
+    client.subscribe('inbox:STF-1')
+    client.connect()
+    sockets.last()?.open()
+    sockets.last()?.receive(heartbeat('CTL-1')) // 25 s interval → dead after 75 s of silence
+
+    vi.advanceTimersByTime(60_000)
+    sockets.last()?.receive({ type: 'pong', id: 'CTL-2', occurredAt: NOW, data: {} }) // any frame resets
+    vi.advanceTimersByTime(74_999)
+    expect(sockets.sockets).toHaveLength(1)
+
+    vi.advanceTimersByTime(1)
+    expect(sockets.sockets[0]?.closedWith).toEqual({ code: 4000, reason: 'stale' })
+    expect(sockets.sockets).toHaveLength(2)
+    expect(statuses.at(-1)).toBe('reconnecting')
+
+    sockets.last()?.open()
+    expect(sockets.last()?.messages()).toEqual([{ action: 'subscribe', topic: 'inbox:STF-1' }])
+    expect(client.getStatus()).toBe('open')
+  })
+
+  it('never presumes a socket dead before the server announced heartbeats', () => {
+    const { client, sockets } = setup()
+    client.connect()
+    sockets.last()?.open()
+    vi.advanceTimersByTime(10 * 60_000)
+    expect(sockets.sockets).toHaveLength(1)
+  })
+
+  it('retryNow() skips the pending backoff and is a no-op otherwise', () => {
+    const { client, sockets } = setup()
+    client.connect()
+    sockets.last()?.open()
+    client.retryNow()
+    expect(sockets.sockets).toHaveLength(1)
+
+    for (let i = 0; i < 4; i++) {
+      sockets.last()?.serverClose(1006)
+      vi.advanceTimersByTime(1_000)
+    }
+    sockets.last()?.serverClose(1006) // next try in 1 s (the ceiling)
+    const before = sockets.sockets.length
+    client.retryNow()
+    expect(sockets.sockets).toHaveLength(before + 1)
+
+    client.disconnect()
+    client.retryNow()
+    expect(sockets.sockets).toHaveLength(before + 1)
+  })
 })
+
+const NOW = '2026-01-01T00:00:00Z'
+
+function heartbeat(id: string) {
+  return { type: 'heartbeat', id, occurredAt: NOW, data: { intervalSeconds: 25 } }
+}

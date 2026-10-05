@@ -32,7 +32,11 @@ from cc_platform.application.notifications.writer import NotificationDraft, Noti
 from cc_platform.application.people.dto import LoginCommand
 from cc_platform.bootstrap.container import Container, build_container
 from cc_platform.domain.cases.values import CaseStatus, CloseReason
-from cc_platform.domain.notifications.notification import Notification, NotificationKind
+from cc_platform.domain.notifications.notification import (
+    ImprovementDossier,
+    Notification,
+    NotificationKind,
+)
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.errors import AccountLockedError
 from cc_platform.domain.people.staff import Language
@@ -452,6 +456,41 @@ async def test_only_the_newest_are_kept(world: Container) -> None:
     )
     assert await writer.write([late]) == []
     assert len(await mine(world, SEBASTIAN_ID)) == 3
+
+
+# ----------------------------------------------------------------------------- improvement dossier
+async def test_the_improvement_dossier_of_a_proposal_is_found_by_its_id(world: Container) -> None:
+    writer = NotificationWriter(
+        uow=world.uow, ids=world.ids, signals=world.use_cases.notifications.mark_read.signals
+    )
+    dossier = ImprovementDossier(
+        title="Resumen más corto",
+        problem="El resumen es largo.",
+        evidence="12 casos.",
+        expected_effect="Menos escalaciones.",
+        evidence_links=(CLAUDIA,),
+    )
+    await writer.write(
+        [
+            NotificationDraft(
+                kind=K.IMPROVEMENT_PROPOSED,
+                recipients=(LUCIA_ID, RENATA_ID),
+                created_at=world.clock.now(),
+                source_key="improve:prop-1",
+                proposal_id="prop-1",
+                agent_id="disputas",
+                improvement=dossier,
+            )
+        ]
+    )
+
+    async with world.uow() as uow:
+        found = await uow.notifications.improvement_for("prop-1")
+        other = await uow.notifications.improvement_for("prop-2")
+
+    assert found is not None
+    assert found.improvement == dossier
+    assert other is None
 
 
 # ----------------------------------------------------------------------------- list and read

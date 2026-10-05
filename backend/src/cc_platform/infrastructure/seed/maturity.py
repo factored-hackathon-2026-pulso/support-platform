@@ -36,6 +36,8 @@ from cc_platform.infrastructure.seed.timeline import SeedTimeline
 LUCIA = 5
 #: The agent that serves "Cargo no reconocido" in the story (agent-core's demo disputes agent).
 SEED_TYPE_AGENT = "disputas"
+#: The name the ``volume`` profile gives it (sample, team-generated; ADR 0009 / slice 25).
+SEED_TYPE_AGENT_NAME = "Asistente de disputas"
 
 
 @dataclass(frozen=True, slots=True)

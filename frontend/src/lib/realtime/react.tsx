@@ -30,5 +30,19 @@ export function RealtimeProvider({ client, handlers, token, children }: Realtime
     return () => client.disconnect()
   }, [client, token])
 
+  // Back online, or back to a tab the browser may have throttled: skip the
+  // pending backoff instead of waiting up to its ceiling.
+  useEffect(() => {
+    const retry = () => {
+      if (document.visibilityState === 'visible') client.retryNow()
+    }
+    window.addEventListener('online', retry)
+    document.addEventListener('visibilitychange', retry)
+    return () => {
+      window.removeEventListener('online', retry)
+      document.removeEventListener('visibilitychange', retry)
+    }
+  }, [client])
+
   return <RealtimeContext value={client}>{children}</RealtimeContext>
 }

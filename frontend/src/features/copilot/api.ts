@@ -11,6 +11,7 @@ import type {
   CopilotThread,
   LatestCopilotSuggestion,
   SuggestionFeedback,
+  SuggestionFeedbackSubject,
 } from './types'
 
 export const copilotKeys = {
@@ -21,6 +22,9 @@ export const copilotKeys = {
   asks: (caseId: string) => ['copilot', caseId, 'asks'] as const,
   /** GET /cases/{id}/copilot/suggestions/latest. */
   latest: (caseId: string) => ['copilot', caseId, 'latest'] as const,
+  /** UI-only: this suggestion was reported as shown in this session (never fetched). */
+  shown: (caseId: string, suggestionId: string) =>
+    ['copilot', caseId, 'shown', suggestionId] as const,
   /** GET /ai/stages (slice 21): every case type's stage. */
   stages: () => ['copilot', 'stages'] as const,
 }
@@ -84,16 +88,32 @@ export async function requestSuggestion(
   )
 }
 
-/** POST …/suggestions/{id}/feedback: she dismissed the draft (`discarded`) or left it. */
+/**
+ * POST …/suggestions/{id}/feedback: she dismissed the draft (`discarded`) or left it; or, with
+ * `subject: 'escalation'`, she answered "Ahora no" to the recommendation (`dismissed`).
+ */
 export async function sendSuggestionFeedback(
   caseId: string,
   suggestionId: string,
   decision: SuggestionFeedback,
+  subject: SuggestionFeedbackSubject = 'reply',
 ): Promise<CopilotSuggestion> {
   return unwrap(
     api.POST('/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/feedback', {
       params: { path: { caseId, suggestionId } },
-      body: { decision },
+      body: { subject, decision },
+    }),
+  )
+}
+
+/**
+ * POST …/suggestions/{id}/shown (event catalog 1.3.0): her screen showed the suggestion. The
+ * backend records it once per suggestion; best effort (the caller ignores a failure).
+ */
+export async function recordSuggestionShown(caseId: string, suggestionId: string): Promise<void> {
+  await unwrap(
+    api.POST('/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/shown', {
+      params: { path: { caseId, suggestionId } },
     }),
   )
 }

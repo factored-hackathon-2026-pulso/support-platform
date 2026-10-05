@@ -18,7 +18,9 @@ from pydantic import ConfigDict, Field, StringConstraints
 from cc_platform.api.schemas.cases import ClientMessageId
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.application.ai.builder import BuilderStatus as BuilderStatusView
-from cc_platform.application.ai.registry import ProposalOrigin, ProposalState
+from cc_platform.application.ai.registry import ProposalOrigin, ProposalState, ReasonCode
+from cc_platform.domain.cases.values import CaseChannel, CaseStatus, CaseType
+from cc_platform.domain.people.staff import Language
 
 StepUpCode = Annotated[
     str,
@@ -50,10 +52,18 @@ class BuilderStatus(ViewModel):
         description="How the second factor is asked: a code from the authenticator app."
     )
     step_up_digits: int | None = Field(description="How many digits the code has.")
+    reachable: bool = Field(
+        description=(
+            "Deploy brief P4: false while agent-core is configured but down (its circuit breaker "
+            "is open or it does not answer its health check): show that the agents service is "
+            "not available; the screens that only read the platform keep working."
+        ),
+    )
 
     @classmethod
-    def from_view(cls, view: BuilderStatusView) -> BuilderStatus:
+    def from_view(cls, view: BuilderStatusView, *, reachable: bool) -> BuilderStatus:
         return cls(
+            reachable=reachable,
             available=True,
             can_approve=view.can_approve,
             can_revoke=view.can_revoke,
@@ -65,6 +75,7 @@ class BuilderStatus(ViewModel):
     def unavailable(cls) -> BuilderStatus:
         return cls(
             available=False,
+            reachable=True,  # nothing to reach: the builder is off, not down
             can_approve=False,
             can_revoke=False,
             step_up_method=None,
@@ -215,6 +226,17 @@ class ProposalList(ViewModel):
     )
 
 
+class LastDecision(ViewModel):
+    """The last human decision, as agent-core shows it (PR 53): never the free-text reason nor
+    who decided (the platform's history names her)."""
+
+    decision: Literal["approved", "rejected"]
+    reason_code: ReasonCode | None = Field(
+        description="On a rejection, agent-core's closed-vocabulary reason when one was chosen."
+    )
+    decided_at: datetime
+
+
 class ProposalDetail(ViewModel):
     proposal: Proposal
     changes: list[EntityDraft] = Field(description="The draft: what the proposal changes.")
@@ -223,6 +245,83 @@ class ProposalDetail(ViewModel):
         "failed gate: the proposal is back in draft; that report came with the 409)."
     )
     review: ApprovalReview | None = Field(description="Present once there is an evaluation.")
+    last_decision: LastDecision | None = Field(
+        description="The last approval or rejection (null before one, or from an agent-core "
+        "that does not report it).",
+    )
+
+
+class EvidenceCase(ViewModel):
+    """An evidence link of the engine's dossier, resolved against the platform's cases."""
+
+    case_id: str
+    available: bool = Field(
+        description="False when the id names no case here (stale or never existed): show it "
+        "without a link; the other facts are null."
+    )
+    status: CaseStatus | None
+    case_type: CaseType | None
+    channel: CaseChannel | None
+    language: Language | None
+    opened_at: datetime | None
+
+
+class ProposalImprovement(ViewModel):
+    """The improvement engine's dossier (ADR 0007), as it announced it. Plain text: render it as
+    such (no markup), keeping line breaks."""
+
+    title: str = Field(description="At most 120 characters.")
+    problem: str
+    evidence: str
+    expected_effect: str
+    language: Literal["es"] = Field(
+        description="The language the engine wrote it in: the announce carries Spanish only."
+    )
+    announced_at: datetime
+    evidence_cases: list[EvidenceCase] = Field(
+        description="The announce's `evidenceLinks` (0-8), in its order."
+    )
+
+
+class ProposalHistoryEntry(ViewModel):
+    """One step of the proposal, from the platform's audit (oldest first). Only the members of
+    its `kind` are set; the others are null."""
+
+    kind: Literal[
+        "created",
+        "tracked",
+        "frozen",
+        "evaluated",
+        "approved",
+        "rejected",
+        "reopened",
+        "published",
+        "promoted",
+    ]
+    at: datetime
+    actor_id: str | None = Field(description="A staff id; null for the engine or the system.")
+    actor_name: str | None
+    source: str | None = Field(
+        description="`tracked`: who brought it here (`chat`, `tracked`, `engine`)."
+    )
+    verdict: Verdict | None = Field(description="`evaluated`: the gate's verdict.")
+    items: int | None = Field(description="`evaluated`: how many gate items.")
+    items_failed: int | None = Field(description="`evaluated`: how many failed.")
+    suite_id: str | None = Field(description="`evaluated`: the suite it ran.")
+    reason_code: ReasonCode | None = Field(description="`rejected`: agent-core's code, if any.")
+    release_id: str | None = Field(description="`published` / `promoted`: the release.")
+    alias: Literal["staging", "prod"] | None = Field(description="`promoted`: which alias.")
+
+
+class ProposalRecord(ViewModel):
+    improvement: ProposalImprovement | None = Field(
+        description="Null when the improvement engine did not announce this proposal (or its "
+        "notifications were all pruned)."
+    )
+    history: list[ProposalHistoryEntry] = Field(
+        description="Oldest first. Only what happened through the platform: the registry has no "
+        "history read."
+    )
 
 
 class ValidationReport(ViewModel):
@@ -379,6 +478,12 @@ class ApproveRequest(RequestModel):
 class RejectRequest(RequestModel):
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
     step_up_code: StepUpCode
+    reason_code: ReasonCode | None = Field(
+        default=None,
+        description="Why, from agent-core's closed list (its PR 53): `insufficient_evidence`, "
+        "`wrong_target`, `risk`, `duplicate`, `policy_conflict`, `wording`, `other`. Optional; "
+        "sent to the registry and kept in the audit (the free-text `reason` is not).",
+    )
 
 
 class PublishRequest(RequestModel):

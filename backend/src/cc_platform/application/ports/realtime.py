@@ -54,6 +54,11 @@ class RealtimeConnection(Protocol):
         ...
 
 
+#: Close reason of a graceful shutdown: the socket closes with 1012 (service restart) and the
+#: client reconnects with backoff.
+SERVER_SHUTDOWN = "server_shutdown"
+
+
 class RealtimeHub(Protocol):
     def connect(
         self, *, connection_id: str, principal_id: str, session_id: str
@@ -88,4 +93,9 @@ class RealtimeHub(Protocol):
     def close_principal(self, principal_id: str, reason: str) -> int:
         """Close every connection of that staff member or customer with ``reason`` (e.g.
         ``access_changed`` after a roles change); returns how many."""
+        ...
+
+    def close_all(self, reason: str) -> int:
+        """Close every connection with ``reason`` (``server_shutdown`` on a graceful stop);
+        returns how many."""
         ...

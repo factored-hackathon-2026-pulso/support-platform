@@ -141,7 +141,12 @@ async def test_a_closed_case_with_questions_moves_its_type_up(world: Container) 
         "service_quality",
         "system",
     )
-    assert newest.payload == {"case_type": "service_quality", "from_stage": 1, "to_stage": 2}
+    assert newest.payload == {
+        "case_type": "service_quality",
+        "from_stage": 1,
+        "to_stage": 2,
+        "schema_version": 1,
+    }
 
 
 async def test_a_case_without_a_type_counts_for_nothing(world: Container) -> None:

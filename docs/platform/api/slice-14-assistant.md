@@ -56,6 +56,7 @@ The platform is people-only unless both are set (they go together):
 | `CC_ASSISTANT_STEP_UP_CODE` | the simulated second-factor code, default `000000` (a development stand-in) |
 | `CC_BANK_CUSTOMER_LINKS_FILE` | private JSON `{ "<platform customer id>": "<dataset customer_id>" }`, read at startup |
 | `CC_AGENT_CORE_TIMEOUT_SECONDS` | how long one agent call may take, default 60 |
+| `CC_CORE_*` | deploy brief P4: timeouts per kind of call, retries and the circuit breaker (RUNBOOK §4.0) |
 
 Without them every new route answers `404 assistant_disabled` and the existing flows are unchanged. The
 platform schema gained two tables (`assistant_sessions`, `bank_customer_links`): there are still no
@@ -158,7 +159,10 @@ earlier assistant turns stay in the transcript.
   `handoffQuality`: `"useful" | "incomplete" | "unnecessary"`. Only meaningful for a case with a handoff;
   the platform sends it to agent-core in the background (it never fails the close). **Leave it out when you
   don't know**: the platform never guesses a label. Suggested UI: a three-way choice in the close dialog
-  only when `GET …/handoff` works.
+  only when `GET …/handoff` works. Event catalog 1.3.0: with `incomplete`, an optional `handoffReasked` (a closed list:
+  `identity`, `amount`, `merchant`, `date`, `product`, `reason`, `other`) says what she had to ask the customer
+  again (422 with another quality); the close records `case.handoff_rated` with both (see `engine-signals.md`).
+  agent-core still gets only the quality.
 
 ### 4.2 Supervisión
 

@@ -266,6 +266,9 @@ class CloseCaseCommand:
     """ADR 0003: how useful the assistant's handoff was (``useful``, ``incomplete`` or
     ``unnecessary``). Only meaningful for a case that came from one; sent to agent-core as the
     label of that handoff. Left out, nothing is sent (the platform never guesses a label)."""
+    handoff_reasked: tuple[str, ...] = ()
+    """With ``incomplete`` only: what she had to ask the customer again (``HandoffReask``
+    values). Recorded in ``case.handoff_rated``; never sent to agent-core."""
 
 
 # ----------------------------------------------------------------------------- customer side

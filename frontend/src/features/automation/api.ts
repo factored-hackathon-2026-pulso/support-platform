@@ -19,7 +19,9 @@ import type {
   Proposal,
   ProposalDetail,
   ProposalList,
+  ProposalRecord,
   ProposalSummary,
+  ReasonCode,
   ReleaseDetail,
   ValidationReport,
   VersionList,
@@ -33,6 +35,11 @@ export const automationKeys = {
   proposals: () => ['automation', 'proposals'] as const,
   /** GET /builder/proposals/{id}: the draft, the last evaluation and the review. */
   proposal: (proposalId: string) => ['automation', 'proposal', proposalId] as const,
+  /**
+   * GET /builder/proposals/{id}/record: the engine's dossier and the decisions' history. Under
+   * the proposal's key, so whatever refreshes the proposal refreshes it too.
+   */
+  record: (proposalId: string) => ['automation', 'proposal', proposalId, 'record'] as const,
   /** GET /builder/aliases/{agentId}/{alias}. */
   alias: (agentId: string, alias: string) => ['automation', 'alias', agentId, alias] as const,
   /** GET /builder/releases/{releaseId}. */
@@ -106,6 +113,23 @@ export async function fetchProposal(
   )
 }
 
+/**
+ * GET …/record: what the platform keeps about the proposal, without agent-core: the improvement
+ * engine's dossier (null when it did not announce it) with its evidence cases resolved, and the
+ * history of the decisions taken here (oldest first).
+ */
+export async function fetchProposalRecord(
+  proposalId: string,
+  signal?: AbortSignal,
+): Promise<ProposalRecord> {
+  return unwrap(
+    api.GET('/api/v1/builder/proposals/{proposalId}/record', {
+      params: { path: { proposalId } },
+      signal,
+    }),
+  )
+}
+
 /** POST …/validate: always 200; `violations: []` means it can be frozen. */
 export async function validateProposal(proposalId: string): Promise<ValidationReport> {
   return unwrap(
@@ -161,9 +185,10 @@ export async function approveProposal(
   )
 }
 
+/** POST …/reject: back to draft; `reasonCode` is agent-core's closed list (its PR 53). */
 export async function rejectProposal(
   proposalId: string,
-  body: { reason: string; stepUpCode: string },
+  body: { reason: string; stepUpCode: string; reasonCode?: ReasonCode | null },
 ): Promise<Proposal> {
   return unwrap(
     api.POST('/api/v1/builder/proposals/{proposalId}/reject', {

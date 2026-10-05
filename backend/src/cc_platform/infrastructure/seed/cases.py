@@ -104,10 +104,6 @@ def seed_call_id(case_number: int) -> str:
     return make_id(IdPrefix.CALL, str(case_number).zfill(BODY_LENGTH))
 
 
-def _staff_name(number: int) -> str:
-    return next(seed.name for seed in DEMO_STAFF if seed.number == number)
-
-
 def _staff_name_of(staff_id: str) -> str:
     return next(s.name for s in DEMO_STAFF if seed_staff_id(s.number) == staff_id)
 
@@ -127,6 +123,11 @@ class _Story:
     assignments: list[Assignment] = field(default_factory=list)
     escalations: list[Escalation] = field(default_factory=list)
     calls: list[Call] = field(default_factory=list)
+    staff_name: Callable[[str], str] = field(default_factory=lambda: _staff_name_of)
+    """Names by staff id (the synthetic volume adds its own analysts to the demo's)."""
+
+    def _name(self, number: int) -> str:
+        return self.staff_name(seed_staff_id(number))
 
     def _turn(
         self,
@@ -204,7 +205,7 @@ class _Story:
         )
         self.case.assign(assignment)
         self.assignments.append(assignment)
-        self.banner(at, staff_lines.assigned_on_arrival(_staff_name(staff), self.case.language))
+        self.banner(at, staff_lines.assigned_on_arrival(self._name(staff), self.case.language))
 
     def reassign(self, at: datetime, staff: int, *, by: int, open_cases: int) -> None:
         """A supervisor (``by``) passes the open case to ``staff``: staff banner and the
@@ -230,11 +231,11 @@ class _Story:
                 actor=assignment.assigned_by, to_staff_id=assignment.staff_id, at=at
             )
             self.case.clear_escalation(escalation.id)
-        previous_name = _staff_name_of(previous) if previous else ""
-        self.banner(at, staff_lines.reassigned(_staff_name(by), previous_name, _staff_name(staff)))
+        previous_name = self.staff_name(previous) if previous else ""
+        self.banner(at, staff_lines.reassigned(self._name(by), previous_name, self._name(staff)))
         self._turn(
             at,
-            copy.reassigned_notice(self.case.language, _staff_name(staff).split()[0]),
+            copy.reassigned_notice(self.case.language, self._name(staff).split()[0]),
             kind=TurnKind.NOTICE,
             role=TurnAuthorRole.SYSTEM,
             author=None,
@@ -253,14 +254,14 @@ class _Story:
         )
         self.case.escalate(escalation.id)
         self.escalations.append(escalation)
-        self.banner(at, staff_lines.escalated(_staff_name_of(staff_id)))
+        self.banner(at, staff_lines.escalated(self.staff_name(staff_id)))
 
     def answer_escalation(self, at: datetime, *, by: int, note: str) -> None:
         """Supervision (``by``) answers the open escalation, as ``RespondEscalation`` does."""
         escalation = self._open_escalation()
         escalation.answer(actor=ActorRef(ActorRole.SUPERVISOR, seed_staff_id(by)), note=note, at=at)
         self.case.clear_escalation(escalation.id)
-        self.banner(at, staff_lines.escalation_answered(_staff_name(by)))
+        self.banner(at, staff_lines.escalation_answered(self._name(by)))
 
     def _open_escalation(self) -> Escalation:
         return next(e for e in self.escalations if e.id == self.case.open_escalation_id)
@@ -337,7 +338,7 @@ class _Story:
         )
         self.case.assign(assignment)
         self.assignments.append(assignment)
-        self.banner(at, staff_lines.follow_up_call(_staff_name(staff), self.customer_first_name))
+        self.banner(at, staff_lines.follow_up_call(self._name(staff), self.customer_first_name))
 
     def _call(self) -> Call:
         return next(c for c in self.calls if c.id == self.case.active_call_id)
@@ -438,7 +439,7 @@ class _Story:
         analyst = self._analyst_ref().actor_id
         thread = next(t.subject for t in self.turns if t.subject is not None)
         framed = copy.email_reply_body(
-            self.case.language, self.customer_first_name, _staff_name_of(analyst), body
+            self.case.language, self.customer_first_name, self.staff_name(analyst), body
         )
         self.case.start_progress(at=at)
         self._turn(

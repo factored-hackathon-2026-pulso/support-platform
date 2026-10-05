@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import httpx
 import structlog
 
-from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
+from cc_platform.api.context import ApiContext, BuildInfo, ReadinessOptions, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
 from cc_platform.application.ai.agents import (
@@ -23,6 +23,12 @@ from cc_platform.application.ai.agents import (
     SetAgentPaused,
 )
 from cc_platform.application.ai.announce import AnnounceImprovement
+from cc_platform.application.ai.availability import (
+    CoreStatus,
+    CoreStatusCheck,
+    WhileCoreAvailable,
+    core_status_unknown,
+)
 from cc_platform.application.ai.builder import AgentBuilder
 from cc_platform.application.ai.builder_chat import (
     AskBuilder,
@@ -53,6 +59,7 @@ from cc_platform.application.ai.maturity import (
 )
 from cc_platform.application.ai.priority import ApplyHandoffPriority, HandoffPriorityProcess
 from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
+from cc_platform.application.ai.proposal_record import GetProposalRecord
 from cc_platform.application.ai.registry import AgentRegistryClient
 from cc_platform.application.ai.staff import (
     AiOffHandoverProcess,
@@ -65,14 +72,17 @@ from cc_platform.application.ai.staff import (
 from cc_platform.application.ai.suggestion_process import (
     SUGGESTION_PROCESS_EVENTS,
     SUGGESTION_SIGNAL_EVENTS,
+    SuggestionCloser,
     SuggestionProcess,
     SuggestionSignal,
 )
 from cc_platform.application.ai.suggestions import (
     DecideSuggestion,
+    EndSuggestionsOnClose,
     GetLatestSuggestion,
     LinkSuggestion,
     PurgeSuggestionDrafts,
+    RecordSuggestionShown,
     RequestSuggestion,
     SuggestionService,
 )
@@ -236,9 +246,9 @@ from cc_platform.application.platform.use_cases import PlatformUseCases
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.email import DevMailbox, EmailSender
 from cc_platform.application.ports.event_bus import EventBus
-from cc_platform.application.ports.health import HealthProbe
+from cc_platform.application.ports.health import HealthProbe, ReadinessProbe
 from cc_platform.application.ports.ids import IdGenerator
-from cc_platform.application.ports.realtime import RealtimeHub
+from cc_platform.application.ports.realtime import SERVER_SHUTDOWN, RealtimeHub
 from cc_platform.application.ports.security import (
     MfaVerifier,
     OneTimeTokens,
@@ -258,17 +268,28 @@ from cc_platform.application.use_cases import UseCases
 from cc_platform.bootstrap.settings import Settings
 from cc_platform.domain.ai.events import AssistantEnded
 from cc_platform.domain.ai.maturity_events import MATURITY_EVENTS, STAGE_EVENTS
+from cc_platform.domain.cases.events import CaseClosed
 from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
 from cc_platform.domain.people.staff import Language
 from cc_platform.domain.platform.events import PLATFORM_EVENTS, PlatformAiToggled
+from cc_platform.infrastructure.ai.core_readiness import CoreReadinessProbe
 from cc_platform.infrastructure.ai.ed25519_issuer import Ed25519AgentCredentialIssuer
 from cc_platform.infrastructure.ai.http_registry import HttpAgentRegistry
 from cc_platform.infrastructure.ai.http_runtime import HttpAgentRuntime
 from cc_platform.infrastructure.ai.keys import AgentSigningKeys
 from cc_platform.infrastructure.background import AsyncioBackgroundTasks, PeriodicTask
 from cc_platform.infrastructure.clock import SystemClock
+from cc_platform.infrastructure.core.clients import ResilientAgentRegistry, ResilientAgentRuntime
+from cc_platform.infrastructure.core.http import CoreHealth, core_http_client
+from cc_platform.infrastructure.core.resilience import (
+    CallKind,
+    CircuitBreaker,
+    CoreGuard,
+    CoreTimeouts,
+    RetryPolicy,
+)
 from cc_platform.infrastructure.email.dev_mailbox import (
     DiscardingEmailSender,
     InMemoryDevMailbox,
@@ -284,6 +305,7 @@ from cc_platform.infrastructure.persistence.sqlalchemy.database import (
     PoolOptions,
 )
 from cc_platform.infrastructure.persistence.sqlalchemy.migrator import ensure_at_head, migrate
+from cc_platform.infrastructure.persistence.sqlalchemy.readiness import DatabaseReadinessProbe
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from cc_platform.infrastructure.realtime.in_memory_hub import InMemoryRealtimeHub
 from cc_platform.infrastructure.security.customer_tokens import HmacCustomerTokenService
@@ -327,6 +349,8 @@ class Container:
     dev_mailbox: DevMailbox | None = None
     database: Database | None = None
     health_probes: Sequence[HealthProbe] = field(default_factory=tuple)
+    #: ``GET /readyz`` (deploy runtime contract): the database, then the Core.
+    readiness_probes: Sequence[ReadinessProbe] = field(default_factory=tuple)
     sla_sweep: PeriodicTask | None = None
     #: ADR 0003: ``None`` while ``CC_AGENT_CORE_URL`` is unset (the platform stays people-only).
     agent_core: AgentCoreServices | None = None
@@ -350,14 +374,37 @@ class Container:
                 dev_mailbox=self.dev_mailbox is not None,
             ),
             realtime=RealtimeOptions(
-                expiry_check_interval=self.settings.realtime_expiry_check_interval
+                expiry_check_interval=self.settings.realtime_expiry_check_interval,
+                heartbeat_interval=self.settings.realtime_heartbeat_interval,
+            ),
+            readiness=ReadinessOptions(
+                probes=self.readiness_probes,
+                timeout_seconds=self.settings.readiness_timeout_seconds,
             ),
             internal_token=(
                 self.settings.internal_service_token.get_secret_value()
                 if self.settings.internal_service_token is not None
                 else None
             ),
+            core_status=self.core_status,
         )
+
+    @property
+    def core_status(self) -> CoreStatusCheck:
+        """P4: the Core's state for ``/readyz`` (``await container.core_status()`` → ``ok`` or
+        ``degraded``). ``ok`` without a Core: the platform is people-only by configuration."""
+        if self.agent_core is None:
+            return core_status_unknown
+        if self.agent_core.core_status is not None:
+            return self.agent_core.core_status
+        guard = self.agent_core.guard
+        if guard is None:
+            return core_status_unknown
+
+        async def breaker_status() -> CoreStatus:
+            return "ok" if guard.is_available() else "degraded"
+
+        return breaker_status
 
     async def startup(self) -> None:
         if self.database is not None:
@@ -436,13 +483,19 @@ class Container:
             _log.info("seed_demo_data", **created)
 
     async def shutdown(self) -> None:
+        """Graceful stop: periodic jobs first, then the sockets still open (closed with 1012,
+        the SPA reconnects to another or the restarted process), then the background jobs get
+        ``CC_SHUTDOWN_TIMEOUT_SECONDS`` to finish (the assistant sweep recovers the cancelled
+        ones on the next start), then the connections are released."""
         if self.sla_sweep is not None:
             await self.sla_sweep.stop()
         if self.assistant_sweep is not None:
             await self.assistant_sweep.stop()
         if self.suggestion_purge is not None:
             await self.suggestion_purge.stop()
-        await self.background.drain()
+        closed = self.realtime_hub.close_all(SERVER_SHUTDOWN)
+        cancelled = await self.background.drain_or_cancel(self.settings.shutdown_timeout_seconds)
+        _log.info("shutdown", sockets_closed=closed, jobs_cancelled=cancelled)
         if self.agent_core is not None and self.agent_core.http_client is not None:
             await self.agent_core.http_client.aclose()
         if self.database is not None:
@@ -459,21 +512,77 @@ class AgentCoreServices:
     """Closed on shutdown; ``None`` for a test double that owns no connection."""
     registry: AgentRegistryClient | None = None
     """The registry API (slice 16, the agent builder); ``None`` leaves the builder disabled."""
+    guard: CoreGuard | None = None
+    """P4: timeouts, retries and the circuit breaker shared by every call to this Core. ``None``
+    (a test double) = calls go straight to ``runtime`` and ``registry``."""
+    core_status: CoreStatusCheck | None = None
+    """P4: the readiness check of this Core (``/readyz``); ``None`` = the guard's breaker alone."""
+
+    def runtime_for(self, kind: CallKind) -> AgentRuntime:
+        """The runtime one consumer uses, with its kind's timeout (behind the shared guard)."""
+        if self.guard is None:
+            return self.runtime
+        return ResilientAgentRuntime(self.runtime, self.guard, kind)
+
+    def guarded_registry(self) -> AgentRegistryClient | None:
+        if self.registry is None or self.guard is None:
+            return self.registry
+        return ResilientAgentRegistry(self.registry, self.guard)
+
+
+def _core_guard(settings: Settings) -> CoreGuard:
+    """P4: one guard (one breaker) per Core; the model calls default to the legacy timeout."""
+    model = settings.agent_core_timeout_seconds
+    return CoreGuard(
+        timeouts=CoreTimeouts(
+            assistant=settings.core_timeout_assistant_seconds or model,
+            copilot=settings.core_timeout_copilot_seconds or model,
+            suggestions=settings.core_timeout_suggestions_seconds or model,
+            builder=settings.core_timeout_builder_seconds or model,
+            registry=settings.core_timeout_registry_seconds,
+            evaluate=settings.core_timeout_evaluate_seconds,
+            probe=settings.core_probe_timeout_seconds,
+        ),
+        retry=RetryPolicy(
+            attempts=settings.core_retry_attempts,
+            base_delay=settings.core_retry_base_delay_seconds,
+            max_delay=settings.core_retry_max_delay_seconds,
+        ),
+        breaker=CircuitBreaker(
+            failure_threshold=settings.core_breaker_failure_threshold,
+            reset_seconds=settings.core_breaker_reset_seconds,
+        ),
+    )
 
 
 def _agent_core_services(settings: Settings, clock: Clock) -> AgentCoreServices | None:
     if settings.agent_core_url is None or settings.agent_keys_file is None:
         return None
     keys = AgentSigningKeys.from_file(settings.agent_keys_file)
-    client = httpx.AsyncClient(
-        base_url=settings.agent_core_url, timeout=settings.agent_core_timeout_seconds
+    guard = _core_guard(settings)
+    client = core_http_client(
+        settings.agent_core_url,
+        timeouts=guard.timeouts,
+        connect_timeout=settings.core_connect_timeout_seconds,
     )
     return AgentCoreServices(
         issuer=Ed25519AgentCredentialIssuer(keys, clock),
         runtime=HttpAgentRuntime(client),
         http_client=client,
         registry=HttpAgentRegistry(client),
+        guard=guard,
+        core_status=CoreHealth(client, guard),
     )
+
+
+def _readiness_probes(
+    settings: Settings, database: Database | None, agent_core: AgentCoreServices | None
+) -> tuple[ReadinessProbe, ...]:
+    """``GET /readyz``: the database (critical; none with ``CC_PERSISTENCE=memory``), then
+    the Core's own ``/readyz`` (non-critical; ``disabled`` without ``CC_AGENT_CORE_URL``)."""
+    client = agent_core.http_client if agent_core is not None else None
+    core = CoreReadinessProbe(client, timeout_seconds=settings.readiness_timeout_seconds)
+    return (DatabaseReadinessProbe(database), core) if database is not None else (core,)
 
 
 def _wire_realtime(
@@ -554,11 +663,13 @@ def _build_assistant(
     handover = AssistantHandover(
         clock=clock, ids=ids, sla=FirstResponseSlaPolicy(), assign_case=assign_case
     )
+    # P4: every assistant call (turns, handoffs) behind the Core's guard, with its timeout.
+    assistant_runtime = agent_core.runtime_for(CallKind.ASSISTANT)
     engine = AssistantEngine(
         uow=uow,
         clock=clock,
         ids=ids,
-        runtime=agent_core.runtime,
+        runtime=assistant_runtime,
         issuer=agent_core.issuer,
         handover=handover,
         config=config,
@@ -568,7 +679,7 @@ def _build_assistant(
         HandoffPriorityProcess(
             background,
             ApplyHandoffPriority(
-                uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+                uow=uow, clock=clock, runtime=assistant_runtime, issuer=agent_core.issuer
             ),
         ),
         event_types=[AssistantEnded],
@@ -587,7 +698,7 @@ def _build_assistant(
         ),
         request_person=RequestPerson(uow=uow, clock=clock, handover=handover),
         handoff=GetCaseHandoff(
-            uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+            uow=uow, clock=clock, runtime=assistant_runtime, issuer=agent_core.issuer
         ),
         release=ReleaseAssistantCase(uow=uow, clock=clock, handover=handover),
         copilot_thread=GetCopilotThread(uow=uow, stage_gate=settings.stage_gates_suggestions),
@@ -596,7 +707,7 @@ def _build_assistant(
             uow=uow,
             clock=clock,
             ids=ids,
-            runtime=agent_core.runtime,
+            runtime=agent_core.runtime_for(CallKind.COPILOT),
             issuer=agent_core.issuer,
             agent=settings.copilot_agent,
             stage_gate=settings.stage_gates_suggestions,
@@ -622,19 +733,36 @@ def _build_assistant(
             bus.subscribe(
                 # Slice 18: no automatic suggestion while the AI switch is off; slice 21: nor for
                 # a case whose type is below stage 2 (its copilot proposes nothing yet).
-                WhileAiOn(ai_switch, _stage_gated(settings, uow, suggestion_process)),
+                # P4: nor while the Core is down (the panel stays quiet, no failed attempts).
+                WhileAiOn(
+                    ai_switch,
+                    _while_core_up(agent_core, _stage_gated(settings, uow, suggestion_process)),
+                ),
                 event_types=SUGGESTION_PROCESS_EVENTS,
             )
         bus.subscribe(SuggestionSignal(hub), event_types=SUGGESTION_SIGNAL_EVENTS)
+        bus.subscribe(  # catalog 1.3.0: a case that closes ends its newest suggestion
+            SuggestionCloser(background, EndSuggestionsOnClose(uow=uow, clock=clock)),
+            event_types=[CaseClosed],
+        )
     return _AssistantParts(
-        gate=AssistantGate(config, switch=ai_switch),
+        gate=AssistantGate(config, switch=ai_switch, core=agent_core.guard),
         engine=engine,
         resolution=RecordHandoffResolution(
-            uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+            uow=uow, clock=clock, runtime=assistant_runtime, issuer=agent_core.issuer
         ),
         use_cases=use_cases,
         sweep=SweepAssistantSessions(uow=uow, clock=clock, tasks=background, engine=engine),
     )
+
+
+def _while_core_up(
+    agent_core: AgentCoreServices, subscriber: Callable[[EventRecord], Awaitable[None]]
+) -> Callable[[EventRecord], Awaitable[None]]:
+    """P4: background AI work skipped while the Core's breaker is open."""
+    if agent_core.guard is None:
+        return subscriber
+    return WhileCoreAvailable(agent_core.guard, subscriber)
 
 
 def _stage_gated(
@@ -659,7 +787,7 @@ def _build_suggestions(
         uow=uow,
         clock=clock,
         ids=ids,
-        runtime=agent_core.runtime,
+        runtime=agent_core.runtime_for(CallKind.SUGGESTIONS),
         issuer=agent_core.issuer,
         agent=settings.copilot_suggestions_agent,
         stage_gate=settings.stage_gates_suggestions,
@@ -673,6 +801,7 @@ def _build_suggestions(
         decide=DecideSuggestion(uow=uow, clock=clock),
         link=LinkSuggestion(uow=uow, clock=clock),
         purge=PurgeSuggestionDrafts(uow=uow, clock=clock),
+        shown=RecordSuggestionShown(uow=uow, clock=clock),
     )
 
 
@@ -687,12 +816,13 @@ def _build_builder(
     notifications: NotificationWriter,
 ) -> BuilderUseCases | None:
     """Slice 16: the agent builder exists when agent-core's registry is wired."""
-    if agent_core.registry is None:
+    registry_client = agent_core.guarded_registry()
+    if registry_client is None:
         return None
     registry = AgentBuilder(
         uow=uow,
         clock=clock,
-        registry=agent_core.registry,
+        registry=registry_client,
         issuer=agent_core.issuer,
         step_up=step_up,
     )
@@ -703,8 +833,8 @@ def _build_builder(
             uow=uow,
             clock=clock,
             ids=ids,
-            runtime=agent_core.runtime,
-            registry=agent_core.registry,
+            runtime=agent_core.runtime_for(CallKind.BUILDER),
+            registry=registry_client,
             issuer=agent_core.issuer,
             builder=registry,
             agent=settings.builder_agent,
@@ -713,11 +843,12 @@ def _build_builder(
             uow=uow,
             clock=clock,
             ids=ids,
-            runtime=agent_core.runtime,
+            runtime=agent_core.runtime_for(CallKind.BUILDER),
             issuer=agent_core.issuer,
             agent=settings.builder_agent,
         ),
         announce=AnnounceImprovement(uow=uow, clock=clock, builder=registry, writer=notifications),
+        record=GetProposalRecord(uow=uow),
     )
 
 
@@ -1156,6 +1287,7 @@ def build_container(
         dev_mailbox=kit.dev_mailbox,
         database=database,
         health_probes=tuple(probes),
+        readiness_probes=_readiness_probes(settings, database, agent_core),
         sla_sweep=sla_sweep,
         agent_core=agent_core,
         assistant_engine=assistant_engine,

@@ -53,3 +53,17 @@ def test_cors_allows_the_vite_dev_origin(client: TestClient) -> None:
         headers={"Origin": "http://evil.example", "Access-Control-Request-Method": "POST"},
     )
     assert "access-control-allow-origin" not in blocked.headers
+
+
+def test_the_api_sets_no_cookies_and_is_never_cached(client: TestClient) -> None:
+    """Deploy contract: sessions are bearer tokens (no cookie to secure), and no cache between
+    the browser and the API (CloudFront, the reverse proxy) may keep a response."""
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "daniela.rios@latambank.example", "password": "demo1234"},
+    )
+    assert login.status_code == 200
+    assert "set-cookie" not in login.headers
+    assert login.headers["cache-control"] == "no-store"
+    assert client.get("/api/v1/meta").headers["cache-control"] == "no-store"
+    assert client.get("/api/v1/nope").headers["cache-control"] == "no-store"

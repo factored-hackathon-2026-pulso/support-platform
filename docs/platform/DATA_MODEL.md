@@ -598,7 +598,7 @@ sealed TOTP key. Events never carry emails, links, passwords or keys. See
 | `actor_role`, `actor_id` | text | `customer`, `analyst`, `supervisor`, `admin` or `system`, and its id |
 | `event_time` | date | when it happened |
 | `ingested_at` | date | when it was stored |
-| `payload` | JSON | event detail |
+| `payload` | JSON | event detail; since event catalog 1.3.0 also `schema_version` (every type and its payload: `api/engine-signals.md`) |
 
 Event types:
 
@@ -610,6 +610,7 @@ Event types:
 | Calls (slice 12) | `call.started` (`direction`, `customer_id`, `analyst_id`, `reason`: only its length in the audit; "Llamó a la línea de atención" / "Llamó a {cliente}"), `call.answered` (`answered_by_role`, `analyst_id`, `ring_seconds`), `call.held`, `call.resumed` (`hold_seconds`), `call.mute_changed` (`muted`), `call.ended` (`end_reason`, `ended_by_role`, `answered`, `duration_seconds`, `hold_seconds`); `conversation` family, all of them change something |
 | Staff | `staff.availability_changed` |
 | Administration | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated`; part 4: `staff.invitation_sent` (`invitation_id`, `expires_at`), `staff.invitation_resent` (+ `resend_count`), `staff.invitation_cancelled`, `staff.password_reset_link_sent` (`reset_id`, `expires_at`, `revoked_sessions`, `cleared_lock`); slice 18: `platform.ai_toggled` (entity `platform`, `payload`: `enabled`; audit: "Activó / Desactivó las funciones de IA") |
+| Engine signals (catalog 1.3.0) | `copilot.suggestion_shown`, `copilot.suggestion_ignored`, `case.handoff_rated` and the rest of the copilot, assistant and `ai.*` events: see `api/engine-signals.md` |
 | Access | `auth.login_failed`, `auth.password_accepted`, `auth.mfa_challenge_issued`, `auth.mfa_failed`, `auth.account_locked`, `auth.session_started`, `auth.session_ended`, `customer.session_started`; part 4 (the person herself): `staff.invitation_accepted` (`invitation_id`), `staff.mfa_enrolled` (`method: totp`), `staff.password_reset` (`cleared_lock`: she created her new password with the link) |
 
 ## Schema history

@@ -10,7 +10,10 @@ import {
   hasHandoff,
   humanizeKey,
   readHandoff,
+  HANDOFF_REASK_OPTIONS,
+  handoffReaskLabel,
   toggleHandoffQuality,
+  toggleHandoffReask,
   verifiedCountLabel,
 } from './handoff'
 
@@ -192,5 +195,22 @@ describe('"¿Te sirvió el traspaso?"', () => {
     expect(toggleHandoffQuality(null, 'useful')).toBe('useful')
     expect(toggleHandoffQuality('useful', 'incomplete')).toBe('incomplete')
     expect(toggleHandoffQuality('useful', 'useful')).toBeNull()
+  })
+})
+
+describe('"¿Qué tuviste que volver a preguntar?" (catalog 1.3.0)', () => {
+  it('is a closed list in the packet order, and ticking keeps that order', () => {
+    expect(HANDOFF_REASK_OPTIONS.map((value) => [value, handoffReaskLabel(value)])).toEqual([
+      ['identity', 'Identidad'],
+      ['amount', 'Monto'],
+      ['merchant', 'Comercio'],
+      ['date', 'Fecha'],
+      ['product', 'Producto'],
+      ['reason', 'Motivo'],
+      ['other', 'Otro'],
+    ])
+    expect(toggleHandoffReask([], 'date')).toEqual(['date'])
+    expect(toggleHandoffReask(['date'], 'identity')).toEqual(['identity', 'date'])
+    expect(toggleHandoffReask(['identity', 'date'], 'identity')).toEqual(['date'])
   })
 })

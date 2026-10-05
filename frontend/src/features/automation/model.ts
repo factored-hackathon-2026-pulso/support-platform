@@ -324,6 +324,18 @@ export function agentName(agentId: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : agentId
 }
 
+/**
+ * An agent's name to show: Supervisión's name for the agent serving a type (slice 25's catalog,
+ * carried by the stages), else its id in words.
+ */
+export function agentDisplayName(stages: AiStages | undefined, agentId: string): string {
+  if (stages?.available) {
+    const serving = stages.types.find((entry) => entry.agentId === agentId && entry.agentName)
+    if (serving?.agentName) return serving.agentName
+  }
+  return agentName(agentId)
+}
+
 /** Types waiting for an agent (`ready`): what "Activar" can serve. */
 export function readyTypes(stages: AiStages | undefined): CaseTypeStage[] {
   if (!stages?.available) return []

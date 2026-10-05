@@ -10,9 +10,13 @@ import type {
   BuilderThread,
   EntityDraft,
   EvalReport,
+  EvidenceCase,
   Proposal,
   ProposalDetail,
+  ProposalHistoryEntry,
+  ProposalImprovement,
   ProposalList,
+  ProposalRecord,
   ProposalSummary,
   ReleaseDetail,
 } from '@/features/automation'
@@ -27,6 +31,7 @@ export const BUILDER_ON: BuilderStatus = {
   canRevoke: false,
   stepUpMethod: 'authenticator',
   stepUpDigits: 6,
+  reachable: true,
 }
 
 export const BUILDER_OFF: BuilderStatus = {
@@ -35,6 +40,7 @@ export const BUILDER_OFF: BuilderStatus = {
   canRevoke: false,
   stepUpMethod: null,
   stepUpDigits: null,
+  reachable: true,
 }
 
 export function makeChange(overrides: Partial<EntityDraft> = {}): EntityDraft {
@@ -127,8 +133,76 @@ export function makeProposalDetail(
     ],
     lastEval: null,
     review: null,
+    lastDecision: null,
     ...overrides,
   }
+}
+
+/** The engine's dossier as the platform keeps it (ADR 0007); synthetic text and case ids. */
+export const EVIDENCE_CASE_ID = 'CASE-01KA0000000000000000000101'
+export const GONE_CASE_ID = 'CASE-00000000000000000000000000'
+
+export function makeEvidenceCase(overrides: Partial<EvidenceCase> = {}): EvidenceCase {
+  return {
+    caseId: EVIDENCE_CASE_ID,
+    available: true,
+    status: 'closed',
+    caseType: 'unrecognized_charge',
+    channel: 'chat_app',
+    language: 'es',
+    openedAt: '2026-10-01T14:00:00Z',
+    ...overrides,
+  }
+}
+
+export function makeImprovement(overrides: Partial<ProposalImprovement> = {}): ProposalImprovement {
+  return {
+    title: 'Disputas: confirmar el cargo antes de pedir el comprobante',
+    problem:
+      'Los clientes con un cargo no reconocido escalan más por chat.\nEl paso de confirmación falta.',
+    evidence: 'Celda: 96 de 240 casos escalados frente a 48 de 240 en la base del mismo canal.',
+    expectedEffect: 'Menos escalaciones en esta celda. Es una hipótesis, no una predicción.',
+    language: 'es',
+    announcedAt: '2026-10-05T12:00:00Z',
+    evidenceCases: [
+      makeEvidenceCase(),
+      {
+        caseId: GONE_CASE_ID,
+        available: false,
+        status: null,
+        caseType: null,
+        channel: null,
+        language: null,
+        openedAt: null,
+      },
+    ],
+    ...overrides,
+  }
+}
+
+export function makeHistoryEntry(
+  kind: ProposalHistoryEntry['kind'],
+  overrides: Partial<ProposalHistoryEntry> = {},
+): ProposalHistoryEntry {
+  return {
+    kind,
+    at: '2026-10-05T14:00:00Z',
+    actorId: 'STF-00000000000000000000000005',
+    actorName: 'Lucía Gómez',
+    source: null,
+    verdict: null,
+    items: null,
+    itemsFailed: null,
+    suiteId: null,
+    reasonCode: null,
+    releaseId: null,
+    alias: null,
+    ...overrides,
+  }
+}
+
+export function makeRecord(overrides: Partial<ProposalRecord> = {}): ProposalRecord {
+  return { improvement: null, history: [], ...overrides }
 }
 
 export function makeSummary(overrides: Partial<ProposalSummary> = {}): ProposalSummary {

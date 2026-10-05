@@ -143,6 +143,12 @@ class InMemoryRealtimeHub:
             self.disconnect(connection_id, reason)
         return len(doomed)
 
+    def close_all(self, reason: str) -> int:
+        doomed = list(self._connections)
+        for connection_id in doomed:
+            self.disconnect(connection_id, reason)
+        return len(doomed)
+
     @property
     def connection_count(self) -> int:
         return len(self._connections)

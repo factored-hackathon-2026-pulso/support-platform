@@ -24,7 +24,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from functools import partial
 
-from cc_platform.application.ai.suggestions import SuggestionService
+from cc_platform.application.ai.suggestions import EndSuggestionsOnClose, SuggestionService
 from cc_platform.application.events import EventRecord
 from cc_platform.application.ports.background import BackgroundTasks
 from cc_platform.application.ports.realtime import RealtimeHub
@@ -37,7 +37,7 @@ from cc_platform.domain.ai.events import (
     CopilotSuggestionRequested,
 )
 from cc_platform.domain.ai.suggestion import SuggestionStatus, SuggestionTrigger
-from cc_platform.domain.cases.events import CaseAssigned, TurnCreated
+from cc_platform.domain.cases.events import CaseAssigned, CaseClosed, TurnCreated
 from cc_platform.domain.cases.values import (
     AssignmentReason,
     TurnAudience,
@@ -168,3 +168,20 @@ class SuggestionSignal:
         if isinstance(event, CopilotSuggestionFailed):
             return SuggestionStatus.FAILED, event.analyst_id
         return None, None
+
+
+class SuggestionCloser:
+    """A bus subscriber on ``case.closed``: the case's newest suggestion (of the analyst who closed
+    it) leaves her screen (``EndSuggestionsOnClose``), in the background after the close."""
+
+    def __init__(self, tasks: BackgroundTasks, end: EndSuggestionsOnClose) -> None:
+        self._tasks = tasks
+        self._end = end
+
+    async def __call__(self, record: EventRecord) -> None:
+        event = record.event
+        if isinstance(event, CaseClosed) and event.case_id is not None:
+            self._tasks.spawn(
+                "suggestion_case_closed",
+                partial(self._end.execute, event.case_id, event.closed_by_id),
+            )

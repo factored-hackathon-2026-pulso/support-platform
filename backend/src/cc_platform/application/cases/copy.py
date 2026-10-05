@@ -268,6 +268,18 @@ NOTICE_ASSISTANT_HANDOVER: dict[Language, str] = {
     Language.PORTUGUESE: "Vou te passar para uma pessoa da equipe para continuar com o seu caso.",
 }
 
+#: Deploy brief P4: the Core went down mid-conversation (or did not answer in time).
+NOTICE_ASSISTANT_UNAVAILABLE: dict[Language, str] = {
+    Language.SPANISH: (
+        "En este momento no puedo responderte. Te paso con una persona del equipo para que siga "
+        "con tu caso."
+    ),
+    Language.PORTUGUESE: (
+        "No momento não consigo te responder. Vou te passar para uma pessoa da equipe para "
+        "continuar com o seu caso."
+    ),
+}
+
 NOTICE_CONFIRMED: dict[Language, str] = {
     Language.SPANISH: "Confirmaste la acción.",
     Language.PORTUGUESE: "Você confirmou a ação.",
@@ -286,6 +298,10 @@ NOTICE_STEP_UP_VERIFIED: dict[Language, str] = {
 
 def assistant_handover_notice(language: Language) -> str:
     return NOTICE_ASSISTANT_HANDOVER[language]
+
+
+def assistant_unavailable_notice(language: Language) -> str:
+    return NOTICE_ASSISTANT_UNAVAILABLE[language]
 
 
 def confirmation_notice(language: Language, *, confirmed: bool) -> str:

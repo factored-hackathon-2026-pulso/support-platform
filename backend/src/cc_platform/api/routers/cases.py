@@ -274,7 +274,12 @@ async def close_case(
     detail = await api.use_cases.cases.close.execute(
         actor,
         case_id,
-        CloseCaseCommand(reason=body.reason, note=body.note, handoff_quality=body.handoff_quality),
+        CloseCaseCommand(
+            reason=body.reason,
+            note=body.note,
+            handoff_quality=body.handoff_quality,
+            handoff_reasked=tuple(body.handoff_reasked or ()),
+        ),
     )
     return CaseDetail.from_view(detail)
 
@@ -424,11 +429,13 @@ async def request_copilot_suggestion(
 @router.post(
     "/{caseId}/copilot/suggestions/{suggestionId}/feedback",
     response_model=CopilotSuggestion,
-    summary="Dismiss the copilot's draft",
+    summary="Dismiss the copilot's draft or its recommendation to escalate",
     description=(
-        "ADR 0005. `discarded` (the analyst dismissed the draft) or `ignored` (she left it). "
-        "The draft leaves the list; the rest of the suggestion stays. `used` and `edited` are "
-        "derived when she replies with `copilotSuggestionId`. 404 for an id that is not hers."
+        "ADR 0005. For the draft (`subject: reply`): `discarded` (the analyst dismissed it) or "
+        "`ignored` (she left it). For the recommendation (`subject: escalation`): `dismissed` "
+        '("Ahora no"). What was decided leaves the list; the rest of the suggestion stays. '
+        "`used` and `edited` are derived when she replies with `copilotSuggestionId`; "
+        "`accepted` when she escalates with it. 404 for an id that is not hers."
     ),
     responses=problem_responses(401, 403, 404, 422),
 )
@@ -441,9 +448,32 @@ async def decide_copilot_suggestion(
     api: ApiContextDep,
 ) -> CopilotSuggestion:
     view = await (await suggestion_use_cases(api)).decide.execute(
-        actor, case_id, suggestion_id, decision=body.decision
+        actor, case_id, suggestion_id, decision=body.decision, subject=body.subject
     )
     return CopilotSuggestion.from_view(view)
+
+
+@router.post(
+    "/{caseId}/copilot/suggestions/{suggestionId}/shown",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="The analyst's screen showed the copilot's suggestion",
+    description=(
+        "Event catalog 1.3.0. Send it when a `ready` suggestion is on screen (the draft, the "
+        'recommendation to escalate or "Herramientas"). Records `copilot.suggestion_shown` once '
+        "per suggestion (audited, no text); a repeat, or one with nothing left to show, records "
+        "nothing and is still 204. 404 for an id that is not hers."
+    ),
+    responses=problem_responses(401, 403, 404, 422),
+)
+async def copilot_suggestion_shown(
+    *,
+    case_id: CaseId,
+    suggestion_id: Annotated[str, Path(alias="suggestionId", max_length=64, examples=["CPS-01J…"])],
+    actor: Analyst,
+    api: ApiContextDep,
+) -> Response:
+    await (await suggestion_use_cases(api)).shown.execute(actor, case_id, suggestion_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put(

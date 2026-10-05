@@ -18,6 +18,7 @@ from cc_platform.api.schemas.ai_stages import (
     ActivateAgentRequest,
     ActivateAgentResult,
     AiStages,
+    ItemDecisionRequest,
     MoveStageBackRequest,
     MoveStageBackResult,
     ToolUsedRequest,
@@ -131,4 +132,35 @@ async def record_tool_used(
     api: ApiContextDep,
 ) -> Response:
     await api.use_cases.maturity.tool_used.execute(actor, case_id, suggestion_id, tool=body.tool)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/cases/{caseId}/copilot/suggestions/{suggestionId}/items",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="The analyst used or dismissed a tool, an action or the escalation recommendation",
+    description=(
+        "Slice 24. `item` is `tool`, `action` or `escalate` (`ref` is the item's `tool`, empty for "
+        "`escalate`); `decision` is `used` or `dismissed`. A used tool is `copilot.tool_used` "
+        "(the stage 2 signal); anything else is `copilot.item_decided`. Both are audited and the "
+        "suggestion is not changed. Her own suggestion (`ready`), an item it holds: 404 "
+        "otherwise. AI off: 404 `assistant_disabled`."
+    ),
+    responses=problem_responses(401, 403, 404, 422),
+)
+async def record_item_decision(
+    case_id: CaseId,
+    suggestion_id: Annotated[str, Path(alias="suggestionId", max_length=64, examples=["CPS-01J…"])],
+    body: ItemDecisionRequest,
+    actor: Analyst,
+    api: ApiContextDep,
+) -> Response:
+    await api.use_cases.maturity.item_decided.execute(
+        actor,
+        case_id,
+        suggestion_id,
+        item=body.item,
+        ref=body.ref,
+        decision=body.decision,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

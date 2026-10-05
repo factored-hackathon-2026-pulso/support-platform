@@ -58,12 +58,14 @@ def container(
     tmp_path: Path,
     runtime: InMemoryAgentRuntime,
 ) -> Container:
-    enabled = getattr(request, "param", True)
+    mode = getattr(request, "param", True)  # True: gate off · False: no agent · "gated": gate on
+    enabled = mode is not False
     links = tmp_path / "links.json"
     links.write_text(json.dumps({seed_customer_id(NATALIA): "bank-0001"}), encoding="utf-8")
     extra: dict[str, object] = {
         "copilot_suggestions_agent": "copiloto-sugerencias@prod",
         "copilot_suggestions_auto": False,  # these tests ask by hand
+        "stage_gates_suggestions": mode == "gated",
     }
     settings = make_settings(
         database_url=f"sqlite+aiosqlite:///{tmp_path / 'suggestions-api.db'}",
@@ -393,3 +395,118 @@ def test_the_events_reach_the_audit_without_any_text(
     dumped = json.dumps(events, ensure_ascii=False)
     for secret in (DRAFT, "Radicar una disputa", "Posible robo", "Ver los cargos"):
         assert secret not in dumped
+
+
+def set_type(client: TestClient, headers: dict[str, str], case_id: str, case_type: str) -> None:
+    version = client.get(f"/api/v1/cases/{case_id}", headers=headers).json()["case"]["version"]
+    moved = client.put(
+        f"/api/v1/cases/{case_id}/type",
+        headers=headers,
+        json={"caseType": case_type, "expectedVersion": version},
+    )
+    assert moved.status_code == 200, moved.text
+
+
+@pytest.mark.parametrize("container", ["gated"], indirect=True)
+def test_the_server_refuses_what_the_stage_does_not_offer(
+    client: TestClient, sign_in: Callable[[str], str], assigned_case: str
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))  # the case has no type: stage 0
+
+    asked = ask(client, analyst, assigned_case)
+    thread = client.get(f"/api/v1/cases/{assigned_case}/copilot", headers=analyst)
+    question = client.post(
+        f"/api/v1/cases/{assigned_case}/copilot/messages",
+        headers={**analyst, "Idempotency-Key": "m-0001-aaaa"},
+        json={"text": "¿cuánto debe?", "clientMessageId": "m-0001-aaaa"},
+    )
+
+    assert latest(client, analyst, assigned_case).json() == {"available": False, "suggestion": None}
+    assert (asked.status_code, asked.json()["code"]) == (409, "copilot_unavailable")
+    assert thread.json()["available"] is False
+    assert (question.status_code, question.json()["code"]) == (409, "copilot_unavailable")
+
+
+@pytest.mark.parametrize("container", ["gated"], indirect=True)
+def test_a_type_at_stage_two_gets_tools_and_questions(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    set_type(client, analyst, assigned_case, "app_issue")  # seeded at stage 2
+    runtime.suggestion_script.append(FULL)
+
+    asked = ask(client, analyst, assigned_case)
+
+    assert asked.status_code == 201, asked.text
+    assert latest(client, analyst, assigned_case).json()["available"] is True
+    thread = client.get(f"/api/v1/cases/{assigned_case}/copilot", headers=analyst)
+    assert thread.json()["available"] is True
+
+
+def decide_item(
+    client: TestClient,
+    headers: dict[str, str],
+    case_id: str,
+    suggestion_id: str,
+    body: dict[str, str],
+) -> Any:
+    return client.post(
+        f"/api/v1/cases/{case_id}/copilot/suggestions/{suggestion_id}/items",
+        headers=headers,
+        json=body,
+    )
+
+
+def test_the_analyst_records_what_she_did_with_each_item(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.append(FULL)
+    suggestion_id = ask(client, analyst, assigned_case).json()["id"]
+    used = {"item": "tool", "ref": "leer_movimientos@1", "decision": "used"}
+    dismissed_tool = {"item": "tool", "ref": "leer_movimientos@1", "decision": "dismissed"}
+    dismissed_escalation = {"item": "escalate", "decision": "dismissed"}
+
+    for body in (used, dismissed_tool, dismissed_escalation):
+        done = decide_item(client, analyst, assigned_case, suggestion_id, body)
+        assert done.status_code == 204, done.text
+
+    supervisor = bearer(sign_in(SUPERVISOR.email))
+    audit = client.get(
+        "/api/v1/audit/events", params={"family": "conversation", "limit": 100}, headers=supervisor
+    )
+    types = [e["type"] for e in audit.json()["items"]]
+    assert types.count("copilot.tool_used") == 1
+    assert types.count("copilot.item_decided") == 2
+
+
+def test_an_item_the_suggestion_does_not_hold_is_not_found(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.append(
+        (ReplySuggestion(text=DRAFT, citations=("f1",), language="es"),)
+    )
+    suggestion_id = ask(client, analyst, assigned_case).json()["id"]
+
+    for body in (
+        {"item": "tool", "ref": "otra@1", "decision": "used"},
+        {"item": "action", "ref": "leer_movimientos@1", "decision": "dismissed"},
+        {"item": "escalate", "decision": "dismissed"},
+    ):
+        gone = decide_item(client, analyst, assigned_case, suggestion_id, body)
+        assert (gone.status_code, gone.json()["code"]) == (404, "not_found")
+    supervisor = bearer(sign_in(SUPERVISOR.email))
+    body = {"item": "escalate", "decision": "dismissed"}
+    assert decide_item(client, supervisor, assigned_case, suggestion_id, body).status_code == 403
+    bad = {"item": "reply", "decision": "used"}
+    assert decide_item(client, analyst, assigned_case, suggestion_id, bad).status_code == 422

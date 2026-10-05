@@ -41,6 +41,7 @@ from cc_platform.application.ai.maturity import (
     MaturityRealtimeProjector,
     MaturityUseCases,
     MoveStageBack,
+    RecordItemDecision,
     RecordToolUsed,
     WhileTypeProposes,
 )
@@ -567,7 +568,7 @@ def _build_assistant(
             uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
         ),
         release=ReleaseAssistantCase(uow=uow, clock=clock, handover=handover),
-        copilot_thread=GetCopilotThread(uow=uow),
+        copilot_thread=GetCopilotThread(uow=uow, stage_gate=settings.stage_gates_suggestions),
         grant_status=GetGrantStatus(uow=uow),
         ask_copilot=AskCopilot(
             uow=uow,
@@ -576,6 +577,7 @@ def _build_assistant(
             runtime=agent_core.runtime,
             issuer=agent_core.issuer,
             agent=settings.copilot_agent,
+            stage_gate=settings.stage_gates_suggestions,
         ),
         builder=_build_builder(
             settings,
@@ -638,11 +640,14 @@ def _build_suggestions(
         runtime=agent_core.runtime,
         issuer=agent_core.issuer,
         agent=settings.copilot_suggestions_agent,
+        stage_gate=settings.stage_gates_suggestions,
     )
     return SuggestionUseCases(
         service=service,
         request=RequestSuggestion(service=service, uow=uow),
-        latest=GetLatestSuggestion(uow=uow, clock=clock),
+        latest=GetLatestSuggestion(
+            uow=uow, clock=clock, stage_gate=settings.stage_gates_suggestions
+        ),
         decide=DecideSuggestion(uow=uow, clock=clock),
         link=LinkSuggestion(uow=uow, clock=clock),
         purge=PurgeSuggestionDrafts(uow=uow, clock=clock),
@@ -1042,6 +1047,7 @@ def build_container(
             stages=GetAiStages(uow=uow, switch=ai_switch, rule=stage_rule),
             move_back=MoveStageBack(uow=uow, clock=clock, switch=ai_switch),
             tool_used=RecordToolUsed(uow=uow, clock=clock, switch=ai_switch),
+            item_decided=RecordItemDecision(uow=uow, clock=clock, switch=ai_switch),
             activate_agent=ActivateTypeAgent(
                 uow=uow,
                 clock=clock,

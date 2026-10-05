@@ -77,6 +77,7 @@ FAMILY: Mapping[str, AuditFamily] = {
     "copilot.suggestion_failed": AuditFamily.CONVERSATION,
     "copilot.suggestion_decided": AuditFamily.CONVERSATION,
     "copilot.tool_used": AuditFamily.CONVERSATION,
+    "copilot.item_decided": AuditFamily.CONVERSATION,
     # the agent builder (slice 16): who changed which agent, and who approved and published it
     "builder.proposal_created": AuditFamily.AGENTS,
     "builder.proposal_tracked": AuditFamily.AGENTS,
@@ -726,6 +727,7 @@ _DESCRIBERS: Mapping[str, Describer] = {
     "copilot.suggestion_failed": _fixed("audit.copilot.suggestionFailed"),
     "copilot.suggestion_decided": _suggestion_decided,
     "copilot.tool_used": _fixed("audit.copilot.toolUsed"),
+    "copilot.item_decided": _fixed("audit.copilot.itemDecided"),
     # slice 21: the stages per case type (the rule's steps are the system's)
     "ai.stage_advanced": _stage_advanced,
     "ai.stage_moved_back": _stage_moved_back,

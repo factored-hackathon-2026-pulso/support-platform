@@ -5518,6 +5518,45 @@
         "title": "InvitedUser",
         "type": "object"
       },
+      "ItemDecisionRequest": {
+        "additionalProperties": false,
+        "description": "What the analyst did with one item of her suggestion (slice 24).",
+        "properties": {
+          "decision": {
+            "enum": [
+              "used",
+              "dismissed"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "item": {
+            "enum": [
+              "tool",
+              "action",
+              "escalate"
+            ],
+            "title": "Item",
+            "type": "string"
+          },
+          "ref": {
+            "default": "",
+            "description": "The tool or action (`tool` of the item); empty for `escalate`.",
+            "examples": [
+              "leer_movimientos@1"
+            ],
+            "maxLength": 120,
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "decision"
+        ],
+        "title": "ItemDecisionRequest",
+        "type": "object"
+      },
       "Language": {
         "enum": [
           "es",
@@ -16182,6 +16221,104 @@
         "summary": "Dismiss the copilot's draft",
         "tags": [
           "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/items": {
+      "post": {
+        "description": "Slice 24. `item` is `tool`, `action` or `escalate` (`ref` is the item's `tool`, empty for `escalate`); `decision` is `used` or `dismissed`. A used tool is `copilot.tool_used` (the stage 2 signal); anything else is `copilot.item_decided`. Both are audited and the suggestion is not changed. Her own suggestion (`ready`), an item it holds: 404 otherwise. AI off: 404 `assistant_disabled`.",
+        "operationId": "ai-stages_record_item_decision",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "suggestionId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CPS-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Suggestionid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The analyst used or dismissed a tool, an action or the escalation recommendation",
+        "tags": [
+          "ai-stages"
         ]
       }
     },

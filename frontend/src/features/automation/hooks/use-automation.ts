@@ -21,6 +21,7 @@ import {
   fetchBuilderChat,
   fetchBuilderStatus,
   fetchProposal,
+  fetchProposalRecord,
   fetchProposals,
   fetchRelease,
   freezeProposal,
@@ -48,6 +49,8 @@ import type {
   MaturingType,
   ProposalDetail,
   ProposalList,
+  ProposalRecord,
+  ReasonCode,
   ReleaseDetail,
   VersionList,
 } from '../types'
@@ -88,6 +91,15 @@ export function useProposal(proposalId: string): UseQueryResult<ProposalDetail, 
   return useQuery<ProposalDetail, ApiProblem>({
     queryKey: automationKeys.proposal(proposalId),
     queryFn: ({ signal }) => fetchProposal(proposalId, signal),
+    refetchOnWindowFocus: true,
+  })
+}
+
+/** The engine's dossier and the decisions' history (local reads: no agent-core call). */
+export function useProposalRecord(proposalId: string): UseQueryResult<ProposalRecord, ApiProblem> {
+  return useQuery<ProposalRecord, ApiProblem>({
+    queryKey: automationKeys.record(proposalId),
+    queryFn: ({ signal }) => fetchProposalRecord(proposalId, signal),
     refetchOnWindowFocus: true,
   })
 }
@@ -216,7 +228,7 @@ export type ProposalStep =
   | { kind: 'reopen' }
   | { kind: 'evaluate'; suiteId: string; suiteVersion: string | null }
   | { kind: 'approve'; candidateHash: string; acceptYardstickLoosened: boolean; stepUpCode: string }
-  | { kind: 'reject'; reason: string; stepUpCode: string }
+  | { kind: 'reject'; reason: string; reasonCode: ReasonCode; stepUpCode: string }
   | { kind: 'publish'; stepUpCode: string; idempotencyKey: string }
 
 async function runStep(proposalId: string, step: ProposalStep): Promise<unknown> {
@@ -239,7 +251,11 @@ async function runStep(proposalId: string, step: ProposalStep): Promise<unknown>
         stepUpCode: step.stepUpCode,
       })
     case 'reject':
-      return rejectProposal(proposalId, { reason: step.reason, stepUpCode: step.stepUpCode })
+      return rejectProposal(proposalId, {
+        reason: step.reason,
+        reasonCode: step.reasonCode,
+        stepUpCode: step.stepUpCode,
+      })
     case 'publish':
       return publishProposal(proposalId, {
         stepUpCode: step.stepUpCode,
@@ -283,14 +299,15 @@ export function useTrackProposal() {
 
 /**
  * Point `prod` at a release with her code: "Volver a la versión anterior" (the release the current
- * one was based on) or "Pasar a producción" (the one `staging` points at).
+ * one was based on) or "Pasar a producción" (the one `staging` points at, or a proposal's own
+ * release; `proposalId` then refreshes that proposal's page and history).
  */
-export function usePromoteProd(agentId: string) {
+export function usePromoteProd(agentId: string, proposalId?: string) {
   const refresh = useRefreshAfterStep()
   return useMutation({
     mutationFn: (body: { releaseId: string; stepUpCode: string }) =>
       promoteAlias(agentId, 'prod', { ...body, reason: '' }),
-    onSettled: () => refresh(),
+    onSettled: () => refresh(proposalId),
   })
 }
 

@@ -2,23 +2,42 @@ import { useState } from 'react'
 import { Bot, Check, Tag, Wrench } from 'lucide-react'
 import { automationTypePath, PATHS } from '@/app/paths'
 import { PageBody } from '@/components/layout'
-import { Badge, EmptyState, LanguageMarks, QueryState, Skeleton, Status } from '@/components/ui'
+import {
+  Badge,
+  Callout,
+  EmptyState,
+  LanguageMarks,
+  QueryState,
+  Skeleton,
+  Status,
+} from '@/components/ui'
 import { useAiStages } from '@/features/copilot/core'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
-import { useBuilderAvailable, useProposal } from '../hooks/use-automation'
+import {
+  useAlias,
+  useBuilderAvailable,
+  useProposal,
+  useProposalRecord,
+} from '../hooks/use-automation'
 import { agentName, typeName, typeStage } from '../model'
 import {
+  announcedByEngine,
   changeView,
   draftLanguages,
   draftTools,
+  endStepFor,
   proposalStatus,
   proposalSteps,
+  publishedReleaseOf,
   toolName,
+  type EndStep,
 } from '../proposals'
 import type { MaturingType, ProposalDetail } from '../types'
 import { AutomationFrame, EngineMissing, type Crumb } from './AutomationFrame'
 import { EvaluationReport } from './EvaluationReport'
+import { ImprovementDossier } from './ImprovementDossier'
+import { ProposalHistory } from './ProposalHistory'
 import { ProposalNextStep, type GateResult } from './ProposalNextStep'
 
 export interface ProposalScreenProps {
@@ -31,9 +50,11 @@ export interface ProposalScreenProps {
 
 /**
  * One proposal to change an agent (IaAutomatizacion `propuesta`, `prueba`, `activar`,
- * `activado` on slice 16's registry): where it is from draft to an active agent, the next step
- * (validate, prepare, test, approve, publish, activate; the decisions with her authenticator
- * code), the test report and what the draft changes.
+ * `activado` on slice 16's registry): where it is from draft to an active agent (or, for an agent
+ * already in production, to production), the improvement engine's dossier when it announced it,
+ * the next step (validate, prepare, test, approve, reject with a reason, publish, activate or
+ * "Pasar a producción"; the decisions with her authenticator code), the test report base against
+ * candidate, the history of the decisions and what the draft changes.
  */
 export function ProposalScreen({ proposalId, type, onTypeChange }: ProposalScreenProps) {
   const { t } = useTranslation(['automation', 'cases'])
@@ -76,10 +97,25 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
   const { proposal } = detail
   const stages = useAiStages()
   const served = typeStage(stages.data, type)
-  const active =
+  const record = useProposalRecord(proposal.proposalId)
+  const prod = useAlias(proposal.agentId, 'prod')
+  const history = record.data?.history ?? []
+  const publishedReleaseId = publishedReleaseOf(history)
+  const servesThisAgent = served?.agent === 'active' && served.agentId === proposal.agentId
+  const endStep: EndStep = endStepFor({
+    typeAgent: served?.agent ?? null,
+    servesThisAgent,
+    inProduction: prod.data === undefined ? undefined : prod.data !== null,
+    prodHoldsThisRelease:
+      publishedReleaseId === null || prod.data === undefined
+        ? null
+        : prod.data?.releaseId === publishedReleaseId,
+  })
+  const done =
     proposal.state === 'published' &&
-    served?.agent === 'active' &&
-    served.agentId === proposal.agentId
+    (endStep === 'promote'
+      ? publishedReleaseId !== null && prod.data?.releaseId === publishedReleaseId
+      : servesThisAgent)
   const [gate, setGate] = useState<GateResult | null>(null)
   // The report of the current candidate, or the one a failed gate just returned.
   const report = gate?.report ?? detail.lastEval?.report ?? null
@@ -97,30 +133,43 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
           </li>
         ) : null}
         <li>
-          <Status {...proposalStatus(active ? 'published' : proposal.state)} />
+          <Status {...proposalStatus(proposal.state)} />
         </li>
       </ul>
-      <Stepper state={proposal.state} active={active} />
+      <Stepper state={proposal.state} done={done} endStep={endStep} />
+      {record.data?.improvement ? (
+        <ImprovementDossier improvement={record.data.improvement} />
+      ) : announcedByEngine(history) ? (
+        <Callout tone="neutral">{t('dossier.missing')}</Callout>
+      ) : null}
       <ProposalNextStep
         detail={detail}
         type={type}
         onGateResult={setGate}
         onTypeChosen={onTypeChange}
+        endStep={endStep}
+        prod={prod.data}
+        publishedReleaseId={publishedReleaseId}
       />
       {report ? <EvaluationReport report={report} failedNow={gate?.failed ?? false} /> : null}
+      {record.isError ? (
+        <Callout tone="warn">{t('history.loadError')}</Callout>
+      ) : record.data ? (
+        <ProposalHistory entries={history} />
+      ) : null}
       <Changes detail={detail} />
     </>
   )
 }
 
-function Stepper({ state, active }: { state: string; active: boolean }) {
+function Stepper({ state, done, endStep }: { state: string; done: boolean; endStep: EndStep }) {
   const { t } = useTranslation('automation')
   return (
     <ol
       aria-label={t('proposal.progress')}
       className="m-0 grid list-none grid-cols-6 gap-1 rounded-12 border border-border bg-surface p-2"
     >
-      {proposalSteps(state, active).map((step) => (
+      {proposalSteps(state, done, endStep).map((step) => (
         <li
           key={step.key}
           aria-current={step.state === 'current' ? 'step' : undefined}

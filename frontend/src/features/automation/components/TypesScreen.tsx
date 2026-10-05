@@ -122,7 +122,7 @@ function Panorama({ stages, selected, onSelect }: PanoramaProps) {
             ))}
           </ul>
         </div>
-        <div className="overflow-hidden rounded-12 border border-border bg-surface">
+        <div className="overflow-x-auto rounded-12 border border-border bg-surface">
           <Table aria-label={t('panorama.table')} density="comfortable">
             <THead>
               <tr>
@@ -196,11 +196,12 @@ function TypeRow({ type, entry, signal, selected, onSelect }: TypeRowProps) {
         <span
           aria-hidden="true"
           className={cn(
-            'inline-flex items-center gap-1 text-13 font-medium whitespace-nowrap',
+            // Wraps rather than being cut when the type panel leaves the table narrow (Portuguese).
+            'inline-flex items-center justify-end gap-1 text-right text-13 font-medium',
             view.ready ? 'text-accent-strong' : 'text-ink-2',
           )}
         >
-          {view.ready ? <Bot size={14} /> : null}
+          {view.ready ? <Bot size={14} className="shrink-0" /> : null}
           {view.ready ? t('panorama.openReady') : t('panorama.open')}
         </span>
       </TCell>

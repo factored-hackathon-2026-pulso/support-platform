@@ -7,6 +7,7 @@ import {
   EMPTY_AUDIT_STATE,
   actorName,
   actorRoleLabel,
+  showsActorName,
   actorTone,
   auditFiltersOf,
   clearAuditFilters,
@@ -144,6 +145,18 @@ describe('rows', () => {
     expect(actorTone('system')).toBe('neutral')
     expect(actorName({ role: 'system', id: 'system', name: null })).toBe('Plataforma')
     expect(actorName({ role: 'customer', id: 'CUS-1', name: null })).toBe('CUS-1')
+  })
+
+  it('names the assistant by its badge alone (slice 19)', () => {
+    expect(actorRoleLabel('assistant')).toBe('Asistente virtual')
+    expect(actorTone('assistant')).toBe('neutral')
+    expect(showsActorName('assistant')).toBe(false)
+    expect(showsActorName('system')).toBe(false)
+    expect(showsActorName('analyst')).toBe(true)
+    expect(detailByline({ role: 'assistant', id: 'recepcion@1.0.0', name: null })).toEqual({
+      name: 'Asistente virtual',
+      role: null,
+    })
   })
 
   it('writes times in the viewer zone', () => {

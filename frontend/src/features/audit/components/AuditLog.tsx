@@ -18,6 +18,7 @@ import { shortCaseId } from '@/features/conversation'
 import {
   actorName,
   actorRoleLabel,
+  showsActorName,
   actorTone,
   emptyLogCopy,
   eventTime,
@@ -183,7 +184,7 @@ function EventRow({ event, selected, onSelect }: EventRowProps) {
           <Badge tone={actorTone(actor.role)} size="sm">
             {actorRoleLabel(actor.role)}
           </Badge>
-          {actor.role === 'system' ? null : (
+          {!showsActorName(actor.role) ? null : (
             <span className="truncate" title={actor.id}>
               {actorName(actor)}
             </span>

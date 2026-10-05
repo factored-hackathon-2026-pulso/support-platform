@@ -2978,7 +2978,6 @@ export interface components {
       /**
        * Reachable
        * @description Deploy brief P4: false while agent-core is configured but down (its circuit breaker is open or it does not answer its health check): show that the agents service is not available; the screens that only read the platform keep working.
-       * @default true
        */
       reachable: boolean
       /**

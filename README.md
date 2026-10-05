@@ -2,7 +2,7 @@
 
 Support platform for LATAM Bank's transaction-dispute intake (Factored AI & Data Hackathon 2026). Customers and support staff talk by chat and by simulated phone calls and email; analysts handle cases, supervisors watch queues, team and escalations, and administrators manage users by email invitation. People only: no AI is connected yet.
 
-The product UI is in Spanish; the implementation is in English.
+The product UI is in Spanish and, since slice 23, Brazilian Portuguese (each person picks it in the account menu); the implementation is in English.
 
 ## Layout
 

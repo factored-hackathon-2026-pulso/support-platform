@@ -1,6 +1,6 @@
 # ADR 0009 · Routing customers to the agent of their case type, and pausing it
 
-- Status: **Proposed** (2026-10-05). For the user's review before any code. It answers items 4 and 6 of the support-platform team's list of AI pending items (routing by case type; the panel's agent catalog, results per agent and pause).
+- Status: **Accepted** (user decisions of 2026-10-05: routing by routing card, pause as a directory exclusion, display names editable by Supervisión). It answers items 4 and 6 of the support-platform team's list of AI pending items (routing by case type; the panel's agent catalog, results per agent and pause).
 - Date: 2026-10-05
 - Scope: `backend/` (assistant intake, maturity, the agents read model) and agent-core (`registry`, `recepcion`'s directory).
 - Related: ADR 0003, ADR 0006 (§1 "agent" stage; slice 22 §3 and §6 name the gaps this closes), agent-core ADR 0021 (transfer between agents), agent-core `RegistryDirectory`.
@@ -38,8 +38,8 @@ Alternative considered: pause = point `prod` at the previous release. Rejected: 
 - No change in `recepcion`'s flow. One additive agent-core change (pause). One migration on the platform (`agent_catalog`, a `paused` column, a results projection). Delete `backend/cc_platform.db` as usual.
 - The honest limit stays visible: routing is semantic (card + model), so a type's agent may not receive 100% of its cases. The results per agent measure exactly that.
 
-## Open for the user
+## Decided
 
-1. Is routing by routing card enough, or must a type's cases always reach its agent (then the platform needs a classification step at intake, a bigger change)?
-2. Pause as a directory exclusion, or also stop conversations in progress?
-3. Display names: editable by Supervisión, or fixed to the type's name?
+1. Routing by routing card is enough; no classification step at intake.
+2. Pause excludes the agent from the directory; conversations in progress continue.
+3. Display names are editable by Supervisión (default: the case type's name).

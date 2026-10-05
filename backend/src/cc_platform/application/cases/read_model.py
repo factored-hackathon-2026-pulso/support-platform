@@ -555,8 +555,12 @@ class CaseReader:
         )
 
     async def _agent_name(self, case: Case, status: CustomerConversationStatus) -> str | None:
-        """The assignee's first name while with an agent; on a closed case, who attended."""
-        if status is CustomerConversationStatus.WITH_ASSISTANT:
+        """The assignee's first name while with an agent; on a closed case, who attended (the
+        assistant, by its name, when it resolved the conversation itself)."""
+        resolved_by_assistant = (
+            case.closure is not None and case.closure.closed_by_role is ActorRole.ASSISTANT
+        )
+        if status is CustomerConversationStatus.WITH_ASSISTANT or resolved_by_assistant:
             return copy.ASSISTANT_NAME[case.language]
         if status is CustomerConversationStatus.WAITING_AGENT or not case.assigned_analyst_id:
             return None

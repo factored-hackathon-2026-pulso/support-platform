@@ -566,6 +566,42 @@
         "title": "AdminUserList",
         "type": "object"
       },
+      "AgentStatus": {
+        "enum": [
+          "none",
+          "ready",
+          "active"
+        ],
+        "title": "AgentStatus",
+        "type": "string"
+      },
+      "AiStages": {
+        "properties": {
+          "available": {
+            "description": "false while the AI switch is off: hide every stage (`types` is empty).",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/StageRule"
+          },
+          "types": {
+            "description": "Every case type but `none` (a case without a type gets no copilot).",
+            "items": {
+              "$ref": "#/components/schemas/CaseTypeStage"
+            },
+            "title": "Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "rule",
+          "types"
+        ],
+        "title": "AiStages",
+        "type": "object"
+      },
       "AliasChange": {
         "properties": {
           "actor": {
@@ -2561,6 +2597,85 @@
         "title": "CaseTypeResult",
         "type": "object"
       },
+      "CaseTypeStage": {
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentStatus",
+            "description": "`ready`: the drafts met the rule, the system proposes an agent to Supervisión (slice 22). `active`: an agent serves the type."
+          },
+          "agentSince": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agentsince"
+          },
+          "caseType": {
+            "$ref": "#/components/schemas/CaseType"
+          },
+          "copilotMode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CopilotMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the copilot offers a case of the type (ADR 0005's `copilot_mode`); null at stage 0: no copilot."
+          },
+          "lastChange": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageLastChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reached": {
+            "description": "The stages reached (1-3) and since when.",
+            "items": {
+              "$ref": "#/components/schemas/StageReached"
+            },
+            "title": "Reached",
+            "type": "array"
+          },
+          "signals": {
+            "$ref": "#/components/schemas/StageSignals"
+          },
+          "stage": {
+            "description": "0 people only · 1 the analyst asks the copilot · 2 it proposes tools · 3 it shadows (drafts above the composer).",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Stage",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "caseType",
+          "stage",
+          "agent",
+          "copilotMode",
+          "signals",
+          "reached",
+          "agentSince",
+          "lastChange",
+          "version"
+        ],
+        "title": "CaseTypeStage",
+        "type": "object"
+      },
       "ChangeCaseTypeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2749,6 +2864,16 @@
         ],
         "title": "CopilotMessage",
         "type": "object"
+      },
+      "CopilotMode": {
+        "description": "ADR 0005's ``copilot_mode``: what the copilot offers for a case of the type.",
+        "enum": [
+          "answer",
+          "tools",
+          "drafts"
+        ],
+        "title": "CopilotMode",
+        "type": "string"
       },
       "CopilotSuggestion": {
         "properties": {
@@ -5546,6 +5671,41 @@
         "title": "MfaRequest",
         "type": "object"
       },
+      "MoveStageBackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "toStage": {
+            "description": "An earlier stage (or 3 to withdraw `ready`).",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Tostage",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "toStage"
+        ],
+        "title": "MoveStageBackRequest",
+        "type": "object"
+      },
+      "MoveStageBackResult": {
+        "properties": {
+          "changed": {
+            "description": "false: the type was already there (nothing recorded).",
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/CaseTypeStage"
+          }
+        },
+        "required": [
+          "changed",
+          "type"
+        ],
+        "title": "MoveStageBackResult",
+        "type": "object"
+      },
       "MuteCallRequest": {
         "additionalProperties": false,
         "properties": {
@@ -7792,6 +7952,179 @@
         "title": "StaffRole",
         "type": "string"
       },
+      "StageChange": {
+        "description": "What the last change of the type was.",
+        "enum": [
+          "advanced",
+          "moved_back",
+          "agent_ready",
+          "agent_active"
+        ],
+        "title": "StageChange",
+        "type": "string"
+      },
+      "StageLastChange": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "byName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who did it; null: the system, by the team rule.",
+            "title": "Byname"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StageChange"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "byName"
+        ],
+        "title": "StageLastChange",
+        "type": "object"
+      },
+      "StageReached": {
+        "properties": {
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          },
+          "stage": {
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Stage",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stage",
+          "since"
+        ],
+        "title": "StageReached",
+        "type": "object"
+      },
+      "StageRule": {
+        "description": "**Team rule** (example thresholds for the demo, not learned from data; show it as \"Regla\ndel equipo (ejemplo)\"). Configurable with ``CC_STAGE_*``.",
+        "properties": {
+          "askedCasesToProposeTools": {
+            "description": "1 → 2: closed cases of the type in which the analyst asked the copilot.",
+            "title": "Askedcasestoproposetools",
+            "type": "integer"
+          },
+          "draftAsIsPercentForAgent": {
+            "description": "3 → agent: % of them sent as is or with minor changes.",
+            "title": "Draftasispercentforagent",
+            "type": "integer"
+          },
+          "draftWindow": {
+            "description": "3 → agent: the last drafts looked at.",
+            "title": "Draftwindow",
+            "type": "integer"
+          },
+          "minorEditPermille": {
+            "description": "An edited draft counts as minor changes up to this edit distance (0-1000).",
+            "title": "Minoreditpermille",
+            "type": "integer"
+          },
+          "resolvedCasesToAsk": {
+            "description": "0 → 1: cases of the type resolved by people.",
+            "title": "Resolvedcasestoask",
+            "type": "integer"
+          },
+          "toolCasesMinimum": {
+            "description": "2 → 3: …once there are at least this many.",
+            "title": "Toolcasesminimum",
+            "type": "integer"
+          },
+          "toolUsePercentToShadow": {
+            "description": "2 → 3: % of the closed cases with tool proposals in which one was used.",
+            "title": "Toolusepercenttoshadow",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resolvedCasesToAsk",
+          "askedCasesToProposeTools",
+          "toolUsePercentToShadow",
+          "toolCasesMinimum",
+          "draftWindow",
+          "draftAsIsPercentForAgent",
+          "minorEditPermille"
+        ],
+        "title": "StageRule",
+        "type": "object"
+      },
+      "StageSignals": {
+        "description": "What the platform recorded for the type **since it reached its current stage**.",
+        "properties": {
+          "askedCases": {
+            "description": "Closed cases in which someone asked the copilot.",
+            "title": "Askedcases",
+            "type": "integer"
+          },
+          "closedCases": {
+            "title": "Closedcases",
+            "type": "integer"
+          },
+          "drafts": {
+            "description": "Decided drafts in the window (at most `rule.draftWindow`).",
+            "title": "Drafts",
+            "type": "integer"
+          },
+          "draftsAsIs": {
+            "description": "Sent as is or with minor changes.",
+            "title": "Draftsasis",
+            "type": "integer"
+          },
+          "draftsDiscarded": {
+            "title": "Draftsdiscarded",
+            "type": "integer"
+          },
+          "draftsEdited": {
+            "title": "Draftsedited",
+            "type": "integer"
+          },
+          "resolvedCases": {
+            "title": "Resolvedcases",
+            "type": "integer"
+          },
+          "toolCases": {
+            "description": "Closed cases in which the copilot proposed tools.",
+            "title": "Toolcases",
+            "type": "integer"
+          },
+          "toolUsedCases": {
+            "description": "…and the analyst used one.",
+            "title": "Toolusedcases",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "closedCases",
+          "resolvedCases",
+          "askedCases",
+          "toolCases",
+          "toolUsedCases",
+          "drafts",
+          "draftsAsIs",
+          "draftsEdited",
+          "draftsDiscarded"
+        ],
+        "title": "StageSignals",
+        "type": "object"
+      },
       "StartCallRequest": {
         "additionalProperties": false,
         "properties": {
@@ -8185,6 +8518,37 @@
           "atRiskCases"
         ],
         "title": "TeamSummary",
+        "type": "object"
+      },
+      "ToolDecision": {
+        "description": "What the analyst did with a ``tool`` the copilot proposed (only ``used`` for now).",
+        "enum": [
+          "used"
+        ],
+        "title": "ToolDecision",
+        "type": "string"
+      },
+      "ToolUsedRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/ToolDecision",
+            "default": "used"
+          },
+          "tool": {
+            "examples": [
+              "leer_movimientos@1"
+            ],
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool"
+        ],
+        "title": "ToolUsedRequest",
         "type": "object"
       },
       "TotpEnrollment": {
@@ -10528,6 +10892,53 @@
         "summary": "Unlock a locked account (resets the failed-attempt counter)",
         "tags": [
           "administration"
+        ]
+      }
+    },
+    "/api/v1/ai/stages": {
+      "get": {
+        "description": "Slice 21. Every case type but `none`, with its stage (0-3), whether an agent is proposed (`ready`) or serves it (`active`), the copilot mode a case of the type gets, the signals counted since its current stage and the team rule (example thresholds). A type nothing happened to is at stage 0. AI off: `available: false` and no types. Live: `ai.stage_updated` on `ai:stages`.",
+        "operationId": "ai-stages_get_ai_stages",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiStages"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The AI stage of every case type (analysts and Supervisión)",
+        "tags": [
+          "ai-stages"
         ]
       }
     },
@@ -15412,6 +15823,114 @@
         ]
       }
     },
+    "/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/tools": {
+      "post": {
+        "description": "Slice 21. Send it when \"Usar\" asks the copilot about a `tool` of the suggestion. Records `copilot.tool_used` (audited; the suggestion is not changed); it feeds the stage 2 signal of the case's type. Her own suggestion (`ready`), a tool it proposed: 404 otherwise. AI off: 404 `assistant_disabled`.",
+        "operationId": "ai-stages_record_tool_used",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "suggestionId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CPS-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Suggestionid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolUsedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The analyst used a tool the copilot proposed",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
     "/api/v1/cases/{caseId}/emails": {
       "get": {
         "operationId": "channels_get_email_thread",
@@ -18980,6 +19499,108 @@
         "summary": "List staff (active only unless includeInactive), optionally by role",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/stages/{caseType}/move-back": {
+      "post": {
+        "description": "Slice 21. A desired state, safe to repeat: the same stage answers `changed: false`. `toStage` 3 on a type `ready` for an agent withdraws the proposal. Moving up is only the team rule's. 409 `invalid_transition` for a higher stage or a type an agent serves (slice 22 deactivates the agent). Records `ai.stage_moved_back` (audited); the type earns the stages above again from zero. AI off: 404 `assistant_disabled`.",
+        "operationId": "ai-stages_move_stage_back",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseType",
+            "required": true,
+            "schema": {
+              "examples": [
+                "undue_charge"
+              ],
+              "maxLength": 40,
+              "title": "Casetype",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveStageBackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveStageBackResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Move a case type back to an earlier stage (Supervisión)",
+        "tags": [
+          "ai-stages"
         ]
       }
     },

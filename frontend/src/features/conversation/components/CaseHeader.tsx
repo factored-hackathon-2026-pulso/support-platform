@@ -15,6 +15,16 @@ import {
 } from '../model'
 import type { CaseDetail } from '../types'
 
+/**
+ * The header wraps instead of squeezing: when the name and the case number do not fit next to
+ * the actions (the right panel open, a long name, longer Portuguese labels), the actions move to
+ * a second row on the right, and they wrap among themselves on a very narrow column. The name
+ * is only truncated when it does not fit even on its own row.
+ */
+const HEADER_CLASS =
+  'flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border px-6 py-3.5'
+const IDENTITY_CLASS = 'flex min-w-0 flex-auto flex-col gap-0.5'
+
 export interface CaseHeaderProps {
   detail: CaseDetail
   onRequestClose: () => void
@@ -98,7 +108,7 @@ export function CaseHeader({
   )
 
   const rightSide = (
-    <div className="flex shrink-0 items-center gap-2">
+    <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
       {closed || !customerFile ? (
         <Status {...caseStatus(summary.inboxStatus)} srLabel={t('header.status')} />
       ) : null}
@@ -155,8 +165,8 @@ export function CaseHeader({
   if (customerFile) {
     const name = summary.customer.displayName
     return (
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-6 py-3.5">
-        <div className="flex min-w-0 flex-col gap-0.5">
+      <header className={HEADER_CLASS}>
+        <div className={IDENTITY_CLASS}>
           {/* The heading keeps the plain name (the button inside says what it does). */}
           <h2
             ref={headingRef}
@@ -184,8 +194,8 @@ export function CaseHeader({
   }
 
   return (
-    <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-6 py-3.5">
-      <div className="flex min-w-0 flex-col gap-0.5">
+    <header className={HEADER_CLASS}>
+      <div className={IDENTITY_CLASS}>
         <h2
           ref={headingRef}
           tabIndex={-1}

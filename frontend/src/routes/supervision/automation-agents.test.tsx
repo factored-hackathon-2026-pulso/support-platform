@@ -140,6 +140,34 @@ describe('agents (slice 22)', () => {
     expect(await within(cobros).findByText('Solo en pruebas')).toBeInTheDocument()
   })
 
+  it('waits for the registry before saying where an agent runs (never "Sin datos del registro" meanwhile)', async () => {
+    const answers: Array<() => void> = []
+    vi.mocked(fetchAlias).mockImplementation(
+      (agentId, alias) =>
+        new Promise((resolve) => {
+          answers.push(() =>
+            resolve(
+              makeAlias({
+                agentId,
+                alias,
+                releaseId: alias === 'staging' ? RELEASE_ID : BASE_RELEASE_ID,
+              }),
+            ),
+          )
+        }),
+    )
+    render('/supervision/automation/agents')
+    const table = await screen.findByRole('table', { name: 'Agentes' })
+    const disputas = await within(table).findByRole('row', { name: /Disputas/ })
+    await vi.waitFor(() => expect(answers.length).toBeGreaterThan(0))
+    expect(within(disputas).queryByText('Sin datos del registro')).not.toBeInTheDocument()
+    expect(within(disputas).queryByText('En producción')).not.toBeInTheDocument()
+
+    for (const answer of answers) answer()
+    expect(await within(disputas).findByText('En producción')).toBeInTheDocument()
+    expect(within(disputas).queryByText('Sin datos del registro')).not.toBeInTheDocument()
+  })
+
   it('shows one agent: where it runs, what it serves, its versions; rolls prod back with her code', async () => {
     vi.mocked(promoteAlias).mockResolvedValue({})
     const { user } = render('/supervision/automation/agents/disputas')

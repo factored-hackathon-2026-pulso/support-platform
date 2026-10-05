@@ -74,4 +74,26 @@ test.describe('Automatización (slice 22)', () => {
     await api.setAiEnabled(true)
     await expect(item).toBeVisible()
   })
+
+  test('in Portuguese, the case types table fits next to the type panel', async ({
+    api,
+    actors,
+    people,
+  }) => {
+    await api.setAiEnabled(true)
+    // A throwaway supervisor: the seeded accounts keep their language.
+    const supervisor = await people.person(['supervisor'], ['es', 'pt'])
+    const { page, shell } = await actors.signedIn('supervisão', supervisor)
+    await shell.chooseLanguage('Português')
+    await page.goto('/supervision/automation?type=undue_charge')
+    await expect(page.getByRole('complementary', { name: /Cobrança indevida/ })).toBeVisible()
+    const table = page.getByRole('table', { name: 'Tipos de caso e sua etapa' })
+    await expect(table.getByRole('row')).toHaveCount(7)
+    // Nothing of the table is cut by its card (the longer Portuguese labels made it overflow).
+    const widths = await table.evaluate((el) => ({
+      table: el.scrollWidth,
+      card: el.parentElement!.clientWidth,
+    }))
+    expect(widths.table).toBeLessThanOrEqual(widths.card)
+  })
 })

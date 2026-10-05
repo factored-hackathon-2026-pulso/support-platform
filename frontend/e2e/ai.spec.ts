@@ -2,6 +2,33 @@ import { CUSTOMERS, SEEDED, uniqueText } from './support/data'
 import { expect, test } from './support/fixtures'
 import { WorkspacePage } from './support/pages/workspace-page'
 
+/**
+ * The conversation header with the right panel open: the customer's name is not cut and no
+ * header button covers the name or the case number (the panel leaves the conversation narrow).
+ */
+async function expectHeaderReadable(workspace: WorkspacePage, customerName: string) {
+  const header = workspace.conversation(customerName).locator('header').first()
+  const layout = await header.evaluate((el) => {
+    const box = (node: Element) => node.getBoundingClientRect()
+    const nameButton = el.querySelector('h2 button') ?? el.querySelector('h2')!
+    const identity = [nameButton, ...el.querySelectorAll('p')].map(box)
+    const actions = [...el.querySelectorAll('button')]
+      .filter((button) => !button.closest('h2') && !button.closest('p'))
+      .map(box)
+    const overlaps = identity.some((a) =>
+      actions.some(
+        (b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom,
+      ),
+    )
+    return {
+      nameCut: nameButton.scrollWidth > nameButton.clientWidth + 1,
+      overlaps,
+      outside: actions.some((b) => b.right > box(el).right + 1),
+    }
+  })
+  expect(layout).toEqual({ nameCut: false, overlaps: false, outside: false })
+}
+
 test.describe('AI functions (slices 18 to 21)', () => {
   // The dev default is on: whatever happens, the next scenario starts with AI on.
   test.afterEach(async ({ api }) => {
@@ -43,6 +70,8 @@ test.describe('AI functions (slices 18 to 21)', () => {
     await expect(page.getByRole('region', { name: 'Borrador del copiloto' })).toHaveCount(0)
     const support = workspace.conversation(customer.name).getByRole('button', { name: 'Apoyo' })
     await expect(support).toHaveAttribute('aria-expanded', 'true')
+    // With the panel open the header still reads: the whole name, clear of the header's buttons.
+    await expectHeaderReadable(workspace, customer.name)
     // It has "Tipo de caso" (every case opens without one).
     await expect(workspace.caseTypeMenu(panel)).toHaveAccessibleName(
       'Tipo de caso: Sin tipo. Cambiar el tipo de caso',

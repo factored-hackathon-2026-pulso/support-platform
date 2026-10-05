@@ -133,6 +133,8 @@ export interface AgentAliases {
   staging: AliasState | null | undefined
   /** The registry did not answer for this agent. */
   failed: boolean
+  /** Still asking the registry: the status is not known yet (not "no data"). */
+  pending: boolean
 }
 
 /** Both aliases of several agents (the agents list). */
@@ -154,6 +156,7 @@ export function useAgentsAliases(agentIds: readonly string[], enabled: boolean):
       prod: prod?.data,
       staging: staging?.data,
       failed: Boolean(prod?.isError || staging?.isError),
+      pending: enabled && Boolean(prod?.isPending || staging?.isPending),
     }
   })
 }

@@ -14,6 +14,8 @@ from cc_platform.application.cases.ports import (
     AssigneeLoad,
     CaseRef,
     CustomerCaseFact,
+    EvidenceCell,
+    EvidenceSample,
     OpenCaseRef,
     RatingTotals,
 )
@@ -502,6 +504,28 @@ class InMemoryCaseRepository(_StagedRepository[Case]):
     async def get_many(self, case_ids: Collection[str]) -> dict[str, Case]:
         wanted = set(case_ids)
         return {case.id: case for case in self._tracked(c for c in self._all() if c.id in wanted)}
+
+    async def sample_cell(self, cell: EvidenceCell, *, limit: int) -> EvidenceSample:
+        def fits(case: Case) -> bool:
+            return (
+                (cell.case_type is None or case.case_type.value == cell.case_type)
+                and (cell.channel is None or case.channel.value == cell.channel)
+                and (cell.language is None or case.language.value == cell.language)
+                and (cell.priority is None or case.priority.value == cell.priority)
+                and (
+                    cell.close_reason is None
+                    or (case.closure is not None and case.closure.reason.value == cell.close_reason)
+                )
+                and (cell.opened_from is None or case.opened_at >= cell.opened_from)
+                and (cell.opened_before is None or case.opened_at < cell.opened_before)
+            )
+
+        found = sorted(
+            (case for case in self._all() if fits(case)),
+            key=lambda case: (case.opened_at, case.id),
+            reverse=True,
+        )
+        return EvidenceSample(matched=len(found), case_ids=tuple(c.id for c in found[:limit]))
 
     def _tracked(self, cases: Iterable[Case]) -> list[Case]:
         found = list(cases)

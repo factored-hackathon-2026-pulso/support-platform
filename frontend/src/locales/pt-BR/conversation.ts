@@ -432,4 +432,54 @@ export default {
       footnote: 'Montado pelo assistente virtual a partir da conversa. Revise antes de responder.',
     },
   },
+  staffLine: {
+    assignedOnArrival: {
+      es: 'Atribuído a {{analyst}} porque está disponível e fala espanhol.',
+      pt: 'Atribuído a {{analyst}} porque está disponível e fala português (regra 3).',
+    },
+    assignedFromAssistant: {
+      es: 'Atribuído a {{analyst}} após a transferência do assistente: está disponível e fala espanhol.',
+      pt: 'Atribuído a {{analyst}} após a transferência do assistente: está disponível e fala português (regra 3).',
+    },
+    queued: {
+      es: 'Não há pessoas disponíveis que falem espanhol: o caso aguarda na fila em espanhol.',
+      pt: 'Não há pessoas disponíveis que falem português: o caso aguarda na fila em português.',
+    },
+    assignedFromQueue: {
+      es: 'Atribuído a {{analyst}} depois de {{minutes}} min na fila em espanhol.',
+      pt: 'Atribuído a {{analyst}} depois de {{minutes}} min na fila em português.',
+    },
+    wroteAgain:
+      '{{customer}} voltou a escrever. O caso anterior foi encerrado em {{date}} ({{reason}}).',
+    calledAgain:
+      '{{customer}} voltou a ligar. O caso anterior foi encerrado em {{date}} ({{reason}}).',
+    assignedBySupervision: {
+      es: '{{supervisor}} atribuiu o caso a {{analyst}} depois de {{minutes}} min na fila em espanhol.',
+      pt: '{{supervisor}} atribuiu o caso a {{analyst}} depois de {{minutes}} min na fila em português.',
+    },
+    assignedBySupervisionPaused: {
+      es: '{{supervisor}} atribuiu o caso a {{analyst}} depois de {{minutes}} min na fila em espanhol ({{paused}} estava em pausa).',
+      pt: '{{supervisor}} atribuiu o caso a {{analyst}} depois de {{minutes}} min na fila em português ({{paused}} estava em pausa).',
+    },
+    reassigned: '{{supervisor}} reatribuiu o caso de {{previous}} para {{analyst}}.',
+    reassignedPaused:
+      '{{supervisor}} reatribuiu o caso de {{previous}} para {{analyst}} ({{paused}} estava em pausa).',
+    escalated: '{{analyst}} escalou o caso para a supervisão.',
+    escalationWithdrawn: '{{analyst}} retirou o escalonamento.',
+    escalationAnswered: '{{supervisor}} respondeu ao escalonamento.',
+    escalationTaken: '{{supervisor}} assumiu o caso de {{previous}}.',
+    assistantReleased: {
+      escalated: 'O assistente escalou o caso para uma pessoa (transferência {{ref}}).',
+      ended: 'O assistente encerrou o atendimento sem resolver o caso ({{code}}).',
+      failed:
+        'O assistente não conseguiu continuar o atendimento ({{code}}). O caso passa para uma pessoa.',
+      supervision: '{{who}} assumiu o caso do assistente.',
+      customer_request: 'O cliente pediu para falar com uma pessoa.',
+      ai_disabled: 'IA desativada: o caso passou do assistente para uma pessoa.',
+    },
+    noReference: 'sem referência',
+    noDetail: 'sem detalhe',
+    supervision: 'Supervisão',
+    followUpCall: '{{analyst}} abriu este caso para ligar para {{customer}} (acompanhamento).',
+  },
 } satisfies Translation<typeof es>

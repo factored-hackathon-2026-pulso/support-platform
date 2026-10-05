@@ -12,7 +12,7 @@ import {
   Textarea,
 } from '@/components/ui'
 import { ESCALATION_STATE, MAX_ESCALATION_TEXT } from '@/features/cases'
-import { shortCaseId, useCaseDetail } from '@/features/conversation'
+import { shortCaseId, turnText, useCaseDetail } from '@/features/conversation'
 import { formatRelativeTime, formatTime } from '@/lib/format'
 import { useTranslation } from '@/lib/i18n'
 import {
@@ -364,7 +364,7 @@ function LastTurns({ turns, loading }: { turns: Turn[] | undefined; loading: boo
                   ? t('escalations.panel.internalNote')
                   : t('escalations.panel.notice')}{' '}
               </span>
-              {turn.text}
+              {turnText(turn)}
             </li>
           )
         }

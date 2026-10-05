@@ -30,6 +30,7 @@ from cc_platform.application.ai.engine import AssistantEngine, AssistantHandover
 from cc_platform.application.ai.grants import GetGrantStatus
 from cc_platform.application.ai.maturity import (
     MATURITY_SIGNAL_EVENTS,
+    ActivateTypeAgent,
     GetAiStages,
     MaturityProjector,
     MaturityRealtimeProjector,
@@ -1023,6 +1024,16 @@ def build_container(
             stages=GetAiStages(uow=uow, switch=ai_switch, rule=stage_rule),
             move_back=MoveStageBack(uow=uow, clock=clock, switch=ai_switch),
             tool_used=RecordToolUsed(uow=uow, clock=clock, switch=ai_switch),
+            activate_agent=ActivateTypeAgent(
+                uow=uow,
+                clock=clock,
+                switch=ai_switch,
+                builder=(
+                    assistant_use_cases.builder.registry
+                    if assistant_use_cases is not None and assistant_use_cases.builder is not None
+                    else None
+                ),
+            ),
         ),
         assistant=assistant_use_cases,
     )

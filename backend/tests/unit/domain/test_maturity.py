@@ -194,12 +194,24 @@ def test_back_to_stage_three_withdraws_the_agent_proposal() -> None:
 def test_an_agent_is_activated_only_once_ready_and_then_blocks_moving_back() -> None:
     m = climbed()
     with pytest.raises(InvalidTransitionError):
-        m.activate_agent(actor=LUCIA, at=T)
+        m.activate_agent(agent_id="cobros", actor=LUCIA, at=T)
     m.signals = StageSignals(recent_drafts="a" * 100)
     m.evaluate(RULE, at=T)
-    assert m.activate_agent(actor=LUCIA, at=T + timedelta(days=1))
-    assert not m.activate_agent(actor=LUCIA, at=T)
-    assert (m.agent, m.last_change) == (AgentStatus.ACTIVE, StageChange.AGENT_ACTIVE)
-    assert isinstance(m.pull_events()[-1], CaseTypeAgentActivated)
+    with pytest.raises(InvalidValueError):
+        m.activate_agent(agent_id="  ", actor=LUCIA, at=T)
+    assert m.check_activation("cobros")
+    assert m.activate_agent(agent_id="cobros", actor=LUCIA, at=T + timedelta(days=1))
+    assert not m.activate_agent(agent_id="cobros", actor=LUCIA, at=T)  # the same agent: a no-op
+    assert not m.check_activation("cobros")
+    with pytest.raises(InvalidTransitionError):  # another agent while one serves the type
+        m.check_activation("otro")
+    assert (m.agent, m.agent_id, m.last_change) == (
+        AgentStatus.ACTIVE,
+        "cobros",
+        StageChange.AGENT_ACTIVE,
+    )
+    event = m.pull_events()[-1]
+    assert isinstance(event, CaseTypeAgentActivated)
+    assert event.payload()["agent_id"] == "cobros"
     with pytest.raises(InvalidTransitionError):
         m.move_back(to_stage=MaturityStage.PEOPLE_ONLY, actor=LUCIA, at=T)

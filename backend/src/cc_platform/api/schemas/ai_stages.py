@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, StringConstraints
 
+from cc_platform.api.schemas.builder import AliasChange, StepUpCode
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.application.ai.maturity import (
+    ActivateAgentResultView,
     AiStagesView,
     CaseTypeStageView,
     MoveStageResultView,
@@ -117,6 +120,10 @@ class CaseTypeStage(ApiModel):
     signals: StageSignals
     reached: list[StageReached] = Field(description="The stages reached (1-3) and since when.")
     agent_since: datetime | None
+    agent_id: str | None = Field(
+        description="agent-core's id of the agent that serves the type (set while `agent` is "
+        "`active`, slice 22)."
+    )
     last_change: StageLastChange | None
     version: int
 
@@ -136,6 +143,7 @@ class CaseTypeStage(ApiModel):
             signals=StageSignals.from_signals(m.signals),
             reached=[StageReached(stage=s, since=at) for s, at in stage_since(m)],
             agent_since=m.agent_since,
+            agent_id=m.agent_id,
             last_change=last,
             version=m.version,
         )
@@ -175,3 +183,29 @@ class MoveStageBackResult(ApiModel):
 class ToolUsedRequest(RequestModel):
     tool: str = Field(min_length=1, max_length=120, examples=["leer_movimientos@1"])
     decision: ToolDecision = ToolDecision.USED
+
+
+class ActivateAgentRequest(RequestModel):
+    agent_id: Annotated[
+        str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_/-]*$", max_length=120)
+    ] = Field(description="agent-core's id of the agent that will serve the type.")
+    release_id: Annotated[str, StringConstraints(min_length=1, max_length=120)] = Field(
+        description="The published release `prod` will point at (the proposal's publication)."
+    )
+    step_up_code: StepUpCode
+
+
+class ActivateAgentResult(ApiModel):
+    changed: bool = Field(
+        description="false: that agent already served the type (nothing promoted or recorded)."
+    )
+    type: CaseTypeStage
+    alias: AliasChange | None = Field(description="The registry's `prod` change; null if none.")
+
+    @classmethod
+    def from_view(cls, view: ActivateAgentResultView) -> ActivateAgentResult:
+        return cls(
+            changed=view.changed,
+            type=CaseTypeStage.from_view(view.type),
+            alias=AliasChange.model_validate(view.alias) if view.alias is not None else None,
+        )

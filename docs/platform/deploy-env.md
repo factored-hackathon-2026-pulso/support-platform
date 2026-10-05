@@ -270,6 +270,24 @@ written as JSON (`CC_CORS_ORIGINS=["https://a.example"]`).
 | `CC_ASSISTANT_STEP_UP_CODE` | no | `000000` | no | `000000` | The simulated second factor (development stand-in; a real one replaces it). |
 | `CC_BANK_CUSTOMER_LINKS_FILE` | no | unset | file contents | `/run/secrets/bank-customer-links.json` | Private JSON `{platform customer id: dataset customer id}`; never committed. Only linked customers can talk to the assistant (agent-core's customer principal is the dataset id). |
 
+#### Resilience of every call to the Core
+
+| Variable | Required | Default | Secret | Example shape | Description |
+| --- | --- | --- | --- | --- | --- |
+| `CC_CORE_TIMEOUT_ASSISTANT_SECONDS` | no | unset | no | `60` | Core call timeout for the assistant; unset: the general Core timeout. |
+| `CC_CORE_TIMEOUT_COPILOT_SECONDS` | no | unset | no | `60` | Core call timeout for the copilot; unset: the general Core timeout. |
+| `CC_CORE_TIMEOUT_SUGGESTIONS_SECONDS` | no | unset | no | `60` | Core call timeout for copilot suggestions; unset: the general Core timeout. |
+| `CC_CORE_TIMEOUT_BUILDER_SECONDS` | no | unset | no | `60` | Core call timeout for the builder; unset: the general Core timeout. |
+| `CC_CORE_TIMEOUT_REGISTRY_SECONDS` | no | `30.0` | no | `30.0` | Registry calls (proposals, releases, aliases, versions) and an evaluation (runs a suite). |
+| `CC_CORE_TIMEOUT_EVALUATE_SECONDS` | no | `120.0` | no | `120.0` | Core call timeout for evaluations. |
+| `CC_CORE_CONNECT_TIMEOUT_SECONDS` | no | `3.0` | no | `3.0` | Opening a connection to the Core (a Core that is down fails fast), and the readiness probe. |
+| `CC_CORE_PROBE_TIMEOUT_SECONDS` | no | `2.0` | no | `2.0` | Core call timeout for the `/readyz` status probe. |
+| `CC_CORE_RETRY_ATTEMPTS` | no | `2` | no | `2` | Retries after a quick failure, only for calls that are safe to repeat (0 = never). |
+| `CC_CORE_RETRY_BASE_DELAY_SECONDS` | no | `0.2` | no | `0.2` | First delay between Core call retries (doubles each attempt). |
+| `CC_CORE_RETRY_MAX_DELAY_SECONDS` | no | `2.0` | no | `2.0` | Ceiling of the delay between Core call retries. |
+| `CC_CORE_BREAKER_FAILURE_THRESHOLD` | no | `5` | no | `5` | Consecutive failures that open the circuit breaker, and how long it stays open. |
+| `CC_CORE_BREAKER_RESET_SECONDS` | no | `30.0` | no | `30.0` | How long the Core circuit breaker stays open before a trial call. |
+
 #### Logging
 
 | Variable | Required | Default | Secret | Example shape | Description |

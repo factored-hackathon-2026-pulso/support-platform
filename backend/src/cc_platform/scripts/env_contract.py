@@ -73,6 +73,10 @@ EXAMPLES: dict[str, str] = {
     "copilot_suggestions_agent": "copiloto-sugerencias@prod",
     "internal_service_token": "<48+ random url-safe characters>",
     "bank_customer_links_file": "/run/secrets/bank-customer-links.json",
+    "core_timeout_assistant_seconds": "60",
+    "core_timeout_copilot_seconds": "60",
+    "core_timeout_suggestions_seconds": "60",
+    "core_timeout_builder_seconds": "60",
 }
 
 #: Descriptions of the fields ``settings.py`` does not comment.
@@ -107,6 +111,27 @@ NOTES: dict[str, str] = {
     "port": "Port of `cc-api`.",
     "realtime_queue_size": "Envelopes a slow socket may lag behind before it is closed (1013).",
     "realtime_expiry_check_seconds": "How often an idle socket re-checks its session expiry.",
+    "core_timeout_assistant_seconds": (
+        "Core call timeout for the assistant; unset: the general Core timeout."
+    ),
+    "core_timeout_copilot_seconds": (
+        "Core call timeout for the copilot; unset: the general Core timeout."
+    ),
+    "core_timeout_suggestions_seconds": (
+        "Core call timeout for copilot suggestions; unset: the general Core timeout."
+    ),
+    "core_timeout_builder_seconds": (
+        "Core call timeout for the builder; unset: the general Core timeout."
+    ),
+    "core_timeout_evaluate_seconds": "Core call timeout for evaluations.",
+    "core_probe_timeout_seconds": "Core call timeout for the `/readyz` status probe.",
+    "core_retry_base_delay_seconds": (
+        "First delay between Core call retries (doubles each attempt)."
+    ),
+    "core_retry_max_delay_seconds": "Ceiling of the delay between Core call retries.",
+    "core_breaker_reset_seconds": (
+        "How long the Core circuit breaker stays open before a trial call."
+    ),
     "log_level": "Root log level.",
     "log_format": "`json` (one object per line) or `console` (development).",
 }

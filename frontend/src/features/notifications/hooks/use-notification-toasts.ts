@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { roleFromPath } from '@/app/roles'
 import { useToast } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { envelopePayload, useRealtimeClient } from '@/lib/realtime'
 import {
   NOTIFICATION_NAVIGATION,
@@ -36,10 +37,11 @@ export function useNotificationToasts(unreadIds: ReadonlySet<string> | null): vo
   const navigate = useNavigate()
   const location = useLocation()
   const read = useReadNotification()
+  const { t } = useTranslation('notifications')
 
-  const latest = useRef({ location, navigate, read })
+  const latest = useRef({ location, navigate, read, t })
   useEffect(() => {
-    latest.current = { location, navigate, read }
+    latest.current = { location, navigate, read, t }
   })
 
   /** Notification id → the toast showing it, with the notification. */
@@ -72,7 +74,7 @@ export function useNotificationToasts(unreadIds: ReadonlySet<string> | null): vo
               },
             },
             {
-              label: 'Más tarde',
+              label: latest.current.t('toast.later'),
               variant: 'secondary',
               onClick: () => void shown.current.delete(notification.id),
             },

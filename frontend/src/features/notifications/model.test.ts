@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { NOW, minutesFrom } from '@/test/case-fixtures'
+import { setTestLocale } from '@/test/render'
 import {
   analystNotifications,
   asPages,
@@ -355,5 +356,41 @@ describe('envelope readers', () => {
     })
     expect(readNotificationsRead({ notificationIds: [1], unreadCount: 1 })).toBeNull()
     expect(readNotificationsRead({ unreadCount: 1 })).toBeNull()
+  })
+})
+
+describe('the templates in Brazilian Portuguese', () => {
+  it('follows the UI language at call time', () => {
+    setTestLocale('pt-BR')
+    expect(copyOf({ kind: 'assigned_on_arrival' })).toMatchObject({
+      title: 'Você recebeu um caso novo',
+      detail: 'Larissa Monteiro Alves',
+      action: 'Abrir caso',
+    })
+    expect(copyOf({ kind: 'case_queued', language: 'pt', role: 'supervisor' })).toMatchObject({
+      action: 'Ver na fila',
+    })
+    expect(
+      copyOf({ kind: 'account_locked', role: 'admin', targetName: 'Mariana Duque' }),
+    ).toMatchObject({
+      title: 'Conta bloqueada: Mariana Duque',
+      detail: '5 tentativas malsucedidas de entrar',
+      action: 'Revisar',
+    })
+    expect(copyOf({ kind: 'case_escalated', actorName: null }).title).toBe(
+      'Alguém da equipe escalou um caso',
+    )
+    expect(
+      slaRiskDetail(makeNotification({ firstResponseAt: null, slaDueAt: minutesFrom(1) }), now),
+    ).toBe('Larissa Monteiro Alves, vence em 1 min')
+    expect(notificationTime(minutesFrom(0), now)).toBe('agora')
+    expect(notificationTime(minutesFrom(-6), now)).toBe('há 6 min')
+    expect(notificationTime(minutesFrom(-130), now)).toBe('há 2 h')
+    expect(bellLabel(0)).toBe('Notificações')
+    expect(bellLabel(1)).toBe('Notificações, 1 não lida')
+    expect(notificationSections(analystNotifications).map((s) => s.title)).toEqual([
+      'Novas',
+      'Anteriores',
+    ])
   })
 })

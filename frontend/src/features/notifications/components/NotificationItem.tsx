@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { buttonClasses } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import {
   NOTIFICATION_NAVIGATION,
   notificationCopy,
@@ -78,6 +79,7 @@ export interface NotificationItemProps {
  * ambiguous for a screen reader.
  */
 export function NotificationItem({ notification, now, onOpen, onMarkRead }: NotificationItemProps) {
+  const { t } = useTranslation('notifications')
   const copy = notificationCopy(notification, now)
   const unread = !notification.readAt
   const titleId = useId()
@@ -116,7 +118,7 @@ export function NotificationItem({ notification, now, onOpen, onMarkRead }: Noti
               onClick={() => onMarkRead(notification)}
               className={buttonClasses({ variant: 'ghost', size: 'sm' })}
             >
-              Marcar como leída
+              {t('item.markRead')}
             </button>
           ) : null}
         </span>
@@ -128,7 +130,7 @@ export function NotificationItem({ notification, now, onOpen, onMarkRead }: Noti
         {unread ? (
           <>
             <span aria-hidden="true" className="size-2 rounded-full bg-accent" />
-            <span className="sr-only">Sin leer</span>
+            <span className="sr-only">{t('item.unread')}</span>
           </>
         ) : null}
       </span>

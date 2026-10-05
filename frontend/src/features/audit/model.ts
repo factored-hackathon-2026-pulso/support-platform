@@ -3,10 +3,13 @@
  * docs/platform/api/slice-3-supervision.md §5, §8.8–§8.9): the filters (their URL
  * state is in url.ts), the API query they become (dates in the viewer's zone →
  * UTC instants), how each event row reads (who, kind badge, day separators,
- * times) and the detail aside. No React, no I/O: unit-tested in model.test.ts.
+ * times) and the detail aside. No React, no I/O: unit-tested in model.test.ts. Copy comes
+ * from the `audit` catalog, read when a function runs (the UI language of that moment).
  */
+import { ROLE_LABEL } from '@/app/roles'
 import type { Tone } from '@/components/ui'
 import { formatDate, formatTime, localDayKey } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type {
   ActorRole,
   AuditActor,
@@ -17,6 +20,8 @@ import type {
 } from './types'
 import type { AuditUrlState } from './url'
 
+const t = i18n.getFixedT(null, 'audit')
+
 type DateInput = Date | string | number
 
 // ── Filters ─────────────────────────────────────────────────────────────────
@@ -24,35 +29,55 @@ type DateInput = Date | string | number
 export interface KindFilterOption {
   /** `null` = Todos. */
   value: AuditActorKind | null
-  label: string
+  /** In the active UI language (read on access). */
+  readonly label: string
 }
 
-/** "Quién" pills: Todos · Equipo · Clientes · Plataforma. */
+function kindFilter(value: AuditActorKind | null): KindFilterOption {
+  return {
+    value,
+    get label() {
+      return t(`filters.kind.${value ?? 'all'}`)
+    },
+  }
+}
+
+/** "Quién" pills: Todos, Equipo, Clientes, Plataforma. */
 export const AUDIT_KIND_FILTERS: readonly KindFilterOption[] = [
-  { value: null, label: 'Todos' },
-  { value: 'staff', label: 'Equipo' },
-  { value: 'customer', label: 'Clientes' },
-  { value: 'system', label: 'Plataforma' },
+  kindFilter(null),
+  kindFilter('staff'),
+  kindFilter('customer'),
+  kindFilter('system'),
 ]
 
 export interface FamilyOption {
   value: AuditFamily
-  label: string
+  /** In the active UI language (read on access). */
+  readonly label: string
+}
+
+function familyOption(value: AuditFamily): FamilyOption {
+  return {
+    value,
+    get label() {
+      return t(`families.${value}`)
+    },
+  }
 }
 
 /** "Tipo" options (the catalog families, slice 3 §5.3 + slice 4 §7.1). */
 export const AUDIT_FAMILIES: readonly FamilyOption[] = [
-  { value: 'conversation', label: 'Conversación' },
-  { value: 'assignment', label: 'Asignación' },
-  { value: 'lifecycle', label: 'Ciclo del caso' },
-  { value: 'availability', label: 'Disponibilidad' },
-  { value: 'access', label: 'Accesos' },
-  { value: 'administration', label: 'Administración' },
+  familyOption('conversation'),
+  familyOption('assignment'),
+  familyOption('lifecycle'),
+  familyOption('availability'),
+  familyOption('access'),
+  familyOption('administration'),
   // Slice 9: escalations to supervision (motive and answer redacted).
-  { value: 'escalation', label: 'Escalamientos' },
+  familyOption('escalation'),
   // Slice 16 (the agent builder) and 21 (the AI stages per case type).
-  { value: 'agents', label: 'Agentes e IA' },
-  { value: 'other', label: 'Otros' },
+  familyOption('agents'),
+  familyOption('other'),
 ]
 
 export function familyLabel(family: AuditFamily): string {
@@ -123,7 +148,7 @@ export function withActorKind(
 /** Inline error of "Hasta" when it is before "Desde" (no request is sent). */
 export function dateRangeError(state: Pick<AuditUrlState, 'fromDate' | 'toDate'>): string | null {
   if (state.fromDate && state.toDate && state.toDate < state.fromDate) {
-    return 'Debe ser el mismo día de «Desde» o uno posterior.'
+    return t('filters.rangeError')
   }
   return null
 }
@@ -155,19 +180,21 @@ export function auditFiltersOf(state: AuditUrlState): AuditQuery {
 
 // ── Rows ────────────────────────────────────────────────────────────────────
 
-const ROLE_LABELS: Record<ActorRole, string> = {
-  analyst: 'Analista',
-  supervisor: 'Supervisión',
-  admin: 'Administración',
-  customer: 'Cliente',
-  system: 'Plataforma',
-  // Slice 19: agent-core's assistant, by the name customers and staff see.
-  assistant: 'Asistente virtual',
-}
-
-/** Kind badge of the "Quién" column. */
+/** Kind badge of the "Quién" column: staff roles by their shared name (`shell:roles`), the
+ * customer, the platform and (slice 19) agent-core's assistant by the name staff see. */
 export function actorRoleLabel(role: ActorRole): string {
-  return ROLE_LABELS[role] ?? role
+  switch (role) {
+    case 'analyst':
+    case 'supervisor':
+    case 'admin':
+      return ROLE_LABEL[role]
+    case 'customer':
+    case 'system':
+    case 'assistant':
+      return t(`actor.${role}`)
+    default:
+      return role
+  }
 }
 
 /** Staff in the warm tone of the canvas "Persona" chip, customers in accent, the platform and the assistant neutral. */
@@ -187,7 +214,7 @@ export function showsActorName(role: ActorRole): boolean {
 
 /** The name next to the badge: the person, "Plataforma", or the id when no name is known. */
 export function actorName(actor: AuditActor): string {
-  if (actor.role === 'system') return 'Plataforma'
+  if (actor.role === 'system') return t('actor.system')
   return actor.name ?? actor.id
 }
 
@@ -204,10 +231,10 @@ export function eventInstant(value: DateInput): string {
 /** Day separator: "Hoy", "Ayer", "3 mar" (another year: "28 dic 2025"). */
 export function dayLabel(value: DateInput, now: DateInput): string {
   const day = localDayKey(value)
-  if (day === localDayKey(now)) return 'Hoy'
+  if (day === localDayKey(now)) return t('log.today')
   const yesterday = new Date(new Date(now).getTime())
   yesterday.setDate(yesterday.getDate() - 1)
-  if (day === localDayKey(yesterday)) return 'Ayer'
+  if (day === localDayKey(yesterday)) return t('log.yesterday')
   const sameYear = day.slice(0, 4) === localDayKey(now).slice(0, 4)
   return formatDate(value, { withYear: !sameYear })
 }
@@ -244,12 +271,12 @@ export function groupByDay(events: readonly AuditEvent[], now: DateInput): Audit
 
 /** "Mostrando 51 eventos". */
 export function shownCountLabel(count: number): string {
-  return count === 1 ? 'Mostrando 1 evento' : `Mostrando ${count} eventos`
+  return t('log.shown', { count })
 }
 
 /** Empty log: nothing at all, or nothing for these filters. */
 export function emptyLogCopy(filtered: boolean): string {
-  return filtered ? 'Ningún evento coincide con estos filtros.' : 'Todavía no hay eventos.'
+  return filtered ? t('log.emptyFiltered') : t('log.empty')
 }
 
 // ── Detail aside ─────────────────────────────────────────────────────────────
@@ -272,7 +299,7 @@ export interface DetailByline {
 }
 
 export function detailByline(actor: AuditActor): DetailByline {
-  if (actor.role === 'system') return { name: 'Plataforma', role: null }
+  if (actor.role === 'system') return { name: t('actor.system'), role: null }
   if (actor.role === 'assistant') return { name: actorRoleLabel('assistant'), role: null }
   return { name: actorName(actor), role: actorRoleLabel(actor.role) }
 }
@@ -300,25 +327,16 @@ export function hidesMessageText(event: Pick<AuditEvent, 'redactedFields'>): boo
   return event.redactedFields.includes('text')
 }
 
-export const REDACTED_TEXT_NOTE =
-  'El texto del mensaje no se muestra aquí: está en la conversación.'
-
-/** Slice 7: the customer's rating comment is redacted the same way (`case.rated`). */
-export const REDACTED_COMMENT_NOTE =
-  'El comentario del cliente no se muestra aquí: está en el caso cerrado.'
-
-/** Slice 9: an escalation's motive and supervision's answer are staff text, redacted too. */
-export const REDACTED_MOTIVE_NOTE =
-  'El motivo del escalamiento no se muestra aquí: está en el caso y en Escalados.'
-export const REDACTED_NOTE_NOTE =
-  'La respuesta de supervisión no se muestra aquí: está en el caso y en Escalados.'
-
-/** The note under "Datos del evento" for what the PII policy removed, or null. */
+/**
+ * The note under "Datos del evento" for what the PII policy removed, or null: the message
+ * text; slice 7, the customer's rating comment (`case.rated`); slice 9, an escalation's
+ * motive and supervision's answer (staff text, redacted too).
+ */
 export function redactionNote(event: Pick<AuditEvent, 'redactedFields'>): string | null {
-  if (hidesMessageText(event)) return REDACTED_TEXT_NOTE
-  if (event.redactedFields.includes('comment')) return REDACTED_COMMENT_NOTE
-  if (event.redactedFields.includes('motive')) return REDACTED_MOTIVE_NOTE
-  if (event.redactedFields.includes('note')) return REDACTED_NOTE_NOTE
+  if (hidesMessageText(event)) return t('redacted.text')
+  if (event.redactedFields.includes('comment')) return t('redacted.comment')
+  if (event.redactedFields.includes('motive')) return t('redacted.motive')
+  if (event.redactedFields.includes('note')) return t('redacted.note')
   return null
 }
 
@@ -326,5 +344,5 @@ export function redactionNote(event: Pick<AuditEvent, 'redactedFields'>): string
 
 /** "Persona" option: active and inactive staff, the inactive ones marked "(desactivada)". */
 export function personOptionLabel(person: { name: string; active: boolean }): string {
-  return person.active ? person.name : `${person.name} (desactivada)`
+  return person.active ? person.name : t('filters.inactivePerson', { name: person.name })
 }

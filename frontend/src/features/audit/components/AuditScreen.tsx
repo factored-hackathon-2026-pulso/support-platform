@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { Page, PageBody } from '@/components/layout'
 import { PageHeader } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { auditFiltersOf, clearAuditFilters, dateRangeError, hasAuditFilters } from '../model'
 import type { AuditStateChangeOptions, AuditUrlState } from '../url'
 import { useNow } from '@/lib/hooks'
@@ -32,6 +33,7 @@ export interface AuditScreenProps {
  * does not import features/supervision).
  */
 export function AuditScreen({ state, onStateChange, canOpenCases = true }: AuditScreenProps) {
+  const { t } = useTranslation('audit')
   const now = useNow(DAY_TICK_MS)
   const query = useMemo(() => auditFiltersOf(state), [state])
   const blocked = dateRangeError(state) !== null
@@ -52,8 +54,8 @@ export function AuditScreen({ state, onStateChange, canOpenCases = true }: Audit
     <Page
       header={
         <PageHeader
-          title="Auditoría"
-          subtitle="Quién hizo qué, en qué caso y cuándo"
+          title={t('screen.title')}
+          subtitle={t('screen.subtitle')}
           actions={<AuditSearch value={state.query} onChange={onQueryChange} />}
         />
       }

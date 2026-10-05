@@ -41,7 +41,9 @@ def test_first_sign_in_answers_the_fallback_and_the_team(
     response = client.get(HOME, headers=bearer(sign_in(ANALYST.email)))
     assert response.status_code == 200, response.text
     body = response.json()
-    assert set(body) == {"since", "sinceSource", "activity", "teamNow", "serverTime"}
+    assert set(body) == {"since", "sinceSource", "activity", "teamNow", "serverTime", "assistant"}
+    # Slice 21: AI on (the default) without an assistant story in the seed.
+    assert body["assistant"] == {"resolved": 0, "handedToYou": 0, "withAssistantNow": 0}
     assert body["sinceSource"] == "fallback"
     assert body["since"] == (clock.now() - timedelta(hours=8)).isoformat().replace("+00:00", "Z")
     team = body["teamNow"]

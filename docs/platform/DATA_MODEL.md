@@ -491,6 +491,7 @@ a close or against another call.
 
 `assistant_sessions` — one row per case that opened in the agent's hands (`case_id` unique). Optimistic
 locking like every aggregate. No message text is stored here (it lives in `turns`).
+`agent_release` is the agent release the run started on (agent-core's `release`; null if it did not say): it travels in `assistant.turn_answered.release` so an outcome can be attributed to a release (engine signals).
 
 | Column | Type | Notes |
 |---|---|---|
@@ -509,7 +510,7 @@ locking like every aggregate. No message text is stored here (it lives in `turns
 | `failure_code`, `last_trace_id` | | why it ended; the agent-core trace id |
 | `created_at`, `updated_at`, `version` | | |
 
-`copilot_suggestions` (ADR 0005) — one row per agent-core run that proposed something for a case: `id` `CPS-…`, `case_id`, `analyst_id`, `agent`, `trigger` (`customer_message | manual | handover`), `status` (`preparing | ready | none | failed`), `based_on_sequence` (the last turn it read: a later customer message makes it stale), `request_key` (the manual request's `Idempotency-Key`; unique with `(case_id, analyst_id)`), `items` (JSON list of typed suggestions: the **texts**, cleared by the purge, 24 hours at most), `kinds`, `tool_ids`, `reply_hash` (SHA-256 of the draft), `reply_decision` (`used | edited | discarded | ignored`), `edit_distance_permille` (0 = as proposed, 1000 = nothing in common), `escalation_accepted`, `truncated` (agent-core proposed more than the 3 kept, or a text was cut to its limit), `run_id`, `trace_id`, `failure_code`, `purged_at`, `version`. What stays after the purge: kinds, tool ids, the hash and the decisions.
+`copilot_suggestions` (ADR 0005) — one row per agent-core run that proposed something for a case: `id` `CPS-…`, `case_id`, `analyst_id`, `agent`, `trigger` (`customer_message | manual | handover`), `status` (`preparing | ready | none | failed`), `based_on_sequence` (the last turn it read: a later customer message makes it stale), `request_key` (the manual request's `Idempotency-Key`; unique with `(case_id, analyst_id)`), `items` (JSON list of typed suggestions: the **texts**, cleared by the purge, 24 hours at most), `kinds`, `tool_ids`, `reply_hash` (SHA-256 of the draft), `reply_decision` (`used | edited | discarded | ignored`), `edit_distance_permille` (0 = as proposed, 1000 = nothing in common), `escalation_accepted`, `truncated` (agent-core proposed more than the 3 kept, or a text was cut to its limit), `run_id`, `trace_id`, `release` (the agent release that answered; in `suggestion_ready|none.release` and copied into `suggestion_decided`), `failure_code`, `purged_at`, `version`. What stays after the purge: kinds, tool ids, the hash and the decisions.
 
 `copilot_threads` (slice 15) — one row per (case, analyst), unique `(case_id, analyst_id)`: `id` `CPT-…`, `agent`, agent-core's `agent_session_id` / `run_id`, `runs` (the idempotency suffix of each run), `messages` (JSON list of `{id, role: analyst|copilot, text, created_at, client_message_id, answers}`, newest 200), `last_trace_id`, `version`. The text lives here; the event log carries sizes only.
 

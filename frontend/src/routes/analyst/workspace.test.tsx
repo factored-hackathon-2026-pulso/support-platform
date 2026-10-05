@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CasesApi from '@/features/cases/api'
+import type * as Copilot from '@/features/copilot'
 import type * as NotificationsApi from '@/features/notifications/api'
 import { fetchAvailability, fetchInbox, updateAvailability } from '@/features/cases/api'
 import { ApiProblem } from '@/lib/api'
@@ -41,6 +42,36 @@ vi.mock('@/features/notifications/api', async (importOriginal) => {
   }
 })
 
+/** Slice 20: whether the stubbed copilot says it is available for the open case. */
+const copilot = vi.hoisted(() => ({ available: false }))
+
+/**
+ * The copilot's tabs are tested in their own feature: here the Workspace's decisions (which tabs,
+ * their order, the URL) are checked with stub tabs whose availability the test sets.
+ */
+vi.mock('@/features/copilot', async (importOriginal) => {
+  const actual = await importOriginal<typeof Copilot>()
+  return {
+    ...actual,
+    CopilotPanel: ({ caseId }: { caseId: string }) => <p>Copiloto de {caseId}</p>,
+    ToolsPanel: ({ caseId, onOpenCopilot }: { caseId: string; onOpenCopilot?: () => void }) => (
+      <div>
+        <p>Herramientas de {caseId}</p>
+        <button type="button" onClick={onOpenCopilot}>
+          Ir a Copiloto
+        </button>
+      </div>
+    ),
+    useCopilotAccess: () => true,
+    useCopilotThread: (caseId: string) => ({
+      data: copilot.available ? { caseId, available: true, messages: [] } : undefined,
+    }),
+    useLatestSuggestion: () => ({
+      data: copilot.available ? { available: true, suggestion: null } : undefined,
+    }),
+  }
+})
+
 /**
  * The conversation feature is another agent's slice with its own tests: here it
  * is replaced by stubs that expose what the Workspace passes to it.
@@ -56,6 +87,8 @@ vi.mock('@/features/conversation', async () => {
     focusOnLoad,
     onFocused,
     onOpenHandoff,
+    copilotMode,
+    supportPanel,
   }: {
     caseId: string
     onClosed?: (id: string) => void
@@ -63,6 +96,8 @@ vi.mock('@/features/conversation', async () => {
     focusOnLoad?: boolean
     onFocused?: () => void
     onOpenHandoff?: () => void
+    copilotMode?: string | null
+    supportPanel?: { open: boolean; onToggle(): void }
   }) {
     const heading = useRef<HTMLHeadingElement>(null)
     useEffect(() => {
@@ -93,13 +128,29 @@ vi.mock('@/features/conversation', async () => {
             Ver todo
           </button>
         ) : null}
+        {supportPanel ? (
+          <button
+            id="apoyo-del-caso-boton"
+            type="button"
+            aria-expanded={supportPanel.open}
+            onClick={supportPanel.onToggle}
+          >
+            Apoyo
+          </button>
+        ) : null}
+        <p>Copiloto en modo {copilotMode ?? 'ninguno'}</p>
       </section>
     )
   }
   /** Slice 19: the first case of the list came from the assistant; its handoff loaded. */
   const HANDOFF_CASE = 'CASE-00000000000000000000000102'
   function useCaseDetail(caseId: string) {
-    return { data: { case: { id: caseId }, assignment: null } }
+    return {
+      data: {
+        case: { id: caseId, status: 'in_progress', customer: { displayName: 'Patricia Lozano' } },
+        assignment: null,
+      },
+    }
   }
   function useCaseHandoff(detail?: { case: { id: string } }) {
     return {
@@ -141,6 +192,7 @@ vi.mock('@/features/conversation', async () => {
     registerConversationRealtime: () => {},
     CUSTOMER_FILE_PANEL_ID: 'ficha-del-cliente',
     CUSTOMER_FILE_TRIGGER_ID: TRIGGER,
+    SUPPORT_PANEL_TRIGGER_ID: 'apoyo-del-caso-boton',
     ConversationPane,
     CustomerFile,
     HandoffPanel,
@@ -157,6 +209,7 @@ const NEXT = 'CASE-00000000000000000000000108'
 const SECOND = 'CASE-00000000000000000000000101'
 
 beforeEach(() => {
+  copilot.available = false
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
   vi.mocked(fetchInbox).mockResolvedValue(makeInbox())
@@ -547,5 +600,71 @@ describe('/analyst/cases right panel with AI on (slice 19)', () => {
     await screen.findByText(`Conversación ${FIRST}`)
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ver todo' })).not.toBeInTheDocument()
+  })
+})
+
+describe('/analyst/cases right panel with the copilot (slice 20)', () => {
+  const tabNames = (panel: HTMLElement) =>
+    within(panel)
+      .getAllByRole('tab')
+      .map((tab) => tab.textContent)
+
+  it('"Apoyo" opens it at "Copiloto": Traspaso, Copiloto, Herramientas, Cliente', async () => {
+    copilot.available = true
+    const { router, user } = renderWorkspace('/analyst/cases', { aiEnabled: true })
+    await screen.findByText(`Conversación ${FIRST}`)
+    expect(screen.getByText('Copiloto en modo drafts')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Apoyo' }))
+    expect(searchOf(router).get('panel')).toBe('copilot')
+    const panel = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(tabNames(panel)).toEqual(['Traspaso', 'Copiloto', 'Herramientas', 'Cliente'])
+    expect(within(panel).getByRole('tab', { name: 'Copiloto' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(panel).toHaveTextContent(`Copiloto de ${FIRST}`)
+    expect(screen.getByRole('button', { name: 'Apoyo' })).toHaveAttribute('aria-expanded', 'true')
+
+    await user.click(within(panel).getByRole('tab', { name: 'Herramientas' }))
+    expect(searchOf(router).get('panel')).toBe('tools')
+    await user.click(within(panel).getByRole('button', { name: 'Ir a Copiloto' }))
+    expect(searchOf(router).get('panel')).toBe('copilot')
+
+    await user.click(within(panel).getByRole('button', { name: 'Cerrar el panel de apoyo' }))
+    expect(searchOf(router).get('panel')).toBeNull()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apoyo' })).toHaveFocus())
+  })
+
+  it('keeps ?panel=customer and ?panel=tools working for a case with no handoff', async () => {
+    copilot.available = true
+    const { unmount } = renderWorkspace(`/analyst/cases?case=${SECOND}&panel=customer`, {
+      aiEnabled: true,
+    })
+    const panel = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(tabNames(panel)).toEqual(['Copiloto', 'Herramientas', 'Cliente'])
+    expect(within(panel).getByRole('tab', { name: 'Cliente' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    unmount()
+
+    renderWorkspace(`/analyst/cases?case=${SECOND}&panel=tools`, { aiEnabled: true })
+    const tools = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(tools).toHaveTextContent(`Herramientas de ${SECOND}`)
+  })
+
+  it('has no copilot tabs while the copilot is unavailable for the customer', async () => {
+    renderWorkspace(`/analyst/cases?case=${SECOND}&panel=copilot`, { aiEnabled: true })
+    const panel = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(tabNames(panel)).toEqual(['Cliente'])
+  })
+
+  it('ignores the copilot with AI off: no "Apoyo", no mode, no panel for ?panel=copilot', async () => {
+    copilot.available = true
+    renderWorkspace(`/analyst/cases?case=${FIRST}&panel=copilot`)
+    await screen.findByText(`Conversación ${FIRST}`)
+    expect(screen.getByText('Copiloto en modo ninguno')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Apoyo' })).toBeNull()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
   })
 })

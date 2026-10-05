@@ -297,6 +297,9 @@ turns = Table(
     Column("client_message_id", String(64), nullable=True),
     # slice 12: the subject of an ``email`` turn (null on every other kind)
     Column("subject", String(200), nullable=True),
+    # slice 23c: the facts of a staff-only line (``{kind, params}``; null on every other turn
+    # and on routing banners written before 23c, which show their stored text)
+    Column("staff_line", JSON, nullable=True),
     UniqueConstraint("case_id", "sequence", name="uq_turns_case_sequence"),
     UniqueConstraint("author_id", "client_message_id", name="uq_turns_author_client_message"),
 )

@@ -33,7 +33,7 @@ from cc_platform.application.ai.runtime import (
     AgentRuntimeUnavailableError,
     AgentTurn,
 )
-from cc_platform.application.cases import copy
+from cc_platform.application.cases import copy, staff_lines
 from cc_platform.application.cases.assignment import AssignCase
 from cc_platform.application.cases.sla import SlaPolicy
 from cc_platform.application.concurrency import retry_on_conflict
@@ -121,14 +121,16 @@ class AssistantHandover:
             reason=reason,
             handoff_ref=ref,
         )
+        released = staff_lines.assistant_released(reason, ref=ref, code=code, who=who)
         banner = case.append_turn(
             turn_id=self.ids.new_id(IdPrefix.TURN),
             kind=TurnKind.ROUTING,
             audience=TurnAudience.STAFF,
             author_role=TurnAuthorRole.SYSTEM,
             author_id=None,
-            text=copy.assistant_released(reason, ref=ref, code=code, who=who),
+            text=released.text,
             created_at=now,
+            staff_line=released.line,
         )
         await uow.turns.add(banner)
         if notify_customer:

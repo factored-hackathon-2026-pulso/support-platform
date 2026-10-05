@@ -68,8 +68,9 @@ ACTOR_ROLES: dict[AuditActorKind, frozenset[str]] = {
 #: Payload keys removed by the PII policy, per event type (the value's length is kept).
 #: Slice 9: an escalation's motive and supervision's answer are staff text like messages.
 #: Slice 12: an email's subject (like its body, the turn text) and an outbound call's reason.
+#: Slice 23c: a staff-only line's facts (the names in its text), removed like the text.
 REDACTED_TEXT: dict[str, tuple[str, ...]] = {
-    "turn.created": ("text", "subject"),
+    "turn.created": ("text", "subject", "staff_line"),
     "case.rated": ("comment",),
     "escalation.opened": ("motive",),
     "escalation.answered": ("note",),
@@ -136,6 +137,8 @@ def redact(event_type: str, payload: JsonObject) -> tuple[JsonObject, tuple[str,
     redacted = {k: v for k, v in payload.items() if k not in keys}
     for key in keys:
         value = payload[key]
+        if isinstance(value, dict):
+            continue  # structured facts (a staff line): no length to keep
         redacted[f"{key}_length"] = len(value) if isinstance(value, str) else 0
     return redacted, keys
 

@@ -33,7 +33,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from cc_platform.application.cases import copy
+from cc_platform.application.cases import copy, staff_lines
 from cc_platform.application.cases.assignment import language_rule
 from cc_platform.application.cases.dto import AssignmentView, CaseSummaryView
 from cc_platform.application.cases.errors import (
@@ -183,20 +183,21 @@ async def hand_over(
     if waited is not None:
         case.assign(assignment)
         label = case.queue_label or copy.QUEUE_LABEL[case.language]
-        banner = copy.manually_assigned_from_queue(
+        banner = staff_lines.manually_assigned_from_queue(
             actor.name,
             target.name,
             copy.queue_wait_minutes(waited),
             label,
+            case.language,
             paused_first_name=paused_name,
         )
     else:
         case.reassign(assignment)
         previous_name = (await reader.staff_name(previous) if previous else None) or ""
         if take:
-            banner = copy.escalation_taken(actor.name, previous_name)
+            banner = staff_lines.escalation_taken(actor.name, previous_name)
         else:
-            banner = copy.reassigned(
+            banner = staff_lines.reassigned(
                 actor.name, previous_name, target.name, paused_first_name=paused_name
             )
     escalation = await _end_open_escalation(uow, case, supervisor, target, now=now, take=take)
@@ -207,8 +208,9 @@ async def hand_over(
             audience=TurnAudience.STAFF,
             author_role=TurnAuthorRole.SYSTEM,
             author_id=None,
-            text=banner,
+            text=banner.text,
             created_at=now,
+            staff_line=banner.line,
         )
     ]
     if waited is None:

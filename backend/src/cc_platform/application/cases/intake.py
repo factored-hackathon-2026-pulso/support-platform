@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from cc_platform.application.ai.config import AssistantGate
-from cc_platform.application.cases import copy
+from cc_platform.application.cases import copy, staff_lines
 from cc_platform.application.cases.assignment import AssignCase
 from cc_platform.application.cases.sla import SlaPolicy
 from cc_platform.application.errors import AuthenticationRequiredError
@@ -178,6 +178,9 @@ class CaseIntake:
                 )
             )
         if previous is not None and previous.closure is not None:
+            again = staff_lines.wrote_again(
+                profile.first_name, previous.closure.closed_at, previous.closure.reason, channel
+            )
             turns.append(
                 case.append_turn(
                     turn_id=self.ids.new_id(IdPrefix.TURN),
@@ -185,13 +188,9 @@ class CaseIntake:
                     audience=TurnAudience.STAFF,
                     author_role=TurnAuthorRole.SYSTEM,
                     author_id=None,
-                    text=copy.wrote_again(
-                        profile.first_name,
-                        previous.closure.closed_at,
-                        previous.closure.reason,
-                        channel,
-                    ),
+                    text=again.text,
                     created_at=now,
+                    staff_line=again.line,
                 )
             )
         return case, turns, session

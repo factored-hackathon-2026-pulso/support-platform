@@ -27,6 +27,21 @@ describe('StageStrip (slice 21)', () => {
     expect(strip).toHaveTextContent('Con agente')
   })
 
+  it('keeps the type on one line and lets the stage line wrap instead of cutting it', () => {
+    // A narrow conversation (support panel open at 1440 px) cut the line with "…" and broke
+    // "Cargo no reconocido" over two lines; the browser check is in e2e/ai.spec.ts.
+    render(
+      <StageStrip
+        typeLabel="Cargo no reconocido"
+        stage={makeTypeStage('unrecognized_charge', 3, 'active')}
+      />,
+    )
+    expect(screen.getByTestId('stage-strip-type')).toHaveClass('whitespace-nowrap', 'shrink-0')
+    const line = screen.getByTestId('stage-strip-line')
+    expect(line).not.toHaveClass('truncate')
+    expect(line).toHaveClass('min-w-0', 'flex-1')
+  })
+
   it('says the stage in Portuguese', () => {
     setTestLocale('pt-BR')
     const { rerender } = render(

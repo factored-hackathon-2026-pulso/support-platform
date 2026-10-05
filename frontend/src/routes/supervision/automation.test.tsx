@@ -268,6 +268,15 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
 
   it('proposes an agent through the builder chat, and links the proposal it made', async () => {
     vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
+    // An older thread: "Proponer un agente" starts a new conversation instead of continuing it.
+    vi.mocked(fetchBuilderChat).mockResolvedValue({
+      available: true,
+      messages: [
+        builderMessage('m0', 'person', '¿Qué agentes puedo modificar?'),
+        builderMessage('m00', 'agent', 'Cuéntame qué cambio quieres en ese agente.', 'm0'),
+      ],
+    })
+    vi.mocked(restartBuilderChat).mockResolvedValue({ available: true, messages: [] })
     vi.mocked(askBuilder).mockResolvedValue({
       message: builderMessage('m1', 'person', 'x'),
       answers: [builderMessage('m2', 'agent', `Creé la propuesta ${PROPOSAL_ID}.`, 'm1')],
@@ -278,6 +287,11 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
     await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
     const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
+    expect(
+      await within(sheet).findByText('Cuéntale qué agente quieres o qué cambiar en uno.'),
+    ).toBeInTheDocument()
+    expect(restartBuilderChat).toHaveBeenCalledTimes(1)
+    expect(within(sheet).queryByText('¿Qué agentes puedo modificar?')).not.toBeInTheDocument()
     const box = within(sheet).getByRole('textbox', { name: 'Mensaje para el constructor' })
     expect(box).toHaveValue(
       'Agente: cobros. Objetivo: un agente nuevo que atienda los chats de los casos de tipo ' +
@@ -288,12 +302,43 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     expect(askBuilder).toHaveBeenCalledWith(
       expect.objectContaining({ text: expect.stringContaining('Agente: cobros.') }),
     )
+    // The restart went first: the message opens the new thread.
+    expect(vi.mocked(restartBuilderChat).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(askBuilder).mock.invocationCallOrder[0]!,
+    )
     expect(await within(sheet).findByText(`Creé la propuesta ${PROPOSAL_ID}.`)).toBeInTheDocument()
     expect(within(sheet).getByRole('link', { name: 'Abrir propuesta' })).toHaveAttribute(
       'href',
       `/supervision/automation/proposals/${PROPOSAL_ID}?type=undue_charge`,
     )
     expect(box).toHaveValue('')
+  })
+
+  it('retries the new conversation before sending when the restart failed on opening', async () => {
+    vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
+    vi.mocked(restartBuilderChat)
+      .mockRejectedValueOnce(ApiProblem.network())
+      .mockResolvedValueOnce({ available: true, messages: [] })
+    vi.mocked(askBuilder).mockResolvedValue({
+      message: builderMessage('m1', 'person', 'x'),
+      answers: [builderMessage('m2', 'agent', '¿Qué herramientas usa el equipo?', 'm1')],
+      proposals: [],
+      replayed: false,
+    })
+    const { user } = renderAutomation('/supervision/automation?type=undue_charge')
+    const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
+    await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
+    expect(
+      await within(sheet).findByText('No pudimos empezar una conversación nueva'),
+    ).toBeInTheDocument()
+    expect(askBuilder).not.toHaveBeenCalled()
+    await user.click(within(sheet).getByRole('button', { name: 'Enviar' }))
+    expect(await within(sheet).findByText('¿Qué herramientas usa el equipo?')).toBeInTheDocument()
+    expect(restartBuilderChat).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(restartBuilderChat).mock.invocationCallOrder[1]).toBeLessThan(
+      vi.mocked(askBuilder).mock.invocationCallOrder[0]!,
+    )
   })
 
   it('keeps a failed message for a retry with the same id, and starts a new conversation', async () => {

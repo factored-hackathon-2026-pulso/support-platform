@@ -5,6 +5,7 @@ import {
   assistantActiveMessage,
   assistantCopy,
   assistantView,
+  confirmationAlreadySaid,
   confirmationExpiry,
   describeAssistantFailure,
   hadAssistant,
@@ -79,6 +80,29 @@ describe('confirmation and second factor', () => {
     expect(confirmationExpiry(confirmation, 'pt')).toBe('Vence às 11:05')
     expect(isConfirmationExpired(confirmation, Date.parse('2099-01-01T16:04:59Z'))).toBe(false)
     expect(isConfirmationExpired(confirmation, Date.parse('2099-01-01T16:05:00Z'))).toBe(true)
+  })
+
+  it('knows when the last assistant message already asks the confirmation, es and pt', () => {
+    const said = (role: 'assistant' | 'customer', text: string) => ({ authorRole: role, text })
+    const es = 'Voy a radicar la disputa del cargo. ¿Confirmas?'
+    expect(confirmationAlreadySaid(es, [said('customer', 'x'), said('assistant', es)])).toBe(true)
+    // Spacing and case apart, or inside a longer message.
+    expect(
+      confirmationAlreadySaid(es, [
+        said('assistant', 'Listo, Natalia.  voy a radicar la disputa del cargo.\n¿confirmas?'),
+      ]),
+    ).toBe(true)
+    const pt = 'Vou registrar a contestação. Confirma?'
+    expect(confirmationAlreadySaid(pt, [said('assistant', pt)])).toBe(true)
+    // Only the last assistant message counts; a different one keeps the summary on the card.
+    expect(
+      confirmationAlreadySaid(pt, [said('assistant', pt), said('assistant', 'Qual cobrança?')]),
+    ).toBe(false)
+    expect(
+      confirmationAlreadySaid('Radicar una disputa por 120 USD', [said('assistant', es)]),
+    ).toBe(false)
+    expect(confirmationAlreadySaid(es, [said('customer', es)])).toBe(false)
+    expect(confirmationAlreadySaid('  ', [said('assistant', es)])).toBe(false)
   })
 
   it('keeps six digits of the code', () => {

@@ -258,7 +258,10 @@ function AgentSection({ type, entry }: { type: MaturingType; entry: CaseTypeStag
   )
 }
 
-/** "Proponer un agente": the builder chat with the type's first message (agent-core needed). */
+/**
+ * "Proponer un agente": a new conversation with the builder, the type's first message in the
+ * composer (agent-core needed). It never continues an older thread.
+ */
 function ProposeButton({ type, entry }: { type: MaturingType; entry: CaseTypeStage }) {
   const { t } = useTranslation('automation')
   const builder = useBuilderAvailable()
@@ -269,7 +272,9 @@ function ProposeButton({ type, entry }: { type: MaturingType; entry: CaseTypeSta
       variant="primary"
       size="sm"
       icon={<Bot size={16} />}
-      onClick={() => chat.open(newAgentRequest(type, agentIdFor(entry), entry), type)}
+      onClick={() =>
+        chat.open({ prefill: newAgentRequest(type, agentIdFor(entry), entry), type, fresh: true })
+      }
     >
       {t('type.propose')}
     </Button>

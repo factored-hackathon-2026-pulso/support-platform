@@ -92,18 +92,21 @@ export function AskPersonButton({
 }
 
 /**
- * "Confirma para seguir" (contract §3.3): what the assistant is about to do, when the question
- * expires, "No" and "Sí". The answer comes back as the conversation; the assistant's reply as a
+ * "Confirma para seguir" (contract §3.3): what the assistant is about to do (unless its last
+ * message just said it), when the question expires, "No" and "Sí". The answer comes back as the conversation; the assistant's reply as a
  * turn. An expired confirmation still sends (the server says `confirmation_expired`).
  */
 export function ConfirmationCard({
   customerId,
   confirmation,
   language,
+  summaryShown = false,
 }: {
   customerId: string
   confirmation: AssistantConfirmation
   language: Language
+  /** The assistant's last message already says the summary: the card does not repeat it. */
+  summaryShown?: boolean
 }) {
   const copy = assistantCopy(language)
   const titleId = useId()
@@ -129,7 +132,9 @@ export function ConfirmationCard({
         <ShieldCheck size={14} aria-hidden="true" />
         {copy.confirmTitle}
       </h3>
-      <p className="m-0 text-16 leading-[1.35] font-bold text-app-ink">{confirmation.summary}</p>
+      {summaryShown ? null : (
+        <p className="m-0 text-16 leading-[1.35] font-bold text-app-ink">{confirmation.summary}</p>
+      )}
       <p
         className={cn(
           'm-0 inline-flex items-center gap-1.5 text-12',

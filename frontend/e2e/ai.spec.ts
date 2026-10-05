@@ -1,4 +1,5 @@
 import { CUSTOMERS, SEEDED, uniqueText } from './support/data'
+import type { Locator } from '@playwright/test'
 import { expect, test } from './support/fixtures'
 import { WorkspacePage } from './support/pages/workspace-page'
 
@@ -27,6 +28,24 @@ async function expectHeaderReadable(workspace: WorkspacePage, customerName: stri
     }
   })
   expect(layout).toEqual({ nameCut: false, overlaps: false, outside: false })
+}
+
+/**
+ * The stage strip with the right panel open: the type name stays on one line and the stage line
+ * is whole (it wraps instead of being cut with "…"), inside the conversation column.
+ */
+async function expectStripReadable(strip: Locator) {
+  const layout = await strip.evaluate((el) => {
+    const type = el.querySelector<HTMLElement>('[data-testid="stage-strip-type"]')!
+    const line = el.querySelector<HTMLElement>('[data-testid="stage-strip-line"]')!
+    const lineHeight = parseFloat(getComputedStyle(type).lineHeight)
+    return {
+      typeOnOneLine: type.getBoundingClientRect().height < lineHeight * 1.5,
+      lineCut: line.scrollWidth > line.clientWidth + 1,
+      outside: line.getBoundingClientRect().right > el.getBoundingClientRect().right + 1,
+    }
+  })
+  expect(layout).toEqual({ typeOnOneLine: true, lineCut: false, outside: false })
 }
 
 test.describe('AI functions (slices 18 to 21)', () => {
@@ -152,6 +171,12 @@ test.describe('AI functions (slices 18 to 21)', () => {
     )
     await expect(page.getByRole('region', { name: 'Borrador del copiloto' })).toHaveCount(0)
     await expect(panel.getByRole('tab', { name: 'Copiloto' })).toHaveCount(0)
+    // With the panel open (1440 px) the strip reads whole; the type with an agent has the
+    // longest line ("Con agente: …").
+    await expectStripReadable(strip)
+    await workspace.setCaseType(panel, 'Cargo no reconocido')
+    await expect(strip).toContainText('Con agente')
+    await expectStripReadable(strip)
 
     // Another type: the strip follows; Supervisión moves it back and the strip follows live.
     await workspace.setCaseType(panel, 'Problema con app')

@@ -175,8 +175,8 @@ def escalation_taken(supervisor_name: str, previous_name: str) -> Banner:
 def assistant_released(
     reason: str, *, ref: str | None = None, code: str | None = None, who: str | None = None
 ) -> Banner:
-    """``ref``, ``code`` and ``who`` only when known (the UI says "sin referencia", "sin
-    detalle" and "Supervisión" in the viewer's language otherwise)."""
+    """``ref``, ``code`` and ``who`` only when known (the UI says "sin detalle" and "Supervisión"
+    in the viewer's language otherwise). ``ref`` stays in the facts but no text shows it."""
     optional = {"ref": ref, "code": code, "who": who}
     params: dict[str, str | int] = {"reason": reason}
     params |= {key: value for key, value in optional.items() if value}

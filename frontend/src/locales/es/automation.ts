@@ -370,6 +370,8 @@ export default {
     thinking: 'El constructor está armando la respuesta…',
     restart: 'Nueva conversación',
     restartDone: 'Empezaste una conversación nueva',
+    restartFailed: 'No pudimos empezar una conversación nueva',
+    restartRetry: 'Al enviar el mensaje lo intentamos otra vez.',
     failed: 'No se envió.',
     retry: 'Reintentar',
     busy: 'El constructor todavía responde el mensaje anterior.',

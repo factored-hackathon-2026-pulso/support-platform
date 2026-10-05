@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent }
 import { ArrowRight } from 'lucide-react'
 import { Button, Callout, Skeleton } from '@/components/ui'
 import { cn } from '@/lib/cn'
-import { assistantView } from '../assistant'
+import { assistantView, confirmationAlreadySaid } from '../assistant'
 import { chatTurns } from '../channels'
 import {
   chatLang,
@@ -67,6 +67,11 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
   // Slice 19: the assistant's typing pill, confirmation, second factor and "Hablar con una persona".
   const assistant = assistantView(conversation)
   const assistantCard = assistant.confirmation !== null || assistant.stepUp !== null
+  // The card does not repeat a question the assistant's last bubble already asks.
+  const confirmationSaid =
+    assistant.confirmation !== null && chat.data
+      ? confirmationAlreadySaid(assistant.confirmation.summary, chatTurns(chat.data).turns)
+      : false
   const chips =
     chat.status === 'success' && !assistant.working && !assistantCard
       ? visibleSuggestions(suggestions, chat.data)
@@ -167,6 +172,7 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
             customerId={customerId}
             confirmation={assistant.confirmation}
             language={language}
+            summaryShown={confirmationSaid}
           />
         ) : assistant.stepUp && conversation ? (
           <StepUpCard

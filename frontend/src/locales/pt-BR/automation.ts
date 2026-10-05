@@ -365,6 +365,8 @@ export default {
     thinking: 'O construtor está montando a resposta…',
     restart: 'Nova conversa',
     restartDone: 'Você começou uma nova conversa',
+    restartFailed: 'Não foi possível começar uma nova conversa',
+    restartRetry: 'Ao enviar a mensagem, tentamos de novo.',
     failed: 'Não foi enviada.',
     retry: 'Tentar de novo',
     busy: 'O construtor ainda está respondendo a mensagem anterior.',

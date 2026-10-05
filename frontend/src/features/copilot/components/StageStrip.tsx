@@ -13,6 +13,10 @@ export interface StageStripProps {
  * The stage strip under the case header (IaWorkspace, slice 21): the case type, three stage bars
  * and one quiet line saying what the copilot does for this type. The bars are decoration; the
  * line carries the stage for everyone.
+ *
+ * With the support panel open the conversation is about 600 px wide at 1440 px: the type name
+ * never wraps or shrinks, and the line wraps under itself (aligned with its first line) instead of
+ * being cut, so the whole sentence is always readable.
  */
 export function StageStrip({ typeLabel, stage }: StageStripProps) {
   const { t } = useTranslation('copilot')
@@ -20,14 +24,17 @@ export function StageStrip({ typeLabel, stage }: StageStripProps) {
   return (
     <div
       data-testid="stage-strip"
-      className="flex shrink-0 items-center gap-2.5 border-b border-border bg-subtle px-6 py-[7px] text-13 text-ink-2"
+      className="flex shrink-0 items-start gap-2.5 border-b border-border bg-subtle px-6 py-[7px] text-13 leading-[19px] text-ink-2"
     >
-      <span className="inline-flex items-center gap-[5px] font-semibold text-ink">
+      <span
+        data-testid="stage-strip-type"
+        className="inline-flex shrink-0 items-center gap-[5px] font-semibold whitespace-nowrap text-ink"
+      >
         <Tag size={13} aria-hidden="true" className="shrink-0" />
         <span className="sr-only">{t('stage.typeLabel')} </span>
         {typeLabel}
       </span>
-      <span aria-hidden="true" className="inline-flex items-center gap-0.5">
+      <span aria-hidden="true" className="inline-flex h-[19px] shrink-0 items-center gap-0.5">
         {view.bars.map((filled, index) => (
           <span
             key={index}
@@ -37,9 +44,13 @@ export function StageStrip({ typeLabel, stage }: StageStripProps) {
         ))}
       </span>
       {view.agent ? (
-        <Bot size={13} aria-hidden="true" className="shrink-0 text-accent-strong" />
+        <span aria-hidden="true" className="inline-flex h-[19px] shrink-0 items-center">
+          <Bot size={13} className="text-accent-strong" />
+        </span>
       ) : null}
-      <span className="min-w-0 truncate">{view.line}</span>
+      <span data-testid="stage-strip-line" className="min-w-0 flex-1 text-pretty">
+        {view.line}
+      </span>
     </div>
   )
 }

@@ -74,8 +74,9 @@ callout, the call view) and under the email composer, each with "Hablar con una 
 
 - **Transcript**: `TranscriptVariant` `assistant` (the bank's side, right-aligned, pale blue bubble, bot +
   "Asistente virtual" + time). The routing banners (`kind: routing`, staff-only) already rendered as the
-  accent "Nota interna" line; slice 14's texts show there ("El asistente escaló el caso a una persona
-  (traspaso hnd-7).", "IA desactivada: el caso pasó del asistente a una persona.", …).
+  accent "Nota interna" line; slice 14's texts show there ("El asistente escaló el caso a una persona.",
+  "IA desactivada: el caso pasó del asistente a una persona.", …). The handoff's reference (an
+  agent-core UUID) stays in the line's facts (`staffLine.params.ref`) but is not shown.
 - **"Cómo llegó a ti"** for `assistant_handoff`: [bot] "Tras el traspaso del asistente", [languages] "Hablas
   ES" (+ "Regla 3" in Portuguese). Supervisión's line: "Lo atiende Daniela Ríos: le llegó tras el traspaso
   del asistente"; for a case the assistant holds: "Lo atiende el asistente virtual desde las 10:47" and the

@@ -471,10 +471,10 @@ export function staffLineText(line: StaffLine): string | null {
         ? t('staffLine.escalationTaken', { supervisor, previous })
         : null
     case 'assistant_released': {
-      // An unknown reason reads as a failure, as the server's Spanish text does.
+      // An unknown reason reads as a failure, as the server's Spanish text does. The handoff's
+      // reference (an agent-core UUID) is not shown: the handoff card carries what it holds.
       const reason = text('reason')
       return t(`staffLine.assistantReleased.${isReleaseReason(reason) ? reason : 'failed'}`, {
-        ref: text('ref') ?? t('staffLine.noReference'),
         code: text('code') ?? t('staffLine.noDetail'),
         who: text('who') ?? t('staffLine.supervision'),
       })

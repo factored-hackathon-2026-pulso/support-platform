@@ -242,7 +242,7 @@ async def test_an_escalation_places_the_case_like_an_arrival_rule_3(
     public = [t.text for t in turns if t.audience is TurnAudience.EVERYONE]
     assert public == ["Hola, no reconozco un cargo", "Te paso con una persona del equipo."]
     banners = [t.text for t in turns if t.kind is TurnKind.ROUTING]
-    assert banners[0] == "El asistente escaló el caso a una persona (traspaso hnd-7)."
+    assert banners[0] == "El asistente escaló el caso a una persona."
     assert banners[1].startswith("Asignado a Daniela Ríos tras el traspaso del asistente")
     # the customer's message is waiting for the analyst (unread), the agent's reply is not
     assert case.unread_count == 1

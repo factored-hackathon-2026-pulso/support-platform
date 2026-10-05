@@ -10,7 +10,7 @@ import { useTranslation } from '@/lib/i18n'
 import { useBuilderAvailable } from '../hooks/use-automation'
 import type { MaturingType } from '../types'
 import { BuilderChatSheet } from './BuilderChat'
-import { BuilderChatContext } from './chat-panel'
+import { BuilderChatContext, type BuilderChatRequest } from './chat-panel'
 
 export type AutomationSection = 'types' | 'agents' | 'proposals'
 
@@ -18,6 +18,7 @@ interface ChatState {
   open: boolean
   prefill: string
   type: MaturingType | null
+  fresh: boolean
   /** A new key per opening: the sheet starts with that opening's message. */
   key: number
 }
@@ -56,10 +57,16 @@ export function AutomationFrame({
 }: AutomationFrameProps) {
   const { t } = useTranslation('automation')
   const builder = useBuilderAvailable()
-  const [chat, setChat] = useState<ChatState>({ open: false, prefill: '', type: null, key: 0 })
+  const [chat, setChat] = useState<ChatState>({
+    open: false,
+    prefill: '',
+    type: null,
+    fresh: false,
+    key: 0,
+  })
   const open = useCallback(
-    (prefill = '', type: MaturingType | null = null) =>
-      setChat((current) => ({ open: true, prefill, type, key: current.key + 1 })),
+    ({ prefill = '', type = null, fresh = false }: BuilderChatRequest = {}) =>
+      setChat((current) => ({ open: true, prefill, type, fresh, key: current.key + 1 })),
     [],
   )
   const control = useMemo(() => ({ open }), [open])
@@ -71,6 +78,8 @@ export function AutomationFrame({
             eyebrow={crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} /> : undefined}
             title={title}
             subtitle={subtitle}
+            // The screens' intros are whole sentences: they wrap, never cut with "…".
+            wrapSubtitle
             documentTitle={documentTitle}
             actions={
               <div className="flex items-center gap-2">
@@ -99,6 +108,7 @@ export function AutomationFrame({
           open={chat.open}
           prefill={chat.prefill}
           type={chat.type}
+          fresh={chat.fresh}
           onOpenChange={(next) => setChat((current) => ({ ...current, open: next }))}
         />
       ) : null}

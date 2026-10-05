@@ -28,32 +28,60 @@ export interface BuilderChatSheetProps {
   prefill?: string
   /** The case type the conversation is about: the proposal links carry it. */
   type?: MaturingType | null
+  /**
+   * Start a new conversation before the first message ("Proponer un agente"): the sheet restarts
+   * her thread as it opens and never shows or continues the older one.
+   */
+  fresh?: boolean
 }
 
 /**
  * "Constructor de agentes" (slice 16's chat with `constructor-chat`): she says what she wants, it
  * drafts a proposal. One message at a time; a failed one keeps its id for "Reintentar". The thread
- * stays between visits; "Nueva conversación" starts over (an agent-core run can end).
+ * stays between visits; "Nueva conversación" starts over (an agent-core run can end), and so does
+ * an opening with `fresh`.
  */
 export function BuilderChatSheet({
   open,
   onOpenChange,
   prefill = '',
   type = null,
+  fresh = false,
 }: BuilderChatSheetProps) {
   const { t } = useTranslation('automation')
-  const thread = useBuilderChat(open)
+  // While a fresh opening has not restarted the thread, the older one is neither read nor shown.
+  const [needsRestart, setNeedsRestart] = useState(fresh)
+  const thread = useBuilderChat(open && !needsRestart)
   const ask = useAskBuilder()
   const restart = useRestartBuilderChat()
+  const { mutate: restartThread } = restart
   const { toast } = useToast()
   const [draft, setDraft] = useState(prefill)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const formId = useId()
+  const restarted = useRef(false)
+
+  useEffect(() => {
+    if (!open || !fresh || restarted.current) return
+    restarted.current = true
+    restartThread(undefined, { onSuccess: () => setNeedsRestart(false) })
+  }, [open, fresh, restartThread])
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const text = draft.trim()
-    if (!text || ask.sending) return
+    if (!text || ask.sending || restart.isPending) return
+    if (needsRestart) {
+      // The restart on opening failed: try again, and only then send.
+      restartThread(undefined, {
+        onSuccess: () => {
+          setNeedsRestart(false)
+          ask.send(text)
+          setDraft('')
+        },
+      })
+      return
+    }
     ask.send(text)
     setDraft('')
   }
@@ -102,7 +130,7 @@ export function BuilderChatSheet({
               type="submit"
               variant="primary"
               size="sm"
-              aria-disabled={ask.sending || draft.trim() === ''}
+              aria-disabled={ask.sending || restart.isPending || draft.trim() === ''}
             >
               {t('chat.send')}
             </Button>
@@ -110,21 +138,31 @@ export function BuilderChatSheet({
         </form>
       }
     >
-      <QueryState
-        query={thread}
-        skeleton={<Skeleton className="h-24 w-full" />}
-        errorTitle={t('chat.loadError')}
-      >
-        {(data: BuilderThread) => (
-          <ChatLog
-            entries={chatEntries(data, ask.pending)}
-            sending={ask.sending}
-            onRetry={ask.retry}
-            proposals={ask.proposals}
-            type={type}
-          />
-        )}
-      </QueryState>
+      {needsRestart ? (
+        restart.isError ? (
+          <Callout tone="danger" title={t('chat.restartFailed')}>
+            {t('chat.restartRetry')}
+          </Callout>
+        ) : (
+          <Skeleton className="h-24 w-full" />
+        )
+      ) : (
+        <QueryState
+          query={thread}
+          skeleton={<Skeleton className="h-24 w-full" />}
+          errorTitle={t('chat.loadError')}
+        >
+          {(data: BuilderThread) => (
+            <ChatLog
+              entries={chatEntries(data, ask.pending)}
+              sending={ask.sending}
+              onRetry={ask.retry}
+              proposals={ask.proposals}
+              type={type}
+            />
+          )}
+        </QueryState>
+      )}
     </Sheet>
   )
 }

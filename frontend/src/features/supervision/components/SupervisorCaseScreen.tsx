@@ -20,6 +20,7 @@ import {
   shortCaseId,
   useCaseDetail,
 } from '@/features/conversation'
+import { useTranslation } from '@/lib/i18n'
 import { describeReleaseFailure, reassignedToastTitle, takenFromAssistantToast } from '../model'
 import type { CaseViewUrlState, UrlStateChangeOptions } from '../url'
 import { useReleaseFromAssistant, useTeamOverview } from '../hooks'
@@ -51,6 +52,7 @@ export function SupervisorCaseScreen({
   backTo,
   backLabel,
 }: SupervisorCaseScreenProps) {
+  const { t } = useTranslation('supervision')
   const detail = useCaseDetail(caseId)
   const { toast } = useToast()
   const customerName = detail.data?.customer.displayName ?? null
@@ -87,7 +89,7 @@ export function SupervisorCaseScreen({
       <CasePriorityControl detail={detail.data} align="end" className="mr-1" />
       {canReassign ? (
         <Button variant="secondary" onClick={openReassign}>
-          Reasignar
+          {t('actions.reassign')}
         </Button>
       ) : null}
       {withAssistant ? (
@@ -101,7 +103,7 @@ export function SupervisorCaseScreen({
             })
           }
         >
-          Tomar el caso
+          {t('actions.take')}
         </Button>
       ) : null}
     </>
@@ -109,7 +111,7 @@ export function SupervisorCaseScreen({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <DocumentTitle title={`Caso ${shortCaseId(caseId)} en supervisión`} />
+      <DocumentTitle title={t('caseView.documentTitle', { id: shortCaseId(caseId) })} />
       <div className="flex shrink-0 items-center gap-3 border-b border-border bg-surface px-6 py-2">
         <LinkButton
           to={backTo}
@@ -121,12 +123,12 @@ export function SupervisorCaseScreen({
         </LinkButton>
         <span className="inline-flex items-center gap-1.5 text-13 text-ink-2">
           <Eye size={14} aria-hidden="true" className="text-muted" />
-          Solo lectura
+          {t('caseView.readOnly')}
         </span>
         <h1 className="sr-only">
           {customerName
-            ? `Conversación de ${customerName} (supervisión)`
-            : 'Conversación (supervisión)'}
+            ? t('caseView.heading', { name: customerName })
+            : t('caseView.headingAnonymous')}
         </h1>
       </div>
       <main className="flex min-h-0 grow flex-col bg-canvas">
@@ -171,6 +173,7 @@ interface ReassignLoaderProps {
 
 /** The reassign dialog once the team (the candidates) is loaded; loading and error inside a dialog. */
 function ReassignLoader({ summary, holderName, onClose, onReassigned }: ReassignLoaderProps) {
+  const { t } = useTranslation(['supervision', 'common'])
   const team = useTeamOverview()
   if (team.data) {
     return (
@@ -189,23 +192,23 @@ function ReassignLoader({ summary, holderName, onClose, onReassigned }: Reassign
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title="Reasignar caso"
+      title={t('reassign.title')}
     >
       {team.status === 'error' ? (
         <Callout
           tone="danger"
-          title="No pudimos cargar el equipo"
+          title={t('caseView.teamLoadError')}
           actions={
             <Button size="sm" loading={team.isFetching} onClick={() => void team.refetch()}>
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
           }
         >
-          Revisa tu conexión e inténtalo de nuevo.
+          {t('common:query.errorDescription')}
         </Callout>
       ) : (
         <div className="flex justify-center py-6 text-muted">
-          <Spinner label="Cargando el equipo" size={24} />
+          <Spinner label={t('caseView.loadingTeam')} size={24} />
         </div>
       )}
     </Dialog>

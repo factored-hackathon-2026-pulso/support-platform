@@ -1,5 +1,6 @@
 import { FACT_ICONS, Tooltip, type FactTone } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useActiveLocale } from '@/lib/i18n'
 import { RECENT_RATING_HEADER, recentRatingCell } from '../model'
 import type { RatingStats } from '../types'
 
@@ -23,6 +24,7 @@ export interface RecentRatingProps {
  * calificados" (also the accessible text). "—" when none was rated.
  */
 export function RecentRating({ stats, className }: RecentRatingProps) {
+  useActiveLocale() // the cell's copy follows a language switch
   const cell = recentRatingCell(stats)
   if (!cell) {
     return (

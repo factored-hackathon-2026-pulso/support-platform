@@ -9,6 +9,7 @@ import {
   type FilterSelection,
 } from '@/components/ui'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import {
   filterAnalysts,
   findOpenCase,
@@ -45,6 +46,7 @@ export interface TeamScreenProps {
  * cases with "Reasignar".
  */
 export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps) {
+  const { t } = useTranslation('supervision')
   useSupervisionLive()
   const team = useTeamOverview()
   const now = useNow(SUPERVISION_TICK_MS)
@@ -100,11 +102,11 @@ export function TeamScreen({ state, onStateChange, onOpenCase }: TeamScreenProps
     <Page
       header={
         <PageHeader
-          title="Equipo"
+          title={t('team.title')}
           subtitle={
             analysts
               ? teamSubtitle(shown.length, analysts.length, chips.length > 0)
-              : 'Cargando el equipo…'
+              : t('team.loading')
           }
           actions={
             <div className="flex flex-col items-end gap-2">

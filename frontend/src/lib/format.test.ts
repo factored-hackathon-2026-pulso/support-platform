@@ -13,7 +13,6 @@ import {
   formatTime,
   localDayKey,
   getInitials,
-  joinEs,
   maskLast4,
 } from './format'
 
@@ -25,6 +24,15 @@ describe('format', () => {
     expect(formatMoney(12400, 'ARS')).toBe('$12.400,00 ARS')
     expect(formatMoney(-305909, 'COP')).toBe('-$305.909 COP')
     expect(formatMoney(99.9, 'USD', { fractionDigits: 2 })).toBe('$99,90 USD')
+  })
+
+  it('joins lists in the active locale (Spanish by default)', () => {
+    expect(formatList([])).toBe('')
+    expect(formatList(['Analista'])).toBe('Analista')
+    expect(formatList(['Analista', 'Supervisión'])).toBe('Analista y Supervisión')
+    expect(formatList(['Analista', 'Supervisión', 'Administración'])).toBe(
+      'Analista, Supervisión y Administración',
+    )
   })
 
   it('groups thousands even with four digits', () => {
@@ -78,15 +86,6 @@ describe('format', () => {
     expect(getInitials('Diego Romero Contreras')).toBe('DR')
     expect(getInitials('Samuel Óscar Campos Cruz')).toBe('SC')
     expect(getInitials('Ana Díaz')).toBe('AD')
-  })
-
-  it('joins lists in Spanish', () => {
-    expect(joinEs([])).toBe('')
-    expect(joinEs(['Analista'])).toBe('Analista')
-    expect(joinEs(['Analista', 'Supervisión'])).toBe('Analista y Supervisión')
-    expect(joinEs(['Analista', 'Supervisión', 'Administración'])).toBe(
-      'Analista, Supervisión y Administración',
-    )
   })
 })
 

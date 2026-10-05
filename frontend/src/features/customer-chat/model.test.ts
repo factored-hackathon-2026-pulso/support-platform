@@ -203,10 +203,10 @@ describe('what the chat shows', () => {
       ]),
       pending('cm-5', 'obrigado'),
     )
-    expect(toChatItems(chat).map((i) => [i.side, i.author, i.delivery])).toEqual([
+    expect(toChatItems(chat, 'pt').map((i) => [i.side, i.author, i.delivery])).toEqual([
       ['customer', null, 'sent'],
       ['notice', null, 'sent'],
-      ['bank', 'Daniela, de LATAM Bank', 'sent'],
+      ['bank', 'Daniela, do LATAM Bank', 'sent'],
       ['notice', null, 'sent'],
       ['customer', null, 'sending'],
     ])
@@ -297,12 +297,12 @@ describe('what the chat shows', () => {
 
   it('keeps the same key from "Enviando…" to sent', () => {
     const sending = addPendingCustomer(emptyChat(), pending('cm-7', 'oi'))
-    expect(toChatItems(sending)[0]?.key).toBe('cm-7')
+    expect(toChatItems(sending, 'es')[0]?.key).toBe('cm-7')
     const sent = mergeCustomerTurns(sending, [
       makeCustomerTurn({ sequence: 1, text: 'oi', clientMessageId: 'cm-7' }),
     ])
-    expect(toChatItems(sent)[0]).toMatchObject({ key: 'cm-7', delivery: 'sent' })
-    expect(toChatItems(mergeCustomerTurns(emptyChat(), [makeCustomerTurn()]))[0]?.key).toBe(
+    expect(toChatItems(sent, 'es')[0]).toMatchObject({ key: 'cm-7', delivery: 'sent' })
+    expect(toChatItems(mergeCustomerTurns(emptyChat(), [makeCustomerTurn()]), 'es')[0]?.key).toBe(
       'TRN-C0001',
     )
   })
@@ -521,8 +521,22 @@ describe('the assistant in the chat (slice 19)', () => {
   })
 
   it('puts the assistant on the bank side with its own name', () => {
-    const [, item] = toChatItems({ turns: [makeCustomerTurn(), assistantTurn], pending: [] })
+    const [, item] = toChatItems({ turns: [makeCustomerTurn(), assistantTurn], pending: [] }, 'es')
     expect(item).toMatchObject({ side: 'assistant', author: 'Asistente virtual' })
+  })
+
+  it('names the author in the customer language when the server sends no name', () => {
+    const nameless = { ...assistantTurn, authorName: null }
+    const analyst = makeCustomerTurn({ sequence: 3, authorRole: 'analyst', authorName: 'Daniela' })
+    const turns = { turns: [nameless, analyst], pending: [] }
+    expect(toChatItems(turns, 'es').map((i) => i.author)).toEqual([
+      'Asistente virtual',
+      'Daniela, de LATAM Bank',
+    ])
+    expect(toChatItems(turns, 'pt').map((i) => i.author)).toEqual([
+      'Assistente virtual',
+      'Daniela, do LATAM Bank',
+    ])
   })
 
   it('says who attends while the assistant has it, and during the hand-over', () => {

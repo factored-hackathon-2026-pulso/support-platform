@@ -38,6 +38,7 @@ import {
   type CopilotMode,
 } from '@/features/copilot'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import { topics, useRealtimeSubscription } from '@/lib/realtime'
 import { emptyWorkspaceCopy, firstSelectableCase, nextCaseAfterClose } from '../model'
 import {
@@ -81,6 +82,7 @@ export interface WorkspaceScreenProps {
  * when nothing is left. Picking a card keeps the focus on the card.
  */
 export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) {
+  const { t } = useTranslation(['workspace', 'cases'])
   const user = useCurrentUser()
   useRealtimeSubscription(topics.inbox(user.id))
 
@@ -228,7 +230,7 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
 
   return (
     <div className="flex h-full min-h-0">
-      <DocumentTitle title="Casos" />
+      <DocumentTitle title={t('title')} />
       <CaseListPanel
         selectedCaseId={state.caseId}
         filter={state.filter}
@@ -255,7 +257,7 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
           />
         ) : inbox.status === 'pending' ? (
           <div className="flex grow items-center justify-center text-muted">
-            <Spinner label="Cargando tus casos" size={24} />
+            <Spinner label={t('loading')} size={24} />
           </div>
         ) : inboxEmpty ? (
           <EmptyState
@@ -269,8 +271,8 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
             className="grow"
             headingRef={emptyHeading}
             icon={<MousePointerClick size={40} strokeWidth={1.6} />}
-            title="Elige un caso de la lista"
-            description="La conversación con el cliente aparece aquí."
+            title={t('pick.title')}
+            description={t('pick.description')}
           />
         )}
       </main>
@@ -293,8 +295,8 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
       ) : state.caseId && panelOpen ? (
         <SidePanel
           id={CUSTOMER_FILE_PANEL_ID}
-          title="Ficha del cliente"
-          closeLabel="Cerrar la ficha del cliente"
+          title={t('customerFile.title')}
+          closeLabel={t('customerFile.close')}
           onClose={closeCustomerFile}
           focusOnOpen={panelOpenedHere}
           returnFocusTo={CUSTOMER_FILE_TRIGGER_ID}
@@ -341,6 +343,7 @@ function SupportPanel({
   copilotMode,
   returnFocusTo,
 }: SupportPanelProps) {
+  const { t } = useTranslation(['workspace', 'cases'])
   const detail = useCaseDetail(caseId)
   const { handoff, available } = useCaseHandoff(detail.data)
   // The tab shows while the packet loads, once it loaded, and with a retry for an agent-core
@@ -357,13 +360,19 @@ function SupportPanel({
   const closed = summary?.status === 'closed'
   const tabs: SidePanelTab[] = [
     ...(showsHandoff && detail.data
-      ? [{ value: 'handoff', label: 'Traspaso', content: <HandoffPanel detail={detail.data} /> }]
+      ? [
+          {
+            value: 'handoff',
+            label: t('support.handoff'),
+            content: <HandoffPanel detail={detail.data} />,
+          },
+        ]
       : []),
     ...(showsCopilot && summary
       ? [
           {
             value: 'copilot',
-            label: 'Copiloto',
+            label: t('support.copilot'),
             layout: 'fill' as const,
             content: (
               <CopilotPanel
@@ -379,7 +388,7 @@ function SupportPanel({
       ? [
           {
             value: 'tools',
-            label: 'Herramientas',
+            label: t('support.tools'),
             content: (
               <ToolsPanel
                 caseId={caseId}
@@ -393,19 +402,19 @@ function SupportPanel({
       : []),
     {
       value: 'customer',
-      label: 'Cliente',
+      label: t('support.customer'),
       content: <CustomerFile caseId={caseId} history={history} onHistoryChange={onHistoryChange} />,
     },
   ]
   return (
     <TabbedSidePanel
       id={CUSTOMER_FILE_PANEL_ID}
-      label="Apoyo del caso"
-      tabsLabel="Apoyo"
+      label={t('support.label')}
+      tabsLabel={t('support.tabs')}
       tabs={tabs}
       value={panel}
       onValueChange={onPanelChange}
-      closeLabel="Cerrar el panel de apoyo"
+      closeLabel={t('support.close')}
       onClose={onClose}
       focusOnOpen={focusOnOpen}
       returnFocusTo={returnFocusTo}

@@ -1,5 +1,6 @@
 import { ROLE_LABEL, sortRoles, type RoleId } from '@/app/roles'
 import { cn } from '@/lib/cn'
+import { useActiveLocale } from '@/lib/i18n'
 
 /** Canvas role chips (Admin.dc.html): Analista grey, Supervisión peach, Administración green. */
 const CHIP_CLASS: Record<RoleId, string> = {
@@ -15,6 +16,7 @@ export interface RoleChipsProps {
 
 /** The person's roles in canonical order, as small pills. */
 export function RoleChips({ roles, className }: RoleChipsProps) {
+  useActiveLocale()
   return (
     <span className={cn('flex flex-wrap gap-1', className)}>
       {sortRoles(roles).map((role) => (

@@ -732,3 +732,141 @@ describe('users and roles screen ("Usuarios y roles")', () => {
     await waitFor(() => expect(vi.mocked(fetchAdminUsers).mock.calls.length).toBeGreaterThan(calls))
   })
 })
+
+describe('users and roles screen in Portuguese (slice 23)', () => {
+  const renderPt = (path = '/admin/users') =>
+    renderRoute(path, { staff: adminStaff, locale: 'pt-BR' })
+  const tablePt = () => screen.getByRole('table', { name: 'Pessoas' })
+  const asidePt = () => screen.getByRole('complementary', { name: 'Pessoa selecionada' })
+
+  it('lists people with their account status, the counts and the Filtros groups', async () => {
+    const { user } = renderPt()
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Usuários e perfis' }),
+    ).toBeInTheDocument()
+    await screen.findByRole('table', { name: 'Pessoas' })
+    expect(screen.getByText('13 pessoas na plataforma')).toBeInTheDocument()
+    expect(screen.getByText('4 pessoas')).toBeInTheDocument()
+    expect(within(tablePt()).getByRole('columnheader', { name: 'Perfis' })).toBeInTheDocument()
+    expect(within(tablePt()).getByRole('columnheader', { name: 'Conta' })).toBeInTheDocument()
+    const danielaRow = within(tablePt()).getByRole('row', { name: /Daniela Ríos Medina/ })
+    expect(within(danielaRow).getByText('Ativa')).toBeInTheDocument()
+    const locked = within(within(tablePt()).getByRole('row', { name: /Mariana Duque/ })).getByText(
+      'Bloqueada',
+    ).parentElement!
+    expect(locked).toHaveAttribute('title', 'Até as 11:13')
+    expect(
+      within(asidePt()).getByText('Escolha uma pessoa para ver e editar a conta dela.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Pessoas, perfis, idiomas e equipes: diretório da plataforma (dados de exemplo).',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Buscar pessoa' })).toHaveAttribute(
+      'placeholder',
+      'Buscar por nome, e-mail ou id',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Filtros' }))
+    const panel = screen.getByRole('group', { name: 'Filtros' })
+    for (const legend of ['Perfil', 'Status', 'Equipe', 'Idioma']) {
+      expect(within(panel).getByRole('group', { name: legend })).toBeInTheDocument()
+    }
+    expect(within(panel).getByRole('checkbox', { name: 'Supervisão 2' })).toBeInTheDocument()
+    expect(within(panel).getByRole('checkbox', { name: 'Convite pendente 0' })).toBeInTheDocument()
+    expect(
+      await within(panel).findByRole('checkbox', { name: 'Equipo Caribe (inativa) 0' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows a locked person and unlocks her', async () => {
+    vi.mocked(unlockUser).mockResolvedValue({
+      changed: true,
+      user: { ...mariana, status: 'active', lockedUntil: null, failedAttempts: 0, version: 4 },
+      revokedSessions: 0,
+    })
+    const { user } = renderPt()
+    await user.click(await screen.findByRole('button', { name: 'Mariana Duque' }))
+    const panel = asidePt()
+    expect(within(panel).getByText('Conta bloqueada')).toBeInTheDocument()
+    expect(
+      within(panel).getByText('5 tentativas sem sucesso. A conta se desbloqueia sozinha às 11:13.'),
+    ).toBeInTheDocument()
+    expect(within(panel).getByText('Idiomas:').parentElement).toHaveTextContent('Español')
+    expect(within(panel).getByText('Equipe:').parentElement).toHaveTextContent('Equipo Pacífico')
+    expect(within(panel).getByRole('textbox', { name: 'Nome completo' })).toHaveValue(
+      'Mariana Duque',
+    )
+    expect(within(panel).getByRole('checkbox', { name: /^Analista/ })).toHaveAccessibleDescription(
+      'Atende casos por chat com os clientes.',
+    )
+    expect(within(panel).getByText('Último acesso')).toBeInTheDocument()
+    expect(within(panel).getByText('Casos abertos')).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'Salvar alterações' })).toBeDisabled()
+    expect(within(panel).getByRole('link', { name: 'Ver na auditoria' })).toBeInTheDocument()
+
+    await user.click(within(panel).getByRole('button', { name: 'Desbloquear' }))
+    expect(unlockUser).toHaveBeenCalledWith(mariana.id)
+    expect(await screen.findByText('Conta desbloqueada')).toBeInTheDocument()
+    expect(screen.getByText('Mariana Duque já pode tentar entrar de novo.')).toBeInTheDocument()
+  })
+
+  it('invites a person: the form, its errors and "Convite enviado"', async () => {
+    const ana = {
+      ...daniela,
+      id: 'STF-NEW0000001',
+      name: 'Ana Gil',
+      email: 'ana.gil@latambank.example',
+      languages: ['pt' as const],
+      team: TEAM_PACIFICO,
+      version: 1,
+      openCases: { total: 0, es: 0, pt: 0 },
+      status: 'invited' as const,
+      lastLoginAt: null,
+      secondFactor: null,
+      invitation: { ...bruna.invitation!, sentAt: NOW.toISOString() },
+    }
+    vi.mocked(createUser).mockResolvedValue({ user: ana })
+    vi.mocked(fetchAdminUser).mockResolvedValue(ana)
+    const { user } = renderPt()
+    await screen.findByRole('table', { name: 'Pessoas' })
+    await user.click(screen.getByRole('button', { name: 'Novo usuário' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Novo usuário' })
+    expect(within(dialog).getByText('A pessoa recebe um convite por e-mail')).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar convite' }))
+    expect(within(dialog).getByRole('textbox', { name: 'Nome completo' })).toHaveFocus()
+    expect(
+      within(dialog).getByText('Digite o nome completo (pelo menos 2 caracteres).'),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByText('Escolha pelo menos um perfil.')).toBeInTheDocument()
+    expect(within(dialog).getByText('Escolha uma equipe.')).toBeInTheDocument()
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Nome completo' }), 'Ana Gil')
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'E-mail' }),
+      'ana.gil@latambank.example',
+    )
+    await user.click(within(dialog).getByRole('checkbox', { name: /^Analista/ }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Português' }))
+    await user.selectOptions(
+      within(dialog).getByRole('combobox', { name: 'Equipe' }),
+      TEAM_PACIFICO.id,
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar convite' }))
+    expect(createUser).toHaveBeenCalled()
+    const sent = await screen.findByRole('dialog', { name: 'Convite enviado' })
+    expect(sent).toHaveTextContent(
+      'Convite enviado para ana.gil@latambank.example. O link vence em 48 horas.',
+    )
+    expect(within(sent).getByText('ana.gil@latambank.example')).toHaveClass('font-semibold')
+    expect(within(sent).getByText('Cria a própria senha')).toBeInTheDocument()
+    await user.click(within(sent).getByRole('button', { name: 'Pronto' }))
+    const panel = asidePt()
+    expect(await within(panel).findByText('Convite pendente')).toBeInTheDocument()
+    expect(within(panel).getByText('Vence')).toBeInTheDocument()
+    expect(within(panel).getByText('Nunca')).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'Reenviar convite' })).toBeInTheDocument()
+  })
+})

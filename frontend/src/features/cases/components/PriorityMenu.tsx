@@ -1,5 +1,6 @@
 import { ChoiceMenu, PriorityIcon } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { PRIORITY_OPTIONS, casePriority, priorityMenuLabel } from '../model'
 import type { CasePriority } from '../types'
 
@@ -13,12 +14,6 @@ export interface PriorityMenuProps {
   className?: string
   triggerClassName?: string
 }
-
-const OPTIONS = PRIORITY_OPTIONS.map((option) => ({
-  value: option.value,
-  label: option.label,
-  icon: <PriorityIcon level={option.value} />,
-}))
 
 /**
  * The case priority as a menu button (slice 8): the glyph and the word ("Alta") open a
@@ -34,14 +29,20 @@ export function PriorityMenu({
   className,
   triggerClassName,
 }: PriorityMenuProps) {
+  const { t } = useTranslation('cases')
   const current = casePriority(priority)
+  const options = PRIORITY_OPTIONS.map((option) => ({
+    value: option.value,
+    label: option.label,
+    icon: <PriorityIcon level={option.value} />,
+  }))
   return (
     <ChoiceMenu
       value={current.value}
-      options={OPTIONS}
+      options={options}
       onChange={onChange}
       triggerLabel={priorityMenuLabel(current.value)}
-      menuLabel="Prioridad"
+      menuLabel={t('priority.menu')}
       disabled={disabled}
       align={align}
       className={className}

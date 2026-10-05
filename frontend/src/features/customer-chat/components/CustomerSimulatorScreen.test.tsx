@@ -215,7 +215,7 @@ describe('CustomerSimulatorScreen · chat', () => {
       )
     })
     expect(await screen.findByText('Olá, Rafael! Vou verificar.')).toBeInTheDocument()
-    expect(screen.getByText('Daniela, de LATAM Bank')).toBeInTheDocument()
+    expect(screen.getByText('Daniela, do LATAM Bank')).toBeInTheDocument()
     expect(screen.getByText('Você está falando com Daniela, do LATAM Bank')).toBeInTheDocument()
     expect(screen.getByText('Recebemos sua mensagem.')).toBeInTheDocument()
     // POST response + echo = one bubble; the chip already sent is not offered again.

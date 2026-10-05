@@ -16,7 +16,8 @@ import {
   type StatusAppearance,
 } from '@/components/ui'
 import { isApiProblem } from '@/lib/api'
-import { formatRelativeTime, formatTime, joinEs, pluralize } from '@/lib/format'
+import { formatList, formatNumber, formatRelativeTime, formatTime } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type {
   AccountStatus,
   AdminInvitation,
@@ -33,7 +34,8 @@ import type {
 } from './types'
 import type { TeamsUrlState, UsersUrlState } from './url'
 
-export { joinEs }
+/** The `admin` catalog, read when a function runs (slice 23: copy follows the UI language). */
+const t = i18n.getFixedT(null, 'admin')
 
 type DateInput = Date | string | number
 
@@ -42,18 +44,30 @@ const toMs = (value: DateInput) =>
 
 // ── Labels (contract §1.2) ───────────────────────────────────────────────────
 
-/** Second line of the role checkbox cards. */
-export const ROLE_DESCRIPTION: Record<RoleId, string> = {
-  analyst: 'Atiende casos por chat con los clientes.',
-  supervisor:
-    'Ve las colas y el equipo, atiende escalamientos, reasigna casos y revisa la auditoría.',
-  admin: 'Invita y edita cuentas, roles, idiomas y equipos.',
+/** Second line of the role checkbox cards (`admin:roleDescription`, read on access). */
+export const ROLE_DESCRIPTION: Readonly<Record<RoleId, string>> = {
+  get analyst() {
+    return t('roleDescription.analyst')
+  },
+  get supervisor() {
+    return t('roleDescription.supervisor')
+  },
+  get admin() {
+    return t('roleDescription.admin')
+  },
 }
 
 export const LANGUAGES: readonly Language[] = ['es', 'pt']
 
 /** "español" (inside a sentence); controls show the language mark or its own name. */
-export const LANGUAGE_IN_SENTENCE: Record<Language, string> = { es: 'español', pt: 'portugués' }
+export const LANGUAGE_IN_SENTENCE: Readonly<Record<Language, string>> = {
+  get es() {
+    return t('languageInSentence.es')
+  },
+  get pt() {
+    return t('languageInSentence.pt')
+  },
+}
 
 /**
  * The one account-status map (glyph + word; the words qualify "cuenta"): check =
@@ -61,26 +75,79 @@ export const LANGUAGE_IN_SENTENCE: Record<Language, string> = { es: 'español', 
  * invited, not activated yet (part 4), x = deactivated (or an invitation cancelled).
  */
 export const ACCOUNT_STATUS: Readonly<Record<AccountStatus, StatusAppearance>> = {
-  active: { shape: 'check', tone: 'success', label: 'Activa' },
-  locked: { shape: 'lock', tone: 'warn', label: 'Bloqueada', strong: true },
-  invited: { shape: 'dashed', tone: 'accent', label: 'Invitación pendiente' },
-  inactive: { shape: 'cross', tone: 'closed', label: 'Desactivada' },
-  cancelled: { shape: 'cross', tone: 'closed', label: 'Invitación cancelada' },
+  active: {
+    shape: 'check',
+    tone: 'success',
+    get label() {
+      return t('accountStatus.active')
+    },
+  },
+  locked: {
+    shape: 'lock',
+    tone: 'warn',
+    get label() {
+      return t('accountStatus.locked')
+    },
+    strong: true,
+  },
+  invited: {
+    shape: 'dashed',
+    tone: 'accent',
+    get label() {
+      return t('accountStatus.invited')
+    },
+  },
+  inactive: {
+    shape: 'cross',
+    tone: 'closed',
+    get label() {
+      return t('accountStatus.inactive')
+    },
+  },
+  cancelled: {
+    shape: 'cross',
+    tone: 'closed',
+    get label() {
+      return t('accountStatus.cancelled')
+    },
+  },
 }
 
-/** Account status words (selects, sentences). */
+/** Account status words (selects, sentences), read on access. */
 export const ACCOUNT_STATUS_LABEL: Readonly<Record<AccountStatus, string>> = {
-  active: ACCOUNT_STATUS.active.label,
-  locked: ACCOUNT_STATUS.locked.label,
-  invited: ACCOUNT_STATUS.invited.label,
-  inactive: ACCOUNT_STATUS.inactive.label,
-  cancelled: ACCOUNT_STATUS.cancelled.label,
+  get active() {
+    return ACCOUNT_STATUS.active.label
+  },
+  get locked() {
+    return ACCOUNT_STATUS.locked.label
+  },
+  get invited() {
+    return ACCOUNT_STATUS.invited.label
+  },
+  get inactive() {
+    return ACCOUNT_STATUS.inactive.label
+  },
+  get cancelled() {
+    return ACCOUNT_STATUS.cancelled.label
+  },
 }
 
 /** The one team-status map: the same glyphs as an account ("Activo" / "Inactivo"). */
 export const TEAM_STATUS: Readonly<Record<'active' | 'inactive', StatusAppearance>> = {
-  active: { shape: 'check', tone: 'success', label: 'Activo' },
-  inactive: { shape: 'cross', tone: 'closed', label: 'Inactivo' },
+  active: {
+    shape: 'check',
+    tone: 'success',
+    get label() {
+      return t('teamStatus.active')
+    },
+  },
+  inactive: {
+    shape: 'cross',
+    tone: 'closed',
+    get label() {
+      return t('teamStatus.inactive')
+    },
+  },
 }
 
 export function teamStatus(team: Pick<AdminTeam, 'active'>): StatusAppearance {
@@ -89,7 +156,7 @@ export function teamStatus(team: Pick<AdminTeam, 'active'>): StatusAppearance {
 
 /** "Equipo Andes (inactivo)" for options naming an inactive team. */
 export function teamOptionLabel(team: Pick<AdminTeam, 'name' | 'active'>): string {
-  return team.active ? team.name : `${team.name} (inactivo)`
+  return team.active ? team.name : t('teamOptionInactive', { name: team.name })
 }
 
 /** By name, accent-insensitive, then id (the server order, §4.1). */
@@ -117,7 +184,7 @@ export function accountStatusAt(
 
 /** `title` of a locked status: "Hasta las 10:47". */
 export function lockedUntilTitle(lockedUntil: string): string {
-  return `Hasta las ${formatTime(lockedUntil)}`
+  return t('lockedUntil', { time: formatTime(lockedUntil) })
 }
 
 /** Status callout of the aside (null while active). */
@@ -134,16 +201,19 @@ export function statusCallout(
   if (status === 'locked' && user.lockedUntil) {
     return {
       tone: 'warn',
-      title: 'Cuenta bloqueada',
-      text: `${pluralize(user.failedAttempts, 'intento fallido', 'intentos fallidos')}. Se desbloquea sola a las ${formatTime(user.lockedUntil)}.`,
+      title: t('statusCallout.lockedTitle'),
+      text: t('statusCallout.lockedText', {
+        count: user.failedAttempts,
+        time: formatTime(user.lockedUntil),
+      }),
       action: 'unlock',
     }
   }
   if (status === 'inactive') {
     return {
       tone: 'neutral',
-      title: 'Cuenta desactivada',
-      text: 'No puede ingresar.',
+      title: t('statusCallout.inactiveTitle'),
+      text: t('statusCallout.inactiveText'),
       action: 'reactivate',
     }
   }
@@ -152,11 +222,13 @@ export function statusCallout(
 
 /** "Casos abiertos": "5 (4 en español y 1 en portugués)", "0". */
 export function openCasesFact(openCases: AdminUser['openCases']): string {
-  if (openCases.total === 0) return '0'
-  const parts = LANGUAGES.filter((language) => openCases[language] > 0).map(
-    (language) => `${openCases[language]} en ${LANGUAGE_IN_SENTENCE[language]}`,
+  if (openCases.total === 0) return formatNumber(0)
+  const parts = LANGUAGES.filter((language) => openCases[language] > 0).map((language) =>
+    t('openCases.part', { value: openCases[language], language: LANGUAGE_IN_SENTENCE[language] }),
   )
-  return parts.length ? `${openCases.total} (${joinEs(parts)})` : String(openCases.total)
+  return parts.length
+    ? t('openCases.total', { value: openCases.total, parts: formatList(parts) })
+    : formatNumber(openCases.total)
 }
 
 /**
@@ -168,9 +240,20 @@ export function userSummaryFacts(user: Pick<AdminUser, 'languages' | 'team'>): F
   const languages = LANGUAGES.filter((language) => user.languages.includes(language))
   return [
     languages.length > 0
-      ? { key: 'languages', icon: 'languages', text: '', label: 'Idiomas', languages }
-      : { key: 'languages', icon: 'languages', text: 'Sin idiomas', label: 'Idiomas' },
-    { key: 'team', icon: 'users', text: user.team.name, label: 'Equipo' },
+      ? {
+          key: 'languages',
+          icon: 'languages',
+          text: '',
+          label: i18n.t('common:fields.languages'),
+          languages,
+        }
+      : {
+          key: 'languages',
+          icon: 'languages',
+          text: t('noLanguages'),
+          label: i18n.t('common:fields.languages'),
+        },
+    { key: 'team', icon: 'users', text: user.team.name, label: i18n.t('common:fields.team') },
   ]
 }
 
@@ -349,7 +432,7 @@ export function userFilterGroups(
           label: ROLE_LABEL[role],
         })),
       ),
-      legend: 'Rol',
+      legend: i18n.t('common:fields.role'),
     },
     {
       ...counted(
@@ -359,9 +442,9 @@ export function userFilterGroups(
           label: ACCOUNT_STATUS_LABEL[status],
         })),
       ),
-      legend: 'Estado',
+      legend: t('filters.status'),
     },
-    { ...counted('team', teamOptions), legend: 'Equipo' },
+    { ...counted('team', teamOptions), legend: i18n.t('common:fields.team') },
     {
       ...counted(
         'language',
@@ -371,29 +454,26 @@ export function userFilterGroups(
           language,
         })),
       ),
-      legend: 'Idioma',
+      legend: t('filters.language'),
     },
   ]
 }
 
 /** "13 personas", or "4 de 13 personas" while filtered. */
 export function usersShownLabel(shown: number, total: number): string {
-  const all = pluralize(total, 'persona')
-  return shown === total ? all : `${shown} de ${all}`
+  return shown === total
+    ? t('users.count', { count: total })
+    : t('users.shown', { shown, count: total })
 }
 
 /** Header subtitle (canvas `usersSub`): "13 personas en la plataforma" (never " · " joined). */
 export function usersSubtitle(total: number | undefined): string {
-  return total === undefined
-    ? 'Quién puede hacer qué en la plataforma'
-    : `${pluralize(total, 'persona')} en la plataforma`
+  return total === undefined ? t('users.subtitle') : t('users.subtitleCount', { count: total })
 }
 
 /** Header subtitle (canvas `teamsSub`): "4 equipos en la plataforma" (never " · " joined). */
 export function teamsSubtitle(total: number | undefined): string {
-  return total === undefined
-    ? 'Cómo se agrupan las personas en la plataforma'
-    : `${pluralize(total, 'equipo')} en la plataforma`
+  return total === undefined ? t('teams.subtitle') : t('teams.subtitleCount', { count: total })
 }
 
 // ── "Filtros" of Equipos (Admin.dc.html `tf`) ────────────────────────────────
@@ -425,10 +505,10 @@ export function teamFilterGroups(
   return [
     {
       key: TEAM_FILTER_KEY,
-      legend: 'Estado',
+      legend: t('filters.status'),
       options: TEAM_STATE_ORDER.map((status) => ({
         value: status,
-        label: status === 'active' ? 'Activos' : 'Inactivos',
+        label: t(`teamStates.${status}`),
         ...(counts ? { count: counts[status] } : {}),
       })),
     },
@@ -437,8 +517,9 @@ export function teamFilterGroups(
 
 /** "4 equipos", or "3 de 4 equipos" while a filter hides some (canvas `shownLabel`). */
 export function teamsShownLabel(shown: number, total: number): string {
-  const all = pluralize(total, 'equipo')
-  return shown === total ? all : `${shown} de ${all}`
+  return shown === total
+    ? t('teams.count', { count: total })
+    : t('teams.shown', { shown, count: total })
 }
 
 // ── The user draft (contract §10.2–§10.4) ────────────────────────────────────
@@ -487,15 +568,28 @@ export function normalizeEmail(value: string): string {
   return value.trim().toLowerCase()
 }
 
-export const FIELD_ERROR: Record<UserDraftField, string> = {
-  name: 'Escribe el nombre completo (al menos 2 caracteres).',
-  email: 'Escribe un correo válido, como nombre@latambank.example.',
-  roles: 'Elige al menos un rol.',
-  languages: 'Quien atiende casos necesita al menos un idioma.',
-  teamId: 'Elige un equipo.',
+/** The client-side error of each field (`admin:fieldError`, read on access). */
+export const FIELD_ERROR: Readonly<Record<UserDraftField, string>> = {
+  get name() {
+    return t('fieldError.name')
+  },
+  get email() {
+    return t('fieldError.email')
+  },
+  get roles() {
+    return t('fieldError.roles')
+  },
+  get languages() {
+    return t('fieldError.languages')
+  },
+  get teamId() {
+    return t('fieldError.teamId')
+  },
 }
 
-export const TEAM_NAME_ERROR = 'Escribe un nombre de al menos 2 caracteres.'
+export function teamNameError(): string {
+  return t('teamNameError')
+}
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -517,7 +611,7 @@ export function validateUserDraft(draft: UserDraft): UserDraftErrors {
 
 export function validateTeamName(name: string): string | null {
   const normalized = normalizeName(name)
-  return normalized.length < 2 || normalized.length > TEAM_NAME_MAX_LENGTH ? TEAM_NAME_ERROR : null
+  return normalized.length < 2 || normalized.length > TEAM_NAME_MAX_LENGTH ? teamNameError() : null
 }
 
 /** The first field with an error, in form order (it gets the focus). */
@@ -583,14 +677,22 @@ export function toggleValue<T extends string>(values: readonly T[], value: T, on
 
 // ── Guard rails (contract §10.2) ─────────────────────────────────────────────
 
-export const SELF_CHANGE_COPY: Record<SelfChangeAction, string> = {
-  remove_own_admin: 'No puedes quitarte tu propio rol de Administración.',
-  deactivate_self: 'No puedes desactivar tu propia cuenta.',
-  reset_own_password:
-    'Pídele a otra persona de Administración que te envíe un enlace para restablecer tu contraseña.',
+/** What a person cannot do to her own account (`admin:guards`, read on access). */
+export const SELF_CHANGE_COPY: Readonly<Record<SelfChangeAction, string>> = {
+  get remove_own_admin() {
+    return t('guards.removeOwnAdmin')
+  },
+  get deactivate_self() {
+    return t('guards.deactivateSelf')
+  },
+  get reset_own_password() {
+    return t('guards.resetOwnPassword')
+  },
 }
 
-export const LAST_ADMIN_HINT = 'Es la única persona activa con Administración.'
+export function lastAdminHint(): string {
+  return t('guards.lastAdmin')
+}
 
 export interface UserGuardState {
   /** The Administración card cannot be unchecked; the text replaces its description. */
@@ -610,27 +712,25 @@ export function userGuardState(user: Pick<AdminUser, 'guards'>): UserGuardState 
     }
   }
   if (user.guards.lastActiveAdmin) {
-    return { adminLocked: LAST_ADMIN_HINT, deactivateBlocked: LAST_ADMIN_HINT, resetBlocked: null }
+    const hint = lastAdminHint()
+    return { adminLocked: hint, deactivateBlocked: hint, resetBlocked: null }
   }
   return { adminLocked: null, deactivateBlocked: null, resetBlocked: null }
 }
 
-const openCasesPrefix = (count: number) =>
-  `Tiene ${pluralize(count, 'caso abierto', 'casos abiertos')}`
-
 export function removeAnalystBlockedCopy(count: number): string {
-  return `${openCasesPrefix(count)}: supervisión tiene que reasignarlos antes de quitarle el rol de Analista.`
+  return t('guards.removeAnalyst', { count })
 }
 
 export function removeLanguageBlockedCopy(count: number, language: Language): string {
-  return `${openCasesPrefix(count)} en ${LANGUAGE_IN_SENTENCE[language]}: supervisión tiene que reasignarlos antes de quitarle ese idioma.`
+  return t('guards.removeLanguage', { count, language: LANGUAGE_IN_SENTENCE[language] })
 }
 
 /** Title and detail of the "can't deactivate yet" callout. */
 export function deactivateBlockedCopy(count: number): { title: string; text: string } {
   return {
-    title: 'Primero hay que reasignar sus casos',
-    text: `${openCasesPrefix(count)}. Supervisión los reasigna desde Equipo.`,
+    title: t('guards.deactivateTitle'),
+    text: t('guards.deactivateText', { count }),
   }
 }
 
@@ -680,7 +780,9 @@ export interface AdminFailureContext {
   subject: 'user' | 'team'
 }
 
-export const GENERIC_SAVE_ERROR = 'No pudimos guardar los cambios. Inténtalo de nuevo.'
+export function genericSaveError(): string {
+  return t('failure.generic')
+}
 
 function isUserField(value: string | null): value is UserDraftField {
   return value !== null && (USER_DRAFT_FIELDS as readonly string[]).includes(value)
@@ -691,35 +793,36 @@ function isLanguage(value: string | null): value is Language {
 }
 
 export function teamNotEmptyCopy(memberCount: number): string {
-  return memberCount === 1
-    ? 'Para desactivarlo, primero mueve a su persona a otro equipo.'
-    : `Para desactivarlo, primero mueve a sus ${memberCount} personas a otro equipo.`
+  return t('failure.teamNotEmpty', { count: memberCount })
 }
 
 export function describeAdminFailure(error: unknown, context: AdminFailureContext): AdminFailure {
-  if (!isApiProblem(error)) return { message: GENERIC_SAVE_ERROR, action: 'none' }
+  if (!isApiProblem(error)) return { message: genericSaveError(), action: 'none' }
   switch (error.code) {
     case 'version_conflict':
       return {
-        message: `Alguien más cambió ${context.subject === 'user' ? 'a esta persona' : 'este equipo'} mientras editabas. Cargamos los datos actuales: revisa y vuelve a guardar.`,
+        message:
+          context.subject === 'user'
+            ? t('failure.versionConflictUser')
+            : t('failure.versionConflictTeam'),
         action: 'use_current',
       }
     case 'email_taken':
-      return { message: 'Ya existe una cuenta con ese correo.', field: 'email', action: 'none' }
+      return { message: t('failure.emailTaken'), field: 'email', action: 'none' }
     case 'team_name_taken':
-      return { message: 'Ya existe un equipo con ese nombre.', field: 'name', action: 'none' }
+      return { message: t('failure.teamNameTaken'), field: 'name', action: 'none' }
     case 'self_change_forbidden': {
       const action = error.stringExtension('action') as SelfChangeAction | null
       const message = action && action in SELF_CHANGE_COPY ? SELF_CHANGE_COPY[action] : null
       return {
-        message: message ?? GENERIC_SAVE_ERROR,
+        message: message ?? genericSaveError(),
         ...(action === 'remove_own_admin' ? { field: 'roles' as const } : {}),
         action: 'none',
       }
     }
     case 'last_admin':
       return {
-        message: 'Debe quedar al menos una persona activa con Administración.',
+        message: t('failure.lastAdmin'),
         action: 'refetch',
       }
     case 'staff_has_open_cases': {
@@ -737,7 +840,7 @@ export function describeAdminFailure(error: unknown, context: AdminFailureContex
         }
       }
       return {
-        message: `${openCasesPrefix(count)}. Supervisión tiene que reasignarlos antes de desactivar la cuenta.`,
+        message: t('failure.openCasesDeactivate', { count }),
         action: 'refetch',
       }
     }
@@ -748,32 +851,32 @@ export function describeAdminFailure(error: unknown, context: AdminFailureContex
       }
     case 'team_inactive':
       return {
-        message: 'Ese equipo está desactivado. Elige otro.',
+        message: t('failure.teamInactive'),
         field: 'teamId',
         action: 'refetch_teams',
       }
     case 'staff_inactive':
-      return { message: 'Esta cuenta está desactivada. Reactívala primero.', action: 'refetch' }
+      return { message: t('failure.staffInactive'), action: 'refetch' }
     case 'staff_invited':
       return {
-        message: 'Esta persona todavía no activó su cuenta. Reenvía la invitación.',
+        message: t('failure.staffInvited'),
         action: 'refetch',
       }
     case 'invalid_transition':
       return {
-        message: 'Esta persona ya no tiene una invitación pendiente.',
+        message: t('failure.invalidTransition'),
         action: 'refetch',
       }
     case 'invalid_value': {
       const field = error.stringExtension('field')
       if (context.subject === 'team' && field === 'name') {
-        return { message: TEAM_NAME_ERROR, field: 'name', action: 'none' }
+        return { message: teamNameError(), field: 'name', action: 'none' }
       }
       if (isUserField(field)) return { message: FIELD_ERROR[field], field, action: 'none' }
-      return { message: GENERIC_SAVE_ERROR, action: 'none' }
+      return { message: genericSaveError(), action: 'none' }
     }
     default:
-      return { message: GENERIC_SAVE_ERROR, action: 'none' }
+      return { message: genericSaveError(), action: 'none' }
   }
 }
 
@@ -821,59 +924,75 @@ export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name
 }
 
-const sessionsClosed = (revoked: number) => {
-  if (revoked <= 0) return ''
-  return revoked === 1 ? ' Se cerró su sesión.' : ` Se cerraron sus ${revoked} sesiones.`
-}
-
 export function deactivatedToast(name: string, revokedSessions: number) {
   return {
-    title: 'Cuenta desactivada',
-    description: `${name} ya no puede ingresar.${sessionsClosed(revokedSessions)}`,
+    title: t('toast.deactivatedTitle'),
+    description:
+      revokedSessions > 0
+        ? t('toast.deactivatedSessions', { name, count: revokedSessions })
+        : t('toast.deactivatedText', { name }),
   }
 }
 
 export function reactivatedToast(name: string) {
   return {
-    title: 'Cuenta reactivada',
-    description: `${name} puede volver a ingresar con su contraseña. Empieza En pausa.`,
+    title: t('toast.reactivatedTitle'),
+    description: t('toast.reactivatedText', { name }),
   }
 }
 
 export function unlockedToast(name: string, changed: boolean) {
   return changed
-    ? { title: 'Cuenta desbloqueada', description: `${name} ya puede volver a intentar ingresar.` }
-    : { title: 'La cuenta ya no estaba bloqueada.' }
+    ? { title: t('toast.unlockedTitle'), description: t('toast.unlockedText', { name }) }
+    : { title: t('toast.notLocked') }
 }
 
 // ── Invitations and reset links (part 4: nobody but her sees her password) ──
 
-/** Team-generated lifetimes, as the server applies them (said in the copy). */
+/** Team-generated lifetimes, as the server applies them (said in the copy; the reset link: 1 hour). */
 export const INVITATION_TTL_HOURS = 48
-export const RESET_LINK_TTL_LABEL = '1 hora'
 
-/** The info box of "Nuevo usuario" (Admin.dc.html `nuevo`). */
-export const INVITATION_INFO = {
-  title: 'Le llega una invitación por correo',
-  text: `Con el enlace crea su contraseña y configura la verificación en dos pasos. Nadie más ve su contraseña. El enlace vence en ${INVITATION_TTL_HOURS} horas.`,
+/** The info box of "Nuevo usuario" (Admin.dc.html `nuevo`), read on access. */
+export const INVITATION_INFO: { readonly title: string; readonly text: string } = {
+  get title() {
+    return t('invitation.infoTitle')
+  },
+  get text() {
+    return t('invitation.infoText', { hours: INVITATION_TTL_HOURS })
+  },
+}
+
+type InvitationStepKey = 'password' | 'mfa' | 'active'
+
+function invitationStep(key: InvitationStepKey, icon: 'lock' | 'smartphone' | 'check') {
+  return {
+    key,
+    icon,
+    get text() {
+      return t(`invitation.steps.${key}`)
+    },
+  }
 }
 
 /** "Invitación enviada" dialog: what happens next (icon + short line). */
 export const INVITATION_STEPS: readonly {
-  key: string
-  icon: 'lock' | 'smartphone' | 'check'
-  text: string
+  readonly key: string
+  readonly icon: 'lock' | 'smartphone' | 'check'
+  readonly text: string
 }[] = [
-  { key: 'password', icon: 'lock', text: 'Crea su propia contraseña' },
-  { key: 'mfa', icon: 'smartphone', text: 'Configura la verificación en dos pasos' },
-  { key: 'active', icon: 'check', text: 'Su cuenta queda activa y empieza En pausa' },
+  invitationStep('password', 'lock'),
+  invitationStep('mfa', 'smartphone'),
+  invitationStep('active', 'check'),
 ]
 
-export const INVITATION_SENT_FOOTNOTE =
-  'Mientras tanto aparece como Invitación pendiente. Puedes reenviarla o cancelarla desde su ficha.'
+export function invitationSentFootnote(): string {
+  return t('invitation.sentFootnote')
+}
 
 /** "El enlace vence en 48 horas." (after the bold address). */
-export const INVITATION_EXPIRY_SENTENCE = `El enlace vence en ${INVITATION_TTL_HOURS} horas.`
+export function invitationExpirySentence(): string {
+  return t('invitation.expiry', { hours: INVITATION_TTL_HOURS })
+}
 
 /**
  * "hace 3 h", "en 45 h", "en 20 min": an invitation lives 48 hours, so its times read
@@ -885,7 +1004,7 @@ export function invitationSpan(value: DateInput, now: DateInput): string {
   const minutes = Math.round(Math.abs(diff) / 60_000)
   const hours = Math.floor(minutes / 60)
   if (minutes < 60 || hours > INVITATION_TTL_HOURS) return formatRelativeTime(value, now)
-  return diff > 0 ? `en ${hours} h` : `hace ${hours} h`
+  return diff > 0 ? t('invitation.spanFuture', { hours }) : t('invitation.spanPast', { hours })
 }
 
 export interface InvitationFact {
@@ -906,15 +1025,15 @@ export function invitationFacts(
   return [
     {
       key: 'sent',
-      label: 'Invitación enviada',
+      label: t('invitation.sent'),
       value: invitationSpan(invitation.sentAt, now),
     },
     {
       key: 'expires',
-      label: expired ? 'Venció' : 'Vence',
+      label: expired ? t('invitation.expired') : t('invitation.expires'),
       value: invitationSpan(invitation.expiresAt, now),
     },
-    { key: 'login', label: 'Último ingreso', value: 'Nunca' },
+    { key: 'login', label: t('person.facts.lastLogin'), value: t('person.facts.never') },
   ]
 }
 
@@ -928,58 +1047,61 @@ export function invitationExpired(
 
 export function resentInvitationToast(email: string) {
   return {
-    title: 'Invitación reenviada',
-    description: `Le enviamos un enlace nuevo a ${email}. Vence en ${INVITATION_TTL_HOURS} horas y el anterior ya no funciona.`,
+    title: t('toast.resentTitle'),
+    description: t('toast.resentText', { email, hours: INVITATION_TTL_HOURS }),
   }
 }
 
 export function cancelledInvitationToast(name: string) {
   return {
-    title: 'Invitación cancelada',
-    description: `El enlace que recibió ${name} ya no funciona.`,
+    title: t('toast.cancelledTitle'),
+    description: t('toast.cancelledText', { name }),
   }
 }
 
 export function cancelInvitationCopy(name: string) {
   return {
-    title: `¿Cancelar la invitación de ${name}?`,
-    text: 'El enlace que le enviamos deja de funcionar y la cuenta no se crea. Si hace falta, puedes invitarle de nuevo.',
+    title: t('cancelDialog.title', { name }),
+    text: t('cancelDialog.text'),
   }
 }
 
 /** "¿Enviar a … un enlace para restablecer su contraseña?" (Admin.dc.html `dlg.reset`). */
 export function resetLinkCopy(name: string, email: string) {
   return {
-    title: `¿Enviar a ${name} un enlace para restablecer su contraseña?`,
+    title: t('resetDialog.title', { name }),
     consequences: [
-      `Le llega un correo a ${email} con un enlace para crear una contraseña nueva. Vence en ${RESET_LINK_TTL_LABEL}.`,
-      'Se cierran sus sesiones abiertas ahora.',
-      'Si la cuenta estaba bloqueada, se desbloquea.',
-      'Nadie del equipo ve la contraseña nueva.',
+      t('resetDialog.email', { email }),
+      t('sessionsEndNow'),
+      t('resetDialog.unlocks'),
+      t('resetDialog.nobodySees'),
     ],
   }
 }
 
 export function resetLinkSentToast(email: string) {
   return {
-    title: 'Enlace enviado',
-    description: `Le enviamos a ${email} un enlace para crear una contraseña nueva. Sus sesiones abiertas se cerraron.`,
+    title: t('toast.resetSentTitle'),
+    description: t('toast.resetSentText', { email }),
   }
 }
 
 /** "Verificación en dos pasos" fact (null while she has no login account). */
 export function secondFactorLabel(secondFactor: AdminUser['secondFactor']): string | null {
-  if (secondFactor === 'totp') return 'App de autenticación'
-  if (secondFactor === 'dev_code') return 'Código de desarrollo'
+  if (secondFactor === 'totp') return t('person.secondFactor.totp')
+  if (secondFactor === 'dev_code') return t('person.secondFactor.devCode')
   return null
 }
 
-export const DEACTIVATE_CONSEQUENCES: readonly string[] = [
-  'No podrá ingresar.',
-  'Se cierran sus sesiones abiertas ahora.',
-  'Deja de recibir casos y queda En pausa.',
-  'Su historial y la auditoría se conservan.',
-]
+/** What "Desactivar cuenta" does, one line each (the confirmation dialog). */
+export function deactivateConsequences(): string[] {
+  return [
+    t('deactivateDialog.noSignIn'),
+    t('sessionsEndNow'),
+    t('deactivateDialog.noCases'),
+    t('deactivateDialog.historyKept'),
+  ]
+}
 
 // ── Teams (contract §10.5) ───────────────────────────────────────────────────
 

@@ -1,6 +1,7 @@
 import { Lock } from 'lucide-react'
 import { Fact } from '@/components/ui'
 import { type CaseRating, CloseReasonIcon, RatingBadge, closeReasonLabel } from '@/features/cases'
+import { useTranslation } from '@/lib/i18n'
 import {
   closedFooter,
   footerFacts,
@@ -32,6 +33,7 @@ const frame =
  * case ("Solo lectura: …", "Sin asignar: …"); a closed case shows the same closure facts there.
  */
 export function ReadOnlyFooter({ detail, meId, mode = 'workspace' }: ReadOnlyFooterProps) {
+  const { t } = useTranslation('conversation')
   if (mode === 'supervision') {
     if (detail.closure) {
       return (
@@ -42,7 +44,7 @@ export function ReadOnlyFooter({ detail, meId, mode = 'workspace' }: ReadOnlyFoo
     if (!lines) return null
     const [first, ...rest] = lines
     return (
-      <div role="note" aria-label="Solo lectura" className={frame}>
+      <div role="note" aria-label={t('footer.readOnly')} className={frame}>
         <Lock size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-muted" />
         <div className="flex min-w-0 flex-col gap-0.5">
           <p className="m-0 font-semibold text-ink">{first}</p>
@@ -61,8 +63,10 @@ export function ReadOnlyFooter({ detail, meId, mode = 'workspace' }: ReadOnlyFoo
 }
 
 function FactsFooter({ footer }: { footer: FooterFacts }) {
+  // `cases` too: the close reason and the rating are the shared case vocabulary.
+  const { t } = useTranslation(['conversation', 'cases'])
   return (
-    <div role="note" aria-label="Solo lectura" className={frame}>
+    <div role="note" aria-label={t('footer.readOnly')} className={frame}>
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {footer.reason ? (
@@ -83,10 +87,11 @@ function FactsFooter({ footer }: { footer: FooterFacts }) {
 }
 
 function RatingLine({ rating }: { rating: CaseRating }) {
+  const { t } = useTranslation('conversation')
   const comment = ratingComment(rating)
   return (
     <p className="m-0 mt-1 flex flex-wrap items-center gap-2">
-      <RatingBadge rating={rating} srLabel="Calificación del cliente" />
+      <RatingBadge rating={rating} srLabel={t('footer.rating')} />
       {comment ? <span className="text-13 break-words text-ink-2">{comment}</span> : null}
     </p>
   )

@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { ChevronDown, ChevronRight, Mail, Send } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { formatDateTime, getInitials } from '@/lib/format'
+import type { AppLocale } from '@/lib/i18n'
 import {
   MAX_EMAIL_SUBJECT,
   customerMailCopy,
@@ -15,7 +16,8 @@ import {
 } from '../channels'
 import { useCustomerConversation, useSendCustomerEmail, useSkippedRatings } from '../hooks'
 import { isAssistantActive } from '../assistant'
-import { MAX_CUSTOMER_MESSAGE_LENGTH, chatLang, surveyState } from '../model'
+import { customerLocale } from '../locale'
+import { MAX_CUSTOMER_MESSAGE_LENGTH, surveyState } from '../model'
 import type { Language } from '../types'
 import { AskPersonButton } from './AssistantControls'
 import { ConversationSurvey } from './ConversationSurvey'
@@ -90,7 +92,7 @@ export function CustomerMailView({ customerId, customerName, language }: Custome
   return (
     <section
       aria-labelledby={`${ids}-heading`}
-      lang={chatLang(language)}
+      lang={customerLocale(language)}
       className="mx-auto flex h-full max-h-[844px] w-full max-w-[760px] flex-col overflow-hidden rounded-16 border border-app-line bg-white text-app-ink shadow-popover"
     >
       <header className="flex shrink-0 flex-col gap-1 border-b border-app-line px-5 py-4">
@@ -119,6 +121,7 @@ export function CustomerMailView({ customerId, customerName, language }: Custome
                 item={item}
                 customerName={customerName}
                 newMark={copy.newMark}
+                locale={customerLocale(language)}
               />
             ),
           )}
@@ -217,10 +220,13 @@ function MailRow({
   item,
   customerName,
   newMark,
+  locale,
 }: {
   item: MailItem
   customerName: string
   newMark: string
+  /** The customer's: dates in their language ("5 fev, 11:02"). */
+  locale: AppLocale
 }) {
   const [open, setOpen] = useState(item.latest || item.isNew)
   const bodyId = useId()
@@ -257,7 +263,7 @@ function MailRow({
                   {newMark}
                 </span>
               ) : null}
-              {formatDateTime(item.createdAt, { withYear: false })}
+              {formatDateTime(item.createdAt, { withYear: false, locale })}
             </span>
           </span>
           {open ? null : (

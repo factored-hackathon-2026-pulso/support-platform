@@ -1,2 +1,124 @@
-/** Namespace `home` (slice 23b migrates this area). Spanish is the source. */
-export default {} as const
+/**
+ * Namespace `home`: the analyst home, "Inicio" (slice 6), with the assistant's lines of slice 21.
+ * Spanish is the source.
+ */
+export default {
+  title: 'Inicio',
+  header: {
+    /** Screen-reader prefix of her team pill. */
+    team: 'Equipo:',
+    morning: 'Buenos días',
+    afternoon: 'Buenas tardes',
+    evening: 'Buenas noches',
+    greeting: '{{greeting}}, {{name}}',
+  },
+  availability: {
+    region: 'Tu disponibilidad',
+    loadError: 'No pudimos cargar tu estado',
+    goToCases: 'Ir a Casos',
+    updateError: 'No pudimos cambiar tu estado',
+    pausedTitle: 'Estás en pausa',
+    availableTitle: 'Estás disponible',
+    start: 'Empezar a atender',
+    pause: 'Pausar casos nuevos',
+    noNewCases: 'Sin casos nuevos',
+    receivesNewCases: 'Recibes casos nuevos',
+    openCases_one: '{{count, number}} caso abierto',
+    openCases_other: '{{count, number}} casos abiertos',
+  },
+  tiles: {
+    nav: 'Tus casos por estado',
+    /** Under the Cerrados tile. */
+    closedHint: 'Últimos 7 días',
+    count: '{{count, number}} {{label}}',
+    noCount: 'Sin dato de {{label}}',
+    link: '{{subject}}. Ver en Casos',
+    linkWithHint: '{{subject}}, {{hint}}. Ver en Casos',
+  },
+  first: {
+    title: 'Lo primero',
+    subtitle: 'Ordenado por lo que vence antes',
+    emptyTitle: 'No tienes casos abiertos',
+    emptyPaused: 'Cuando empieces a atender, los casos que te lleguen aparecen aquí.',
+    emptyAvailable: 'Cuando un cliente escriba y te corresponda, aparece aquí.',
+    loadError: 'No pudimos cargar tus casos',
+    listLabel: 'Casos por urgencia',
+    open: 'Abrir',
+    openLabel: 'Abrir el caso de {{name}}',
+    noMessages: 'Sin mensajes todavía',
+    /** Her own last message as the preview. */
+    ownPreview: 'Tú: {{text}}',
+    waitingSince: 'Sin respuesta desde',
+    waitingTooltip: 'Sin respuesta del cliente',
+    lastActivity: 'Última actividad',
+  },
+  feed: {
+    title: 'Mientras no estabas',
+    loadError: 'No pudimos cargar lo que pasó',
+    empty: 'Nada nuevo desde tu última sesión',
+    showLess: 'Ver menos',
+    showAll: 'Ver todo ({{total, number}})',
+    truncated: 'Se muestran las {{shown, number}} más recientes de {{total, number}}.',
+    since: {
+      fallback: 'Últimas 8 horas',
+      fallbackTooltip: 'No hay una sesión tuya anterior',
+      signedOut: 'Cerraste sesión',
+      label: 'Desde',
+      today: 'hoy {{time}}',
+      yesterday: 'ayer {{time}}',
+      dateTime: '{{date}}, {{time}}',
+    },
+    /** The assistant's line on top (slice 21). */
+    assistant: {
+      name: 'Asistente virtual',
+      resolved_one: 'Resolvió {{count, number}} conversación de tus idiomas',
+      resolved_other: 'Resolvió {{count, number}} conversaciones de tus idiomas',
+      resolvedAndHanded: '{{resolved}} y te pasó {{handed, number}}',
+      handed_one: 'Te pasó {{count, number}} caso',
+      handed_other: 'Te pasó {{count, number}} casos',
+    },
+    /** The fixed phrase of each kind of row. */
+    phrase: {
+      arrived: 'Te llegó',
+      fromQueue: 'Te llegó desde la cola',
+      assigned: 'Te lo asignaron',
+      reassignedAway: 'Ya no es tuyo',
+      returned: 'Volvió a escribir',
+      messages_one: 'Escribió {{count, number}} mensaje',
+      messages_other: 'Escribió {{count, number}} mensajes',
+      fromAssistant: 'El asistente te lo pasó',
+    },
+    fact: {
+      byLanguage: 'Por idioma',
+      rule3: 'Regla 3',
+      waited: 'Esperó {{minutes, number}} min',
+      /** Who assigned it when the event has no name. */
+      supervision: 'Supervisión',
+      assignedBy: 'Asignado por',
+      reassignedBy: 'Lo reasignó',
+      otherPerson: 'Otra persona',
+      nowWith: 'Ahora lo atiende',
+      readOnly: 'Solo lectura',
+      previousCases_one: '{{count, number}} caso antes',
+      previousCases_other: '{{count, number}} casos antes',
+      previousCasesLabel: 'Casos anteriores',
+    },
+    link: {
+      label: '{{name}}: {{phrase}}. {{details}}. {{target}}',
+      lastClose: 'Último cierre: {{reason}}',
+      openReadOnly: 'Abrir en solo lectura',
+      open: 'Abrir el caso',
+    },
+  },
+  team: {
+    title: 'Tu equipo ahora',
+    noData: 'Sin datos del equipo por ahora.',
+    available: 'Disponibles',
+    availableValue: '{{available, number}} de {{total, number}}',
+    you: 'Tú',
+    waiting: 'Esperan en la cola',
+    oldest: 'El más antiguo',
+    withAssistant: 'Con el asistente ahora',
+    pausedNote: 'Al empezar, la cola de tus idiomas se reparte primero contigo.',
+  },
+} as const

@@ -382,22 +382,6 @@ export function getInitials(fullName: string): string {
   return `${first[0] ?? ''}${surname?.[0] ?? ''}`.toUpperCase()
 }
 
-/**
- * "1 caso" / "3 casos". Spanish-only, for copy not migrated yet: catalogs say plurals with
- * `_one` / `_other` keys and `count` (ARCHITECTURE.md §12).
- */
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${formatNumber(count)} ${count === 1 ? singular : plural}`
-}
-
-/**
- * A list in Spanish: "A", "A y B", "A, B y C" (same rule as the backend
- * `copy.join_es`, slice-4-administration.md §1.2). Empty → "".
- */
-export function joinEs(items: readonly string[]): string {
-  return WORDS.es.list(items)
-}
-
 /** A list in the active locale: "A, B y C" / "A, B e C". Empty → "". */
 export function formatList(items: readonly string[], { locale }: LocaleOptions = {}): string {
   return wordsFor(locale).list(items)

@@ -1,5 +1,6 @@
 import { CircleCheck, X } from 'lucide-react'
 import { IconButton } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 
 export interface ResultStripProps {
   /** `null` = nothing to report (the live region stays mounted, empty). */
@@ -13,6 +14,7 @@ export interface ResultStripProps {
  * (`<output>`) is always mounted so the message is announced when it appears.
  */
 export function ResultStrip({ result, onDismiss }: ResultStripProps) {
+  const { t } = useTranslation('common')
   return (
     // <output> is a polite status live region, always mounted so the message is announced.
     <output className="block shrink-0">
@@ -25,7 +27,7 @@ export function ResultStrip({ result, onDismiss }: ResultStripProps) {
           <IconButton
             size="sm"
             variant="ghost"
-            aria-label="Cerrar aviso"
+            aria-label={t('toast.dismiss')}
             icon={<X size={16} aria-hidden="true" />}
             onClick={onDismiss}
           />

@@ -2,6 +2,7 @@ import { PanelLeftOpen } from 'lucide-react'
 import { IconButton } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { getInitials } from '@/lib/format'
+import { useTranslation } from '@/lib/i18n'
 import { inboxStatusMeta } from '../model'
 import type { CaseSummary } from '../types'
 import { toneRing } from './tone-classes'
@@ -23,15 +24,16 @@ export function CollapsedCaseRail({
   onSelectCase,
   onExpand,
 }: CollapsedCaseRailProps) {
+  const { t } = useTranslation('cases')
   return (
     <section
-      aria-label="Casos, lista contraída"
+      aria-label={t('rail.region')}
       className="flex h-full w-16 shrink-0 flex-col items-center gap-2.5 border-r border-border bg-panel py-4"
     >
-      <h1 className="sr-only">Casos</h1>
+      <h1 className="sr-only">{t('list.title')}</h1>
       <IconButton
-        aria-label="Mostrar la lista de casos"
-        title="Mostrar casos"
+        aria-label={t('rail.expand')}
+        title={t('rail.expandShort')}
         icon={<PanelLeftOpen size={18} />}
         className="rounded-8"
         onClick={onExpand}
@@ -39,7 +41,7 @@ export function CollapsedCaseRail({
       {toReplyCount !== undefined ? (
         <span className="text-12 font-semibold text-warn tabular">
           {toReplyCount}
-          <span className="sr-only"> por responder</span>
+          <span className="sr-only"> {t('rail.toReply')}</span>
         </span>
       ) : null}
       <ul className="m-0 flex min-h-0 scrollbar-thin list-none flex-col items-center gap-2.5 overflow-y-auto p-1">

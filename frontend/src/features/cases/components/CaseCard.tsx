@@ -1,4 +1,5 @@
 import { Fact, ListItemButton, Status } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import {
   ESCALATED_MARKER,
   caseCardFacts,
@@ -32,6 +33,7 @@ export interface CaseCardProps {
  * and accessible text "Calificación: Bien").
  */
 export function CaseCard({ summary, selected, now, onSelect }: CaseCardProps) {
+  const { t } = useTranslation('cases')
   const meta = inboxStatusMeta(summary)
   const closed = summary.status === 'closed'
   const sla = closed ? null : slaFact(summary, now)
@@ -53,7 +55,7 @@ export function CaseCard({ summary, selected, now, onSelect }: CaseCardProps) {
             icon="clock"
             text={closedAgo}
             tone="muted"
-            label="Cerrado"
+            label={t('card.closed')}
             focusable={false}
             className="shrink-0"
           />
@@ -69,9 +71,7 @@ export function CaseCard({ summary, selected, now, onSelect }: CaseCardProps) {
           />
         ) : null}
       </span>
-      <span className="truncate text-13 text-ink-2">
-        {summary.preview ?? 'Sin mensajes todavía'}
-      </span>
+      <span className="truncate text-13 text-ink-2">{summary.preview ?? t('card.noMessages')}</span>
       <span className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
           <Status {...caseStatus(summary.inboxStatus)} />
@@ -103,8 +103,8 @@ export function CaseCard({ summary, selected, now, onSelect }: CaseCardProps) {
             icon="clock"
             text={formatLastInteraction(summary, now)}
             tone="muted"
-            label="Última actividad"
-            tooltip="Última actividad"
+            label={t('card.lastActivity')}
+            tooltip={t('card.lastActivity')}
             focusable={false}
             className="shrink-0"
           />

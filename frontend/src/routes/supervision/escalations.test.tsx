@@ -281,3 +281,40 @@ describe('escalations screen ("Escalados")', () => {
     await waitFor(() => expect(router.state.location.search).toBe(''))
   })
 })
+
+describe('escalations screen in Portuguese (pt-BR)', () => {
+  it('lists the escalations and answers one in Portuguese', async () => {
+    vi.mocked(respondEscalation).mockResolvedValue({
+      escalation: { ...ESC, state: 'answered', note: 'Sigue tú con ella.' },
+      case: { ...julianCamila, escalated: false },
+    })
+    const { user } = renderRoute('/supervision/escalations', {
+      staff: supervisorStaff,
+      locale: 'pt-BR',
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Escalados' })).toBeInTheDocument()
+    expect(screen.getByText('Casos em que a equipe pediu ajuda da supervisão')).toBeVisible()
+    expect(await screen.findByText('2 abertos')).toBeInTheDocument()
+    const region = screen.getByRole('region', { name: 'Escalonamentos' })
+    const headings = within(region)
+      .getAllByRole('heading', { level: 2 })
+      .map((h) => h.textContent)
+    expect(headings).toEqual(['Abertos (2)', 'Atendidos hoje'])
+
+    await user.click(within(region).getByRole('button', { name: /Camila Torres Benavides/ }))
+    const panel = await screen.findByRole('complementary', { name: 'Camila Torres Benavides' })
+    expect(within(panel).getByText('Escalou há 21 min')).toBeInTheDocument()
+    expect(within(panel).getByRole('heading', { name: 'O caso' })).toBeInTheDocument()
+    expect(within(panel).getByRole('link', { name: /Ver caso completo/ })).toBeInTheDocument()
+    await user.click(within(panel).getByRole('button', { name: 'Responder' }))
+    const reply = within(panel).getByRole('textbox', { name: 'Sua resposta para Julián' })
+    expect(reply).toHaveAccessibleDescription(/Chega para Julián dentro do caso/)
+    await user.click(within(panel).getByRole('button', { name: 'Enviar resposta' }))
+    expect(within(panel).getByText('Escreva sua resposta.')).toBeInTheDocument()
+    await user.type(reply, 'Sigue tú con ella.')
+    await user.click(within(panel).getByRole('button', { name: 'Enviar resposta' }))
+    expect(
+      await screen.findByText('Julián recebeu sua resposta no caso de Camila Torres Benavides.'),
+    ).toBeInTheDocument()
+  })
+})

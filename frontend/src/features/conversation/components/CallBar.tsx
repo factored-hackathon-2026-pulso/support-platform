@@ -2,6 +2,7 @@ import { Mic, MicOff, Pause, Phone, PhoneOff, Play } from 'lucide-react'
 import { Button, Fact, Status, useToast } from '@/components/ui'
 import { formatTimer } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import {
   CALL_STATUS,
   callControls,
@@ -29,6 +30,7 @@ export interface CallBarProps {
  * "Poner en espera" / "Retomar", "Silenciar" (a toggle) and "Colgar".
  */
 export function CallBar({ caseId, call, canAct }: CallBarProps) {
+  const { t } = useTranslation('conversation')
   const active = isActiveCall(call)
   const now = useNow(1000, active)
   const command = useCallCommand(caseId)
@@ -44,7 +46,7 @@ export function CallBar({ caseId, call, canAct }: CallBarProps) {
       {
         onError: (error) =>
           toast({
-            title: 'No se pudo',
+            title: t('call.bar.failed'),
             description: describeCallFailure(error),
             politeness: 'alert',
           }),
@@ -55,7 +57,7 @@ export function CallBar({ caseId, call, canAct }: CallBarProps) {
   const busy = command.isPending
   return (
     <section
-      aria-label="Llamada"
+      aria-label={t('call.bar.region')}
       className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-6 py-2.5"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
@@ -63,14 +65,14 @@ export function CallBar({ caseId, call, canAct }: CallBarProps) {
           <Status {...status} label={callStateLabel(call)} />
         </output>
         {active ? (
-          <span className="font-mono text-14 text-ink" title="Duración de la llamada">
-            <span className="sr-only">Duración: </span>
+          <span className="font-mono text-14 text-ink" title={t('call.bar.duration')}>
+            <span className="sr-only">{t('call.bar.durationLead')} </span>
             {formatTimer(callElapsedSeconds(call, now))}
           </span>
         ) : null}
         <Fact {...direction} size="md" />
         {active && call.muted ? (
-          <Fact icon="mic-off" text="Silenciado" tone="warn" size="md" />
+          <Fact icon="mic-off" text={t('call.bar.muted')} tone="warn" size="md" />
         ) : null}
       </div>
       {controls.answer || controls.hangUp ? (
@@ -82,7 +84,7 @@ export function CallBar({ caseId, call, canAct }: CallBarProps) {
               aria-disabled={busy || undefined}
               onClick={() => act('answer')}
             >
-              Contestar
+              {t('call.bar.answer')}
             </Button>
           ) : null}
           {controls.hold ? (
@@ -92,7 +94,7 @@ export function CallBar({ caseId, call, canAct }: CallBarProps) {
               aria-disabled={busy || undefined}
               onClick={() => act('hold')}
             >
-              Poner en espera
+              {t('call.bar.hold')}
             </Button>
           ) : null}
           {controls.resume ? (
@@ -102,7 +104,7 @@ export function CallBar({ caseId, call, canAct }: CallBarProps) {
               aria-disabled={busy || undefined}
               onClick={() => act('resume')}
             >
-              Retomar
+              {t('call.bar.resume')}
             </Button>
           ) : null}
           {controls.mute ? (
@@ -119,7 +121,7 @@ export function CallBar({ caseId, call, canAct }: CallBarProps) {
               aria-disabled={busy || undefined}
               onClick={() => act({ muted: !call.muted })}
             >
-              Silenciar
+              {t('call.bar.mute')}
             </Button>
           ) : null}
           {controls.hangUp ? (
@@ -129,7 +131,7 @@ export function CallBar({ caseId, call, canAct }: CallBarProps) {
               aria-disabled={busy || undefined}
               onClick={() => act('hangup')}
             >
-              Colgar
+              {t('call.bar.hangUp')}
             </Button>
           ) : null}
         </div>

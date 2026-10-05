@@ -3,6 +3,7 @@ import { useCurrentUser } from '@/app/session'
 import { Badge, DocumentTitle } from '@/components/ui'
 import { useAvailability, useInbox } from '@/features/cases'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import { useHome } from '../hooks'
 import { greeting, headerLine } from '../model'
 import { ActivityFeed } from './ActivityFeed'
@@ -25,6 +26,7 @@ const TICK_MS = 30_000
  * landmark.
  */
 export function HomeScreen() {
+  const { t } = useTranslation(['home', 'cases'])
   const user = useCurrentUser()
   const now = useNow(TICK_MS)
   const inbox = useInbox({ status: null, q: '' })
@@ -36,14 +38,14 @@ export function HomeScreen() {
 
   return (
     <main className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto px-10 py-7">
-      <DocumentTitle title="Inicio" />
+      <DocumentTitle title={t('title')} />
       <header className="flex items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <p className="m-0 flex items-center gap-2 text-13 text-muted">
             <span>{header.date}</span>
             {header.team ? (
               <Badge tone="neutral" size="sm">
-                <span className="sr-only">Equipo: </span>
+                <span className="sr-only">{t('header.team')} </span>
                 {header.team}
               </Badge>
             ) : null}

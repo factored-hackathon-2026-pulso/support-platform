@@ -14,7 +14,7 @@ import {
   seededTurns,
 } from '@/test/conversation-fixtures'
 import { analystStaff } from '@/test/fixtures'
-import { renderWithProviders } from '@/test/render'
+import { renderWithProviders, setTestLocale } from '@/test/render'
 import * as api from '../api'
 import type { CaseDetail, PostTurnResponse, TurnPage } from '../types'
 import { ConversationPane } from './ConversationPane'
@@ -742,5 +742,105 @@ describe('ConversationPane · supervision mode (slice 3)', () => {
         'Ya no puedes cerrarlo: supervisión pasó este caso a otra persona.',
       ),
     ).toBeInTheDocument()
+  })
+})
+
+describe('ConversationPane · in Portuguese (slice 23)', () => {
+  function setupPt(detail: CaseDetail = makeCaseDetail(), mode?: 'supervision') {
+    vi.mocked(api.fetchCaseDetail).mockResolvedValue(detail)
+    vi.mocked(api.fetchTurns).mockResolvedValue(page())
+    vi.mocked(api.markCaseRead).mockResolvedValue(detail.case)
+    return renderWithProviders(<ConversationPane caseId={detail.case.id} mode={mode} />, {
+      staff: analystStaff,
+      locale: 'pt-BR',
+    })
+  }
+
+  it('shows the open case, how it reached her, and says why a reply did not go out', async () => {
+    vi.mocked(api.postAnalystTurn).mockRejectedValueOnce(
+      new ApiProblem({ status: 409, code: 'case_closed' }),
+    )
+    const { user } = setupPt()
+    const pane = await screen.findByRole('region', {
+      name: 'Conversa com Marcela Quintana Pardo',
+    })
+    expect(within(pane).getByRole('list', { name: 'Dados do caso' })).toBeInTheDocument()
+    const arrival = screen.getByText('Como chegou até você').parentElement!
+    expect(arrival).toHaveTextContent('Você estava disponível')
+    expect(arrival).toHaveTextContent('Você fala')
+    expect(await screen.findByRole('list', { name: 'Mensagens' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Encerrar caso' })).toBeInTheDocument()
+    expect(screen.getByText('Enter envia. Shift + Enter adiciona uma linha.')).toBeInTheDocument()
+
+    await user.type(screen.getByRole('textbox', { name: 'Escreva para o cliente' }), 'Olá{Enter}')
+    expect(await screen.findByText('Não enviada: o caso já está encerrado.')).toBeInTheDocument()
+  })
+
+  it('closes a case through "Encerrar caso" with the notice in the case language', async () => {
+    vi.mocked(api.closeCase).mockRejectedValueOnce(
+      new ApiProblem({ status: 403, code: 'case_not_assigned' }),
+    )
+    const { user } = setupPt()
+    await user.click(await screen.findByRole('button', { name: 'Encerrar caso' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Encerrar caso' })
+    expect(within(dialog).getByText('Nota interna (opcional)')).toBeInTheDocument()
+    // The customer reads the notice in the case's language (Spanish here), whatever the UI's.
+    expect(within(dialog).getByText('O cliente verá').parentElement!).toHaveTextContent(
+      /^O cliente veráLa conversación terminó\./,
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Encerrar caso' }))
+    expect(await within(dialog).findByText('Escolha um motivo.')).toBeInTheDocument()
+    const reasons = within(dialog).getByRole('radiogroup', { name: /Motivo/ })
+    await user.click(within(reasons).getAllByRole('radio')[0]!)
+    await user.click(within(dialog).getByRole('button', { name: 'Encerrar caso' }))
+    expect(
+      await within(dialog).findByText(
+        'Você não pode mais encerrá-lo: a supervisão passou este caso para outra pessoa.',
+      ),
+    ).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('shows a closed case read-only', async () => {
+    setupPt(makeClosedDetail())
+    const footer = await screen.findByRole('note', { name: 'Somente leitura' })
+    expect(footer).toHaveTextContent('Encerrado:')
+    expect(footer).toHaveTextContent('Nota: Se explicó el plazo del reverso (5 días hábiles).')
+    expect(screen.queryByRole('button', { name: 'Encerrar caso' })).not.toBeInTheDocument()
+  })
+
+  it('reads the supervision view: who holds it and how it arrived', async () => {
+    setupPt(makeCaseDetail(), 'supervision')
+    expect(
+      await screen.findByText('Somente leitura: atendido por Daniela Ríos.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Como chegou').parentElement!).toHaveTextContent(
+      'Atendido por Daniela Ríos: chegou por estar disponível e falar espanhol',
+    )
+  })
+
+  it('switches language on screen, the transcript words included', async () => {
+    setup()
+    await screen.findByRole('list', { name: 'Mensajes' })
+    expect(screen.getAllByText('Tú').length).toBeGreaterThan(0)
+    act(() => setTestLocale('pt-BR'))
+    expect(await screen.findByRole('list', { name: 'Mensagens' })).toBeInTheDocument()
+    expect(screen.queryByText('Tú')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Você').length).toBeGreaterThan(0)
+    expect(screen.getByRole('textbox', { name: 'Escreva para o cliente' })).toBeInTheDocument()
+  })
+
+  it('names why a case cannot be opened', async () => {
+    vi.mocked(api.fetchCaseDetail).mockRejectedValue(
+      new ApiProblem({ status: 404, code: 'not_found' }),
+    )
+    vi.mocked(api.fetchTurns).mockResolvedValue(page())
+    renderWithProviders(<ConversationPane caseId={CASE_ID} />, {
+      staff: analystStaff,
+      locale: 'pt-BR',
+    })
+    expect(await screen.findByText('Não encontramos este caso')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument()
   })
 })

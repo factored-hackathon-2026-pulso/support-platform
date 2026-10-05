@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CircleArrowUp, ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { escalationReason, suggestionView } from '../model'
 import { useLatestSuggestion } from '../hooks/use-suggestions'
 
@@ -25,6 +26,7 @@ export interface EscalationSuggestionProps {
  * for it in the API).
  */
 export function EscalationSuggestion({ caseId, enabled, onReview }: EscalationSuggestionProps) {
+  const { t } = useTranslation('copilot')
   const latest = useLatestSuggestion(caseId, enabled)
   const [hiddenFor, setHiddenFor] = useState<string | null>(null)
   if (!enabled) return null
@@ -35,27 +37,27 @@ export function EscalationSuggestion({ caseId, enabled, onReview }: EscalationSu
   return (
     <div className="shrink-0 px-6 pt-3">
       <section
-        aria-label="El copiloto recomienda escalar"
+        aria-label={t('escalation.region')}
         className="mx-auto flex w-full max-w-[880px] flex-col gap-2 rounded-12 border border-warn-border bg-warn-soft px-3.5 py-3"
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="inline-flex items-center gap-1.5 text-14 font-semibold text-warn-strong">
               <CircleArrowUp size={15} aria-hidden="true" />
-              El copiloto recomienda escalar a supervisión
+              {t('escalation.title')}
             </span>
             <span className="text-13 text-ink-2">{escalationReason(escalation.reasonCode)}</span>
           </div>
           <span className="flex shrink-0 items-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => setHiddenFor(view.id)}>
-              Ahora no
+              {t('escalation.notNow')}
             </Button>
             <Button
               size="sm"
               variant="secondary"
               onClick={() => onReview({ suggestionId: view.id, motive: escalation.motiveDraft })}
             >
-              Revisar y escalar
+              {t('escalation.review')}
             </Button>
           </span>
         </div>
@@ -63,7 +65,7 @@ export function EscalationSuggestion({ caseId, enabled, onReview }: EscalationSu
           <div className="flex flex-col gap-1">
             <span className="inline-flex items-center gap-1.5 text-12 font-semibold text-ink-2">
               <ListChecks size={13} aria-hidden="true" />
-              En qué se basa
+              {t('escalation.evidence')}
             </span>
             <ul className="m-0 flex list-disc flex-col gap-0.5 pl-5 text-13 text-ink">
               {escalation.evidence.map((item) => (

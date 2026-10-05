@@ -1,9 +1,11 @@
 /**
  * Pure rules of the analyst's support panel (slice 20): which copilot surfaces show, the Q&A
- * thread as the panel renders it, the suggestions read by kind, and the Spanish copy for every
- * failure. No React, no I/O: unit-tested in model.test.ts.
+ * thread as the panel renders it, the suggestions read by kind, and the copy for every failure
+ * (catalog `copilot`, read when a function runs, so it is in the UI language of that moment).
+ * No React, no I/O: unit-tested in model.test.ts.
  */
 import { ApiProblem, type Schemas } from '@/lib/api'
+import { APP_LOCALES, i18n } from '@/lib/i18n'
 import type {
   CopilotAsk,
   CopilotExchange,
@@ -16,6 +18,8 @@ import type {
   SuggestionStatus,
   SuggestionTool,
 } from './types'
+
+const t = i18n.getFixedT(null, 'copilot')
 
 // ─── Stage gating ───────────────────────────────────────────────────────────
 
@@ -162,36 +166,27 @@ export interface AskFailure {
 /** A failed question → the line under it (slice 15 §2 errors). */
 export function describeAskFailure(error: unknown): AskFailure {
   if (!(error instanceof ApiProblem)) {
-    return { message: 'No se pudo responder. Inténtalo de nuevo.', retryable: true }
+    return { message: t('askFailure.generic'), retryable: true }
   }
   switch (error.code) {
     case 'copilot_busy':
-      return {
-        message: 'El copiloto todavía responde tu pregunta anterior. Reintenta en unos segundos.',
-        retryable: true,
-      }
+      return { message: t('askFailure.busy'), retryable: true }
     case 'case_closed':
-      return { message: 'El caso se cerró: el copiloto ya no responde.', retryable: false }
+      return { message: t('askFailure.closed'), retryable: false }
     case 'copilot_unavailable':
-      return { message: 'El copiloto no tiene datos de este cliente.', retryable: false }
+      return { message: t('askFailure.unavailable'), retryable: false }
     case 'assistant_disabled':
-      return { message: 'El copiloto no está disponible ahora.', retryable: false }
+      return { message: t('askFailure.disabled'), retryable: false }
     case 'case_not_assigned':
     case 'forbidden':
-      return { message: 'Este caso ya no está a tu nombre.', retryable: false }
+      return { message: t('askFailure.notAssigned'), retryable: false }
     case 'validation_error':
     case 'invalid_value':
-      return {
-        message: 'La pregunta puede tener hasta 2.000 caracteres.',
-        retryable: false,
-      }
+      return { message: t('askFailure.tooLong'), retryable: false }
     case 'network_error':
-      return { message: 'No hay conexión. Inténtalo de nuevo.', retryable: true }
+      return { message: t('askFailure.network'), retryable: true }
     default:
-      return {
-        message: 'No se pudo responder. Inténtalo de nuevo.',
-        retryable: error.status >= 500,
-      }
+      return { message: t('askFailure.generic'), retryable: error.status >= 500 }
   }
 }
 
@@ -204,22 +199,24 @@ export function firstName(displayName: string): string {
 
 /** The quiet line on top of the tab: it reads, it never acts (ADR 0003 §6). */
 export function copilotNotice(displayName: string): string {
-  return `Consulta y calcula con los datos de ${firstName(displayName)}. No hace cambios ni le escribe al cliente.`
+  return t('notice', { name: firstName(displayName) })
 }
 
 export function emptyThreadTitle(displayName: string): string {
-  return `Pregúntale sobre ${firstName(displayName)}`
+  return t('thread.emptyTitle', { name: firstName(displayName) })
 }
 
 /**
  * Starter questions of the empty thread: they only fill the box. Grounded in what the dataset
  * holds about a customer (products, transactions, complaints).
  */
-export const STARTER_QUESTIONS: readonly string[] = [
-  '¿Qué productos tiene y en qué estado están?',
-  '¿Qué movimientos tuvo en los últimos 30 días?',
-  '¿Tiene reclamos anteriores y cómo se cerraron?',
-]
+export function starterQuestions(): string[] {
+  return [
+    t('thread.starters.products'),
+    t('thread.starters.transactions'),
+    t('thread.starters.complaints'),
+  ]
+}
 
 // ─── Suggestions ────────────────────────────────────────────────────────────
 
@@ -273,10 +270,25 @@ export function suggestionView(latest: LatestCopilotSuggestion | undefined): Sug
 
 /**
  * "Usar" on a tool: the predefined question it asks the copilot through her thread (ADR 0005 §3:
- * a tool is a read, answered in text). The tool's id helps the copilot pick it.
+ * a tool is a read, answered in text), in her UI language. The tool's id helps the copilot pick it.
  */
 export function toolQuestion(tool: Pick<SuggestionTool, 'label' | 'tool'>): string {
-  return `Consulta ${tool.label} (${tool.tool}) para este cliente y dime qué encontraste.`
+  return t('tools.question', { label: tool.label, tool: tool.tool })
+}
+
+/**
+ * The same question in every UI language whose catalog is loaded: a tool used before she switched
+ * language still finds its answer.
+ */
+function toolQuestions(tool: Pick<SuggestionTool, 'label' | 'tool'>): Set<string> {
+  const questions = new Set([toolQuestion(tool)])
+  for (const locale of APP_LOCALES) {
+    if (!i18n.hasResourceBundle(locale, 'copilot')) continue
+    questions.add(
+      i18n.getFixedT(locale, 'copilot')('tools.question', { label: tool.label, tool: tool.tool }),
+    )
+  }
+  return questions
 }
 
 /** The newest time she used that tool, as a thread turn (its answer is the tool's result). */
@@ -284,10 +296,10 @@ export function toolResult(
   turns: readonly CopilotTurnView[],
   tool: Pick<SuggestionTool, 'label' | 'tool'>,
 ): CopilotTurnView | null {
-  const question = toolQuestion(tool)
+  const questions = toolQuestions(tool)
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     const turn = turns[index]
-    if (turn?.text === question) return turn
+    if (turn && questions.has(turn.text)) return turn
   }
   return null
 }
@@ -299,14 +311,14 @@ function humanize(key: string): string {
 
 /**
  * agent-core's reason code for an escalation (`policy:…`, `rule:…`; ADR 0005 §4: it comes from
- * rules, not from the model) → a short Spanish phrase.
+ * rules, not from the model) → a short phrase (the code's words stay as they come).
  */
 export function escalationReason(code: string): string {
   const [prefix, ...rest] = code.split(':')
   const name = humanize(rest.join(':'))
-  if (prefix === 'policy' && name) return `Una política lo pide: ${name}`
-  if (prefix === 'rule' && name) return `Una regla del copiloto lo pide: ${name}`
-  return humanize(code) || 'El copiloto recomienda escalarlo'
+  if (prefix === 'policy' && name) return t('escalation.reasonPolicy', { name })
+  if (prefix === 'rule' && name) return t('escalation.reasonRule', { name })
+  return humanize(code) || t('escalation.reasonFallback')
 }
 
 export interface SuggestFailure {
@@ -318,35 +330,31 @@ export interface SuggestFailure {
 /** "Sugerir" failed → the line in "Herramientas" (slice 15b §2). */
 export function describeSuggestFailure(error: unknown): SuggestFailure {
   if (!(error instanceof ApiProblem)) {
-    return { message: 'No se pudo preparar la sugerencia. Inténtalo de nuevo.', retry: true }
+    return { message: t('suggestFailure.generic'), retry: true }
   }
   switch (error.code) {
     case 'copilot_busy':
-      return {
-        message: 'El copiloto ya está preparando una sugerencia. Espera unos segundos.',
-        retry: false,
-      }
+      return { message: t('suggestFailure.busy'), retry: false }
     case 'case_closed':
-      return { message: 'El caso se cerró: el copiloto ya no sugiere.', retry: false }
+      return { message: t('suggestFailure.closed'), retry: false }
     case 'copilot_unavailable':
-      return { message: 'El copiloto no tiene datos de este cliente.', retry: false }
+      return { message: t('suggestFailure.unavailable'), retry: false }
     case 'assistant_disabled':
-      return { message: 'Las sugerencias del copiloto no están disponibles ahora.', retry: false }
+      return { message: t('suggestFailure.disabled'), retry: false }
     case 'case_not_assigned':
     case 'forbidden':
-      return { message: 'Este caso ya no está a tu nombre.', retry: false }
+      return { message: t('suggestFailure.notAssigned'), retry: false }
     case 'network_error':
-      return { message: 'No hay conexión. Inténtalo de nuevo.', retry: true }
+      return { message: t('suggestFailure.network'), retry: true }
     default:
-      return {
-        message: 'No se pudo preparar la sugerencia. Inténtalo de nuevo.',
-        retry: error.status >= 500,
-      }
+      return { message: t('suggestFailure.generic'), retry: error.status >= 500 }
   }
 }
 
 /** A stored suggestion that failed (`status: failed`, made on its own) → its line. */
-export const FAILED_SUGGESTION_MESSAGE = 'El copiloto no pudo preparar la última sugerencia.'
+export function failedSuggestionMessage(): string {
+  return t('suggestFailure.stored')
+}
 
 /**
  * The draft into the composer: the draft alone, or after what she had already written (her text

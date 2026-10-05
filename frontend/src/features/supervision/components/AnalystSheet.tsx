@@ -2,6 +2,7 @@ import { Button, Fact, Sheet, Stat, Status, toneBorderLeft } from '@/components/
 import { caseStatus } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { formatRelativeTime } from '@/lib/format'
+import { useTranslation } from '@/lib/i18n'
 import {
   ACTIVITY_META,
   RECENT_RATING_HEADER,
@@ -28,6 +29,7 @@ export interface AnalystSheetProps {
  * and "Reasignar" (the exception: assignment is automatic).
  */
 export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: AnalystSheetProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation', 'common'])
   return (
     <Sheet
       open
@@ -38,17 +40,23 @@ export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: 
       description={
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Status {...ACTIVITY_META[analyst.activity]} />
-          <Fact icon="languages" text="" languages={analyst.languages} label="Idiomas" size="md" />
-          <Fact icon="users" text={analyst.team.name} label="Equipo" size="md" />
+          <Fact
+            icon="languages"
+            text=""
+            languages={analyst.languages}
+            label={t('common:fields.languages')}
+            size="md"
+          />
+          <Fact icon="users" text={analyst.team.name} label={t('common:fields.team')} size="md" />
         </span>
       }
       width={600}
     >
       <div className="grid grid-cols-5 gap-3">
-        <SheetStat label="Abiertos" value={analyst.counts.open} />
-        <SheetStat label="Nuevos" value={analyst.counts.new} />
-        <SheetStat label="Por responder" value={analyst.counts.toReply} />
-        <SheetStat label="Esperando al cliente" value={analyst.counts.waiting} />
+        <SheetStat label={t('sheet.open')} value={analyst.counts.open} />
+        <SheetStat label={t('sheet.new')} value={analyst.counts.new} />
+        <SheetStat label={t('sheet.toReply')} value={analyst.counts.toReply} />
+        <SheetStat label={t('sheet.waiting')} value={analyst.counts.waiting} />
         <Stat
           label={RECENT_RATING_HEADER.label}
           value={<RecentRating stats={analyst.recentRatings} className="text-16" />}
@@ -58,10 +66,10 @@ export function AnalystSheet({ analyst, now, onClose, onOpenCase, onReassign }: 
       </div>
       <section aria-labelledby="analyst-cases-heading" className="flex flex-col gap-2">
         <h3 id="analyst-cases-heading" className="m-0 text-15 font-semibold">
-          Casos abiertos
+          {t('sheet.casesHeading')}
         </h3>
         {analyst.openCases.length === 0 ? (
-          <p className="m-0 text-14 text-muted">No tiene casos abiertos.</p>
+          <p className="m-0 text-14 text-muted">{t('sheet.noCases')}</p>
         ) : (
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {analyst.openCases.map((summary) => (
@@ -99,6 +107,7 @@ interface OpenCaseItemProps {
 }
 
 function OpenCaseItem({ summary, now, onOpenCase, onReassign }: OpenCaseItemProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const status = caseStatus(summary.inboxStatus)
   const firstResponse = firstResponseFact(summary, now)
   return (
@@ -113,7 +122,7 @@ function OpenCaseItem({ summary, now, onOpenCase, onReassign }: OpenCaseItemProp
         <Fact {...withoutKey(firstResponse)} className="shrink-0" />
       </span>
       <span className="truncate text-13 text-ink-2">
-        {summary.preview ?? 'Sin mensajes todavía'}
+        {summary.preview ?? t('sheet.noMessages')}
       </span>
       <span className="flex items-center justify-between gap-2 text-12 text-muted">
         <span className="flex min-w-0 items-center gap-2.5">
@@ -129,17 +138,17 @@ function OpenCaseItem({ summary, now, onOpenCase, onReassign }: OpenCaseItemProp
           caseId={summary.id}
           onOpen={onOpenCase}
           variant="button"
-          aria-label={`Ver conversación de ${summary.customer.displayName}`}
+          aria-label={t('sheet.viewConversationOf', { name: summary.customer.displayName })}
         >
-          Ver conversación
+          {t('sheet.viewConversation')}
         </CaseLink>
         <Button
           size="sm"
           variant="secondary"
-          aria-label={`Reasignar el caso de ${summary.customer.displayName}`}
+          aria-label={t('sheet.reassignCaseOf', { name: summary.customer.displayName })}
           onClick={() => onReassign(summary.id)}
         >
-          Reasignar
+          {t('actions.reassign')}
         </Button>
       </span>
     </li>

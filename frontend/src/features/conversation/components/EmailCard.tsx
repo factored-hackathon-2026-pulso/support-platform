@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Avatar } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { formatDateTime } from '@/lib/format'
+import { useTranslation } from '@/lib/i18n'
 import { emailSnippet } from '../channels'
 import type { TranscriptItem } from '../model'
 
@@ -12,13 +13,14 @@ import type { TranscriptItem } from '../model'
  * open with the whole body. Unanswered emails and the newest start open; the rest start collapsed.
  */
 export function EmailCard({ item, defaultOpen }: { item: TranscriptItem; defaultOpen?: boolean }) {
+  const { t } = useTranslation('conversation')
   const [open, setOpen] = useState(defaultOpen ?? Boolean(item.isNew || item.latest))
   const bodyId = useId()
   const customer = item.speaker === 'customer'
   return (
     <li>
       <article
-        aria-label={`Correo de ${item.author ?? ''}`}
+        aria-label={t('transcript.emailFrom', { name: item.author ?? '' })}
         className={cn(
           'flex flex-col rounded-12 border bg-surface',
           item.isNew ? 'border-accent-border' : 'border-border',
@@ -51,7 +53,7 @@ export function EmailCard({ item, defaultOpen }: { item: TranscriptItem; default
               {item.isNew ? (
                 <span className="inline-flex items-center gap-1 font-semibold text-accent-strong">
                   <span aria-hidden="true" className="size-2 rounded-full bg-accent" />
-                  Nuevo
+                  {t('transcript.emailNew')}
                 </span>
               ) : null}
               <span>{formatDateTime(item.createdAt, { withYear: false })}</span>

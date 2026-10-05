@@ -198,3 +198,27 @@ describe('CaseHistorySheet', () => {
     expect(onClose).toHaveBeenCalled()
   })
 })
+
+describe('CaseHistorySheet in Portuguese (slice 23)', () => {
+  it('lists the other cases, reads one and goes back', async () => {
+    const { user } = renderWithProviders(<Harness />, { staff: analystStaff, locale: 'pt-BR' })
+    const sheet = screen.getByRole('dialog', { name: 'Casos anteriores de Patricia' })
+    expect(sheet).toHaveAccessibleDescription('Conversas que teve com a equipe. Somente leitura.')
+    const list = await within(sheet).findByRole('list', { name: 'Casos anteriores' })
+    await user.click(within(list).getAllByRole('button')[1]!)
+    expect(
+      await within(sheet).findByRole('heading', { name: 'Caso CASE-…0110' }),
+    ).toBeInTheDocument()
+    const messages = await within(sheet).findByRole('list', { name: 'Mensagens do caso anterior' })
+    // The analyst's own turns are "Você" for her; the transcript itself is never translated.
+    expect(within(messages).getByText(/Soy Julián, de LATAM Bank/)).toBeInTheDocument()
+    await user.click(within(sheet).getByRole('button', { name: 'Todos os casos anteriores' }))
+    expect(await within(sheet).findByRole('list', { name: 'Casos anteriores' })).toBeInTheDocument()
+  })
+
+  it('says when there are no other cases', async () => {
+    vi.mocked(api.fetchCaseHistory).mockResolvedValueOnce({ items: [], total: 0 })
+    renderWithProviders(<Harness />, { staff: analystStaff, locale: 'pt-BR' })
+    expect(await screen.findByText('Não tem outros casos.')).toBeInTheDocument()
+  })
+})

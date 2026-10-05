@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Mail, MessageSquare, Phone, type LucideIcon } from 'lucide-react'
 import { Callout, cardClasses } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { CHANNEL_OPTIONS, type SimChannel } from '../channels'
 
 const ICONS: Record<SimChannel, LucideIcon> = {
@@ -25,6 +26,7 @@ export interface ChannelPickerProps {
  * or Escribir un correo, as three cards with their icon.
  */
 export function ChannelPicker({ firstName, busy, error, errorAction, onPick }: ChannelPickerProps) {
+  const { t } = useTranslation('customer', { keyPrefix: 'channels' })
   return (
     <section
       aria-labelledby="canal-title"
@@ -32,15 +34,12 @@ export function ChannelPicker({ firstName, busy, error, errorAction, onPick }: C
     >
       <div className="flex flex-col gap-1">
         <h2 id="canal-title" className="m-0 font-display text-20 font-bold">
-          ¿Cómo se comunica {firstName} con el banco?
+          {t('title', { name: firstName })}
         </h2>
-        <p className="m-0 text-14 text-ink-2">
-          El caso le llega a alguien disponible del equipo que hable su idioma, por el canal que
-          elijas.
-        </p>
+        <p className="m-0 text-14 text-ink-2">{t('subtitle')}</p>
       </div>
       {error ? (
-        <Callout tone="danger" title="No se pudo llamar" actions={errorAction}>
+        <Callout tone="danger" title={t('callFailed')} actions={errorAction}>
           {error}
         </Callout>
       ) : null}

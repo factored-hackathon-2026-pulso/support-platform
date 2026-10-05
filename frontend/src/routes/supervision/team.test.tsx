@@ -357,3 +357,74 @@ describe('supervision routes', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('team screen in Portuguese (pt-BR)', () => {
+  it('lists the analysts with Portuguese headers, states and figures', async () => {
+    const { user } = renderRoute('/supervision/team', { staff: supervisorStaff, locale: 'pt-BR' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Equipe' })).toBeInTheDocument()
+    expect(await screen.findByText('6 analistas')).toBeInTheDocument()
+    for (const header of [
+      'Nome',
+      'Agora',
+      'Idiomas',
+      'Abertos',
+      'A responder',
+      'Maior espera',
+      'Em risco',
+      'Avaliação 7 dias',
+    ]) {
+      expect(within(analystsTable()).getByRole('columnheader', { name: header })).toBeVisible()
+    }
+    const danielaRow = row(/Daniela Ríos/)
+    expect(within(danielaRow).getByText('Atendendo')).toBeInTheDocument()
+    expect(within(danielaRow).getByText('sem sessão aberta')).toBeInTheDocument()
+    expect(within(danielaRow).getByText('Carga alta')).toBeInTheDocument()
+    expect(within(row(/Julián Ortega/)).getByText('Em pausa')).toBeInTheDocument()
+    expect(within(row(/Paula Medina/)).getByText('Sem conexão')).toBeInTheDocument()
+    expect(screen.getByText('7 casos abertos')).toBeInTheDocument()
+    expect(screen.getByText('2 em risco')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Julián Ortega' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Julián Ortega' })
+    // The count label and the case's status pill share the words.
+    expect(within(sheet).getAllByText('Aguardando o cliente')).toHaveLength(2)
+    expect(
+      within(sheet).getByRole('link', { name: 'Ver conversa de Camila Torres Benavides' }),
+    ).toBeInTheDocument()
+    expect(
+      within(sheet).getByRole('button', { name: 'Reatribuir o caso de Camila Torres Benavides' }),
+    ).toBeInTheDocument()
+  })
+
+  it('reassigns in Portuguese; the customer notice stays in the case language', async () => {
+    vi.mocked(setCaseAssignee).mockResolvedValue({
+      changed: true,
+      case: makeCaseSummary({ ...julianCamila, assignedAnalystId: DANIELA_ID }),
+      assignment: { ...makeCaseDetail().assignment!, reason: 'manual' },
+    })
+    const { user } = renderRoute(`/supervision/team?reassign=${julianCamila.id}`, {
+      staff: supervisorStaff,
+      locale: 'pt-BR',
+    })
+    const dialog = await screen.findByRole('dialog', { name: 'Reatribuir caso' })
+    expect(within(dialog).getByText('Atendido por Julián Ortega')).toBeInTheDocument()
+    expect(within(dialog).getByText('Sugestões')).toBeInTheDocument()
+    expect(within(dialog).getByText('Para quem?')).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('checkbox', { name: 'Incluir quem está em pausa ou desconectado' }),
+    ).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Reatribuir' }))
+    expect(within(dialog).getByText('Escolha para quem passar o caso.')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('radio', { name: /^Daniela Ríos/ }))
+    expect(within(dialog).getByText('O cliente verá')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('Ahora te atiende Daniela, de nuestro equipo.'),
+    ).toHaveAttribute('lang', 'es')
+    await user.click(within(dialog).getByRole('button', { name: 'Reatribuir para Daniela' }))
+    expect(
+      await screen.findByText(
+        'O caso de Camila Torres Benavides passou de Julián Ortega para Daniela Ríos.',
+      ),
+    ).toBeInTheDocument()
+  })
+})

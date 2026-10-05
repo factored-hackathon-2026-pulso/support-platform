@@ -2,7 +2,8 @@ import { Link } from 'react-router'
 import { StatusIcon, toneBorderLeft } from '@/components/ui'
 import type { InboxCounts } from '@/features/cases'
 import { cn } from '@/lib/cn'
-import { CLOSED_TILE_HINT, statusTiles } from '../model'
+import { useTranslation } from '@/lib/i18n'
+import { closedTileHint, statusTileLabel, statusTiles } from '../model'
 
 /**
  * The four status counters (canvas `tiles`): Por responder · Nuevos · Esperando
@@ -10,16 +11,17 @@ import { CLOSED_TILE_HINT, statusTiles } from '../model'
  * (`/analyst/cases?status=…`). The Casos list itself has no tiles (slice 6 §4.3).
  */
 export function StatusTiles({ counts }: { counts: InboxCounts | undefined }) {
+  const { t } = useTranslation(['home', 'cases'])
   return (
-    <nav aria-label="Tus casos por estado">
+    <nav aria-label={t('tiles.nav')}>
       <ul className="m-0 grid list-none grid-cols-4 gap-3 p-0">
         {statusTiles(counts).map((tile) => {
-          const hint = tile.status === 'closed' ? CLOSED_TILE_HINT : null
+          const hint = tile.status === 'closed' ? closedTileHint() : null
           return (
             <li key={tile.status}>
               <Link
                 to={tile.href}
-                aria-label={`${tile.count ?? 'Sin dato de'} ${tile.label}${hint ? `, ${hint.toLowerCase()}` : ''}. Ver en Casos`}
+                aria-label={statusTileLabel(tile, hint)}
                 className={cn(
                   'flex h-full flex-col gap-0.5 rounded-12 border border-l-4 border-border bg-surface px-4 py-3 text-ink transition-colors hover:border-ink-2',
                   toneBorderLeft[tile.tone],

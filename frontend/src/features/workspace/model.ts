@@ -1,8 +1,12 @@
 /**
  * Pure rules of the Workspace screen: which case to show and the empty-state copy (the
- * URL state is in url.ts). No React, no I/O: unit-tested in model.test.ts.
+ * URL state is in url.ts). No React, no I/O: unit-tested in model.test.ts. Copy comes from
+ * the `workspace` catalog, read when a function runs.
  */
 import type { CaseSummary } from '@/features/cases'
+import { i18n } from '@/lib/i18n'
+
+const t = i18n.getFixedT(null, 'workspace')
 
 /** First case of the list that is not in `skip` (cases just closed here). */
 export function firstSelectableCase(
@@ -38,14 +42,8 @@ export interface EmptyWorkspaceCopy {
 
 /** No open case at all; the paused variant explains why nothing arrives (contract §9.2). */
 export function emptyWorkspaceCopy(paused: boolean): EmptyWorkspaceCopy {
-  return paused
-    ? {
-        title: 'No tienes casos abiertos',
-        description:
-          'Estás en pausa: no te llegan casos nuevos. Vuelve a disponible para recibir el siguiente.',
-      }
-    : {
-        title: 'No tienes casos abiertos',
-        description: 'Estás disponible. Cuando un cliente escriba y te corresponda, aparece aquí.',
-      }
+  return {
+    title: t('empty.title'),
+    description: t(paused ? 'empty.paused' : 'empty.available'),
+  }
 }

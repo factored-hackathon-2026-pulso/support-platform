@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { CircleArrowUp, Users, WandSparkles } from 'lucide-react'
 import { Button, Callout, Dialog, Field, Textarea, useToast } from '@/components/ui'
 import { MAX_ESCALATION_TEXT } from '@/features/cases'
+import { useTranslation } from '@/lib/i18n'
 import { describeEscalationFailure, motiveCounter, shortCaseId, validateMotive } from '../model'
 import { useEscalateCase } from '../hooks/use-escalation'
 import type { CaseSummary } from '../types'
@@ -42,6 +43,7 @@ export function EscalateCaseDialog({
   onOpenChange,
   suggestion = null,
 }: EscalateCaseDialogProps) {
+  const { t } = useTranslation('conversation')
   const escalate = useEscalateCase(summary.id)
   const { toast } = useToast()
   const [motive, setMotive] = useState('')
@@ -79,7 +81,7 @@ export function EscalateCaseDialog({
       {
         onSuccess: () => {
           changeOpen(false)
-          toast({ title: 'Escalaste el caso a supervisión', duration: 4000 })
+          toast({ title: t('escalation.dialog.done'), duration: 4000 })
         },
       },
     )
@@ -89,7 +91,7 @@ export function EscalateCaseDialog({
     <Dialog
       open={open}
       onOpenChange={changeOpen}
-      title="Escalar a supervisión"
+      title={t('escalation.dialog.title')}
       description={
         <span className="inline-flex flex-wrap items-center gap-x-2">
           <span>{summary.customer.displayName}</span>
@@ -101,7 +103,7 @@ export function EscalateCaseDialog({
       footer={
         <>
           <Button variant="secondary" onClick={() => changeOpen(false)}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -109,7 +111,7 @@ export function EscalateCaseDialog({
             icon={<CircleArrowUp size={15} aria-hidden="true" />}
             onClick={submit}
           >
-            Escalar
+            {t('escalation.dialog.submit')}
           </Button>
         </>
       }
@@ -118,17 +120,17 @@ export function EscalateCaseDialog({
         {suggestedBy ? (
           <p className="m-0 inline-flex items-center gap-1.5 text-13 text-accent-strong">
             <WandSparkles size={14} aria-hidden="true" />
-            El copiloto sugirió este motivo. Revísalo antes de escalar.
+            {t('escalation.dialog.suggested')}
           </p>
         ) : null}
         <Field
-          label="Motivo"
+          label={t('escalation.dialog.motive')}
           required
           error={error ?? undefined}
           hint={
             <span className="inline-flex items-center gap-1">
               <Users size={13} aria-hidden="true" />
-              Lo ve el equipo. El cliente no.
+              {t('escalation.dialog.visibility')}
             </span>
           }
           labelAside={<span className="text-12 text-muted">{motiveCounter(motive)}</span>}
@@ -137,7 +139,7 @@ export function EscalateCaseDialog({
             ref={motiveRef}
             rows={4}
             maxLength={MAX_ESCALATION_TEXT}
-            placeholder="Qué necesitas de supervisión"
+            placeholder={t('escalation.dialog.placeholder')}
             value={motive}
             onChange={(event) => {
               setMotive(event.target.value)
@@ -145,11 +147,11 @@ export function EscalateCaseDialog({
             }}
           />
         </Field>
-        <Callout tone="info" title="El caso sigue contigo">
-          Puedes seguir escribiéndole al cliente mientras supervisión responde.
+        <Callout tone="info" title={t('escalation.dialog.staysTitle')}>
+          {t('escalation.dialog.staysText')}
         </Callout>
         {escalate.isError ? (
-          <Callout tone="danger" title="No se escaló el caso">
+          <Callout tone="danger" title={t('escalation.dialog.failedTitle')}>
             {describeEscalationFailure(escalate.error, 'escalate')}
           </Callout>
         ) : null}

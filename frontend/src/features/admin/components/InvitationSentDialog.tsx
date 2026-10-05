@@ -1,6 +1,7 @@
 import { Check, Lock, Mail, Smartphone } from 'lucide-react'
 import { Button, Dialog } from '@/components/ui'
-import { INVITATION_EXPIRY_SENTENCE, INVITATION_SENT_FOOTNOTE, INVITATION_STEPS } from '../model'
+import { Trans, useTranslation } from '@/lib/i18n'
+import { INVITATION_STEPS, invitationExpirySentence, invitationSentFootnote } from '../model'
 
 const STEP_ICON = { lock: Lock, smartphone: Smartphone, check: Check } as const
 
@@ -16,6 +17,7 @@ export interface InvitationSentDialogProps {
  * idempotent replay of the same create (the invitation already exists).
  */
 export function InvitationSentDialog({ email, onClose }: InvitationSentDialogProps) {
+  const { t } = useTranslation(['admin', 'common'])
   return (
     <Dialog
       open
@@ -31,18 +33,23 @@ export function InvitationSentDialog({ email, onClose }: InvitationSentDialogPro
           >
             <Mail size={18} />
           </span>
-          Invitación enviada
+          {t('invitation.sentTitle')}
         </span>
       }
       footer={
         <Button variant="primary" onClick={onClose}>
-          Listo
+          {t('common:actions.done')}
         </Button>
       }
     >
       <p className="m-0 text-15 leading-[1.5] text-ink">
-        Invitación enviada a <span className="font-semibold">{email}</span>.{' '}
-        {INVITATION_EXPIRY_SENTENCE}
+        <Trans
+          t={t}
+          i18nKey="invitation.sentTo"
+          values={{ email }}
+          components={{ strong: <span className="font-semibold" /> }}
+        />{' '}
+        {invitationExpirySentence()}
       </p>
       <ul className="m-0 flex list-none flex-col gap-2 p-0 text-14 text-ink-2">
         {INVITATION_STEPS.map((step) => {
@@ -55,7 +62,7 @@ export function InvitationSentDialog({ email, onClose }: InvitationSentDialogPro
           )
         })}
       </ul>
-      <p className="m-0 text-13 text-muted">{INVITATION_SENT_FOOTNOTE}</p>
+      <p className="m-0 text-13 text-muted">{invitationSentFootnote()}</p>
     </Dialog>
   )
 }

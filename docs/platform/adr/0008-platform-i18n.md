@@ -1,7 +1,7 @@
 # ADR 0008 · Platform UI in Spanish and Brazilian Portuguese
 
-- Status: **Accepted** (user decision of 2026-10-04). 23a (the foundation) is built: contract
-  `api/slice-23-i18n.md`. 23b (the areas) and 23c (server-rendered texts, Portuguese e2e) are planned there.
+- Status: **Accepted** (user decision of 2026-10-04). 23a (the foundation) and 23b (the areas, with a
+  Portuguese e2e walk) are built: contract `api/slice-23-i18n.md`. 23c (server-rendered texts) is planned there.
 - Date: 2026-10-04
 - Scope: `frontend/` (the staff app and, without changing its behaviour, the customer simulator), `backend/`
   (the preference; server texts in 23c).

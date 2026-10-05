@@ -15,6 +15,7 @@ import {
   Table,
 } from '@/components/ui'
 import { shortCaseId } from '@/features/conversation'
+import { useTranslation } from '@/lib/i18n'
 import {
   actorName,
   actorRoleLabel,
@@ -66,13 +67,10 @@ export function AuditLog({
   onRetry,
   onClearFilters,
 }: AuditLogProps) {
+  const { t } = useTranslation(['audit', 'common'])
   let body
   if (blocked) {
-    body = (
-      <p className="m-0 px-7 py-10 text-center text-14 text-muted">
-        Corrige las fechas para ver el registro.
-      </p>
-    )
+    body = <p className="m-0 px-7 py-10 text-center text-14 text-muted">{t('log.blocked')}</p>
   } else if (status === 'pending') {
     body = <LogSkeleton />
   } else if (status === 'error') {
@@ -80,14 +78,14 @@ export function AuditLog({
       <div className="px-7 py-6">
         <Callout
           tone="danger"
-          title="No pudimos cargar el registro"
+          title={t('log.errorTitle')}
           actions={
             <Button size="sm" loading={retrying} onClick={onRetry}>
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
           }
         >
-          Revisa tu conexión e inténtalo de nuevo.
+          {t('common:query.errorDescription')}
         </Callout>
       </div>
     )
@@ -100,7 +98,7 @@ export function AuditLog({
         action={
           filtered ? (
             <Button variant="secondary" onClick={onClearFilters}>
-              Limpiar filtros
+              {t('common:filters.clear')}
             </Button>
           ) : null
         }
@@ -109,13 +107,13 @@ export function AuditLog({
   } else {
     body = (
       <>
-        <Table aria-label="Eventos" stickyHeader wrapperClassName="overflow-visible">
+        <Table aria-label={t('log.table')} stickyHeader wrapperClassName="overflow-visible">
           <THead>
             <TRow>
-              <TH className="w-[96px] bg-canvas pl-7">Hora</TH>
-              <TH className="w-[260px] bg-canvas">Quién</TH>
-              <TH className="bg-canvas">Qué hizo</TH>
-              <TH className="w-[140px] bg-canvas pr-7">Caso</TH>
+              <TH className="w-[96px] bg-canvas pl-7">{t('log.columns.time')}</TH>
+              <TH className="w-[260px] bg-canvas">{t('log.columns.who')}</TH>
+              <TH className="bg-canvas">{t('log.columns.what')}</TH>
+              <TH className="w-[140px] bg-canvas pr-7">{t('log.columns.case')}</TH>
             </TRow>
           </THead>
           <TBody>
@@ -146,12 +144,12 @@ export function AuditLog({
           <span className="text-13 text-muted">{shownCountLabel(events.length)}</span>
           {hasMore ? (
             <Button variant="secondary" size="sm" loading={loadingMore} onClick={onLoadMore}>
-              Cargar más
+              {t('log.loadMore')}
             </Button>
           ) : null}
           {loadMoreFailed ? (
             <span role="alert" className="text-13 text-danger-strong">
-              No pudimos cargar más eventos. Inténtalo de nuevo.
+              {t('log.loadMoreFailed')}
             </span>
           ) : null}
         </div>
@@ -160,7 +158,7 @@ export function AuditLog({
   }
 
   return (
-    <section aria-label="Registro" className="min-w-0 grow scrollbar-thin overflow-y-auto">
+    <section aria-label={t('log.region')} className="min-w-0 grow scrollbar-thin overflow-y-auto">
       {body}
     </section>
   )
@@ -173,6 +171,7 @@ interface EventRowProps {
 }
 
 function EventRow({ event, selected, onSelect }: EventRowProps) {
+  const { t } = useTranslation('audit')
   const { actor } = event
   return (
     <TRow selected={selected} onSelect={onSelect}>
@@ -195,7 +194,7 @@ function EventRow({ event, selected, onSelect }: EventRowProps) {
         <TRowSelect className="flex items-center gap-2">
           <span>{event.description}</span>
           {event.changesState ? (
-            <span className="shrink-0 text-11 font-semibold text-warn">CAMBIO</span>
+            <span className="shrink-0 text-11 font-semibold text-warn">{t('log.changes')}</span>
           ) : null}
         </TRowSelect>
       </TCell>

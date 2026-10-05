@@ -58,7 +58,10 @@ export function CustomerChat({ customerId, suggestions, language }: CustomerChat
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   // Slice 12: call lines and emails have their own views; the chat shows messages and notices.
-  const items = useMemo(() => (chat.data ? toChatItems(chatTurns(chat.data)) : []), [chat.data])
+  const items = useMemo(
+    () => (chat.data ? toChatItems(chatTurns(chat.data), language) : []),
+    [chat.data, language],
+  )
   const scrollRef = useScrollToEnd(items)
   const conversation = chat.data?.conversation ?? null
   // Slice 19: the assistant's typing pill, confirmation, second factor and "Hablar con una persona".

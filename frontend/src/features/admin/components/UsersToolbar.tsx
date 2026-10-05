@@ -8,6 +8,7 @@ import {
   type FilterGroup,
 } from '@/components/ui'
 import { useDebouncedValue } from '@/lib/hooks'
+import { useActiveLocale, useTranslation } from '@/lib/i18n'
 import {
   USER_SEARCH_MAX_LENGTH,
   clearUserFilters,
@@ -43,6 +44,7 @@ export function UsersToolbar({ state, onStateChange, groups, shown, total }: Use
     replace(usersPatchOfSelection(toggleFilter(selection, group, value)))
   const clear = () => replace({ ...clearUserFilters(state), query: state.query })
   const chips = activeFilterChips(groups, selection)
+  useActiveLocale()
 
   return (
     <div className="flex shrink-0 flex-col gap-2 border-b border-border px-7 py-3">
@@ -68,6 +70,7 @@ function UserSearch({ value, onChange }: { value: string; onChange(query: string
     setDraft(value)
   }
   const debounced = useDebouncedValue(draft, USER_SEARCH_DEBOUNCE_MS)
+  const { t } = useTranslation('admin')
   useEffect(() => {
     // Only a settled draft that differs from the URL is pushed.
     if (debounced === draft && debounced !== value) onChange(debounced)
@@ -76,8 +79,8 @@ function UserSearch({ value, onChange }: { value: string; onChange(query: string
   return (
     <SearchInput
       size="sm"
-      aria-label="Buscar persona"
-      placeholder="Buscar por nombre, correo o id"
+      aria-label={t('users.search')}
+      placeholder={t('users.searchPlaceholder')}
       maxLength={USER_SEARCH_MAX_LENGTH}
       value={draft}
       onChange={(event) => setDraft(event.target.value)}

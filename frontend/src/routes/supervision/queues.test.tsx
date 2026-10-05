@@ -254,3 +254,64 @@ describe('queues screen with the assistant (slice 19)', () => {
     expect(await screen.findByText('El asistente ya no tiene este caso')).toBeInTheDocument()
   })
 })
+
+describe('queues screen in Portuguese (pt-BR)', () => {
+  it('shows the queues, the cases and the filters in Portuguese', async () => {
+    const { user, router } = renderRoute('/supervision/queues', {
+      staff: supervisorStaff,
+      locale: 'pt-BR',
+    })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Filas' })).toBeInTheDocument()
+    expect(screen.getByText('Todos os casos abertos, por idioma')).toBeVisible()
+    expect(screen.getByText(/^A atribuição é automática: cada caso vai para/)).toBeInTheDocument()
+    const nav = screen.getByRole('navigation', { name: 'Idioma' })
+    expect(await within(nav).findByText('2 sem responsável')).toBeInTheDocument()
+    const ptTable = await screen.findByRole('table', { name: /^Casos abertos em / })
+    for (const header of ['Cliente', 'Status', 'Aberto', 'Primeira resposta', 'Responsável']) {
+      expect(within(ptTable).getByRole('columnheader', { name: header })).toBeVisible()
+    }
+    const rosa = within(ptTable).getByRole('row', { name: /Rosa Elena Ibarra Méndez/ })
+    expect(within(rosa).getAllByText('Sem responsável').length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: 'Filtros' }))
+    expect(screen.getByRole('group', { name: 'Prioridade' })).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Julián Ortega 2' }))
+    expect(router.state.location.search).toBe(`?analyst=${JULIAN_ID}`)
+    expect(screen.getByText(/^2 de \d+ casos abertos$/)).toBeInTheDocument()
+  })
+
+  it('takes a case from the assistant with Portuguese copy', async () => {
+    const ximena = {
+      ...queuedRosa,
+      id: 'CASE-00000000000000000000000119',
+      customer: { ...queuedRosa.customer, displayName: 'Ximena Robles Treviño' },
+      status: 'with_assistant' as const,
+      inboxStatus: null,
+    }
+    const open = makeOpenCases()
+    vi.mocked(fetchOpenCases).mockImplementation((language) =>
+      Promise.resolve(
+        language === 'pt'
+          ? portugueseOpenCases
+          : { ...open, cases: [...open.cases, { case: ximena, assigneeName: null }] },
+      ),
+    )
+    vi.mocked(releaseFromAssistant).mockResolvedValue({ ...ximena, status: 'queued' })
+    const { user } = renderRoute('/supervision/queues', {
+      staff: supervisorStaff,
+      aiEnabled: true,
+      locale: 'pt-BR',
+    })
+    const ptTable = await screen.findByRole('table', { name: /^Casos abertos em / })
+    const ximenaRow = within(ptTable).getByRole('row', { name: /Ximena Robles Treviño/ })
+    expect(within(ximenaRow).getByText('Assistente virtual')).toBeInTheDocument()
+    expect(within(ximenaRow).getByText('Não conta')).toBeInTheDocument()
+    await user.click(
+      within(ximenaRow).getByRole('button', { name: 'Assumir o caso de Ximena Robles Treviño' }),
+    )
+    expect(await screen.findByText('Você assumiu o caso do assistente')).toBeInTheDocument()
+    expect(
+      screen.getByText(/^Ficou na fila em .+: vai para a primeira pessoa disponível\.$/),
+    ).toBeInTheDocument()
+  })
+})

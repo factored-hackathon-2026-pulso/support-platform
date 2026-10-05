@@ -2,8 +2,9 @@
 
 Kept apart from ``Staff`` on purpose: administration edits ``Staff`` with an expected version,
 and a person changing her own language must never make an administrator's edit stale. A
-missing row means the defaults (``UiLanguage.SPANISH``). The server reads it too: the texts it
-renders for a person (notifications, emails, problem details) follow it in a later phase.
+missing row means the defaults (``UiLanguage.SPANISH``). The server reads it too (slice 23c):
+the audit is rendered in the reader's language and her emails in hers; an invitation sets it
+to the language administration chose for her (``preset_ui_language``).
 """
 
 from __future__ import annotations
@@ -42,6 +43,15 @@ class StaffPreferences(AggregateRoot):
     @classmethod
     def default(cls, staff_id: str) -> StaffPreferences:
         return cls(staff_id=staff_id)
+
+    def preset_ui_language(self, language: UiLanguage) -> bool:
+        """Slice 23c: the language administration chose when it invited her (her emails and
+        her first sign-in use it). Not her own change, so nothing is recorded; ``False`` when
+        it is already ``language``."""
+        if language is self.ui_language:
+            return False
+        self.ui_language = language
+        return True
 
     def set_ui_language(self, language: UiLanguage, *, now: datetime, actor: ActorRef) -> bool:
         """Change the UI language; ``False`` (nothing recorded) when it is already ``language``."""

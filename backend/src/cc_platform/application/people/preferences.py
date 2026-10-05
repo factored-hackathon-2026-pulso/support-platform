@@ -3,7 +3,8 @@
 Any staff member reads and changes her own (``GET|PUT /me/preferences``); the change is an
 event (``staff.ui_language_changed``, audited like her other self changes) and reaches her
 other sessions as ``preferences.updated`` on ``staff:<id>``. ``ui_language_of`` is the one
-server-side reader: the texts the server renders for a person follow it in a later phase.
+server-side reader: the texts the server renders for a person follow it (slice 23c: the
+audit for its reader, the invitation and password-reset emails for their recipient).
 """
 
 from __future__ import annotations
@@ -14,7 +15,11 @@ from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
-from cc_platform.domain.people.preferences import StaffPreferences, UiLanguage
+from cc_platform.domain.people.preferences import (
+    DEFAULT_UI_LANGUAGE,
+    StaffPreferences,
+    UiLanguage,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,8 +37,18 @@ async def preferences_of(uow: UnitOfWork, staff_id: str) -> StaffPreferences:
 
 
 async def ui_language_of(uow: UnitOfWork, staff_id: str) -> UiLanguage:
-    """The language the platform speaks to her (server-rendered texts, later phase)."""
+    """The language the platform speaks to her (server-rendered texts)."""
     return (await preferences_of(uow, staff_id)).ui_language
+
+
+async def preset_ui_language(uow: UnitOfWork, staff_id: str, language: UiLanguage) -> None:
+    """Slice 23c: an invitation's language becomes hers (no event: not her own change)."""
+    stored = await uow.preferences.get(staff_id)
+    if stored is None:
+        if language is not DEFAULT_UI_LANGUAGE:
+            await uow.preferences.add(StaffPreferences(staff_id=staff_id, ui_language=language))
+    elif stored.preset_ui_language(language):
+        await uow.preferences.save(stored)
 
 
 @dataclass(frozen=True, slots=True)

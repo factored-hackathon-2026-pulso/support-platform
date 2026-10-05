@@ -92,7 +92,7 @@ from cc_platform.domain.cases.events import (
     CaseViewed,
     TurnCreated,
 )
-from cc_platform.domain.cases.turn import Turn
+from cc_platform.domain.cases.turn import StaffLine, Turn
 from cc_platform.domain.cases.values import TurnAudience, TurnAuthorRole, TurnKind
 from cc_platform.domain.customers.events import CustomerSessionStarted
 from cc_platform.domain.people.availability import AvailabilityStatus
@@ -192,6 +192,7 @@ def turn_from_event(event: TurnCreated) -> Turn:
         created_at=event.occurred_at,
         client_message_id=event.client_message_id,
         subject=event.subject,
+        staff_line=StaffLine.from_json(event.staff_line),
     )
 
 

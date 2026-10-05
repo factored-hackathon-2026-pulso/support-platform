@@ -5,8 +5,9 @@ no external service) that ``GET /api/v1/dev/mailbox`` lists while ``CC_DEV_MAILB
 (never in production). A production adapter (SMTP or a provider's API) is not built: the
 container refuses to start with ``CC_ENV=prod`` until it exists (see the README).
 
-Messages are plain text in Spanish (neutral), composed by the application
-(``application/people/onboarding/emails.py``); adapters only deliver them.
+Messages are plain text in the recipient's UI language (Spanish or Brazilian Portuguese,
+slice 23c), composed by the application (``application/people/onboarding/emails.py``);
+adapters only deliver them.
 """
 
 from __future__ import annotations

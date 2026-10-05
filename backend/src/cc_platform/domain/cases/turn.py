@@ -7,12 +7,14 @@ case, staff-only turns included).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from cc_platform.domain.cases.values import (
     CONVERSATION_KINDS,
     EmailDirection,
+    StaffLineKind,
     TurnAudience,
     TurnAuthorRole,
     TurnKind,
@@ -21,6 +23,7 @@ from cc_platform.domain.people.staff import Language
 from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import InvalidValueError
 from cc_platform.domain.shared.ids import IdPrefix, require_id
+from cc_platform.domain.shared.json import JsonObject, JsonValue
 
 MAX_TURN_TEXT = 4000
 MAX_EMAIL_SUBJECT = 200
@@ -51,6 +54,42 @@ def normalize_email_subject(subject: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class StaffLine:
+    """Slice 23c: the facts of a staff-only transcript line (``routing`` turn): what it says
+    (``kind``) and with what (``params``: names as they were then, ids of enums, counts,
+    ISO times). The turn's ``text`` keeps the Spanish sentence; the staff UI writes the line
+    from these facts in each viewer's language. Older turns have none (their text is shown).
+    """
+
+    kind: StaffLineKind
+    params: Mapping[str, str | int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for key, value in self.params.items():
+            if not isinstance(value, str | int) or isinstance(value, bool):
+                raise InvalidValueError(f"staff line param {key} must be text or a number")
+
+    def to_json(self) -> JsonObject:
+        params: dict[str, JsonValue] = dict(self.params)
+        return {"kind": self.kind.value, "params": params}
+
+    @classmethod
+    def from_json(cls, data: object) -> StaffLine | None:
+        """The stored facts, or ``None`` when absent or not understood (the text is shown)."""
+        if not isinstance(data, dict):
+            return None
+        kind, params = data.get("kind"), data.get("params")
+        if kind not in {k.value for k in StaffLineKind} or not isinstance(params, dict):
+            return None
+        clean = {
+            str(k): v
+            for k, v in params.items()
+            if isinstance(v, str | int) and not isinstance(v, bool)
+        }
+        return cls(StaffLineKind(kind), clean)
+
+
+@dataclass(frozen=True, slots=True)
 class Turn:
     id: str
     case_id: str
@@ -65,6 +104,8 @@ class Turn:
     client_message_id: str | None = None
     subject: str | None = None
     """Slice 12: the subject of an ``email`` turn (``None`` on every other kind)."""
+    staff_line: StaffLine | None = None
+    """Slice 23c: the facts of a staff-only line (``routing`` turns written since 23c)."""
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.TURN)
@@ -75,6 +116,8 @@ class Turn:
             raise InvalidValueError("turn text must be normalised", field="text")
         if self.kind is TurnKind.ROUTING and self.audience is not TurnAudience.STAFF:
             raise InvalidValueError("routing banners are staff-only", field="audience")
+        if self.staff_line is not None and self.kind is not TurnKind.ROUTING:
+            raise InvalidValueError("only a routing banner has staff-line facts", field="kind")
         if self.author_role is not TurnAuthorRole.SYSTEM and not self.author_id:
             raise InvalidValueError("only system turns may lack an author", field="author_id")
         self._check_channel_kinds()

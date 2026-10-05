@@ -10,6 +10,7 @@ import type { FactIcon, FactItem, StatusAppearance, Tone } from '@/components/ui
 import {
   caseStatus,
   caseChannel,
+  closeReasonLabel,
   channelFact,
   channelLabel,
   countryName,
@@ -312,7 +313,8 @@ export function turnAuthor(turn: Turn, variant: TranscriptVariant, meId = ''): s
     case 'analyst':
       return turn.authorName ?? t('transcript.analyst')
     case 'assistant':
-      return turn.authorName ?? t('transcript.assistant')
+      // Slice 23c: the server names it in Spanish ("Asistente virtual"); staff read their own.
+      return t('transcript.assistant')
     case 'line': {
       // The canvas labels the call's two sides "Cliente" and "Tú".
       const speaker = turnSpeaker(turn, meId)
@@ -368,6 +370,129 @@ function channelFields(
   return {}
 }
 
+// ── Staff-only lines (slice 23c) ─────────────────────────────────────────────
+
+/** The facts of a staff-only line (`Turn.staffLine`). */
+export type StaffLine = NonNullable<Turn['staffLine']>
+
+const CLOSE_REASONS_KNOWN: readonly CloseReason[] = [
+  'resolved',
+  'customer_unresponsive',
+  'duplicate',
+  'out_of_scope',
+  'other',
+]
+const RELEASE_REASONS = [
+  'escalated',
+  'ended',
+  'failed',
+  'supervision',
+  'customer_request',
+  'ai_disabled',
+] as const
+type ReleaseReason = (typeof RELEASE_REASONS)[number]
+
+function isReleaseReason(value: string | null): value is ReleaseReason {
+  return (RELEASE_REASONS as readonly (string | null)[]).includes(value)
+}
+
+/**
+ * A staff-only line of the transcript written from its facts in the viewer's language
+ * ("Asignado a Daniela Ríos porque está disponible y habla español." / "Atribuído a Daniela
+ * Ríos porque está disponível e fala espanhol."). `null` when the facts are missing a value
+ * this version needs: the turn's stored (Spanish) text is shown instead, as for lines written
+ * before 23c. The previous case's closing time is shown in the viewer's zone.
+ */
+export function staffLineText(line: StaffLine): string | null {
+  const text = (key: string): string | null => {
+    const value = line.params[key]
+    return typeof value === 'string' && value !== '' ? value : null
+  }
+  const count = (key: string): number | null => {
+    const value = line.params[key]
+    return typeof value === 'number' ? value : null
+  }
+  const raw = text('language')
+  const language: Language | null = raw === 'es' || raw === 'pt' ? raw : null
+  const analyst = text('analyst')
+  const supervisor = text('supervisor')
+  const previous = text('previous')
+  const minutes = count('minutes')
+  const paused = text('paused')
+  switch (line.kind) {
+    case 'assigned_on_arrival':
+      return analyst && language ? t(`staffLine.assignedOnArrival.${language}`, { analyst }) : null
+    case 'assigned_from_assistant':
+      return analyst && language
+        ? t(`staffLine.assignedFromAssistant.${language}`, { analyst })
+        : null
+    case 'queued':
+      return language ? t(`staffLine.queued.${language}`) : null
+    case 'assigned_from_queue':
+      return analyst && language && minutes !== null
+        ? t(`staffLine.assignedFromQueue.${language}`, { analyst, minutes })
+        : null
+    case 'assigned_by_supervision': {
+      if (!supervisor || !analyst || !language || minutes === null) return null
+      const values = { supervisor, analyst, minutes }
+      return paused
+        ? t(`staffLine.assignedBySupervisionPaused.${language}`, { ...values, paused })
+        : t(`staffLine.assignedBySupervision.${language}`, values)
+    }
+    case 'reassigned': {
+      if (!supervisor || !previous || !analyst) return null
+      const values = { supervisor, previous, analyst }
+      return paused
+        ? t('staffLine.reassignedPaused', { ...values, paused })
+        : t('staffLine.reassigned', values)
+    }
+    case 'wrote_again': {
+      const customer = text('customer')
+      const closedAt = text('closedAt')
+      const reason = CLOSE_REASONS_KNOWN.find((value) => value === text('closeReason'))
+      if (!customer || !closedAt || !reason || Number.isNaN(Date.parse(closedAt))) return null
+      const values = {
+        customer,
+        date: formatDateTime(closedAt),
+        reason: closeReasonLabel(reason).toLocaleLowerCase(i18n.language),
+      }
+      return text('channel') === 'phone_inbound'
+        ? t('staffLine.calledAgain', values)
+        : t('staffLine.wroteAgain', values)
+    }
+    case 'escalated':
+      return analyst ? t('staffLine.escalated', { analyst }) : null
+    case 'escalation_withdrawn':
+      return analyst ? t('staffLine.escalationWithdrawn', { analyst }) : null
+    case 'escalation_answered':
+      return supervisor ? t('staffLine.escalationAnswered', { supervisor }) : null
+    case 'escalation_taken':
+      return supervisor && previous
+        ? t('staffLine.escalationTaken', { supervisor, previous })
+        : null
+    case 'assistant_released': {
+      // An unknown reason reads as a failure, as the server's Spanish text does.
+      const reason = text('reason')
+      return t(`staffLine.assistantReleased.${isReleaseReason(reason) ? reason : 'failed'}`, {
+        ref: text('ref') ?? t('staffLine.noReference'),
+        code: text('code') ?? t('staffLine.noDetail'),
+        who: text('who') ?? t('staffLine.supervision'),
+      })
+    }
+    case 'follow_up_call': {
+      const customer = text('customer')
+      return analyst && customer ? t('staffLine.followUpCall', { analyst, customer }) : null
+    }
+    default:
+      return null
+  }
+}
+
+/** What a turn says on screen: a staff-only line from its facts, else the stored text. */
+export function turnText(turn: Turn): string {
+  return (turn.staffLine ? staffLineText(turn.staffLine) : null) ?? turn.text
+}
+
 /** Confirmed turns in sequence order, then the pending messages in the order they were sent. */
 export function toTranscriptItems(
   cache: TranscriptCache,
@@ -381,7 +506,7 @@ export function toTranscriptItems(
     return {
       key: turn.clientMessageId ?? turn.id,
       variant,
-      text: turn.text,
+      text: turnText(turn),
       author: turnAuthor(turn, variant, meId),
       createdAt: turn.createdAt,
       sequence: turn.sequence,

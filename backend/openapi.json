@@ -3231,6 +3231,11 @@
             "maxLength": 64,
             "title": "Teamid",
             "type": "string"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "default": "es",
+            "description": "Slice 23c: her platform language (the invitation email, the activation screens and her first sign-in use it). Default `es`."
           }
         },
         "required": [
@@ -5412,6 +5417,10 @@
           "teamName": {
             "title": "Teamname",
             "type": "string"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "description": "Slice 23c: her platform language, as administration chose it."
           }
         },
         "required": [
@@ -5420,7 +5429,8 @@
           "roles",
           "teamName",
           "expiresAt",
-          "passwordRules"
+          "passwordRules",
+          "uiLanguage"
         ],
         "title": "InvitationCheck",
         "type": "object"
@@ -6272,13 +6282,18 @@
           },
           "passwordRules": {
             "$ref": "#/components/schemas/PasswordRules"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "description": "Slice 23c: her platform language."
           }
         },
         "required": [
           "name",
           "email",
           "expiresAt",
-          "passwordRules"
+          "passwordRules",
+          "uiLanguage"
         ],
         "title": "PasswordResetCheck",
         "type": "object"
@@ -8011,6 +8026,54 @@
         "title": "SinceSource",
         "type": "string"
       },
+      "StaffLine": {
+        "description": "Slice 23c: the facts of a staff-only transcript line; the staff UI writes the sentence\nin the viewer's language (``text`` keeps the Spanish one).\n\n``params`` by ``kind`` (names as they were when the line was written; ``language`` is the\ncase language ``es`` | ``pt``):\n``assigned_on_arrival`` / ``assigned_from_assistant`` {analyst, language};\n``queued`` {language}; ``assigned_from_queue`` {analyst, minutes, language};\n``wrote_again`` {customer (first name), closedAt (ISO), closeReason, channel};\n``assigned_by_supervision`` {supervisor, analyst, minutes, language, paused?};\n``reassigned`` {supervisor, previous, analyst, paused?} (``paused``: the first name of\nthe analyst who was paused); ``escalated`` / ``escalation_withdrawn`` {analyst};\n``escalation_answered`` {supervisor}; ``escalation_taken`` {supervisor, previous};\n``assistant_released`` {reason, ref?, code?, who?}; ``follow_up_call`` {analyst, customer}.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/StaffLineKind"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "params"
+        ],
+        "title": "StaffLine",
+        "type": "object"
+      },
+      "StaffLineKind": {
+        "description": "Slice 23c: what a staff-only transcript line (a ``routing`` turn) says. The turn keeps\nthe facts (``StaffLine``: this kind and its parameters) next to its stored Spanish text,\nso each viewer's UI writes the sentence in her own language.",
+        "enum": [
+          "assigned_on_arrival",
+          "assigned_from_assistant",
+          "queued",
+          "assigned_from_queue",
+          "wrote_again",
+          "assigned_by_supervision",
+          "reassigned",
+          "escalated",
+          "escalation_withdrawn",
+          "escalation_answered",
+          "escalation_taken",
+          "assistant_released",
+          "follow_up_call"
+        ],
+        "title": "StaffLineKind",
+        "type": "string"
+      },
       "StaffListResponse": {
         "properties": {
           "items": {
@@ -8808,6 +8871,17 @@
             "title": "Sequence",
             "type": "integer"
           },
+          "staffLine": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaffLine"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 23c: the facts of a staff-only `routing` line, written in the viewer's language by the UI; null on other turns and on lines written before 23c (show `text`)."
+          },
           "subject": {
             "anyOf": [
               {
@@ -8838,7 +8912,8 @@
           "language",
           "createdAt",
           "clientMessageId",
-          "subject"
+          "subject",
+          "staffLine"
         ],
         "title": "Turn",
         "type": "object"

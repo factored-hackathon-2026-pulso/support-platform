@@ -73,7 +73,7 @@ test.describe('Platform language (slice 23)', () => {
 })
 
 test.describe('The platform in Portuguese (slice 23b)', () => {
-  test('a person with every role walks the main screens of each one in Portuguese', async ({
+  test('a person with every role walks the main screens of each one in Portuguese, server texts included', async ({
     actors,
     people,
     customers,
@@ -113,6 +113,13 @@ test.describe('The platform in Portuguese (slice 23b)', () => {
     const conversation = page.getByRole('region', { name: `Conversa com ${customer.name}` })
     await expect(conversation.getByRole('heading', { level: 2, name: customer.name })).toBeVisible()
     await expect(conversation.getByText(text)).toBeVisible()
+    // Slice 23c: the staff-only line is written from its facts in her language.
+    await expect(
+      conversation.getByText(
+        `Atribuído a ${person.name} porque está disponível e fala português (regra 3).`,
+      ),
+    ).toBeVisible()
+    await expect(conversation.getByText(/Asignado a .* porque está disponible/)).toHaveCount(0)
     await expect(
       conversation.getByRole('textbox', { name: 'Escreva para o cliente' }),
     ).toBeVisible()
@@ -141,6 +148,22 @@ test.describe('The platform in Portuguese (slice 23b)', () => {
     await expectScreen(page, 'Automação')
     await rail.getByRole('link', { name: /^Auditoria/ }).click()
     await expectScreen(page, 'Auditoria')
+    // Slice 23c: "O que fez" is rendered by the server in her language.
+    const caseId = new URL(caseUrl).searchParams.get('case') ?? ''
+    await page.goto(`/supervision/audit?case=${caseId}`)
+    await expectScreen(page, 'Auditoria')
+    const events = page.getByRole('table', { name: 'Eventos' })
+    await expect(
+      events.getByRole('row', {
+        name: new RegExp(
+          escapeRegExp(
+            `Atribuiu o caso a ${person.name}: estava disponível e fala português (regra 3)`,
+          ),
+        ),
+      }),
+    ).toBeVisible()
+    await expect(events.getByRole('row', { name: /Escreveu uma mensagem/ }).first()).toBeVisible()
+    await expect(events.getByText(/Asignó el caso/)).toHaveCount(0)
 
     // Administração: Usuários e perfis, Equipes, Plataforma.
     await goToRole(rail, person.name, 'Administração')

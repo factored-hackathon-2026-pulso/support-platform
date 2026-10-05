@@ -394,6 +394,7 @@ class CaseReader:
                 created_at=turn.created_at,
                 client_message_id=turn.client_message_id,
                 subject=turn.subject,
+                staff_line=turn.staff_line,
             )
             for turn in turns
         ]

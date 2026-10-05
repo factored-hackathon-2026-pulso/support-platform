@@ -40,6 +40,7 @@ export function makeTurn(overrides: Partial<Turn> = {}): Turn {
     createdAt: new Date(Date.UTC(2026, 2, 5, 15, 46, sequence)).toISOString(),
     clientMessageId: null,
     subject: null,
+    staffLine: null,
     ...overrides,
   }
 }

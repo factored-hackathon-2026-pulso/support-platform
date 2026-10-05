@@ -1,7 +1,14 @@
 import { useId, useRef, useState } from 'react'
 import { Mail, UserPlus } from 'lucide-react'
-import { Button, Callout, Dialog } from '@/components/ui'
-import { useTranslation } from '@/lib/i18n'
+import { Button, Callout, Dialog, Field, Select } from '@/components/ui'
+import {
+  APP_LOCALES,
+  DEFAULT_LOCALE,
+  LOCALE_NAME,
+  isAppLocale,
+  useTranslation,
+  type AppLocale,
+} from '@/lib/i18n'
 import {
   EMPTY_USER_DRAFT,
   INVITATION_INFO,
@@ -41,6 +48,8 @@ export function CreateUserDialog({
     ...EMPTY_USER_DRAFT,
     teamId: initialTeamId ?? '',
   }))
+  // Slice 23c: her platform language (the invitation email and her first sign-in).
+  const [uiLanguage, setUiLanguage] = useState<AppLocale>(DEFAULT_LOCALE)
   const [errors, setErrors] = useState<UserDraftErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const controls = useRef<UserFormControls>({})
@@ -62,7 +71,7 @@ export function CreateUserDialog({
       return
     }
     create.mutate(
-      { body: createUserBody(draft), idempotencyKey },
+      { body: { ...createUserBody(draft), uiLanguage }, idempotencyKey },
       {
         onSuccess: onCreated,
         onError: (problem) => {
@@ -134,6 +143,15 @@ export function CreateUserDialog({
           teams={teams}
           controls={controls}
         />
+        <Field label={t('form.uiLanguage')} hint={t('form.uiLanguageHint')}>
+          <Select
+            value={uiLanguage}
+            options={APP_LOCALES.map((locale) => ({ value: locale, label: LOCALE_NAME[locale] }))}
+            onChange={(event) => {
+              if (isAppLocale(event.target.value)) setUiLanguage(event.target.value)
+            }}
+          />
+        </Field>
         <div className="flex gap-2.5 rounded-10 bg-canvas px-3.5 py-3 text-13 leading-[1.45] text-ink-2">
           <Mail size={16} aria-hidden="true" className="mt-px shrink-0" />
           <span className="flex flex-col gap-0.5">

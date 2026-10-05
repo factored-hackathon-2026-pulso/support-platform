@@ -317,4 +317,34 @@ describe('escalations screen in Portuguese (pt-BR)', () => {
       await screen.findByText('Julián recebeu sua resposta no caso de Camila Torres Benavides.'),
     ).toBeInTheDocument()
   })
+
+  it('writes the staff-only line of the last messages in Portuguese (slice 23c)', async () => {
+    vi.mocked(fetchLastTurns).mockResolvedValue({
+      items: [
+        makeTurn({
+          id: 'TRN-2',
+          caseId: julianCamila.id,
+          sequence: 2,
+          kind: 'routing',
+          audience: 'staff',
+          authorRole: 'system',
+          authorId: null,
+          text: 'Julián Ortega escaló el caso a supervisión.',
+          staffLine: { kind: 'escalated', params: { analyst: 'Julián Ortega' } },
+          createdAt: minutesFrom(-21),
+        }),
+      ],
+      olderCursor: null,
+      lastSequence: 2,
+    })
+    renderRoute(`/supervision/escalations?escalation=${ESC.id}`, {
+      staff: supervisorStaff,
+      locale: 'pt-BR',
+    })
+    const panel = await screen.findByRole('complementary', { name: 'Camila Torres Benavides' })
+    expect(
+      await within(panel).findByText('Julián Ortega escalou o caso para a supervisão.'),
+    ).toBeInTheDocument()
+    expect(within(panel).queryByText('Julián Ortega escaló el caso a supervisión.')).toBeNull()
+  })
 })

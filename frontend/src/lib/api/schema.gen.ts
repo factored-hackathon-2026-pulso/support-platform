@@ -3657,6 +3657,11 @@ export interface components {
        * @description An active team (TEAM-…).
        */
       teamId: string
+      /**
+       * @description Slice 23c: her platform language (the invitation email, the activation screens and her first sign-in use it). Default `es`.
+       * @default es
+       */
+      uiLanguage: components['schemas']['UiLanguage']
     }
     /**
      * CustomerCall
@@ -4553,6 +4558,8 @@ export interface components {
       roles: components['schemas']['StaffRole'][]
       /** Teamname */
       teamName: string
+      /** @description Slice 23c: her platform language, as administration chose it. */
+      uiLanguage: components['schemas']['UiLanguage']
     }
     /**
      * InvitationStatus
@@ -4945,6 +4952,8 @@ export interface components {
       /** Name */
       name: string
       passwordRules: components['schemas']['PasswordRules']
+      /** @description Slice 23c: her platform language. */
+      uiLanguage: components['schemas']['UiLanguage']
     }
     /** PasswordResetDone */
     PasswordResetDone: {
@@ -5763,6 +5772,50 @@ export interface components {
      * @enum {string}
      */
     SinceSource: 'previous_session' | 'fallback'
+    /**
+     * StaffLine
+     * @description Slice 23c: the facts of a staff-only transcript line; the staff UI writes the sentence
+     *     in the viewer's language (``text`` keeps the Spanish one).
+     *
+     *     ``params`` by ``kind`` (names as they were when the line was written; ``language`` is the
+     *     case language ``es`` | ``pt``):
+     *     ``assigned_on_arrival`` / ``assigned_from_assistant`` {analyst, language};
+     *     ``queued`` {language}; ``assigned_from_queue`` {analyst, minutes, language};
+     *     ``wrote_again`` {customer (first name), closedAt (ISO), closeReason, channel};
+     *     ``assigned_by_supervision`` {supervisor, analyst, minutes, language, paused?};
+     *     ``reassigned`` {supervisor, previous, analyst, paused?} (``paused``: the first name of
+     *     the analyst who was paused); ``escalated`` / ``escalation_withdrawn`` {analyst};
+     *     ``escalation_answered`` {supervisor}; ``escalation_taken`` {supervisor, previous};
+     *     ``assistant_released`` {reason, ref?, code?, who?}; ``follow_up_call`` {analyst, customer}.
+     */
+    StaffLine: {
+      kind: components['schemas']['StaffLineKind']
+      /** Params */
+      params: {
+        [key: string]: string | number
+      }
+    }
+    /**
+     * StaffLineKind
+     * @description Slice 23c: what a staff-only transcript line (a ``routing`` turn) says. The turn keeps
+     *     the facts (``StaffLine``: this kind and its parameters) next to its stored Spanish text,
+     *     so each viewer's UI writes the sentence in her own language.
+     * @enum {string}
+     */
+    StaffLineKind:
+      | 'assigned_on_arrival'
+      | 'assigned_from_assistant'
+      | 'queued'
+      | 'assigned_from_queue'
+      | 'wrote_again'
+      | 'assigned_by_supervision'
+      | 'reassigned'
+      | 'escalated'
+      | 'escalation_withdrawn'
+      | 'escalation_answered'
+      | 'escalation_taken'
+      | 'assistant_released'
+      | 'follow_up_call'
     /** StaffListResponse */
     StaffListResponse: {
       /** Items */
@@ -6185,6 +6238,8 @@ export interface components {
        * @description 1-based, gap-free per case (staff-only turns included).
        */
       sequence: number
+      /** @description Slice 23c: the facts of a staff-only `routing` line, written in the viewer's language by the UI; null on other turns and on lines written before 23c (show `text`). */
+      staffLine: components['schemas']['StaffLine'] | null
       /**
        * Subject
        * @description Slice 12: the subject of an `email` turn.

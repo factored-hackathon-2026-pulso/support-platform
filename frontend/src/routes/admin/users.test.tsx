@@ -462,6 +462,7 @@ describe('users and roles screen ("Usuarios y roles")', () => {
         roles: ['analyst'],
         languages: ['pt'],
         teamId: TEAM_PACIFICO.id,
+        uiLanguage: 'es',
       },
       expect.stringMatching(/^[A-Za-z0-9-]{8,64}$/),
     )
@@ -868,5 +869,39 @@ describe('users and roles screen in Portuguese (slice 23)', () => {
     expect(within(panel).getByText('Vence')).toBeInTheDocument()
     expect(within(panel).getByText('Nunca')).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Reenviar convite' })).toBeInTheDocument()
+  })
+
+  it('invites in the platform language administration picks (slice 23c)', async () => {
+    vi.mocked(createUser).mockResolvedValue({ user: { ...bruna, name: 'Ana Gil' } })
+    vi.mocked(fetchAdminUser).mockResolvedValue({ ...bruna, name: 'Ana Gil' })
+    const { user } = renderPt()
+    await screen.findByRole('table', { name: 'Pessoas' })
+    await user.click(screen.getByRole('button', { name: 'Novo usuário' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Novo usuário' })
+    const language = within(dialog).getByRole('combobox', { name: 'Idioma da plataforma' })
+    expect(language).toHaveValue('es')
+    expect(
+      within(dialog).getByText(
+        'O convite chega neste idioma e a plataforma abre assim. Depois dá para mudar no menu da conta.',
+      ),
+    ).toBeInTheDocument()
+    expect(within(language).getByRole('option', { name: 'Español' })).toBeInTheDocument()
+    await user.selectOptions(language, 'pt-BR')
+    await user.type(within(dialog).getByRole('textbox', { name: 'Nome completo' }), 'Ana Gil')
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'E-mail' }),
+      'ana.gil@latambank.example',
+    )
+    await user.click(within(dialog).getByRole('checkbox', { name: /^Analista/ }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Português' }))
+    await user.selectOptions(
+      within(dialog).getByRole('combobox', { name: 'Equipe' }),
+      TEAM_PACIFICO.id,
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar convite' }))
+    expect(createUser).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'ana.gil@latambank.example', uiLanguage: 'pt-BR' }),
+      expect.any(String),
+    )
   })
 })

@@ -480,7 +480,7 @@ export interface paths {
     put?: never
     /**
      * Tell the builder agent what to change
-     * @description The agent (`constructor-chat`) reads the current version, drafts the change, creates a proposal, writes the draft and validates it. It only proposes: freezing, evaluating, approving and publishing are the screens' steps, and approving and publishing are a person's. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`), like the analyst's copilot: a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Proposals the answer mentions are tracked and returned in `proposals`. 409 `builder_busy` while it answers a previous message; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the message stays in the thread: send it again with the same `clientMessageId`).
+     * @description The agent (`constructor-chat`) asks which agent, then what to change; it then reads the current version, drafts the change, creates a proposal, writes the draft and validates it, in the caller's UI language (es or pt-BR). `awaiting: slot` says it asked for the next datum. A message that starts a run (none yet, or the last one ended) answers the run's opening question: the answer carries that question first. It only proposes: freezing, evaluating, approving and publishing are the screens' steps, and approving and publishing are a person's. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`), like the analyst's copilot: a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Proposals the answer mentions are tracked and returned in `proposals`. 409 `builder_busy` while it answers a previous message; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the message stays in the thread: send it again with the same `clientMessageId`).
      */
     post: operations['builder_ask_builder']
     delete?: never
@@ -500,7 +500,7 @@ export interface paths {
     put?: never
     /**
      * Start a new conversation with the builder agent
-     * @description Slice 22, "Nueva conversación": the caller's thread starts over, empty (the transcript stays in agent-core), and her next message starts another run of the builder agent, whatever state the current one is in. Proposals already made stay in the list. Safe to repeat. AI off or no agent-core: 404 `assistant_disabled`.
+     * @description Slice 22, "Nueva conversación": the caller's thread starts over (the transcript stays in agent-core) and a new run of the builder agent starts at once, in her UI language, whatever state the current one is in: the thread comes back with the run's opening (`constructor-chat` first asks which agent) and `awaiting`. If agent-core does not answer, the thread comes back empty and her next message starts the run. Proposals already made stay in the list. Each call starts over. AI off or no agent-core: 404 `assistant_disabled`.
      */
     post: operations['builder_restart_chat']
     delete?: never
@@ -538,7 +538,7 @@ export interface paths {
     }
     /**
      * The proposals to change agents, newest first
-     * @description agent-core's registry has no list call, so this is the platform's index: the proposals created here, found through the builder chat or tracked by id. With `refresh` (default) each row is re-read from the registry (`live: true`); a row the registry did not answer for keeps its cached state (`live: false`). At most 50.
+     * @description Every proposal agent-core has (its `GET /v1/registry/proposals`), merged with the platform's index, which says who brought each one here (`source`: `platform`, `chat`, `tracked`, `engine`); a proposal only agent-core has is `source: registry`. With `refresh` (default) the registry is read and `live` is true; if agent-core's list does not answer, the index alone is returned (`registryListed: false`), each row re-read by id, and a row the registry did not answer for keeps its cached state (`live: false`). `refresh=false` returns the cached index. Newest first, at most 50.
      */
     get: operations['builder_list_proposals']
     put?: never
@@ -2919,6 +2919,11 @@ export interface components {
        * @description What the builder answered (one or more messages); empty if it said nothing.
        */
       answers: components['schemas']['BuilderMessage'][]
+      /**
+       * Awaiting
+       * @description What the builder waits for after this answer (agent-core's `awaiting`): `slot` when it asked for a datum (the next message answers it), `none` when it finished or handed over. Null on a replay.
+       */
+      awaiting: ('none' | 'slot' | 'confirmation' | 'step_up' | 'input') | null
       message: components['schemas']['BuilderMessage']
       /**
        * Proposals
@@ -2988,6 +2993,11 @@ export interface components {
        * @description False while agent-core is not configured.
        */
       available: boolean
+      /**
+       * Awaiting
+       * @description Only on `POST /builder/chat/restart`: what the new run waits for after its opening (`slot`: it asked for a datum, e.g. which agent). Null on a read, or when the run could not start (the next message starts it).
+       */
+      awaiting: ('none' | 'slot' | 'confirmation' | 'step_up' | 'input') | null
       /**
        * Messages
        * @description Oldest first (the newest 200).
@@ -3581,6 +3591,11 @@ export interface components {
        * @enum {string}
        */
       trigger: 'customer_message' | 'manual' | 'handover'
+      /**
+       * Truncated
+       * @description agent-core proposed more than is shown (at most 3: the reply and the escalation first) or a text was cut to its limit. Informational: show nothing, or a discreet hint.
+       */
+      truncated: boolean
     }
     /** CopilotThread */
     CopilotThread: {
@@ -5454,6 +5469,11 @@ export interface components {
     ProposalList: {
       /** Items */
       items: components['schemas']['ProposalSummary'][]
+      /**
+       * Registrylisted
+       * @description True when `items` include every proposal agent-core has (its list call answered). False when they are only the platform's index: agent-core's list did not answer (show a quiet notice) or `refresh` was false.
+       */
+      registryListed: boolean
     }
     /**
      * ProposalOrigin
@@ -5491,17 +5511,17 @@ export interface components {
       refreshedAt: string
       /**
        * Registeredby
-       * @description The staff member who brought it into this list.
+       * @description Who brought it into the platform's index: a staff id, or `engine` (ADR 0007). Null for a `registry` row (only agent-core's list has it).
        */
-      registeredBy: string
+      registeredBy: string | null
       /** Rev */
       rev: number
       /**
        * Source
-       * @description Created here, found through the builder chat, or tracked by id.
+       * @description Who brought it here: created on this platform, found through the builder chat's answer, tracked by id, announced by the improvement engine, or `registry`: only agent-core's list has it (the builder chat made it and its answer did not name it, or someone created it in agent-core directly).
        * @enum {string}
        */
-      source: 'platform' | 'chat' | 'tracked' | 'engine'
+      source: 'platform' | 'chat' | 'tracked' | 'engine' | 'registry'
       state: components['schemas']['ProposalState']
       /** Title */
       title: string
@@ -8444,7 +8464,7 @@ export interface operations {
         /** @description Filter by the proposal state. */
         state?: components['schemas']['ProposalState'] | null
         limit?: number
-        /** @description Re-read each row from the registry. */
+        /** @description Read the registry (its list, or each row by id). */
         refresh?: boolean
       }
       header?: never

@@ -4,12 +4,15 @@
  */
 import type {
   AliasState,
+  BuilderExchange,
   BuilderMessage,
   BuilderStatus,
+  BuilderThread,
   EntityDraft,
   EvalReport,
   Proposal,
   ProposalDetail,
+  ProposalList,
   ProposalSummary,
   ReleaseDetail,
 } from '@/features/automation'
@@ -192,4 +195,86 @@ export function builderMessage(
   answers: string | null = null,
 ): BuilderMessage {
   return { id, role, text, createdAt: '2026-10-05T14:00:00Z', answers }
+}
+
+/** `constructor-chat`'s questions and answers (agent-core's templates), as the fake says them. */
+export const CONSTRUCTOR_TEXTS = {
+  es: {
+    askAgent: '¿Qué agente quieres modificar? (por ejemplo: disputas)',
+    askGoal: 'Cuéntame qué cambio quieres en ese agente.',
+    done: 'Dejé la propuesta en borrador. Revísala y apruébala en el registry.',
+    handover: 'Te paso con un asesor.',
+  },
+  pt: {
+    askAgent: 'Qual agente você quer modificar? (por exemplo: disputas)',
+    askGoal: 'Conte-me qual mudança você quer nesse agente.',
+    done: 'Deixei a proposta em rascunho. Revise-a e aprove-a no registry.',
+    handover: 'Vou te passar para um atendente.',
+  },
+} as const
+
+/**
+ * A fake of `constructor-chat`'s flow `construir` behind the platform's chat API: "Nueva
+ * conversación" starts a run that asks for the agent; each message answers the question asked,
+ * verbatim (the agent, then the goal); with both it makes a proposal (agent-core's rules: a valid
+ * agent id, a goal of at most 200 characters) that only the proposals list shows (its answer names
+ * no id), else it hands over. Wire it with `vi.mocked(restartBuilderChat).mockImplementation(
+ * builder.restart)`, the same for `askBuilder` and `fetchProposals`.
+ */
+export function scriptedConstructor(locale: 'es' | 'pt' = 'es') {
+  const texts = CONSTRUCTOR_TEXTS[locale]
+  const proposals: ProposalSummary[] = []
+  const sent: string[] = []
+  let asking: 'agent' | 'goal' | null = null
+  let agentId = ''
+  let count = 0
+  const id = () => `bm-${++count}`
+  const answer = (text: string, answers: string | null = null) =>
+    builderMessage(id(), 'agent', text, answers)
+  return {
+    sent,
+    proposals,
+    restart: (): Promise<BuilderThread> => {
+      asking = 'agent'
+      return Promise.resolve({
+        available: true,
+        messages: [answer(texts.askAgent)],
+        awaiting: 'slot',
+      })
+    },
+    ask: ({ text }: { text: string; clientMessageId: string }): Promise<BuilderExchange> => {
+      sent.push(text)
+      const message = builderMessage(id(), 'person', text)
+      const reply = (said: string, awaiting: BuilderExchange['awaiting']): BuilderExchange => ({
+        message,
+        answers: [answer(said, message.id)],
+        proposals: [],
+        replayed: false,
+        awaiting,
+      })
+      if (asking === 'agent') {
+        agentId = text
+        asking = 'goal'
+        return Promise.resolve(reply(texts.askGoal, 'slot'))
+      }
+      asking = null
+      if (!/^[a-z0-9][a-z0-9_/-]*$/.test(agentId) || [...text].length > 200) {
+        return Promise.resolve(reply(texts.handover, 'none'))
+      }
+      proposals.unshift(
+        makeSummary({
+          proposalId: `p-made-${proposals.length + 1}`,
+          agentId,
+          title: text,
+          source: 'registry',
+          registeredBy: null,
+          createdBy: 'constructor-bot',
+          rev: 1,
+        }),
+      )
+      return Promise.resolve(reply(texts.done, 'none'))
+    },
+    list: (): Promise<ProposalList> =>
+      Promise.resolve({ items: [...proposals], registryListed: true }),
+  }
 }

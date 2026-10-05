@@ -8,6 +8,7 @@ import { Button, Callout, PageHeader, Spinner } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
 import { useBuilderAvailable } from '../hooks/use-automation'
+import type { AgentRequest } from '../builder-chat'
 import type { MaturingType } from '../types'
 import { BuilderChatSheet } from './BuilderChat'
 import { BuilderChatContext, type BuilderChatRequest } from './chat-panel'
@@ -16,10 +17,10 @@ export type AutomationSection = 'types' | 'agents' | 'proposals'
 
 interface ChatState {
   open: boolean
-  prefill: string
+  request: AgentRequest | null
   type: MaturingType | null
   fresh: boolean
-  /** A new key per opening: the sheet starts with that opening's message. */
+  /** A new key per opening: the sheet starts with that opening's request. */
   key: number
 }
 
@@ -59,14 +60,14 @@ export function AutomationFrame({
   const builder = useBuilderAvailable()
   const [chat, setChat] = useState<ChatState>({
     open: false,
-    prefill: '',
+    request: null,
     type: null,
     fresh: false,
     key: 0,
   })
   const open = useCallback(
-    ({ prefill = '', type = null, fresh = false }: BuilderChatRequest = {}) =>
-      setChat((current) => ({ open: true, prefill, type, fresh, key: current.key + 1 })),
+    ({ request = null, type = null, fresh = false }: BuilderChatRequest = {}) =>
+      setChat((current) => ({ open: true, request, type, fresh, key: current.key + 1 })),
     [],
   )
   const control = useMemo(() => ({ open }), [open])
@@ -106,7 +107,7 @@ export function AutomationFrame({
         <BuilderChatSheet
           key={chat.key}
           open={chat.open}
-          prefill={chat.prefill}
+          request={chat.request}
           type={chat.type}
           fresh={chat.fresh}
           onOpenChange={(next) => setChat((current) => ({ ...current, open: next }))}

@@ -66,10 +66,19 @@ beforeEach(() => {
         proposalId: 'p-engine',
         agentId: 'disputas',
         title: 'Pasar a una persona si roban la tarjeta',
-        source: 'engine' as never,
+        source: 'engine',
         live: false,
       }),
+      makeSummary({
+        proposalId: 'p-registry',
+        agentId: 'sucursales',
+        title: 'Atender los chats de Atención en sucursal',
+        source: 'registry',
+        registeredBy: null,
+        createdBy: 'constructor-bot',
+      }),
     ],
+    registryListed: true,
   })
   vi.mocked(fetchAlias).mockImplementation((agentId, alias) => {
     if (agentId === 'disputas') {
@@ -218,12 +227,28 @@ describe('proposals (slice 22)', () => {
     expect(within(table).getByRole('row', { name: /Cobro indebido/ })).toHaveTextContent(
       'Del constructor',
     )
+    // only agent-core's list has it (the builder chat made it without naming it)
+    expect(within(table).getByRole('row', { name: /Atención en sucursal/ })).toHaveTextContent(
+      'Del registro',
+    )
+    // the list is whole: no notice, no "Seguir"
+    expect(
+      screen.queryByText('Solo ves las propuestas que la plataforma conoce'),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Seguir' })).not.toBeInTheDocument()
   })
 
-  it('tracks a proposal by id, and says when the registry does not know it', async () => {
+  it("without agent-core's list says so and tracks a proposal by id", async () => {
+    vi.mocked(fetchProposals).mockResolvedValue({
+      items: [makeSummary({ live: false })],
+      registryListed: false,
+    })
     vi.mocked(trackProposal).mockRejectedValueOnce(notFound())
     vi.mocked(trackProposal).mockResolvedValueOnce(makeSummary())
     const { user } = render('/supervision/automation/proposals')
+    expect(
+      await screen.findByText('Solo ves las propuestas que la plataforma conoce'),
+    ).toBeInTheDocument()
     const field = await screen.findByRole('textbox', { name: 'Id de la propuesta' })
     await user.type(field, 'nope')
     await user.click(screen.getByRole('button', { name: 'Seguir' }))
@@ -241,6 +266,9 @@ describe('proposals (slice 22)', () => {
     const table = await screen.findByRole('table', { name: 'Propostas para mudar agentes' })
     expect(within(table).getByRole('row', { name: /roban la tarjeta/ })).toHaveTextContent(
       'Do motor de melhoria',
+    )
+    expect(within(table).getByRole('row', { name: /Atención en sucursal/ })).toHaveTextContent(
+      'Do registro',
     )
   })
 })

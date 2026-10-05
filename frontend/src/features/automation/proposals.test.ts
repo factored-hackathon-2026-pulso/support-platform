@@ -41,9 +41,26 @@ describe('a proposal', () => {
   })
 
   it('says where it came from, the improvement engine included', () => {
-    expect(proposalSource('chat')).toEqual({ label: 'Del constructor', engine: false })
-    expect(proposalSource('engine')).toEqual({ label: 'Del motor de mejora', engine: true })
-    expect(proposalSource('someday')).toEqual({ label: 'Otro origen', engine: false })
+    expect(proposalSource('chat')).toEqual({
+      label: 'Del constructor',
+      engine: false,
+      registry: false,
+    })
+    expect(proposalSource('engine')).toEqual({
+      label: 'Del motor de mejora',
+      engine: true,
+      registry: false,
+    })
+    expect(proposalSource('registry')).toEqual({
+      label: 'Del registro',
+      engine: false,
+      registry: true,
+    })
+    expect(proposalSource('someday')).toEqual({
+      label: 'Otro origen',
+      engine: false,
+      registry: false,
+    })
   })
 
   it('reads each change of the draft without its raw content', () => {

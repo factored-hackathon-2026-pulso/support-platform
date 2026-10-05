@@ -71,16 +71,28 @@ export function proposalSteps(state: string, active: boolean): ProposalStep[] {
   }))
 }
 
-/** Where a proposal came from. Ready for the improvement engine's `engine` (PR #17). */
-export function proposalSource(source: string): { label: string; engine: boolean } {
+/**
+ * Who brought a proposal here: the platform's index (`platform`, `chat`, `tracked`, the
+ * improvement engine's `engine`) or, for one only agent-core's list has, `registry`.
+ */
+export function proposalSource(source: string): {
+  label: string
+  engine: boolean
+  registry: boolean
+} {
   switch (source) {
     case 'platform':
     case 'chat':
     case 'tracked':
     case 'engine':
-      return { label: t(`proposals.source.${source}`), engine: source === 'engine' }
+    case 'registry':
+      return {
+        label: t(`proposals.source.${source}`),
+        engine: source === 'engine',
+        registry: source === 'registry',
+      }
     default:
-      return { label: t('proposals.source.other'), engine: false }
+      return { label: t('proposals.source.other'), engine: false, registry: false }
   }
 }
 

@@ -70,7 +70,7 @@ const PATH = `/supervision/automation/proposals/${PROPOSAL_ID}`
 beforeEach(() => {
   vi.mocked(fetchAiStages).mockResolvedValue(makeStages())
   vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
-  vi.mocked(fetchProposals).mockResolvedValue({ items: [] })
+  vi.mocked(fetchProposals).mockResolvedValue({ items: [], registryListed: true })
   vi.mocked(fetchQueueOverview).mockResolvedValue(makeQueueOverview())
   vi.mocked(fetchRelease).mockImplementation((releaseId) =>
     Promise.resolve(

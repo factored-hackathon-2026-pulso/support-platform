@@ -18,9 +18,9 @@ import { ApiProblem } from '@/lib/api'
 import {
   BUILDER_OFF,
   BUILDER_ON,
-  PROPOSAL_ID,
+  CONSTRUCTOR_TEXTS,
   builderMessage,
-  makeSummary,
+  scriptedConstructor,
 } from '@/test/automation-fixtures'
 import { supervisorStaff } from '@/test/fixtures'
 import { renderRoute } from '@/test/render'
@@ -89,8 +89,8 @@ function seededStages() {
 beforeEach(() => {
   vi.mocked(fetchAiStages).mockResolvedValue(seededStages())
   vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_OFF)
-  vi.mocked(fetchProposals).mockResolvedValue({ items: [] })
-  vi.mocked(fetchBuilderChat).mockResolvedValue({ available: true, messages: [] })
+  vi.mocked(fetchProposals).mockResolvedValue({ items: [], registryListed: true })
+  vi.mocked(fetchBuilderChat).mockResolvedValue({ available: true, messages: [], awaiting: null })
   vi.mocked(fetchQueueOverview).mockResolvedValue(makeQueueOverview())
 })
 
@@ -266,7 +266,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     )
   })
 
-  it('proposes an agent through the builder chat, and links the proposal it made', async () => {
+  it("proposes an agent in the builder's order: the agent id, then the goal", async () => {
     vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
     // An older thread: "Proponer un agente" starts a new conversation instead of continuing it.
     vi.mocked(fetchBuilderChat).mockResolvedValue({
@@ -275,56 +275,131 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
         builderMessage('m0', 'person', '¿Qué agentes puedo modificar?'),
         builderMessage('m00', 'agent', 'Cuéntame qué cambio quieres en ese agente.', 'm0'),
       ],
+      awaiting: null,
     })
-    vi.mocked(restartBuilderChat).mockResolvedValue({ available: true, messages: [] })
-    vi.mocked(askBuilder).mockResolvedValue({
-      message: builderMessage('m1', 'person', 'x'),
-      answers: [builderMessage('m2', 'agent', `Creé la propuesta ${PROPOSAL_ID}.`, 'm1')],
-      proposals: [makeSummary()],
-      replayed: false,
-    })
+    const builder = scriptedConstructor()
+    vi.mocked(restartBuilderChat).mockImplementation(builder.restart)
+    vi.mocked(askBuilder).mockImplementation(builder.ask)
+    vi.mocked(fetchProposals).mockImplementation(builder.list)
     const { user } = renderAutomation('/supervision/automation?type=undue_charge')
     const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
     await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
     const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
-    expect(
-      await within(sheet).findByText('Cuéntale qué agente quieres o qué cambiar en uno.'),
-    ).toBeInTheDocument()
+    // the new run opens by asking for the agent
+    expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.es.askAgent)).toBeInTheDocument()
     expect(restartBuilderChat).toHaveBeenCalledTimes(1)
     expect(within(sheet).queryByText('¿Qué agentes puedo modificar?')).not.toBeInTheDocument()
-    const box = within(sheet).getByRole('textbox', { name: 'Mensaje para el constructor' })
-    expect(box).toHaveValue(
-      'Agente: cobros. Objetivo: un agente nuevo que atienda los chats de los casos de tipo ' +
-        '"Cobro indebido" como lo hace el equipo y pase a una persona lo que no pueda resolver. ' +
-        'El equipo envía 84 de los últimos 100 borradores del copiloto tal cual o con cambios menores.',
-    )
-    await user.click(within(sheet).getByRole('button', { name: 'Enviar' }))
-    expect(askBuilder).toHaveBeenCalledWith(
-      expect.objectContaining({ text: expect.stringContaining('Agente: cobros.') }),
-    )
-    // The restart went first: the message opens the new thread.
-    expect(vi.mocked(restartBuilderChat).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(askBuilder).mock.invocationCallOrder[0]!,
-    )
-    expect(await within(sheet).findByText(`Creé la propuesta ${PROPOSAL_ID}.`)).toBeInTheDocument()
-    expect(within(sheet).getByRole('link', { name: 'Abrir propuesta' })).toHaveAttribute(
+    const form = within(sheet).getByRole('form', { name: 'Pedido para el constructor' })
+    expect(within(form).getByRole('textbox', { name: 'Agente' })).toHaveValue('cobros')
+    const goal =
+      'Atender los chats de "Cobro indebido" como lo hace el equipo y pasar a una persona lo que no ' +
+      'pueda resolver. El equipo envía 84 de 100 borradores del copiloto sin cambios o con cambios menores.'
+    expect(within(form).getByRole('textbox', { name: /Objetivo/ })).toHaveValue(goal)
+    expect(form).toHaveTextContent(`${[...goal].length} de 200`)
+
+    await user.click(within(form).getByRole('button', { name: 'Enviar al constructor' }))
+
+    // one datum per question, in its order: the id alone, then the goal
+    await waitFor(() => expect(builder.sent).toEqual(['cobros', goal]))
+    expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.es.done)).toBeInTheDocument()
+    const log = within(sheet).getByRole('list', { name: 'Conversación con el constructor' })
+    expect(
+      within(log)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      `Constructor${CONSTRUCTOR_TEXTS.es.askAgent}`,
+      'Túcobros',
+      `Constructor${CONSTRUCTOR_TEXTS.es.askGoal}`,
+      `Tú${goal}`,
+      `Constructor${CONSTRUCTOR_TEXTS.es.done}`,
+    ])
+    // its answer names no proposal: the list (agent-core's, merged) has the new one
+    expect(await within(sheet).findByRole('link', { name: 'Abrir propuesta' })).toHaveAttribute(
       'href',
-      `/supervision/automation/proposals/${PROPOSAL_ID}?type=undue_charge`,
+      '/supervision/automation/proposals/p-made-1?type=undue_charge',
     )
-    expect(box).toHaveValue('')
+    // the composer takes over for whatever comes next
+    expect(within(sheet).getByRole('textbox', { name: 'Mensaje para el constructor' })).toHaveValue(
+      '',
+    )
   })
 
-  it('retries the new conversation before sending when the restart failed on opening', async () => {
+  it('stops when the builder does not ask for the goal, leaving it in the composer', async () => {
     vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
+    const builder = scriptedConstructor()
+    vi.mocked(restartBuilderChat).mockImplementation(builder.restart)
+    vi.mocked(fetchProposals).mockImplementation(builder.list)
+    vi.mocked(askBuilder).mockImplementation(({ text }) =>
+      Promise.resolve({
+        message: builderMessage('m1', 'person', text),
+        answers: [builderMessage('m2', 'agent', CONSTRUCTOR_TEXTS.es.handover, 'm1')],
+        proposals: [],
+        replayed: false,
+        awaiting: 'none',
+      }),
+    )
+    const { user } = renderAutomation('/supervision/automation?type=undue_charge')
+    const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
+    await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
+    const form = await within(sheet).findByRole('form', { name: 'Pedido para el constructor' })
+    const goal = within(form).getByRole('textbox', { name: /Objetivo/ })
+    await user.clear(goal)
+    await user.type(goal, 'Cobros indebidos a una persona.')
+    await user.click(within(form).getByRole('button', { name: 'Enviar al constructor' }))
+
+    expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.es.handover)).toBeInTheDocument()
+    expect(askBuilder).toHaveBeenCalledTimes(1)
+    expect(within(sheet).getByText(/El constructor no pidió el objetivo/)).toBeInTheDocument()
+    expect(within(sheet).getByRole('textbox', { name: 'Mensaje para el constructor' })).toHaveValue(
+      'Cobros indebidos a una persona.',
+    )
+  })
+
+  it('checks the agent id and the length of the goal before answering the builder', async () => {
+    vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
+    const builder = scriptedConstructor()
+    vi.mocked(restartBuilderChat).mockImplementation(builder.restart)
+    vi.mocked(askBuilder).mockImplementation(builder.ask)
+    vi.mocked(fetchProposals).mockImplementation(builder.list)
+    const { user } = renderAutomation('/supervision/automation?type=undue_charge')
+    const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
+    await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
+    const form = await within(sheet).findByRole('form', { name: 'Pedido para el constructor' })
+    const agent = within(form).getByRole('textbox', { name: 'Agente' })
+    await user.clear(agent)
+    await user.type(agent, 'Cobro indebido')
+    const goal = within(form).getByRole('textbox', { name: /Objetivo/ })
+    await user.type(goal, ' ' + 'x'.repeat(30))
+    await user.click(within(form).getByRole('button', { name: 'Enviar al constructor' }))
+
+    expect(
+      within(form).getByText(
+        'Usa minúsculas, números, guiones o "/", y empieza por una letra o un número.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(form).getByText('El objetivo no puede pasar de 200 caracteres.'),
+    ).toBeInTheDocument()
+    expect(askBuilder).not.toHaveBeenCalled()
+    await user.clear(agent)
+    await user.type(agent, 'cobros')
+    await user.clear(goal)
+    await user.type(goal, 'Atender los cobros indebidos.')
+    await user.click(within(form).getByRole('button', { name: 'Enviar al constructor' }))
+    await waitFor(() => expect(builder.sent).toEqual(['cobros', 'Atender los cobros indebidos.']))
+  })
+
+  it('retries the new conversation before answering when the restart failed on opening', async () => {
+    vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
+    const builder = scriptedConstructor()
     vi.mocked(restartBuilderChat)
       .mockRejectedValueOnce(ApiProblem.network())
-      .mockResolvedValueOnce({ available: true, messages: [] })
-    vi.mocked(askBuilder).mockResolvedValue({
-      message: builderMessage('m1', 'person', 'x'),
-      answers: [builderMessage('m2', 'agent', '¿Qué herramientas usa el equipo?', 'm1')],
-      proposals: [],
-      replayed: false,
-    })
+      .mockImplementation(builder.restart)
+    vi.mocked(askBuilder).mockImplementation(builder.ask)
+    vi.mocked(fetchProposals).mockImplementation(builder.list)
     const { user } = renderAutomation('/supervision/automation?type=undue_charge')
     const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
     await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
@@ -333,12 +408,38 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
       await within(sheet).findByText('No pudimos empezar una conversación nueva'),
     ).toBeInTheDocument()
     expect(askBuilder).not.toHaveBeenCalled()
-    await user.click(within(sheet).getByRole('button', { name: 'Enviar' }))
-    expect(await within(sheet).findByText('¿Qué herramientas usa el equipo?')).toBeInTheDocument()
+    await user.click(within(sheet).getByRole('button', { name: 'Enviar al constructor' }))
+    expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.es.done)).toBeInTheDocument()
     expect(restartBuilderChat).toHaveBeenCalledTimes(2)
     expect(vi.mocked(restartBuilderChat).mock.invocationCallOrder[1]).toBeLessThan(
       vi.mocked(askBuilder).mock.invocationCallOrder[0]!,
     )
+  })
+
+  it('proposes an agent in Portuguese for a person who reads Portuguese', async () => {
+    vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
+    const builder = scriptedConstructor('pt')
+    vi.mocked(restartBuilderChat).mockImplementation(builder.restart)
+    vi.mocked(askBuilder).mockImplementation(builder.ask)
+    vi.mocked(fetchProposals).mockImplementation(builder.list)
+    const { user } = renderAutomation('/supervision/automation?type=undue_charge', {
+      locale: 'pt-BR',
+    })
+    const aside = await screen.findByRole('complementary', {
+      name: 'Tipo de caso: Cobrança indevida',
+    })
+    await user.click(await within(aside).findByRole('button', { name: 'Propor um agente' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Construtor de agentes' })
+    expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.pt.askAgent)).toBeInTheDocument()
+    const form = within(sheet).getByRole('form', { name: 'Pedido para o construtor' })
+    const goal =
+      'Atender os chats de "Cobrança indevida" como a equipe faz e passar para uma pessoa o que não ' +
+      'conseguir resolver. A equipe envia 84 de 100 rascunhos do copiloto sem mudanças ou com mudanças pequenas.'
+    expect(within(form).getByRole('textbox', { name: /Objetivo/ })).toHaveValue(goal)
+    await user.click(within(form).getByRole('button', { name: 'Enviar ao construtor' }))
+    await waitFor(() => expect(builder.sent).toEqual(['cobros', goal]))
+    expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.pt.done)).toBeInTheDocument()
+    expect(within(sheet).getByRole('link', { name: 'Abrir proposta' })).toBeInTheDocument()
   })
 
   it('keeps a failed message for a retry with the same id, and starts a new conversation', async () => {
@@ -349,9 +450,14 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
         builderMessage('m0', 'person', 'Hola'),
         builderMessage('m00', 'agent', 'Te paso con un asesor.', 'm0'),
       ],
+      awaiting: null,
     })
     vi.mocked(askBuilder).mockRejectedValueOnce(ApiProblem.network())
-    vi.mocked(restartBuilderChat).mockResolvedValue({ available: true, messages: [] })
+    vi.mocked(restartBuilderChat).mockResolvedValue({
+      available: true,
+      messages: [],
+      awaiting: null,
+    })
     const { user } = renderAutomation()
     await user.click(await screen.findByRole('button', { name: 'Constructor de agentes' }))
     const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
@@ -368,6 +474,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
       answers: [builderMessage('m2', 'agent', '¿Para qué tipo de caso?', 'm1')],
       proposals: [],
       replayed: false,
+      awaiting: 'slot',
     })
     await user.click(within(sheet).getByRole('button', { name: 'Reintentar' }))
     expect(vi.mocked(askBuilder).mock.calls[1]?.[0]).toEqual(first)

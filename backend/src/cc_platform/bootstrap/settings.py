@@ -136,6 +136,26 @@ class Settings(BaseSettings):
     #: customers can talk to the assistant (agent-core's customer principal is the dataset id).
     bank_customer_links_file: Path | None = None
 
+    # Resilience of every call to the Core (deploy brief P4; ``infrastructure/core``). Timeouts per
+    # kind of call; the four model ones fall back to ``CC_AGENT_CORE_TIMEOUT_SECONDS`` when unset.
+    core_timeout_assistant_seconds: float | None = Field(default=None, gt=0)
+    core_timeout_copilot_seconds: float | None = Field(default=None, gt=0)
+    core_timeout_suggestions_seconds: float | None = Field(default=None, gt=0)
+    core_timeout_builder_seconds: float | None = Field(default=None, gt=0)
+    #: Registry calls (proposals, releases, aliases, versions) and an evaluation (runs a suite).
+    core_timeout_registry_seconds: float = Field(default=30.0, gt=0)
+    core_timeout_evaluate_seconds: float = Field(default=120.0, gt=0)
+    #: Opening a connection to the Core (a Core that is down fails fast), and the readiness probe.
+    core_connect_timeout_seconds: float = Field(default=3.0, gt=0)
+    core_probe_timeout_seconds: float = Field(default=2.0, gt=0)
+    #: Retries after a quick failure, only for calls that are safe to repeat (0 = never).
+    core_retry_attempts: int = Field(default=2, ge=0, le=5)
+    core_retry_base_delay_seconds: float = Field(default=0.2, ge=0)
+    core_retry_max_delay_seconds: float = Field(default=2.0, ge=0)
+    #: Consecutive failures that open the circuit breaker, and how long it stays open.
+    core_breaker_failure_threshold: int = Field(default=5, ge=1)
+    core_breaker_reset_seconds: float = Field(default=30.0, gt=0)
+
     # Logging
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"

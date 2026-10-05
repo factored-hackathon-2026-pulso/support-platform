@@ -7,7 +7,7 @@ import { Page } from '@/components/layout'
 import { Button, Callout, PageHeader, Spinner } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
-import { useBuilderAvailable } from '../hooks/use-automation'
+import { useAgentsServiceDown, useBuilderAvailable } from '../hooks/use-automation'
 import type { AgentRequest } from '../builder-chat'
 import type { MaturingType } from '../types'
 import { BuilderChatSheet } from './BuilderChat'
@@ -58,6 +58,9 @@ export function AutomationFrame({
 }: AutomationFrameProps) {
   const { t } = useTranslation('automation')
   const builder = useBuilderAvailable()
+  // P4: agent-core wired but down. The screens keep showing what the platform has; the chat waits.
+  const serviceDown = useAgentsServiceDown()
+  const chatReady = builder && !serviceDown
   const [chat, setChat] = useState<ChatState>({
     open: false,
     request: null,
@@ -85,7 +88,7 @@ export function AutomationFrame({
             actions={
               <div className="flex items-center gap-2">
                 {actions}
-                {builder ? (
+                {chatReady ? (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -99,11 +102,16 @@ export function AutomationFrame({
             }
           />
         }
-        toolbar={<SectionNav section={section} />}
+        toolbar={
+          <>
+            <SectionNav section={section} />
+            {serviceDown ? <ServiceDown /> : null}
+          </>
+        }
       >
         {children}
       </Page>
-      {builder ? (
+      {chatReady ? (
         <BuilderChatSheet
           key={chat.key}
           open={chat.open}
@@ -199,5 +207,21 @@ export function EngineMissing({ className }: { className?: string }) {
     <Callout tone="neutral" title={t('engine.title')} className={className}>
       {t('engine.text')}
     </Callout>
+  )
+}
+
+/**
+ * "El servicio de agentes no está disponible" (deploy brief P4): agent-core is wired but does not
+ * answer. What the platform keeps (types, the proposals' index) still shows; the actions that need
+ * agent-core come back by themselves when it answers again.
+ */
+export function ServiceDown() {
+  const { t } = useTranslation('automation')
+  return (
+    <div className="shrink-0 border-b border-border bg-surface px-7 py-3">
+      <Callout tone="warn" title={t('serviceDown.title')}>
+        {t('serviceDown.text')}
+      </Callout>
+    </div>
   )
 }

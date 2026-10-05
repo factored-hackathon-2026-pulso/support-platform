@@ -27,6 +27,7 @@ export const BUILDER_ON: BuilderStatus = {
   canRevoke: false,
   stepUpMethod: 'authenticator',
   stepUpDigits: 6,
+  reachable: true,
 }
 
 export const BUILDER_OFF: BuilderStatus = {
@@ -35,6 +36,7 @@ export const BUILDER_OFF: BuilderStatus = {
   canRevoke: false,
   stepUpMethod: null,
   stepUpDigits: null,
+  reachable: true,
 }
 
 export function makeChange(overrides: Partial<EntityDraft> = {}): EntityDraft {

@@ -278,6 +278,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/ai/agents': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The agents the platform knows: name to show and results (analysts and Supervisión)
+     * @description ADR 0009. One row per agent that serves a case type or has held an assistant session: `displayName` (Supervisión's name, else the id humanized), the type it serves and its results (sessions, still open, resolved, handed to people), counted from the assistant sessions by their last answering agent. AI off: `available: false`.
+     */
+    get: operations['ai-stages_get_ai_agents']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/ai/stages': {
     parameters: {
       query?: never
@@ -810,7 +830,7 @@ export interface paths {
     }
     /**
      * Whether the agent builder is available, and what the caller may do
-     * @description Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured or the AI switch is off (slice 18; hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for.
+     * @description Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured or the AI switch is off (slice 18; hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for. `reachable: false` (deploy brief P4) while agent-core is configured but down: the calls that need it answer 503 `agent_core_unavailable` at once.
      */
     get: operations['builder_get_status']
     put?: never
@@ -1133,6 +1153,26 @@ export interface paths {
      * @description ADR 0005. `discarded` (the analyst dismissed the draft) or `ignored` (she left it). The draft leaves the list; the rest of the suggestion stays. `used` and `edited` are derived when she replies with `copilotSuggestionId`. 404 for an id that is not hers.
      */
     post: operations['cases_decide_copilot_suggestion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/items': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * The analyst used or dismissed a tool, an action or the escalation recommendation
+     * @description Slice 24. `item` is `tool`, `action` or `escalate` (`ref` is the item's `tool`, empty for `escalate`); `decision` is `used` or `dismissed`. A used tool is `copilot.tool_used` (the stage 2 signal); anything else is `copilot.item_decided`. Both are audited and the suggestion is not changed. Her own suggestion (`ready`), an item it holds: 404 otherwise. AI off: 404 `assistant_disabled`.
+     */
+    post: operations['ai-stages_record_item_decision']
     delete?: never
     options?: never
     head?: never
@@ -2019,6 +2059,66 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/supervision/ai/stages/{caseType}/agent/name': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Name the agent that serves a case type (Supervisión)
+     * @description ADR 0009. 1 to 80 characters. 404 `not_found`: the type has no agent; 404 `assistant_disabled`: AI off. Audited (`ai.agent_renamed`, without the name), live on `ai:stages`.
+     */
+    put: operations['ai-stages_rename_agent']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/ai/stages/{caseType}/agent/pause': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Pause the agent of a case type (Supervisión)
+     * @description ADR 0009 §2. The agent leaves the reception directory: new cases do not reach it, open ones carry on, `prod` is untouched. Needs her authenticator code. Audited (`ai.agent_paused`), live on `ai:stages`. Pausing a paused agent: 200, nothing changes. 404 `not_found` (no agent), `assistant_disabled` (AI off or no agent-core); 422 `builder_step_up_invalid`; `registry_*`; 502/503.
+     */
+    post: operations['ai-stages_pause_agent']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/ai/stages/{caseType}/agent/resume': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Resume the agent of a case type (Supervisión)
+     * @description ADR 0009 §2. The reverse of `pause`; the same rules and problems.
+     */
+    post: operations['ai-stages_resume_agent']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/supervision/ai/stages/{caseType}/move-back': {
     parameters: {
       query?: never
@@ -2499,11 +2599,59 @@ export interface components {
       /** @description Over every filter except status. */
       statusCounts: components['schemas']['UserStatusCounts']
     }
+    /** AgentResults */
+    AgentResults: {
+      /**
+       * Active
+       * @description …still open.
+       */
+      active: number
+      /**
+       * Handedtopeople
+       * @description Escalated, ended without a resolution, failed or taken by Supervisión.
+       */
+      handedToPeople: number
+      /** Resolved */
+      resolved: number
+      /**
+       * Sessions
+       * @description Assistant sessions whose last answering agent it was.
+       */
+      sessions: number
+    }
+    /** AgentRow */
+    AgentRow: {
+      /** Agentid */
+      agentId: string
+      /** @description The type it serves; null: serves none. */
+      caseType: components['schemas']['CaseType'] | null
+      /**
+       * Displayname
+       * @description Supervisión's name for it, or the id humanized.
+       */
+      displayName: string
+      /**
+       * Paused
+       * @description Out of the reception directory (ADR 0009 section 2).
+       */
+      paused: boolean
+      results: components['schemas']['AgentResults']
+    }
     /**
      * AgentStatus
      * @enum {string}
      */
     AgentStatus: 'none' | 'ready' | 'active'
+    /** AiAgents */
+    AiAgents: {
+      /** Agents */
+      agents: components['schemas']['AgentRow'][]
+      /**
+       * Available
+       * @description false while the AI switch is off (`agents` is empty).
+       */
+      available: boolean
+    }
     /** AiStages */
     AiStages: {
       /**
@@ -2976,6 +3124,11 @@ export interface components {
        */
       canRevoke: boolean
       /**
+       * Reachable
+       * @description Deploy brief P4: false while agent-core is configured but down (its circuit breaker is open or it does not answer its health check): show that the agents service is not available; the screens that only read the platform keep working.
+       */
+      reachable: boolean
+      /**
        * Stepupdigits
        * @description How many digits the code has.
        */
@@ -3442,6 +3595,16 @@ export interface components {
        * @description agent-core's id of the agent that serves the type (set while `agent` is `active`, slice 22).
        */
       agentId: string | null
+      /**
+       * Agentname
+       * @description The name Supervisión gave the agent (ADR 0009); null: show the humanized id.
+       */
+      agentName: string | null
+      /**
+       * Agentpaused
+       * @description Supervisión paused the agent: new cases do not reach it, open ones carry on.
+       */
+      agentPaused: boolean
       /** Agentsince */
       agentSince: string | null
       caseType: components['schemas']['CaseType']
@@ -4630,6 +4793,29 @@ export interface components {
       user: components['schemas']['AdminUser']
     }
     /**
+     * ItemDecisionRequest
+     * @description What the analyst did with one item of her suggestion (slice 24).
+     */
+    ItemDecisionRequest: {
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: 'used' | 'dismissed'
+      /**
+       * Item
+       * @enum {string}
+       */
+      item: 'tool' | 'action' | 'escalate'
+      /**
+       * Ref
+       * @description The tool or action (`tool` of the item); empty for `escalate`.
+       * @default
+       * @example leer_movimientos@1
+       */
+      ref: string
+    }
+    /**
      * Language
      * @enum {string}
      */
@@ -5057,6 +5243,19 @@ export interface components {
        * @description The rules the SPA lists, in order.
        */
       rules: components['schemas']['PasswordRule'][]
+    }
+    /** PauseAgentRequest */
+    PauseAgentRequest: {
+      /**
+       * Reason
+       * @default
+       */
+      reason: string
+      /**
+       * Stepupcode
+       * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
+       */
+      stepUpCode: string
     }
     /**
      * PlatformSettings
@@ -5673,6 +5872,11 @@ export interface components {
       before: unknown
       /** Field */
       field: string
+    }
+    /** RenameAgentRequest */
+    RenameAgentRequest: {
+      /** Name */
+      name: string
     }
     /** RenameTeamRequest */
     RenameTeamRequest: {
@@ -7661,6 +7865,44 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807): validation_error */
       422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_get_ai_agents': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AiAgents']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
         headers: {
           [name: string]: unknown
         }
@@ -11132,6 +11374,67 @@ export interface operations {
       }
     }
   }
+  'ai-stages_record_item_decision': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        suggestionId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ItemDecisionRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   'ai-stages_record_tool_used': {
     parameters: {
       query?: never
@@ -13880,6 +14183,246 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_rename_agent': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseType: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RenameAgentRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CaseTypeStage']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_pause_agent': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseType: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PauseAgentRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CaseTypeStage']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      423: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_resume_agent': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseType: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PauseAgentRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CaseTypeStage']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      423: {
         headers: {
           [name: string]: unknown
         }

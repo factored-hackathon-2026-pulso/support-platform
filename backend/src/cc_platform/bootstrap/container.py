@@ -23,6 +23,12 @@ from cc_platform.application.ai.agents import (
     SetAgentPaused,
 )
 from cc_platform.application.ai.announce import AnnounceImprovement
+from cc_platform.application.ai.availability import (
+    CoreStatus,
+    CoreStatusCheck,
+    WhileCoreAvailable,
+    core_status_unknown,
+)
 from cc_platform.application.ai.builder import AgentBuilder
 from cc_platform.application.ai.builder_chat import (
     AskBuilder,
@@ -269,6 +275,15 @@ from cc_platform.infrastructure.ai.http_runtime import HttpAgentRuntime
 from cc_platform.infrastructure.ai.keys import AgentSigningKeys
 from cc_platform.infrastructure.background import AsyncioBackgroundTasks, PeriodicTask
 from cc_platform.infrastructure.clock import SystemClock
+from cc_platform.infrastructure.core.clients import ResilientAgentRegistry, ResilientAgentRuntime
+from cc_platform.infrastructure.core.http import CoreHealth, core_http_client
+from cc_platform.infrastructure.core.resilience import (
+    CallKind,
+    CircuitBreaker,
+    CoreGuard,
+    CoreTimeouts,
+    RetryPolicy,
+)
 from cc_platform.infrastructure.email.dev_mailbox import (
     DiscardingEmailSender,
     InMemoryDevMailbox,
@@ -352,7 +367,25 @@ class Container:
                 if self.settings.internal_service_token is not None
                 else None
             ),
+            core_status=self.core_status,
         )
+
+    @property
+    def core_status(self) -> CoreStatusCheck:
+        """P4: the Core's state for ``/readyz`` (``await container.core_status()`` → ``ok`` or
+        ``degraded``). ``ok`` without a Core: the platform is people-only by configuration."""
+        if self.agent_core is None:
+            return core_status_unknown
+        if self.agent_core.core_status is not None:
+            return self.agent_core.core_status
+        guard = self.agent_core.guard
+        if guard is None:
+            return core_status_unknown
+
+        async def breaker_status() -> CoreStatus:
+            return "ok" if guard.is_available() else "degraded"
+
+        return breaker_status
 
     async def startup(self) -> None:
         if self.database is not None:
@@ -444,20 +477,66 @@ class AgentCoreServices:
     """Closed on shutdown; ``None`` for a test double that owns no connection."""
     registry: AgentRegistryClient | None = None
     """The registry API (slice 16, the agent builder); ``None`` leaves the builder disabled."""
+    guard: CoreGuard | None = None
+    """P4: timeouts, retries and the circuit breaker shared by every call to this Core. ``None``
+    (a test double) = calls go straight to ``runtime`` and ``registry``."""
+    core_status: CoreStatusCheck | None = None
+    """P4: the readiness check of this Core (``/readyz``); ``None`` = the guard's breaker alone."""
+
+    def runtime_for(self, kind: CallKind) -> AgentRuntime:
+        """The runtime one consumer uses, with its kind's timeout (behind the shared guard)."""
+        if self.guard is None:
+            return self.runtime
+        return ResilientAgentRuntime(self.runtime, self.guard, kind)
+
+    def guarded_registry(self) -> AgentRegistryClient | None:
+        if self.registry is None or self.guard is None:
+            return self.registry
+        return ResilientAgentRegistry(self.registry, self.guard)
+
+
+def _core_guard(settings: Settings) -> CoreGuard:
+    """P4: one guard (one breaker) per Core; the model calls default to the legacy timeout."""
+    model = settings.agent_core_timeout_seconds
+    return CoreGuard(
+        timeouts=CoreTimeouts(
+            assistant=settings.core_timeout_assistant_seconds or model,
+            copilot=settings.core_timeout_copilot_seconds or model,
+            suggestions=settings.core_timeout_suggestions_seconds or model,
+            builder=settings.core_timeout_builder_seconds or model,
+            registry=settings.core_timeout_registry_seconds,
+            evaluate=settings.core_timeout_evaluate_seconds,
+            probe=settings.core_probe_timeout_seconds,
+        ),
+        retry=RetryPolicy(
+            attempts=settings.core_retry_attempts,
+            base_delay=settings.core_retry_base_delay_seconds,
+            max_delay=settings.core_retry_max_delay_seconds,
+        ),
+        breaker=CircuitBreaker(
+            failure_threshold=settings.core_breaker_failure_threshold,
+            reset_seconds=settings.core_breaker_reset_seconds,
+        ),
+    )
 
 
 def _agent_core_services(settings: Settings, clock: Clock) -> AgentCoreServices | None:
     if settings.agent_core_url is None or settings.agent_keys_file is None:
         return None
     keys = AgentSigningKeys.from_file(settings.agent_keys_file)
-    client = httpx.AsyncClient(
-        base_url=settings.agent_core_url, timeout=settings.agent_core_timeout_seconds
+    guard = _core_guard(settings)
+    client = core_http_client(
+        settings.agent_core_url,
+        timeouts=guard.timeouts,
+        connect_timeout=settings.core_connect_timeout_seconds,
     )
     return AgentCoreServices(
         issuer=Ed25519AgentCredentialIssuer(keys, clock),
         runtime=HttpAgentRuntime(client),
         http_client=client,
         registry=HttpAgentRegistry(client),
+        guard=guard,
+        core_status=CoreHealth(client, guard),
     )
 
 
@@ -539,11 +618,13 @@ def _build_assistant(
     handover = AssistantHandover(
         clock=clock, ids=ids, sla=FirstResponseSlaPolicy(), assign_case=assign_case
     )
+    # P4: every assistant call (turns, handoffs) behind the Core's guard, with its timeout.
+    assistant_runtime = agent_core.runtime_for(CallKind.ASSISTANT)
     engine = AssistantEngine(
         uow=uow,
         clock=clock,
         ids=ids,
-        runtime=agent_core.runtime,
+        runtime=assistant_runtime,
         issuer=agent_core.issuer,
         handover=handover,
         config=config,
@@ -553,7 +634,7 @@ def _build_assistant(
         HandoffPriorityProcess(
             background,
             ApplyHandoffPriority(
-                uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+                uow=uow, clock=clock, runtime=assistant_runtime, issuer=agent_core.issuer
             ),
         ),
         event_types=[AssistantEnded],
@@ -572,7 +653,7 @@ def _build_assistant(
         ),
         request_person=RequestPerson(uow=uow, clock=clock, handover=handover),
         handoff=GetCaseHandoff(
-            uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+            uow=uow, clock=clock, runtime=assistant_runtime, issuer=agent_core.issuer
         ),
         release=ReleaseAssistantCase(uow=uow, clock=clock, handover=handover),
         copilot_thread=GetCopilotThread(uow=uow, stage_gate=settings.stage_gates_suggestions),
@@ -581,7 +662,7 @@ def _build_assistant(
             uow=uow,
             clock=clock,
             ids=ids,
-            runtime=agent_core.runtime,
+            runtime=agent_core.runtime_for(CallKind.COPILOT),
             issuer=agent_core.issuer,
             agent=settings.copilot_agent,
             stage_gate=settings.stage_gates_suggestions,
@@ -607,19 +688,32 @@ def _build_assistant(
             bus.subscribe(
                 # Slice 18: no automatic suggestion while the AI switch is off; slice 21: nor for
                 # a case whose type is below stage 2 (its copilot proposes nothing yet).
-                WhileAiOn(ai_switch, _stage_gated(settings, uow, suggestion_process)),
+                # P4: nor while the Core is down (the panel stays quiet, no failed attempts).
+                WhileAiOn(
+                    ai_switch,
+                    _while_core_up(agent_core, _stage_gated(settings, uow, suggestion_process)),
+                ),
                 event_types=SUGGESTION_PROCESS_EVENTS,
             )
         bus.subscribe(SuggestionSignal(hub), event_types=SUGGESTION_SIGNAL_EVENTS)
     return _AssistantParts(
-        gate=AssistantGate(config, switch=ai_switch),
+        gate=AssistantGate(config, switch=ai_switch, core=agent_core.guard),
         engine=engine,
         resolution=RecordHandoffResolution(
-            uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
+            uow=uow, clock=clock, runtime=assistant_runtime, issuer=agent_core.issuer
         ),
         use_cases=use_cases,
         sweep=SweepAssistantSessions(uow=uow, clock=clock, tasks=background, engine=engine),
     )
+
+
+def _while_core_up(
+    agent_core: AgentCoreServices, subscriber: Callable[[EventRecord], Awaitable[None]]
+) -> Callable[[EventRecord], Awaitable[None]]:
+    """P4: background AI work skipped while the Core's breaker is open."""
+    if agent_core.guard is None:
+        return subscriber
+    return WhileCoreAvailable(agent_core.guard, subscriber)
 
 
 def _stage_gated(
@@ -644,7 +738,7 @@ def _build_suggestions(
         uow=uow,
         clock=clock,
         ids=ids,
-        runtime=agent_core.runtime,
+        runtime=agent_core.runtime_for(CallKind.SUGGESTIONS),
         issuer=agent_core.issuer,
         agent=settings.copilot_suggestions_agent,
         stage_gate=settings.stage_gates_suggestions,
@@ -672,12 +766,13 @@ def _build_builder(
     notifications: NotificationWriter,
 ) -> BuilderUseCases | None:
     """Slice 16: the agent builder exists when agent-core's registry is wired."""
-    if agent_core.registry is None:
+    registry_client = agent_core.guarded_registry()
+    if registry_client is None:
         return None
     registry = AgentBuilder(
         uow=uow,
         clock=clock,
-        registry=agent_core.registry,
+        registry=registry_client,
         issuer=agent_core.issuer,
         step_up=step_up,
     )
@@ -688,8 +783,8 @@ def _build_builder(
             uow=uow,
             clock=clock,
             ids=ids,
-            runtime=agent_core.runtime,
-            registry=agent_core.registry,
+            runtime=agent_core.runtime_for(CallKind.BUILDER),
+            registry=registry_client,
             issuer=agent_core.issuer,
             builder=registry,
             agent=settings.builder_agent,
@@ -698,7 +793,7 @@ def _build_builder(
             uow=uow,
             clock=clock,
             ids=ids,
-            runtime=agent_core.runtime,
+            runtime=agent_core.runtime_for(CallKind.BUILDER),
             issuer=agent_core.issuer,
             agent=settings.builder_agent,
         ),

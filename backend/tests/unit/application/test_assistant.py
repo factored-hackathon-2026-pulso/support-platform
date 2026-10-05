@@ -265,6 +265,19 @@ async def test_an_escalation_takes_the_priority_the_agent_saw(
     assert decode(read.credentials.authorization)["type"] == "customer"  # not an analyst's
 
 
+async def test_agent_core_s_default_normal_priority_reads_as_medium(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    runtime.handoffs["hnd-7"] = {"handoff_ref": "hnd-7", "priority": "normal"}
+    runtime.script.append(escalation("hnd-7"))
+
+    case_id = await write(world, NATALIA)
+    await settle(world)
+    case, _session, _turns = await case_and_session(world, case_id)
+
+    assert case.priority is CasePriority.MEDIUM
+
+
 async def test_an_unknown_or_missing_priority_leaves_the_case_alone(
     world: Container, runtime: InMemoryAgentRuntime
 ) -> None:

@@ -29,6 +29,7 @@ erDiagram
     staff ||--o{ mfa_challenges : "codes"
     staff ||--o{ staff_sessions : "sessions"
     staff ||--o| analyst_availability : "available / paused"
+    staff ||--o| staff_preferences : "her UI language"
     cases ||--o{ event_log : "case_id"
     cases ||--o{ escalations : "escalations (one open at a time)"
     cases ||--o{ calls : "calls (one active at a time, slice 12)"
@@ -214,6 +215,10 @@ erDiagram
         string staff_id PK
         string status "available paused"
         datetime since
+    }
+    staff_preferences {
+        string staff_id PK
+        string ui_language "es pt-BR"
     }
     notifications {
         string id PK "NTF-…"
@@ -565,6 +570,7 @@ See `api/slice-10-notifications.md`.
 | `mfa_challenges` | verification code | `id`, `staff_id`, `issued_at`, `expires_at`, `max_attempts`, `attempts`, `status` (cancelled if the password is reset or the person is deactivated), `verified_at`, `method` |
 | `staff_sessions` | started sessions | `id`, `staff_id`, `issued_at`, `expires_at`, `mfa_method`, `ended_at`, `end_reason` |
 | `analyst_availability` | available or paused | `staff_id`, `status` (`available`, `paused`), `since` |
+| `staff_preferences` | a person's own settings (slice 23) | `staff_id`, `ui_language` (`es`, `pt-BR`: the language of her platform UI, never of the conversations), `version`; absent = the defaults (`es`). Apart from `staff` so that her own change never makes an administrator's edit (`expectedVersion`) stale |
 
 **Secure onboarding (part 4).** No table stores a plaintext password, a link or a readable
 verification key: only hashes (Argon2id for passwords, SHA-256 for single-use links) and the

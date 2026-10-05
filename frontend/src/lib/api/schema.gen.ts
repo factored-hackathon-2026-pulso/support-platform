@@ -1833,6 +1833,27 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/me/preferences': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** My preferences (never changed = the defaults) */
+    get: operations['preferences_get_preferences']
+    /**
+     * Change my preferences (same value = no change, no event)
+     * @description Records `staff.ui_language_changed` (audited) and sends `preferences.updated` to her other sessions on `staff:<id>`.
+     */
+    put: operations['preferences_set_preferences']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/meta': {
     parameters: {
       query?: never
@@ -4594,6 +4615,8 @@ export interface components {
     MeResponse: {
       /** @description Slice 18: the platform settings the SPA needs (the AI switch); live as `platform.updated` on `platform:settings`. */
       platform: components['schemas']['PlatformSettings']
+      /** @description Slice 23: her own settings (the UI language); changed with `PUT /me/preferences`, live as `preferences.updated` on `staff:<id>`. */
+      preferences: components['schemas']['Preferences']
       session: components['schemas']['SessionOut']
       staff: components['schemas']['StaffOut']
     }
@@ -4945,6 +4968,14 @@ export interface components {
     PostTurnResponse: {
       case: components['schemas']['CaseSummary']
       turn: components['schemas']['Turn']
+    }
+    /**
+     * Preferences
+     * @description Her own settings (in ``/auth/me``; live as ``preferences.updated`` on ``staff:<id>``).
+     */
+    Preferences: {
+      /** @description The language of her platform UI (BCP 47): `es` (default) or `pt-BR`. Never the language of the conversations. */
+      uiLanguage: components['schemas']['UiLanguage']
     }
     /**
      * ProblemCode
@@ -6122,9 +6153,21 @@ export interface components {
       /** Oldercursor */
       olderCursor: string | null
     }
+    /**
+     * UiLanguage
+     * @description Languages of the platform UI (BCP 47 tags, as the browser and ``Intl`` use them).
+     *
+     *     Not the same set as ``Language`` (what a person speaks with customers: ``es`` | ``pt``).
+     * @enum {string}
+     */
+    UiLanguage: 'es' | 'pt-BR'
     /** UpdateAvailabilityRequest */
     UpdateAvailabilityRequest: {
       status: components['schemas']['AvailabilityStatus']
+    }
+    /** UpdatePreferencesRequest */
+    UpdatePreferencesRequest: {
+      uiLanguage: components['schemas']['UiLanguage']
     }
     /** UpdateUserRequest */
     UpdateUserRequest: {
@@ -13084,6 +13127,77 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  preferences_get_preferences: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Preferences']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  preferences_set_preferences: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdatePreferencesRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Preferences']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
       422: {
         headers: {
           [name: string]: unknown

@@ -3,15 +3,16 @@
 The rules in `docs/platform/ENGINEERING_BRIEF.md` win over this file. This file
 explains how the SPA is put together and the conventions every slice follows.
 
-Code, identifiers and comments are in English. Everything a user sees is Spanish
-(neutral LATAM), copied from the canvas (`warehouse/design/source/project/*.dc.html`).
+Code, identifiers and comments are in English. Everything a user sees comes from the translation
+catalogs (`src/locales`, slice 23): Spanish (neutral LATAM, copied from the canvas,
+`warehouse/design/source/project/*.dc.html`) is the source, Brazilian Portuguese has every key (§12).
 
 ## 1. Stack
 
 Vite · React 19 · TypeScript (strict, `noUncheckedIndexedAccess`) · Tailwind v4
 (tokens in `src/styles/index.css`) · React Router v8 data router · TanStack Query v5 ·
-openapi-fetch + openapi-typescript · lucide-react · Vitest + Testing Library ·
-oxlint + prettier. Fonts are self-hosted (`@fontsource/*`).
+openapi-fetch + openapi-typescript · i18next + react-i18next (slice 23) · lucide-react ·
+Vitest + Testing Library · oxlint + prettier. Fonts are self-hosted (`@fontsource/*`).
 
 ## 2. Folders
 
@@ -29,6 +30,7 @@ src/
     session.tsx         SessionProvider, useSession, useCurrentUser, useCurrentRole
     session-realtime.ts `me.updated` → the session cache (registerSessionRealtime)
     session-live.tsx    SessionLiveSync: `staff:<me>` topic, 4409 → reload /auth/me, roles toast
+    preferences.ts      her UI language (slice 23): primed by /auth/me, UiLanguageSync, the menu's mutation
     realtime.ts         the app RealtimeClient (token + auth-error wiring)
     realtime-handlers.ts  composition point: every feature's realtime registration
     query-client.ts     TanStack Query defaults
@@ -44,8 +46,10 @@ src/
     realtime/           WebSocket client, envelope → cache handlers, React hooks
     session-token.ts    token store (memory + sessionStorage)
     config.ts           VITE_API_URL, realtime URL
-    format.ts, cn.ts    formatters (incl. joinEs "A, B y C"), class names
+    format.ts, cn.ts    formatters in the active locale (formatList "A, B y C" / "A, B e C"), class names
+    i18n/               the i18next instance, the locale store, `Translation<T>`, useActiveLocale (§12)
     hooks.ts            generic React hooks shared by features: useDebouncedValue, useNow
+  locales/              translation catalogs: `<locale>/<namespace>.ts` + namespaces.ts (§12)
   styles/index.css      tokens (@theme) and base styles
   test/                 render helpers, fixtures (invented people), fake socket,
                         architecture.test.ts (import boundaries, path literals)
@@ -76,7 +80,7 @@ route table, and `main.tsx`) imports features only through `core.ts`: an import 
 an `index.ts` there would put every screen of that feature in the entry chunk, since
 the barrel statically depends on them (lazy routes would then be empty shells).
 Today `cases`, `conversation`, `copilot`, `supervision`, `admin`, `home`, `notifications` and `onboarding` have one. The vocabulary the
-shell itself shows (role names, "Ahora tienes: …") lives in `app/roles.ts`.
+shell itself shows (role names, "Ahora tienes: …") lives in `app/roles.ts`, read from the `shell` catalog.
 
 Rules:
 
@@ -464,6 +468,27 @@ Contract: `docs/platform/api/slice-21-stages.md`. In `copilot` (the stage is how
   item, "y N más"); `HandoffItem.lines`.
 - Test fixture: `src/test/stage-fixtures.ts` (`makeStages`, `makeTypeStage`, shaped like the seed).
 
+### The platform in Spanish and Portuguese (slice 23)
+
+Contract: `docs/platform/api/slice-23-i18n.md`; decisions: ADR 0008; the guide: §12. No new feature folder.
+
+- **`lib/i18n`** (framework-free except `react.ts`): `i18n` (the instance; `common` and `shell` bundled, the
+  rest lazy), `changeLocale`, `prefetchNamespaces`, `loadAllCatalogs` (tests), the locale store
+  (`getActiveLocale`, `detectInitialLocale`, `storeLocale`, `LOCALE_NAME`), `Translation<T>`, `useActiveLocale`.
+- **`app/preferences.ts`**: `usePreferences` (primed by `/auth/me` like the platform settings),
+  `UiLanguageSync` (mounted in `AppProviders`: the language and the stored choice), `useSetUiLanguage`
+  (optimistic, rollback toast in the language it goes back to), `registerPreferencesRealtime`
+  (`preferences.updated`). `SessionLiveSync` refetches it after a reconnect.
+- **`components/layout`**: `RoleSwitcher` gains "Idioma de la plataforma" (globe) with the own names;
+  `ScreenSuspense` around the layouts' outlet (a lazy catalog suspends there, the rail stays).
+- **`app/roles.ts`**: `ROLES`, nav items and `ROLE_LABEL` are getters over `shell:*` (consumers unchanged);
+  `RailIndicator.noun` is a key (`pending` | `queued` | `escalations`); `presenceFor(status, locale)`.
+- **`components/ui`**: their copy is in `common`; `APP_TITLE` became `appTitle()`; `languagesName` uses
+  `formatList`. **`lib/api/problem.ts`**: the generic and network titles come from `common:errors`.
+- **Migrated in 23a**: the shell, `components/*`, `app/*`, `routes/not-found`, `features/auth`,
+  `features/onboarding`, "Plataforma" (`features/admin/platform.ts` now holds its copy helpers). The rest is
+  listed in `src/test/i18n-allowlist.ts` for 23b.
+
 ### Supervision and audit (slice 3)
 
 Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
@@ -790,7 +815,8 @@ right role section; its query string goes in the feature's `url.ts`. Until it is
   `{ timeZone }` only when a screen must show another zone on purpose, and say so
   in the copy ("10:47 (hora Bogotá)"). Tests pin the process zone to
   `America/Bogota` (`vite.config.ts`). `formatRelativeTime(value, now)` takes `now`
-  explicitly (real clock or a server time).
+  explicitly (real clock or a server time). Words and number format follow the UI
+  locale (§12); `{ locale }` forces one.
 
 ## 9. Component catalog (`@/components/ui`)
 
@@ -861,7 +887,8 @@ trigger), `AppShell` (rail + outlet), `Rail` (role
 destinations from `ROLES`, `aria-current`, live badges/dots from the `indicators`
 prop: nav items name an `indicator` key and `app/rail-indicators.ts` maps feature
 counts to it; no count means no badge, never a constant), `RoleSwitcher` (avatar menu:
-CAMBIAR DE ROL with only the roles the user holds, sign out), `AuthLayout` (dark brand
+her facts, "Idioma de la plataforma" with the own names (slice 23), CAMBIAR DE ROL with only the
+roles the user holds, sign out), `AuthLayout` (dark brand
 panel + form column), `Page` / `PageBody` / `PageToolbar`, `SplitView`,
 `ScreenPlaceholder`, `FullScreenStatus`. Slice 10: `AppShell` / `Rail` take a `notifications`
 slot (the bell, above the avatar), composed by `routes/staff-shell.tsx`.
@@ -887,6 +914,11 @@ Extend primitives instead of forking them; add new ones here with a test.
 - Every `model.ts` has unit tests; every screen has a render test of its main
   states (canvas states such as `error`, `vacia`, `bloqueada`).
 - Fixtures use invented people (`src/test/fixtures.ts`), never dataset records.
+- Language (slice 23): every catalog is preloaded (`src/test/setup.ts`) and the language goes
+  back to `es` after each test. `renderRoute(entry, { locale: 'pt-BR' })` /
+  `renderWithProviders(ui, { locale })` render in that language from the first frame (and prime
+  it as the person's preference); `setTestLocale(locale)` switches mid-test. Every migrated
+  screen has a pt-BR render test.
 - Query by role and accessible name (that is also the a11y check).
 - `src/test/architecture.test.ts` checks the import boundaries of §3.
 
@@ -918,7 +950,10 @@ is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
   the customer calls, the analyst answers, lines both ways, hold / resume, a staff-only note,
   hang up, close without "El cliente verá", the survey in the call view; the customer emails, the
   analyst replies by email, the framed reply reaches the customer marked "Nuevo", the customer
-  answers in the thread). The simulator page object picks a channel (`open(channel)`,
+  answers in the thread), `i18n.spec.ts` (slice 23: a throwaway admin switches to Português in the
+  account menu on "Plataforma"; the rail, the menu, the screen, `<html lang>` and the tab title
+  follow; a reload keeps it; signed out, the login is in Portuguese; `AppShell.chooseLanguage`).
+  The simulator page object picks a channel (`open(channel)`,
   `actors.customer(label, customer, channel)`, chat by default) and has call and email helpers;
   the Workspace page object has `callBar`, `callState`, `say`, `addNote`, `replyByEmail`. Slice 10: `supervision.spec.ts`
   › "the bell: …" (supervision's count goes up live, "Revisar" in the panel lands on Escalados
@@ -989,13 +1024,77 @@ is never touched) and the Vite dev server with `VITE_API_URL` pointed at it
   and back on the list the row it came from; the simulator's "Ver conversaciones
   anteriores" hands the focus to the first loaded block. Buttons that become
   unavailable while focused (composer "Enviar") use `aria-disabled`, not `disabled`.
-- Language: the customer simulator's chat (inside the phone frame) speaks the
-  customer's language (`es` | `pt`, `lang` on the frame); the staff UI and the
-  simulator page around it are Spanish.
+- Language: `<html lang>` follows the UI language (`es` | `pt-BR`, slice 23). The customer
+  simulator's chat (inside the phone frame) speaks the customer's language (`es` | `pt`, `lang`
+  on the frame), whatever the UI language. Language options carry `lang` (their own names).
 - Desktop-first (1440×900) and must not break at 1280 px.
 
-## 12. Environment
+## 12. Internationalization (slice 23): writing and migrating copy
+
+The rules every area follows (ADR 0008; contract `docs/platform/api/slice-23-i18n.md`).
+
+**Where copy lives.** `src/locales/es/<namespace>.ts` (the source, `export default { … } as const`) and
+`src/locales/pt-BR/<namespace>.ts` (`export default { … } satisfies Translation<typeof es>`). One namespace
+per area: `common` (actions, loading, generic errors, the primitives), `shell` (rail, account menu, roles,
+session and route-error screens), `auth`, `onboarding`, `home`, `cases`, `conversation`, `copilot`,
+`workspace`, `supervision`, `audit`, `admin`, `notifications`, `customer`. An area edits only its own files;
+a new namespace is added to both folders and to `src/locales/namespaces.ts` (list and `Resources`).
+
+**Keys.** English, camelCase, nested by screen or component, then by role of the text:
+`login.title`, `login.forgotHelp`, `mailbox.kind.invitation`, `failure.mfaInvalid`. Name what the text is,
+not what it says (`emptyTitle`, not `noEmailsYet`). Reuse `common:actions.*` for plain actions ("Reintentar",
+"Cerrar", "Continuar"). Never build a key from user data; from an enum, use a typed template
+(``t(`mailbox.kind.${kind}`)``) so the compiler checks every value.
+
+**In components.** `const { t } = useTranslation('auth')` → `t('login.title')`; several namespaces:
+`useTranslation(['onboarding', 'common'])` → `t('reset.title')`, `t('common:actions.signIn')`; a deep
+block: `useTranslation('admin', { keyPrefix: 'platform' })`. The component re-renders on a language switch.
+
+**In pure modules** (`model.ts`, copy maps): read the catalog **when the function runs**, never at import:
+`const t = i18n.getFixedT(null, 'auth')` at the top, then `t('failure.generic')` inside the function. Turn
+`const LABEL: Record<K, string> = {…}` into `function label(key: K) { return t(`…${key}`) }` (or getters, as
+`app/roles.ts` does, when many callers read the map). A component that renders a model's text must call
+`useTranslation` (or `useActiveLocale()`) so it re-renders; a `useMemo` over translated text lists the locale
+in its dependencies.
+
+**Interpolation and plurals.** `{{name}}` placeholders (React escapes; never concatenate translated pieces:
+the word order differs). Plurals by `count`: write `key_one` and `key_other` in both languages and call
+`t('key', { count })`; numbers in the text as `{{count, number}}` ("4.412"). Lists with `formatList` (not
+`joinEs`). Rich text (a link inside a sentence): `<Trans>` with components, or split the sentence in two
+keys around the element as `LoginScreen` does with its dev-mailbox link.
+
+**Formatting.** Dates, times, relative times, numbers and money only through `lib/format.ts` (it follows the
+UI locale). Never `toLocaleString` or a hand-made month list in a feature.
+
+**What is not copy.** Brand and product names that do not change, a language's own name ("Español",
+"Português": `LOCALE_NAME`, `LANGUAGE_NATIVE_NAME`), identifiers, URLs, data from the API (names, case ids,
+messages, server texts until 23c). Mark a deliberate literal that the guard flags with `// i18n-ignore` on
+its line or `// i18n-ignore-next-line` above it, with the reason.
+
+**Portuguese.** Natural Brazilian Portuguese for a bank's support team, not a literal translation; keep the
+terms of `slice-23-i18n.md` §3 (caso, fila, equipe, atendimento, supervisão, perfil, "Sair", "Tentar de
+novo", e-mail). Same tone and length as the Spanish where the layout is tight.
+
+**Tests.** Keep the Spanish assertions as they are (Spanish copy must not change). Add one pt-BR render test
+per screen (`renderRoute(…, { locale: 'pt-BR' })`) that walks its main state and one interaction. The guards:
+`src/test/i18n-literals.test.ts` (no copy outside the catalogs; pending areas in `src/test/i18n-allowlist.ts`)
+and `src/lib/i18n/catalogs.test.ts` (same keys and placeholders in every locale). `I18N_REPORT=1 pnpm test
+i18n-literals` lists what an area still has (`I18N_REPORT=all` prints every literal with its line).
+
+**Migrating an area (23b).**
+
+1. `I18N_REPORT=all pnpm test i18n-literals`, filter your paths: that is the list.
+2. Move the copy of `model.ts` and the other pure files first (functions over `t`, see above), keeping their
+   Spanish output so their unit tests stay green; then the components.
+3. Write `es` and `pt-BR` together; `pnpm typecheck` says what is missing.
+4. Delete your area's block from `src/test/i18n-allowlist.ts` (only your block).
+5. Add the pt-BR render tests; run `pnpm test`, `pnpm lint`, `pnpm build` (your catalog must be its own lazy
+   chunk, not in `index-*.js`).
+6. Shared vocabulary of another area: call its helper; do not copy its words into your catalog.
+
+## 13. Environment
 
 `VITE_API_URL` (default `http://localhost:8000`, see `.env.example`). Scripts:
 `dev`, `build`, `typecheck`, `lint`, `test`, `e2e`, `e2e:install`, `format`, `format:check`,
-`gen:api`, `check:api`. The e2e runner sets its own `VITE_API_URL` (§10).
+`gen:api`, `check:api`. The e2e runner sets its own `VITE_API_URL` (§10). The UI language before
+sign-in is the browser's (es / pt) unless this browser stored a choice (`localStorage` `cc.ui-language`).

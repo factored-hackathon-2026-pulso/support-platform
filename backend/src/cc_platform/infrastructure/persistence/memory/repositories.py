@@ -47,6 +47,7 @@ from cc_platform.domain.people.invitation import Invitation
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.password_reset import PasswordReset
+from cc_platform.domain.people.preferences import StaffPreferences
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Language, Staff, StaffRole
 from cc_platform.domain.people.team import Team
@@ -471,6 +472,17 @@ class InMemoryAnalystAvailabilityRepository(_StagedRepository[AnalystAvailabilit
 
     async def list(self) -> list[AnalystAvailability]:
         return sorted(self._all(), key=lambda availability: availability.staff_id)
+
+
+# ----------------------------------------------------------------------------- people: preferences
+class InMemoryStaffPreferencesRepository(_StagedRepository[StaffPreferences]):
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, StaffPreferences], track: Tracker) -> None:
+        super().__init__(committed, lambda preferences: preferences.staff_id, track)
+
+    async def get(self, staff_id: str) -> StaffPreferences | None:
+        return await self._get(staff_id)
 
 
 # ----------------------------------------------------------------------------- cases

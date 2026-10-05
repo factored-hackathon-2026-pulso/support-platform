@@ -98,6 +98,20 @@ class StaffAvailabilityChanged(DomainEvent):
         return payload
 
 
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StaffUiLanguageChanged(DomainEvent):
+    """Slice 23: a person changed the language of her own platform UI (actor = herself).
+
+    ``from_language`` / ``to_language`` are ``UiLanguage`` values (``es`` | ``pt-BR``).
+    """
+
+    event_type = "staff.ui_language_changed"
+    entity = "staff"
+
+    from_language: str
+    to_language: str
+
+
 # ----------------------------------------------------------------------------- administration
 # Slice 4 §2.4: every event below has ``actor = ActorRef(admin, <admin id>)`` and no case.
 # Lists keep a canonical order (roles: analyst, supervisor, admin; languages sorted) and

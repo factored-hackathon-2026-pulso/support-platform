@@ -1,15 +1,14 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { activationSteps, type ActivationStep } from '../model'
+import { useTranslation } from '@/lib/i18n'
 
 /** "1 Contraseña — 2 Verificación en dos pasos" (BoActivar `steps`). */
 export function StepIndicator({ step }: { step: ActivationStep }) {
   const steps = activationSteps(step)
+  const { t } = useTranslation('onboarding')
   return (
-    <ol
-      aria-label="Pasos para activar tu cuenta"
-      className="m-0 flex list-none items-center gap-2.5 p-0"
-    >
+    <ol aria-label={t('steps.label')} className="m-0 flex list-none items-center gap-2.5 p-0">
       {steps.map((item, index) => (
         <li
           key={item.key}

@@ -49,6 +49,7 @@ from cc_platform.domain.ai.events import (
 from cc_platform.domain.cases import CloseReason
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.errors import AccountLockedError
+from cc_platform.domain.people.preferences import UiLanguage
 from cc_platform.domain.people.staff import Language, StaffRole
 from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
@@ -185,6 +186,16 @@ def test_the_ai_switch_says_on_or_off() -> None:
     assert "platform.ai_toggled" in CHANGES_STATE
 
 
+def test_the_ui_language_change_names_the_language_by_its_own_name() -> None:
+    names = AuditNames()
+    to_pt = stored("staff.ui_language_changed", {"from_language": "es", "to_language": "pt-BR"})
+    to_es = stored("staff.ui_language_changed", {"from_language": "pt-BR", "to_language": "es"})
+    assert describe(to_pt, names) == "Cambió el idioma de la plataforma a Português"
+    assert describe(to_es, names) == "Cambió el idioma de la plataforma a Español"
+    assert family_of("staff.ui_language_changed") is AuditFamily.ACCESS
+    assert "staff.ui_language_changed" in CHANGES_STATE
+
+
 async def emit_everything(container: Container) -> None:
     """Drive every kind of event the platform emits through the real use cases."""
     people, cases = container.use_cases.people, container.use_cases.cases
@@ -238,6 +249,8 @@ async def emit_everything(container: Container) -> None:
     await cases.close.execute(daniela, seed_case_id(102), CloseCaseCommand(CloseReason.RESOLVED))
     await cases.close.execute(daniela, seed_case_id(107), CloseCaseCommand(CloseReason.DUPLICATE))
     await people.set_availability.execute(daniela, AvailabilityStatus.PAUSED)
+    # Slice 23: her own UI language.
+    await people.set_preferences.execute(daniela, UiLanguage.PORTUGUESE_BRAZIL)
     await people.set_availability.execute(daniela, AvailabilityStatus.AVAILABLE)
     await container.background.drain()  # the drain assigns what is left in the queues
     await emit_administration(container)

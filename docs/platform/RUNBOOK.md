@@ -301,6 +301,10 @@ After updating to slice 8, delete `backend/cc_platform.db`: the seed only adds m
 an older database keeps the old priorities and deadlines. Slice 9 adds the `escalations` table
 and the `cases.open_escalation_id` column: an older database does not start
 (`OutdatedSchemaError`) until it is deleted.
+Slice 23 adds the `staff_preferences` table (each person's UI language): delete an older
+database too. The UI language is chosen in the account menu ("Idioma de la plataforma": Español /
+Português); before signing in, the app uses the language this browser last used, else the
+browser's (Spanish or Portuguese), else Spanish.
 
 ### Simulator customers
 

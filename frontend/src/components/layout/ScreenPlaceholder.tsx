@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Construction } from 'lucide-react'
+import { useTranslation } from '@/lib/i18n'
 import { EmptyState, PageHeader } from '@/components/ui'
 import { Page, PageBody } from './Page'
 
@@ -27,15 +28,16 @@ export function ScreenPlaceholder({
   detail,
   eyebrow,
 }: ScreenPlaceholderProps) {
+  const { t } = useTranslation('shell')
   return (
     <Page header={<PageHeader title={title} subtitle={subtitle} eyebrow={eyebrow} />}>
       <PageBody className="flex items-center justify-center">
         <EmptyState
           icon={<Construction size={40} strokeWidth={1.6} />}
-          title="En construcción"
+          title={t('placeholder.title')}
           description={
             <>
-              {description ?? 'Esta pantalla ya está diseñada y llega en una próxima entrega.'}
+              {description ?? t('placeholder.text')}
               {detail ? <span className="mt-2 block text-13 text-muted">{detail}</span> : null}
             </>
           }

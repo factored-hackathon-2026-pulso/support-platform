@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/cn'
 import { handleRovingKeyDown, useRovingFallback } from './roving-focus'
 import { useControllableState } from './use-controllable-state'
+import { useTranslation } from '@/lib/i18n'
 
 interface TabsContextValue {
   value: string
@@ -116,6 +117,7 @@ export interface TabProps extends Omit<HTMLAttributes<HTMLButtonElement>, 'onCli
 }
 
 export function Tab({ value, disabled, dot, count, className, children, ...props }: TabProps) {
+  const { t } = useTranslation()
   const ctx = useTabsContext('Tab')
   const fallback = use(TabListFallbackContext)
   const selected = ctx.value === value
@@ -144,7 +146,7 @@ export function Tab({ value, disabled, dot, count, className, children, ...props
       {count !== undefined ? <span className="font-normal text-muted"> {count}</span> : null}
       {dot ? (
         <span className="size-2 rounded-full bg-warn">
-          <span className="sr-only"> con alertas</span>
+          <span className="sr-only"> {t('withAlertsSuffix')}</span>
         </span>
       ) : null}
     </button>

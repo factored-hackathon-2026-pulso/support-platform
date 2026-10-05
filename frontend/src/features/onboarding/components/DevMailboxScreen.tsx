@@ -12,7 +12,8 @@ import {
 } from '@/components/ui'
 import { formatRelativeTime } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
-import { DEV_EMAIL_KIND_LABEL } from '../model'
+import { useTranslation } from '@/lib/i18n'
+import { devEmailKindLabel } from '../model'
 import { inAppPath } from '../url'
 import { useDevMailbox, useMeta } from '../hooks/use-onboarding'
 import type { DevEmail } from '../types'
@@ -28,17 +29,16 @@ export function DevMailboxScreen() {
   const enabled = meta.data?.devMailbox === true
   const mailbox = useDevMailbox(enabled)
   const now = useNow(30_000)
+  const { t } = useTranslation(['onboarding', 'common'])
 
   return (
     <div className="min-h-dvh bg-canvas px-4 py-10 text-ink">
       <div className="mx-auto flex max-w-[760px] flex-col gap-5">
-        <DocumentTitle title="Correos de desarrollo" />
+        <DocumentTitle title={t('mailbox.title')} />
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <h1 className="m-0 font-display text-30 font-bold">Correos de desarrollo</h1>
-            <p className="m-0 text-14 text-ink-2">
-              Los correos más recientes de este entorno, del más nuevo al más viejo.
-            </p>
+            <h1 className="m-0 font-display text-30 font-bold">{t('mailbox.title')}</h1>
+            <p className="m-0 text-14 text-ink-2">{t('mailbox.lead')}</p>
           </div>
           {enabled ? (
             <Button
@@ -47,12 +47,12 @@ export function DevMailboxScreen() {
               loading={mailbox.isFetching}
               onClick={() => void mailbox.refetch()}
             >
-              Actualizar
+              {t('common:actions.refresh')}
             </Button>
           ) : null}
         </div>
-        <Callout tone="warn" title="Herramienta de desarrollo">
-          Muestra los correos que la plataforma envió en este entorno. No existe en producción.
+        <Callout tone="warn" title={t('mailbox.toolTitle')}>
+          {t('mailbox.toolText')}
         </Callout>
         {meta.isPending ? (
           <Skeleton className="h-24" />
@@ -60,11 +60,11 @@ export function DevMailboxScreen() {
           <EmptyState
             as="h2"
             icon={<Inbox size={32} strokeWidth={1.6} />}
-            title="No disponible"
-            description="Este entorno no guarda correos de desarrollo."
+            title={t('mailbox.unavailable')}
+            description={t('mailbox.unavailableText')}
             action={
               <Link to={PATHS.login} className="text-14 text-link font-semibold">
-                Ir a Entrar
+                {t('mailbox.goToSignIn')}
               </Link>
             }
           />
@@ -77,14 +77,14 @@ export function DevMailboxScreen() {
               <EmptyState
                 as="h2"
                 icon={<Inbox size={32} strokeWidth={1.6} />}
-                title="Todavía no hay correos"
-                description="Cuando administración invite a alguien o le envíe un enlace, aparece aquí."
+                title={t('mailbox.emptyTitle')}
+                description={t('mailbox.emptyText')}
               />
             }
-            errorTitle="No pudimos cargar los correos"
+            errorTitle={t('mailbox.errorTitle')}
           >
             {(data) => (
-              <ul aria-label="Correos" className="m-0 flex list-none flex-col gap-3 p-0">
+              <ul aria-label={t('mailbox.list')} className="m-0 flex list-none flex-col gap-3 p-0">
                 {data.items.map((email) => (
                   <DevEmailItem key={email.id} email={email} now={now} />
                 ))}
@@ -99,6 +99,7 @@ export function DevMailboxScreen() {
 
 function DevEmailItem({ email, now }: { email: DevEmail; now: number }) {
   const path = inAppPath(email.link)
+  const { t } = useTranslation('onboarding')
   return (
     <li>
       <article
@@ -111,24 +112,24 @@ function DevEmailItem({ email, now }: { email: DevEmail; now: number }) {
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13 text-ink-2">
               <span className="flex items-center gap-1.5">
                 <Mail size={14} aria-hidden="true" className="text-muted" />
-                <span className="sr-only">Para: </span>
+                <span className="sr-only">{t('mailbox.to')}</span>
                 {email.to}
               </span>
               <time dateTime={email.sentAt}>{formatRelativeTime(email.sentAt, now)}</time>
             </span>
           </div>
           <Badge tone={email.kind === 'invitation' ? 'accent' : 'warn'} size="sm">
-            {DEV_EMAIL_KIND_LABEL[email.kind]}
+            {devEmailKindLabel(email.kind)}
           </Badge>
         </header>
         <p className="m-0 text-14 leading-[1.5] whitespace-pre-wrap text-ink-2">{email.text}</p>
         {path ? (
           <Link
             to={path}
-            aria-label={`Abrir enlace: ${email.subject} para ${email.to}`}
+            aria-label={t('mailbox.openLabel', { subject: email.subject, to: email.to })}
             className="self-start text-14 text-link font-semibold"
           >
-            Abrir enlace
+            {t('mailbox.open')}
           </Link>
         ) : null}
       </article>

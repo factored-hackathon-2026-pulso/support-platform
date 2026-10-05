@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { cn } from '@/lib/cn'
 import { deleteDigit, insertDigits, sanitizeDigits } from './code-input-model'
+import { useTranslation } from '@/lib/i18n'
 
 /** Imperative handle (`ref`): move focus back into the code, e.g. after a rejected code. */
 export interface CodeInputHandle {
@@ -49,6 +50,7 @@ export function CodeInput({
   className,
   ref,
 }: CodeInputProps) {
+  const { t } = useTranslation()
   const refs = useRef<Array<HTMLInputElement | null>>([])
   const digits = Array.from({ length }, (_, index) => value[index] ?? '')
 
@@ -108,7 +110,7 @@ export function CodeInput({
             ref={(element) => {
               refs.current[index] = element
             }}
-            aria-label={`Dígito ${index + 1}`}
+            aria-label={t('codeInput.digit', { index: index + 1 })}
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
             inputMode="numeric"

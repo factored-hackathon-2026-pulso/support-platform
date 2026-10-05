@@ -11,6 +11,7 @@ from cc_platform.application.people.auth import (
     VerifyMfa,
 )
 from cc_platform.application.people.availability import GetMyAvailability, SetMyAvailability
+from cc_platform.application.people.preferences import GetMyPreferences, SetMyPreferences
 from cc_platform.application.people.queries import GetCurrentStaff, ListStaff
 
 
@@ -24,3 +25,5 @@ class PeopleUseCases:
     list_staff: ListStaff
     get_availability: GetMyAvailability
     set_availability: SetMyAvailability
+    get_preferences: GetMyPreferences
+    set_preferences: SetMyPreferences

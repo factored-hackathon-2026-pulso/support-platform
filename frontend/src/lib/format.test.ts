@@ -5,6 +5,7 @@ import {
   formatDate,
   formatDateTime,
   formatDuration,
+  formatList,
   formatMoney,
   formatNumber,
   formatPercent,
@@ -97,5 +98,23 @@ describe('formatLongDate / localHour', () => {
     expect(formatLongDate('2026-01-05T15:00:00Z', { timeZone: 'UTC' })).toBe('Lunes 5 de enero')
     expect(localHour('2026-10-04T02:00:00Z')).toBe(21)
     expect(localHour('2026-10-04T02:00:00Z', { timeZone: 'UTC' })).toBe(2)
+  })
+
+  it('speaks Brazilian Portuguese with the same compact forms (slice 23)', () => {
+    const locale = 'pt-BR'
+    expect(formatNumber(4412, { locale })).toBe('4.412')
+    expect(formatMoney(12400.5, 'MXN', { locale })).toBe('$12.400,50 MXN')
+    expect(formatDate('2025-03-05T11:02:00-05:00', { locale })).toBe('5 mar 2025')
+    expect(formatDate('2025-02-05T11:02:00-05:00', { locale, withYear: false })).toBe('5 fev')
+    expect(formatLongDate('2026-10-03T15:00:00Z', { locale })).toBe('Sábado, 3 de outubro')
+    const now = '2026-10-04T15:10:00Z'
+    expect(formatRelativeTime('2026-10-04T15:09:50Z', now, { locale })).toBe('agora')
+    expect(formatRelativeTime('2026-10-04T13:10:00Z', now, { locale })).toBe('há 2 h')
+    expect(formatRelativeTime('2026-10-04T15:19:00Z', now, { locale })).toBe('em 9 min')
+    expect(formatRelativeTime('2026-10-02T15:10:00Z', now, { locale })).toBe('há 2 dias')
+    expect(formatRelativeTime('2026-10-03T15:10:00Z', now, { locale })).toBe('há 1 dia')
+    expect(formatList(['A', 'B', 'C'], { locale })).toBe('A, B e C')
+    expect(formatList(['A', 'B', 'C'])).toBe('A, B y C')
+    expect(formatLongDate('2026-10-03T15:00:00Z')).toBe('Sábado 3 de octubre')
   })
 })

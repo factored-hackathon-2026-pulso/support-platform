@@ -2,6 +2,7 @@ import { useId, useState, type Ref } from 'react'
 import { Circle, CircleCheck, CircleX } from 'lucide-react'
 import { Field, Input } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { confirmationError, passwordChecks, type PasswordOwner, type RuleState } from '../model'
 
 const RULE_ICON: Record<RuleState, typeof Circle> = {
@@ -48,10 +49,11 @@ export function PasswordFields({
   onConfirmationChange,
   owner,
   passwordError = null,
-  passwordLabel = 'Contraseña nueva',
+  passwordLabel,
   passwordRef,
   confirmationRef,
 }: PasswordFieldsProps) {
+  const { t } = useTranslation(['onboarding', 'common'])
   const [show, setShow] = useState(false)
   const id = useId()
   const passwordId = `${id}-password`
@@ -64,7 +66,7 @@ export function PasswordFields({
     <>
       <Field
         id={passwordId}
-        label={passwordLabel}
+        label={passwordLabel ?? t('password.label')}
         error={passwordError}
         labelAside={
           <button
@@ -73,7 +75,7 @@ export function PasswordFields({
             className="cursor-pointer text-14 text-link font-semibold"
             onClick={() => setShow((value) => !value)}
           >
-            {show ? 'Ocultar' : 'Mostrar'}
+            {show ? t('common:actions.hide') : t('common:actions.show')}
           </button>
         }
       >
@@ -91,7 +93,7 @@ export function PasswordFields({
       </Field>
       <ul
         id={rulesId}
-        aria-label="Requisitos de la contraseña"
+        aria-label={t('password.rules')}
         className="m-0 flex list-none flex-col gap-1.5 rounded-10 bg-panel px-3.5 py-3 text-13"
       >
         {checks.map((check) => {
@@ -110,7 +112,7 @@ export function PasswordFields({
           )
         })}
       </ul>
-      <Field label="Repite la contraseña" error={mismatch}>
+      <Field label={t('password.confirm')} error={mismatch}>
         <Input
           ref={confirmationRef}
           type={type}

@@ -8,7 +8,9 @@ import { createAppRealtimeClient } from '@/app/realtime'
 import { createAppEnvelopeHandlers } from '@/app/realtime-handlers'
 import { routes } from '@/app/router'
 import { primePlatformSettings } from '@/app/platform'
+import { primePreferences } from '@/app/preferences'
 import { sessionKeys, type Staff } from '@/app/session'
+import { i18n, type AppLocale } from '@/lib/i18n'
 import { sessionToken } from '@/lib/session-token'
 import { createFakeSocketFactory } from './fake-socket'
 
@@ -25,13 +27,36 @@ export interface RenderAppOptions {
    * off: the people-only app, so a screen shows no AI element unless a test asks for it.
    */
   aiEnabled?: boolean
+  /**
+   * The UI language (slice 23): the app renders in it from the first frame, and a signed-in
+   * `staff` has it as her saved preference. Default `es`. Every catalog is preloaded
+   * (src/test/setup.ts), and the language goes back to `es` after each test.
+   */
+  locale?: AppLocale
+}
+
+/**
+ * Switch the UI language for a test, synchronously (every catalog is already loaded). Use it
+ * to change language mid-test; `renderRoute` / `renderWithProviders` take `locale` for the start.
+ */
+export function setTestLocale(locale: AppLocale): void {
+  void i18n.changeLanguage(locale)
+  if (i18n.language !== locale) {
+    throw new Error(`The UI language did not switch to ${locale} synchronously.`)
+  }
 }
 
 /**
  * Fresh providers per test: own query cache, fake realtime socket, own envelope
  * handler registry (every feature's), optional session.
  */
-function setupProviders({ staff = null, token, aiEnabled = false }: RenderAppOptions) {
+function setupProviders({
+  staff = null,
+  token,
+  aiEnabled = false,
+  locale = 'es',
+}: RenderAppOptions) {
+  setTestLocale(locale)
   const queryClient = createQueryClient()
   const sockets = createFakeSocketFactory()
   const realtimeClient = createAppRealtimeClient(sockets.factory)
@@ -39,6 +64,7 @@ function setupProviders({ staff = null, token, aiEnabled = false }: RenderAppOpt
   if (staff) {
     queryClient.setQueryData(sessionKeys.me(), staff)
     primePlatformSettings(queryClient, { aiEnabled })
+    primePreferences(queryClient, { uiLanguage: locale })
     sessionToken.set(`test-token-${staff.id}`)
   } else if (token) {
     sessionToken.set(token)
@@ -69,9 +95,17 @@ export interface RenderWithProvidersOptions extends RenderOptions, RenderAppOpti
 /** Render a component with the app providers and a memory router around it. */
 export function renderWithProviders(
   ui: ReactElement,
-  { route = '/', path = '*', staff, token, aiEnabled, ...options }: RenderWithProvidersOptions = {},
+  {
+    route = '/',
+    path = '*',
+    staff,
+    token,
+    aiEnabled,
+    locale,
+    ...options
+  }: RenderWithProvidersOptions = {},
 ) {
-  const { Wrapper, ...context } = setupProviders({ staff, token, aiEnabled })
+  const { Wrapper, ...context } = setupProviders({ staff, token, aiEnabled, locale })
   const router = createMemoryRouter([{ path, element: ui }], { initialEntries: [route] })
   return {
     user: userEvent.setup(),

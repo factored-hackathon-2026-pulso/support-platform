@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.domain.people.mfa import MfaMethod
+from cc_platform.domain.people.preferences import UiLanguage
 from cc_platform.domain.people.staff import (
     Language,
     Staff,
@@ -85,3 +86,5 @@ class CurrentStaff:
     staff: StaffView
     session_id: str
     session_expires_at: datetime
+    ui_language: UiLanguage
+    """Slice 23: her own UI language (``StaffPreferences``)."""

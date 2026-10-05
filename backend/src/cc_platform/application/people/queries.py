@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cc_platform.application.people.dto import CurrentStaff, StaffView
+from cc_platform.application.people.preferences import ui_language_of
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
 from cc_platform.domain.people.staff import Staff, StaffRole
@@ -29,10 +30,12 @@ class GetCurrentStaff:
             if staff is None:
                 raise NotFoundError("La persona no existe.", staffId=actor.staff_id)
             view = await staff_view(uow, staff)
+            ui_language = await ui_language_of(uow, staff.id)
         return CurrentStaff(
             staff=view,
             session_id=actor.session_id,
             session_expires_at=actor.session_expires_at,
+            ui_language=ui_language,
         )
 
 

@@ -202,6 +202,15 @@ analyst_availability = Table(
     _version(),
 )
 
+# Slice 23: a person's own settings (the UI language). Absent = the defaults (``es``).
+staff_preferences = Table(
+    "staff_preferences",
+    metadata,
+    Column("staff_id", String(ID), ForeignKey("staff.id"), primary_key=True),
+    Column("ui_language", String(10), nullable=False),
+    _version(),
+)
+
 # Minimal customer profile (seeded "Datos de ejemplo"; no use case writes it yet).
 customers = Table(
     "customers",

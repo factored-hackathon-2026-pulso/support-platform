@@ -1,7 +1,12 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
+import { changeLocale, loadAllCatalogs } from '@/lib/i18n'
 import { customerSessionToken, sessionToken } from '@/lib/session-token'
+
+// Every catalog of every locale up front: no screen suspends on a lazy catalog in a test, and
+// `renderWithProviders(…, { locale: 'pt-BR' })` renders Portuguese at once (slice 23).
+await loadAllCatalogs()
 
 // Route tests render the real lazy route table: the first `import()` of a screen
 // (transform + module graph + first render in jsdom) can take well over the 1 s
@@ -16,8 +21,14 @@ globalThis.fetch = vi.fn<typeof fetch>(() =>
   Promise.reject(new TypeError('Network disabled in tests')),
 )
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  await changeLocale('es')
+  try {
+    localStorage.clear()
+  } catch {
+    // Storage unavailable: nothing to clean.
+  }
   sessionToken.clear()
   customerSessionToken.clear()
   try {

@@ -10,6 +10,7 @@ import {
 } from '@/app/roles'
 import { CountBadge } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { i18n, useTranslation } from '@/lib/i18n'
 import { RoleSwitcher } from './RoleSwitcher'
 
 export interface RailProps {
@@ -30,12 +31,10 @@ function indicatorFor(item: NavItem, indicators: RailIndicators): RailIndicator 
   return (item.indicator && indicators[item.indicator]) || {}
 }
 
-function navAccessibleName(label: string, { count, dot, noun }: RailIndicator): string {
-  if (count) {
-    const [one, many] = noun ?? ['pendiente', 'pendientes']
-    return `${label}, ${count} ${count === 1 ? one : many}`
-  }
-  if (dot) return `${label}, con novedades`
+/** "Casos, 2 pendientes", "Colas, 3 sin asignar", "Inicio, con novedades". */
+function navAccessibleName(label: string, { count, dot, noun = 'pending' }: RailIndicator): string {
+  if (count) return i18n.t(`shell:rail.${noun}`, { label, count })
+  if (dot) return i18n.t('shell:rail.withNews', { label })
   return label
 }
 
@@ -45,18 +44,19 @@ function navAccessibleName(label: string, { count, dot, noun }: RailIndicator): 
  */
 export function Rail({ role, indicators = {}, presence = null, notifications }: RailProps) {
   const { pathname } = useLocation()
+  const { t } = useTranslation(['shell', 'common'])
   return (
     <nav
-      aria-label="Principal"
+      aria-label={t('rail.label')}
       data-surface="dark"
       className="flex w-16 shrink-0 flex-col items-center gap-2 bg-rail py-4"
     >
       <span
         aria-hidden="true"
         className="mb-3 font-display text-15 font-bold text-white"
-        title="Plataforma CC"
+        title={t('common:brand.name')}
       >
-        CC
+        {t('common:brand.mark')}
       </span>
       <ul className="m-0 flex list-none flex-col items-center gap-2 p-0">
         {role.nav.map((item) => {

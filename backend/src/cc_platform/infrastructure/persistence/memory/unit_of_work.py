@@ -29,6 +29,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryNotificationRepository,
     InMemoryPasswordResetRepository,
     InMemoryPlatformSettingsRepository,
+    InMemoryStaffPreferencesRepository,
     InMemoryStaffRepository,
     InMemoryStaffSessionRepository,
     InMemoryTeamRepository,
@@ -47,6 +48,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     mfa_challenges: InMemoryMfaChallengeRepository
     sessions: InMemoryStaffSessionRepository
     availability: InMemoryAnalystAvailabilityRepository
+    preferences: InMemoryStaffPreferencesRepository
     invitations: InMemoryInvitationRepository
     password_resets: InMemoryPasswordResetRepository
     customers: InMemoryCustomerRepository
@@ -83,6 +85,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.mfa_challenges = InMemoryMfaChallengeRepository(store.mfa_challenges, track)
         self.sessions = InMemoryStaffSessionRepository(store.sessions, track)
         self.availability = InMemoryAnalystAvailabilityRepository(store.availability, track)
+        self.preferences = InMemoryStaffPreferencesRepository(store.preferences, track)
         self.invitations = InMemoryInvitationRepository(store.invitations, track)
         self.password_resets = InMemoryPasswordResetRepository(store.password_resets, track)
         self.customers = InMemoryCustomerRepository(store.customers)
@@ -122,6 +125,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryMfaChallengeRepository
         | InMemoryStaffSessionRepository
         | InMemoryAnalystAvailabilityRepository
+        | InMemoryStaffPreferencesRepository
         | InMemoryInvitationRepository
         | InMemoryPasswordResetRepository
         | InMemoryCustomerRepository
@@ -152,6 +156,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.mfa_challenges,
             self.sessions,
             self.availability,
+            self.preferences,
             self.invitations,
             self.password_resets,
             self.case_slots,

@@ -5618,6 +5618,10 @@
             "$ref": "#/components/schemas/PlatformSettings",
             "description": "Slice 18: the platform settings the SPA needs (the AI switch); live as `platform.updated` on `platform:settings`."
           },
+          "preferences": {
+            "$ref": "#/components/schemas/Preferences",
+            "description": "Slice 23: her own settings (the UI language); changed with `PUT /me/preferences`, live as `preferences.updated` on `staff:<id>`."
+          },
           "session": {
             "$ref": "#/components/schemas/SessionOut"
           },
@@ -5628,7 +5632,8 @@
         "required": [
           "staff",
           "session",
-          "platform"
+          "platform",
+          "preferences"
         ],
         "title": "MeResponse",
         "type": "object"
@@ -6405,6 +6410,20 @@
           "case"
         ],
         "title": "PostTurnResponse",
+        "type": "object"
+      },
+      "Preferences": {
+        "description": "Her own settings (in ``/auth/me``; live as ``preferences.updated`` on ``staff:<id>``).",
+        "properties": {
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "description": "The language of her platform UI (BCP 47): `es` (default) or `pt-BR`. Never the language of the conversations."
+          }
+        },
+        "required": [
+          "uiLanguage"
+        ],
+        "title": "Preferences",
         "type": "object"
       },
       "ProblemCode": {
@@ -8815,6 +8834,15 @@
         "title": "TurnPage",
         "type": "object"
       },
+      "UiLanguage": {
+        "description": "Languages of the platform UI (BCP 47 tags, as the browser and ``Intl`` use them).\n\nNot the same set as ``Language`` (what a person speaks with customers: ``es`` | ``pt``).",
+        "enum": [
+          "es",
+          "pt-BR"
+        ],
+        "title": "UiLanguage",
+        "type": "string"
+      },
       "UpdateAvailabilityRequest": {
         "additionalProperties": false,
         "properties": {
@@ -8826,6 +8854,19 @@
           "status"
         ],
         "title": "UpdateAvailabilityRequest",
+        "type": "object"
+      },
+      "UpdatePreferencesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage"
+          }
+        },
+        "required": [
+          "uiLanguage"
+        ],
+        "title": "UpdatePreferencesRequest",
         "type": "object"
       },
       "UpdateUserRequest": {
@@ -19083,6 +19124,97 @@
         "summary": "Mark one of my notifications as read",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/me/preferences": {
+      "get": {
+        "operationId": "preferences_get_preferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "My preferences (never changed = the defaults)",
+        "tags": [
+          "preferences"
+        ]
+      },
+      "put": {
+        "description": "Records `staff.ui_language_changed` (audited) and sends `preferences.updated` to her other sessions on `staff:<id>`.",
+        "operationId": "preferences_set_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Change my preferences (same value = no change, no event)",
+        "tags": [
+          "preferences"
         ]
       }
     },

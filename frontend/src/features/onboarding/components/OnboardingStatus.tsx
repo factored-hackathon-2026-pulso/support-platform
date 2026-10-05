@@ -1,10 +1,12 @@
 import { Button, Callout, Spinner } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 
 /** While a link is checked (the token is sent once). */
 export function CheckingLink() {
+  const { t } = useTranslation('onboarding')
   return (
     <div className="flex justify-center py-10 text-muted">
-      <Spinner label="Revisando el enlace" size={24} />
+      <Spinner label={t('link.checking')} size={24} />
     </div>
   )
 }
@@ -19,13 +21,14 @@ export function CheckFailed({
   retrying: boolean
   onRetry(): void
 }) {
+  const { t } = useTranslation(['onboarding', 'common'])
   return (
     <Callout
       tone="danger"
-      title="No pudimos revisar el enlace"
+      title={t('link.checkFailed')}
       actions={
         <Button size="sm" loading={retrying} onClick={onRetry}>
-          Reintentar
+          {t('common:actions.retry')}
         </Button>
       }
     >

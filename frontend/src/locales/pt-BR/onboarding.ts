@@ -1,0 +1,120 @@
+import type { Translation } from '@/lib/i18n/catalog'
+import type es from '../es/onboarding'
+
+export default {
+  password: {
+    label: 'Nova senha',
+    confirm: 'Repita a senha',
+    rules: 'Requisitos da senha',
+    rule: {
+      length: 'Pelo menos {{min}} caracteres',
+      personal: 'Não inclui seu nome nem seu e-mail',
+      common: 'Não é uma senha comum',
+      match: 'As duas senhas são iguais',
+    },
+    ruleState: {
+      ok: ': atende',
+      bad: ': não atende',
+      pending: ': pendente',
+    },
+    mismatch: 'As duas senhas não são iguais.',
+    rejected: 'A senha {{reasons}}. Escolha outra.',
+    rejectedGeneric: 'A senha não atende aos requisitos. Escolha outra.',
+    reason: {
+      min_length: 'tem menos de {{min}} caracteres',
+      max_length: 'tem mais de {{max}} caracteres',
+      personal_info: 'inclui seu nome ou seu e-mail',
+      common: 'é uma senha comum',
+    },
+    nobodyKnows:
+      'Ninguém do banco conhece sua senha: nem a administração nem a supervisão podem vê-la.',
+  },
+  steps: {
+    label: 'Etapas para ativar sua conta',
+    password: 'Senha',
+    verification: 'Verificação em duas etapas',
+    done: ', concluída',
+    current: ', etapa atual',
+    pending: ', pendente',
+  },
+  activation: {
+    title: 'Ative sua conta',
+    greeting:
+      'Olá, {{name}}. A Administração convidou você para a Plataforma CC. Crie sua senha para começar.',
+    rolePrefix: 'Perfil: ',
+    form: 'Criar senha',
+    verifyTitle: 'Configure a verificação em duas etapas',
+    verifyText:
+      'Sempre que você entrar, vamos pedir um código do seu app autenticador, além da sua senha.',
+    qr: 'Código QR para o seu app autenticador',
+    stepOpen: 'Abra o app autenticador no seu celular.',
+    stepScan: 'Adicione uma conta e escaneie o código.',
+    stepType: 'Digite abaixo o código de {{length}} dígitos que ele mostrar.',
+    manualKey: 'Não consegue escanear? Digite esta chave no app:',
+    codeForm: 'Confirmar o código',
+    code: 'Código de {{length}} dígitos',
+    codeRequired: 'Digite os {{length}} dígitos que o seu app mostra.',
+    submit: 'Ativar conta',
+    appsNote:
+      'Qualquer app autenticador funciona, como o Google Authenticator ou o Microsoft Authenticator. Se trocar de celular, peça ajuda à administração.',
+    readyTitle: 'Sua conta está pronta',
+    readyText: 'A partir de agora, você entra com seu e-mail, sua senha e o código do seu app.',
+    readyMfa: 'Verificação em duas etapas ativa',
+    readyPaused: 'Você começa Em pausa: mude para Disponível quando quiser receber casos',
+  },
+  reset: {
+    title: 'Crie uma nova senha',
+    greeting:
+      'Olá, {{name}}. A Administração enviou este link para você criar uma nova senha. Sua verificação em duas etapas não muda.',
+    form: 'Criar nova senha',
+    submit: 'Salvar senha',
+    doneTitle: 'Senha atualizada',
+    doneText: 'Você já pode entrar com sua nova senha e o código do seu app.',
+  },
+  link: {
+    checking: 'Verificando o link',
+    checkFailed: 'Não foi possível verificar o link',
+    invalidTitle: 'O link venceu ou já foi usado',
+    invitationText: 'Os links de convite valem por 48 horas e só podem ser usados uma vez.',
+    invitationAsk: 'Peça um novo convite à administração',
+    resetText: 'Os links para redefinir a senha valem por 1 hora e só podem ser usados uma vez.',
+    resetAsk: 'Peça um novo link à administração',
+    askText: 'Você vai receber um e-mail com um novo link.',
+    invitationDone: 'Já ativou sua conta?',
+    resetDone: 'Já tem sua senha?',
+    signIn: 'Entre com seu e-mail',
+  },
+  failure: {
+    generic: 'Não foi possível concluir esta etapa. Tente de novo.',
+    rateLimitedAt: 'Muitas tentativas. Tente de novo às {{time}}.',
+    rateLimited: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.',
+    totpInvalid: 'O código não confere. Digite o código que o seu app mostra agora.',
+    totpInvalidAttempts_one:
+      'O código não confere. Digite o código que o seu app mostra agora. Resta 1 tentativa.',
+    totpInvalidAttempts_other:
+      'O código não confere. Digite o código que o seu app mostra agora. Restam {{count}} tentativas.',
+    lockedAt: 'Você digitou um código errado vezes demais. Tente de novo às {{time}}.',
+    locked: 'Você digitou um código errado vezes demais. Aguarde 15 minutos.',
+    restart: 'Crie sua senha de novo para continuar.',
+  },
+  mailbox: {
+    title: 'E-mails de desenvolvimento',
+    lead: 'Os e-mails mais recentes deste ambiente, do mais novo ao mais antigo.',
+    toolTitle: 'Ferramenta de desenvolvimento',
+    toolText: 'Mostra os e-mails que a plataforma enviou neste ambiente. Não existe em produção.',
+    unavailable: 'Indisponível',
+    unavailableText: 'Este ambiente não guarda e-mails de desenvolvimento.',
+    goToSignIn: 'Ir para Entrar',
+    emptyTitle: 'Ainda não há e-mails',
+    emptyText: 'Quando a administração convidar alguém ou enviar um link, ele aparece aqui.',
+    errorTitle: 'Não foi possível carregar os e-mails',
+    list: 'E-mails',
+    to: 'Para: ',
+    open: 'Abrir link',
+    openLabel: 'Abrir link: {{subject}} para {{to}}',
+    kind: {
+      invitation: 'Convite',
+      password_reset: 'Redefinir senha',
+    },
+  },
+} satisfies Translation<typeof es>

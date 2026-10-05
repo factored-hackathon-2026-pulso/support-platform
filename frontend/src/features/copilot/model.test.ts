@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
 import {
-  FULL_COPILOT_MODE,
   STARTER_QUESTIONS,
   composerTextWithDraft,
   copilotNotice,
@@ -83,7 +82,6 @@ describe('copilotSurfaces (the stage as one switch)', () => {
     expect(copilotSurfaces('tools')).toEqual({ copilot: true, tools: true, draft: false })
     expect(copilotSurfaces('drafts')).toEqual({ copilot: true, tools: true, draft: true })
     expect(copilotSurfaces(null)).toEqual({ copilot: false, tools: false, draft: false })
-    expect(copilotSurfaces(FULL_COPILOT_MODE)).toEqual(copilotSurfaces('drafts'))
   })
 })
 

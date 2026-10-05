@@ -22,6 +22,7 @@ import {
   toolResult,
   type CopilotTurnView,
 } from '../model'
+import { recordToolUsed } from '../api'
 import { useAskCopilot, useCopilotAsks, useCopilotThread } from '../hooks/use-copilot'
 import { useLatestSuggestion, useRequestSuggestion } from '../hooks/use-suggestions'
 import type { SuggestionAction, SuggestionTool } from '../types'
@@ -157,7 +158,11 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
                 tool={tool}
                 result={toolResult(turns, tool)}
                 canUse={canAsk && !closed && !asking}
-                onUse={() => ask(toolQuestion(tool))}
+                onUse={() => {
+                  ask(toolQuestion(tool))
+                  // Slice 21: a stage signal of the case type (best effort, never in the way).
+                  if (view?.id) void recordToolUsed(caseId, view.id, tool.tool).catch(() => {})
+                }}
                 onOpenCopilot={onOpenCopilot}
               />
             ))}

@@ -4,6 +4,7 @@
  * that talks to the API client; tests mock it with `vi.mock('@/features/copilot/api')`.
  */
 import { api, unwrap } from '@/lib/api'
+import type { AiStages } from './stages'
 import type {
   CopilotExchange,
   CopilotSuggestion,
@@ -20,6 +21,8 @@ export const copilotKeys = {
   asks: (caseId: string) => ['copilot', caseId, 'asks'] as const,
   /** GET /cases/{id}/copilot/suggestions/latest. */
   latest: (caseId: string) => ['copilot', caseId, 'latest'] as const,
+  /** GET /ai/stages (slice 21): every case type's stage. */
+  stages: () => ['copilot', 'stages'] as const,
 }
 
 export const copilotMutationKeys = {
@@ -91,6 +94,28 @@ export async function sendSuggestionFeedback(
     api.POST('/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/feedback', {
       params: { path: { caseId, suggestionId } },
       body: { decision },
+    }),
+  )
+}
+
+/** GET /ai/stages (slice 21). `available: false` (AI off): no stage, no copilot. */
+export async function fetchAiStages(signal?: AbortSignal): Promise<AiStages> {
+  return unwrap(api.GET('/api/v1/ai/stages', { signal }))
+}
+
+/**
+ * POST …/suggestions/{id}/tools (slice 21): she used a tool the copilot proposed ("Usar"). A
+ * stage signal of the case type; best effort (the caller ignores a failure).
+ */
+export async function recordToolUsed(
+  caseId: string,
+  suggestionId: string,
+  tool: string,
+): Promise<void> {
+  await unwrap(
+    api.POST('/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/tools', {
+      params: { path: { caseId, suggestionId } },
+      body: { tool, decision: 'used' },
     }),
   )
 }

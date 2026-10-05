@@ -16,6 +16,7 @@ vi.mock('../api', async (importOriginal) => {
     askCopilot: vi.fn<typeof actual.askCopilot>(),
     fetchLatestSuggestion: vi.fn<typeof actual.fetchLatestSuggestion>(),
     requestSuggestion: vi.fn<typeof actual.requestSuggestion>(),
+    recordToolUsed: vi.fn<typeof actual.recordToolUsed>(),
   }
 })
 
@@ -66,6 +67,8 @@ beforeEach(() => {
     suggestion: suggestion(),
   })
   vi.mocked(api.requestSuggestion).mockReset()
+  vi.mocked(api.recordToolUsed).mockReset()
+  vi.mocked(api.recordToolUsed).mockResolvedValue(undefined)
 })
 
 function renderPanel({ closed = false } = {}) {
@@ -116,10 +119,25 @@ describe('ToolsPanel (the "Herramientas" tab, slice 20)', () => {
     const { user, onOpenCopilot } = renderPanel()
     await user.click(await screen.findByRole('button', { name: 'Usar Movimientos de la cuenta' }))
     expect(vi.mocked(api.askCopilot).mock.calls[0]?.[1].text).toBe(toolQuestion(TOOL))
+    // Slice 21: the use is a stage signal of the case type.
+    expect(api.recordToolUsed).toHaveBeenCalledWith(CASE_ID, 'CPS-1', 'leer_movimientos@1')
     expect(await screen.findByText('Dos cobros de 18.900.')).toBeInTheDocument()
     expect(screen.getByText('Consultada')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Ver en Copiloto' }))
     expect(onOpenCopilot).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed tool feedback never gets in her way', async () => {
+    vi.mocked(api.recordToolUsed).mockRejectedValue(new ApiProblem({ status: 503, code: 'x' }))
+    vi.mocked(api.askCopilot).mockResolvedValue({
+      question: { id: 'CPM-1', role: 'analyst', text: 'q', createdAt: AT, answers: null },
+      answers: [],
+      replayed: false,
+    })
+    const { user } = renderPanel()
+    await user.click(await screen.findByRole('button', { name: 'Usar Movimientos de la cuenta' }))
+    expect(api.askCopilot).toHaveBeenCalledTimes(1)
+    expect(api.recordToolUsed).toHaveBeenCalledTimes(1) // its rejection is swallowed
   })
 
   it('"Sugerir" asks for a fresh one and retries a failure with the same key', async () => {

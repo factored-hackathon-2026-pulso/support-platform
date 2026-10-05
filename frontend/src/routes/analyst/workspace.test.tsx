@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CasesApi from '@/features/cases/api'
@@ -21,6 +22,7 @@ import {
   notificationCreated,
 } from '@/test/notification-fixtures'
 import { renderRoute } from '@/test/render'
+import { makeStages } from '@/test/stage-fixtures'
 import { fetchNotifications, markNotificationRead } from '@/features/notifications/api'
 
 vi.mock('@/features/cases/api', async (importOriginal) => {
@@ -42,8 +44,15 @@ vi.mock('@/features/notifications/api', async (importOriginal) => {
   }
 })
 
-/** Slice 20: whether the stubbed copilot says it is available for the open case. */
-const copilot = vi.hoisted(() => ({ available: false }))
+/**
+ * Slice 20: whether the stubbed copilot says it is available for the open case. Slice 21: the type
+ * of each case (the stub detail) and whether the stages arrived.
+ */
+const copilot = vi.hoisted(() => ({
+  available: false,
+  stages: true,
+  types: {} as Record<string, string>,
+}))
 
 /**
  * The copilot's tabs are tested in their own feature: here the Workspace's decisions (which tabs,
@@ -69,6 +78,7 @@ vi.mock('@/features/copilot', async (importOriginal) => {
     useLatestSuggestion: () => ({
       data: copilot.available ? { available: true, suggestion: null } : undefined,
     }),
+    useAiStages: () => ({ data: copilot.stages ? makeStages() : undefined }),
   }
 })
 
@@ -89,6 +99,7 @@ vi.mock('@/features/conversation', async () => {
     onOpenHandoff,
     copilotMode,
     supportPanel,
+    stageStrip,
   }: {
     caseId: string
     onClosed?: (id: string) => void
@@ -98,6 +109,7 @@ vi.mock('@/features/conversation', async () => {
     onOpenHandoff?: () => void
     copilotMode?: string | null
     supportPanel?: { open: boolean; onToggle(): void }
+    stageStrip?: ReactNode
   }) {
     const heading = useRef<HTMLHeadingElement>(null)
     useEffect(() => {
@@ -139,6 +151,7 @@ vi.mock('@/features/conversation', async () => {
           </button>
         ) : null}
         <p>Copiloto en modo {copilotMode ?? 'ninguno'}</p>
+        {stageStrip}
       </section>
     )
   }
@@ -147,7 +160,12 @@ vi.mock('@/features/conversation', async () => {
   function useCaseDetail(caseId: string) {
     return {
       data: {
-        case: { id: caseId, status: 'in_progress', customer: { displayName: 'Patricia Lozano' } },
+        case: {
+          id: caseId,
+          status: 'in_progress',
+          customer: { displayName: 'Patricia Lozano' },
+          caseType: copilot.types[caseId] ?? 'undue_charge',
+        },
         assignment: null,
       },
     }
@@ -210,6 +228,8 @@ const SECOND = 'CASE-00000000000000000000000101'
 
 beforeEach(() => {
   copilot.available = false
+  copilot.stages = true
+  copilot.types = {}
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
   vi.mocked(fetchInbox).mockResolvedValue(makeInbox())
@@ -666,5 +686,83 @@ describe('/analyst/cases right panel with the copilot (slice 20)', () => {
     expect(screen.getByText('Copiloto en modo ninguno')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Apoyo' })).toBeNull()
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+  })
+})
+
+describe('/analyst/cases AI stages per case type (slice 21)', () => {
+  const tabNames = (panel: HTMLElement) =>
+    within(panel)
+      .getAllByRole('tab')
+      .map((tab) => tab.textContent)
+
+  it('a stage-3 type gets every surface and the strip under the header', async () => {
+    copilot.available = true
+    renderWorkspace(`/analyst/cases?case=${FIRST}&panel=copilot`, { aiEnabled: true })
+    await screen.findByText(`Conversación ${FIRST}`)
+    expect(screen.getByText('Copiloto en modo drafts')).toBeInTheDocument()
+    const strip = screen.getByTestId('stage-strip')
+    expect(strip).toHaveTextContent('Tipo de caso: Cobro indebido')
+    expect(strip).toHaveTextContent(
+      'Etapa 3 de 3: el copiloto propone respuestas y deja herramientas listas',
+    )
+    const panel = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(tabNames(panel)).toEqual(['Traspaso', 'Copiloto', 'Herramientas', 'Cliente'])
+  })
+
+  it('a stage-1 type gets only "Copiloto"', async () => {
+    copilot.available = true
+    copilot.types = { [SECOND]: 'service_quality' }
+    renderWorkspace(`/analyst/cases?case=${SECOND}&panel=copilot`, { aiEnabled: true })
+    await screen.findByText(`Conversación ${SECOND}`)
+    expect(screen.getByText('Copiloto en modo answer')).toBeInTheDocument()
+    expect(screen.getByTestId('stage-strip')).toHaveTextContent(
+      'Etapa 1 de 3: el copiloto responde lo que le preguntas',
+    )
+    const panel = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(tabNames(panel)).toEqual(['Copiloto', 'Cliente'])
+  })
+
+  it('stage 0 and "Sin tipo" get no copilot; only a typed case has a strip', async () => {
+    copilot.available = true
+    copilot.types = { [SECOND]: 'virtual_card', [FIRST]: 'none' }
+    const { unmount } = renderWorkspace(`/analyst/cases?case=${SECOND}&panel=copilot`, {
+      aiEnabled: true,
+    })
+    await screen.findByText(`Conversación ${SECOND}`)
+    expect(screen.getByText('Copiloto en modo ninguno')).toBeInTheDocument()
+    expect(screen.getByTestId('stage-strip')).toHaveTextContent('Etapa 0 de 3')
+    const panel = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(tabNames(panel)).toEqual(['Cliente'])
+    unmount()
+
+    renderWorkspace(`/analyst/cases?case=${FIRST}`, { aiEnabled: true })
+    await screen.findByText(`Conversación ${FIRST}`)
+    expect(screen.getByText('Copiloto en modo ninguno')).toBeInTheDocument()
+    expect(screen.queryByTestId('stage-strip')).not.toBeInTheDocument()
+  })
+
+  it('a type an agent serves says so', async () => {
+    copilot.types = { [SECOND]: 'unrecognized_charge' }
+    renderWorkspace(`/analyst/cases?case=${SECOND}`, { aiEnabled: true })
+    await screen.findByText(`Conversación ${SECOND}`)
+    expect(screen.getByText('Copiloto en modo drafts')).toBeInTheDocument()
+    expect(screen.getByTestId('stage-strip')).toHaveTextContent(
+      'Con agente: el asistente virtual atiende este tipo y te pasa lo que no resuelve',
+    )
+  })
+
+  it('shows nothing before the stages arrive, nor with AI off', async () => {
+    copilot.stages = false
+    const { unmount } = renderWorkspace(`/analyst/cases?case=${FIRST}`, { aiEnabled: true })
+    await screen.findByText(`Conversación ${FIRST}`)
+    expect(screen.getByText('Copiloto en modo ninguno')).toBeInTheDocument()
+    expect(screen.queryByTestId('stage-strip')).not.toBeInTheDocument()
+    unmount()
+
+    copilot.stages = true
+    renderWorkspace(`/analyst/cases?case=${FIRST}`)
+    await screen.findByText(`Conversación ${FIRST}`)
+    expect(screen.getByText('Copiloto en modo ninguno')).toBeInTheDocument()
+    expect(screen.queryByTestId('stage-strip')).not.toBeInTheDocument()
   })
 })

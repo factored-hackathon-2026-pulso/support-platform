@@ -3,7 +3,7 @@
  * thread as the panel renders it, the suggestions read by kind, and the Spanish copy for every
  * failure. No React, no I/O: unit-tested in model.test.ts.
  */
-import { ApiProblem } from '@/lib/api'
+import { ApiProblem, type Schemas } from '@/lib/api'
 import type {
   CopilotAsk,
   CopilotExchange,
@@ -22,12 +22,9 @@ import type {
 /**
  * How far the copilot goes for a case (ADR 0005 `copilot_mode`, ADR 0006 stages 1-3): `answer`
  * (stage 1: she asks), `tools` (stage 2: it also proposes reads), `drafts` (stage 3: it also
- * drafts the reply). S21 computes it per case type; S20 shows everything the backend offers.
+ * drafts the reply). Slice 21: the case type's stage (`copilotModeOf`, stages.ts).
  */
-export type CopilotMode = 'answer' | 'tools' | 'drafts'
-
-/** Slice 20: every surface (the type's stage arrives with S21). */
-export const FULL_COPILOT_MODE: CopilotMode = 'drafts'
+export type CopilotMode = Schemas['CopilotMode']
 
 export interface CopilotSurfaces {
   /** The "Copiloto" tab (the Q&A thread). */

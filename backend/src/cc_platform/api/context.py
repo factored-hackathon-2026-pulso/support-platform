@@ -16,7 +16,7 @@ from datetime import timedelta
 
 from cc_platform.application.ai.availability import CoreStatusCheck, core_status_unknown
 from cc_platform.application.ports.clock import Clock
-from cc_platform.application.ports.health import HealthProbe
+from cc_platform.application.ports.health import HealthProbe, ReadinessProbe
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.realtime import RealtimeHub
 from cc_platform.application.realtime.topics import TopicAccessPolicy
@@ -37,6 +37,16 @@ class BuildInfo:
 class RealtimeOptions:
     #: How often an idle socket re-checks its session expiry against the ``Clock``.
     expiry_check_interval: timedelta = timedelta(seconds=30)
+    #: How often an idle socket gets a ``heartbeat`` envelope; ``None`` = never.
+    heartbeat_interval: timedelta | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReadinessOptions:
+    """``GET /readyz``: the dependencies to check and how long each may take."""
+
+    probes: Sequence[ReadinessProbe] = ()
+    timeout_seconds: float = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +61,7 @@ class ApiContext:
     realtime: RealtimeOptions = RealtimeOptions()
     #: ``CC_INTERNAL_SERVICE_TOKEN``: unlocks the service-to-service routes (``/internal``).
     internal_token: str | None = None
+    readiness: ReadinessOptions = ReadinessOptions()
     #: Deploy brief P4: ``await core_status()`` → ``ok`` / ``degraded``, the Core's state for
     #: ``/readyz`` (degraded, never fatal: the non-AI screens keep working without the Core).
     core_status: CoreStatusCheck = core_status_unknown

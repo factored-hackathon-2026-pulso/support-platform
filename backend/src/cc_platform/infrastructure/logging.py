@@ -5,7 +5,8 @@ every line in the output has the same shape.
 
 Secrets never reach the output: ``SecretRedactionFilter`` sits on the root handler and masks
 credentials embedded in log text, e.g. the WebSocket session token that uvicorn prints with
-the handshake path (``"WebSocket /api/v1/ws?token=…" [accepted]``).
+the handshake path (``"WebSocket /api/v1/ws?token=…" [accepted]``), or the password of a
+database URL in a driver's error text.
 """
 
 from __future__ import annotations
@@ -25,10 +26,13 @@ REDACTED = "[REDACTED]"
 _SECRET_PARAM = re.compile(r"(?i)\b((?:access_|session_)?token|password|secret)=([^\s\"'&]+)")
 # A password hash in PHC form (``$argon2id$v=19$m=…,t=…,p=…$salt$hash``), wherever it is.
 _PASSWORD_HASH = re.compile(r"\$argon2(?:id|i|d)\$[A-Za-z0-9+/=$,.\-]+")
+# The password of a URL with credentials (``postgresql+asyncpg://app:<password>@host/db``).
+_URL_PASSWORD = re.compile(r"(\b[a-z][a-z0-9+.\-]*://[^:/@\s]+:)([^@\s]+)@", re.IGNORECASE)
 
 
 def redact_secrets(text: str) -> str:
     text = _PASSWORD_HASH.sub(REDACTED, text)
+    text = _URL_PASSWORD.sub(lambda match: f"{match.group(1)}{REDACTED}@", text)
     return _SECRET_PARAM.sub(lambda match: f"{match.group(1)}={REDACTED}", text)
 
 

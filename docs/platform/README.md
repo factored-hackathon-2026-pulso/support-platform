@@ -32,6 +32,8 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 |---|---|---|
 | [ENGINEERING_BRIEF.md](./ENGINEERING_BRIEF.md) | English | Start here. Scope, stack, layout, patterns, product rules, API conventions, slice plan, quality gates, hygiene. Every slice and review follows it. |
 | [RUNBOOK.md](./RUNBOOK.md) | English | Install, run backend + frontend, environment variables, seeded accounts and simulator customers, database reset, API type regeneration, gates, e2e, troubleshooting. |
+| [deploy-env.md](./deploy-env.md) | English | Deploy runtime contract: every `CC_*` variable (generated), what a deployed environment requires, `/healthz` and `/readyz`, graceful shutdown, realtime keepalive. |
+| [deploy/edge.md](./deploy/edge.md) | English | What CloudFront and the host reverse proxy must configure: paths, WebSocket, timeouts, headers, caching, health checks. |
 | [DATA_MODEL.md](./DATA_MODEL.md) | English | Tables, case life cycle, event log, and how the platform differs from the synthetic sample contract. |
 | [adr/0001-architecture.md](./adr/0001-architecture.md) | English | Hexagonal + DDD-lite + CQRS-lite with an append-only event log; patterns, alternatives, consequences (amended 2026-10-03 for the scope cut). |
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | English | **Superseded (2026-10-03).** Kept only as a record; do not implement it. |

@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 import structlog
+from cryptography.fernet import Fernet
+from fastapi.testclient import TestClient
 
+from cc_platform.bootstrap.app import create_app
 from cc_platform.infrastructure.logging import REDACTED, configure_logging, redact_secrets
+from tests.support import make_settings
 
 TOKEN = "eyJhbGciOiJIUzI1NiIs.payload.kHehnKNcLkjMGLzHmRiTdl_8GNbB0qFA21YUpIIYj9o"
 
@@ -45,6 +50,11 @@ def test_uvicorn_websocket_handshake_line_is_redacted(capsys: pytest.CaptureFixt
             f"[parameters: ('STF-1', '{REDACTED}')]",
         ),
         ("SET password_hash=? WHERE", "SET password_hash=? WHERE"),
+        (
+            "connect postgresql+asyncpg://cc_app:s3cr3t@db.internal:5432/cc failed",
+            f"connect postgresql+asyncpg://cc_app:{REDACTED}@db.internal:5432/cc failed",
+        ),
+        ("http://core.internal:8000/readyz", "http://core.internal:8000/readyz"),
     ],
 )
 def test_redact_secrets(raw: str, expected: str) -> None:
@@ -65,3 +75,28 @@ def test_exception_text_is_redacted_too(capsys: pytest.CaptureFixture[str]) -> N
     assert "RuntimeError: write failed" in output
     assert "argon2" not in output
     assert TOKEN not in output
+
+
+@pytest.mark.usefixtures("restore_logging")
+def test_a_full_start_and_stop_never_logs_a_secret(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """Deploy contract: secret values never reach the log, whatever the level."""
+    secrets = {
+        "session_secret": "session-" + "S" * 40,
+        "totp_secret_key": Fernet.generate_key().decode(),
+        "internal_service_token": "internal-" + "I" * 40,
+    }
+    settings = make_settings(
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'logs.db'}",
+        log_level="DEBUG",
+        **secrets,
+    )
+    with TestClient(create_app(settings)) as client:
+        client.get("/readyz")
+        client.get("/api/v1/meta")
+    output = capsys.readouterr()
+    logged = output.err + output.out
+    assert "readyz" in logged  # the log was captured
+    for value in secrets.values():
+        assert value not in logged

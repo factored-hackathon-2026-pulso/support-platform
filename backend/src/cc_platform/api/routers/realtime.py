@@ -6,7 +6,7 @@ Protocol (JSON text frames):
   ``{"action": "unsubscribe", "topic": …}``, ``{"action": "ping"}``.
 - server → client: envelopes ``{"type", "id", "occurredAt", "data"}``. Domain envelopes use
   the event type (``turn.created``…); control envelopes are ``welcome``, ``subscribed``,
-  ``unsubscribed``, ``pong`` and ``error`` (``data.code`` is a ``ProblemCode``).
+  ``unsubscribed``, ``pong``, ``heartbeat`` and ``error`` (``data.code`` is a ``ProblemCode``).
 
 Authentication: ``?token=<token>`` (log output redacts it, see ``infrastructure.logging``).
 One socket serves both kinds of principal, told apart by the token audience: a staff
@@ -19,8 +19,13 @@ deactivation or password reset, reason ``session_ended``) or expires (reason
 ``session_expired``, even if the client stays silent), with 4409 when the person's roles
 changed (reason ``access_changed``: refetch ``/auth/me`` and reconnect right away; the
 subscriptions are re-checked with the new roles), and with 1013 when the client cannot keep
-up with its queue. Staff may also follow ``admin:directory`` (admins) and their own
-``staff:<STF-id>`` (slice 4).
+up with its queue, and with 1012 (service restart) when the API stops gracefully: the client
+reconnects with backoff, to the restarted process. Staff may also follow ``admin:directory``
+(admins) and their own ``staff:<STF-id>`` (slice 4).
+
+Every ``CC_REALTIME_HEARTBEAT_SECONDS`` the server sends a ``heartbeat`` control envelope
+(``data.intervalSeconds``): the edge (CloudFront, the reverse proxy) never sees the socket
+idle, and a client that hears nothing for a few intervals knows the socket is dead.
 """
 
 from __future__ import annotations
@@ -44,7 +49,11 @@ from cc_platform.application.errors import (
     AuthenticationRequiredError,
     InvalidTopicError,
 )
-from cc_platform.application.ports.realtime import RealtimeConnection, RealtimeEnvelope
+from cc_platform.application.ports.realtime import (
+    SERVER_SHUTDOWN,
+    RealtimeConnection,
+    RealtimeEnvelope,
+)
 from cc_platform.application.realtime.projector import ACCESS_CHANGED
 from cc_platform.application.realtime.topics import Topic, TopicKind
 from cc_platform.application.security import Actor, CustomerActor
@@ -57,6 +66,7 @@ router = APIRouter(tags=["realtime"])
 CLOSE_UNAUTHENTICATED = 4401
 CLOSE_ACCESS_CHANGED = 4409
 CLOSE_TRY_AGAIN_LATER = 1013
+CLOSE_SERVICE_RESTART = 1012
 SESSION_EXPIRED_DETAIL = "Tu sesión venció. Vuelve a ingresar."
 
 
@@ -158,7 +168,8 @@ class RealtimeSocketSession:
         reader = asyncio.create_task(self._read_loop(connection, actor))
         pump = asyncio.create_task(self._pump(connection))
         expiry = asyncio.create_task(self._watch_expiry(actor))
-        tasks = (reader, pump, expiry)
+        heartbeat = asyncio.create_task(self._heartbeat())
+        tasks = (reader, pump, expiry, heartbeat)
         try:
             done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         finally:
@@ -201,6 +212,17 @@ class RealtimeSocketSession:
     async def _pump(self, connection: RealtimeConnection) -> None:
         while (envelope := await connection.next_envelope()) is not None:
             await self._ws.send_json(envelope.to_wire())
+
+    async def _heartbeat(self) -> None:
+        """Keep the socket busy for the edge; never returns while heartbeats are on."""
+        interval = self._api.realtime.heartbeat_interval
+        if interval is None:
+            await asyncio.Event().wait()  # off: wait to be cancelled with the others
+            return
+        seconds = interval.total_seconds()
+        while True:
+            await asyncio.sleep(seconds)
+            await self._send_control("heartbeat", {"intervalSeconds": seconds})
 
     async def _watch_expiry(self, actor: _Principal) -> None:
         """Return once the session is expired by the ``Clock``.
@@ -290,9 +312,12 @@ class RealtimeSocketSession:
 
 def _close_code(reason: str) -> int:
     """Hub close reason → WebSocket close code. 4409: roles changed, reconnect right away
-    (not an auth error); 1013: too slow; anything else (session ended): 4401."""
+    (not an auth error); 1013: too slow; 1012: graceful shutdown; anything else (session
+    ended): 4401."""
     if reason == "slow_consumer":
         return CLOSE_TRY_AGAIN_LATER
+    if reason == SERVER_SHUTDOWN:
+        return CLOSE_SERVICE_RESTART
     if reason == ACCESS_CHANGED:
         return CLOSE_ACCESS_CHANGED
     return CLOSE_UNAUTHENTICATED

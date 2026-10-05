@@ -247,10 +247,15 @@ def test_settings_keep_the_dev_mailbox_out_of_production() -> None:
         "env": "prod",
         "session_secret": "a-production-secret-that-is-long-enough-0123456789",
         "seed_demo_data": False,
+        # The rest of the deploy runtime contract (docs/platform/deploy-env.md).
+        "database_url": "postgresql+asyncpg://cc_app:x@db.internal/cc",
+        "public_app_url": "https://support.example.org",
+        "cors_origins": [],
     }
+    totp_key = "a" * 43 + "="  # 32 url-safe base64 bytes
     with pytest.raises(ValueError, match="CC_DEV_MAILBOX"):
-        Settings(_env_file=None, dev_mailbox=True, totp_secret_key="k" * 44, **prod)
+        Settings(_env_file=None, dev_mailbox=True, totp_secret_key=totp_key, **prod)
     with pytest.raises(ValueError, match="CC_TOTP_SECRET_KEY"):
         Settings(_env_file=None, **prod)
-    ok = Settings(_env_file=None, totp_secret_key="k" * 44, **prod)
+    ok = Settings(_env_file=None, totp_secret_key=totp_key, **prod)
     assert not ok.dev_mailbox_enabled

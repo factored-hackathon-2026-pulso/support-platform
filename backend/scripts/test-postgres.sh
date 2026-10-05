@@ -20,7 +20,8 @@ cleanup() { "$engine" rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT INT TERM
 
 "$engine" run -d --name "$name" -e POSTGRES_PASSWORD="$password" -p 127.0.0.1::5432 \
-  "$image" -c max_connections=200 >/dev/null
+  "$image" -c max_connections=200 -c fsync=off -c synchronous_commit=off -c full_page_writes=off \
+  >/dev/null  # a disposable test server: durability off, much faster
 port="$("$engine" port "$name" 5432/tcp | head -n1 | sed 's/.*://')"
 
 for _ in $(seq 1 60); do

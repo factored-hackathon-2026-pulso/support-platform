@@ -34,6 +34,8 @@ export type KnownRealtimeEventType =
   | 'notifications.read'
   // Slice 18 (the AI switch, slice-18-ai-foundation.md §5): on `platform:settings`
   | 'platform.updated'
+  // Slice 15b / 20 (the copilot's suggestions): on `inbox:<staffId>`, the suggestion id and status only
+  | 'copilot.suggestion_updated'
 
 export type RealtimeEventType = KnownRealtimeEventType | ControlEnvelopeType | (string & {})
 

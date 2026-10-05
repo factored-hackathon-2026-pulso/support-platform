@@ -41,7 +41,8 @@ describe('FEATURE_REALTIME_REGISTRATIONS', () => {
   it('handles every staff envelope of slices 1–2 (inbox + open conversation)', () => {
     const registry = createAppEnvelopeHandlers()
     const queryClient = new QueryClient()
-    expect(registry.dispatch(at('turn.created'), queryClient)).toBe(1) // conversation
+    // conversation + the copilot's newest suggestion (slice 20: a customer's turn makes it stale)
+    expect(registry.dispatch(at('turn.created'), queryClient)).toBe(2)
     // inbox + conversation + Inicio (slice 6)
     expect(registry.dispatch(at('case.updated'), queryClient)).toBe(3)
     expect(registry.dispatch(at('case.assigned'), queryClient)).toBe(3)
@@ -63,6 +64,11 @@ describe('FEATURE_REALTIME_REGISTRATIONS', () => {
     const queryClient = new QueryClient()
     expect(registry.dispatch(at('directory.updated'), queryClient)).toBe(1)
     expect(registry.dispatch(at('me.updated'), queryClient)).toBe(1)
+  })
+
+  it('handles the copilot signal of slice 20', () => {
+    const registry = createAppEnvelopeHandlers()
+    expect(registry.dispatch(at('copilot.suggestion_updated'), new QueryClient())).toBe(1)
   })
 
   it('leaves customer envelopes to the simulator registry', () => {

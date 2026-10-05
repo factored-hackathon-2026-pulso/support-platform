@@ -118,6 +118,10 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_ASSISTANT_SWEEP_SECONDS` | `30` | S17: how often a sweep re-runs assistant work lost with its process (sessions quiet for 20 s); `0` turns it off |
 | `CC_INTERNAL_SERVICE_TOKEN` | unset | S17: shared secret of `/api/v1/internal/*` (agent-core's `grant_active` check, bearer, constant-time compare). Unset = those routes answer 404. A long random value; never commit it |
 | `CC_COPILOT_AGENT` | `copiloto-asesor@prod` | Slice 15: the agent the analyst's copilot asks |
+| `CC_COPILOT_SUGGESTIONS_AGENT` | unset | ADR 0005 (slice 15b): the agent that makes suggestions for a case. Unset = no suggestions. Needs agent-core ADR 0026 |
+| `CC_COPILOT_SUGGESTIONS_AUTO` | `true` | Suggest on its own when a customer writes or a case reaches an analyst (`false`: only *Sugerir*) |
+| `CC_COPILOT_SUGGESTIONS_COALESCE_SECONDS` | `3` | A burst of customer messages makes one suggestion |
+| `CC_COPILOT_SUGGESTIONS_PURGE_SECONDS` | `600` | How often the suggestion texts older than 24 hours are purged (0 = off) |
 | `CC_BUILDER_AGENT` | `constructor-chat@prod` | Slice 16: the builder agent supervisors chat with (`id`, `id@alias` or `id@X.Y.Z`) |
 | `CC_ASSISTANT_LANGUAGES` | `["es", "pt"]` | Slice 14: case languages the assistant serves (JSON list, policy `H1`); others go straight to people |
 | `CC_ASSISTANT_STEP_UP_CODE` | `000000` | Slice 14: the **simulated** second-factor code (a development stand-in) |

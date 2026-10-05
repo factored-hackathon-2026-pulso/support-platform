@@ -66,6 +66,11 @@ FAMILY: Mapping[str, AuditFamily] = {
     "assistant.ended": AuditFamily.LIFECYCLE,
     "copilot.query_asked": AuditFamily.CONVERSATION,
     "copilot.answered": AuditFamily.CONVERSATION,
+    "copilot.suggestion_requested": AuditFamily.CONVERSATION,
+    "copilot.suggestion_ready": AuditFamily.CONVERSATION,
+    "copilot.suggestion_none": AuditFamily.CONVERSATION,
+    "copilot.suggestion_failed": AuditFamily.CONVERSATION,
+    "copilot.suggestion_decided": AuditFamily.CONVERSATION,
     # the agent builder (slice 16): who changed which agent, and who approved and published it
     "builder.proposal_created": AuditFamily.AGENTS,
     "builder.proposal_tracked": AuditFamily.AGENTS,
@@ -410,6 +415,23 @@ def _assistant_ended(event: StoredEvent, _names: AuditNames) -> str:
     return _ASSISTANT_END_TEXT.get(_text(event.payload, "result") or "", "Terminó el asistente")
 
 
+# --------------------------------------------------------------------------- suggestions (ADR 0005)
+_SUGGESTION_DECISION_TEXT: Mapping[str, str] = {
+    "used": "Usó el borrador del copiloto tal cual",
+    "edited": "Usó el borrador del copiloto con cambios",
+    "discarded": "Descartó el borrador del copiloto",
+    "ignored": "El borrador del copiloto quedó sin decidir",
+}
+
+
+def _suggestion_decided(event: StoredEvent, _names: AuditNames) -> str:
+    if _text(event.payload, "subject") == "escalation":
+        return "Escaló el caso con la recomendación del copiloto"
+    return _SUGGESTION_DECISION_TEXT.get(
+        _text(event.payload, "decision") or "", "Decidió sobre una sugerencia del copiloto"
+    )
+
+
 # ----------------------------------------------------------------------------- builder (slice 16)
 _VERDICT_TEXT: Mapping[str, str] = {
     "pass": "La evaluación de la propuesta pasó el gate",
@@ -637,6 +659,11 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     # slice 15: the copilot (the audit never shows what was asked or answered)
     "copilot.query_asked": _fixed("Le preguntó algo al copiloto sobre el caso"),
     "copilot.answered": _fixed("El copiloto respondió"),
+    "copilot.suggestion_requested": _fixed("Se pidió una sugerencia al copiloto"),
+    "copilot.suggestion_ready": _fixed("El copiloto preparó una sugerencia"),
+    "copilot.suggestion_none": _fixed("El copiloto no tenía nada que sugerir"),
+    "copilot.suggestion_failed": _fixed("No se pudo preparar la sugerencia del copiloto"),
+    "copilot.suggestion_decided": _suggestion_decided,
     # slice 16: the agent builder (the audit never shows a draft, a reason or a chat text)
     "builder.proposal_created": _fixed("Creó una propuesta de cambio de un agente"),
     "builder.proposal_tracked": _fixed("Agregó una propuesta del constructor a la lista"),

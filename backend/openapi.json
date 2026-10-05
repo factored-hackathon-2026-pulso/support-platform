@@ -2634,6 +2634,125 @@
         "title": "CopilotMessage",
         "type": "object"
       },
+      "CopilotSuggestion": {
+        "properties": {
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "escalationAccepted": {
+            "title": "Escalationaccepted",
+            "type": "boolean"
+          },
+          "failureCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failurecode"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "replyDecision": {
+            "anyOf": [
+              {
+                "enum": [
+                  "used",
+                  "edited",
+                  "discarded",
+                  "ignored"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What happened to the draft once decided (it then leaves `suggestions`).",
+            "title": "Replydecision"
+          },
+          "stale": {
+            "description": "The customer wrote after the turns it read.",
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "`none`: the copilot had nothing to propose (a normal answer, show nothing).",
+            "enum": [
+              "preparing",
+              "ready",
+              "none",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "suggestions": {
+            "description": "Empty when there is nothing to propose, and once the texts expired.",
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "action": "#/components/schemas/SuggestionAction",
+                  "escalate": "#/components/schemas/SuggestionEscalation",
+                  "reply": "#/components/schemas/SuggestionReply",
+                  "tool": "#/components/schemas/SuggestionTool"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SuggestionReply"
+                },
+                {
+                  "$ref": "#/components/schemas/SuggestionTool"
+                },
+                {
+                  "$ref": "#/components/schemas/SuggestionAction"
+                },
+                {
+                  "$ref": "#/components/schemas/SuggestionEscalation"
+                }
+              ]
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "trigger": {
+            "enum": [
+              "customer_message",
+              "manual",
+              "handover"
+            ],
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "caseId",
+          "trigger",
+          "status",
+          "stale",
+          "createdAt",
+          "replyDecision",
+          "escalationAccepted",
+          "failureCode",
+          "suggestions"
+        ],
+        "title": "CopilotSuggestion",
+        "type": "object"
+      },
       "CopilotThread": {
         "properties": {
           "available": {
@@ -3975,6 +4094,20 @@
       "EscalateRequest": {
         "additionalProperties": false,
         "properties": {
+          "copilotSuggestionId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR 0005: the copilot suggestion that recommended escalating; recorded as accepted. A wrong or already decided id never fails the escalation.",
+            "title": "Copilotsuggestionid"
+          },
           "motive": {
             "description": "Why (required, trimmed, at most 500).",
             "maxLength": 500,
@@ -5079,6 +5212,32 @@
         "title": "LanguageQueue",
         "type": "object"
       },
+      "LatestCopilotSuggestion": {
+        "properties": {
+          "available": {
+            "description": "False while agent-core or the suggestions agent is not configured, or the customer is not linked to the dataset: hide the suggestions.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CopilotSuggestion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest one; null when none was made yet or its texts expired (24 hours)."
+          }
+        },
+        "required": [
+          "available",
+          "suggestion"
+        ],
+        "title": "LatestCopilotSuggestion",
+        "type": "object"
+      },
       "LinkTokenRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5818,6 +5977,20 @@
             "pattern": "^[A-Za-z0-9-]+$",
             "title": "Clientmessageid",
             "type": "string"
+          },
+          "copilotSuggestionId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR 0005: the copilot suggestion this reply came from; the platform derives `used` or `edited` from it. A wrong or already decided id never fails the reply.",
+            "title": "Copilotsuggestionid"
           },
           "text": {
             "maxLength": 4000,
@@ -7109,6 +7282,19 @@
         "title": "ReplyBlockedReason",
         "type": "string"
       },
+      "RequestSuggestionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "trigger": {
+            "const": "manual",
+            "default": "manual",
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "title": "RequestSuggestionRequest",
+        "type": "object"
+      },
       "RespondEscalationRequest": {
         "additionalProperties": false,
         "properties": {
@@ -7452,6 +7638,154 @@
           "reason"
         ],
         "title": "StartCallRequest",
+        "type": "object"
+      },
+      "SuggestionAction": {
+        "properties": {
+          "executable": {
+            "const": false,
+            "description": "Always false in this stage: it is information, the copilot does not run it.",
+            "title": "Executable",
+            "type": "boolean"
+          },
+          "summary": {
+            "description": "What would be done, in plain words.",
+            "title": "Summary",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "type": {
+            "const": "action",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "tool",
+          "summary",
+          "executable"
+        ],
+        "title": "SuggestionAction",
+        "type": "object"
+      },
+      "SuggestionEscalation": {
+        "properties": {
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "motiveDraft": {
+            "description": "To pre-fill the escalation dialog (at most 500).",
+            "title": "Motivedraft",
+            "type": "string"
+          },
+          "reasonCode": {
+            "description": "agent-core's reason code (`policy:…`, `rule:…`).",
+            "title": "Reasoncode",
+            "type": "string"
+          },
+          "type": {
+            "const": "escalate",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "reasonCode",
+          "evidence",
+          "motiveDraft"
+        ],
+        "title": "SuggestionEscalation",
+        "type": "object"
+      },
+      "SuggestionFeedbackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "description": "The analyst dismissed the draft (`discarded`) or left it (`ignored`). `used` and `edited` are not posted: send `copilotSuggestionId` with the reply.",
+            "enum": [
+              "discarded",
+              "ignored"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "SuggestionFeedbackRequest",
+        "type": "object"
+      },
+      "SuggestionReply": {
+        "properties": {
+          "citations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "text": {
+            "description": "A draft for the customer. The analyst sends it; nothing is sent.",
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "reply",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text",
+          "citations",
+          "language"
+        ],
+        "title": "SuggestionReply",
+        "type": "object"
+      },
+      "SuggestionTool": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "tool": {
+            "description": "A read of the copilot's catalog (`id@version`).",
+            "title": "Tool",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool",
+            "title": "Type",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "tool",
+          "label",
+          "why"
+        ],
+        "title": "SuggestionTool",
         "type": "object"
       },
       "TeamAnalyst": {
@@ -14452,6 +14786,345 @@
           }
         ],
         "summary": "Ask the copilot something about this case",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/copilot/suggestions": {
+      "post": {
+        "description": "ADR 0005. The copilot reads the recent turns and answers a typed list that may be empty (`status: none` is a normal answer): a draft reply, reads to look at, a prepared action that is **not executable**, and a recommendation to escalate. Nothing is sent or run. The call waits for the model (seconds). Idempotent on `Idempotency-Key`: a retry of a request that has its answer is 200 with `Idempotent-Replayed: true` and asks nothing; after a failure the same key asks again. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while one is being prepared; 404 `assistant_disabled` without agent-core or the suggestions agent; 503/502 when agent-core does not answer.",
+        "operationId": "cases_request_copilot_suggestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "description": "Must equal the body `clientMessageId`; a retry with it is a replay.",
+              "maxLength": 64,
+              "minLength": 8,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RequestSuggestionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopilotSuggestion"
+                }
+              }
+            },
+            "description": "Replay of a request already answered"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopilotSuggestion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Ask the copilot for a suggestion about this case",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/copilot/suggestions/latest": {
+      "get": {
+        "description": "ADR 0005. Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` hides the suggestions (agent-core, the suggestions agent or the dataset link is missing); `suggestion: null` means none yet or its texts expired (24 hours). `stale: true` once the customer wrote after the turns it read. A suggestion that is `preparing` is on its way: ask again or wait for the `copilot.suggestion_ready` signal on `inbox:<staffId>`.",
+        "operationId": "cases_latest_copilot_suggestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LatestCopilotSuggestion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The copilot's newest suggestion for this case",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/feedback": {
+      "post": {
+        "description": "ADR 0005. `discarded` (the analyst dismissed the draft) or `ignored` (she left it). The draft leaves the list; the rest of the suggestion stays. `used` and `edited` are derived when she replies with `copilotSuggestionId`. 404 for an id that is not hers.",
+        "operationId": "cases_decide_copilot_suggestion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "suggestionId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CPS-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Suggestionid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestionFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopilotSuggestion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Dismiss the copilot's draft",
         "tags": [
           "cases"
         ]

@@ -16,6 +16,14 @@ from cc_platform.application.ai.customer import (
 )
 from cc_platform.application.ai.grants import GetGrantStatus
 from cc_platform.application.ai.staff import GetCaseHandoff, ReleaseAssistantCase
+from cc_platform.application.ai.suggestions import (
+    DecideSuggestion,
+    GetLatestSuggestion,
+    LinkSuggestion,
+    PurgeSuggestionDrafts,
+    RequestSuggestion,
+    SuggestionService,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +33,19 @@ class BuilderUseCases:
     registry: AgentBuilder
     thread: GetBuilderThread
     ask: AskBuilder
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestionUseCases:
+    """The copilot's suggestions (ADR 0005): ask, read the latest, decide, link what the analyst
+    did, and purge the drafts. ``service`` is the engine the automatic ones also use."""
+
+    service: SuggestionService
+    request: RequestSuggestion
+    latest: GetLatestSuggestion
+    decide: DecideSuggestion
+    link: LinkSuggestion
+    purge: PurgeSuggestionDrafts
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,3 +64,5 @@ class AssistantUseCases:
     grant_status: GetGrantStatus
     # the agent builder for supervisors (slice 16): ``None`` when the registry is not wired
     builder: BuilderUseCases | None = None
+    # the copilot's suggestions (ADR 0005): ``None`` when no suggestions agent is configured
+    suggestions: SuggestionUseCases | None = None

@@ -49,6 +49,9 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.people impor
     SqlStaffSessionRepository,
     SqlTeamRepository,
 )
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.suggestions import (
+    SqlCopilotSuggestionRepository,
+)
 from cc_platform.infrastructure.persistence.unit_of_work_base import BaseUnitOfWork
 
 #: SQLite's busy answers: another connection holds the write lock past the busy timeout.
@@ -82,6 +85,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     notifications: SqlNotificationRepository
     assistant_sessions: SqlAssistantSessionRepository
     copilot_threads: SqlCopilotThreadRepository
+    copilot_suggestions: SqlCopilotSuggestionRepository
     builder_threads: SqlBuilderThreadRepository
     builder_proposals: SqlBuilderProposalRepository
     bank_links: SqlBankCustomerLinks
@@ -122,6 +126,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.notifications = SqlNotificationRepository(session, self.track)
         self.assistant_sessions = SqlAssistantSessionRepository(session, self.track)
         self.copilot_threads = SqlCopilotThreadRepository(session, self.track)
+        self.copilot_suggestions = SqlCopilotSuggestionRepository(session, self.track)
         self.builder_threads = SqlBuilderThreadRepository(session, self.track)
         self.builder_proposals = SqlBuilderProposalRepository(session, self.track)
         self.bank_links = SqlBankCustomerLinks(session)

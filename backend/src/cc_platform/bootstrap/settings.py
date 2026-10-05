@@ -9,6 +9,11 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from cc_platform.bootstrap.deploy_checks import (
+    DeploymentConfigError,
+    deployment_problems,
+    invalid_trusted_proxies,
+)
 from cc_platform.domain.ai.maturity import StageRule
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
@@ -18,10 +23,17 @@ DEV_SESSION_SECRET = "dev-only-session-secret-change-me-0123456789"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="CC_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_prefix="CC_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        # A validation error never echoes the values it got (secrets, database URL).
+        hide_input_in_errors=True,
     )
 
-    env: Literal["dev", "test", "prod"] = "dev"
+    #: ``staging``: the shared deployed environment (synthetic demo data allowed); ``prod``:
+    #: real customers. Both enforce the runtime contract (``docs/platform/deploy-env.md``).
+    env: Literal["dev", "test", "staging", "prod"] = "dev"
     build: str = Field(default="dev", description="Build id (git sha or CI run) shown in /meta.")
 
     # Persistence
@@ -62,10 +74,23 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     host: str = "127.0.0.1"
     port: int = 8000
+    #: Peers whose ``X-Forwarded-For/-Proto/-Host`` headers are believed (IPs or CIDRs, ``*`` =
+    #: any, refused when deployed): the host reverse proxy in front of the API.
+    trusted_proxies: list[str] = ["127.0.0.1", "::1"]
+    #: Reload on code changes (``cc-api``). Unset: on only with ``CC_ENV=dev``.
+    reload: bool | None = None
+    #: Graceful shutdown: how long in-flight requests, then background jobs, may take to finish
+    #: after SIGTERM (each); the rest is cancelled. Keep the stop grace period above twice this.
+    shutdown_timeout_seconds: float = Field(default=10.0, gt=0)
+    #: ``GET /readyz``: the longest each dependency check may take before it counts as down.
+    readiness_timeout_seconds: float = Field(default=2.0, gt=0)
 
     # Realtime
     realtime_queue_size: int = Field(default=256, ge=1)
     realtime_expiry_check_seconds: float = Field(default=30.0, gt=0)
+    #: An idle socket gets a ``heartbeat`` envelope this often, so CloudFront and the reverse
+    #: proxy never see it idle and the SPA can tell a dead socket from a quiet one; 0 = off.
+    realtime_heartbeat_seconds: float = Field(default=25.0, ge=0)
 
     # Notifications (slice 10): how often the SLA sweep looks for cases at risk without a
     # first response ("Caso por vencer sin respuesta"); 0 turns it off (tests).
@@ -154,18 +179,24 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _refuse_dev_defaults_in_prod(self) -> Self:
+        # Every broken rule at once (``deploy_checks``); messages never carry values.
+        problems = deployment_problems(self, dev_session_secret=DEV_SESSION_SECRET)
         if self.env == "prod":
-            if self.session_secret.get_secret_value() == DEV_SESSION_SECRET:
-                raise ValueError("CC_SESSION_SECRET must be set in production")
             if self.seed_demo_data:
-                raise ValueError("CC_SEED_DEMO_DATA must be false in production")
+                problems.append("CC_SEED_DEMO_DATA must be false in production")
             if self.dev_mailbox:
-                raise ValueError("CC_DEV_MAILBOX is a development tool: never in production")
-            if self.totp_secret_key is None:
-                raise ValueError("CC_TOTP_SECRET_KEY must be set in production")
+                problems.append("CC_DEV_MAILBOX is a development tool: never in production")
         if (self.agent_core_url is None) != (self.agent_keys_file is None):
-            raise ValueError("CC_AGENT_CORE_URL and CC_AGENT_KEYS_FILE go together or not at all")
+            problems.append("CC_AGENT_CORE_URL and CC_AGENT_KEYS_FILE go together or not at all")
+        if invalid := invalid_trusted_proxies(self.trusted_proxies):
+            problems.append(f"CC_TRUSTED_PROXIES: {len(invalid)} entries are not IPs or CIDRs")
+        if problems:
+            raise DeploymentConfigError(problems)
         return self
+
+    @property
+    def reload_enabled(self) -> bool:
+        return self.reload if self.reload is not None else self.env == "dev"
 
     @property
     def dev_mailbox_enabled(self) -> bool:
@@ -196,6 +227,11 @@ class Settings(BaseSettings):
     @property
     def realtime_expiry_check_interval(self) -> timedelta:
         return timedelta(seconds=self.realtime_expiry_check_seconds)
+
+    @property
+    def realtime_heartbeat_interval(self) -> timedelta | None:
+        seconds = self.realtime_heartbeat_seconds
+        return timedelta(seconds=seconds) if seconds > 0 else None
 
     @property
     def mfa_ttl(self) -> timedelta:

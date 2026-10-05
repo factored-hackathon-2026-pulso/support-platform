@@ -21,6 +21,7 @@ dependencies = [
 
 [project.scripts]
 cc-api = "cc_platform.bootstrap.server:main"
+cc-seed = "cc_platform.scripts.seed:main"
 
 [dependency-groups]
 dev = [

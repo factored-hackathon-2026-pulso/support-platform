@@ -617,6 +617,7 @@ describe('closure and the read-only footer', () => {
         canClose: false,
         canAssign: false,
         canChangePriority: false,
+        canChangeType: false,
         canEscalate: false,
         canCall: false,
         canEmail: false,

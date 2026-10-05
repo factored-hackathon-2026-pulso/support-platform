@@ -10,6 +10,7 @@ import {
   useCustomerChatLive,
   useCustomerSession,
   useDemoCustomers,
+  useSimulatorAiEnabled,
   useStartCustomerCall,
   type CustomerSession,
 } from '../hooks'
@@ -128,6 +129,7 @@ function SimulatorBody({
   onLeave: () => void
 }) {
   useCustomerChatLive(customerId)
+  const aiEnabled = useSimulatorAiEnabled()
   const customers = useDemoCustomers()
   const me = customers.data?.items.find((customer) => customer.id === customerId)
   const language = me?.language ?? 'es'
@@ -144,7 +146,7 @@ function SimulatorBody({
   }
 
   return (
-    <div className="flex min-h-0 grow flex-col gap-4">
+    <div className="flex min-h-0 grow flex-col gap-4" data-ai-enabled={aiEnabled}>
       <div className="mx-auto flex w-full max-w-[880px] flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-14 text-ink-2">
           <p className="m-0">

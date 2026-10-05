@@ -22,6 +22,7 @@ import type {
   PostCustomerTurnResponse,
   RateConversationRequest,
   CustomerConversation,
+  CustomerPlatformSettings,
 } from './types'
 
 /** Query keys (frozen by the contract §9.6). */
@@ -34,6 +35,8 @@ export const customerChatKeys = {
     ['customer-chat', customerId, 'past', caseId] as const,
   /** Slice 12: the current (or latest) call of the signed-in customer. */
   call: (customerId: string) => ['customer-chat', customerId, 'call'] as const,
+  /** Slice 18: the platform settings as the simulator sees them (the AI switch). */
+  platform: () => ['customer-chat', 'platform'] as const,
 }
 
 export const customerChatMutationKeys = {
@@ -46,6 +49,13 @@ export const customerChatMutationKeys = {
 
 /** Bearer = customer token; a 401 for it clears it (back to the picker). */
 export const customerApi = createApiClient({ tokenStore: customerSessionToken })
+
+/** GET /customer/platform (slice 18): whether the AI functions are on (customer token). */
+export async function fetchCustomerPlatform(
+  signal?: AbortSignal,
+): Promise<CustomerPlatformSettings> {
+  return unwrap(customerApi.GET('/api/v1/customer/platform', { signal }))
+}
 
 /** GET /customer/demo-customers (no auth): simulator customers first, then the other seeded ones. */
 export async function listDemoCustomers(signal?: AbortSignal): Promise<DemoCustomerList> {

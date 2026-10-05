@@ -156,12 +156,12 @@ const RULES: Rule[] = [
       ['src/app', 'src/features', 'src/routes', 'src/components'].some((dir) => inDir(target, dir)),
   },
   {
-    name: 'features use only the session, role and path helpers of src/app',
+    name: 'features use only the session, platform, role and path helpers of src/app',
     violates: ({ from, target }) =>
       inDir(from, 'src/features') &&
       !isTestFile(from) &&
       inDir(target, 'src/app') &&
-      !['src/app/session', 'src/app/roles', 'src/app/paths'].includes(target),
+      !['src/app/session', 'src/app/platform', 'src/app/roles', 'src/app/paths'].includes(target),
   },
   {
     name: 'test helpers (src/test) are used by tests only',

@@ -8,12 +8,13 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router'
 import { api, isApiProblem, unwrap, type Schemas } from '@/lib/api'
 import { sortLanguages, type FactItem } from '@/components/ui'
 import { getInitials } from '@/lib/format'
 import { sessionToken } from '@/lib/session-token'
+import { primePlatformSettings } from './platform'
 import { ROLES, roleFromPath, sortRoles, type RoleDefinition, type RoleId } from './roles'
 
 export type Staff = Schemas['StaffOut']
@@ -83,9 +84,14 @@ export const sessionKeys = {
   me: () => [...sessionKeys.all, 'me'] as const,
 }
 
-/** GET /auth/me → the staff member (the session part is not used by the UI yet). */
-export async function fetchMe(signal?: AbortSignal): Promise<Staff> {
-  const { staff } = await unwrap(api.GET('/api/v1/auth/me', { signal }))
+/**
+ * GET /auth/me → the staff member (the session part is not used by the UI yet). Slice 18: the
+ * answer also carries the platform settings (the AI switch); `queryClient` keeps them in their
+ * own cache (`app/platform.ts`), so they need no second request.
+ */
+export async function fetchMe(signal?: AbortSignal, queryClient?: QueryClient): Promise<Staff> {
+  const { staff, platform } = await unwrap(api.GET('/api/v1/auth/me', { signal }))
+  if (queryClient) primePlatformSettings(queryClient, platform)
   return staff
 }
 
@@ -133,7 +139,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const me = useQuery({
     queryKey: sessionKeys.me(),
-    queryFn: ({ signal }) => fetchMe(signal),
+    queryFn: ({ signal }) => fetchMe(signal, queryClient),
     enabled: token !== null,
     staleTime: Infinity,
   })

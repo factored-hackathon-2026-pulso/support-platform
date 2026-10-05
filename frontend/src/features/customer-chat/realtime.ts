@@ -25,6 +25,7 @@ import type {
   CustomerCallState,
   CustomerChatCache,
   CustomerConversation,
+  CustomerPlatformSettings,
   CustomerTurn,
 } from './types'
 
@@ -109,7 +110,17 @@ function applyCall(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
   }
 }
 
+/** `platform.updated` (slice 18, topic `platform:settings`): the AI switch, as it is now. */
+function applyPlatform(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
+  const payload = envelopePayload(envelope)
+  if (!payload || typeof payload.aiEnabled !== 'boolean') return
+  queryClient.setQueryData<CustomerPlatformSettings>(customerChatKeys.platform(), {
+    aiEnabled: payload.aiEnabled,
+  })
+}
+
 export const registerCustomerChatRealtime: RealtimeRegistration = (registry) => {
+  registry.register('platform.updated', applyPlatform)
   registry.register('turn.created', applyTurn)
   registry.register('call.updated', applyCall)
   registry.register('conversation.updated', applyConversationUpdate)

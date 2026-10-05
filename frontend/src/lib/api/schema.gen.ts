@@ -3,6 +3,43 @@
  * Import it only from `src/lib/api/client.ts` (the API boundary).
  */
 export interface paths {
+  '/api/v1/admin/platform': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The platform settings (Administración) */
+    get: operations['platform_get_admin_settings']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/admin/platform/ai': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Turn the AI functions on or off (Administración)
+     * @description Slice 18. Sets the desired state, so it is safe to repeat: the same state answers 200 with `changed: false` and records nothing. A change records `platform.ai_toggled` `{enabled}` (audit: "Activó / Desactivó las funciones de IA") and sends `platform.updated` on `platform:settings`. Off: new chats go to people, the copilot answers `available: false`, the builder is unavailable; an assistant conversation already under way is not interrupted.
+     */
+    put: operations['platform_set_ai_enabled']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/admin/teams': {
     parameters: {
       query?: never
@@ -401,7 +438,7 @@ export interface paths {
     }
     /**
      * The caller's conversation with the builder agent
-     * @description One thread per person. `available: false` (no messages, status 200) while agent-core is not configured: hide the chat.
+     * @description One thread per person. `available: false` (no messages, status 200) while agent-core is not configured or the AI switch is off (slice 18): hide the chat.
      */
     get: operations['builder_get_chat']
     put?: never
@@ -733,7 +770,7 @@ export interface paths {
     }
     /**
      * Whether the agent builder is available, and what the caller may do
-     * @description Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured (hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for.
+     * @description Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured or the AI switch is off (slice 18; hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for.
      */
     get: operations['builder_get_status']
     put?: never
@@ -971,7 +1008,7 @@ export interface paths {
     }
     /**
      * The analyst's conversation with the copilot about this case
-     * @description Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` (with no messages) while agent-core is not configured or the customer is not linked to the dataset: hide the panel, it is not an error.
+     * @description Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` (with no messages) while agent-core is not configured, the AI switch is off (slice 18) or the customer is not linked to the dataset: hide the panel, it is not an error.
      */
     get: operations['cases_get_copilot']
     put?: never
@@ -993,7 +1030,7 @@ export interface paths {
     put?: never
     /**
      * Ask the copilot something about this case
-     * @description Slice 15 (ADR 0003). The copilot reads and calculates (it suggests what to look up and never acts) and answers as the analyst: agent-core decides what she may see. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; 404 `assistant_disabled` without agent-core; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the question stays in the thread: ask again with the same `clientMessageId`).
+     * @description Slice 15 (ADR 0003). The copilot reads and calculates (it suggests what to look up and never acts) and answers as the analyst: agent-core decides what she may see. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; 404 `assistant_disabled` without agent-core or while the AI switch is off; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the question stays in the thread: ask again with the same `clientMessageId`).
      */
     post: operations['cases_ask_copilot']
     delete?: never
@@ -1198,6 +1235,26 @@ export interface paths {
      * @description Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true` and the original turn; the same id with another text is `idempotency_conflict`. Moves a `new` case to `in_progress`; the first reply stops the first-response SLA.
      */
     post: operations['cases_post_turn']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/type': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Set what the case is about (the assignee, or supervision on any open case)
+     * @description Slice 18, the same rules as the priority. Checks in this order: the case exists (404) · the caller is its assignee analyst or a supervisor (403 `case_not_assigned`) · it is not closed (409 `case_closed`) · it already has that type (200, `changed: false`, nothing happens) · it is still at `expectedVersion` (409 `version_conflict`, with the case now as `current`). Records `case.type_changed` `{from, to}`. Independent of the AI switch: the type is data about the case.
+     */
+    put: operations['cases_change_case_type']
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -1504,6 +1561,26 @@ export interface paths {
      * @description With no open case a new one opens (channel `email`) and is assigned like a chat or waits in the queue; with an open case the email joins it. Idempotent on `clientMessageId` (= `Idempotency-Key`).
      */
     post: operations['customer_send_my_email']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/customer/platform': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The platform settings as the customer simulator needs them
+     * @description Slice 18: whether the AI functions are on (live: `platform:settings`).
+     */
+    get: operations['platform_get_customer_settings']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -2013,6 +2090,34 @@ export interface components {
       sentAt: string
       /** @description pending or expired while she is invited. */
       status: components['schemas']['InvitationStatus']
+    }
+    /**
+     * AdminPlatformSettings
+     * @description Administración's view of the settings ("Plataforma").
+     */
+    AdminPlatformSettings: {
+      /**
+       * Agentcoreconfigured
+       * @description Whether agent-core is wired. With AI on but no agent-core, the assistant, the copilot and the builder stay unavailable (the platform behaves as today).
+       */
+      agentCoreConfigured: boolean
+      /** Aienabled */
+      aiEnabled: boolean
+      /**
+       * Updatedat
+       * @description The last change; null: never changed.
+       */
+      updatedAt: string | null
+      /**
+       * Updatedbyname
+       * @description Who made the last change.
+       */
+      updatedByName: string | null
+      /**
+       * Version
+       * @description 0 while the deployment default (`CC_AI_ENABLED`) applies.
+       */
+      version: number
     }
     /** AdminTeam */
     AdminTeam: {
@@ -2809,6 +2914,11 @@ export interface components {
        * @description Slice 8: the caller is the assignee analyst or a supervisor, and the case is open (PUT /cases/{caseId}/priority).
        */
       canChangePriority: boolean
+      /**
+       * Canchangetype
+       * @description Slice 18: the same rule as `canChangePriority` (PUT /cases/{caseId}/type).
+       */
+      canChangeType: boolean
       /** Canclose */
       canClose: boolean
       /**
@@ -2993,6 +3103,8 @@ export interface components {
       activeCallId: string | null
       /** Assignedanalystid */
       assignedAnalystId: string | null
+      /** @description Slice 18: what the case is about (a dataset complaint subcategory); `none` until the assignee or supervision sets it. */
+      caseType: components['schemas']['CaseType']
       channel: components['schemas']['CaseChannel']
       closeReason: components['schemas']['CloseReason'] | null
       /** Closedat */
@@ -3051,6 +3163,43 @@ export interface components {
        * @description Realtime: apply only when newer than the cached one.
        */
       version: number
+    }
+    /**
+     * CaseType
+     * @description What the case is about (slice 18, ADR 0005): the AI matures per case type.
+     *
+     *     The values are the dataset's complaint subcategories (``complaints.subcategory`` in
+     *     data-lab; names from its aggregate report ``reports/demand/complaints_by_subcategory.csv``,
+     *     never from records) plus ``none`` (the dataset's ``(null)`` subcategory, and every case
+     *     when it opens). ``virtual_card`` ("Tarjeta virtual") is **team-generated**: a new product
+     *     the demo shows maturing from zero; it is not in the dataset.
+     * @enum {string}
+     */
+    CaseType:
+      | 'none'
+      | 'unrecognized_charge'
+      | 'undue_charge'
+      | 'app_issue'
+      | 'branch_service'
+      | 'service_quality'
+      | 'virtual_card'
+    /** CaseTypeResult */
+    CaseTypeResult: {
+      case: components['schemas']['CaseSummary']
+      /**
+       * Changed
+       * @description false: the case already had that type (no event).
+       */
+      changed: boolean
+    }
+    /** ChangeCaseTypeRequest */
+    ChangeCaseTypeRequest: {
+      caseType: components['schemas']['CaseType']
+      /**
+       * Expectedversion
+       * @description The case `version` the caller saw (stale → `version_conflict`).
+       */
+      expectedVersion: number
     }
     /** ChangePriorityRequest */
     ChangePriorityRequest: {
@@ -4186,6 +4335,8 @@ export interface components {
     }
     /** MeResponse */
     MeResponse: {
+      /** @description Slice 18: the platform settings the SPA needs (the AI switch); live as `platform.updated` on `platform:settings`. */
+      platform: components['schemas']['PlatformSettings']
       session: components['schemas']['SessionOut']
       staff: components['schemas']['StaffOut']
     }
@@ -4469,6 +4620,18 @@ export interface components {
        * @description The rules the SPA lists, in order.
        */
       rules: components['schemas']['PasswordRule'][]
+    }
+    /**
+     * PlatformSettings
+     * @description What every client reads (staff in ``/auth/me``, the simulator in
+     *     ``/customer/platform``, both live as ``platform.updated`` on ``platform:settings``).
+     */
+    PlatformSettings: {
+      /**
+       * Aienabled
+       * @description The AI switch. Off: hide every AI element; the platform is people-only (new chats go to people, no copilot, no builder).
+       */
+      aiEnabled: boolean
     }
     /** PostAnalystTurnRequest */
     PostAnalystTurnRequest: {
@@ -5165,6 +5328,23 @@ export interface components {
        */
       tokenType: 'Bearer'
     }
+    /** SetAiEnabledRequest */
+    SetAiEnabledRequest: {
+      /**
+       * Enabled
+       * @description The desired state of the AI switch.
+       */
+      enabled: boolean
+    }
+    /** SetAiEnabledResult */
+    SetAiEnabledResult: {
+      /**
+       * Changed
+       * @description false: the switch was already in that state (no event).
+       */
+      changed: boolean
+      settings: components['schemas']['AdminPlatformSettings']
+    }
     /** SetAssigneeRequest */
     SetAssigneeRequest: {
       /**
@@ -5621,6 +5801,95 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  platform_get_admin_settings: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AdminPlatformSettings']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  platform_set_ai_enabled: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetAiEnabledRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SetAiEnabledResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   admin_list_teams: {
     parameters: {
       query?: {
@@ -10678,6 +10947,77 @@ export interface operations {
       }
     }
   }
+  cases_change_case_type: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ChangeCaseTypeRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CaseTypeResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   customer_get_my_call: {
     parameters: {
       query?: never
@@ -11539,6 +11879,35 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  platform_get_customer_settings: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PlatformSettings']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
         headers: {
           [name: string]: unknown
         }

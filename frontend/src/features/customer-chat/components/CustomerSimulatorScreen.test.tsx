@@ -29,6 +29,7 @@ vi.mock('../api', async (importOriginal) => {
     postCustomerTurn: vi.fn<typeof actual.postCustomerTurn>(),
     listPastConversations: vi.fn<typeof actual.listPastConversations>(),
     fetchPastConversation: vi.fn<typeof actual.fetchPastConversation>(),
+    fetchCustomerPlatform: vi.fn<typeof actual.fetchCustomerPlatform>(),
   }
 })
 
@@ -46,6 +47,7 @@ function renderSimulator() {
 }
 
 beforeEach(() => {
+  vi.mocked(api.fetchCustomerPlatform).mockResolvedValue({ aiEnabled: false })
   vi.mocked(api.fetchCustomerCall).mockResolvedValue({ call: null })
   vi.mocked(api.listDemoCustomers).mockResolvedValue({ items: demoCustomers })
   vi.mocked(api.fetchCustomerConversation).mockResolvedValue({
@@ -526,6 +528,20 @@ describe('CustomerSimulatorScreen · chat', () => {
     expect(
       screen.queryByRole('button', { name: /Ver conversas anteriores/ }),
     ).not.toBeInTheDocument()
+  })
+
+  it('follows the AI switch live on its own socket (slice 18)', async () => {
+    customerSessionToken.set(token())
+    vi.mocked(api.fetchCustomerPlatform).mockResolvedValue({ aiEnabled: true })
+    const { customerSockets, container } = renderSimulator()
+    expect(await screen.findByText('Hablando como')).toBeInTheDocument()
+    const socket = customerSockets.last()
+    act(() => socket?.open())
+    expect(socket?.messages()).toContainEqual({ action: 'subscribe', topic: 'platform:settings' })
+    const root = () => container.querySelector('[data-ai-enabled]')
+    await waitFor(() => expect(root()).toHaveAttribute('data-ai-enabled', 'true'))
+    act(() => socket?.receive(envelope('platform.updated', { aiEnabled: false })))
+    await waitFor(() => expect(root()).toHaveAttribute('data-ai-enabled', 'false'))
   })
 
   it('drops an expired stored token', async () => {

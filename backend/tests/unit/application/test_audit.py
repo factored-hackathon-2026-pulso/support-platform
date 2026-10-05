@@ -333,6 +333,9 @@ async def test_every_emitted_event_has_a_description() -> None:
         "case.assistant_started",
         "case.assistant_released",
         "copilot.tool_used",  # slice 21: needs a suggestion (``test_maturity.py``)
+        "ai.agent_renamed",  # ADR 0009: needs a served type (``test_ai_stages_api.py``)
+        "ai.agent_paused",  # ADR 0009: needs a served type (``test_builder_api.py``)
+        "ai.agent_resumed",
         "copilot.item_decided",  # slice 24: needs a suggestion (test_copilot_suggestions_api.py)
         *(
             event.event_type

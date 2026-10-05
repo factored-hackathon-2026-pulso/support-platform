@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime
+from sqlalchemy import JSON, DateTime
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 
@@ -35,3 +36,7 @@ class UtcDateTime(TypeDecorator[datetime]):
         if value.tzinfo is None:
             return value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
+
+
+#: JSON documents: ``jsonb`` on Postgres (comparable, indexable), JSON text on SQLite.
+JSON_DOCUMENT = JSON().with_variant(postgresql.JSONB(), "postgresql")

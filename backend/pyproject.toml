@@ -17,10 +17,13 @@ dependencies = [
     "pyotp>=2.9",
     "cryptography>=43",
     "httpx>=0.27",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
 ]
 
 [project.scripts]
 cc-api = "cc_platform.bootstrap.server:main"
+cc-migrate = "cc_platform.bootstrap.migrate:main"
 
 [dependency-groups]
 dev = [
@@ -67,6 +70,7 @@ ignore = [
 "tests/**" = ["S101", "S105", "S106", "PLR2004", "PLC0415"]
 "src/cc_platform/infrastructure/seed/**" = ["S105", "S106"]
 "src/cc_platform/bootstrap/settings.py" = ["S105"]
+"src/cc_platform/infrastructure/persistence/sqlalchemy/migrations/versions/**" = ["PLR0915"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

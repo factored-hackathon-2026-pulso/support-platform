@@ -1,14 +1,15 @@
 """Table definitions (SQLAlchemy Core). Domain objects are mapped explicitly in repositories,
 so the domain stays free of persistence concerns.
 
-Only portable types are used (no SQLite-only SQL). Schema is created with
-``metadata.create_all`` at startup; Alembic migrations are a known gap (see README).
+Only portable types are used (no SQLite-only SQL). The schema is built by the Alembic
+revisions in ``migrations/versions`` (``cc-migrate``); a change here needs a new revision, and
+``tests/unit/infrastructure/test_migrations.py`` fails until the two agree.
 """
 
 from __future__ import annotations
 
 from sqlalchemy import (
-    JSON,
+    BigInteger,
     Boolean,
     Column,
     ForeignKey,
@@ -21,11 +22,15 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-from cc_platform.infrastructure.persistence.sqlalchemy.types import UtcDateTime
+from cc_platform.infrastructure.persistence.sqlalchemy.types import JSON_DOCUMENT, UtcDateTime
 
 ID = 40
 
 VERSION_COLUMN = "version"
+
+#: ``event_log.sequence``: a 64-bit identity on Postgres; SQLite needs ``INTEGER`` to make it
+#: the rowid (autoincrement).
+EVENT_SEQUENCE = BigInteger().with_variant(Integer(), "sqlite")
 
 
 def _version() -> Column[int]:
@@ -62,8 +67,8 @@ staff = Table(
     Column("id", String(ID), primary_key=True),
     Column("name", String(200), nullable=False),
     Column("email", String(320), nullable=False, unique=True),
-    Column("roles", JSON, nullable=False),
-    Column("languages", JSON, nullable=False),
+    Column("roles", JSON_DOCUMENT, nullable=False),
+    Column("languages", JSON_DOCUMENT, nullable=False),
     Column("team_id", String(ID), ForeignKey("teams.id"), nullable=False, index=True),
     Column("active", Boolean, nullable=False, default=True),
     Column("created_at", UtcDateTime, nullable=False),
@@ -79,7 +84,7 @@ admin_roster = Table(
     "admin_roster",
     metadata,
     Column("id", String(20), primary_key=True),
-    Column("admin_ids", JSON, nullable=False),
+    Column("admin_ids", JSON_DOCUMENT, nullable=False),
     _version(),
 )
 
@@ -221,7 +226,7 @@ customers = Table(
     Column("city", String(120), nullable=False),
     Column("locale", String(10), nullable=False),
     Column("simulator", Boolean, nullable=False, default=False),
-    Column("suggestions", JSON, nullable=False),
+    Column("suggestions", JSON_DOCUMENT, nullable=False),
 )
 
 cases = Table(
@@ -252,7 +257,7 @@ cases = Table(
     Column("last_turn_author_role", String(20), nullable=True),
     Column("last_turn_preview", String(400), nullable=True),
     Column("assignee_read_sequence", Integer, nullable=False, default=0),
-    Column("unread_sequences", JSON, nullable=False),
+    Column("unread_sequences", JSON_DOCUMENT, nullable=False),
     # closure (flattened)
     Column("closed_at", UtcDateTime, nullable=True),
     Column("closed_by_id", String(120), nullable=True),
@@ -299,7 +304,7 @@ turns = Table(
     Column("subject", String(200), nullable=True),
     # slice 23c: the facts of a staff-only line (``{kind, params}``; null on every other turn
     # and on routing banners written before 23c, which show their stored text)
-    Column("staff_line", JSON, nullable=True),
+    Column("staff_line", JSON_DOCUMENT, nullable=True),
     UniqueConstraint("case_id", "sequence", name="uq_turns_case_sequence"),
     UniqueConstraint("author_id", "client_message_id", name="uq_turns_author_client_message"),
 )
@@ -371,7 +376,7 @@ calls = Table(
     Column("end_reason", String(20), nullable=True),
     Column("ended_by_role", String(20), nullable=True),
     Column("muted", Boolean, nullable=False, default=False),
-    Column("holds", JSON, nullable=False),
+    Column("holds", JSON_DOCUMENT, nullable=False),
     Column("creation_key", String(64), nullable=True, unique=True),
     _version(),
     Index("ix_calls_case_started", "case_id", "started_at"),
@@ -395,15 +400,15 @@ assistant_sessions = Table(
     # the agent release the run started on (engine signals: outcome attribution)
     Column("agent_release", String(120), nullable=True),
     Column("awaiting", String(20), nullable=False),
-    Column("confirmation", JSON, nullable=True),
-    Column("step_up", JSON, nullable=True),
+    Column("confirmation", JSON_DOCUMENT, nullable=True),
+    Column("step_up", JSON_DOCUMENT, nullable=True),
     Column("step_up_verified_at", UtcDateTime, nullable=True),
     Column("step_up_attempts", Integer, nullable=False, default=0),
     Column("processed_sequence", Integer, nullable=False, default=0),
-    Column("claim", JSON, nullable=True),
+    Column("claim", JSON_DOCUMENT, nullable=True),
     Column("claimed_at", UtcDateTime, nullable=True),
-    Column("queued", JSON, nullable=True),
-    Column("blocked", JSON, nullable=True),
+    Column("queued", JSON_DOCUMENT, nullable=True),
+    Column("blocked", JSON_DOCUMENT, nullable=True),
     Column("resend_blocked", Boolean, nullable=False, default=False),
     Column("handoff_ref", String(120), nullable=True),
     Column("handoff_resolved_at", UtcDateTime, nullable=True),
@@ -427,7 +432,7 @@ copilot_threads = Table(
     Column("agent_session_id", String(120), nullable=True),
     Column("run_id", String(120), nullable=True),
     Column("runs", Integer, nullable=False, default=0),
-    Column("messages", JSON, nullable=False),
+    Column("messages", JSON_DOCUMENT, nullable=False),
     Column("last_trace_id", String(120), nullable=True),
     Column("created_at", UtcDateTime, nullable=False),
     Column("updated_at", UtcDateTime, nullable=False),
@@ -449,9 +454,9 @@ copilot_suggestions = Table(
     Column("status", String(20), nullable=False),
     Column("based_on_sequence", Integer, nullable=False),
     Column("request_key", String(80), nullable=True),
-    Column("items", JSON, nullable=False),
-    Column("kinds", JSON, nullable=False),
-    Column("tool_ids", JSON, nullable=False),
+    Column("items", JSON_DOCUMENT, nullable=False),
+    Column("kinds", JSON_DOCUMENT, nullable=False),
+    Column("tool_ids", JSON_DOCUMENT, nullable=False),
     Column("reply_hash", String(64), nullable=True),
     Column("reply_decision", String(20), nullable=True),
     Column("edit_distance_permille", Integer, nullable=True),
@@ -482,8 +487,8 @@ case_type_maturity = Table(
     Column("case_type", String(40), primary_key=True),
     Column("stage", Integer, nullable=False),
     Column("agent", String(20), nullable=False),
-    Column("signals", JSON, nullable=False),
-    Column("stage_since", JSON, nullable=False),
+    Column("signals", JSON_DOCUMENT, nullable=False),
+    Column("stage_since", JSON_DOCUMENT, nullable=False),
     Column("agent_since", UtcDateTime, nullable=True),
     Column("agent_id", String(120), nullable=True),
     Column("changed_at", UtcDateTime, nullable=True),
@@ -504,7 +509,7 @@ builder_threads = Table(
     Column("agent_session_id", String(120), nullable=True),
     Column("run_id", String(120), nullable=True),
     Column("runs", Integer, nullable=False, default=0),
-    Column("messages", JSON, nullable=False),
+    Column("messages", JSON_DOCUMENT, nullable=False),
     Column("last_trace_id", String(120), nullable=True),
     Column("created_at", UtcDateTime, nullable=False),
     Column("updated_at", UtcDateTime, nullable=False),
@@ -571,7 +576,7 @@ notifications = Table(
     # ADR 0007 (``improvement_proposed``): the proposal, its agent and the engine's dossier.
     Column("proposal_id", String(64), nullable=True),
     Column("agent_id", String(64), nullable=True),
-    Column("improvement", JSON, nullable=True),
+    Column("improvement", JSON_DOCUMENT, nullable=True),
     _version(),
     UniqueConstraint("recipient_id", "source_key", name="uq_notifications_recipient_source"),
     # Her list, newest first (keyset pagination and retention).
@@ -594,7 +599,7 @@ customer_case_slots = Table(
 event_log = Table(
     "event_log",
     metadata,
-    Column("sequence", Integer, primary_key=True, autoincrement=True),
+    Column("sequence", EVENT_SEQUENCE, primary_key=True, autoincrement=True),
     Column("event_id", String(ID), nullable=False, unique=True),
     Column("event_type", String(80), nullable=False),
     Column("entity", String(40), nullable=False),
@@ -604,7 +609,7 @@ event_log = Table(
     Column("actor_id", String(120), nullable=False),
     Column("event_time", UtcDateTime, nullable=False),
     Column("ingested_at", UtcDateTime, nullable=False),
-    Column("payload", JSON, nullable=False),
+    Column("payload", JSON_DOCUMENT, nullable=False),
     Index("ix_event_log_case_sequence", "case_id", "sequence"),
     Index("ix_event_log_entity", "entity", "entity_id"),
     Index("ix_event_log_event_time", "event_time"),

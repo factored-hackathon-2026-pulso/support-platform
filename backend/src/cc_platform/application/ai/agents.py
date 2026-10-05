@@ -101,9 +101,8 @@ class GetAgents:
             AgentRow(
                 agent_id=agent_id,
                 display_name=(
-                    serving[agent_id].agent_name
-                    if agent_id in serving and serving[agent_id].agent_name
-                    else humanize(agent_id)
+                    (serving[agent_id].agent_name if agent_id in serving else None)
+                    or humanize(agent_id)
                 ),
                 case_type=serving[agent_id].case_type if agent_id in serving else None,
                 paused=agent_id in serving and serving[agent_id].agent_paused,

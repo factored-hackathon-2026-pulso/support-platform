@@ -20,6 +20,7 @@ from typing import Literal
 
 from cc_platform.application.ai.credentials import AgentCredentials
 from cc_platform.application.ai.registry import (
+    AgentPause,
     AgentRegistryClient,
     AliasChange,
     AliasState,
@@ -319,6 +320,24 @@ class ResilientAgentRegistry:
             CallKind.REGISTRY,
             "revoke",
             lambda: self._inner.revoke(credentials, release_id=release_id, reason=reason),
+        )
+
+    async def pause_agent(
+        self, credentials: AgentCredentials, *, agent_id: str, reason: str = ""
+    ) -> AgentPause:
+        return await self._guard.call(
+            CallKind.REGISTRY,
+            "pause_agent",
+            lambda: self._inner.pause_agent(credentials, agent_id=agent_id, reason=reason),
+        )
+
+    async def resume_agent(
+        self, credentials: AgentCredentials, *, agent_id: str, reason: str = ""
+    ) -> AgentPause:
+        return await self._guard.call(
+            CallKind.REGISTRY,
+            "resume_agent",
+            lambda: self._inner.resume_agent(credentials, agent_id=agent_id, reason=reason),
         )
 
     async def get_alias(

@@ -55,7 +55,13 @@ import type {
   VersionList,
 } from '../types'
 
-/** GET /builder/status while AI is on (`available: false` without agent-core). */
+/** How often the status is asked again while the agents service is down (to notice it is back). */
+export const UNREACHABLE_RECHECK_MS = 15_000
+
+/**
+ * GET /builder/status while AI is on (`available: false` without agent-core). While agent-core is
+ * down (`reachable: false`) it is asked again every few seconds, so the screen recovers by itself.
+ */
 export function useBuilderStatus(): UseQueryResult<BuilderStatus, ApiProblem> {
   const aiEnabled = useAiEnabled()
   return useQuery<BuilderStatus, ApiProblem>({
@@ -63,12 +69,24 @@ export function useBuilderStatus(): UseQueryResult<BuilderStatus, ApiProblem> {
     queryFn: ({ signal }) => fetchBuilderStatus(signal),
     enabled: aiEnabled,
     staleTime: 60_000,
+    refetchInterval: (query) =>
+      isAgentsServiceDown(query.state.data) ? UNREACHABLE_RECHECK_MS : false,
   })
 }
 
 /** Whether the builder answers (AI on and agent-core wired). */
 export function useBuilderAvailable(): boolean {
   return useBuilderStatus().data?.available === true
+}
+
+/** Agent-core is wired but down (deploy brief P4): "el servicio de agentes no está disponible". */
+export function isAgentsServiceDown(status: BuilderStatus | undefined): boolean {
+  return status?.available === true && status.reachable === false
+}
+
+/** Whether the agents service is down right now (see `isAgentsServiceDown`). */
+export function useAgentsServiceDown(): boolean {
+  return isAgentsServiceDown(useBuilderStatus().data)
 }
 
 /**

@@ -114,6 +114,11 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_NOTIFICATION_SWEEP_SECONDS` | `30` | Slice 10: how often to look for cases about to miss their first response (the "Caso por vencer sin respuesta" notification for Supervisión); it also runs on startup. `0` turns it off |
 | `CC_AGENT_CORE_URL`, `CC_AGENT_KEYS_FILE` | unset | ADR 0003: agent-core's runtime URL and the private signing keys of the credentials the platform issues to it. They go together or not at all; unset, the platform is people-only (§4.1) |
 | `CC_AGENT_CORE_TIMEOUT_SECONDS` | `60` | How long a turn may take before the case falls back to a person |
+| `CC_CORE_TIMEOUT_ASSISTANT_SECONDS`, `CC_CORE_TIMEOUT_COPILOT_SECONDS`, `CC_CORE_TIMEOUT_SUGGESTIONS_SECONDS`, `CC_CORE_TIMEOUT_BUILDER_SECONDS` | unset (= `CC_AGENT_CORE_TIMEOUT_SECONDS`) | P4: timeout of each kind of model call (the customer's turn, the copilot's answer, a suggestion, the builder's chat) |
+| `CC_CORE_TIMEOUT_REGISTRY_SECONDS`, `CC_CORE_TIMEOUT_EVALUATE_SECONDS` | `30`, `120` | P4: timeout of a registry call and of an evaluation (it runs a suite) |
+| `CC_CORE_CONNECT_TIMEOUT_SECONDS`, `CC_CORE_PROBE_TIMEOUT_SECONDS` | `3`, `2` | P4: opening a connection to agent-core; its readiness probe (`GET /healthz`) |
+| `CC_CORE_RETRY_ATTEMPTS`, `CC_CORE_RETRY_BASE_DELAY_SECONDS`, `CC_CORE_RETRY_MAX_DELAY_SECONDS` | `2`, `0.2`, `2` | P4: retries after a quick failure (network, 5xx), exponential backoff with full jitter, only for calls safe to repeat (idempotency key, `client_turn_id`, reads). A timeout is never retried |
+| `CC_CORE_BREAKER_FAILURE_THRESHOLD`, `CC_CORE_BREAKER_RESET_SECONDS` | `5`, `30` | P4: consecutive failures that open the circuit breaker (one per agent-core URL), and how long it stays open before one probe call is let through |
 | `CC_ASSISTANT_AGENT` | `recepcion@prod` | Slice 14: the agent a conversation starts with (`id`, `id@alias` or `id@X.Y.Z`) |
 | `CC_ASSISTANT_SWEEP_SECONDS` | `30` | S17: how often a sweep re-runs assistant work lost with its process (sessions quiet for 20 s); `0` turns it off |
 | `CC_INTERNAL_SERVICE_TOKEN` | unset | S17: shared secret of `/api/v1/internal/*` (agent-core's `grant_active` check, bearer, constant-time compare). Unset = those routes answer 404. A long random value; never commit it |
@@ -128,6 +133,30 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_BANK_CUSTOMER_LINKS_FILE` | unset | Slice 14: private JSON `{"CUS-…": "<dataset customer_id>"}` read at startup; only linked customers can talk to the assistant. Never commit it |
 | `CC_LOG_LEVEL` | `INFO` | Log level |
 | `CC_LOG_FORMAT` | `json` | `console` to read the logs in the terminal |
+
+### 4.0 When agent-core is down (deploy brief P4)
+
+Every call to agent-core goes through one resilience layer (`backend/src/cc_platform/infrastructure/core`):
+a timeout per kind of call, retries for the calls that are safe to repeat, and a circuit breaker
+shared by every call to the same agent-core. While the breaker is open, or a call fails:
+
+- **New chat:** goes straight to people (no assistant), like with the AI switch off.
+- **Ongoing assistant conversation:** the customer reads "En este momento no puedo responderte. Te
+  paso con una persona del equipo…" (pt: "No momento não consigo te responder…") and the case goes to
+  the language queue with the usual staff banner (`failed`, code `unavailable`).
+- **Copilot and suggestions:** the copilot answers `503 agent_core_unavailable` at once (the panel
+  shows its retry state); automatic suggestions are not attempted at all.
+- **Automatización:** `GET /builder/status` says `reachable: false` and the screens show "El servicio
+  de agentes no está disponible"; the types and the proposals index keep showing. The status is asked
+  again every 15 s, so the screen recovers by itself.
+- **Readiness:** `await container.core_status()` (also `ApiContext.core_status`) answers `ok` or
+  `degraded`: `degraded` while the breaker is open (no call), else after a quick `GET /healthz` of
+  agent-core. The probe counts like any call, so readiness polls open (and close) the breaker before a
+  customer runs into it. Without agent-core configured it answers `ok`.
+
+Each call to agent-core carries a W3C `traceparent` (and the incoming `tracestate`): the trace of the
+incoming request when it brought a valid one, a new one otherwise. Every log line of the request has
+its `trace_id`; agent-core's `trace_id` of the turn is the same id.
 
 ### 4.1 Connecting agent-core (ADR 0003, slice 13)
 

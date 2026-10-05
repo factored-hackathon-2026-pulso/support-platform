@@ -850,7 +850,7 @@ export interface paths {
     }
     /**
      * Whether the agent builder is available, and what the caller may do
-     * @description Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured or the AI switch is off (slice 18; hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for.
+     * @description Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured or the AI switch is off (slice 18; hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for. `reachable: false` (deploy brief P4) while agent-core is configured but down: the calls that need it answer 503 `agent_core_unavailable` at once.
      */
     get: operations['builder_get_status']
     put?: never
@@ -3143,6 +3143,11 @@ export interface components {
        * @description Revoke a release (Administración; needs step-up).
        */
       canRevoke: boolean
+      /**
+       * Reachable
+       * @description Deploy brief P4: false while agent-core is configured but down (its circuit breaker is open or it does not answer its health check): show that the agents service is not available; the screens that only read the platform keep working.
+       */
+      reachable: boolean
       /**
        * Stepupdigits
        * @description How many digits the code has.

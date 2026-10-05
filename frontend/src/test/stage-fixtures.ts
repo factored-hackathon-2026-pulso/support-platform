@@ -33,6 +33,8 @@ export function makeTypeStage(
     agentName: null,
     agentPaused: false,
     agentId: agent === 'active' ? 'disputas' : null,
+    agentName: null,
+    agentPaused: false,
     lastChange: null,
     version: 1,
   }

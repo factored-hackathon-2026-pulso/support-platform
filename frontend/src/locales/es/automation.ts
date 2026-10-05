@@ -19,6 +19,11 @@ export default {
     title: 'El motor de IA no está conectado',
     text: 'Los tipos de caso maduran igual con lo que registra la plataforma. Para proponer, probar y activar agentes hace falta el motor de IA.',
   },
+  /** Deploy brief P4: agent-core is wired but down. */
+  serviceDown: {
+    title: 'El servicio de agentes no está disponible',
+    text: 'Los tipos de caso y las propuestas guardadas se siguen viendo. Proponer, evaluar, aprobar y publicar vuelven solos cuando el servicio responda.',
+  },
   /** The five states of a case type, as the panorama shows them. */
   stage: {
     label: 'Etapa {{stage}}',

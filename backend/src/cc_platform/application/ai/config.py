@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 
+from cc_platform.application.ai.availability import CoreAvailability
 from cc_platform.application.platform.settings import AiSwitch
 from cc_platform.application.ports.unit_of_work import UnitOfWork
 from cc_platform.domain.cases.values import CaseChannel
@@ -36,10 +37,12 @@ class AssistantConfig:
 class AssistantGate:
     """Decides whether a new case opens in the agent's hands: it must be a chat, the customer
     must be a known dataset customer and the case language one the assistant serves, and the
-    AI switch must be on (slice 18: off, every new chat goes to people as before AI)."""
+    AI switch must be on (slice 18: off, every new chat goes to people as before AI), and the
+    Core must be up (deploy brief P4: while its circuit breaker is open, people answer)."""
 
     config: AssistantConfig
     switch: AiSwitch | None = None
+    core: CoreAvailability | None = None
 
     async def agent_for(
         self, uow: UnitOfWork, customer: Customer, channel: CaseChannel
@@ -51,5 +54,7 @@ class AssistantGate:
         if await uow.bank_links.get(customer.id) is None:
             return None
         if self.switch is not None and not await self.switch.is_on_in(uow):
+            return None
+        if self.core is not None and not self.core.is_available():
             return None
         return self.config.entry_agent

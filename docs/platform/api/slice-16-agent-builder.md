@@ -87,7 +87,9 @@ All bodies and responses are camelCase; ids are agent-core's opaque text (propos
 
 ### Status and the list
 
-- `GET /builder/status` → `BuilderStatus` `{available, canApprove, canRevoke, stepUpMethod, stepUpDigits}`. Always 200.
+- `GET /builder/status` → `BuilderStatus` `{available, canApprove, canRevoke, stepUpMethod, stepUpDigits, reachable}`. Always 200.
+  `reachable: false` (deploy brief P4) while agent-core is configured but down: show "El servicio de agentes no está
+  disponible"; the calls that need it answer `503 agent_core_unavailable` at once.
 - `GET /builder/proposals?agentId=&state=&limit=&refresh=` → `ProposalList` `{items: ProposalSummary[], registryListed}`,
   newest first, at most 50. **Every proposal agent-core has** (its `GET /v1/registry/proposals`, contract 1.4.0, read as
   the person) **merged with the platform's index**, which remembers who brought each one here. With `refresh`

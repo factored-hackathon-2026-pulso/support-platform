@@ -59,6 +59,8 @@ export const NOTIFICATION_KIND: Record<NotificationKind, NotificationAppearance>
   sla_at_risk: { icon: 'flame', tone: 'danger', action: 'Ver en la cola' },
   account_locked: { icon: 'lock', tone: 'danger', action: 'Revisar' },
   invitation_accepted: { icon: 'user-check', tone: 'success', action: 'Ver usuarios' },
+  // ADR 0007: the improvement engine proposed a change to an agent (no Agentes screen yet).
+  improvement_proposed: { icon: 'up', tone: 'accent', action: 'Revisar' },
 }
 
 /** What one notification says and where its action goes. */
@@ -158,6 +160,12 @@ export function notificationCopy(n: Notification, now: number): NotificationCopy
         `Invitación aceptada: ${target}`,
         'Ya puede entrar a la plataforma',
         n.targetId ? adminUserPath(n.targetId) : PATHS.admin.users,
+      )
+    case 'improvement_proposed':
+      return copy(
+        `Nueva propuesta de mejora para ${n.improvement?.agentId ?? 'un agente'}`,
+        n.improvement?.title ?? 'Propuesta del motor de mejora',
+        PATHS.supervision.root,
       )
   }
 }

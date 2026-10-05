@@ -11,7 +11,11 @@ from sqlalchemy import case as sql_case
 from sqlalchemy.exc import IntegrityError
 
 from cc_platform.application.notifications.ports import NotificationCursor
-from cc_platform.domain.notifications.notification import Notification, NotificationKind
+from cc_platform.domain.notifications.notification import (
+    ImprovementDossier,
+    Notification,
+    NotificationKind,
+)
 from cc_platform.domain.people.staff import Language
 from cc_platform.domain.shared.errors import ConcurrentUpdateError, DomainError
 from cc_platform.infrastructure.persistence.sqlalchemy import tables
@@ -48,6 +52,9 @@ class SqlNotificationRepository(VersionedRepository[Notification]):
             "score": aggregate.score,
             "failed_attempts": aggregate.failed_attempts,
             "read_at": aggregate.read_at,
+            "proposal_id": aggregate.proposal_id,
+            "agent_id": aggregate.agent_id,
+            "improvement": _dossier_to_json(aggregate.improvement),
         }
 
     def _from_row(self, row: Row) -> Notification:
@@ -66,6 +73,9 @@ class SqlNotificationRepository(VersionedRepository[Notification]):
             score=row["score"],
             failed_attempts=row["failed_attempts"],
             read_at=row["read_at"],
+            proposal_id=row["proposal_id"],
+            agent_id=row["agent_id"],
+            improvement=_dossier_from_json(row["improvement"]),
         )
 
     async def recipients_with_key(
@@ -142,3 +152,27 @@ class SqlNotificationRepository(VersionedRepository[Notification]):
         if stale:
             await self._session.execute(delete(self.table).where(c.id.in_(sorted(stale))))
         return stale
+
+
+def _dossier_to_json(dossier: ImprovementDossier | None) -> dict[str, Any] | None:
+    if dossier is None:
+        return None
+    return {
+        "title": dossier.title,
+        "problem": dossier.problem,
+        "evidence": dossier.evidence,
+        "expectedEffect": dossier.expected_effect,
+        "evidenceLinks": list(dossier.evidence_links),
+    }
+
+
+def _dossier_from_json(value: dict[str, Any] | None) -> ImprovementDossier | None:
+    if value is None:
+        return None
+    return ImprovementDossier(
+        title=value["title"],
+        problem=value["problem"],
+        evidence=value["evidence"],
+        expected_effect=value["expectedEffect"],
+        evidence_links=tuple(value["evidenceLinks"]),
+    )

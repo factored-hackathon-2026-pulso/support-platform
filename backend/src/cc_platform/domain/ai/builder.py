@@ -29,8 +29,10 @@ from cc_platform.domain.shared.aggregate import AggregateRoot
 from cc_platform.domain.shared.errors import InvalidValueError
 from cc_platform.domain.shared.ids import IdPrefix, require_id
 
-type ProposalSource = Literal["platform", "chat", "tracked"]
-PROPOSAL_SOURCES: tuple[ProposalSource, ...] = ("platform", "chat", "tracked")
+type ProposalSource = Literal["platform", "chat", "tracked", "engine"]
+PROPOSAL_SOURCES: tuple[ProposalSource, ...] = ("platform", "chat", "tracked", "engine")
+#: ``registered_by`` of a proposal the improvement engine announced (ADR 0007): no staff member.
+ENGINE_REGISTRANT = "engine"
 
 
 @dataclass(eq=False)
@@ -58,7 +60,11 @@ class BuilderProposal(AggregateRoot):
     def __post_init__(self) -> None:
         if not self.id.strip():
             raise InvalidValueError("a proposal needs an id", field="proposal_id")
-        require_id(self.registered_by, IdPrefix.STAFF)
+        if self.source == "engine":
+            if self.registered_by != ENGINE_REGISTRANT:
+                raise InvalidValueError("the engine announces its own", field="registered_by")
+        else:
+            require_id(self.registered_by, IdPrefix.STAFF)
 
     def observe(
         self,

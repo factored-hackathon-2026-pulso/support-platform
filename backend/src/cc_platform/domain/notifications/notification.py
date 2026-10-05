@@ -20,6 +20,7 @@ aggregate with a ``version``: marking it read is a compare-and-set like any othe
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -27,7 +28,7 @@ from enum import StrEnum
 from cc_platform.domain.people.staff import Language, StaffRole
 from cc_platform.domain.shared.aggregate import AggregateRoot
 from cc_platform.domain.shared.errors import InvalidValueError
-from cc_platform.domain.shared.ids import IdPrefix, require_id
+from cc_platform.domain.shared.ids import IdPrefix, is_valid_id, require_id
 
 #: Team-generated: notifications kept per person (older ones are deleted).
 RETENTION_PER_PERSON = 200
@@ -55,6 +56,8 @@ class NotificationKind(StrEnum):
     # Administración: every active person with the role.
     ACCOUNT_LOCKED = "account_locked"
     INVITATION_ACCEPTED = "invitation_accepted"
+    # Supervisión: the improvement engine proposed a change to an agent (ADR 0007).
+    IMPROVEMENT_PROPOSED = "improvement_proposed"
 
 
 #: The role a kind belongs to (the frontend toasts it only on that role's screens).
@@ -73,12 +76,61 @@ KIND_ROLE: dict[NotificationKind, StaffRole] = {
     NotificationKind.SLA_AT_RISK: StaffRole.SUPERVISOR,
     NotificationKind.ACCOUNT_LOCKED: StaffRole.ADMIN,
     NotificationKind.INVITATION_ACCEPTED: StaffRole.ADMIN,
+    NotificationKind.IMPROVEMENT_PROPOSED: StaffRole.SUPERVISOR,
 }
 
 #: Kinds about a person, not a case (``target_id`` is that person).
 STAFF_KINDS: frozenset[NotificationKind] = frozenset(
     {NotificationKind.ACCOUNT_LOCKED, NotificationKind.INVITATION_ACCEPTED}
 )
+
+
+MAX_TITLE = 120
+MAX_PROBLEM = 600
+MAX_EVIDENCE = 600
+MAX_EFFECT = 400
+MAX_EVIDENCE_LINKS = 8
+MAX_PROPOSAL_ID = 64
+MAX_AGENT_ID = 64
+
+#: Free text that must not carry personal data: an email address, or a run of digits that
+#: could be a card, account, phone or national id number.
+_EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
+_LONG_NUMBER = re.compile(r"(?:\d[ \-.]?){9,}")
+
+
+def _bounded(text: str, *, field: str, limit: int) -> str:
+    cleaned = text.strip()
+    if not cleaned or len(cleaned) > limit:
+        raise InvalidValueError(f"{field} must have 1 to {limit} characters", field=field)
+    if _EMAIL.search(cleaned) or _LONG_NUMBER.search(cleaned):
+        raise InvalidValueError(f"{field} must not contain personal data", field=field)
+    return cleaned
+
+
+@dataclass(frozen=True, slots=True)
+class ImprovementDossier:
+    """What the improvement engine says about its proposal, bounded free text without personal
+    data (the evidence is case ids, never customer words). The platform only relays it."""
+
+    title: str
+    problem: str
+    evidence: str
+    expected_effect: str
+    evidence_links: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _bounded(self.title, field="title", limit=MAX_TITLE)
+        _bounded(self.problem, field="problem", limit=MAX_PROBLEM)
+        _bounded(self.evidence, field="evidence", limit=MAX_EVIDENCE)
+        _bounded(self.expected_effect, field="expected_effect", limit=MAX_EFFECT)
+        if len(self.evidence_links) > MAX_EVIDENCE_LINKS or len(set(self.evidence_links)) != len(
+            self.evidence_links
+        ):
+            raise InvalidValueError("too many or repeated evidence links", field="evidence_links")
+        for link in self.evidence_links:
+            if not is_valid_id(link, IdPrefix.CASE):
+                raise InvalidValueError("an evidence link is a case id", field="evidence_links")
 
 
 @dataclass(eq=False)
@@ -104,13 +156,26 @@ class Notification(AggregateRoot):
     failed_attempts: int | None = None
     """``account_locked``: failed attempts that locked the account."""
     read_at: datetime | None = None
+    proposal_id: str | None = None
+    """``improvement_proposed``: agent-core's proposal id (opaque text)."""
+    agent_id: str | None = None
+    """``improvement_proposed``: the agent the proposal changes."""
+    improvement: ImprovementDossier | None = None
+    """``improvement_proposed``: the engine's dossier summary."""
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.NOTIFICATION)
         require_id(self.recipient_id, IdPrefix.STAFF)
         if not self.source_key.strip() or len(self.source_key) > MAX_SOURCE_KEY:
             raise InvalidValueError("invalid source key", field="source_key")
-        if self.kind in STAFF_KINDS:
+        if self.kind is NotificationKind.IMPROVEMENT_PROPOSED:
+            if not (self.proposal_id and self.agent_id and self.improvement is not None):
+                raise InvalidValueError("an improvement names its proposal", field="proposal_id")
+            if len(self.proposal_id) > MAX_PROPOSAL_ID or len(self.agent_id) > MAX_AGENT_ID:
+                raise InvalidValueError("proposal or agent id too long", field="proposal_id")
+            if self.case_id is not None:
+                raise InvalidValueError("an improvement is not about a case", field="case_id")
+        elif self.kind in STAFF_KINDS:
             if self.target_id is None:
                 raise InvalidValueError("a staff notification names its person", field="target")
             require_id(self.target_id, IdPrefix.STAFF)

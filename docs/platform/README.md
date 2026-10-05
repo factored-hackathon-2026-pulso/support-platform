@@ -36,6 +36,8 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | [adr/0001-architecture.md](./adr/0001-architecture.md) | English | Hexagonal + DDD-lite + CQRS-lite with an append-only event log; patterns, alternatives, consequences (amended 2026-10-03 for the scope cut). |
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | English | **Superseded (2026-10-03).** Kept only as a record; do not implement it. |
 | [adr/0003-agent-core-integration.md](./adr/0003-agent-core-integration.md) | English | AI returns through `agent-core`: agent-handled chat and escalation, analyst copilot, agent builder, identity issuer, tools over HTTP, slice plan S13–S17. |
+| [adr/0007-improvement-engine-announce.md](./adr/0007-improvement-engine-announce.md) | English | The improvement engine announces its agent-core proposals through a service-token route: adopted into the builder list, supervisors notified (`improvement_proposed`), never approved. |
+| [api/improvement-announce.md](./api/improvement-announce.md) | English | **Hand-over for the frontend.** ADR 0007: the announce endpoint contract, bounds, errors and the `improvement_proposed` notification payload. |
 | [api/slice-14-assistant.md](./api/slice-14-assistant.md) | English | **Hand-over for the frontend.** Slice 14 (ADR 0003): the assistant (agent-core) handles chats first: the `with_assistant` case state, confirmation and step-up endpoints, ask-for-a-person, the analyst's handoff packet and its label, supervision release, realtime, the contract changes to regenerate types from, error codes, configuration. |
 | [api/slice-16-agent-builder.md](./api/slice-16-agent-builder.md) | English | **Hand-over for the frontend.** Slice 16 (ADR 0003 §7): the agent builder for Supervisión and Administración: proposals through agent-core's registry (`/builder/*`), the fresh authenticator code (`stepUpCode`) behind approve, reject, publish, promote and revoke, the builder chat (`constructor-chat`), errors, what to build, known gaps (no `eval_suite` yet). |
 | [api/slice-15b-copilot-suggestions.md](./api/slice-15b-copilot-suggestions.md) | English | **Hand-over for the frontend.** ADR 0005: the copilot's suggestions (a draft reply, reads, a prepared action, a recommendation to escalate; the list may be empty), `GET latest`, `POST` (*Sugerir*), feedback, `copilotSuggestionId`, the inbox signal, retention, configuration. Backend built against a fake agent-core; the real agent needs agent-core ADR 0026. |
@@ -59,7 +61,7 @@ Other sources of truth: the design boards in `warehouse/design/source/project/*.
 `data-lab/docs/policies.md`, and the event envelope of `data-lab/contracts/synthetic-sample/platform_history.json` (read-only). The
 other rules of `data-lab/docs/policies.md` and `data-lab/docs/security_questions.md` do not apply to the platform.
 
-New architecture decisions go in `adr/NNNN-title.md` (next number: 0004).
+New architecture decisions go in `adr/NNNN-title.md` (next number: 0008).
 
 ## Quick start
 

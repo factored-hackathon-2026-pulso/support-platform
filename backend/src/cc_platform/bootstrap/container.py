@@ -16,6 +16,7 @@ import structlog
 from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
+from cc_platform.application.ai.announce import AnnounceImprovement
 from cc_platform.application.ai.builder import AgentBuilder
 from cc_platform.application.ai.builder_chat import AskBuilder, GetBuilderThread
 from cc_platform.application.ai.builder_step_up import BuilderStepUp
@@ -487,6 +488,7 @@ def _build_assistant(
     assign_case: AssignCase,
     step_up: BuilderStepUp,
     ai_switch: AiSwitch,
+    notifications: NotificationWriter,
 ) -> _AssistantParts:
     """Wire the assistant: engine, the bus process that keeps it answering, and the use cases."""
     config = AssistantConfig(
@@ -544,7 +546,13 @@ def _build_assistant(
             agent=settings.copilot_agent,
         ),
         builder=_build_builder(
-            settings, agent_core, uow=uow, clock=clock, ids=ids, step_up=step_up
+            settings,
+            agent_core,
+            uow=uow,
+            clock=clock,
+            ids=ids,
+            step_up=step_up,
+            notifications=notifications,
         ),
         suggestions=_build_suggestions(settings, agent_core, uow=uow, clock=clock, ids=ids),
     )
@@ -611,6 +619,7 @@ def _build_builder(
     clock: Clock,
     ids: IdGenerator,
     step_up: BuilderStepUp,
+    notifications: NotificationWriter,
 ) -> BuilderUseCases | None:
     """Slice 16: the agent builder exists when agent-core's registry is wired."""
     if agent_core.registry is None:
@@ -635,6 +644,7 @@ def _build_builder(
             builder=registry,
             agent=settings.builder_agent,
         ),
+        announce=AnnounceImprovement(uow=uow, clock=clock, builder=registry, writer=notifications),
     )
 
 
@@ -793,6 +803,7 @@ def build_container(
                 dev_verifier=mfa_verifier,
             ),
             ai_switch=ai_switch,
+            notifications=notification_writer,
         )
     )
     assistant_gate = assistant.gate if assistant else None

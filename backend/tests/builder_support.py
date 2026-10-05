@@ -61,7 +61,7 @@ CONSTRUCTOR_TEXTS: dict[str, dict[str, str]] = {
         "pedir_agente": "Qual agente você quer modificar? (por exemplo: disputas)",
         "pedir_objetivo": "Conte-me qual mudança você quer nesse agente.",
         "propuesta_lista": "Deixei a proposta em rascunho. Revise-a e aprove-a no registry.",
-        "traspaso": "Vou te passar para um atendente.",
+        "traspaso": "Vou transferir para um atendente.",
     },
 }
 

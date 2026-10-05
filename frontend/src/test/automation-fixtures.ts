@@ -209,7 +209,7 @@ export const CONSTRUCTOR_TEXTS = {
     askAgent: 'Qual agente você quer modificar? (por exemplo: disputas)',
     askGoal: 'Conte-me qual mudança você quer nesse agente.',
     done: 'Deixei a proposta em rascunho. Revise-a e aprove-a no registry.',
-    handover: 'Vou te passar para um atendente.',
+    handover: 'Vou transferir para um atendente.',
   },
 } as const
 

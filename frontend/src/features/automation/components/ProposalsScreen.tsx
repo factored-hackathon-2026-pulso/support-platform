@@ -135,7 +135,7 @@ function ProposalTable({ data }: { data: ProposalList }) {
                   </span>
                 </TCell>
                 <TCell muted>
-                  <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                     {source.engine ? <Sparkles size={13} aria-hidden="true" /> : null}
                     {source.registry ? <Database size={13} aria-hidden="true" /> : null}
                     {source.label}

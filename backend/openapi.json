@@ -3065,6 +3065,11 @@
             ],
             "title": "Trigger",
             "type": "string"
+          },
+          "truncated": {
+            "description": "agent-core proposed more than is shown (at most 3: the reply and the escalation first) or a text was cut to its limit. Informational: show nothing, or a discreet hint.",
+            "title": "Truncated",
+            "type": "boolean"
           }
         },
         "required": [
@@ -3076,6 +3081,7 @@
           "createdAt",
           "replyDecision",
           "escalationAccepted",
+          "truncated",
           "failureCode",
           "suggestions"
         ],

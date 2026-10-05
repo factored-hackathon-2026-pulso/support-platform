@@ -142,6 +142,8 @@ class CopilotSuggestionReady(DomainEvent):
     agent: str
     kinds: tuple[str, ...]
     count: int
+    truncated: bool
+    """More was proposed than kept (a cap or a limit): a flag, never the text."""
     run_id: str | None
     trace_id: str
 

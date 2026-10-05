@@ -38,7 +38,6 @@ DRAFT = "Natalia, ya radiqué la disputa y te confirmo por este chat."
 FULL = (
     ReplySuggestion(text=DRAFT, citations=("f1",), language="es"),
     ToolSuggestion(tool="leer_movimientos@1", label="Movimientos", why="Ver los cargos"),
-    ActionSuggestion(tool="radicar_pqr@1", summary="Radicar una disputa por 120 USD"),
     EscalationSuggestion(
         reason_code="policy:fraude",
         evidence=("Dice que le robaron la tarjeta",),
@@ -149,19 +148,44 @@ def test_the_analyst_asks_for_a_suggestion_and_reads_it_back(
     body = response.json()
     assert (body["status"], body["trigger"], body["stale"]) == ("ready", "manual", False)
     assert body["replyDecision"] is None
-    assert [s["type"] for s in body["suggestions"]] == ["reply", "tool", "action", "escalate"]
+    assert [s["type"] for s in body["suggestions"]] == ["reply", "tool", "escalate"]
+    assert body["truncated"] is False
     assert body["suggestions"][0] == {
         "type": "reply",
         "text": DRAFT,
         "citations": ["f1"],
         "language": "es",
     }
-    assert body["suggestions"][2]["executable"] is False  # information only
-    assert body["suggestions"][3]["reasonCode"] == "policy:fraude"
-    assert body["suggestions"][3]["motiveDraft"] == "Posible robo de tarjeta."
+    assert body["suggestions"][1]["label"] == "Movimientos"  # the platform's catalog
+    assert body["suggestions"][2]["reasonCode"] == "policy:fraude"
+    assert body["suggestions"][2]["motiveDraft"] == "Posible robo de tarjeta."
     read = latest(client, analyst, assigned_case).json()
     assert read["available"] is True
     assert read["suggestion"]["id"] == body["id"]
+
+
+def test_an_action_is_information_and_a_cut_list_says_so(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.append(
+        (
+            ActionSuggestion(tool="radicar_pqr@1", summary="Radicar una disputa por 120 USD"),
+            ReplySuggestion(text=DRAFT),
+            ReplySuggestion(text="otro borrador"),
+        )
+    )
+
+    body = ask(client, analyst, assigned_case).json()
+
+    assert [s["type"] for s in body["suggestions"]] == ["action", "reply"]
+    assert body["suggestions"][0]["executable"] is False  # information only
+    assert body["truncated"] is True  # the second reply was left out, and it says so
+    read = latest(client, analyst, assigned_case).json()
+    assert read["suggestion"]["truncated"] is True
 
 
 def test_nothing_to_propose_is_a_normal_answer(
@@ -246,7 +270,7 @@ def test_dismissing_the_draft_keeps_the_rest(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["replyDecision"] == "discarded"
-    assert [s["type"] for s in body["suggestions"]] == ["tool", "action", "escalate"]
+    assert [s["type"] for s in body["suggestions"]] == ["tool", "escalate"]
     bad = client.post(
         f"/api/v1/cases/{assigned_case}/copilot/suggestions/{made['id']}/feedback",
         headers=analyst,

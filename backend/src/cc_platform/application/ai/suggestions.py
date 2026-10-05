@@ -112,25 +112,27 @@ def customer_waiting_seconds(turns: Sequence[Turn], now: datetime) -> int:
     return max(0, int((now - waiting_since).total_seconds())) if waiting_since else 0
 
 
-def sla_state(case: Case, now: datetime) -> dict[str, object]:
+def sla_state(case: Case, now: datetime) -> tuple[str, int | None]:
+    """The first-response SLA as ``(estado, minutos_restantes)``; the minutes only while it runs
+    (``a_tiempo``, ``en_riesgo``)."""
     if case.first_response_at is not None:
-        return {"estado": "respondida", "minutos_restantes": None}
+        return "respondida", None
     remaining = int((case.sla_due_at - now).total_seconds() // 60)
     if remaining < 0:
-        return {"estado": "vencido", "minutos_restantes": None}
-    return {"estado": "en_riesgo" if remaining <= 5 else "a_tiempo", "minutos_restantes": remaining}
+        return "vencido", None
+    return ("en_riesgo" if remaining <= 5 else "a_tiempo"), remaining
 
 
-def previous_state(previous: CopilotSuggestion | None) -> dict[str, object] | None:
+def previous_state(previous: CopilotSuggestion | None) -> tuple[str | None, bool | None]:
     """What happened to the last suggestion, so the agent does not repeat a draft that was
-    discarded."""
+    discarded: ``(borrador, escalacion_aceptada)``, each ``None`` when it does not apply."""
     if previous is None or previous.status is not SuggestionStatus.READY:
-        return None
+        return None, None
     if previous.reply_decision is not None:
-        reply: str | None = previous.reply_decision.value
+        draft: str | None = previous.reply_decision.value
     else:
-        reply = "pendiente" if previous.reply_pending else None
-    return {"borrador": reply, "escalacion_aceptada": previous.escalation_accepted}
+        draft = "pendiente" if previous.reply_pending else None
+    return draft, previous.escalation_accepted
 
 
 def build_input(
@@ -140,18 +142,29 @@ def build_input(
     arrival: str | None,
     previous: CopilotSuggestion | None,
     now: datetime,
+    assistant_session_id: str | None = None,
 ) -> dict[str, object]:
-    """The ``input`` of a suggestion run: the recent turns and the facts of the case. The turns'
-    text is the customer's and the analyst's own words: agent-core treats it as untrusted."""
+    """The ``input`` of a suggestion run: the recent turns and the facts of the case, **flat** as
+    agent-core's ``input_schema`` takes it (scalars and one list of flat turns; a slot it does not
+    declare or a null is a 422). What does not apply is **left out**, never sent as null. The
+    turns' text is the customer's and the analyst's own words: agent-core treats it as untrusted.
+    ``assistant_session_id`` is traceability (the assistant's agent-core session), not memory."""
     spoken = _speech(turns)[-CONTEXT_TURNS:]
+    sla, minutes = sla_state(case, now)
+    draft, escalation_accepted = previous_state(previous)
+    optional: dict[str, object | None] = {
+        "sla_minutos_restantes": minutes,
+        "motivo_llegada": arrival,
+        "sugerencia_borrador": draft,
+        "sugerencia_escalacion_aceptada": escalation_accepted,
+        "assistant_session_id": assistant_session_id,
+    }
     return {
         "idioma": case.language.value,
         "canal": case.channel.value,
         "prioridad": case.priority.value,
-        "sla": sla_state(case, now),
-        "motivo_llegada": arrival,
+        "sla_estado": sla,
         "espera_del_cliente_segundos": customer_waiting_seconds(turns, now),
-        "sugerencia_anterior": previous_state(previous),
         "turnos": [
             {
                 "rol": _ROLE[t.author_role],
@@ -160,6 +173,7 @@ def build_input(
             }
             for t in spoken
         ],
+        **{name: value for name, value in optional.items() if value is not None},
     }
 
 
@@ -211,7 +225,9 @@ class SuggestionService:
                 SuggestionStatus.READY,
                 SuggestionStatus.NONE,
             ):
-                return await self._prepared(uow, case, existing, analyst, now, replay=existing)
+                return await self._prepared(
+                    uow, case, existing, analyst, now, previous=None, replay=existing
+                )
             if case.is_closed:
                 raise CaseClosedError()
             if any(s is not None and self._preparing(s, now) for s in (latest, existing)):
@@ -227,7 +243,9 @@ class SuggestionService:
                 now=now,
             )
             await uow.commit()
-            return await self._prepared(uow, case, suggestion, analyst, now)
+            return await self._prepared(
+                uow, case, suggestion, analyst, now, previous=_before(latest, suggestion)
+            )
 
     async def _prepare_automatic(self, case_id: str, trigger: SuggestionTrigger) -> Prepared | None:
         async with self.uow() as uow:
@@ -260,7 +278,9 @@ class SuggestionService:
                 uow, case, analyst, trigger, None, existing=None, latest=latest, now=now
             )
             await uow.commit()
-            return await self._prepared(uow, case, suggestion, analyst, now)
+            return await self._prepared(
+                uow, case, suggestion, analyst, now, previous=_before(latest, suggestion)
+            )
 
     @staticmethod
     def _preparing(suggestion: CopilotSuggestion, now: datetime) -> bool:
@@ -284,7 +304,7 @@ class SuggestionService:
         return is_trivial(
             spoken[-1].text,
             waited_seconds=customer_waiting_seconds(turns, now),
-            sla_overdue=sla_state(case, now)["estado"] == "vencido",
+            sla_overdue=sla_state(case, now)[0] == "vencido",
         )
 
     async def _start(
@@ -326,12 +346,12 @@ class SuggestionService:
         analyst: str,
         now: datetime,
         *,
+        previous: CopilotSuggestion | None,
         replay: CopilotSuggestion | None = None,
     ) -> Prepared:
         turns = await uow.turns.page(case.id, limit=CONTEXT_TURNS * 2)
         assignment = await uow.assignments.latest_for_case(case.id)
-        previous = await uow.copilot_suggestions.latest_for(case.id, analyst)
-        previous = previous if previous is not None and previous.id != suggestion.id else None
+        assistant = await uow.assistant_sessions.get_by_case(case.id)
         return Prepared(
             suggestion_id=suggestion.id,
             credentials=await advisor_credentials(uow, self.issuer, self.clock, case, analyst),
@@ -341,6 +361,7 @@ class SuggestionService:
                 arrival=assignment.reason.value if assignment is not None else None,
                 previous=previous,
                 now=now,
+                assistant_session_id=assistant.agent_session_id if assistant else None,
             ),
             language=case.language.value,
             replay=replay,
@@ -554,6 +575,11 @@ class PurgeSuggestionDrafts:
 
 
 # ----------------------------------------------------------------------------------- helpers
+def _before(latest: CopilotSuggestion | None, new: CopilotSuggestion) -> CopilotSuggestion | None:
+    """The suggestion the new one follows (the newest one before it was stored)."""
+    return latest if latest is not None and latest.id != new.id else None
+
+
 async def _mine(uow: UnitOfWork, case: Case, actor: Actor, suggestion_id: str) -> CopilotSuggestion:
     suggestion = await uow.copilot_suggestions.get(suggestion_id)
     if (

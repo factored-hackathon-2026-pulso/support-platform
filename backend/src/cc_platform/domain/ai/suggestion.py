@@ -40,7 +40,9 @@ from cc_platform.domain.shared.ids import IdPrefix, require_id
 #: analyst sends.
 DRAFT_TTL = timedelta(hours=24)
 
-MAX_SUGGESTIONS = 8
+#: At most this many are kept (the screen has no room for more). When agent-core sends more, the
+#: reply and the escalation stay and ``truncated`` says so.
+MAX_SUGGESTIONS = 3
 MAX_REPLY = 4000
 MAX_LINE = 500
 MAX_ID = 120
@@ -48,6 +50,16 @@ MAX_SUMMARY = 300
 MAX_EVIDENCE = 5
 MAX_CITATIONS = 10
 MAX_FAILURE_CODE = 60
+
+#: Readable names of the tools the copilot may propose (agent-core sends none). A tool that is not
+#: here shows its own name. Keyed by the tool's id, without its ``@version``.
+TOOL_LABELS: dict[str, str] = {
+    "leer_movimientos": "Movimientos",
+    "leer_productos": "Productos",
+    "leer_pqr_cliente": "Reclamos del cliente",
+    "obtener_handoff": "Traspaso del asistente",
+    "leer_transcript": "Conversación con el asistente",
+}
 
 
 class SuggestionTrigger(StrEnum):
@@ -117,58 +129,118 @@ class EscalationSuggestion:
 type Suggestion = ReplySuggestion | ToolSuggestion | ActionSuggestion | EscalationSuggestion
 
 
-def _clip(text: str, limit: int) -> str:
-    return " ".join(text.split())[:limit] if limit <= MAX_LINE else text.strip()[:limit]
+def _clip(text: str, limit: int) -> tuple[str, bool]:
+    """The text cleaned and cut to ``limit``, and whether anything was cut."""
+    cleaned = " ".join(text.split()) if limit <= MAX_LINE else text.strip()
+    return cleaned[:limit], len(cleaned) > limit
+
+
+def tool_label(tool: str) -> str:
+    """The readable name of a tool (``leer_movimientos@1`` is "Movimientos"): the platform's own
+    catalog, else the tool's name without its version. agent-core does not send a label."""
+    name = tool.strip().partition("@")[0]
+    return TOOL_LABELS.get(name) or name or tool.strip()
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedSuggestions:
+    items: tuple[Suggestion, ...]
+    truncated: bool
+    """Something real was left out or cut: a second reply or escalation, more than
+    ``MAX_SUGGESTIONS``, or a text longer than its limit. An empty or unknown item is not a cut."""
+
+
+def _clean_reply(item: ReplySuggestion) -> tuple[Suggestion | None, bool]:
+    text, cut = _clip(item.text, MAX_REPLY)
+    if not text:
+        return None, False
+    citations = tuple(c.strip() for c in item.citations if c.strip())
+    cut = cut or len(citations) > MAX_CITATIONS or any(len(c) > MAX_ID for c in citations)
+    reply = ReplySuggestion(
+        text=text,
+        citations=tuple(c[:MAX_ID] for c in citations[:MAX_CITATIONS]),
+        language=item.language.strip()[:8] or "es",
+    )
+    return reply, cut
+
+
+def _clean_tool(item: ToolSuggestion) -> tuple[Suggestion | None, bool]:
+    tool, tool_cut = _clip(item.tool, MAX_ID)
+    if not tool:
+        return None, False
+    why, why_cut = _clip(item.why, MAX_LINE)
+    return ToolSuggestion(tool=tool, label=tool_label(tool), why=why), tool_cut or why_cut
+
+
+def _clean_action(item: ActionSuggestion) -> tuple[Suggestion | None, bool]:
+    tool, tool_cut = _clip(item.tool, MAX_ID)
+    summary, summary_cut = _clip(item.summary, MAX_SUMMARY)
+    if not tool or not summary:
+        return None, False
+    return ActionSuggestion(tool=tool, summary=summary), tool_cut or summary_cut
+
+
+def _clean_escalation(item: EscalationSuggestion) -> tuple[Suggestion | None, bool]:
+    code, code_cut = _clip(item.reason_code, MAX_ID)
+    if not code:
+        return None, False
+    lines = [_clip(e, MAX_SUMMARY) for e in item.evidence if e.strip()]
+    motive, motive_cut = _clip(item.motive_draft, MAX_LINE)
+    cut = code_cut or motive_cut or len(lines) > MAX_EVIDENCE or any(c for _, c in lines)
+    escalation = EscalationSuggestion(
+        reason_code=code,
+        evidence=tuple(text for text, _ in lines[:MAX_EVIDENCE]),
+        motive_draft=motive,
+    )
+    return escalation, cut
+
+
+def _clean(item: Suggestion) -> tuple[Suggestion | None, bool]:
+    if isinstance(item, ReplySuggestion):
+        return _clean_reply(item)
+    if isinstance(item, ToolSuggestion):
+        return _clean_tool(item)
+    if isinstance(item, ActionSuggestion):
+        return _clean_action(item)
+    if isinstance(item, EscalationSuggestion):
+        return _clean_escalation(item)
+    return None, False
+
+
+def normalize_report(raw: Sequence[Suggestion]) -> NormalizedSuggestions:
+    """What agent-core proposed, cleaned: empty texts dropped, long ones cut, one reply and one
+    escalation at most, ``MAX_SUGGESTIONS`` in all (the reply and the escalation come first, then
+    the others in the order given; the result keeps the original order). An unknown shape is
+    dropped. ``truncated`` says whether any of that cut something real: it is never silent."""
+    kept: list[Suggestion] = []
+    truncated = False
+    for item in raw:
+        cleaned, cut = _clean(item)
+        if cleaned is None:
+            continue
+        repeated = isinstance(cleaned, ReplySuggestion | EscalationSuggestion) and any(
+            type(cleaned) is type(other) for other in kept
+        )
+        if repeated:  # a second reply or escalation is left out
+            truncated = True
+            continue
+        kept.append(cleaned)
+        truncated = truncated or cut
+    if len(kept) > MAX_SUGGESTIONS:
+        truncated = True
+        wanted = {
+            i for i, x in enumerate(kept) if isinstance(x, ReplySuggestion | EscalationSuggestion)
+        }
+        for i in range(len(kept)):
+            if len(wanted) >= MAX_SUGGESTIONS:
+                break
+            wanted.add(i)
+        kept = [x for i, x in enumerate(kept) if i in wanted]
+    return NormalizedSuggestions(tuple(kept), truncated)
 
 
 def normalize_suggestions(raw: Sequence[Suggestion]) -> tuple[Suggestion, ...]:
-    """What agent-core proposed, cleaned: empty texts dropped, long ones cut, one reply and one
-    escalation at most, at most ``MAX_SUGGESTIONS`` in all. An unknown shape is dropped."""
-    kept: list[Suggestion] = []
-    has_reply = has_escalation = False
-    for item in raw:
-        if len(kept) >= MAX_SUGGESTIONS:
-            break
-        if isinstance(item, ReplySuggestion):
-            text = item.text.strip()[:MAX_REPLY]
-            if not text or has_reply:
-                continue
-            has_reply = True
-            citations = tuple(c.strip()[:MAX_ID] for c in item.citations if c.strip())
-            kept.append(
-                ReplySuggestion(
-                    text=text,
-                    citations=citations[:MAX_CITATIONS],
-                    language=item.language.strip()[:8] or "es",
-                )
-            )
-        elif isinstance(item, ToolSuggestion):
-            tool = item.tool.strip()[:MAX_ID]
-            if tool:
-                kept.append(
-                    ToolSuggestion(
-                        tool=tool, label=_clip(item.label, MAX_ID), why=_clip(item.why, MAX_LINE)
-                    )
-                )
-        elif isinstance(item, ActionSuggestion):
-            tool = item.tool.strip()[:MAX_ID]
-            summary = _clip(item.summary, MAX_SUMMARY)
-            if tool and summary:
-                kept.append(ActionSuggestion(tool=tool, summary=summary))
-        elif isinstance(item, EscalationSuggestion):
-            code = item.reason_code.strip()[:MAX_ID]
-            if not code or has_escalation:
-                continue
-            has_escalation = True
-            evidence = tuple(_clip(e, MAX_SUMMARY) for e in item.evidence if e.strip())
-            kept.append(
-                EscalationSuggestion(
-                    reason_code=code,
-                    evidence=evidence[:MAX_EVIDENCE],
-                    motive_draft=_clip(item.motive_draft, MAX_LINE),
-                )
-            )
-    return tuple(kept)
+    return normalize_report(raw).items
 
 
 def text_hash(text: str) -> str:
@@ -206,6 +278,8 @@ class CopilotSuggestion(AggregateRoot):
     reply_decision: ReplyDecision | None = None
     edit_distance_permille: int | None = None
     escalation_accepted: bool = False
+    truncated: bool = False
+    """agent-core proposed more than was kept (see ``normalize_report``): said, never silent."""
     run_id: str | None = None
     trace_id: str | None = None
     failure_code: str | None = None
@@ -283,7 +357,9 @@ class CopilotSuggestion(AggregateRoot):
     ) -> None:
         """agent-core answered: ``ready`` with something, ``none`` with nothing."""
         self._require_preparing()
-        items = normalize_suggestions(raw)
+        report = normalize_report(raw)
+        items = report.items
+        self.truncated = report.truncated
         self.run_id = run_id
         self.trace_id = trace_id
         self.updated_at = at
@@ -320,6 +396,7 @@ class CopilotSuggestion(AggregateRoot):
                 agent=self.agent,
                 kinds=self.kinds,
                 count=len(items),
+                truncated=self.truncated,
                 run_id=run_id,
                 trace_id=trace_id,
             )

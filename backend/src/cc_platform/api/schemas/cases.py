@@ -748,6 +748,11 @@ class CopilotSuggestion(ApiModel):
         description="What happened to the draft once decided (it then leaves `suggestions`)."
     )
     escalation_accepted: bool
+    truncated: bool = Field(
+        description="agent-core proposed more than is shown (at most 3: the reply and the "
+        "escalation first) or a text was cut to its limit. Informational: show nothing, or a "
+        "discreet hint."
+    )
     failure_code: str | None
     suggestions: list[SuggestionItem] = Field(
         description="Empty when there is nothing to propose, and once the texts expired."
@@ -795,6 +800,7 @@ class CopilotSuggestion(ApiModel):
             created_at=s.created_at,
             reply_decision=s.reply_decision.value if s.reply_decision is not None else None,
             escalation_accepted=s.escalation_accepted,
+            truncated=s.truncated,
             failure_code=s.failure_code,
             suggestions=items,
         )

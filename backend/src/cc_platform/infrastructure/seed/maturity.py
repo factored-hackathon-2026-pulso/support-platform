@@ -36,7 +36,7 @@ from cc_platform.infrastructure.seed.timeline import SeedTimeline
 LUCIA = 5
 #: The agent that serves "Cargo no reconocido" in the story (agent-core's demo disputes agent).
 SEED_TYPE_AGENT = "disputas"
-#: The name Supervisión gave it (sample, team-generated; ADR 0009 / slice 25).
+#: The name the ``volume`` profile gives it (sample, team-generated; ADR 0009 / slice 25).
 SEED_TYPE_AGENT_NAME = "Asistente de disputas"
 
 
@@ -125,9 +125,6 @@ def _build(story: _Story, t: datetime, rule: StageRule) -> CaseTypeMaturity:
         lucia = ActorRef(ActorRole.SUPERVISOR, seed_staff_id(LUCIA))
         maturity.activate_agent(
             agent_id=SEED_TYPE_AGENT, actor=lucia, at=t - story.agent_active_ago
-        )
-        maturity.rename_agent(
-            SEED_TYPE_AGENT_NAME, actor=lucia, at=t - story.agent_active_ago + timedelta(minutes=5)
         )
     return maturity
 

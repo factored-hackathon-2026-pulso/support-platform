@@ -86,6 +86,7 @@ from cc_platform.domain.shared.ids import IdPrefix
 from cc_platform.infrastructure.seed import volume_catalog as cat
 from cc_platform.infrastructure.seed.cases import SLA, STRATEGY, _Story, seed_case_id
 from cc_platform.infrastructure.seed.customers import CustomerSeed, seed_demo_customers
+from cc_platform.infrastructure.seed.maturity import LUCIA, SEED_TYPE_AGENT, SEED_TYPE_AGENT_NAME
 from cc_platform.infrastructure.seed.people import (
     DEMO_STAFF,
     seed_demo_availability,
@@ -1120,6 +1121,7 @@ async def seed_volume(
     async with uow() as unit:
         stored_first = await unit.cases.get(first.case_id)
         maturity = {m.case_type: m for m in await unit.case_type_maturity.list()}
+        await _name_served_agents(unit, maturity, clock.now())
     anchor = (
         stored_first.opened_at + first.opened_ago
         if stored_first is not None
@@ -1144,6 +1146,27 @@ async def seed_volume(
         customers=customers,
         signals_updated=updated,
     )
+
+
+async def _name_served_agents(
+    unit: UnitOfWork, maturity: Mapping[CaseType, CaseTypeMaturity], now: datetime
+) -> None:
+    """Supervisión's sample name for the agent that serves a type (slice 25's catalog), once:
+    a type whose agent already has a name keeps it."""
+    lucia = ActorRef(ActorRole.SUPERVISOR, seed_staff_id(LUCIA))
+    timeline = SeedTimeline()
+    for row in maturity.values():
+        if (
+            row.agent is AgentStatus.ACTIVE
+            and row.agent_id == SEED_TYPE_AGENT
+            and not row.agent_name
+        ):
+            at = (row.agent_since or now) + timedelta(minutes=5)
+            if row.rename_agent(SEED_TYPE_AGENT_NAME, actor=lucia, at=at):
+                await unit.case_type_maturity.save(row)
+                timeline.take(row)
+    timeline.record_into(unit)
+    await unit.commit()
 
 
 async def _save_batch(uow: UnitOfWorkFactory, batch: Sequence[_VolumeStory]) -> int:

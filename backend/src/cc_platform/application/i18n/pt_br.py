@@ -135,6 +135,7 @@ CATALOG: Final[Mapping[str, str]] = {
     "audit.copilot.suggestionNone": "O copiloto não tinha nada a sugerir",
     "audit.copilot.suggestionFailed": "Não foi possível preparar a sugestão do copiloto",
     "audit.copilot.toolUsed": "Usou uma ferramenta que o copiloto propôs",
+    "audit.copilot.itemDecided": "Decidiu sobre uma recomendação do copiloto",
     "audit.suggestion.escalation": "Escalou o caso com a recomendação do copiloto",
     "audit.suggestion.used": "Usou o rascunho do copiloto sem alterações",
     "audit.suggestion.edited": "Usou o rascunho do copiloto com alterações",

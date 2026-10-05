@@ -336,6 +336,7 @@ async def test_every_emitted_event_has_a_description() -> None:
         "ai.agent_renamed",  # ADR 0009: needs a served type (``test_ai_stages_api.py``)
         "ai.agent_paused",  # ADR 0009: needs a served type (``test_builder_api.py``)
         "ai.agent_resumed",
+        "copilot.item_decided",  # slice 24: needs a suggestion (test_copilot_suggestions_api.py)
         *(
             event.event_type
             for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS, *SUGGESTION_EVENTS, *BUILDER_EVENTS)

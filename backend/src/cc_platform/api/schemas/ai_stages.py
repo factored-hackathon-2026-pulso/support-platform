@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, StringConstraints
 
@@ -244,6 +244,19 @@ class RenameAgentRequest(RequestModel):
 class PauseAgentRequest(RequestModel):
     step_up_code: StepUpCode
     reason: Annotated[str, StringConstraints(max_length=500)] = ""
+
+
+class ItemDecisionRequest(RequestModel):
+    """What the analyst did with one item of her suggestion (slice 24)."""
+
+    item: Literal["tool", "action", "escalate"]
+    ref: str = Field(
+        default="",
+        max_length=120,
+        examples=["leer_movimientos@1"],
+        description="The tool or action (`tool` of the item); empty for `escalate`.",
+    )
+    decision: Literal["used", "dismissed"]
 
 
 class ActivateAgentRequest(RequestModel):

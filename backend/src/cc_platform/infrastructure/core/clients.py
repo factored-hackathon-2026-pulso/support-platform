@@ -33,6 +33,7 @@ from cc_platform.application.ai.registry import (
     ProposalDetail,
     ProposalOrigin,
     ProposalPage,
+    ReasonCode,
     ReleaseDetail,
     ReleaseDiff,
     ValidationReport,
@@ -275,12 +276,19 @@ class ResilientAgentRegistry:
         )
 
     async def reject(
-        self, credentials: AgentCredentials, *, proposal_id: str, reason: str
+        self,
+        credentials: AgentCredentials,
+        *,
+        proposal_id: str,
+        reason: str,
+        reason_code: ReasonCode | None = None,
     ) -> Proposal:
         return await self._guard.call(
             CallKind.REGISTRY,
             "reject",
-            lambda: self._inner.reject(credentials, proposal_id=proposal_id, reason=reason),
+            lambda: self._inner.reject(
+                credentials, proposal_id=proposal_id, reason=reason, reason_code=reason_code
+            ),
         )
 
     async def publish(

@@ -132,7 +132,7 @@ Catalog version **1.3.0**: 96 event types. Every payload also carries `schema_ve
 | `builder.proposal_evaluated` | `builder` | 1 | `agent_id`: string<br>`suite_id`: string<br>`verdict`: string<br>`items`: integer<br>`items_failed`: integer |
 | `builder.proposal_frozen` | `builder` | 1 | `agent_id`: string<br>`candidate_hash`: string<br>`new_versions`: integer |
 | `builder.proposal_published` | `builder` | 1 | `agent_id`: string<br>`release_id`: string<br>`step_up`: boolean |
-| `builder.proposal_rejected` | `builder` | 1 | `agent_id`: string<br>`reason_length`: integer<br>`step_up`: boolean |
+| `builder.proposal_rejected` | `builder` | 1 | `agent_id`: string<br>`reason_length`: integer<br>`step_up`: boolean<br>`reason_code`: string or null |
 | `builder.proposal_reopened` | `builder` | 1 | `agent_id`: string<br>`rev`: integer |
 | `builder.proposal_tracked` | `builder` | 1 | `agent_id`: string<br>`source`: string |
 | `builder.proposal_validated` | `builder` | 1 | `agent_id`: string<br>`violations`: integer<br>`candidate_hash`: string or null |

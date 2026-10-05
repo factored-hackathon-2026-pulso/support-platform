@@ -710,6 +710,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/builder/proposals/{proposalId}/record': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The engine's dossier and the history of the decisions on a proposal
+     * @description What the platform keeps about a proposal, without calling agent-core: the improvement engine's dossier (ADR 0007) with each evidence case resolved (`available: false` when the id names no case here), and the history from the platform's audit (evaluated, approved, rejected with its `reasonCode`, published, promoted to `staging` / `prod`). An id nobody announced or acted on answers an empty record.
+     */
+    get: operations['builder_get_proposal_record']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/builder/proposals/{proposalId}/reject': {
     parameters: {
       query?: never
@@ -721,7 +741,7 @@ export interface paths {
     put?: never
     /**
      * Reject the evaluated candidate: back to `draft`
-     * @description The reason is kept by the registry. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
+     * @description The reason is kept by the registry; `reasonCode` (agent-core's closed list) also goes to the registry and into the audit. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`).
      */
     post: operations['builder_reject_proposal']
     delete?: never
@@ -4500,6 +4520,25 @@ export interface components {
       /** Suiteversion */
       suiteVersion?: string | null
     }
+    /**
+     * EvidenceCase
+     * @description An evidence link of the engine's dossier, resolved against the platform's cases.
+     */
+    EvidenceCase: {
+      /**
+       * Available
+       * @description False when the id names no case here (stale or never existed): show it without a link; the other facts are null.
+       */
+      available: boolean
+      /** Caseid */
+      caseId: string
+      caseType: components['schemas']['CaseType'] | null
+      channel: components['schemas']['CaseChannel'] | null
+      language: components['schemas']['Language'] | null
+      /** Openedat */
+      openedAt: string | null
+      status: components['schemas']['CaseStatus'] | null
+    }
     /** GateItem */
     GateItem: {
       /** Basevalue */
@@ -4907,6 +4946,38 @@ export interface components {
       speakers: number
       /** Waiting */
       waiting: number
+    }
+    /**
+     * LastDecision
+     * @description The last human decision, as agent-core shows it (PR 53): never the free-text reason nor
+     *     who decided (the platform's history names her).
+     */
+    LastDecision: {
+      /**
+       * Decidedat
+       * Format: date-time
+       */
+      decidedAt: string
+      /**
+       * Decision
+       * @enum {string}
+       */
+      decision: 'approved' | 'rejected'
+      /**
+       * Reasoncode
+       * @description On a rejection, agent-core's closed-vocabulary reason when one was chosen.
+       */
+      reasonCode:
+        | (
+            | 'insufficient_evidence'
+            | 'wrong_target'
+            | 'risk'
+            | 'duplicate'
+            | 'policy_conflict'
+            | 'wording'
+            | 'other'
+          )
+        | null
     }
     /** LatestCopilotSuggestion */
     LatestCopilotSuggestion: {
@@ -5684,11 +5755,130 @@ export interface components {
        * @description The draft: what the proposal changes.
        */
       changes: components['schemas']['EntityDraft'][]
+      /** @description The last approval or rejection (null before one, or from an agent-core that does not report it). */
+      lastDecision: components['schemas']['LastDecision'] | null
       /** @description The evaluation of the current candidate (null before one, and after a failed gate: the proposal is back in draft; that report came with the 409). */
       lastEval: components['schemas']['EvalRun'] | null
       proposal: components['schemas']['Proposal']
       /** @description Present once there is an evaluation. */
       review: components['schemas']['ApprovalReview'] | null
+    }
+    /**
+     * ProposalHistoryEntry
+     * @description One step of the proposal, from the platform's audit (oldest first). Only the members of
+     *     its `kind` are set; the others are null.
+     */
+    ProposalHistoryEntry: {
+      /**
+       * Actorid
+       * @description A staff id; null for the engine or the system.
+       */
+      actorId: string | null
+      /** Actorname */
+      actorName: string | null
+      /**
+       * Alias
+       * @description `promoted`: which alias.
+       */
+      alias: ('staging' | 'prod') | null
+      /**
+       * At
+       * Format: date-time
+       */
+      at: string
+      /**
+       * Items
+       * @description `evaluated`: how many gate items.
+       */
+      items: number | null
+      /**
+       * Itemsfailed
+       * @description `evaluated`: how many failed.
+       */
+      itemsFailed: number | null
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind:
+        | 'created'
+        | 'tracked'
+        | 'frozen'
+        | 'evaluated'
+        | 'approved'
+        | 'rejected'
+        | 'reopened'
+        | 'published'
+        | 'promoted'
+      /**
+       * Reasoncode
+       * @description `rejected`: agent-core's code, if any.
+       */
+      reasonCode:
+        | (
+            | 'insufficient_evidence'
+            | 'wrong_target'
+            | 'risk'
+            | 'duplicate'
+            | 'policy_conflict'
+            | 'wording'
+            | 'other'
+          )
+        | null
+      /**
+       * Releaseid
+       * @description `published` / `promoted`: the release.
+       */
+      releaseId: string | null
+      /**
+       * Source
+       * @description `tracked`: who brought it here (`chat`, `tracked`, `engine`).
+       */
+      source: string | null
+      /**
+       * Suiteid
+       * @description `evaluated`: the suite it ran.
+       */
+      suiteId: string | null
+      /**
+       * Verdict
+       * @description `evaluated`: the gate's verdict.
+       */
+      verdict: ('pass' | 'fail' | 'failed_infra') | null
+    }
+    /**
+     * ProposalImprovement
+     * @description The improvement engine's dossier (ADR 0007), as it announced it. Plain text: render it as
+     *     such (no markup), keeping line breaks.
+     */
+    ProposalImprovement: {
+      /**
+       * Announcedat
+       * Format: date-time
+       */
+      announcedAt: string
+      /** Evidence */
+      evidence: string
+      /**
+       * Evidencecases
+       * @description The announce's `evidenceLinks` (0-8), in its order.
+       */
+      evidenceCases: components['schemas']['EvidenceCase'][]
+      /** Expectedeffect */
+      expectedEffect: string
+      /**
+       * Language
+       * @description The language the engine wrote it in: the announce carries Spanish only.
+       * @constant
+       */
+      language: 'es'
+      /** Problem */
+      problem: string
+      /**
+       * Title
+       * @description At most 120 characters.
+       */
+      title: string
     }
     /** ProposalList */
     ProposalList: {
@@ -5705,6 +5895,16 @@ export interface components {
      * @enum {string}
      */
     ProposalOrigin: 'manual' | 'builder_chat' | 'auto_detect' | 'import'
+    /** ProposalRecord */
+    ProposalRecord: {
+      /**
+       * History
+       * @description Oldest first. Only what happened through the platform: the registry has no history read.
+       */
+      history: components['schemas']['ProposalHistoryEntry'][]
+      /** @description Null when the improvement engine did not announce this proposal (or its notifications were all pruned). */
+      improvement: components['schemas']['ProposalImprovement'] | null
+    }
     /**
      * ProposalState
      * @enum {string}
@@ -5831,6 +6031,21 @@ export interface components {
     RejectRequest: {
       /** Reason */
       reason: string
+      /**
+       * Reasoncode
+       * @description Why, from agent-core's closed list (its PR 53): `insufficient_evidence`, `wrong_target`, `risk`, `duplicate`, `policy_conflict`, `wording`, `other`. Optional; sent to the registry and kept in the audit (the free-text `reason` is not).
+       */
+      reasonCode?:
+        | (
+            | 'insufficient_evidence'
+            | 'wrong_target'
+            | 'risk'
+            | 'duplicate'
+            | 'policy_conflict'
+            | 'wording'
+            | 'other'
+          )
+        | null
       /**
        * Stepupcode
        * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
@@ -9561,6 +9776,64 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_get_proposal_record: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProposalRecord']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
         headers: {
           [name: string]: unknown
         }

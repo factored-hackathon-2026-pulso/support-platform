@@ -1,16 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
-import { makeChange, makeEvalReport, makeRelease } from '@/test/automation-fixtures'
 import {
+  makeChange,
+  makeEvalReport,
+  makeHistoryEntry,
+  makeRelease,
+} from '@/test/automation-fixtures'
+import {
+  REASON_CODES,
   agentVersionIn,
+  announcedByEngine,
   changeView,
   describeBuilderFailure,
   draftLanguages,
   draftTools,
+  endStepFor,
+  historyView,
   isMissingSuite,
+  isReasonCode,
   proposalSource,
   proposalStatus,
   proposalSteps,
+  publishedReleaseOf,
+  reasonCodeLabel,
   reportView,
   suiteFor,
   toolName,
@@ -38,6 +50,29 @@ describe('a proposal', () => {
       ['Activa', 'later'],
     ])
     expect(proposalSteps('published', true).every((s) => s.state === 'done')).toBe(true)
+  })
+
+  it('ends in production, not activation, for an agent that already runs there', () => {
+    expect(proposalSteps('published', false, 'promote').at(-1)).toMatchObject({
+      label: 'En producción',
+      state: 'later',
+    })
+    const facts = {
+      typeAgent: null,
+      servesThisAgent: false,
+      inProduction: true,
+      prodHoldsThisRelease: null,
+    }
+    expect(endStepFor(facts)).toBe('promote')
+    expect(endStepFor({ ...facts, inProduction: false })).toBe('activate')
+    expect(endStepFor({ ...facts, inProduction: undefined })).toBe('activate')
+    // a type waiting for an agent is always its first activation
+    expect(endStepFor({ ...facts, typeAgent: 'ready' })).toBe('activate')
+    // the type this agent serves: the activation's done view, unless prod holds another release
+    const serving = { ...facts, typeAgent: 'active', servesThisAgent: true }
+    expect(endStepFor(serving)).toBe('activate')
+    expect(endStepFor({ ...serving, prodHoldsThisRelease: true })).toBe('activate')
+    expect(endStepFor({ ...serving, prodHoldsThisRelease: false })).toBe('promote')
   })
 
   it('says where it came from, the improvement engine included', () => {
@@ -112,16 +147,83 @@ describe('a proposal', () => {
     expect(suiteFor([], undefined)).toBeNull()
   })
 
-  it('shows the test report item by item', () => {
+  it('shows the test report base against candidate, the failed items first', () => {
     const view = reportView(makeEvalReport({ verdict: 'fail' }))
     expect(view.passed).toBe(false)
     expect(view.summary).toBe('1 de 2 criterios')
+    expect(view.decision).toBe('La prueba la devolvió a borrador: 1 criterio no se cumple.')
+    expect(view.decisionTone).toBe('danger')
+    expect(view.items.map((item) => item.metric)).toEqual([
+      'traspaso_a_tiempo',
+      'resuelve_sin_persona',
+    ])
     expect(view.items[0]).toMatchObject({
-      metric: 'resuelve_sin_persona',
-      verdict: 'Cumple',
-      facts: ['Valor 0.92', 'Mínimo 0.85', 'Antes 0.90'],
+      verdict: 'No cumple',
+      phase: 'Plataforma',
+      base: 'Sin medir',
+      candidate: '0.70',
+      floor: '0.80',
     })
-    expect(view.items[1]?.verdict).toBe('No cumple')
+    expect(view.items[1]).toMatchObject({
+      verdict: 'Cumple',
+      phase: 'Vara nueva',
+      base: '0.90',
+      candidate: '0.92',
+      floor: '0.85',
+    })
+  })
+
+  it('says what the gate decided, an infrastructure failure included', () => {
+    expect(reportView(makeEvalReport()).decision).toBe(
+      'La prueba la deja lista para aprobar: cumple todos los criterios.',
+    )
+    expect(reportView(makeEvalReport({ verdict: 'failed_infra' }))).toMatchObject({
+      decisionTone: 'warn',
+      decision: 'La prueba no se completó por una falla del motor de IA. No cuenta como resultado.',
+    })
+  })
+
+  it("offers agent-core's seven rejection reasons in words", () => {
+    expect(REASON_CODES).toHaveLength(7)
+    expect(REASON_CODES.map(reasonCodeLabel)).toEqual([
+      'Falta evidencia',
+      'Cambia el elemento equivocado',
+      'Demasiado riesgo',
+      'Repite otra propuesta',
+      'Choca con una política',
+      'Hay que mejorar la redacción',
+      'Otro motivo',
+    ])
+    expect(isReasonCode('duplicate')).toBe(true)
+    expect(isReasonCode('because')).toBe(false)
+  })
+
+  it('tells the verdict story from the history, oldest first', () => {
+    const entries = [
+      makeHistoryEntry('tracked', { source: 'engine', actorId: null, actorName: null }),
+      makeHistoryEntry('evaluated', { verdict: 'fail', items: 4, itemsFailed: 1 }),
+      makeHistoryEntry('rejected', { reasonCode: 'wording', actorName: null }),
+      makeHistoryEntry('evaluated', { verdict: 'pass', items: 4, itemsFailed: 0 }),
+      makeHistoryEntry('approved'),
+      makeHistoryEntry('published', { releaseId: 'rel-1' }),
+      makeHistoryEntry('promoted', { alias: 'prod', releaseId: 'rel-1' }),
+    ]
+    const view = historyView(entries)
+    expect(view.map((item) => [item.icon, item.text, item.tag])).toEqual([
+      ['engine', 'El motor de mejora la anunció', null],
+      ['failed', 'No pasó la prueba y volvió a borrador', '3 de 4 criterios'],
+      ['rejected', 'Supervisión la rechazó', 'Hay que mejorar la redacción'],
+      ['passed', 'Pasó la prueba', '4 de 4 criterios'],
+      ['approved', 'Lucía Gómez la aprobó', null],
+      ['published', 'Lucía Gómez la publicó en pruebas', null],
+      ['prod', 'Lucía Gómez la pasó a producción', null],
+    ])
+    expect(view[1]?.tagTone).toBe('danger')
+    expect(view.at(-1)?.releaseId).toBe('rel-1')
+    expect(publishedReleaseOf(entries)).toBe('rel-1')
+    expect(publishedReleaseOf([])).toBeNull()
+    expect(announcedByEngine(entries)).toBe(true)
+    expect(announcedByEngine(entries.slice(1))).toBe(false)
   })
 
   it('reads the agent version a release holds', () => {

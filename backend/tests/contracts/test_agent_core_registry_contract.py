@@ -18,6 +18,9 @@ The proposal list (``GET /v1/registry/proposals``, contract 1.4.0) is not in
 ``agent-core/contracts/registry-openapi.json`` (that operation and the schemas it uses). Its query
 parameters and its ``ProposalPage`` answer are checked against it.
 
+``ReasonBody.json`` is newer: it is copied from agent-core contract 1.5.0 (its PR 53 added the
+optional closed-vocabulary ``reason_code`` on reject); the other copies are still 1.4.0.
+
 ``ProposalDetail``, ``ValidationReport`` and ``CandidateView`` are not published as schemas yet;
 they are composed from published pieces (``Proposal``, ``EntityDraft``, ``EvalRun``) and the fields
 ``registry/service.py`` declares. Ask agent-core to publish them.
@@ -223,7 +226,19 @@ def answer(method: str, template: str) -> tuple[int, Any]:
         ("GET", "/v1/registry/proposals/{pid}"): (
             200,
             None,
-            {"proposal": PROPOSAL, "changes": [DRAFT], "last_eval": EVAL_RUN, "review": None},
+            {
+                "proposal": PROPOSAL,
+                "changes": [DRAFT],
+                "last_eval": EVAL_RUN,
+                "review": None,
+                # registry/service.py ``LastDecision`` (PR 53)
+                "last_decision": {
+                    "decision": "rejected",
+                    "reason_code": "wording",
+                    "decided_by_role": "approver",
+                    "decided_at": NOW,
+                },
+            },
         ),
         ("PUT", "/v1/registry/proposals/{pid}/draft"): (200, "Proposal", PROPOSAL),
         ("POST", "/v1/registry/proposals/{pid}/validate"): (
@@ -391,7 +406,12 @@ async def test_every_call_of_the_adapter_matches_the_published_registry_contract
     await api.create_proposal(
         BUILDER, agent_id="disputas", title="Resumen", origin=ProposalOrigin.MANUAL
     )
-    await api.get_proposal(BUILDER, proposal_id=pid)
+    detail = await api.get_proposal(BUILDER, proposal_id=pid)
+    assert detail.last_decision is not None
+    assert (detail.last_decision.decision, detail.last_decision.reason_code) == (
+        "rejected",
+        "wording",
+    )
     page = await api.list_proposals(BUILDER, agent_id="disputas", state="draft", limit=50)
     assert [p.proposal_id for p in page.items] == [pid, pid]
     assert page.items[1].origin is ProposalOrigin.BUILDER_CHAT
@@ -411,6 +431,7 @@ async def test_every_call_of_the_adapter_matches_the_published_registry_contract
     await api.evaluate(BUILDER, proposal_id=pid, suite_id="suite-disputas")
     await api.approve(BUILDER, proposal_id=pid, candidate_hash=HASH, accept_yardstick_loosened=True)
     await api.reject(BUILDER, proposal_id=pid, reason="No cumple")
+    await api.reject(BUILDER, proposal_id=pid, reason="No cumple", reason_code="risk")
     await api.publish(BUILDER, proposal_id=pid, idempotency_key="publish-0001")
     await api.promote(BUILDER, agent_id="disputas", alias="prod", release_id="rel-1", reason="ok")
     await api.get_alias(BUILDER, agent_id="disputas", alias="prod")

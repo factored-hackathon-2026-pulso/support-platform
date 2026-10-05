@@ -108,6 +108,61 @@ async def test_the_detail_carries_the_draft_and_the_last_evaluation() -> None:
     assert detail.review is None
 
 
+async def test_reject_sends_the_reason_code_only_when_one_is_chosen() -> None:
+    bodies: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=PROPOSAL)
+
+    api = registry(handler)
+    await api.reject(CREDENTIALS, proposal_id="p", reason="Repetida", reason_code="duplicate")
+    await api.reject(CREDENTIALS, proposal_id="p", reason="Sin código")
+
+    assert bodies == [
+        {"reason": "Repetida", "reason_code": "duplicate"},
+        {"reason": "Sin código"},  # an agent-core older than PR 53 never sees the field
+    ]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, None),
+        (
+            {"decision": "approved", "reason_code": None, "decided_at": "2026-10-05T10:00:00Z"},
+            ("approved", None),
+        ),
+        (
+            {"decision": "rejected", "reason_code": "risk", "decided_at": "2026-10-05T10:00:00Z"},
+            ("rejected", "risk"),
+        ),
+        # a code outside the closed list reads as none; a shape without a date as no decision
+        (
+            {
+                "decision": "rejected",
+                "reason_code": "because",
+                "decided_at": "2026-10-05T10:00:00Z",
+            },
+            ("rejected", None),
+        ),
+        ({"decision": "rejected", "reason_code": "risk"}, None),
+    ],
+)
+async def test_the_last_decision_is_read_when_agent_core_reports_it(
+    raw: object, expected: tuple[str, str | None] | None
+) -> None:
+    body: dict[str, object] = {"proposal": PROPOSAL, "changes": [], "last_eval": None}
+    if raw is not None:
+        body["last_decision"] = raw
+    api = registry(lambda _request: httpx.Response(200, json=body))
+
+    detail = await api.get_proposal(CREDENTIALS, proposal_id="p")
+
+    found = detail.last_decision
+    assert (None if found is None else (found.decision, found.reason_code)) == expected
+
+
 async def test_the_review_is_parsed_once_there_is_an_evaluation() -> None:
     review = {
         "functional_changes": [DRAFT],

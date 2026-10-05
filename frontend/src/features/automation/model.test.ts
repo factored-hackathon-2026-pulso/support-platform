@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeStages, makeTypeStage } from '@/test/stage-fixtures'
 import {
+  agentDisplayName,
   agentIdFor,
   agentName,
   draftBreakdown,
@@ -199,5 +200,18 @@ describe('one type', () => {
     expect(agentIdFor(ready)).toBe('cobros')
     expect(agentName('calidad-servicio')).toBe('Calidad servicio')
     expect(agentName('disputas')).toBe('Disputas')
+  })
+})
+
+describe('agentDisplayName', () => {
+  it("uses Supervisión's name for the agent serving a type, else the id in words", () => {
+    const named = {
+      ...makeTypeStage('unrecognized_charge', 3, 'active'),
+      agentName: 'Dani Disputas',
+    }
+    const stages = makeStages({ types: [named] })
+    expect(agentDisplayName(stages, 'disputas')).toBe('Dani Disputas')
+    expect(agentDisplayName(stages, 'calidad-servicio')).toBe('Calidad servicio')
+    expect(agentDisplayName(undefined, 'disputas')).toBe('Disputas')
   })
 })

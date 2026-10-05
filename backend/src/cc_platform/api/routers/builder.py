@@ -185,6 +185,26 @@ async def get_proposal(
     return schemas.ProposalDetail.model_validate(detail)
 
 
+@router.get(
+    "/proposals/{proposalId}/record",
+    response_model=schemas.ProposalRecord,
+    summary="The engine's dossier and the history of the decisions on a proposal",
+    description=(
+        "What the platform keeps about a proposal, without calling agent-core: the improvement "
+        "engine's dossier (ADR 0007) with each evidence case resolved (`available: false` when "
+        "the id names no case here), and the history from the platform's audit (evaluated, "
+        "approved, rejected with its `reasonCode`, published, promoted to `staging` / `prod`). "
+        "An id nobody announced or acted on answers an empty record."
+    ),
+    responses=problem_responses(401, 403, 404),
+)
+async def get_proposal_record(
+    proposal_id: ProposalId, actor: Builder, api: ApiContextDep
+) -> schemas.ProposalRecord:
+    record = await (await builder_use_cases(api)).record.execute(actor, proposal_id)
+    return schemas.ProposalRecord.model_validate(record)
+
+
 @router.put(
     "/proposals/{proposalId}/draft",
     response_model=schemas.Proposal,
@@ -303,14 +323,21 @@ async def approve_proposal(
     "/proposals/{proposalId}/reject",
     response_model=schemas.Proposal,
     summary="Reject the evaluated candidate: back to `draft`",
-    description=f"The reason is kept by the registry. {STEP_UP_NOTE}",
+    description=(
+        "The reason is kept by the registry; `reasonCode` (agent-core's closed list) also goes "
+        f"to the registry and into the audit. {STEP_UP_NOTE}"
+    ),
     responses=REGISTRY_ERRORS,
 )
 async def reject_proposal(
     proposal_id: ProposalId, body: schemas.RejectRequest, actor: Builder, api: ApiContextDep
 ) -> schemas.Proposal:
     proposal = await (await builder_use_cases(api)).registry.reject(
-        actor, proposal_id, reason=body.reason, step_up_code=body.step_up_code
+        actor,
+        proposal_id,
+        reason=body.reason,
+        step_up_code=body.step_up_code,
+        reason_code=body.reason_code,
     )
     return schemas.Proposal.model_validate(proposal)
 

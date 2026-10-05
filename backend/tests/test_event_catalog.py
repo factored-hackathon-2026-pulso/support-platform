@@ -77,6 +77,7 @@ CLOSED_KEYS = frozenset(
         ("case.assistant_released", "reason"),
         ("case.closed", "reason"),
         ("case.queued", "reason_code"),
+        ("builder.proposal_rejected", "reason_code"),  # P6: closed list (agent-core PR 53)
         ("case.status_changed", "reason"),
         ("call.ended", "end_reason"),
         ("copilot.suggestion_decided", "reason_code"),

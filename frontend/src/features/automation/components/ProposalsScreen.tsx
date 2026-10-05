@@ -25,9 +25,10 @@ import {
 import { formatRelativeTime } from '@/lib/format'
 import { useNow } from '@/lib/hooks'
 import { isApiProblem } from '@/lib/api'
+import { useAiStages } from '@/features/copilot/core'
 import { useTranslation } from '@/lib/i18n'
 import { useBuilderAvailable, useProposals, useTrackProposal } from '../hooks/use-automation'
-import { agentName } from '../model'
+import { agentDisplayName } from '../model'
 import { describeBuilderFailure, proposalSource, proposalStatus } from '../proposals'
 import type { ProposalList } from '../types'
 import { AutomationFrame, EngineMissing } from './AutomationFrame'
@@ -89,6 +90,7 @@ function ProposalTable({ data }: { data: ProposalList }) {
   const { t } = useTranslation('automation')
   const navigate = useNavigate()
   const now = useNow(TICK_MS)
+  const stages = useAiStages()
   if (data.items.length === 0) {
     return (
       <EmptyState
@@ -123,7 +125,7 @@ function ProposalTable({ data }: { data: ProposalList }) {
                     <span className="font-medium">{proposal.title}</span>
                   </TRowSelect>
                 </TCell>
-                <TCell>{agentName(proposal.agentId)}</TCell>
+                <TCell>{agentDisplayName(stages.data, proposal.agentId)}</TCell>
                 <TCell>
                   <span className="inline-flex items-center gap-2">
                     <Status {...proposalStatus(proposal.state)} />

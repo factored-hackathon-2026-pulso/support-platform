@@ -127,6 +127,25 @@ A row the registry did not answer for says "Sin confirmar". When agent-core's li
 (`registryListed: false`), a quiet notice says only the known proposals show, and "Seguir" (by id)
 appears; otherwise "Seguir" is not drawn.
 
+## 3b. Dossier and decision UX (deploy brief P6, 2026-10-05)
+
+What the deploy brief's P6 asked, on the proposal page (`ProposalScreen`):
+
+| Ask | Built |
+|---|---|
+| The engine's dossier | `ImprovementDossier`: the title (≤ 120), then Problema, Evidencia, Efecto esperado as plain text (`whitespace-pre-line`, `lang="es"`). Read from `GET /builder/proposals/{id}/record` (`improvement`, null for proposals the engine did not announce: nothing is drawn). The announce is Spanish only: in pt-BR a note says the engine writes it in Spanish. If the history says the engine announced it but the dossier is gone (pruned notifications), a quiet note. |
+| Evidence links as real case links | `improvement.evidenceCases`: each `CASE-` id resolved against the platform's cases (status, type, channel, language). A link to `/supervision/cases/{id}` (read-only, audited view); an id that names no case here stays listed, without a link ("Ya no está en la plataforma"). No links: "la evidencia es agregada". |
+| Base vs candidate and the verdict story | `EvaluationReport`: a table per gate item (Criterio with its yardstick and reason, Versión actual = `baseValue`, Esta propuesta = `value`, Mínimo = `floor`, Resultado), failed items first, and what the gate decided (ready to approve / back to draft with N failed / infrastructure failure, no result). `ProposalHistory`: the platform's audit of the proposal, oldest first (announced or created, prepared, each test with its criteria, approved, rejected with its reason, reopened, published with the release, promoted to `staging` / `prod`). Steps taken in the registry directly are not there (no history read in agent-core), and the section says so. A draft rejected before shows agent-core's `lastDecision` reason. |
+| "Pasar a producción" | A published proposal of an agent whose `prod` already points somewhere (the engine's proposals patch existing agents) ends in `PromotePanel` ("Pasar a producción" / "Passar para produção": `prod` → this proposal's release, with her code; then "La versión de esta propuesta ya está en producción"). The stepper's last step reads "En producción". "Activar" stays for the first agent of a `ready` type. pt-BR's agent page wording moved from "Levar para produção" to "Passar para produção" to match. |
+| Reject `reason_code` | The reject dialog asks "Motivo" (agent-core's 7 codes, humanized: Falta evidencia, Cambia el elemento equivocado, Demasiado riesgo, Repite otra propuesta, Choca con una política, Hay que mejorar la redacción, Otro motivo) and "Detalle" (the free text agent-core requires). `reasonCode` travels to the registry and the audit. |
+
+Tests: backend `tests/api/test_proposal_record_api.py`, the reject cases in `tests/api/test_builder_api.py`, the adapter
+and contract tests for `reason_code` / `last_decision`, `improvement_for` on both adapters; frontend `proposals.test.ts`
+and `automation-proposal.test.tsx` (dossier, pt-BR note, no dossier, missing dossier, evidence links, history, the
+table, the last rejection, Pasar a producción and its done view, pt-BR); e2e `dossier.spec.ts` (the builder routes are
+answered in the browser with a synthetic engine proposal, because the e2e backend has no agent-core; the evidence link
+opens a real seeded case).
+
 ## 4. Frontend
 
 New feature `features/automation` (public `index.ts`; no `core.ts`: the shell needs nothing from it):

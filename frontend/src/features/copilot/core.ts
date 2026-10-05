@@ -9,7 +9,7 @@ export { copilotKeys } from './api'
 export { registerCopilotRealtime } from './realtime'
 export { copilotSurfaces, composerTextWithDraft } from './model'
 export type { CopilotMode, CopilotSurfaces } from './model'
-export { STAGE_TEXT, copilotModeOf, stageOfType, stageStrip } from './stages'
+export { copilotModeOf, stageOfType, stageStrip, stageText } from './stages'
 export type { AiStages, CaseTypeStage, StageStripView } from './stages'
 export type {
   CopilotSuggestion,

@@ -204,3 +204,71 @@ describe('ToolsPanel (the "Herramientas" tab, slice 20)', () => {
     )
   })
 })
+
+describe('ToolsPanel in Portuguese (slice 23)', () => {
+  function renderPt() {
+    return renderWithProviders(<ToolsPanel caseId={CASE_ID} closed={false} canAsk />, {
+      staff: analystStaff,
+      aiEnabled: true,
+      locale: 'pt-BR',
+    })
+  }
+
+  it('lists the reads and actions in pt-BR and asks the tool question in her language', async () => {
+    vi.mocked(api.askCopilot).mockImplementation(async (_caseId, body) => ({
+      question: { id: 'CPM-1', role: 'analyst', text: body.text, createdAt: AT, answers: null },
+      answers: [
+        { id: 'CPM-2', role: 'copilot', text: 'Duas cobranças.', createdAt: AT, answers: 'CPM-1' },
+      ],
+      replayed: false,
+    }))
+    const { user } = renderPt()
+    const tools = await screen.findByRole('region', { name: 'Para consultar' })
+    expect(
+      screen.getByText(
+        'Só consultam: nenhuma faz alterações na conta. Cada uso fica registrado na auditoria.',
+      ),
+    ).toBeInTheDocument()
+    const actions = screen.getByRole('region', { name: 'Preparadas, sem executar' })
+    expect(within(actions).getByText('Só informação')).toBeInTheDocument()
+    await user.click(within(tools).getByRole('button', { name: 'Usar Movimientos de la cuenta' }))
+    expect(vi.mocked(api.askCopilot).mock.calls[0]?.[1].text).toBe(
+      'Consulte Movimientos de la cuenta (leer_movimientos@1) para este cliente e me diga o que encontrou.',
+    )
+    expect(await screen.findByText('Duas cobranças.')).toBeInTheDocument()
+    expect(within(tools).getByText('Consultada')).toBeInTheDocument()
+  })
+
+  it('still finds a tool answer asked before she switched to Portuguese', async () => {
+    vi.mocked(api.fetchCopilotThread).mockResolvedValue({
+      caseId: CASE_ID,
+      available: true,
+      messages: [
+        {
+          id: 'CPM-1',
+          role: 'analyst',
+          text: 'Consulta Movimientos de la cuenta (leer_movimientos@1) para este cliente y dime qué encontraste.',
+          createdAt: AT,
+          answers: null,
+        },
+        { id: 'CPM-2', role: 'copilot', text: 'Tres cargos.', createdAt: AT, answers: 'CPM-1' },
+      ],
+    })
+    renderPt()
+    expect(await screen.findByText('Tres cargos.')).toBeInTheDocument()
+    expect(screen.getByText('Consultada')).toBeInTheDocument()
+  })
+
+  it('says a failed "Sugerir" in pt-BR', async () => {
+    vi.mocked(api.requestSuggestion).mockRejectedValueOnce(
+      new ApiProblem({ status: 409, code: 'copilot_busy' }),
+    )
+    const { user } = renderPt()
+    await user.click(await screen.findByRole('button', { name: 'Sugerir' }))
+    expect(
+      await screen.findByText(
+        'O copiloto já está preparando uma sugestão. Aguarde alguns segundos.',
+      ),
+    ).toBeInTheDocument()
+  })
+})

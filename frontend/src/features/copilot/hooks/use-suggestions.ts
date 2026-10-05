@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useToast } from '@/components/ui'
 import type { ApiProblem } from '@/lib/api'
+import { i18n } from '@/lib/i18n'
 import { useOnReconnect } from '@/lib/realtime'
 import {
   copilotKeys,
@@ -100,8 +101,8 @@ export function useDiscardDraft(caseId: string) {
     onError: (_error, _id, context) => {
       if (context) queryClient.setQueryData(key, context.previous)
       toast({
-        title: 'No se descartó el borrador',
-        description: 'Inténtalo de nuevo en un momento.',
+        title: i18n.t('copilot:draft.discardFailedTitle'),
+        description: i18n.t('copilot:draft.discardFailedText'),
         politeness: 'alert',
       })
     },

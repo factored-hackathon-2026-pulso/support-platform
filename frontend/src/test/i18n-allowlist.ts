@@ -50,9 +50,5 @@ export const PENDING_AREAS: readonly PendingArea[] = [
     ],
     strings: 231,
   },
-  // ── copilot: Copiloto, Herramientas, the draft, the AI stage strip
-  { area: 'copilot', paths: ['src/features/copilot/'], strings: 91 },
-  // ── home: Inicio
-  { area: 'home', paths: ['src/features/home/'], strings: 90 },
   // ── end of the pending areas
 ]

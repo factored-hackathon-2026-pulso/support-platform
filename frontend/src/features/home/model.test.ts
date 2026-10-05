@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { NOW, makeCaseSummary, makeCounts, minutesFrom, seededInbox } from '@/test/case-fixtures'
 import { canvasFeed, makeActivityItem, makeHome } from '@/test/home-fixtures'
+import { setTestLocale } from '@/test/render'
 import {
-  EMPTY_FEED_COPY,
   activityLinkLabel,
   activityRow,
   activityTemplate,
   assistantSummary,
   availabilityBlockCopy,
   availableValue,
+  emptyFeedCopy,
   feedToggleLabel,
   feedTruncatedNote,
   firstCases,
@@ -481,7 +482,7 @@ describe('"Mientras no estabas" · rows', () => {
     expect(feedToggleLabel(5, 5, true)).toBe('Ver menos')
     expect(feedTruncatedNote(10, 14)).toBe('Se muestran las 10 más recientes de 14.')
     expect(feedTruncatedNote(5, 5)).toBeNull()
-    expect(EMPTY_FEED_COPY).toBe('Nada nuevo desde tu última sesión')
+    expect(emptyFeedCopy()).toBe('Nada nuevo desde tu última sesión')
   })
 })
 
@@ -523,5 +524,32 @@ describe('"Tu equipo ahora"', () => {
       expect.objectContaining({ language: 'pt', label: 'Esperan en la cola', value: '1' }),
     ])
     expect(queueWait({ language: 'es', waiting: 0, oldestQueuedAt: null }, NOW)).toBeNull()
+  })
+})
+
+describe('the fixed templates in Portuguese (slice 23)', () => {
+  it('words the rows, the plurals and the assistant line in pt-BR', () => {
+    setTestLocale('pt-BR')
+    const at = (overrides: Parameters<typeof makeActivityItem>[0]) =>
+      activityTemplate(makeActivityItem(overrides), NOW)
+    expect(greetingFor(20)).toBe('Boa noite')
+    expect(at({ kind: 'customer_messages', messageCount: 1 }).phrase).toBe('Escreveu 1 mensagem')
+    expect(at({ kind: 'customer_messages', messageCount: 3 }).phrase).toBe('Escreveu 3 mensagens')
+    expect(
+      texts(at({ kind: 'customer_returned', previousCasesCount: 2, lastCloseReason: null }).facts),
+    ).toEqual(['2 casos antes'])
+    expect(texts(at({ kind: 'reassigned_away', actorName: null, targetName: null }).facts)).toEqual(
+      ['Supervisão', 'Outra pessoa', 'Somente leitura'],
+    )
+    const summary = (resolved: number, handedToYou: number) =>
+      assistantSummary({ resolved, handedToYou, withAssistantNow: 0 })
+    expect(summary(1, 0)).toBe('Resolveu 1 conversa dos seus idiomas')
+    expect(summary(0, 1)).toBe('Passou 1 caso para você')
+    expect(summary(0, 2)).toBe('Passou 2 casos para você')
+    expect(feedTruncatedNote(10, 14)).toBe('Mostrando as 10 mais recentes de 14.')
+    expect(availabilityBlockCopy('paused', { openCases: 1 }).facts.map((f) => f.text)).toEqual([
+      'Sem casos novos',
+      '1 caso aberto',
+    ])
   })
 })

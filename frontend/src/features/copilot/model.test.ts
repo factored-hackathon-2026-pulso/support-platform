@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
 import {
-  STARTER_QUESTIONS,
   composerTextWithDraft,
   copilotNotice,
   copilotSurfaces,
@@ -16,6 +15,7 @@ import {
   normalizeQuestion,
   questionCounter,
   removeAsk,
+  starterQuestions,
   suggestionView,
   toolQuestion,
   toolResult,
@@ -99,7 +99,7 @@ describe('the question box', () => {
       'Consulta y calcula con los datos de Natalia. No hace cambios ni le escribe al cliente.',
     )
     expect(emptyThreadTitle('Natalia Guzmán Rincón')).toBe('Pregúntale sobre Natalia')
-    expect(STARTER_QUESTIONS).toHaveLength(3)
+    expect(starterQuestions()).toHaveLength(3)
   })
 })
 

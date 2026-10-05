@@ -4,18 +4,22 @@
  * the type is. No React, no I/O: unit-tested in stages.test.ts.
  */
 import type { Schemas } from '@/lib/api'
+import { i18n } from '@/lib/i18n'
 import type { CopilotMode } from './model'
+
+const t = i18n.getFixedT(null, 'copilot')
 
 export type AiStages = Schemas['AiStages']
 export type CaseTypeStage = Schemas['CaseTypeStage']
 type CaseType = Schemas['CaseType']
 
-/** What the copilot does for a type at each stage (IaWorkspace's stage line). */
-export const STAGE_TEXT: Readonly<Record<number, string>> = {
-  0: 'lo resuelve el equipo; el copiloto todavía no aprende de este tipo',
-  1: 'el copiloto responde lo que le preguntas',
-  2: 'el copiloto propone herramientas',
-  3: 'el copiloto propone respuestas y deja herramientas listas',
+/** The catalog key of each stage, 0 to 3 (`copilot:stage.text.*`). */
+const STAGE_KEYS = ['team', 'answers', 'tools', 'drafts'] as const
+
+/** What the copilot does for a type at a stage (IaWorkspace's stage line); '' for an unknown one. */
+export function stageText(stage: number): string {
+  const key = STAGE_KEYS[stage]
+  return key ? t(`stage.text.${key}`) : ''
 }
 
 /** The stage of a case's type, or null: AI off, the stages unknown yet, or no type. */
@@ -54,7 +58,7 @@ export function stageStrip(stage: CaseTypeStage): StageStripView {
     bars: [filled(1), filled(2), filled(3)],
     agent,
     line: agent
-      ? 'Con agente: el asistente virtual atiende este tipo y te pasa lo que no resuelve'
-      : `Etapa ${stage.stage} de 3: ${STAGE_TEXT[stage.stage] ?? ''}`,
+      ? t('stage.agent')
+      : t('stage.line', { stage: stage.stage, text: stageText(stage.stage) }),
   }
 }

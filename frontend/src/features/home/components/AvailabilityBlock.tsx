@@ -2,6 +2,7 @@ import { workspacePath } from '@/app/paths'
 import { Button, FactList, LinkButton, Skeleton, useToast } from '@/components/ui'
 import { useAvailability, useUpdateAvailability } from '@/features/cases'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { availabilityBlockCopy } from '../model'
 
 export interface AvailabilityBlockProps {
@@ -16,20 +17,21 @@ export interface AvailabilityBlockProps {
  * keeps both in sync).
  */
 export function AvailabilityBlock({ openCases }: AvailabilityBlockProps) {
+  const { t } = useTranslation(['home', 'common'])
   const availability = useAvailability()
   const update = useUpdateAvailability()
   const { toast } = useToast()
 
   const goToCases = (
     <LinkButton to={workspacePath()} variant="secondary" size="lg">
-      Ir a Casos
+      {t('availability.goToCases')}
     </LinkButton>
   )
 
   if (availability.status !== 'success') {
     return (
       <section
-        aria-label="Tu disponibilidad"
+        aria-label={t('availability.region')}
         aria-busy={availability.status === 'pending' || undefined}
         className="flex items-center justify-between gap-6 rounded-14 border border-border bg-surface px-6 py-5"
       >
@@ -39,13 +41,13 @@ export function AvailabilityBlock({ openCases }: AvailabilityBlockProps) {
             <Skeleton className="h-4 w-80" />
           </div>
         ) : (
-          <p className="m-0 text-17 font-semibold">No pudimos cargar tu estado</p>
+          <p className="m-0 text-17 font-semibold">{t('availability.loadError')}</p>
         )}
         <div className="flex shrink-0 gap-2.5">
           {goToCases}
           {availability.status === 'error' ? (
             <Button size="lg" onClick={() => void availability.refetch()}>
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
           ) : null}
         </div>
@@ -60,15 +62,15 @@ export function AvailabilityBlock({ openCases }: AvailabilityBlockProps) {
     update.mutate(paused ? 'available' : 'paused', {
       onError: () =>
         toast({
-          title: 'No pudimos cambiar tu estado',
-          description: 'Revisa tu conexión e inténtalo de nuevo.',
+          title: t('availability.updateError'),
+          description: t('common:query.errorDescription'),
           politeness: 'alert',
         }),
     })
 
   return (
     <section
-      aria-label="Tu disponibilidad"
+      aria-label={t('availability.region')}
       className={cn(
         'flex items-center justify-between gap-6 rounded-14 border px-6 py-5',
         paused ? 'border-warn-border bg-warn-soft' : 'border-success-border bg-success-soft',

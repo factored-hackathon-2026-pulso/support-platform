@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -27,9 +28,11 @@ from typing import ClassVar
 from cc_platform.domain.ai.events import (
     CopilotSuggestionDecided,
     CopilotSuggestionFailed,
+    CopilotSuggestionIgnored,
     CopilotSuggestionNone,
     CopilotSuggestionReady,
     CopilotSuggestionRequested,
+    CopilotSuggestionShown,
 )
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.aggregate import AggregateRoot
@@ -85,6 +88,32 @@ class ReplyDecision(StrEnum):
     """The analyst dismissed it."""
     IGNORED = "ignored"
     """Nobody decided: a newer suggestion replaced it, or it expired."""
+
+
+class EscalationDecision(StrEnum):
+    ACCEPTED = "accepted"
+    """She escalated with the recommendation."""
+    DISMISSED = "dismissed"
+    """She answered "Ahora no": the recommendation leaves her screen."""
+
+
+class IgnoreCause(StrEnum):
+    """Why a suggestion nobody used left the screen (``copilot.suggestion_ignored``)."""
+
+    REPLACED = "replaced"
+    CASE_CLOSED = "case_closed"
+    EXPIRED = "expired"
+
+
+#: What an agent-core code may look like in an event (``policy:fraude``, ``regla_monto@2``).
+#: Anything else is recorded as ``UNRECOGNIZED_CODE``: an event never carries a free text.
+_CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,119}")
+UNRECOGNIZED_CODE = "unrecognized"
+
+
+def event_code(code: str) -> str:
+    """``code`` when it looks like a code, ``UNRECOGNIZED_CODE`` otherwise."""
+    return code if _CODE.fullmatch(code) else UNRECOGNIZED_CODE
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,7 +473,10 @@ class CopilotSuggestion(AggregateRoot):
 
     @property
     def recommends_escalation(self) -> bool:
-        return any(isinstance(i, EscalationSuggestion) for i in self.items)
+        return self._escalation() is not None
+
+    def _escalation(self) -> EscalationSuggestion | None:
+        return next((i for i in self.items if isinstance(i, EscalationSuggestion)), None)
 
     def is_expired(self, now: datetime) -> bool:
         return now - self.created_at >= DRAFT_TTL
@@ -512,14 +544,36 @@ class CopilotSuggestion(AggregateRoot):
 
     def escalation_taken(self, *, at: datetime) -> bool:
         """She escalated using this recommendation. Returns whether anything changed."""
+        escalation = self._escalation()
         if (
             self.status is not SuggestionStatus.READY
-            or not self.recommends_escalation
+            or escalation is None
             or self.escalation_accepted
         ):
             return False
         self.escalation_accepted = True
         self.updated_at = at
+        self._decide_escalation(EscalationDecision.ACCEPTED, escalation, at)
+        return True
+
+    def dismiss_escalation(self, *, at: datetime) -> bool:
+        """She answered "Ahora no" to the recommendation: it leaves the suggestion (like a decided
+        draft), so it does not come back. Returns whether anything changed."""
+        escalation = self._escalation()
+        if (
+            self.status is not SuggestionStatus.READY
+            or escalation is None
+            or self.escalation_accepted
+        ):
+            return False
+        self.items = tuple(i for i in self.items if not isinstance(i, EscalationSuggestion))
+        self.updated_at = at
+        self._decide_escalation(EscalationDecision.DISMISSED, escalation, at)
+        return True
+
+    def _decide_escalation(
+        self, decision: EscalationDecision, escalation: EscalationSuggestion, at: datetime
+    ) -> None:
         self._record(
             CopilotSuggestionDecided(
                 occurred_at=at,
@@ -527,8 +581,51 @@ class CopilotSuggestion(AggregateRoot):
                 entity_id=self.id,
                 case_id=self.case_id,
                 subject="escalation",
-                decision="accepted",
+                decision=decision.value,
                 agent=self.agent,
+                release=self.release,
+                reason_code=event_code(escalation.reason_code),
+            )
+        )
+
+    # ------------------------------------------------------------------ what her screen did
+    def record_shown(self, *, stale: bool, at: datetime) -> bool:
+        """Her screen showed it (``copilot.suggestion_shown``). Only a ``ready`` suggestion with
+        something left on it; the caller records it once per suggestion."""
+        if self.status is not SuggestionStatus.READY or not self.items:
+            return False
+        self._record(
+            CopilotSuggestionShown(
+                occurred_at=at,
+                actor=ActorRef(ActorRole.ANALYST, self.analyst_id),
+                entity_id=self.id,
+                case_id=self.case_id,
+                analyst_id=self.analyst_id,
+                agent=self.agent,
+                kinds=tuple(dict.fromkeys(i.kind for i in self.items)),
+                count=len(self.items),
+                stale=stale,
+                release=self.release,
+            )
+        )
+        return True
+
+    def record_ignored(self, *, cause: IgnoreCause, shown: bool, at: datetime) -> bool:
+        """It left her screen and nothing of it was used (``copilot.suggestion_ignored``). The
+        caller knows that (the tools used are not part of the aggregate) and records it once."""
+        if self.status is not SuggestionStatus.READY:
+            return False
+        self._record(
+            CopilotSuggestionIgnored(
+                occurred_at=at,
+                actor=ActorRef.system(),
+                entity_id=self.id,
+                case_id=self.case_id,
+                analyst_id=self.analyst_id,
+                agent=self.agent,
+                cause=cause.value,
+                kinds=self.kinds,
+                shown=shown,
                 release=self.release,
             )
         )

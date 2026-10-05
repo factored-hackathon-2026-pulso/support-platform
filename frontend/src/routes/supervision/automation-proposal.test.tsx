@@ -8,9 +8,11 @@ import {
   fetchAlias,
   fetchBuilderStatus,
   fetchProposal,
+  fetchProposalRecord,
   fetchProposals,
   fetchRelease,
   freezeProposal,
+  promoteAlias,
   publishProposal,
   rejectProposal,
   validateProposal,
@@ -24,11 +26,16 @@ import {
   BASE_RELEASE_ID,
   BUILDER_OFF,
   BUILDER_ON,
+  EVIDENCE_CASE_ID,
+  GONE_CASE_ID,
   PROPOSAL_ID,
   RELEASE_ID,
   makeAlias,
   makeEvalReport,
+  makeHistoryEntry,
+  makeImprovement,
   makeProposalDetail,
+  makeRecord,
   makeRelease,
 } from '@/test/automation-fixtures'
 import { supervisorStaff } from '@/test/fixtures'
@@ -43,6 +50,8 @@ vi.mock('@/features/automation/api', async (importOriginal) => {
     fetchBuilderStatus: vi.fn<typeof actual.fetchBuilderStatus>(),
     fetchProposals: vi.fn<typeof actual.fetchProposals>(),
     fetchProposal: vi.fn<typeof actual.fetchProposal>(),
+    fetchProposalRecord: vi.fn<typeof actual.fetchProposalRecord>(),
+    promoteAlias: vi.fn<typeof actual.promoteAlias>(),
     validateProposal: vi.fn<typeof actual.validateProposal>(),
     freezeProposal: vi.fn<typeof actual.freezeProposal>(),
     evaluateProposal: vi.fn<typeof actual.evaluateProposal>(),
@@ -72,6 +81,9 @@ beforeEach(() => {
   vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
   vi.mocked(fetchProposals).mockResolvedValue({ items: [], registryListed: true })
   vi.mocked(fetchQueueOverview).mockResolvedValue(makeQueueOverview())
+  vi.mocked(fetchProposalRecord).mockResolvedValue(makeRecord())
+  // By default the agent runs nowhere yet (its first activation).
+  vi.mocked(fetchAlias).mockRejectedValue(problem(404, 'registry_not_found'))
   vi.mocked(fetchRelease).mockImplementation((releaseId) =>
     Promise.resolve(
       releaseId === RELEASE_ID
@@ -296,11 +308,30 @@ describe('a proposal (slice 22)', () => {
     const { user } = renderProposal()
     await user.click(await screen.findByRole('button', { name: 'Rechazar' }))
     const dialog = screen.getByRole('dialog', { name: 'Rechazar' })
-    await user.type(within(dialog).getByRole('textbox', { name: /Motivo/ }), 'Falta el traspaso')
+    const reasons = within(dialog).getByRole('combobox', { name: /Motivo/ })
+    expect(
+      within(reasons)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual([
+      'Elige un motivo',
+      'Falta evidencia',
+      'Cambia el elemento equivocado',
+      'Demasiado riesgo',
+      'Repite otra propuesta',
+      'Choca con una política',
+      'Hay que mejorar la redacción',
+      'Otro motivo',
+    ])
+    await user.type(within(dialog).getByRole('textbox', { name: /Detalle/ }), 'Falta el traspaso')
     await typeCode(user, dialog, '000000')
+    // the reason is required before the code is sent
+    expect(within(dialog).getByRole('button', { name: 'Rechazar' })).toBeDisabled()
+    await user.selectOptions(reasons, 'wording')
     await user.click(within(dialog).getByRole('button', { name: 'Rechazar' }))
     expect(rejectProposal).toHaveBeenCalledWith(PROPOSAL_ID, {
       reason: 'Falta el traspaso',
+      reasonCode: 'wording',
       stepUpCode: '000000',
     })
   })
@@ -374,8 +405,10 @@ describe('a proposal (slice 22)', () => {
     vi.mocked(fetchProposal).mockResolvedValue(
       makeProposalDetail({ state: 'published', candidateHash: 'h1' }),
     )
-    vi.mocked(fetchAlias).mockResolvedValue(
-      makeAlias({ agentId: 'cobros', alias: 'staging', releaseId: RELEASE_ID }),
+    vi.mocked(fetchAlias).mockImplementation((agentId, alias) =>
+      alias === 'staging'
+        ? Promise.resolve(makeAlias({ agentId, alias, releaseId: RELEASE_ID }))
+        : Promise.reject(problem(404, 'registry_not_found')),
     )
     const { user, router } = renderProposal(PATH)
     const select = await screen.findByRole('combobox', { name: 'Tipo de caso que atenderá' })
@@ -399,5 +432,275 @@ describe('a proposal (slice 22)', () => {
     expect(screen.getByText('Para Cobrança indevida')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Aprovar' }))
     expect(screen.getByRole('dialog', { name: 'Aprovar' })).toHaveTextContent('Confirme que é você')
+  })
+})
+
+describe("an improvement engine's proposal (P6: dossier and decisions)", () => {
+  const ENGINE_PATH = PATH
+  const engineHistory = [
+    makeHistoryEntry('tracked', { source: 'engine', actorId: null, actorName: null }),
+  ]
+
+  function engineProposal(proposal: Parameters<typeof makeProposalDetail>[0] = {}) {
+    vi.mocked(fetchProposal).mockResolvedValue(
+      makeProposalDetail({
+        agentId: 'disputas',
+        origin: 'auto_detect',
+        baseReleaseId: BASE_RELEASE_ID,
+        title: '[improvement-engine] disputas confirmar-cargo',
+        ...proposal,
+      }),
+    )
+  }
+
+  it('shows the dossier as plain text with its evidence cases as case links', async () => {
+    engineProposal()
+    vi.mocked(fetchProposalRecord).mockResolvedValue(
+      makeRecord({ improvement: makeImprovement(), history: engineHistory }),
+    )
+    renderProposal(ENGINE_PATH)
+    const dossier = await screen.findByRole('region', { name: 'Informe del motor de mejora' })
+    expect(
+      within(dossier).getByText('Disputas: confirmar el cargo antes de pedir el comprobante'),
+    ).toBeInTheDocument()
+    const problemText = within(dossier).getByText(/Los clientes con un cargo no reconocido/)
+    expect(problemText.textContent).toBe(
+      'Los clientes con un cargo no reconocido escalan más por chat.\nEl paso de confirmación falta.',
+    )
+    expect(problemText).toHaveClass('whitespace-pre-line')
+    expect(within(dossier).getByText('Efecto esperado')).toBeInTheDocument()
+    expect(within(dossier).getByText(/Celda: 96 de 240/)).toBeInTheDocument()
+    // Spanish UI: no note about the dossier's language
+    expect(
+      within(dossier).queryByText('El motor de mejora escribe este informe en español.'),
+    ).not.toBeInTheDocument()
+    const cases = within(dossier).getByRole('list', { name: 'Casos de evidencia del informe' })
+    expect(
+      within(cases).getByRole('link', { name: `Abrir el caso ${EVIDENCE_CASE_ID}` }),
+    ).toHaveAttribute('href', `/supervision/cases/${EVIDENCE_CASE_ID}`)
+    expect(within(cases).getByText('Cargo no reconocido')).toBeInTheDocument()
+    expect(within(cases).getByText('Cerrado')).toBeInTheDocument()
+    // a case the platform no longer has: listed, without a link
+    expect(within(cases).getByText(GONE_CASE_ID)).toBeInTheDocument()
+    expect(within(cases).queryByRole('link', { name: new RegExp(GONE_CASE_ID) })).toBeNull()
+    expect(within(cases).getByText('Ya no está en la plataforma')).toBeInTheDocument()
+    // the history starts with the engine's announcement
+    const history = screen.getByRole('region', { name: 'Historial' })
+    expect(within(history).getByText('El motor de mejora la anunció')).toBeInTheDocument()
+  })
+
+  it('says when the engine attached no cases', async () => {
+    engineProposal()
+    vi.mocked(fetchProposalRecord).mockResolvedValue(
+      makeRecord({ improvement: makeImprovement({ evidenceCases: [] }), history: engineHistory }),
+    )
+    renderProposal(ENGINE_PATH)
+    expect(
+      await screen.findByText('El motor no adjuntó casos: la evidencia es agregada.'),
+    ).toBeInTheDocument()
+  })
+
+  it('in Portuguese, says the engine writes the dossier in Spanish', async () => {
+    engineProposal()
+    vi.mocked(fetchProposalRecord).mockResolvedValue(
+      makeRecord({ improvement: makeImprovement(), history: engineHistory }),
+    )
+    renderProposal(ENGINE_PATH, 'pt-BR')
+    const dossier = await screen.findByRole('region', { name: 'Relatório do motor de melhoria' })
+    expect(
+      within(dossier).getByText('O motor de melhoria escreve este relatório em espanhol.'),
+    ).toBeInTheDocument()
+    expect(within(dossier).getByText('Efeito esperado')).toBeInTheDocument()
+    expect(within(dossier).getByText(/Los clientes con un cargo/)).toHaveAttribute('lang', 'es')
+    expect(within(dossier).getByText('Não está mais na plataforma')).toBeInTheDocument()
+  })
+
+  it('shows no dossier for a proposal the engine did not announce', async () => {
+    vi.mocked(fetchProposal).mockResolvedValue(makeProposalDetail())
+    vi.mocked(fetchProposalRecord).mockResolvedValue(
+      makeRecord({ history: [makeHistoryEntry('created')] }),
+    )
+    renderProposal()
+    expect(await screen.findByText('Lucía Gómez creó la propuesta')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'Informe del motor de mejora' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('says so when the engine announced it but its dossier is gone', async () => {
+    engineProposal()
+    vi.mocked(fetchProposalRecord).mockResolvedValue(makeRecord({ history: engineHistory }))
+    renderProposal(ENGINE_PATH)
+    expect(
+      await screen.findByText(
+        'El motor de mejora anunció esta propuesta, pero ya no encontramos su informe en la plataforma.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('tells the verdict story: tests, a rejection with its reason, approval and production', async () => {
+    engineProposal({ state: 'published', candidateHash: 'h1' })
+    vi.mocked(fetchProposalRecord).mockResolvedValue(
+      makeRecord({
+        history: [
+          ...engineHistory,
+          makeHistoryEntry('evaluated', { verdict: 'fail', items: 3, itemsFailed: 1 }),
+          makeHistoryEntry('rejected', { reasonCode: 'insufficient_evidence' }),
+          makeHistoryEntry('evaluated', { verdict: 'pass', items: 3, itemsFailed: 0 }),
+          makeHistoryEntry('approved'),
+          makeHistoryEntry('published', { releaseId: RELEASE_ID }),
+          makeHistoryEntry('promoted', { alias: 'prod', releaseId: RELEASE_ID }),
+        ],
+      }),
+    )
+    vi.mocked(fetchAlias).mockImplementation((agentId, alias) =>
+      Promise.resolve(makeAlias({ agentId, alias, releaseId: RELEASE_ID })),
+    )
+    renderProposal(ENGINE_PATH)
+    const history = await screen.findByRole('region', { name: 'Historial' })
+    const steps = within(history)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent ?? '')
+    expect(steps).toHaveLength(7)
+    expect(steps[1]).toContain('No pasó la prueba y volvió a borrador')
+    expect(steps[1]).toContain('2 de 3 criterios')
+    expect(steps[2]).toContain('Lucía Gómez la rechazó')
+    expect(steps[2]).toContain('Falta evidencia')
+    expect(steps[5]).toContain(`Versión ${RELEASE_ID}`)
+    expect(steps[6]).toContain('Lucía Gómez la pasó a producción')
+    // prod holds this proposal's release: the last step is done
+    expect(
+      await screen.findByRole('heading', {
+        name: 'La versión de esta propuesta ya está en producción',
+      }),
+    ).toBeInTheDocument()
+    const stepper = screen.getByRole('list', { name: 'Avance de la propuesta' })
+    expect(within(stepper).getByText('En producción')).toBeInTheDocument()
+    expect(within(stepper).getAllByText('Hecho')).toHaveLength(6)
+  })
+
+  it('compares the current version with the proposal, criterion by criterion', async () => {
+    vi.mocked(fetchProposal).mockResolvedValue(
+      makeProposalDetail(
+        { state: 'evaluated', candidateHash: 'h1', agentId: 'disputas' },
+        {
+          lastEval: {
+            evalRunId: 'ev-1',
+            proposalId: PROPOSAL_ID,
+            candidateHash: 'h1',
+            baseReleaseId: BASE_RELEASE_ID,
+            suite: { kind: 'eval_suite', id: 'suite-disputas', version: '1.0.0' },
+            verdict: 'pass',
+            report: makeEvalReport({
+              items: makeEvalReport().items.map((item) => ({ ...item, passed: true })),
+            }),
+            at: '2026-10-05T14:00:00Z',
+          },
+        },
+      ),
+    )
+    renderProposal(ENGINE_PATH)
+    const table = await screen.findByRole('table', { name: 'Resultado de la prueba' })
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((th) => th.textContent),
+    ).toEqual(['Criterio', 'Versión actual', 'Esta propuesta', 'Mínimo', 'Resultado'])
+    const row = within(table).getByRole('row', { name: /resuelve_sin_persona/ })
+    expect(within(row).getByText('0.90')).toBeInTheDocument()
+    expect(within(row).getByText('0.92')).toBeInTheDocument()
+    expect(within(row).getByText('0.85')).toBeInTheDocument()
+    expect(
+      screen.getByText('La prueba la deja lista para aprobar: cumple todos los criterios.'),
+    ).toBeInTheDocument()
+  })
+
+  it('a draft rejected before says why', async () => {
+    engineProposal()
+    vi.mocked(fetchProposal).mockResolvedValue(
+      makeProposalDetail(
+        { agentId: 'disputas' },
+        {
+          lastDecision: {
+            decision: 'rejected',
+            reasonCode: 'policy_conflict',
+            decidedAt: '2026-10-05T13:00:00Z',
+          },
+        },
+      ),
+    )
+    renderProposal(ENGINE_PATH)
+    expect(await screen.findByText('La última vez se rechazó')).toBeInTheDocument()
+    expect(screen.getByText('Choca con una política')).toBeInTheDocument()
+  })
+
+  it('passes a new version of an agent in production to production with her code', async () => {
+    engineProposal({ state: 'published', candidateHash: 'h1' })
+    vi.mocked(fetchProposalRecord).mockResolvedValue(
+      makeRecord({
+        history: [...engineHistory, makeHistoryEntry('published', { releaseId: RELEASE_ID })],
+      }),
+    )
+    vi.mocked(fetchAlias).mockImplementation((agentId, alias) =>
+      Promise.resolve(
+        makeAlias({
+          agentId,
+          alias,
+          releaseId: alias === 'prod' ? BASE_RELEASE_ID : RELEASE_ID,
+        }),
+      ),
+    )
+    vi.mocked(promoteAlias).mockImplementation(() => {
+      vi.mocked(fetchAlias).mockImplementation((agentId, alias) =>
+        Promise.resolve(makeAlias({ agentId, alias, releaseId: RELEASE_ID })),
+      )
+      return Promise.resolve({})
+    })
+    const { user } = renderProposal(ENGINE_PATH)
+    const panel = await screen.findByRole('region', { name: 'Pasar a producción' })
+    expect(screen.queryByRole('button', { name: 'Activar agente' })).not.toBeInTheDocument()
+    expect(within(panel).getByText(BASE_RELEASE_ID)).toBeInTheDocument()
+    expect(within(panel).getByText(RELEASE_ID)).toBeInTheDocument()
+    const stepper = screen.getByRole('list', { name: 'Avance de la propuesta' })
+    expect(within(stepper).getByText('En producción')).toBeInTheDocument()
+    const submit = within(panel).getByRole('button', { name: 'Pasar a producción' })
+    await user.click(submit)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.click(
+      within(panel).getByRole('checkbox', { name: 'Revisé el resultado de la prueba' }),
+    )
+    await user.click(submit)
+    const dialog = screen.getByRole('dialog', {
+      name: 'Pasar a producción la versión de esta propuesta',
+    })
+    await typeCode(user, dialog, '000000')
+    await user.click(within(dialog).getByRole('button', { name: 'Pasar a producción' }))
+    expect(promoteAlias).toHaveBeenCalledWith('disputas', 'prod', {
+      releaseId: RELEASE_ID,
+      reason: '',
+      stepUpCode: '000000',
+    })
+    expect(
+      await screen.findByRole('heading', {
+        name: 'La versión de esta propuesta ya está en producción',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('speaks Portuguese on the way to production', async () => {
+    engineProposal({ state: 'published', candidateHash: 'h1' })
+    vi.mocked(fetchProposalRecord).mockResolvedValue(
+      makeRecord({
+        history: [...engineHistory, makeHistoryEntry('published', { releaseId: RELEASE_ID })],
+      }),
+    )
+    vi.mocked(fetchAlias).mockImplementation((agentId, alias) =>
+      Promise.resolve(makeAlias({ agentId, alias, releaseId: BASE_RELEASE_ID })),
+    )
+    renderProposal(ENGINE_PATH, 'pt-BR')
+    const panel = await screen.findByRole('region', { name: 'Passar para produção' })
+    expect(within(panel).getByRole('button', { name: 'Passar para produção' })).toBeInTheDocument()
+    expect(screen.getByText('Em produção')).toBeInTheDocument()
+    expect(screen.getByText('O motor de melhoria a anunciou')).toBeInTheDocument()
   })
 })

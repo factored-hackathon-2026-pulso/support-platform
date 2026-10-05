@@ -37,14 +37,23 @@ from cc_platform.application.ai.suggestion_filter import is_trivial
 from cc_platform.application.cases.queries import load_case_for
 from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.ports.clock import Clock
+from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor, ensure_any_role
 from cc_platform.domain.ai.errors import CopilotBusyError, CopilotUnavailableError
+from cc_platform.domain.ai.events import (
+    CopilotSuggestionDecided,
+    CopilotSuggestionIgnored,
+    CopilotSuggestionShown,
+)
 from cc_platform.domain.ai.maturity import CopilotMode
+from cc_platform.domain.ai.maturity_events import CopilotToolUsed
 from cc_platform.domain.ai.suggestion import (
     DRAFT_TTL,
     CopilotSuggestion,
+    IgnoreCause,
+    ReplyDecision,
     SuggestionStatus,
     SuggestionTrigger,
 )
@@ -339,8 +348,8 @@ class SuggestionService:
             existing.restart(based_on_sequence=case.last_sequence, at=now)
             await uow.copilot_suggestions.save(existing)
             return existing
-        if latest is not None and latest.ignore_reply(at=now):  # a newer one replaces it
-            await uow.copilot_suggestions.save(latest)
+        if latest is not None:  # a newer one replaces it
+            await end_suggestion(uow, latest, IgnoreCause.REPLACED, now)
         suggestion = CopilotSuggestion.request(
             suggestion_id=self.ids.new_id(IdPrefix.COPILOT_SUGGESTION),
             case_id=case.id,
@@ -501,18 +510,33 @@ class GetLatestSuggestion:
         return LatestSuggestionView(available=True, latest=SuggestionView(latest, stale))
 
 
+#: What ``POST …/feedback`` takes, per subject: the draft is dismissed or left; the
+#: recommendation to escalate is dismissed ("Ahora no").
+FEEDBACK_DECISIONS: dict[str, frozenset[str]] = {
+    "reply": frozenset({"discarded", "ignored"}),
+    "escalation": frozenset({"dismissed"}),
+}
+
+
 @dataclass(frozen=True, slots=True)
 class DecideSuggestion:
-    """``POST …/suggestions/{id}/feedback``: the analyst dismissed the draft."""
+    """``POST …/suggestions/{id}/feedback``: the analyst dismissed the draft (``reply``) or the
+    recommendation to escalate (``escalation``, "Ahora no")."""
 
     uow: UnitOfWorkFactory
     clock: Clock
 
     async def execute(
-        self, actor: Actor, case_id: str, suggestion_id: str, *, decision: str
+        self,
+        actor: Actor,
+        case_id: str,
+        suggestion_id: str,
+        *,
+        decision: str,
+        subject: str = "reply",
     ) -> SuggestionView:
         ensure_any_role(actor, {StaffRole.ANALYST})
-        if decision not in ("discarded", "ignored"):
+        if decision not in FEEDBACK_DECISIONS.get(subject, frozenset()):
             raise InvalidValueError("Elige descartar o ignorar.", field="decision")
         return await retry_on_conflict(
             partial(self._attempt, actor, case_id, suggestion_id, decision)
@@ -525,11 +549,12 @@ class DecideSuggestion:
             case = await load_case_for(uow, actor, case_id, write=True)
             suggestion = await _mine(uow, case, actor, suggestion_id)
             now = self.clock.now()
-            changed = (
-                suggestion.discard_reply(at=now)
-                if decision == "discarded"
-                else suggestion.ignore_reply(at=now)
-            )
+            if decision == "dismissed":
+                changed = suggestion.dismiss_escalation(at=now)
+            elif decision == "discarded":
+                changed = suggestion.discard_reply(at=now)
+            else:
+                changed = suggestion.ignore_reply(at=now)
             if changed:
                 await uow.copilot_suggestions.save(suggestion)
                 await uow.commit()
@@ -609,11 +634,137 @@ class PurgeSuggestionDrafts:
             purged = 0
             for suggestion in due:
                 if suggestion.purge(at=now):
+                    await record_unused(uow, suggestion, IgnoreCause.EXPIRED, now)
                     await uow.copilot_suggestions.save(suggestion)
                     purged += 1
             if purged:
                 await uow.commit()
         return purged
+
+
+@dataclass(frozen=True, slots=True)
+class RecordSuggestionShown:
+    """``POST …/suggestions/{id}/shown``: her screen showed the suggestion (the draft, the
+    recommendation or "Herramientas"). ``copilot.suggestion_shown`` once per suggestion; a
+    repeat, or a suggestion with nothing left to show, records nothing."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+
+    async def execute(self, actor: Actor, case_id: str, suggestion_id: str) -> bool:
+        ensure_any_role(actor, {StaffRole.ANALYST})
+        return await retry_on_conflict(partial(self._attempt, actor, case_id, suggestion_id))
+
+    async def _attempt(self, actor: Actor, case_id: str, suggestion_id: str) -> bool:
+        async with self.uow() as uow:
+            case = await load_case_for(uow, actor, case_id, write=True)
+            suggestion = await _mine(uow, case, actor, suggestion_id)
+            now = self.clock.now()
+            if suggestion.purged_at is not None or suggestion.is_expired(now):
+                return False
+            if (await suggestion_history(uow, suggestion)).shown:
+                return False
+            stale = await _is_stale(uow, case, suggestion)
+            if not suggestion.record_shown(stale=stale, at=now):
+                return False
+            await uow.copilot_suggestions.save(suggestion)
+            await uow.commit()
+        return True
+
+
+@dataclass(frozen=True, slots=True)
+class EndSuggestionsOnClose:
+    """The case closed: its newest suggestion leaves the analyst's screen. An undecided draft
+    becomes ``ignored`` and, when nothing of it was used, ``copilot.suggestion_ignored``
+    (``case_closed``). Runs in the background after the close (best effort)."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+
+    async def execute(self, case_id: str, analyst_id: str) -> bool:
+        return await retry_on_conflict(partial(self._attempt, case_id, analyst_id))
+
+    async def _attempt(self, case_id: str, analyst_id: str) -> bool:
+        async with self.uow() as uow:
+            latest = await uow.copilot_suggestions.latest_for(case_id, analyst_id)
+            if latest is None or latest.purged_at is not None:
+                return False
+            if not await end_suggestion(uow, latest, IgnoreCause.CASE_CLOSED, self.clock.now()):
+                return False
+            await uow.commit()
+        return True
+
+
+# ------------------------------------------------------------------- what happened to it (log)
+#: The events of a case read to tell what happened to one of its suggestions.
+_HISTORY_TYPES = frozenset(
+    {
+        CopilotSuggestionDecided.event_type,
+        CopilotSuggestionShown.event_type,
+        CopilotSuggestionIgnored.event_type,
+        CopilotToolUsed.event_type,
+    }
+)
+_HISTORY_LIMIT = 500
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestionHistory:
+    """What the event log says about one suggestion (the aggregate does not keep it)."""
+
+    shown: bool
+    used: bool
+    """The analyst did something with it: a draft used, edited or discarded, a recommendation
+    accepted or dismissed, a tool used."""
+    ignored: bool
+
+
+async def suggestion_history(uow: UnitOfWork, suggestion: CopilotSuggestion) -> SuggestionHistory:
+    events = [
+        event
+        for event in await uow.event_log.search(
+            AuditFilters(case_id=suggestion.case_id, event_types=_HISTORY_TYPES),
+            before=None,
+            limit=_HISTORY_LIMIT,
+        )
+        if event.entity_id == suggestion.id
+    ]
+    types = {event.event_type for event in events}
+    decided = any(
+        event.event_type == CopilotSuggestionDecided.event_type
+        and event.payload.get("decision") != ReplyDecision.IGNORED.value
+        for event in events
+    )
+    return SuggestionHistory(
+        shown=CopilotSuggestionShown.event_type in types,
+        used=decided or CopilotToolUsed.event_type in types,
+        ignored=CopilotSuggestionIgnored.event_type in types,
+    )
+
+
+async def record_unused(
+    uow: UnitOfWork, suggestion: CopilotSuggestion, cause: IgnoreCause, now: datetime
+) -> bool:
+    """``copilot.suggestion_ignored`` for a ``ready`` suggestion nothing of which was used, once.
+    The caller saves the suggestion."""
+    if suggestion.status is not SuggestionStatus.READY:
+        return False
+    history = await suggestion_history(uow, suggestion)
+    if history.used or history.ignored:
+        return False
+    return suggestion.record_ignored(cause=cause, shown=history.shown, at=now)
+
+
+async def end_suggestion(
+    uow: UnitOfWork, suggestion: CopilotSuggestion, cause: IgnoreCause, now: datetime
+) -> bool:
+    """The suggestion leaves her screen (a newer one, the case closed): an undecided draft is
+    ``ignored`` and an unused suggestion recorded as such. Saves it when anything changed."""
+    changed = suggestion.ignore_reply(at=now)
+    changed = await record_unused(uow, suggestion, cause, now) or changed
+    if changed:
+        await uow.copilot_suggestions.save(suggestion)
+    return changed
 
 
 # ----------------------------------------------------------------------------------- helpers

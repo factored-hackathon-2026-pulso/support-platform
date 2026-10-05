@@ -20,12 +20,14 @@ from cc_platform.application.ai.customer import (
     VerifyAssistantStepUp,
 )
 from cc_platform.application.ai.grants import GetGrantStatus
+from cc_platform.application.ai.proposal_record import GetProposalRecord
 from cc_platform.application.ai.staff import GetCaseHandoff, ReleaseAssistantCase
 from cc_platform.application.ai.suggestions import (
     DecideSuggestion,
     GetLatestSuggestion,
     LinkSuggestion,
     PurgeSuggestionDrafts,
+    RecordSuggestionShown,
     RequestSuggestion,
     SuggestionService,
 )
@@ -41,6 +43,8 @@ class BuilderUseCases:
     restart: RestartBuilderThread
     # ADR 0007: the improvement engine's announcement (service token, no human session)
     announce: AnnounceImprovement
+    # slice 22: the engine's dossier and the decisions' history of a proposal (local reads)
+    record: GetProposalRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +58,7 @@ class SuggestionUseCases:
     decide: DecideSuggestion
     link: LinkSuggestion
     purge: PurgeSuggestionDrafts
+    shown: RecordSuggestionShown
 
 
 @dataclass(frozen=True, slots=True)

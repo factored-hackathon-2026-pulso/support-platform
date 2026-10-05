@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useToast } from '@/components/ui'
 import type { ApiProblem } from '@/lib/api'
@@ -8,10 +8,11 @@ import {
   copilotKeys,
   copilotMutationKeys,
   fetchLatestSuggestion,
+  recordSuggestionShown,
   requestSuggestion,
   sendSuggestionFeedback,
 } from '../api'
-import { describeSuggestFailure } from '../model'
+import { describeSuggestFailure, type SuggestionView } from '../model'
 import type { CopilotSuggestion, LatestCopilotSuggestion } from '../types'
 
 /**
@@ -107,4 +108,41 @@ export function useDiscardDraft(caseId: string) {
       })
     },
   })
+}
+
+/**
+ * "Ahora no" on the recommendation to escalate: the feedback (`subject: escalation`,
+ * `dismissed`) so it is recorded and does not come back. The notice hides at once (the caller's
+ * state); a failure is quiet: the recommendation simply stays hidden in this session.
+ */
+export function useDismissEscalation(caseId: string) {
+  const queryClient = useQueryClient()
+  const key = copilotKeys.latest(caseId)
+  return useMutation<CopilotSuggestion, ApiProblem, string>({
+    mutationKey: copilotMutationKeys.feedback(caseId),
+    mutationFn: (suggestionId) =>
+      sendSuggestionFeedback(caseId, suggestionId, 'dismissed', 'escalation'),
+    onSuccess: (suggestion) =>
+      queryClient.setQueryData<LatestCopilotSuggestion>(key, (current) =>
+        current?.suggestion?.id === suggestion.id ? { ...current, suggestion } : current,
+      ),
+  })
+}
+
+/**
+ * Tells the backend that her screen shows a `ready` suggestion (event catalog 1.3.0,
+ * `copilot.suggestion_shown`). The draft, the recommendation and "Herramientas" all call it with
+ * whether they show something of it: the first one on screen reports it, once per suggestion in
+ * this session (the backend also records it only once). Best effort: a failure is ignored.
+ */
+export function useReportShown(caseId: string, view: SuggestionView | null, visible: boolean) {
+  const queryClient = useQueryClient()
+  const id = visible && view?.status === 'ready' ? view.id : null
+  useEffect(() => {
+    if (!id) return
+    const key = copilotKeys.shown(caseId, id)
+    if (queryClient.getQueryData(key)) return
+    queryClient.setQueryData(key, true)
+    recordSuggestionShown(caseId, id).catch(() => undefined)
+  }, [caseId, id, queryClient])
 }

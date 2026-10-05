@@ -479,7 +479,9 @@ New feature `automation` (only `index.ts`: the shell needs nothing from it). Sup
 - **Pure**: `model.ts` (the panorama and one type: `stageView`, `signalLine`, `maturitySteps`, `ruleLines`,
   `draftBreakdown`, `moveBackOptions`, `agentIdFor`: the type's `agentId` or a suggested id), `proposals.ts`
   (states and steps, `proposalSource` incl. the improvement engine's `engine`, `changeView`, `draftTools`,
-  `draftLanguages`, `suiteFor`, `reportView`, `describeBuilderFailure`), `agents.ts` (derived list, run status,
+  `draftLanguages`, `suiteFor`, `reportView` (base vs candidate, failed first, the gate's decision), `endStepFor`
+  (Activar or Pasar a producción), `REASON_CODES` / `reasonCodeLabel`, `historyView`, `describeBuilderFailure`),
+  `agents.ts` (derived list, run status,
   rollback and promotion targets), `builder-chat.ts` (`chatEntries`; `agentRequest`, `isValidAgentId`, `fitGoal`,
   `newProposals`: "Proponer un agente" in `constructor-chat`'s format, the agent id then a goal of at most
   200 characters, in the UI language), `url.ts` (`?type=`).
@@ -492,7 +494,8 @@ New feature `automation` (only `index.ts`: the shell needs nothing from it). Sup
 - **Screens**: `AutomationGate` (AI unknown → spinner, off → Colas), `AutomationFrame` (path, title, section links
   Tipos de caso · Agentes · Propuestas as `nav` + `aria-current`, the "Constructor de agentes" sheet any screen opens
   through `useBuilderChatPanel`), `TypesScreen` + `TypePanel` (move back dialog), `ProposalsScreen`, `ProposalScreen`
-  (stepper, `ProposalNextStep`, `EvaluationReport`, `ActivatePanel`), `AgentsScreen`, `AgentScreen`. Every decision
+  (stepper, `ImprovementDossier`, `ProposalNextStep`, `EvaluationReport`, `ProposalHistory`, `ActivatePanel` or
+  `PromotePanel` by `endStepFor`), `AgentsScreen`, `AgentScreen`. Every decision
   goes through `StepUpDialog` (the code boxes; a wrong code clears them and says the attempts left).
 - Test fixtures: `src/test/automation-fixtures.ts`.
 

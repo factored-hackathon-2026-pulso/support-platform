@@ -474,6 +474,6 @@ async def test_availability_round_trip(container: Container) -> None:
     # The seeded pause (slice 3 §9.3), then this change only (the repeat records nothing).
     assert [e.event_type for e in events] == ["staff.availability_changed"] * 2
     assert [e.payload for e in events] == [
-        {"from_status": "available", "to_status": "paused"},
-        {"from_status": "paused", "to_status": "available"},
+        {"from_status": "available", "to_status": "paused", "schema_version": 1},
+        {"from_status": "paused", "to_status": "available", "schema_version": 1},
     ]

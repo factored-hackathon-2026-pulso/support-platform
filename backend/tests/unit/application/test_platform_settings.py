@@ -72,7 +72,10 @@ async def test_administration_turns_it_off_once(world: Container) -> None:
     assert await platform.ai_switch.is_on() is False
     on = await platform.set_ai_enabled.execute(admin, True)
     assert (on.changed, on.settings.version) == (True, 2)
-    assert await toggles(world) == [("admin", {"enabled": False}), ("admin", {"enabled": True})]
+    assert await toggles(world) == [
+        ("admin", {"enabled": False, "schema_version": 1}),
+        ("admin", {"enabled": True, "schema_version": 1}),
+    ]
 
 
 async def test_the_stored_value_wins_over_the_default(tmp_path: Path) -> None:

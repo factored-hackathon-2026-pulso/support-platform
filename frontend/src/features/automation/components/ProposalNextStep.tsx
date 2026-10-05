@@ -1,16 +1,39 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Callout, Card, Checkbox, Field, Textarea, useToast } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Callout,
+  Card,
+  Checkbox,
+  Field,
+  Select,
+  Textarea,
+  useToast,
+} from '@/components/ui'
 import { useTranslation } from '@/lib/i18n'
 import { useProposalStep, useRelease, type ProposalStep } from '../hooks/use-automation'
 import {
+  REASON_CODES,
   describeBuilderFailure,
   isMissingSuite,
+  isReasonCode,
   newIdempotencyKey,
+  reasonCodeLabel,
   suiteFor,
   type BuilderFailure,
+  type EndStep,
 } from '../proposals'
-import type { EvalReport, MaturingType, ProposalDetail, Violation, YardstickChange } from '../types'
+import type {
+  AliasState,
+  EvalReport,
+  MaturingType,
+  ProposalDetail,
+  ReasonCode,
+  Violation,
+  YardstickChange,
+} from '../types'
 import { ActivatePanel } from './ActivatePanel'
+import { PromotePanel } from './PromotePanel'
 import { StepUpDialog } from './StepUpDialog'
 
 export interface GateResult {
@@ -25,6 +48,12 @@ export interface ProposalNextStepProps {
   onGateResult(result: GateResult | null): void
   /** "Activar" chose the type the agent serves (the URL keeps it). */
   onTypeChosen(type: MaturingType): void
+  /** How a published proposal ends: "Activar" or "Pasar a producción". */
+  endStep: EndStep
+  /** The agent's `prod` alias (null: nowhere; undefined: not known yet). */
+  prod: AliasState | null | undefined
+  /** The release this proposal published, from its history. */
+  publishedReleaseId: string | null
 }
 
 type Decision = 'approve' | 'reject' | 'publish'
@@ -35,6 +64,9 @@ export function ProposalNextStep({
   type,
   onGateResult,
   onTypeChosen,
+  endStep,
+  prod,
+  publishedReleaseId,
 }: ProposalNextStepProps) {
   const { t } = useTranslation('automation')
   const { proposal } = detail
@@ -84,6 +116,14 @@ export function ProposalNextStep({
     case 'draft':
       body = (
         <>
+          {detail.lastDecision?.decision === 'rejected' ? (
+            <p className="m-0 flex flex-wrap items-center gap-2 text-13 text-ink-2">
+              {t('proposal.lastRejected')}
+              {detail.lastDecision.reasonCode ? (
+                <Badge tone="neutral">{reasonCodeLabel(detail.lastDecision.reasonCode)}</Badge>
+              ) : null}
+            </p>
+          ) : null}
           <p className="m-0 text-13 text-ink-2">{t('proposal.editHint')}</p>
           <Actions>
             <Button
@@ -171,7 +211,11 @@ export function ProposalNextStep({
       )
       break
     case 'published':
-      return <ActivatePanel detail={detail} type={type} onTypeChosen={onTypeChosen} />
+      return endStep === 'promote' && prod ? (
+        <PromotePanel detail={detail} prod={prod} publishedReleaseId={publishedReleaseId} />
+      ) : (
+        <ActivatePanel detail={detail} type={type} onTypeChosen={onTypeChosen} />
+      )
   }
 
   return (
@@ -186,6 +230,7 @@ export function ProposalNextStep({
         <DecisionDialog
           decision={decision}
           detail={detail}
+          endStep={endStep}
           onClose={() => setDecision(null)}
           onDone={(message) => {
             setDecision(null)
@@ -219,17 +264,19 @@ function Violations({ violations }: { violations: Violation[] }) {
 interface DecisionDialogProps {
   decision: Decision
   detail: ProposalDetail
+  endStep: EndStep
   onClose(): void
   onDone(message: string): void
 }
 
 /** Approve, reject or publish: each asks for a fresh code (and approve, the yardstick warning). */
-function DecisionDialog({ decision, detail, onClose, onDone }: DecisionDialogProps) {
+function DecisionDialog({ decision, detail, endStep, onClose, onDone }: DecisionDialogProps) {
   const { t } = useTranslation('automation')
   const { proposal } = detail
   const step = useProposalStep(proposal.proposalId)
   const [error, setError] = useState<string | null>(null)
   const [reason, setReason] = useState('')
+  const [reasonCode, setReasonCode] = useState<ReasonCode | null>(null)
   const [loosened, setLoosened] = useState<YardstickChange[] | null>(null)
   const [accept, setAccept] = useState(false)
   // One key per publication she means to make: a retry of this dialog reuses it.
@@ -253,7 +300,12 @@ function DecisionDialog({ decision, detail, onClose, onDone }: DecisionDialogPro
             stepUpCode: code,
           }
         : decision === 'reject'
-          ? { kind: 'reject', reason: reason.trim(), stepUpCode: code }
+          ? {
+              kind: 'reject',
+              reason: reason.trim(),
+              reasonCode: reasonCode ?? 'other',
+              stepUpCode: code,
+            }
           : { kind: 'publish', stepUpCode: code, idempotencyKey }
     step.mutate(next, {
       onSuccess: () =>
@@ -262,7 +314,9 @@ function DecisionDialog({ decision, detail, onClose, onDone }: DecisionDialogPro
             ? t('proposal.approved')
             : decision === 'reject'
               ? t('proposal.rejected')
-              : t('proposal.published'),
+              : endStep === 'promote'
+                ? t('proposal.publishedPromote')
+                : t('proposal.published'),
         ),
       onError: (failure) => {
         const described = describeBuilderFailure(failure)
@@ -293,10 +347,24 @@ function DecisionDialog({ decision, detail, onClose, onDone }: DecisionDialogPro
       pending={step.isPending}
       error={error}
       confirmDisabled={
-        (decision === 'reject' && reason.trim() === '') || (loosened !== null && !accept)
+        (decision === 'reject' && (reason.trim() === '' || reasonCode === null)) ||
+        (loosened !== null && !accept)
       }
       onConfirm={confirm}
     >
+      {decision === 'reject' ? (
+        <Field label={t('proposal.rejectCode')} hint={t('proposal.rejectCodeHint')} required>
+          <Select
+            placeholder={t('proposal.rejectCodePlaceholder')}
+            value={reasonCode ?? ''}
+            options={REASON_CODES.map((code) => ({ value: code, label: reasonCodeLabel(code) }))}
+            onChange={(event) => {
+              const chosen = event.target.value
+              setReasonCode(isReasonCode(chosen) ? chosen : null)
+            }}
+          />
+        </Field>
+      ) : null}
       {decision === 'reject' ? (
         <Field label={t('proposal.rejectReason')} hint={t('proposal.rejectHint')} required>
           <Textarea

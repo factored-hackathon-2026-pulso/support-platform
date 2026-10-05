@@ -522,4 +522,32 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     expect(aside).toHaveTextContent('Regra da equipe (exemplo)')
     expect(screen.getByRole('link', { name: 'Automação, com novidades' })).toBeInTheDocument()
   })
+
+  it('says when the agents service is down and keeps showing what the platform has', async () => {
+    vi.mocked(fetchBuilderStatus).mockResolvedValue({ ...BUILDER_ON, reachable: false })
+    renderAutomation('/supervision/automation?type=undue_charge')
+    expect(await screen.findByText('El servicio de agentes no está disponible')).toBeInTheDocument()
+    expect(typesTable()).toBeInTheDocument()
+    const aside = panel('Cobro indebido')
+    // the chat waits for the service: no way to open it meanwhile
+    expect(screen.queryByRole('button', { name: 'Constructor de agentes' })).not.toBeInTheDocument()
+    expect(
+      within(aside).queryByRole('button', { name: 'Proponer un agente' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('says it in Portuguese too', async () => {
+    vi.mocked(fetchBuilderStatus).mockResolvedValue({ ...BUILDER_ON, reachable: false })
+    renderAutomation('/supervision/automation', { locale: 'pt-BR' })
+    expect(await screen.findByText('O serviço de agentes não está disponível')).toBeInTheDocument()
+  })
+
+  it('shows no warning while the service answers', async () => {
+    vi.mocked(fetchBuilderStatus).mockResolvedValue({ ...BUILDER_ON, reachable: true })
+    renderAutomation()
+    expect(
+      await screen.findByRole('button', { name: 'Constructor de agentes' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('El servicio de agentes no está disponible')).not.toBeInTheDocument()
+  })
 })

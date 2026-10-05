@@ -27,6 +27,13 @@ export type ReleaseDetail = Schemas['ReleaseDetail']
 export type AliasState = Schemas['AliasState']
 export type VersionList = Schemas['VersionList']
 export type VersionSummary = Schemas['VersionSummary']
+export type LastDecision = Schemas['LastDecision']
+/** agent-core's closed list of rejection reasons (its PR 53). */
+export type ReasonCode = NonNullable<Schemas['RejectRequest']['reasonCode']>
+export type ProposalRecord = Schemas['ProposalRecord']
+export type ProposalImprovement = Schemas['ProposalImprovement']
+export type EvidenceCase = Schemas['EvidenceCase']
+export type ProposalHistoryEntry = Schemas['ProposalHistoryEntry']
 export type BuilderThread = Schemas['BuilderThread']
 export type BuilderMessage = Schemas['BuilderMessage']
 export type BuilderExchange = Schemas['BuilderExchange']

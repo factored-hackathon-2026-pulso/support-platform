@@ -6,6 +6,9 @@
   them, stores them in ``request.state`` and binds them to structlog contextvars so every
   log line of the request carries them.
 - Echoes both headers on the response.
+- Carries the W3C trace (deploy brief P4): a valid incoming ``traceparent`` (and its
+  ``tracestate``) is kept, otherwise a new trace starts; its id is bound as ``trace_id`` on every
+  log line of the request, and the calls to the Core send it on (``application/tracing.py``).
 - Writes one structured access-log line per HTTP request.
 
 ``UnhandledErrorMiddleware`` (innermost, *inside* CORS): turns an unexpected exception into
@@ -26,6 +29,13 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from cc_platform.api.errors import internal_error_response
+from cc_platform.application.tracing import (
+    TRACEPARENT,
+    TRACESTATE,
+    new_trace,
+    parse_trace,
+    use_trace,
+)
 
 REQUEST_ID_HEADER = "X-Request-ID"
 CORRELATION_ID_HEADER = "X-Correlation-ID"
@@ -54,6 +64,7 @@ class RequestContextMiddleware:
         state = scope.setdefault("state", {})
         state["request_id"] = request_id
         state["correlation_id"] = correlation_id
+        trace = parse_trace(headers.get(TRACEPARENT), headers.get(TRACESTATE)) or new_trace()
 
         status_code = 500
         started = time.perf_counter()
@@ -67,8 +78,11 @@ class RequestContextMiddleware:
                 response_headers[CORRELATION_ID_HEADER] = correlation_id
             await send(message)
 
-        with structlog.contextvars.bound_contextvars(
-            request_id=request_id, correlation_id=correlation_id
+        with (
+            use_trace(trace),
+            structlog.contextvars.bound_contextvars(
+                request_id=request_id, correlation_id=correlation_id, trace_id=trace.trace_id
+            ),
         ):
             try:
                 await self.app(scope, receive, send_with_ids)

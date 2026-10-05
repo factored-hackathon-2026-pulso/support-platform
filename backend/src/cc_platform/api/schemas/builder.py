@@ -51,7 +51,6 @@ class BuilderStatus(ViewModel):
     )
     step_up_digits: int | None = Field(description="How many digits the code has.")
     reachable: bool = Field(
-        default=True,
         description=(
             "Deploy brief P4: false while agent-core is configured but down (its circuit breaker "
             "is open or it does not answer its health check): show that the agents service is "
@@ -60,7 +59,7 @@ class BuilderStatus(ViewModel):
     )
 
     @classmethod
-    def from_view(cls, view: BuilderStatusView, *, reachable: bool = True) -> BuilderStatus:
+    def from_view(cls, view: BuilderStatusView, *, reachable: bool) -> BuilderStatus:
         return cls(
             reachable=reachable,
             available=True,
@@ -74,6 +73,7 @@ class BuilderStatus(ViewModel):
     def unavailable(cls) -> BuilderStatus:
         return cls(
             available=False,
+            reachable=True,  # nothing to reach: the builder is off, not down
             can_approve=False,
             can_revoke=False,
             step_up_method=None,

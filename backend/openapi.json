@@ -1642,7 +1642,6 @@
             "type": "boolean"
           },
           "reachable": {
-            "default": true,
             "description": "Deploy brief P4: false while agent-core is configured but down (its circuit breaker is open or it does not answer its health check): show that the agents service is not available; the screens that only read the platform keep working.",
             "title": "Reachable",
             "type": "boolean"
@@ -1678,7 +1677,8 @@
           "canApprove",
           "canRevoke",
           "stepUpMethod",
-          "stepUpDigits"
+          "stepUpDigits",
+          "reachable"
         ],
         "title": "BuilderStatus",
         "type": "object"

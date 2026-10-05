@@ -14,6 +14,7 @@ from cc_platform.domain.cases.values import (
     CaseChannel,
     CasePriority,
     CaseStatus,
+    CaseType,
     CloseReason,
     CustomerConversationStatus,
     CustomerTurnAuthor,
@@ -59,6 +60,7 @@ class CaseSummaryView:
     channel: CaseChannel
     language: Language
     priority: CasePriority
+    case_type: CaseType
     status: CaseStatus
     inbox_status: InboxStatus | None
     opened_at: datetime
@@ -147,6 +149,8 @@ class CaseCapabilitiesView:
     """The caller holds ``supervisor`` and the case is not closed ("Asignar"/"Reasignar")."""
     can_change_priority: bool
     """The caller is the assignee analyst or holds ``supervisor``, and the case is open."""
+    can_change_type: bool
+    """Slice 18: the same rule as ``can_change_priority`` (``PUT /cases/{caseId}/type``)."""
     can_escalate: bool
     """Slice 9: the caller is the assignee analyst, the case is open and not escalated."""
     can_call: bool

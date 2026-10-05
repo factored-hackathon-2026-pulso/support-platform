@@ -100,6 +100,7 @@ def summarize(case: Case, customer_name: str) -> CaseSummaryView:
         channel=case.channel,
         language=case.language,
         priority=case.priority,
+        case_type=case.case_type,
         status=case.status,
         inbox_status=inbox_status(case),
         opened_at=case.opened_at,
@@ -153,8 +154,8 @@ def closed_order(item: CaseSummaryView) -> tuple[datetime, str]:
 
 def capabilities_for(case: Case, actor: Actor) -> CaseCapabilitiesView:
     """What the caller may do: reply and close as the assignee (never a supervisor as such),
-    assign or reassign as a supervisor while the case is open, change the priority as either
-    (slice 8)."""
+    assign or reassign as a supervisor while the case is open, change the priority (slice 8)
+    and the case type (slice 18) as either."""
     is_assignee = case.is_assignee(actor.staff_id)
     reason: ReplyBlockedReason | None = None
     if not is_assignee:
@@ -167,6 +168,7 @@ def capabilities_for(case: Case, actor: Actor) -> CaseCapabilitiesView:
         can_close=is_assignee and case.status in CLOSABLE_STATUSES,
         can_assign=actor.has_any_role({StaffRole.SUPERVISOR}) and not case.is_closed,
         can_change_priority=can_change_priority(case, actor),
+        can_change_type=can_change_type(case, actor),
         can_escalate=can_escalate(case, actor),
         can_call=works_on(case, actor) and case.active_call_id is None,
         can_email=works_on(case, actor),
@@ -199,6 +201,11 @@ def can_change_priority(case: Case, actor: Actor) -> bool:
         return False
     is_assignee = case.is_assignee(actor.staff_id) and actor.has_any_role({StaffRole.ANALYST})
     return is_assignee or actor.has_any_role({StaffRole.SUPERVISOR})
+
+
+def can_change_type(case: Case, actor: Actor) -> bool:
+    """Slice 18: who may set the case type is who may set the priority."""
+    return can_change_priority(case, actor)
 
 
 def customer_of(customer: Customer) -> CaseCustomerView:

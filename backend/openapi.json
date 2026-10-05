@@ -1837,6 +1837,11 @@
             "title": "Canchangepriority",
             "type": "boolean"
           },
+          "canChangeType": {
+            "description": "Slice 18: the same rule as `canChangePriority` (PUT /cases/{caseId}/type).",
+            "title": "Canchangetype",
+            "type": "boolean"
+          },
           "canClose": {
             "title": "Canclose",
             "type": "boolean"
@@ -1872,6 +1877,7 @@
           "canClose",
           "canAssign",
           "canChangePriority",
+          "canChangeType",
           "canEscalate",
           "canCall",
           "canEmail",
@@ -2292,6 +2298,10 @@
             ],
             "title": "Assignedanalystid"
           },
+          "caseType": {
+            "$ref": "#/components/schemas/CaseType",
+            "description": "Slice 18: what the case is about (a dataset complaint subcategory); `none` until the assignee or supervision sets it."
+          },
           "channel": {
             "$ref": "#/components/schemas/CaseChannel"
           },
@@ -2444,6 +2454,7 @@
           "channel",
           "language",
           "priority",
+          "caseType",
           "status",
           "inboxStatus",
           "openedAt",
@@ -2463,6 +2474,58 @@
           "activeCallId"
         ],
         "title": "CaseSummary",
+        "type": "object"
+      },
+      "CaseType": {
+        "description": "What the case is about (slice 18, ADR 0005): the AI matures per case type.\n\nThe values are the dataset's complaint subcategories (``complaints.subcategory`` in\ndata-lab; names from its aggregate report ``reports/demand/complaints_by_subcategory.csv``,\nnever from records) plus ``none`` (the dataset's ``(null)`` subcategory, and every case\nwhen it opens). ``virtual_card`` (\"Tarjeta virtual\") is **team-generated**: a new product\nthe demo shows maturing from zero; it is not in the dataset.",
+        "enum": [
+          "none",
+          "unrecognized_charge",
+          "undue_charge",
+          "app_issue",
+          "branch_service",
+          "service_quality",
+          "virtual_card"
+        ],
+        "title": "CaseType",
+        "type": "string"
+      },
+      "CaseTypeResult": {
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "changed": {
+            "description": "false: the case already had that type (no event).",
+            "title": "Changed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "changed",
+          "case"
+        ],
+        "title": "CaseTypeResult",
+        "type": "object"
+      },
+      "ChangeCaseTypeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "caseType": {
+            "$ref": "#/components/schemas/CaseType"
+          },
+          "expectedVersion": {
+            "description": "The case `version` the caller saw (stale → `version_conflict`).",
+            "minimum": 0.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "caseType",
+          "expectedVersion"
+        ],
+        "title": "ChangeCaseTypeRequest",
         "type": "object"
       },
       "ChangePriorityRequest": {
@@ -15745,6 +15808,108 @@
           }
         ],
         "summary": "Reply to the customer (assignee only)",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{caseId}/type": {
+      "put": {
+        "description": "Slice 18, the same rules as the priority. Checks in this order: the case exists (404) · the caller is its assignee analyst or a supervisor (403 `case_not_assigned`) · it is not closed (409 `case_closed`) · it already has that type (200, `changed: false`, nothing happens) · it is still at `expectedVersion` (409 `version_conflict`, with the case now as `current`). Records `case.type_changed` `{from, to}`. Independent of the AI switch: the type is data about the case.",
+        "operationId": "cases_change_case_type",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeCaseTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseTypeResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Set what the case is about (the assignee, or supervision on any open case)",
         "tags": [
           "cases"
         ]

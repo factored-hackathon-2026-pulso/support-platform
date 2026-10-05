@@ -14,6 +14,7 @@ from cc_platform.application.ai.copilot import (
     CopilotMessageView,
     CopilotThreadView,
 )
+from cc_platform.application.cases.case_type import CaseTypeResultView
 from cc_platform.application.cases.dto import (
     AssignmentView,
     CallView,
@@ -44,6 +45,7 @@ from cc_platform.domain.cases.values import (
     CaseChannel,
     CasePriority,
     CaseStatus,
+    CaseType,
     CloseReason,
     InboxStatus,
     TurnAudience,
@@ -156,6 +158,10 @@ class CaseSummary(ApiModel):
     priority: CasePriority = Field(
         description="Slice 8: `none` until the assignee or supervision sets it."
     )
+    case_type: CaseType = Field(
+        description="Slice 18: what the case is about (a dataset complaint subcategory); "
+        "`none` until the assignee or supervision sets it."
+    )
     status: CaseStatus
     inbox_status: InboxStatus | None = Field(description="null while the case is queued.")
     opened_at: datetime
@@ -193,6 +199,7 @@ class CaseSummary(ApiModel):
             channel=view.channel,
             language=view.language,
             priority=view.priority,
+            case_type=view.case_type,
             status=view.status,
             inbox_status=view.inbox_status,
             opened_at=view.opened_at,
@@ -333,6 +340,9 @@ class CaseCapabilities(ApiModel):
         description="Slice 8: the caller is the assignee analyst or a supervisor, and the case "
         "is open (PUT /cases/{caseId}/priority)."
     )
+    can_change_type: bool = Field(
+        description="Slice 18: the same rule as `canChangePriority` (PUT /cases/{caseId}/type)."
+    )
     can_escalate: bool = Field(
         description="Slice 9: the caller is the assignee analyst, the case is open and has no "
         "open escalation (POST /cases/{caseId}/escalations)."
@@ -358,6 +368,7 @@ class CaseCapabilities(ApiModel):
             can_close=view.can_close,
             can_assign=view.can_assign,
             can_change_priority=view.can_change_priority,
+            can_change_type=view.can_change_type,
             can_escalate=view.can_escalate,
             can_call=view.can_call,
             can_email=view.can_email,
@@ -653,6 +664,23 @@ class CasePriorityResult(ApiModel):
 
     @classmethod
     def from_view(cls, view: PriorityResultView) -> CasePriorityResult:
+        return cls(changed=view.changed, case=CaseSummary.from_view(view.case))
+
+
+# ----------------------------------------------------------------------------- case type (slice 18)
+class ChangeCaseTypeRequest(RequestModel):
+    case_type: CaseType
+    expected_version: int = Field(
+        ge=0, description="The case `version` the caller saw (stale → `version_conflict`)."
+    )
+
+
+class CaseTypeResult(ApiModel):
+    changed: bool = Field(description="false: the case already had that type (no event).")
+    case: CaseSummary
+
+    @classmethod
+    def from_view(cls, view: CaseTypeResultView) -> CaseTypeResult:
         return cls(changed=view.changed, case=CaseSummary.from_view(view.case))
 
 

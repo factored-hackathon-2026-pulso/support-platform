@@ -66,6 +66,7 @@ from cc_platform.application.cases.calls import (
     StartInboundCall,
     StartOutboundCall,
 )
+from cc_platform.application.cases.case_type import ChangeCaseType
 from cc_platform.application.cases.commands import CloseCase, MarkCaseRead, PostAnalystTurn
 from cc_platform.application.cases.customer_chat import (
     GetCustomerConversation,
@@ -754,6 +755,7 @@ def build_container(
             analyst_home=GetAnalystHome(uow=uow, clock=clock),
             rate_conversation=RateConversation(uow=uow, clock=clock),
             change_priority=ChangeCasePriority(uow=uow, clock=clock),
+            change_type=ChangeCaseType(uow=uow, clock=clock),
             language_open_cases=GetLanguageOpenCases(uow=uow, clock=clock),
             escalate=EscalateCase(uow=uow, clock=clock, ids=ids),
             withdraw_escalation=WithdrawEscalation(uow=uow, clock=clock, ids=ids),

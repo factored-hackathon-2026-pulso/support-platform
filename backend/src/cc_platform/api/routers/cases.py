@@ -1,6 +1,7 @@
 """Analyst Workspace: inbox ("Casos"), case detail, the customer's other cases, transcript,
-replies, read cursor, close, the priority (slice 8: the assignee or supervision) and the
-escalation to supervision (slice 9: escalate, withdraw, "Entendido").
+replies, read cursor, close, the priority (slice 8: the assignee or supervision), the case
+type (slice 18, the same rules) and the escalation to supervision (slice 9: escalate, withdraw,
+"Entendido").
 
 Visibility (enforced in the use cases, contract §4.3): the assignee analyst reads and
 writes; any supervisor reads; an analyst who holds (or held) another case of the same
@@ -24,6 +25,8 @@ from cc_platform.api.schemas.cases import (
     CaseHistory,
     CasePriorityResult,
     CaseSummary,
+    CaseTypeResult,
+    ChangeCaseTypeRequest,
     ChangePriorityRequest,
     CloseCaseRequest,
     CopilotExchange,
@@ -37,6 +40,7 @@ from cc_platform.api.schemas.cases import (
     TurnPage,
 )
 from cc_platform.api.schemas.common import problem_responses
+from cc_platform.application.cases.case_type import ChangeCaseTypeCommand
 from cc_platform.application.cases.dto import CaseSummaryView, CloseCaseCommand, PostTurnCommand
 from cc_platform.application.cases.escalations import EscalateCommand
 from cc_platform.application.cases.priority import ChangePriorityCommand
@@ -359,13 +363,47 @@ async def change_priority(
             ChangePriorityCommand(priority=body.priority, expected_version=body.expected_version),
         )
     except VersionConflictError as exc:
-        if isinstance(exc.current_view, CaseSummaryView):
-            current: dict[str, Any] = CaseSummary.from_view(exc.current_view).model_dump(
-                mode="json", by_alias=True
-            )
-            exc.details = {**exc.details, "current": cast("JsonValue", current)}
+        _attach_current_case(exc)
         raise
     return CasePriorityResult.from_view(view)
+
+
+def _attach_current_case(exc: VersionConflictError) -> None:
+    """``version_conflict`` carries the case as the caller reads it now (``current``)."""
+    if isinstance(exc.current_view, CaseSummaryView):
+        current: dict[str, Any] = CaseSummary.from_view(exc.current_view).model_dump(
+            mode="json", by_alias=True
+        )
+        exc.details = {**exc.details, "current": cast("JsonValue", current)}
+
+
+@router.put(
+    "/{caseId}/type",
+    response_model=CaseTypeResult,
+    summary="Set what the case is about (the assignee, or supervision on any open case)",
+    description=(
+        "Slice 18, the same rules as the priority. Checks in this order: the case exists (404) "
+        "· the caller is its assignee analyst or a supervisor (403 `case_not_assigned`) · it is "
+        "not closed (409 `case_closed`) · it already has that type (200, `changed: false`, "
+        "nothing happens) · it is still at `expectedVersion` (409 `version_conflict`, with the "
+        "case now as `current`). Records `case.type_changed` `{from, to}`. Independent of the "
+        "AI switch: the type is data about the case."
+    ),
+    responses=problem_responses(401, 403, 404, 409, 422),
+)
+async def change_case_type(
+    case_id: CaseId, body: ChangeCaseTypeRequest, actor: AnalystOrSupervisor, api: ApiContextDep
+) -> CaseTypeResult:
+    try:
+        view = await api.use_cases.cases.change_type.execute(
+            actor,
+            case_id,
+            ChangeCaseTypeCommand(case_type=body.case_type, expected_version=body.expected_version),
+        )
+    except VersionConflictError as exc:
+        _attach_current_case(exc)
+        raise
+    return CaseTypeResult.from_view(view)
 
 
 # ------------------------------------------------------------------------- escalations (slice 9)

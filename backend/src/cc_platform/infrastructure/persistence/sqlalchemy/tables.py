@@ -211,6 +211,8 @@ cases = Table(
     Column("channel", String(20), nullable=False),
     Column("language", String(5), nullable=False),
     Column("priority", String(10), nullable=False),
+    # slice 18: what the case is about (a dataset complaint subcategory, or none)
+    Column("case_type", String(30), nullable=False, default="none"),
     Column("status", String(20), nullable=False),
     Column("opened_at", UtcDateTime, nullable=False),
     Column("sla_due_at", UtcDateTime, nullable=False),

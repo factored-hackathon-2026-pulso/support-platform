@@ -155,6 +155,21 @@ class CasePriorityChanged(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CaseTypeChanged(DomainEvent):
+    """The assignee or supervision changed what the case is about (slice 18, ADR 0005).
+    Payload ``{"from": "none", "to": "undue_charge"}``, like ``case.priority_changed``."""
+
+    event_type = "case.type_changed"
+    entity = "case"
+
+    from_type: str
+    to_type: str
+
+    def payload(self) -> JsonObject:
+        return {"from": self.from_type, "to": self.to_type}
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CaseAssistantStarted(DomainEvent):
     """ADR 0003: the case opened in the hands of the agent (``with_assistant``): nobody holds
     it and it is in no queue."""
@@ -384,6 +399,7 @@ CASE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseClosed,
     CaseRated,
     CasePriorityChanged,
+    CaseTypeChanged,
     CaseAssistantStarted,
     CaseAssistantReleased,
     *ESCALATION_EVENTS,

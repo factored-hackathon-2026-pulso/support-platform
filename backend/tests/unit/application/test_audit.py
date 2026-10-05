@@ -463,6 +463,7 @@ async def test_filter_by_actor_kind_and_person(harness: Harness) -> None:
     assert len(staff) + len(customers) + len(system) == len(every)
     lucia = await search(harness, actor_id=LUCIA_ID)
     assert [e.description for e in lucia] == [
+        "Cambió el tipo de caso a Cobro indebido",  # Mauricio's queued case (slice 18)
         "Cambió la prioridad a Alta",  # Mauricio's queued case (slice 8)
         "Abrió la conversación en modo supervisión (solo lectura)",
         "Reasignó el caso escalado de Paula Medina a Julián Ortega",  # slice 9
@@ -477,9 +478,9 @@ async def test_filter_by_case_family_and_changes(harness: Harness) -> None:
     case = await search(harness, case_id=seed_case_id(114))
     assert {e.case_ref.id for e in case if e.case_ref} == {seed_case_id(114)}
     assert {e.case_ref.customer_name for e in case if e.case_ref} == {"Esteban Morales Quiroga"}
-    # incl. Julián's case.priority_changed (slice 8) and Paula's escalation, its banner and its
-    # end by the reassignment (slice 9)
-    assert len(case) == 16
+    # incl. Julián's case.priority_changed (slice 8), his case.type_changed (slice 18) and
+    # Paula's escalation, its banner and its end by the reassignment (slice 9)
+    assert len(case) == 17
     for family in AuditFamily:
         found = await search(harness, family=family)
         assert found, family

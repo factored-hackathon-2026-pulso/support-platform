@@ -24,6 +24,7 @@ from cc_platform.domain.cases.values import (
     AssignmentReason,
     CaseChannel,
     CasePriority,
+    CaseType,
     CloseReason,
 )
 from cc_platform.domain.people.staff import Language
@@ -53,6 +54,7 @@ FAMILY: Mapping[str, AuditFamily] = {
     "case.closed": AuditFamily.LIFECYCLE,
     "case.rated": AuditFamily.LIFECYCLE,
     "case.priority_changed": AuditFamily.LIFECYCLE,
+    "case.type_changed": AuditFamily.LIFECYCLE,
     "case.viewed": AuditFamily.ACCESS,
     "turn.created": AuditFamily.CONVERSATION,
     # the assistant (ADR 0003): agent-core handles a conversation before people do
@@ -144,6 +146,7 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "case.closed",
         "case.rated",
         "case.priority_changed",
+        "case.type_changed",
         "case.assistant_started",
         "case.assistant_released",
         "assistant.ended",
@@ -344,6 +347,28 @@ def _case_priority_changed(event: StoredEvent, _names: AuditNames) -> str:
         return "Quitó la prioridad"
     label = PRIORITY_LABEL.get(to or "")
     return f"Cambió la prioridad a {label}" if label else "Cambió la prioridad"
+
+
+#: Slice 18: the case types in words (the frontend uses the same ones, ``CASE_TYPE``). The
+#: names are the dataset's complaint subcategories; "Tarjeta virtual" is team-generated.
+CASE_TYPE_LABEL: Mapping[str, str] = {
+    CaseType.NONE.value: "Sin tipo",
+    CaseType.UNRECOGNIZED_CHARGE.value: "Cargo no reconocido",
+    CaseType.UNDUE_CHARGE.value: "Cobro indebido",
+    CaseType.APP_ISSUE.value: "Problema con app",
+    CaseType.BRANCH_SERVICE.value: "Atención en sucursal",
+    CaseType.SERVICE_QUALITY.value: "Calidad de servicio",
+    CaseType.VIRTUAL_CARD.value: "Tarjeta virtual",
+}
+
+
+def _case_type_changed(event: StoredEvent, _names: AuditNames) -> str:
+    """Next to the actor: "Daniela Ríos · Cambió el tipo de caso a Cobro indebido"."""
+    to = _text(event.payload, "to")
+    if to == CaseType.NONE.value:
+        return "Quitó el tipo de caso"
+    label = CASE_TYPE_LABEL.get(to or "")
+    return f"Cambió el tipo de caso a {label}" if label else "Cambió el tipo de caso"
 
 
 def _escalation_taken(event: StoredEvent, names: AuditNames) -> str:
@@ -623,6 +648,7 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
     "case.closed": _case_closed,
     "case.rated": _case_rated,
     "case.priority_changed": _case_priority_changed,
+    "case.type_changed": _case_type_changed,
     "case.viewed": _case_viewed,
     "turn.created": _turn_created,
     # ADR 0003: the assistant (ids and enums only; the audit never shows what was said)

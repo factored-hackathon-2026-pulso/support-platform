@@ -319,3 +319,48 @@ def test_the_edit_distance_runs_from_zero_to_a_thousand(
     draft: str, sent: str, low: int, high: int
 ) -> None:
     assert low <= edit_distance_permille(draft, sent) <= high
+
+
+# ------------------------------------------------------------- engine signals (release, turn)
+def test_the_answer_events_say_which_release_answered() -> None:
+    s = suggestion()
+    s.pull_events()
+    s.record_answer(raw=everything(), run_id="run-1", trace_id="t-1", release="rel-7", at=NOW)
+    ready_event = s.pull_events()[-1]
+    empty = suggestion()
+    empty.pull_events()
+    empty.record_answer(raw=[], run_id="run-2", trace_id="t-2", release="rel-7", at=NOW)
+
+    assert s.release == "rel-7"
+    assert ready_event.payload()["release"] == "rel-7"
+    assert empty.pull_events()[-1].payload()["release"] == "rel-7"
+
+
+def test_a_runtime_without_a_release_leaves_it_empty() -> None:
+    s = ready()
+
+    assert s.release is None
+    assert s.pull_events()[-1].payload()["release"] is None
+
+
+def test_a_decision_carries_the_turn_that_was_sent_and_who_answered() -> None:
+    s = suggestion()
+    s.record_answer(raw=everything(), run_id="run-1", trace_id="t-1", release="rel-7", at=NOW)
+
+    s.reply_sent(sent_text="Texto distinto", turn_id="TRN-" + "0" * 25 + "9", at=NOW)
+
+    payload = s.pull_events()[-1].payload()
+    assert payload["turn_id"] == "TRN-" + "0" * 25 + "9"
+    assert payload["agent"] == "copiloto-sugerencias@prod"
+    assert payload["release"] == "rel-7"
+    assert payload["decision"] == "edited"
+
+
+def test_a_discard_or_an_escalation_has_no_turn() -> None:
+    discarded, escalated = ready(), ready()
+
+    discarded.discard_reply(at=NOW)
+    escalated.escalation_taken(at=NOW)
+
+    assert discarded.pull_events()[-1].payload()["turn_id"] is None
+    assert escalated.pull_events()[-1].payload()["turn_id"] is None

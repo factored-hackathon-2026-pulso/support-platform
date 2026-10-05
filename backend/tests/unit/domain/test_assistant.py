@@ -367,3 +367,26 @@ def test_session_events_carry_ids_and_enums_never_text() -> None:
     assert payloads[0]["messages"] == 2
     assert payloads[1]["result"] == "escalated"
     assert "text" not in payloads[0]
+
+
+def test_the_answer_event_says_which_release_the_run_started_on() -> None:
+    session = new_session()
+    session.link_run(
+        agent_session_id="ses-1", run_id="run-1", agent="recepcion@prod", release="rel-3", at=NOW
+    )
+    session.claim_input(AgentInput(kind="text", turn_id="TRN-1", sequence=1), now=NOW)
+
+    answer(session, "TRN-1")
+
+    event = session.pull_events()[-1]
+    assert event.event_type == "assistant.turn_answered"
+    assert event.payload()["release"] == "rel-3"
+
+
+def test_a_session_without_a_known_release_says_none() -> None:
+    session = new_session()
+    session.claim_input(AgentInput(kind="text", turn_id="TRN-1", sequence=1), now=NOW)
+
+    answer(session, "TRN-1")
+
+    assert session.pull_events()[-1].payload()["release"] is None

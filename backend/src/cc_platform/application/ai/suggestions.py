@@ -405,6 +405,7 @@ class SuggestionService:
                     raw=run.suggestions,
                     run_id=run.run_id,
                     trace_id=run.trace_id,
+                    release=run.release,
                     at=self.clock.now(),
                 )
                 await uow.copilot_suggestions.save(suggestion)
@@ -518,17 +519,30 @@ class LinkSuggestion:
     clock: Clock
 
     async def reply_sent(
-        self, actor: Actor, case_id: str, suggestion_id: str, *, sent_text: str
+        self,
+        actor: Actor,
+        case_id: str,
+        suggestion_id: str,
+        *,
+        sent_text: str,
+        turn_id: str | None = None,
     ) -> bool:
         return await retry_on_conflict(
-            partial(self._attempt, actor, case_id, suggestion_id, sent_text)
+            partial(self._attempt, actor, case_id, suggestion_id, sent_text, turn_id)
         )
 
     async def escalated(self, actor: Actor, case_id: str, suggestion_id: str) -> bool:
-        return await retry_on_conflict(partial(self._attempt, actor, case_id, suggestion_id, None))
+        return await retry_on_conflict(
+            partial(self._attempt, actor, case_id, suggestion_id, None, None)
+        )
 
     async def _attempt(
-        self, actor: Actor, case_id: str, suggestion_id: str, sent_text: str | None
+        self,
+        actor: Actor,
+        case_id: str,
+        suggestion_id: str,
+        sent_text: str | None,
+        turn_id: str | None,
     ) -> bool:
         async with self.uow() as uow:
             suggestion = await uow.copilot_suggestions.get(suggestion_id)
@@ -542,7 +556,7 @@ class LinkSuggestion:
             changed = (
                 suggestion.escalation_taken(at=now)
                 if sent_text is None
-                else suggestion.reply_sent(sent_text=sent_text, at=now)
+                else suggestion.reply_sent(sent_text=sent_text, turn_id=turn_id, at=now)
             )
             if changed:
                 await uow.copilot_suggestions.save(suggestion)

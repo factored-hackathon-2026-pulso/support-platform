@@ -392,6 +392,8 @@ assistant_sessions = Table(
     Column("agent", String(120), nullable=True),
     Column("agent_session_id", String(120), nullable=True),
     Column("run_id", String(120), nullable=True),
+    # the agent release the run started on (engine signals: outcome attribution)
+    Column("agent_release", String(120), nullable=True),
     Column("awaiting", String(20), nullable=False),
     Column("confirmation", JSON, nullable=True),
     Column("step_up", JSON, nullable=True),
@@ -457,6 +459,7 @@ copilot_suggestions = Table(
     Column("truncated", Boolean, nullable=False, default=False),
     Column("run_id", String(120), nullable=True),
     Column("trace_id", String(120), nullable=True),
+    Column("release", String(120), nullable=True),
     Column("failure_code", String(60), nullable=True),
     Column("purged_at", UtcDateTime, nullable=True),
     Column("created_at", UtcDateTime, nullable=False),

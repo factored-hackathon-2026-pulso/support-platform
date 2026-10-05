@@ -127,6 +127,8 @@ class AssistantSession(AggregateRoot):
     """The agent that answered last (``id@version``; it changes after a transfer)."""
     agent_session_id: str | None = None
     run_id: str | None = None
+    agent_release: str | None = None
+    """The agent release the run started on (agent-core's), for outcome attribution."""
     awaiting: str = "none"
     confirmation: PendingConfirmation | None = None
     step_up: PendingStepUp | None = None
@@ -231,10 +233,19 @@ class AssistantSession(AggregateRoot):
         self.claimed_at = now
         self.updated_at = now
 
-    def link_run(self, *, agent_session_id: str, run_id: str, agent: str, at: datetime) -> None:
+    def link_run(
+        self,
+        *,
+        agent_session_id: str,
+        run_id: str,
+        agent: str,
+        at: datetime,
+        release: str | None = None,
+    ) -> None:
         self._require_active()
         self.agent_session_id = agent_session_id
         self.run_id = run_id
+        self.agent_release = release or self.agent_release
         self.agent = agent
         self.updated_at = at
 
@@ -288,6 +299,7 @@ class AssistantSession(AggregateRoot):
                 outcome=outcome,
                 trace_id=trace_id,
                 messages=messages,
+                release=self.agent_release,
             )
         )
 

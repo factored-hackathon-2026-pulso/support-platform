@@ -64,6 +64,18 @@ export class AppShell {
     await expect(button).toHaveAttribute('aria-expanded', 'false')
   }
 
+  /**
+   * Slice 23: picks the platform language in the avatar menu by its own name ("Español",
+   * "Português"). The menu stays open and follows the new language.
+   */
+  async chooseLanguage(name: 'Español' | 'Português'): Promise<void> {
+    const button = this.rail.getByRole('button', { name: new RegExp(`^${this.userName}, `) })
+    if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click()
+    const option = this.rail.getByRole('button', { name, exact: true })
+    await option.click()
+    await expect(option).toHaveAttribute('aria-pressed', 'true')
+  }
+
   /** A toast with this title (toasts are announced in the "Avisos" region). */
   toast(title: string | RegExp): Locator {
     return this.toasts.getByText(title)

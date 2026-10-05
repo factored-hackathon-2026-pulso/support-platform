@@ -181,6 +181,57 @@ describe('the assistant in the analyst conversation (slice 19)', () => {
     )
   })
 
+  it('with "Incompleto", asks what she had to ask again and sends the ticked ones (catalog 1.3.0)', async () => {
+    vi.mocked(api.closeCase).mockResolvedValue(makeClosedDetail())
+    const { user } = renderPane()
+    await screen.findByRole('region', { name: 'El asistente te pasó este caso' })
+    await user.click(screen.getByRole('button', { name: 'Cerrar caso' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
+    const reaskedName = '¿Qué tuviste que volver a preguntar? (opcional)'
+    expect(within(dialog).queryByRole('group', { name: reaskedName })).not.toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: /Incompleto/ }))
+    const reasked = within(dialog).getByRole('group', { name: reaskedName })
+    expect(
+      within(reasked)
+        .getAllByRole('checkbox')
+        .map((box) => box.closest('label')?.textContent),
+    ).toEqual(['Identidad', 'Monto', 'Comercio', 'Fecha', 'Producto', 'Motivo', 'Otro'])
+    await user.click(within(reasked).getByRole('checkbox', { name: 'Comercio' }))
+    await user.click(within(reasked).getByRole('checkbox', { name: 'Monto' }))
+    await user.click(within(dialog).getByRole('radio', { name: 'Resuelto' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
+    await waitFor(() =>
+      expect(api.closeCase).toHaveBeenCalledWith(handoffDetail().case.id, {
+        reason: 'resolved',
+        note: null,
+        handoffQuality: 'incomplete',
+        handoffReasked: ['amount', 'merchant'],
+      }),
+    )
+  })
+
+  it('forgets what she re-asked when the handoff is no longer incomplete', async () => {
+    vi.mocked(api.closeCase).mockResolvedValue(makeClosedDetail())
+    const { user } = renderPane()
+    await screen.findByRole('region', { name: 'El asistente te pasó este caso' })
+    await user.click(screen.getByRole('button', { name: 'Cerrar caso' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Cerrar caso' })
+    await user.click(within(dialog).getByRole('button', { name: /Incompleto/ }))
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Fecha' }))
+    await user.click(within(dialog).getByRole('button', { name: /Útil/ }))
+    expect(within(dialog).queryByRole('checkbox', { name: 'Fecha' })).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('radio', { name: 'Resuelto' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar caso' }))
+    await waitFor(() =>
+      expect(api.closeCase).toHaveBeenCalledWith(handoffDetail().case.id, {
+        reason: 'resolved',
+        note: null,
+        handoffQuality: 'useful',
+      }),
+    )
+  })
+
   it('never asks about the handoff when it did not load', async () => {
     vi.mocked(api.fetchCaseHandoff).mockRejectedValue(
       new ApiProblem({ status: 404, code: 'handoff_unavailable' }),

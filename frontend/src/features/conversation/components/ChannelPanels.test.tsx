@@ -32,6 +32,7 @@ const capabilities = {
   canClose: true,
   canAssign: false,
   canChangePriority: true,
+  canChangeType: true,
   canEscalate: false,
   canCall: false,
   canEmail: true,

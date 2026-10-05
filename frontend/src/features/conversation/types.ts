@@ -3,10 +3,16 @@
  * aliases of the schemas generated from `backend/openapi.json` (`pnpm gen:api`),
  * plus the UI-only transcript cache.
  */
-import type { CaseChannel, CasePriority, CaseSummary, CloseReason } from '@/features/cases/core'
+import type {
+  CaseChannel,
+  CasePriority,
+  CaseSummary,
+  CaseType,
+  CloseReason,
+} from '@/features/cases/core'
 import type { Schemas } from '@/lib/api'
 
-export type { CaseChannel, CasePriority, CaseSummary, CloseReason }
+export type { CaseChannel, CasePriority, CaseSummary, CaseType, CloseReason }
 
 export type Language = Schemas['Language']
 export type TurnKind = Schemas['TurnKind']
@@ -37,6 +43,9 @@ export type CloseCaseRequest = Schemas['CloseCaseRequest']
 /** Slice 8: PUT /cases/{caseId}/priority. */
 export type ChangePriorityRequest = Schemas['ChangePriorityRequest']
 export type CasePriorityResult = Schemas['CasePriorityResult']
+/** Slice 18: PUT /cases/{caseId}/type. */
+export type ChangeCaseTypeRequest = Schemas['ChangeCaseTypeRequest']
+export type CaseTypeResult = Schemas['CaseTypeResult']
 /** Slice 9: escalations to supervision (staff only). */
 export type Escalation = Schemas['Escalation']
 export type EscalationResult = Schemas['EscalationResult']

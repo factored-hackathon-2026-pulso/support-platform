@@ -84,7 +84,8 @@ Rules:
   (`@/features/cases/core`). No deep imports across features. Inside a feature, use
   relative imports. The app shell uses `core.ts` only (above).
 - Features never import `src/routes`. They may import `@/components/*`, `@/lib/*`
-  and, for the session and role helpers, `@/app/session` / `@/app/roles`.
+  and, for the session, platform (slice 18: the AI switch) and role helpers, `@/app/session` /
+  `@/app/platform` / `@/app/roles`.
 - Layers: `components/ui` imports nothing from `app`, `features`, `routes` or
   `components/layout`; `lib` imports nothing from `app`, `features`, `routes` or
   `components`; `components` never import features (the app composes them, e.g.
@@ -343,6 +344,40 @@ direction. Everything is simulated (no telephony, no mail server): people type w
   ("Nombre (Equipo)"), the MFA eyebrow, the error boundary and the auth panel. Only the document
   title keeps its app suffix ("Página · LATAM Bank Soporte").
 
+### AI foundation: the AI switch and the case type (slice 18)
+
+Contract: `docs/platform/api/slice-18-ai-foundation.md`; the model: ADR 0006. Everything AI is
+additive: with the switch off the app is the people-only one, unchanged.
+
+- **`app/platform.ts`** (the one module of `src/app` besides session, roles and paths that
+  features may import; architecture.test.ts allows it): `platformKeys`, `usePlatformSettings`,
+  **`useAiEnabled()`** (false while unknown: nothing AI flashes), `primePlatformSettings` (the
+  session's `/auth/me` query writes `platform` here, so it costs no request),
+  `registerPlatformRealtime` (`platform.updated` → the cache). It reads the token store, not
+  `useSession`, so the session module can import it without a cycle. `SessionLiveSync`
+  subscribes `platform:settings` and refetches after a reconnect. **Every AI element of later
+  slices renders nothing unless `useAiEnabled()`**. Tests: `renderRoute` / `renderWithProviders`
+  take `aiEnabled` (default false).
+- **`components/ui`**: `Switch` (`role="switch"`, `checked`, `onCheckedChange`; Linear-like ink
+  track) and the fact icon `tag`.
+- **`admin`**: "Plataforma" (`/admin/platform`, `PlatformScreen`): one card "Funciones de IA"
+  (the switch named by its title and described by its line, the last change as facts or "Valor de
+  la instalación", a neutral `Callout` when it is on without agent-core); `useAdminPlatform`
+  (follows `platform:settings`; `platform.updated` refetches it), `useSetAiEnabled` (optimistic,
+  primes the app's switch with the answer, toasts, rollback); copy in `model.ts`
+  (`AI_SWITCH_DESCRIPTION`, `platformChangeFacts`, `aiToggledToast`, `describeAiToggleFailure`).
+- **`cases`** (core): the one map `CASE_TYPE` (dataset subcategories + "Sin tipo" + the
+  team-generated "Tarjeta virtual"), `CASE_TYPE_OPTIONS`, `caseType`, `caseTypeMenuLabel`;
+  `CaseTypeMenu` (index: a `ChoiceMenu` with the tag).
+- **`conversation`**: `changeCaseType` (api), `useChangeCaseType` (the priority's optimistic
+  pattern), `describeCaseTypeFailure`, `caseRows(detail, now, { aiEnabled })` / `caseTypeRow`
+  (the ficha's "Tipo de caso" after "Prioridad"), `CaseTypeControl` (index: the menu when
+  `capabilities.canChangeType`, else tag + word, nothing with AI off).
+- **`supervision`**: the supervisor case header shows `CaseTypeControl` before the priority.
+- **`customer-chat`**: `useSimulatorAiEnabled` (`GET /customer/platform`, `platform.updated` on
+  the simulator's own socket); exposed as `data-ai-enabled` on the session root until S19 gives it
+  an element to show.
+
 ### Supervision and audit (slice 3)
 
 Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
@@ -493,6 +528,7 @@ comma-separated. Unknown values (old Spanish links included) fall back to the de
 | `/admin/users?role=&status=&team=&language=&q=&person=&new=`                 | Usuarios y roles                                   | admin      |
 | `/admin/teams?status=&team=&new=`                                            | Equipos                                            | admin      |
 | `/admin/audit?…` (the supervision audit params)                              | Auditoría (same screen, `canOpenCases`)            | admin      |
+| `/admin/platform`                                                            | Plataforma (slice 18: "Funciones de IA")           | admin      |
 | `/customer?channel=`                                                         | customer simulator: chat, call or email (dev tool) | —          |
 
 Any other path inside a role section shows that role's not-found page; any other
@@ -627,7 +663,9 @@ right role section; its query string goes in the feature's `url.ts`. Until it is
   admins only, `{ staffIds, teamIds }`) and `me.updated` (topic `staff:<id>`, only
   that person, a fresh `StaffOut`): `topics.adminDirectory()`, `topics.staff(id)`. Slice 10:
   `notification.created` and `notifications.read` on `staff:<id>` (the bell). Slice 12:
-  `call.updated` (`Call` on `case:` / `inbox:`, `CustomerCall` on `customer:`).
+  `call.updated` (`Call` on `case:` / `inbox:`, `CustomerCall` on `customer:`). Slice 18:
+  `platform.updated` (topic `platform:settings`, every staff member and every simulator session:
+  `{ aiEnabled }`): `topics.platformSettings()`.
 
 ## 8. Tokens and styling
 
@@ -687,6 +725,7 @@ right role section; its query string goes in the feature's `url.ts`. Until it is
 | `Textarea` / `ComposerFrame`                                   | `variant` bordered·bare                                                                                                                 | put a bare Textarea inside `ComposerFrame` (draws the frame and the focus ring)                                                                                                                                                                           |
 | `Select`                                                       | `options`, `placeholder`, `size`                                                                                                        | native select                                                                                                                                                                                                                                             |
 | `Checkbox`                                                     | `label`, `description`, `variant` plain·card                                                                                            | works inside `Field` (id, hint/error, aria-invalid)                                                                                                                                                                                                       |
+| `Switch`                                                       | `checked`, `onCheckedChange`, `disabled`, `aria-label` / `aria-labelledby`, `aria-describedby` (slice 18)                               |
 | `CodeInput`                                                    | `value`, `onChange`, `length`, `label`, `describedBy`, `invalid`, `disabled`, `initialFocus`, `ref` (`CodeInputHandle.focus(i?)`)       | one box per digit, paste/autofill, Backspace/arrows; every box is described by `describedBy`                                                                                                                                                              |
 | `Dialog`                                                       | `open`, `onOpenChange`, `title`, `description`, `footer`, `footerNote`, `size` sm·md·lg                                                 | focus trap, Escape, restores focus (if the trigger still exists); stacks over a Sheet (top layer reacts, the rest is `inert`)                                                                                                                             |
 | `Sheet`                                                        | `open`, `onOpenChange`, `title`, `description`, `header`, `footer`, `width` 480·600·720                                                 | right drawer, same modal behaviour as Dialog; `description` is the subtitle and the accessible description                                                                                                                                                |

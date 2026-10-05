@@ -15,6 +15,8 @@ State machine (slice 2 contract §2.3; explicit transitions, anything else raise
     closed ──▶ closed + rating          (its customer rates it once, slice 7; no transition)
     open (not closed) ──▶ same + priority (the assignee or supervision sets it, slice 8;
                                           no transition, never on a closed case)
+    open (not closed) ──▶ same + case type (the assignee or supervision sets it, slice 18;
+                                          the same rules as the priority)
     assigned | in_progress ──▶ same + open escalation (the assignee escalates, slice 9; one
                                           at a time, ``open_escalation_id``; no transition)
     open (not closed) ──▶ same + active call (a call starts, slice 12; one at a time,
@@ -58,6 +60,7 @@ from cc_platform.domain.cases.events import (
     CaseRated,
     CaseRead,
     CaseStatusChanged,
+    CaseTypeChanged,
     TurnCreated,
 )
 from cc_platform.domain.cases.rating import (
@@ -74,6 +77,7 @@ from cc_platform.domain.cases.values import (
     CaseChannel,
     CasePriority,
     CaseStatus,
+    CaseType,
     CloseReason,
     TurnAudience,
     TurnAuthorRole,
@@ -166,6 +170,8 @@ class Case(AggregateRoot):
     """The escalation to supervision that is open now (slice 9): at most one per case."""
     active_call_id: str | None = None
     """The call that is ringing or connected now (slice 12): at most one per case."""
+    case_type: CaseType = CaseType.NONE
+    """What the case is about (slice 18): a dataset complaint subcategory, set by staff."""
 
     def __post_init__(self) -> None:
         require_id(self.id, IdPrefix.CASE)
@@ -668,6 +674,32 @@ class Case(AggregateRoot):
                 case_id=self.id,
                 from_priority=previous.value,
                 to_priority=priority.value,
+            )
+        )
+        return True
+
+    # ------------------------------------------------------------------ case type (slice 18)
+    def change_type(self, *, actor: ActorRef, case_type: CaseType, at: datetime) -> bool:
+        """Set what an open case is about (who may do it is the use case's rule).
+
+        Same rules as ``change_priority``: a closed case is read-only (``case_closed``), the
+        same type is a no-op (False, no event), otherwise records ``case.type_changed``
+        ``{from, to}``; the status and the first-response SLA do not change.
+        """
+        if self.is_closed:
+            raise CaseClosedError()
+        if case_type is self.case_type:
+            return False
+        previous = self.case_type
+        self.case_type = case_type
+        self._record(
+            CaseTypeChanged(
+                occurred_at=at,
+                actor=actor,
+                entity_id=self.id,
+                case_id=self.id,
+                from_type=previous.value,
+                to_type=case_type.value,
             )
         )
         return True

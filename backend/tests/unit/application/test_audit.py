@@ -155,6 +155,36 @@ def test_a_priority_change_names_the_new_level() -> None:
     assert "case.priority_changed" in CHANGES_STATE
 
 
+def test_a_case_type_change_names_the_new_type() -> None:
+    """Slice 18: "Daniela Ríos · Cambió el tipo de caso a Cobro indebido", like the priority."""
+    names = AuditNames()
+    expected = {
+        "unrecognized_charge": "Cambió el tipo de caso a Cargo no reconocido",
+        "undue_charge": "Cambió el tipo de caso a Cobro indebido",
+        "app_issue": "Cambió el tipo de caso a Problema con app",
+        "branch_service": "Cambió el tipo de caso a Atención en sucursal",
+        "service_quality": "Cambió el tipo de caso a Calidad de servicio",
+        "virtual_card": "Cambió el tipo de caso a Tarjeta virtual",
+        "none": "Quitó el tipo de caso",
+    }
+    for to, text in expected.items():
+        assert describe(stored("case.type_changed", {"from": "none", "to": to}), names) == text
+    assert describe(stored("case.type_changed", {}), names) == "Cambió el tipo de caso"
+    assert family_of("case.type_changed") is AuditFamily.LIFECYCLE
+    assert "case.type_changed" in CHANGES_STATE
+
+
+def test_the_ai_switch_says_on_or_off() -> None:
+    """Slice 18: "Valeria Quintero · Desactivó las funciones de IA" (Administración)."""
+    names = AuditNames()
+    on = stored("platform.ai_toggled", {"enabled": True})
+    off = stored("platform.ai_toggled", {"enabled": False})
+    assert describe(on, names) == "Activó las funciones de IA"
+    assert describe(off, names) == "Desactivó las funciones de IA"
+    assert family_of("platform.ai_toggled") is AuditFamily.ADMINISTRATION
+    assert "platform.ai_toggled" in CHANGES_STATE
+
+
 async def emit_everything(container: Container) -> None:
     """Drive every kind of event the platform emits through the real use cases."""
     people, cases = container.use_cases.people, container.use_cases.cases
@@ -260,6 +290,9 @@ async def emit_administration(container: Container) -> None:
     await admin.cancel_invitation.execute(valeria, seed_staff_id(15))  # Bruna (seeded)
     off = await admin.deactivate_user.execute(valeria, ana.id, changed.user.version)
     await admin.reactivate_user.execute(valeria, ana.id, off.user.version)
+    # Slice 18: the AI switch, off and on again.
+    await container.use_cases.platform.set_ai_enabled.execute(valeria, False)
+    await container.use_cases.platform.set_ai_enabled.execute(valeria, True)
 
 
 async def all_events(uow_factory: UnitOfWorkFactory) -> list[AuditEventView]:
@@ -467,6 +500,7 @@ async def test_filter_by_actor_kind_and_person(harness: Harness) -> None:
     assert len(staff) + len(customers) + len(system) == len(every)
     lucia = await search(harness, actor_id=LUCIA_ID)
     assert [e.description for e in lucia] == [
+        "Cambió el tipo de caso a Cobro indebido",  # Mauricio's queued case (slice 18)
         "Cambió la prioridad a Alta",  # Mauricio's queued case (slice 8)
         "Abrió la conversación en modo supervisión (solo lectura)",
         "Reasignó el caso escalado de Paula Medina a Julián Ortega",  # slice 9
@@ -481,9 +515,9 @@ async def test_filter_by_case_family_and_changes(harness: Harness) -> None:
     case = await search(harness, case_id=seed_case_id(114))
     assert {e.case_ref.id for e in case if e.case_ref} == {seed_case_id(114)}
     assert {e.case_ref.customer_name for e in case if e.case_ref} == {"Esteban Morales Quiroga"}
-    # incl. Julián's case.priority_changed (slice 8) and Paula's escalation, its banner and its
-    # end by the reassignment (slice 9)
-    assert len(case) == 16
+    # incl. Julián's case.priority_changed (slice 8), his case.type_changed (slice 18) and
+    # Paula's escalation, its banner and its end by the reassignment (slice 9)
+    assert len(case) == 17
     for family in AuditFamily:
         found = await search(harness, family=family)
         assert found, family

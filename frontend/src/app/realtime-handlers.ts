@@ -9,6 +9,7 @@ import {
   type EnvelopeHandlerRegistry,
   type RealtimeRegistration,
 } from '@/lib/realtime'
+import { registerPlatformRealtime } from './platform'
 import { registerSessionRealtime } from './session-realtime'
 
 /**
@@ -33,6 +34,7 @@ export const FEATURE_REALTIME_REGISTRATIONS: readonly RealtimeRegistration[] = [
   registerAdminRealtime, // directory.updated → users and teams
   registerSessionRealtime, // me.updated → the signed-in staff member (roles, team, name)
   registerNotificationsRealtime, // notification.created, notifications.read → the bell (slice 10)
+  registerPlatformRealtime, // platform.updated → the AI switch (slice 18)
 ]
 
 /** Builds a fresh registry with every feature's handlers (one per AppProviders). */

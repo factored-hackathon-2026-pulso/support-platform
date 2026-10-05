@@ -141,6 +141,59 @@
         "title": "AdminInvitation",
         "type": "object"
       },
+      "AdminPlatformSettings": {
+        "description": "Administración's view of the settings (\"Plataforma\").",
+        "properties": {
+          "agentCoreConfigured": {
+            "description": "Whether agent-core is wired. With AI on but no agent-core, the assistant, the copilot and the builder stay unavailable (the platform behaves as today).",
+            "title": "Agentcoreconfigured",
+            "type": "boolean"
+          },
+          "aiEnabled": {
+            "title": "Aienabled",
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last change; null: never changed.",
+            "title": "Updatedat"
+          },
+          "updatedByName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who made the last change.",
+            "title": "Updatedbyname"
+          },
+          "version": {
+            "description": "0 while the deployment default (`CC_AI_ENABLED`) applies.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "aiEnabled",
+          "agentCoreConfigured",
+          "version",
+          "updatedAt",
+          "updatedByName"
+        ],
+        "title": "AdminPlatformSettings",
+        "type": "object"
+      },
       "AdminTeam": {
         "properties": {
           "active": {
@@ -1837,6 +1890,11 @@
             "title": "Canchangepriority",
             "type": "boolean"
           },
+          "canChangeType": {
+            "description": "Slice 18: the same rule as `canChangePriority` (PUT /cases/{caseId}/type).",
+            "title": "Canchangetype",
+            "type": "boolean"
+          },
           "canClose": {
             "title": "Canclose",
             "type": "boolean"
@@ -1872,6 +1930,7 @@
           "canClose",
           "canAssign",
           "canChangePriority",
+          "canChangeType",
           "canEscalate",
           "canCall",
           "canEmail",
@@ -2292,6 +2351,10 @@
             ],
             "title": "Assignedanalystid"
           },
+          "caseType": {
+            "$ref": "#/components/schemas/CaseType",
+            "description": "Slice 18: what the case is about (a dataset complaint subcategory); `none` until the assignee or supervision sets it."
+          },
           "channel": {
             "$ref": "#/components/schemas/CaseChannel"
           },
@@ -2444,6 +2507,7 @@
           "channel",
           "language",
           "priority",
+          "caseType",
           "status",
           "inboxStatus",
           "openedAt",
@@ -2463,6 +2527,58 @@
           "activeCallId"
         ],
         "title": "CaseSummary",
+        "type": "object"
+      },
+      "CaseType": {
+        "description": "What the case is about (slice 18, ADR 0006): the AI matures per case type.\n\nThe values are the dataset's complaint subcategories (``complaints.subcategory`` in\ndata-lab; names from its aggregate report ``reports/demand/complaints_by_subcategory.csv``,\nnever from records) plus ``none`` (the dataset's ``(null)`` subcategory, and every case\nwhen it opens). ``virtual_card`` (\"Tarjeta virtual\") is **team-generated**: a new product\nthe demo shows maturing from zero; it is not in the dataset.",
+        "enum": [
+          "none",
+          "unrecognized_charge",
+          "undue_charge",
+          "app_issue",
+          "branch_service",
+          "service_quality",
+          "virtual_card"
+        ],
+        "title": "CaseType",
+        "type": "string"
+      },
+      "CaseTypeResult": {
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/CaseSummary"
+          },
+          "changed": {
+            "description": "false: the case already had that type (no event).",
+            "title": "Changed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "changed",
+          "case"
+        ],
+        "title": "CaseTypeResult",
+        "type": "object"
+      },
+      "ChangeCaseTypeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "caseType": {
+            "$ref": "#/components/schemas/CaseType"
+          },
+          "expectedVersion": {
+            "description": "The case `version` the caller saw (stale → `version_conflict`).",
+            "minimum": 0.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "caseType",
+          "expectedVersion"
+        ],
+        "title": "ChangeCaseTypeRequest",
         "type": "object"
       },
       "ChangePriorityRequest": {
@@ -5333,6 +5449,10 @@
       },
       "MeResponse": {
         "properties": {
+          "platform": {
+            "$ref": "#/components/schemas/PlatformSettings",
+            "description": "Slice 18: the platform settings the SPA needs (the AI switch); live as `platform.updated` on `platform:settings`."
+          },
           "session": {
             "$ref": "#/components/schemas/SessionOut"
           },
@@ -5342,7 +5462,8 @@
         },
         "required": [
           "staff",
-          "session"
+          "session",
+          "platform"
         ],
         "title": "MeResponse",
         "type": "object"
@@ -5962,6 +6083,21 @@
           "rules"
         ],
         "title": "PasswordRules",
+        "type": "object"
+      },
+      "PlatformSettings": {
+        "description": "What every client reads (staff in ``/auth/me``, the simulator in\n``/customer/platform``, both live as ``platform.updated`` on ``platform:settings``).",
+        "properties": {
+          "aiEnabled": {
+            "description": "The AI switch. Off: hide every AI element; the platform is people-only (new chats go to people, no copilot, no builder).",
+            "title": "Aienabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "aiEnabled"
+        ],
+        "title": "PlatformSettings",
         "type": "object"
       },
       "PostAnalystTurnRequest": {
@@ -7502,6 +7638,39 @@
         "title": "SessionResponse",
         "type": "object"
       },
+      "SetAiEnabledRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "description": "The desired state of the AI switch.",
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "SetAiEnabledRequest",
+        "type": "object"
+      },
+      "SetAiEnabledResult": {
+        "properties": {
+          "changed": {
+            "description": "false: the switch was already in that state (no event).",
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/AdminPlatformSettings"
+          }
+        },
+        "required": [
+          "changed",
+          "settings"
+        ],
+        "title": "SetAiEnabledResult",
+        "type": "object"
+      },
       "SetAssigneeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -8706,6 +8875,119 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/platform": {
+      "get": {
+        "operationId": "platform_get_admin_settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPlatformSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The platform settings (Administración)",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/api/v1/admin/platform/ai": {
+      "put": {
+        "description": "Slice 18. Sets the desired state, so it is safe to repeat: the same state answers 200 with `changed: false` and records nothing. A change records `platform.ai_toggled` `{enabled}` (audit: \"Activó / Desactivó las funciones de IA\") and sends `platform.updated` on `platform:settings`. Off: new chats go to people, the copilot answers `available: false`, the builder is unavailable; an assistant conversation already under way is not interrupted.",
+        "operationId": "platform_set_ai_enabled",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAiEnabledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetAiEnabledResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Turn the AI functions on or off (Administración)",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/api/v1/admin/teams": {
       "get": {
         "operationId": "admin_list_teams",
@@ -11017,7 +11299,7 @@
     },
     "/api/v1/builder/chat": {
       "get": {
-        "description": "One thread per person. `available: false` (no messages, status 200) while agent-core is not configured: hide the chat.",
+        "description": "One thread per person. `available: false` (no messages, status 200) while agent-core is not configured or the AI switch is off (slice 18): hide the chat.",
         "operationId": "builder_get_chat",
         "responses": {
           "200": {
@@ -13225,7 +13507,7 @@
     },
     "/api/v1/builder/status": {
       "get": {
-        "description": "Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured (hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for.",
+        "description": "Slice 16. Always 200 for Supervisión and Administración: `available: false` while agent-core is not configured or the AI switch is off (slice 18; hide the section; every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for.",
         "operationId": "builder_get_status",
         "responses": {
           "200": {
@@ -14566,7 +14848,7 @@
     },
     "/api/v1/cases/{caseId}/copilot": {
       "get": {
-        "description": "Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` (with no messages) while agent-core is not configured or the customer is not linked to the dataset: hide the panel, it is not an error.",
+        "description": "Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` (with no messages) while agent-core is not configured, the AI switch is off (slice 18) or the customer is not linked to the dataset: hide the panel, it is not an error.",
         "operationId": "cases_get_copilot",
         "parameters": [
           {
@@ -14648,7 +14930,7 @@
     },
     "/api/v1/cases/{caseId}/copilot/messages": {
       "post": {
-        "description": "Slice 15 (ADR 0003). The copilot reads and calculates (it suggests what to look up and never acts) and answers as the analyst: agent-core decides what she may see. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; 404 `assistant_disabled` without agent-core; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the question stays in the thread: ask again with the same `clientMessageId`).",
+        "description": "Slice 15 (ADR 0003). The copilot reads and calculates (it suggests what to look up and never acts) and answers as the analyst: agent-core decides what she may see. The call waits for the model (seconds): show a spinner. Idempotent on `clientMessageId` (= `Idempotency-Key`): a retry with the same text answers 200 with `Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; 404 `assistant_disabled` without agent-core or while the AI switch is off; 503 `agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the question stays in the thread: ask again with the same `clientMessageId`).",
         "operationId": "cases_ask_copilot",
         "parameters": [
           {
@@ -14793,7 +15075,7 @@
     },
     "/api/v1/cases/{caseId}/copilot/suggestions": {
       "post": {
-        "description": "ADR 0005. The copilot reads the recent turns and answers a typed list that may be empty (`status: none` is a normal answer): a draft reply, reads to look at, a prepared action that is **not executable**, and a recommendation to escalate. Nothing is sent or run. The call waits for the model (seconds). Idempotent on `Idempotency-Key`: a retry of a request that has its answer is 200 with `Idempotent-Replayed: true` and asks nothing; after a failure the same key asks again. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while one is being prepared; 404 `assistant_disabled` without agent-core or the suggestions agent; 503/502 when agent-core does not answer.",
+        "description": "ADR 0005. The copilot reads the recent turns and answers a typed list that may be empty (`status: none` is a normal answer): a draft reply, reads to look at, a prepared action that is **not executable**, and a recommendation to escalate. Nothing is sent or run. The call waits for the model (seconds). Idempotent on `Idempotency-Key`: a retry of a request that has its answer is 200 with `Idempotent-Replayed: true` and asks nothing; after a failure the same key asks again. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while one is being prepared; 404 `assistant_disabled` without agent-core or the suggestions agent, or while the AI switch is off; 503/502 when agent-core does not answer.",
         "operationId": "cases_request_copilot_suggestion",
         "parameters": [
           {
@@ -14945,7 +15227,7 @@
     },
     "/api/v1/cases/{caseId}/copilot/suggestions/latest": {
       "get": {
-        "description": "ADR 0005. Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` hides the suggestions (agent-core, the suggestions agent or the dataset link is missing); `suggestion: null` means none yet or its texts expired (24 hours). `stale: true` once the customer wrote after the turns it read. A suggestion that is `preparing` is on its way: ask again or wait for the `copilot.suggestion_ready` signal on `inbox:<staffId>`.",
+        "description": "ADR 0005. Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` hides the suggestions (agent-core, the suggestions agent or the dataset link is missing, or the AI switch is off); `suggestion: null` means none yet or its texts expired (24 hours). `stale: true` once the customer wrote after the turns it read. A suggestion that is `preparing` is on its way: ask again or wait for the `copilot.suggestion_ready` signal on `inbox:<staffId>`.",
         "operationId": "cases_latest_copilot_suggestion",
         "parameters": [
           {
@@ -16423,6 +16705,108 @@
         ]
       }
     },
+    "/api/v1/cases/{caseId}/type": {
+      "put": {
+        "description": "Slice 18, the same rules as the priority. Checks in this order: the case exists (404) · the caller is its assignee analyst or a supervisor (403 `case_not_assigned`) · it is not closed (409 `case_closed`) · it already has that type (200, `changed: false`, nothing happens) · it is still at `expectedVersion` (409 `version_conflict`, with the case now as `current`). Records `case.type_changed` `{from, to}`. Independent of the AI switch: the type is data about the case.",
+        "operationId": "cases_change_case_type",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeCaseTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseTypeResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Set what the case is about (the assignee, or supervision on any open case)",
+        "tags": [
+          "cases"
+        ]
+      }
+    },
     "/api/v1/customer/call": {
       "get": {
         "operationId": "customer_get_my_call",
@@ -17633,6 +18017,43 @@
         "summary": "Email the bank: joins the open conversation or opens one (email)",
         "tags": [
           "customer"
+        ]
+      }
+    },
+    "/api/v1/customer/platform": {
+      "get": {
+        "description": "Slice 18: whether the AI functions are on (live: `platform:settings`).",
+        "operationId": "platform_get_customer_settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "CustomerToken": []
+          }
+        ],
+        "summary": "The platform settings as the customer simulator needs them",
+        "tags": [
+          "platform"
         ]
       }
     },

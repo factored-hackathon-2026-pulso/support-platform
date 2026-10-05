@@ -50,6 +50,8 @@ ADMIN_TYPES = {
     # part 4: what administration sends
     "staff.invitation_sent", "staff.invitation_resent", "staff.invitation_cancelled",
     "staff.password_reset_link_sent",
+    # slice 18: the AI switch, a platform-wide setting
+    "platform.ai_toggled",
 }  # fmt: skip
 
 #: Part 4: what the person does with her link (her own access).

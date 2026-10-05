@@ -15,6 +15,7 @@ from cc_platform.api.schemas.auth import (
 )
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.api.schemas.people import StaffOut
+from cc_platform.api.schemas.platform import PlatformSettings
 from cc_platform.application.people.dto import LoginCommand, VerifyMfaCommand
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -73,9 +74,11 @@ async def verify_mfa(body: MfaRequest, api: ApiContextDep) -> SessionResponse:
 )
 async def me(actor: CurrentActor, api: ApiContextDep) -> MeResponse:
     current = await api.use_cases.people.current_staff.execute(actor)
+    settings = await api.use_cases.platform.settings.execute()
     return MeResponse(
         staff=StaffOut.from_view(current.staff),
         session=SessionOut(id=current.session_id, expires_at=current.session_expires_at),
+        platform=PlatformSettings.from_view(settings),
     )
 
 

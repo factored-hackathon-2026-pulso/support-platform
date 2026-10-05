@@ -15,6 +15,7 @@ import {
   countryName,
   isNewerCase,
   casePriority,
+  caseType,
   isAttendedEscalation,
   MAX_ESCALATION_TEXT,
   ratingFact,
@@ -22,6 +23,7 @@ import {
   slaFact,
   type CasePriority,
   type CaseRating,
+  type CaseType,
   type CloseReason,
 } from '@/features/cases/core'
 import { isApiProblem } from '@/lib/api'
@@ -628,6 +630,8 @@ export interface FileRow {
   pill?: { label: string; tone: Tone; icon?: FactIcon }
   /** The case priority (slice 8): the menu when the viewer may change it, else glyph + word. */
   priority?: CasePriority
+  /** The case type (slice 18, AI on only): the menu when the viewer may change it, else the word. */
+  caseType?: CaseType
   /** Short facts as the value ("Primera respuesta"). */
   facts?: FactItem[]
 }
@@ -676,8 +680,15 @@ export function firstResponseFacts(
   return sla ? [sla] : [{ key: 'result', icon: 'alert', text: 'Sin respuesta', tone: 'muted' }]
 }
 
-/** "Este caso": number, channel, priority, opened, status and the first response. */
-export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | number): FileRow[] {
+/**
+ * "Este caso": number, channel, priority, (slice 18, only with the AI switch on) the case
+ * type, opened, status and the first response.
+ */
+export function caseRows(
+  detail: Pick<CaseDetail, 'case'>,
+  now: Date | string | number,
+  { aiEnabled = false }: { aiEnabled?: boolean } = {},
+): FileRow[] {
   const { case: summary } = detail
   return [
     { key: 'id', icon: 'hash', label: 'Número', text: summary.id, mono: true },
@@ -694,6 +705,7 @@ export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | 
       text: casePriority(summary.priority).label,
       priority: summary.priority,
     },
+    ...(aiEnabled ? [caseTypeRow(summary.caseType)] : []),
     {
       key: 'opened',
       icon: 'calendar-clock',
@@ -714,6 +726,17 @@ export function caseRows(detail: Pick<CaseDetail, 'case'>, now: Date | string | 
     },
     ...(summary.status === 'closed' ? [ratingRow(summary.rating)] : []),
   ]
+}
+
+/** "Tipo de caso" (slice 18): the menu or the word, drawn by the ficha. */
+export function caseTypeRow(value: CaseType): FileRow {
+  return {
+    key: 'case-type',
+    icon: 'tag',
+    label: 'Tipo de caso',
+    text: caseType(value).label,
+    caseType: value,
+  }
 }
 
 /**
@@ -965,6 +988,34 @@ export function describePriorityFailure(error: unknown): { title: string; descri
     case 'case_not_assigned':
     case 'forbidden':
       return { title, description: 'Ya no puedes cambiar la prioridad de este caso.' }
+    case 'network_error':
+      return { title, description: 'Revisa tu conexión e inténtalo de nuevo.' }
+    default:
+      return { title, description: 'Inténtalo de nuevo.' }
+  }
+}
+
+// ── Case type (slice 18) ────────────────────────────────────────────────────
+
+/** The toast after a case-type change failed (the menu shows the previous type again). */
+export function describeCaseTypeFailure(error: unknown): { title: string; description: string } {
+  const title = 'No pudimos cambiar el tipo de caso'
+  if (!isApiProblem(error)) return { title, description: 'Inténtalo de nuevo.' }
+  switch (error.code) {
+    case 'version_conflict': {
+      const current = conflictCurrentCase(error)
+      return {
+        title,
+        description: current
+          ? `Alguien más lo cambió: ahora es ${caseType(current.caseType).label}.`
+          : 'Alguien más lo cambió mientras elegías.',
+      }
+    }
+    case 'case_closed':
+      return { title, description: 'El caso ya está cerrado.' }
+    case 'case_not_assigned':
+    case 'forbidden':
+      return { title, description: 'Ya no puedes cambiar el tipo de este caso.' }
     case 'network_error':
       return { title, description: 'Revisa tu conexión e inténtalo de nuevo.' }
     default:

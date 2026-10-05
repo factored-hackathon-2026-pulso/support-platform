@@ -27,6 +27,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryMfaChallengeRepository,
     InMemoryNotificationRepository,
     InMemoryPasswordResetRepository,
+    InMemoryPlatformSettingsRepository,
     InMemoryStaffRepository,
     InMemoryStaffSessionRepository,
     InMemoryTeamRepository,
@@ -40,6 +41,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     staff: InMemoryStaffRepository
     teams: InMemoryTeamRepository
     admin_roster: InMemoryAdminRosterRepository
+    platform_settings: InMemoryPlatformSettingsRepository
     login_accounts: InMemoryLoginAccountRepository
     mfa_challenges: InMemoryMfaChallengeRepository
     sessions: InMemoryStaffSessionRepository
@@ -74,6 +76,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.staff = InMemoryStaffRepository(store.staff, track)
         self.teams = InMemoryTeamRepository(store.teams, track)
         self.admin_roster = InMemoryAdminRosterRepository(store.admin_roster, track)
+        self.platform_settings = InMemoryPlatformSettingsRepository(store.platform_settings, track)
         self.login_accounts = InMemoryLoginAccountRepository(store.login_accounts, track)
         self.mfa_challenges = InMemoryMfaChallengeRepository(store.mfa_challenges, track)
         self.sessions = InMemoryStaffSessionRepository(store.sessions, track)
@@ -109,6 +112,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         InMemoryStaffRepository
         | InMemoryTeamRepository
         | InMemoryAdminRosterRepository
+        | InMemoryPlatformSettingsRepository
         | InMemoryLoginAccountRepository
         | InMemoryMfaChallengeRepository
         | InMemoryStaffSessionRepository
@@ -137,6 +141,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.teams,
             self.staff,
             self.admin_roster,
+            self.platform_settings,
             self.login_accounts,
             self.mfa_challenges,
             self.sessions,

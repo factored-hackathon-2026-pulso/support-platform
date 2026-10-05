@@ -18,3 +18,4 @@ export {
   useSendCustomerEmail,
   useStartCustomerCall,
 } from './use-customer-channels'
+export { useSimulatorAiEnabled } from './use-simulator-platform'

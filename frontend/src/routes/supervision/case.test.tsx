@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ConversationApi from '@/features/conversation/api'
 import {
   changeCasePriority,
+  changeCaseType,
   fetchCaseDetail,
   fetchCaseHistory,
   fetchTurns,
@@ -33,6 +34,7 @@ vi.mock('@/features/conversation/api', async (importOriginal) => {
     fetchCaseHistory: vi.fn<typeof actual.fetchCaseHistory>(),
     markCaseRead: vi.fn<typeof actual.markCaseRead>(),
     changeCasePriority: vi.fn<typeof actual.changeCasePriority>(),
+    changeCaseType: vi.fn<typeof actual.changeCaseType>(),
   }
 })
 
@@ -56,6 +58,7 @@ function ownCaseDetail(): CaseDetail {
       canClose: true,
       canAssign: true,
       canChangePriority: true,
+      canChangeType: true,
       canEscalate: false,
       canCall: false,
       canEmail: false,
@@ -87,6 +90,7 @@ function queuedDetail(): CaseDetail {
         canClose: false,
         canAssign: true,
         canChangePriority: true,
+        canChangeType: true,
         canEscalate: false,
         canCall: false,
         canEmail: false,
@@ -148,6 +152,38 @@ describe('supervisor case view', () => {
     ).toBeInTheDocument()
     // The meta line no longer carries the priority.
     expect(screen.queryByText(/prioridad (media|alta|baja)/)).not.toBeInTheDocument()
+  })
+
+  it('sets the case type from the header, only with the AI switch on (slice 18)', async () => {
+    vi.mocked(fetchCaseDetail).mockResolvedValue(queuedDetail())
+    vi.mocked(changeCaseType).mockImplementation(async (caseId, body) => ({
+      changed: true,
+      case: { ...queuedRosa, id: caseId, caseType: body.caseType, version: queuedRosa.version + 1 },
+    }))
+    const off = renderRoute(casePath(queuedRosa.id), { staff: supervisorStaff })
+    await screen.findByRole('button', { name: priorityMenuLabel(queuedRosa.priority) })
+    expect(screen.queryByRole('button', { name: /^Tipo de caso:/ })).toBeNull()
+    off.unmount()
+
+    const { user } = renderRoute(casePath(queuedRosa.id), {
+      staff: supervisorStaff,
+      aiEnabled: true,
+    })
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Tipo de caso: Sin tipo. Cambiar el tipo de caso',
+      }),
+    )
+    await user.click(screen.getByRole('menuitemradio', { name: 'Tarjeta virtual' }))
+    expect(changeCaseType).toHaveBeenCalledWith(queuedRosa.id, {
+      caseType: 'virtual_card',
+      expectedVersion: queuedRosa.version,
+    })
+    expect(
+      await screen.findByRole('button', {
+        name: 'Tipo de caso: Tarjeta virtual. Cambiar el tipo de caso',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('is read-only even for an assignee holding both roles', async () => {

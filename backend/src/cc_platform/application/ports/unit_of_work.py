@@ -57,6 +57,7 @@ if TYPE_CHECKING:
         StaffSessionRepository,
         TeamRepository,
     )
+    from cc_platform.application.platform.ports import PlatformSettingsRepository
     from cc_platform.application.ports.event_log import EventLogRepository
 
 
@@ -70,6 +71,11 @@ class UnitOfWork(Protocol):
 
     @property
     def admin_roster(self) -> AdminRosterRepository: ...
+
+    @property
+    def platform_settings(self) -> PlatformSettingsRepository:
+        """Slice 18: the platform-wide settings (the AI switch), a singleton."""
+        ...
 
     @property
     def login_accounts(self) -> LoginAccountRepository: ...

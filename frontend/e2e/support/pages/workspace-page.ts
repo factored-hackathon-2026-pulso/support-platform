@@ -109,6 +109,28 @@ export class WorkspacePage {
     ).toBeFocused()
   }
 
+  /**
+   * Slice 18: the "Tipo de caso" row of the ficha (only while AI is on) is a menu button;
+   * picks `label` ("Cobro indebido").
+   */
+  async setCaseType(panel: Locator, label: string): Promise<void> {
+    await this.caseTypeMenu(panel).click()
+    const menu = this.page.getByRole('menu', { name: 'Tipo de caso' })
+    await expect(menu).toBeVisible()
+    await menu.getByRole('menuitemradio', { name: label }).click()
+    await expect(menu).toHaveCount(0)
+    await expect(
+      panel.getByRole('button', { name: `Tipo de caso: ${label}. Cambiar el tipo de caso` }),
+    ).toBeVisible()
+  }
+
+  /** The case-type menu button of the ficha (slice 18). */
+  caseTypeMenu(panel: Locator): Locator {
+    return panel
+      .getByRole('region', { name: 'Este caso' })
+      .getByRole('button', { name: /^Tipo de caso: .*\. Cambiar el tipo de caso$/ })
+  }
+
   /** A case card of the list (its accessible name starts with the customer name). */
   caseCard(customerName: string): Locator {
     return this.caseList.getByRole('button', { name: startsWithName(customerName) })

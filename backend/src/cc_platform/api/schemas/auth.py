@@ -9,6 +9,7 @@ from pydantic import Field
 
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.api.schemas.people import StaffOut
+from cc_platform.api.schemas.platform import PlatformSettings
 from cc_platform.domain.people.mfa import MfaMethod
 
 
@@ -45,3 +46,7 @@ class SessionResponse(ApiModel):
 class MeResponse(ApiModel):
     staff: StaffOut
     session: SessionOut
+    platform: PlatformSettings = Field(
+        description="Slice 18: the platform settings the SPA needs (the AI switch); live as "
+        "`platform.updated` on `platform:settings`."
+    )

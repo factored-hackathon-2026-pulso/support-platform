@@ -77,3 +77,6 @@ export interface CustomerChatCache {
   pastConversationCount: number
   ended: EndedConversation[]
 }
+
+/** Slice 18: the platform settings the simulator reads (the AI switch). */
+export type CustomerPlatformSettings = Schemas['PlatformSettings']

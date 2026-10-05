@@ -20,6 +20,7 @@ export function makeCaseSummary(overrides: Partial<CaseSummary> = {}): CaseSumma
     activeCallId: null,
     language: 'es',
     priority: 'medium',
+    caseType: 'none',
     status: 'in_progress',
     inboxStatus: 'to_reply',
     openedAt: minutesFrom(-14),

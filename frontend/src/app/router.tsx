@@ -113,6 +113,7 @@ export const routes: RouteObject[] = [
             lazyRoute(PATHS.admin.users, () => import('@/routes/admin/users')),
             lazyRoute(PATHS.admin.teams, () => import('@/routes/admin/teams')),
             lazyRoute(PATHS.admin.audit, () => import('@/routes/admin/audit')),
+            lazyRoute(PATHS.admin.platform, () => import('@/routes/admin/platform')),
             lazyRoute('*', () => import('@/routes/not-found')),
           ]),
           lazyRoute('*', () => import('@/routes/not-found')),

@@ -16,6 +16,7 @@ from cc_platform.application.notifications.use_cases import NotificationsUseCase
 from cc_platform.application.people.admin.use_cases import AdministrationUseCases
 from cc_platform.application.people.onboarding.use_cases import OnboardingUseCases
 from cc_platform.application.people.use_cases import PeopleUseCases
+from cc_platform.application.platform.use_cases import PlatformUseCases
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,5 +29,7 @@ class UseCases:
     administration: AdministrationUseCases
     notifications: NotificationsUseCases
     onboarding: OnboardingUseCases
+    platform: PlatformUseCases
+    """Slice 18: the platform-wide settings (the AI switch)."""
     assistant: AssistantUseCases | None = None
     """ADR 0003: ``None`` while agent-core is not configured."""

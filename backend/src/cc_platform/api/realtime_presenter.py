@@ -1,5 +1,6 @@
 """``CaseRealtimePresenter`` / ``SupervisionRealtimePresenter`` /
-``AdministrationRealtimePresenter`` / ``NotificationPresenter`` adapter: socket payloads
+``AdministrationRealtimePresenter`` / ``NotificationPresenter`` /
+``PlatformRealtimePresenter`` adapter: socket payloads
 rendered by the REST schemas.
 
 The realtime projection (application layer) builds views; this module turns them into the
@@ -17,6 +18,7 @@ from cc_platform.api.schemas.common import ApiModel
 from cc_platform.api.schemas.customer import CustomerConversation, CustomerTurn
 from cc_platform.api.schemas.notifications import Notification
 from cc_platform.api.schemas.people import StaffOut
+from cc_platform.api.schemas.platform import PlatformSettings
 from cc_platform.api.schemas.supervision import QueueCounts
 from cc_platform.application.cases.dto import (
     CallView,
@@ -40,6 +42,10 @@ def _json(model: ApiModel) -> JsonObject:
 
 
 class SchemaRealtimePresenter:
+    def platform_settings(self, *, ai_enabled: bool) -> JsonObject:
+        """Slice 18: ``platform.updated`` carries the public ``PlatformSettings``."""
+        return _json(PlatformSettings(ai_enabled=ai_enabled))
+
     def case_summary(self, view: CaseSummaryView) -> JsonObject:
         return _json(CaseSummary.from_view(view))
 

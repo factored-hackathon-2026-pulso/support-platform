@@ -102,6 +102,20 @@ export class PlatformApi {
     return this.signIn(SEEDED.supervisor.email)
   }
 
+  /**
+   * Slice 18: Administración turns the AI functions on or off (the dev default is on). The
+   * scenario that changes it puts it back on, so the others see the default app.
+   */
+  async setAiEnabled(enabled: boolean): Promise<void> {
+    await json<Schemas['SetAiEnabledResult']>(
+      await this.request.put(`${API}/admin/platform/ai`, {
+        headers: this.auth(await this.adminToken()),
+        data: { enabled },
+      }),
+      `ai ${enabled ? 'on' : 'off'}`,
+    )
+  }
+
   async teamId(name: string = TEAM_ANDES): Promise<string> {
     const teams = await json<Schemas['AdminTeamList']>(
       await this.request.get(`${API}/admin/teams`, { headers: this.auth(await this.adminToken()) }),

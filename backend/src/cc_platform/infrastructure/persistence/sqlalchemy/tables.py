@@ -83,6 +83,18 @@ admin_roster = Table(
     _version(),
 )
 
+# Singleton (``id = "default"``, slice 18): platform-wide settings (the AI switch). Absent until
+# Administración changes a switch: the deployment default (``CC_AI_ENABLED``) applies.
+platform_settings = Table(
+    "platform_settings",
+    metadata,
+    Column("id", String(20), primary_key=True),
+    Column("ai_enabled", Boolean, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=True),
+    Column("updated_by_id", String(ID), nullable=True),
+    _version(),
+)
+
 login_accounts = Table(
     "login_accounts",
     metadata,
@@ -211,6 +223,8 @@ cases = Table(
     Column("channel", String(20), nullable=False),
     Column("language", String(5), nullable=False),
     Column("priority", String(10), nullable=False),
+    # slice 18: what the case is about (a dataset complaint subcategory, or none)
+    Column("case_type", String(30), nullable=False, default="none"),
     Column("status", String(20), nullable=False),
     Column("opened_at", UtcDateTime, nullable=False),
     Column("sla_due_at", UtcDateTime, nullable=False),

@@ -26,6 +26,7 @@ from cc_platform.domain.people.password_reset import PasswordReset
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff
 from cc_platform.domain.people.team import Team
+from cc_platform.domain.platform.settings import PlatformSettings
 
 
 @dataclass
@@ -33,6 +34,7 @@ class InMemoryStore:
     staff: dict[str, Staff] = field(default_factory=dict)
     teams: dict[str, Team] = field(default_factory=dict)
     admin_roster: dict[str, AdminRoster] = field(default_factory=dict)
+    platform_settings: dict[str, PlatformSettings] = field(default_factory=dict)
     login_accounts: dict[str, LoginAccount] = field(default_factory=dict)
     mfa_challenges: dict[str, MfaChallenge] = field(default_factory=dict)
     sessions: dict[str, StaffSession] = field(default_factory=dict)

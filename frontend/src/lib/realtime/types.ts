@@ -32,6 +32,8 @@ export type KnownRealtimeEventType =
   // Slice 10 (notification center, slice-10-notifications.md §4.4): on `staff:<id>` only
   | 'notification.created'
   | 'notifications.read'
+  // Slice 18 (the AI switch, slice-18-ai-foundation.md §5): on `platform:settings`
+  | 'platform.updated'
 
 export type RealtimeEventType = KnownRealtimeEventType | ControlEnvelopeType | (string & {})
 
@@ -51,7 +53,8 @@ export type SupervisionTopicKey = 'queues' | 'team' | 'escalations'
  * `case:<caseId>`, `inbox:<staffId>` (staff tokens), `customer:<customerId>`
  * (only the customer token whose subject is that id), `supervision:queues` /
  * `supervision:team` (staff holding the supervisor role), `admin:directory`
- * (staff holding the admin role) and `staff:<staffId>` (only that person).
+ * (staff holding the admin role), `staff:<staffId>` (only that person) and
+ * `platform:settings` (slice 18: every staff and customer session, the AI switch).
  */
 export type RealtimeTopic =
   | `case:${string}`
@@ -60,6 +63,7 @@ export type RealtimeTopic =
   | `supervision:${SupervisionTopicKey}`
   | 'admin:directory'
   | `staff:${string}`
+  | 'platform:settings'
 
 /** Messages the client sends (one topic per message, backend `api/routers/realtime.py`). */
 export type ClientMessage =
@@ -95,6 +99,7 @@ export const topics = {
   supervisionEscalations: (): RealtimeTopic => 'supervision:escalations',
   adminDirectory: (): RealtimeTopic => 'admin:directory',
   staff: (staffId: string): RealtimeTopic => `staff:${staffId}`,
+  platformSettings: (): RealtimeTopic => 'platform:settings',
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,6 +5,7 @@
  */
 import { api, unwrap } from '@/lib/api'
 import type {
+  AdminPlatformSettings,
   AdminTeam,
   AdminTeamChange,
   AdminTeamDetail,
@@ -16,6 +17,7 @@ import type {
   CreateUserRequest,
   InvitedUser,
   PasswordResetLinkSent,
+  SetAiEnabledResult,
   TeamStatusFilter,
   UpdateUserRequest,
 } from './types'
@@ -29,10 +31,13 @@ export const adminKeys = {
   teams: () => ['admin', 'teams'] as const,
   teamList: (status: TeamStatusFilter) => ['admin', 'teams', status] as const,
   team: (teamId: string) => ['admin', 'team', teamId] as const,
+  /** Slice 18: "Plataforma" (the AI switch). */
+  platform: () => ['admin', 'platform'] as const,
 }
 
 export const adminMutationKeys = {
   createUser: ['admin', 'create-user'] as const,
+  setAiEnabled: ['admin', 'platform', 'ai'] as const,
   user: (
     staffId: string,
     action:
@@ -205,4 +210,17 @@ export async function reactivateTeam(
       body: { expectedVersion },
     }),
   )
+}
+
+/** GET /admin/platform (slice 18): the AI switch, whether agent-core is wired, the last change. */
+export async function fetchAdminPlatform(signal?: AbortSignal): Promise<AdminPlatformSettings> {
+  return unwrap(api.GET('/api/v1/admin/platform', { signal }))
+}
+
+/**
+ * PUT /admin/platform/ai (slice 18): the desired state of the AI switch. The same state is a
+ * no-op (`changed: false`); a change is audited and reaches every client live.
+ */
+export async function setAiEnabled(enabled: boolean): Promise<SetAiEnabledResult> {
+  return unwrap(api.PUT('/api/v1/admin/platform/ai', { body: { enabled } }))
 }

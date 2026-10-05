@@ -47,6 +47,12 @@ function invalidateDirectory(envelope: RealtimeEnvelope, queryClient: QueryClien
   }
 }
 
+/** `platform.updated` (slice 18): "Plataforma" refetches (who changed it, and when). */
+function invalidatePlatform(_envelope: RealtimeEnvelope, queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: adminKeys.platform() })
+}
+
 export const registerAdminRealtime: RealtimeRegistration = (registry) => {
   registry.register('directory.updated', invalidateDirectory)
+  registry.register('platform.updated', invalidatePlatform)
 }

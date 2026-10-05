@@ -48,6 +48,31 @@ class CasePriority(StrEnum):
     CRITICAL = "critical"
 
 
+class CaseType(StrEnum):
+    """What the case is about (slice 18, ADR 0006): the AI matures per case type.
+
+    The values are the dataset's complaint subcategories (``complaints.subcategory`` in
+    data-lab; names from its aggregate report ``reports/demand/complaints_by_subcategory.csv``,
+    never from records) plus ``none`` (the dataset's ``(null)`` subcategory, and every case
+    when it opens). ``virtual_card`` ("Tarjeta virtual") is **team-generated**: a new product
+    the demo shows maturing from zero; it is not in the dataset.
+    """
+
+    NONE = "none"
+    UNRECOGNIZED_CHARGE = "unrecognized_charge"
+    """"Cargo no reconocido" (dataset category Transactions)."""
+    UNDUE_CHARGE = "undue_charge"
+    """"Cobro indebido" (dataset category Fees)."""
+    APP_ISSUE = "app_issue"
+    """"Problema con app" (dataset category Technical)."""
+    BRANCH_SERVICE = "branch_service"
+    """"Atención en sucursal" (dataset category Branch)."""
+    SERVICE_QUALITY = "service_quality"
+    """"Calidad de servicio" (dataset category Service)."""
+    VIRTUAL_CARD = "virtual_card"
+    """"Tarjeta virtual": team-generated (a new product, not a dataset subcategory)."""
+
+
 class CaseStatus(StrEnum):
     """Stored state machine of a case (see ``Case``)."""
 

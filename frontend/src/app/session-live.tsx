@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@/components/ui'
-import { topics, useRealtimeClient, useRealtimeSubscription } from '@/lib/realtime'
+import { topics, useOnReconnect, useRealtimeClient, useRealtimeSubscription } from '@/lib/realtime'
+import { platformKeys } from './platform'
 import { rolesNowCopy } from './roles'
 import { sessionKeys, useSession } from './session'
 
@@ -14,7 +15,9 @@ import { sessionKeys, useSession } from './session'
  *   reloads /auth/me;
  * - when her roles change, says so once ("Cambiaron tus roles"). The rail and
  *   the role switcher follow `useSession()`; `RequireRole` sends her home if
- *   the section she is in is gone.
+ *   the section she is in is gone;
+ * - (slice 18) subscribes `platform:settings` (`platform.updated` → the AI switch,
+ *   app/platform.ts) and refetches the settings after a reconnect.
  */
 export function SessionLiveSync() {
   const { user } = useSession()
@@ -22,6 +25,10 @@ export function SessionLiveSync() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   useRealtimeSubscription(user ? topics.staff(user.id) : null)
+  useRealtimeSubscription(user ? topics.platformSettings() : null)
+  useOnReconnect(() => {
+    void queryClient.invalidateQueries({ queryKey: platformKeys.settings() })
+  }, user !== null)
 
   useEffect(
     () =>

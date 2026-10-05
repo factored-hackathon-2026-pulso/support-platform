@@ -1,6 +1,7 @@
 """Analyst Workspace: inbox ("Casos"), case detail, the customer's other cases, transcript,
-replies, read cursor, close, the priority (slice 8: the assignee or supervision) and the
-escalation to supervision (slice 9: escalate, withdraw, "Entendido").
+replies, read cursor, close, the priority (slice 8: the assignee or supervision), the case
+type (slice 18, the same rules) and the escalation to supervision (slice 9: escalate, withdraw,
+"Entendido").
 
 Visibility (enforced in the use cases, contract §4.3): the assignee analyst reads and
 writes; any supervisor reads; an analyst who holds (or held) another case of the same
@@ -16,7 +17,12 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from fastapi.exceptions import RequestValidationError
 
 from cc_platform.api.dependencies import ApiContextDep, require_roles
-from cc_platform.api.routers._assistant import assistant_use_cases, suggestion_use_cases
+from cc_platform.api.routers._assistant import (
+    ai_is_on,
+    assistant_use_cases,
+    suggestion_use_cases,
+    switched_assistant_use_cases,
+)
 from cc_platform.api.schemas.cases import (
     AskCopilotRequest,
     CaseDetail,
@@ -24,6 +30,8 @@ from cc_platform.api.schemas.cases import (
     CaseHistory,
     CasePriorityResult,
     CaseSummary,
+    CaseTypeResult,
+    ChangeCaseTypeRequest,
     ChangePriorityRequest,
     CloseCaseRequest,
     CopilotExchange,
@@ -41,6 +49,7 @@ from cc_platform.api.schemas.cases import (
     TurnPage,
 )
 from cc_platform.api.schemas.common import problem_responses
+from cc_platform.application.cases.case_type import ChangeCaseTypeCommand
 from cc_platform.application.cases.dto import CaseSummaryView, CloseCaseCommand, PostTurnCommand
 from cc_platform.application.cases.escalations import EscalateCommand
 from cc_platform.application.cases.priority import ChangePriorityCommand
@@ -291,14 +300,15 @@ async def get_handoff(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> Ca
     summary="The analyst's conversation with the copilot about this case",
     description=(
         "Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` "
-        "otherwise). `available: false` (with no messages) while agent-core is not configured "
-        "or the customer is not linked to the dataset: hide the panel, it is not an error."
+        "otherwise). `available: false` (with no messages) while agent-core is not configured, "
+        "the AI switch is off (slice 18) or the customer is not linked to the dataset: hide the "
+        "panel, it is not an error."
     ),
     responses=problem_responses(401, 403, 404),
 )
 async def get_copilot(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> CopilotThread:
     use_cases = api.use_cases.assistant
-    if use_cases is None:
+    if use_cases is None or not await ai_is_on(api):
         return CopilotThread(case_id=case_id, available=False, messages=[])
     return CopilotThread.from_view(await use_cases.copilot_thread.execute(actor, case_id))
 
@@ -316,9 +326,9 @@ async def get_copilot(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> Co
         "`Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. "
         "Only the assignee, only on an open case (409 `case_closed`) whose customer is linked "
         "(409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; "
-        "404 `assistant_disabled` without agent-core; 503 `agent_core_unavailable` / 502 "
-        "`agent_core_rejected` when it does not answer (the question stays in the thread: ask "
-        "again with the same `clientMessageId`)."
+        "404 `assistant_disabled` without agent-core or while the AI switch is off; 503 "
+        "`agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the "
+        "question stays in the thread: ask again with the same `clientMessageId`)."
     ),
     responses={
         200: {"description": "Replay of a question already answered", "model": CopilotExchange},
@@ -335,7 +345,7 @@ async def ask_copilot(
     response: Response,
 ) -> CopilotExchange:
     ensure_idempotency_key(idempotency_key, body.client_message_id)
-    exchange = await assistant_use_cases(api).ask_copilot.execute(
+    exchange = await (await switched_assistant_use_cases(api)).ask_copilot.execute(
         actor, case_id, text=body.text, client_message_id=body.client_message_id
     )
     if exchange.replayed:
@@ -351,9 +361,9 @@ async def ask_copilot(
     description=(
         "ADR 0005. Only the case's assignee analyst (403 `case_not_assigned` otherwise). "
         "`available: false` hides the suggestions (agent-core, the suggestions agent or the "
-        "dataset link is missing); `suggestion: null` means none yet or its texts expired "
-        "(24 hours). `stale: true` once the customer wrote after the turns it read. A "
-        "suggestion that is `preparing` is on its way: ask again or wait for the "
+        "dataset link is missing, or the AI switch is off); `suggestion: null` means none yet "
+        "or its texts expired (24 hours). `stale: true` once the customer wrote after the "
+        "turns it read. A suggestion that is `preparing` is on its way: ask again or wait for the "
         "`copilot.suggestion_ready` signal on `inbox:<staffId>`."
     ),
     responses=problem_responses(401, 403, 404),
@@ -362,7 +372,7 @@ async def latest_copilot_suggestion(
     case_id: CaseId, actor: Analyst, api: ApiContextDep
 ) -> LatestCopilotSuggestion:
     suggestions = assistant_use_cases(api).suggestions
-    if suggestions is None:
+    if suggestions is None or not await ai_is_on(api):
         return LatestCopilotSuggestion(available=False, suggestion=None)
     return LatestCopilotSuggestion.from_view(await suggestions.latest.execute(actor, case_id))
 
@@ -381,7 +391,8 @@ async def latest_copilot_suggestion(
         "asks nothing; after a failure the same key asks again. Only the assignee, only on an "
         "open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); "
         "409 `copilot_busy` while one is being prepared; 404 `assistant_disabled` without "
-        "agent-core or the suggestions agent; 503/502 when agent-core does not answer."
+        "agent-core or the suggestions agent, or while the AI switch is off; 503/502 when "
+        "agent-core does not answer."
     ),
     responses={
         200: {"description": "Replay of a request already answered", "model": CopilotSuggestion},
@@ -397,7 +408,7 @@ async def request_copilot_suggestion(
     response: Response,
     body: RequestSuggestionRequest | None = None,
 ) -> CopilotSuggestion:
-    view = await suggestion_use_cases(api).request.execute(
+    view = await (await suggestion_use_cases(api)).request.execute(
         actor, case_id, request_key=idempotency_key
     )
     if view.replayed:
@@ -425,7 +436,7 @@ async def decide_copilot_suggestion(
     actor: Analyst,
     api: ApiContextDep,
 ) -> CopilotSuggestion:
-    view = await suggestion_use_cases(api).decide.execute(
+    view = await (await suggestion_use_cases(api)).decide.execute(
         actor, case_id, suggestion_id, decision=body.decision
     )
     return CopilotSuggestion.from_view(view)
@@ -455,13 +466,47 @@ async def change_priority(
             ChangePriorityCommand(priority=body.priority, expected_version=body.expected_version),
         )
     except VersionConflictError as exc:
-        if isinstance(exc.current_view, CaseSummaryView):
-            current: dict[str, Any] = CaseSummary.from_view(exc.current_view).model_dump(
-                mode="json", by_alias=True
-            )
-            exc.details = {**exc.details, "current": cast("JsonValue", current)}
+        _attach_current_case(exc)
         raise
     return CasePriorityResult.from_view(view)
+
+
+def _attach_current_case(exc: VersionConflictError) -> None:
+    """``version_conflict`` carries the case as the caller reads it now (``current``)."""
+    if isinstance(exc.current_view, CaseSummaryView):
+        current: dict[str, Any] = CaseSummary.from_view(exc.current_view).model_dump(
+            mode="json", by_alias=True
+        )
+        exc.details = {**exc.details, "current": cast("JsonValue", current)}
+
+
+@router.put(
+    "/{caseId}/type",
+    response_model=CaseTypeResult,
+    summary="Set what the case is about (the assignee, or supervision on any open case)",
+    description=(
+        "Slice 18, the same rules as the priority. Checks in this order: the case exists (404) "
+        "· the caller is its assignee analyst or a supervisor (403 `case_not_assigned`) · it is "
+        "not closed (409 `case_closed`) · it already has that type (200, `changed: false`, "
+        "nothing happens) · it is still at `expectedVersion` (409 `version_conflict`, with the "
+        "case now as `current`). Records `case.type_changed` `{from, to}`. Independent of the "
+        "AI switch: the type is data about the case."
+    ),
+    responses=problem_responses(401, 403, 404, 409, 422),
+)
+async def change_case_type(
+    case_id: CaseId, body: ChangeCaseTypeRequest, actor: AnalystOrSupervisor, api: ApiContextDep
+) -> CaseTypeResult:
+    try:
+        view = await api.use_cases.cases.change_type.execute(
+            actor,
+            case_id,
+            ChangeCaseTypeCommand(case_type=body.case_type, expected_version=body.expected_version),
+        )
+    except VersionConflictError as exc:
+        _attach_current_case(exc)
+        raise
+    return CaseTypeResult.from_view(view)
 
 
 # ------------------------------------------------------------------------- escalations (slice 9)

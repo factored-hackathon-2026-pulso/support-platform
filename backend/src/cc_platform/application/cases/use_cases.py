@@ -21,6 +21,7 @@ from cc_platform.application.cases.calls import (
     StartInboundCall,
     StartOutboundCall,
 )
+from cc_platform.application.cases.case_type import ChangeCaseType
 from cc_platform.application.cases.commands import CloseCase, MarkCaseRead, PostAnalystTurn
 from cc_platform.application.cases.customer_chat import (
     GetCustomerConversation,
@@ -79,6 +80,7 @@ class CasesUseCases:
     analyst_home: GetAnalystHome
     rate_conversation: RateConversation
     change_priority: ChangeCasePriority
+    change_type: ChangeCaseType  # slice 18
     # slice 9: "Colas" and escalations
     language_open_cases: GetLanguageOpenCases
     escalate: EscalateCase

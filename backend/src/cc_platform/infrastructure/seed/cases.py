@@ -10,6 +10,10 @@ Por responder).
 Priorities (slice 8): every case opens with ``none`` and staff set it through the domain
 (``case.priority_changed``): Marcela's 101 critical and Beatriz's 102 high (Daniela),
 Mauricio's queued 112 high (Lucía), 106 and 114 low, 104/107/110/113 medium, the rest none.
+Case types (slice 18, the dataset's complaint subcategories): set by staff through the domain
+(``case.type_changed``) like the priority. Cargo no reconocido: 101, 102, 110, 115, 116;
+Cobro indebido: 104, 107, 112 (Lucía, while queued), 114, 117; Problema con app: 113; the rest
+(new, queued or unclear cases) none.
 Customer ratings (slice 7, invented): Patricia rated 104 "Excelente" with a comment and 110
 "Bien", Héctor rated 106 "Bien"; Claudia's 105 stays unrated (the simulator asks her).
 Escalations to supervision (slice 9, neutral invented motives): Daniela's 101 (open, T−6m) and
@@ -58,6 +62,7 @@ from cc_platform.domain.cases.values import (
     AssignmentReason,
     CaseChannel,
     CasePriority,
+    CaseType,
     CloseReason,
     TurnAudience,
     TurnAuthorRole,
@@ -293,6 +298,13 @@ class _Story:
         ``ChangeCasePriority`` does: every case opens with ``none``."""
         self.case.change_priority(actor=ActorRef(role, seed_staff_id(by)), priority=priority, at=at)
 
+    def classify(
+        self, at: datetime, case_type: CaseType, *, by: int, role: ActorRole = ActorRole.ANALYST
+    ) -> None:
+        """The assignee (or a supervisor, ``role``) sets the case type (slice 18), as
+        ``ChangeCaseType`` does: every case opens with ``none``."""
+        self.case.change_type(actor=ActorRef(role, seed_staff_id(by)), case_type=case_type, at=at)
+
     def rate(self, at: datetime, score: int, comment: str | None = None) -> None:
         """The customer rates the closed case (slice 7), as ``RateConversation`` does."""
         self.case.rate(
@@ -499,6 +511,7 @@ def _patricia_old(ids: IdGenerator, t: datetime) -> _Story:
     s.opened_notice(opened)
     s.assign(opened, JULIAN, open_cases=0)
     s.prioritize(opened + timedelta(minutes=2), CasePriority.MEDIUM, by=JULIAN)
+    s.classify(opened + timedelta(minutes=2), CaseType.UNRECOGNIZED_CHARGE, by=JULIAN)
     s.analyst(opened + timedelta(minutes=3),
               "Hola, Patricia. Soy Julián, de LATAM Bank. Ese cargo es de su suscripción de "
               "música, contratada en marzo.")  # fmt: skip
@@ -520,6 +533,7 @@ def _patricia_refund(ids: IdGenerator, t: datetime) -> _Story:
     s.wrote_again(opened, old_closed, CloseReason.RESOLVED)
     s.assign(opened, DANIELA, open_cases=0)
     s.prioritize(opened + timedelta(minutes=2), CasePriority.MEDIUM, by=DANIELA)
+    s.classify(opened + timedelta(minutes=2), CaseType.UNDUE_CHARGE, by=DANIELA)
     s.analyst(opened + timedelta(minutes=3),
               "Hola, Patricia. Soy Daniela, de LATAM Bank. Ya veo los dos cobros: uno se "
               "reversa en un plazo de 5 días hábiles.")  # fmt: skip
@@ -575,6 +589,7 @@ def _joaquin_waiting(ids: IdGenerator, t: datetime) -> _Story:
     s.assign(opened, DANIELA, open_cases=0)
     s.read_up_to(t - timedelta(minutes=41), 3)
     s.prioritize(t - timedelta(minutes=41), CasePriority.MEDIUM, by=DANIELA)
+    s.classify(t - timedelta(minutes=41), CaseType.UNDUE_CHARGE, by=DANIELA)
     s.analyst(t - timedelta(minutes=40),
               "Hola, Joaquín. Soy Daniela, de LATAM Bank. Para encontrar su reclamo, ¿me "
               "podría decir la fecha aproximada del cobro y el monto?")  # fmt: skip
@@ -600,6 +615,7 @@ def _marcela_to_reply(ids: IdGenerator, t: datetime) -> _Story:
     s.assign(opened, DANIELA, open_cases=1)
     s.read_up_to(t - timedelta(minutes=11), 3)
     s.prioritize(t - timedelta(minutes=11), CasePriority.CRITICAL, by=DANIELA)
+    s.classify(t - timedelta(minutes=11), CaseType.UNRECOGNIZED_CHARGE, by=DANIELA)
     s.analyst(t - timedelta(minutes=10),
               "Hola, Marcela. Soy Daniela, de LATAM Bank. Con gusto le ayudo. ¿Me cuenta de "
               "qué fecha es el cargo y por qué valor?")  # fmt: skip
@@ -621,6 +637,7 @@ def _beatriz_impatient(ids: IdGenerator, t: datetime) -> _Story:
     s.assign(opened, DANIELA, open_cases=3)
     s.read_up_to(t - timedelta(minutes=9), 3)
     s.prioritize(t - timedelta(minutes=9), CasePriority.HIGH, by=DANIELA)
+    s.classify(t - timedelta(minutes=9), CaseType.UNRECOGNIZED_CHARGE, by=DANIELA)
     s.customer(t - timedelta(minutes=8), "hola?")
     s.customer(t - timedelta(minutes=5), "hola?? hay alguien??")
     s.customer(t - timedelta(minutes=1), "contesten!! qué mal servicio")
@@ -680,6 +697,7 @@ def _esteban_reassigned(ids: IdGenerator, t: datetime) -> _Story:
     s.escalate(t - timedelta(minutes=36), "Pregunta por una comisión que no sé explicar.")
     s.reassign(t - timedelta(minutes=32), JULIAN, by=LUCIA, open_cases=1)
     s.prioritize(t - timedelta(minutes=31), CasePriority.LOW, by=JULIAN)
+    s.classify(t - timedelta(minutes=31), CaseType.UNDUE_CHARGE, by=JULIAN)
     s.analyst(t - timedelta(minutes=30),
               "Hola, Esteban. Soy Julián, de LATAM Bank. Ya reviso la comisión; ¿de qué mes "
               "es el cobro?")  # fmt: skip
@@ -697,6 +715,7 @@ def _camila_overdue(ids: IdGenerator, t: datetime) -> _Story:
     s.assign(opened, JULIAN, open_cases=0)
     s.read_up_to(t - timedelta(minutes=22), 3)
     s.prioritize(t - timedelta(minutes=22), CasePriority.MEDIUM, by=JULIAN)
+    s.classify(t - timedelta(minutes=22), CaseType.APP_ISSUE, by=JULIAN)
     s.escalate(t - timedelta(minutes=21),
                "Problema con la app al hacer una transferencia: no le llegó a su hermano y no "
                "sé cómo seguir.")  # fmt: skip
@@ -727,6 +746,8 @@ def _mauricio_queued(ids: IdGenerator, t: datetime) -> _Story:
     s.wait_in_queue(opened)
     s.customer(t - timedelta(minutes=4), "¿Alguien me puede atender?")
     s.prioritize(t - timedelta(minutes=3), CasePriority.HIGH, by=LUCIA, role=ActorRole.SUPERVISOR)
+    s.classify(t - timedelta(minutes=3), CaseType.UNDUE_CHARGE, by=LUCIA,
+               role=ActorRole.SUPERVISOR)  # fmt: skip
     return s
 
 
@@ -749,6 +770,7 @@ def _natalia_called(ids: IdGenerator, t: datetime) -> _Story:
           "valor del cobro?", by_customer=False)  # fmt: skip
     s.say(at + timedelta(seconds=45), "Fue el 2 de octubre, por 189.900 pesos.", by_customer=True)
     s.prioritize(at + timedelta(seconds=50), CasePriority.MEDIUM, by=DANIELA)
+    s.classify(at + timedelta(seconds=50), CaseType.UNRECOGNIZED_CHARGE, by=DANIELA)
     s.say(at + timedelta(seconds=55), "Gracias. Permítame un momento mientras lo reviso.",
           by_customer=False)  # fmt: skip
     s.hold(at + timedelta(minutes=1))
@@ -792,6 +814,7 @@ def _claudia_follow_up(ids: IdGenerator, t: datetime) -> _Story:
           "la usa.", by_customer=False)  # fmt: skip
     s.say(at + timedelta(minutes=3), "Perfecto, gracias por llamar.", by_customer=True)
     s.hang_up(at + timedelta(minutes=3, seconds=10), by_customer=True)
+    s.classify(at + timedelta(minutes=4), CaseType.UNRECOGNIZED_CHARGE, by=DANIELA)
     s.close(at + timedelta(minutes=5), CloseReason.RESOLVED, "Seguimiento por teléfono.")
     return s
 
@@ -811,6 +834,7 @@ def _ignacio_email(ids: IdGenerator, t: datetime) -> _Story:
     s.opened_notice(opened)
     s.assign(opened, DANIELA, open_cases=0)
     s.prioritize(opened + timedelta(minutes=8), CasePriority.MEDIUM, by=DANIELA)
+    s.classify(opened + timedelta(minutes=8), CaseType.UNDUE_CHARGE, by=DANIELA)
     s.email_out(
         opened + timedelta(minutes=10),
         "Gracias por escribirnos. Ya vemos los dos cobros del 28 de septiembre en su "

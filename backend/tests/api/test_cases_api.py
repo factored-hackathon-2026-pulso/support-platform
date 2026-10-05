@@ -25,7 +25,7 @@ SUMMARY_KEYS = {
     "id", "version", "customer", "channel", "language", "priority", "status", "inboxStatus",
     "openedAt", "slaDueAt", "firstResponseAt", "lastInteractionAt", "preview",
     "previewAuthorRole", "assignedAnalystId", "unreadCount", "lastSequence", "previousCaseId",
-    "closedAt", "closeReason", "rating", "escalated", "activeCallId",
+    "closedAt", "closeReason", "rating", "escalated", "activeCallId", "caseType",
 }  # fmt: skip
 
 
@@ -173,6 +173,7 @@ def test_case_detail_for_the_assignee(client: TestClient, daniela: dict[str, str
         "canClose": True,
         "canAssign": False,
         "canChangePriority": True,
+        "canChangeType": True,
         "canEscalate": True,
         "canCall": True,
         "canEmail": True,
@@ -197,6 +198,7 @@ def test_closed_case_detail(client: TestClient, daniela: dict[str, str]) -> None
         "canClose": False,
         "canAssign": False,
         "canChangePriority": False,
+        "canChangeType": False,
         "canEscalate": False,
         "canCall": False,
         "canEmail": False,
@@ -269,6 +271,7 @@ def test_history_access_is_read_only(
         "canClose": False,
         "canAssign": False,
         "canChangePriority": False,
+        "canChangeType": False,
         "canEscalate": False,
         "canCall": False,
         "canEmail": False,
@@ -436,6 +439,7 @@ def test_close_with_every_reason(client: TestClient, daniela: dict[str, str], re
         "canClose": False,
         "canAssign": False,
         "canChangePriority": False,
+        "canChangeType": False,
         "canEscalate": False,
         "canCall": False,
         "canEmail": False,

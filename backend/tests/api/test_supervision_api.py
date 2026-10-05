@@ -243,6 +243,7 @@ def test_reassignment_keeps_the_previous_analyst_reading(
         "canClose": False,
         "canAssign": False,
         "canChangePriority": False,
+        "canChangeType": False,
         "canEscalate": False,
         "canCall": False,
         "canEmail": False,

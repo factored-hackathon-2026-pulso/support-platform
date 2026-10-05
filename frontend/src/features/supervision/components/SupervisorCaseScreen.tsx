@@ -14,6 +14,7 @@ import { ESCALATED_MARKER } from '@/features/cases'
 import {
   CaseHistorySheet,
   CasePriorityControl,
+  CaseTypeControl,
   ConversationPane,
   PREVIOUS_CASES_LIST,
   shortCaseId,
@@ -70,10 +71,12 @@ export function SupervisorCaseScreen({
   )
 
   // Slice 8: supervision sets the priority of any open case from here (the menu), and
-  // reads it on a closed one (glyph + word).
+  // reads it on a closed one (glyph + word). Slice 18: the case type, likewise, only while
+  // the AI switch is on (the control renders nothing otherwise).
   const headerActions = detail.data ? (
     <>
       {summary?.escalated ? <Status {...ESCALATED_MARKER} className="mr-1" /> : null}
+      <CaseTypeControl detail={detail.data} align="end" className="mr-1" />
       <CasePriorityControl detail={detail.data} align="end" className="mr-1" />
       {canReassign ? (
         <Button variant="secondary" onClick={openReassign}>

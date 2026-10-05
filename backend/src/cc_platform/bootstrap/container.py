@@ -395,7 +395,9 @@ class Container:
         }
         # Part 4: the seeded pending invitation's email, now that its link exists.
         for email in onboarding.emails:
-            await self.mailer.invitation(email.staff, team_name=email.team_name, token=email.token)
+            await self.mailer.invitation(
+                email.staff, team_name=email.team_name, token=email.token, language=email.language
+            )
         if created["cases"]:
             # Slice 10: the story's older notifications start read.
             created["notifications_seen"] = await mark_seed_notifications_seen(

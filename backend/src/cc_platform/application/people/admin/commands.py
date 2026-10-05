@@ -65,6 +65,7 @@ from cc_platform.application.people.admin.guards import (
 )
 from cc_platform.application.people.admin.queries import not_found_person, user_view
 from cc_platform.application.people.onboarding.mailer import OnboardingMailer
+from cc_platform.application.people.preferences import preset_ui_language, ui_language_of
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.security import IssuedToken, OneTimeTokens
@@ -75,6 +76,7 @@ from cc_platform.domain.people.availability import AvailabilityChangeReason, Ava
 from cc_platform.domain.people.errors import EmailTakenError, StaffInvitedError, TeamInactiveError
 from cc_platform.domain.people.invitation import Invitation
 from cc_platform.domain.people.password_reset import PasswordReset
+from cc_platform.domain.people.preferences import DEFAULT_UI_LANGUAGE, UiLanguage
 from cc_platform.domain.people.session import SessionEndReason
 from cc_platform.domain.people.staff import (
     Staff,
@@ -110,6 +112,7 @@ class _Outgoing:
     staff: Staff
     team_name: str
     token: str
+    language: UiLanguage = DEFAULT_UI_LANGUAGE
 
 
 async def _read_back(
@@ -180,7 +183,10 @@ class CreateUser:
         staff_id, outgoing = await retry_on_conflict(lambda: self._attempt(actor, command, token))
         if outgoing is not None:
             await self.mailer.invitation(
-                outgoing.staff, team_name=outgoing.team_name, token=outgoing.token
+                outgoing.staff,
+                team_name=outgoing.team_name,
+                token=outgoing.token,
+                language=outgoing.language,
             )
         user = await _read_back(self.uow, staff_id, actor, self.clock.now())
         return InvitedUserView(user=user, replayed=outgoing is None)
@@ -242,10 +248,14 @@ class CreateUser:
                 invitation_found.reissue(issued.hash, now=now, actor=admin, ttl=ttl)
                 await uow.staff.save(staff)
                 await uow.invitations.save(invitation_found)
+            await preset_ui_language(uow, staff.id, command.ui_language)
             team.touch()  # serialises with a concurrent DeactivateTeam (§3.8)
             await uow.teams.save(team)
             await uow.commit()
-        return staff.id, _Outgoing(staff=staff, team_name=team.name, token=issued.token)
+        outgoing = _Outgoing(
+            staff=staff, team_name=team.name, token=issued.token, language=command.ui_language
+        )
+        return staff.id, outgoing
 
 
 async def _reinvite(
@@ -504,16 +514,16 @@ class SendPasswordResetLink:
 
     async def execute(self, actor: Actor, staff_id: str) -> PasswordResetLinkView:
         token = _LinkToken(self.tokens)
-        staff, revoked, expires_at = await retry_on_conflict(
+        staff, revoked, expires_at, language = await retry_on_conflict(
             lambda: self._attempt(actor, staff_id, token)
         )
-        await self.mailer.password_reset(staff, token=token.get().token)
+        await self.mailer.password_reset(staff, token=token.get().token, language=language)
         user = await _read_back(self.uow, staff_id, actor, self.clock.now())
         return PasswordResetLinkView(user=user, revoked_sessions=revoked, expires_at=expires_at)
 
     async def _attempt(
         self, actor: Actor, staff_id: str, token: _LinkToken
-    ) -> tuple[Staff, int, datetime]:
+    ) -> tuple[Staff, int, datetime, UiLanguage]:
         now = self.clock.now()
         async with self.uow() as uow:
             admin = await fresh_admin(uow, actor)
@@ -554,8 +564,9 @@ class SendPasswordResetLink:
                 await uow.password_resets.save(reset)
             revoked = await _end_sessions(uow, target.id, now=now, actor=admin)
             await uow.login_accounts.save(account)
+            language = await ui_language_of(uow, target.id)
             await uow.commit()
-        return target, revoked, reset.expires_at
+        return target, revoked, reset.expires_at, language
 
 
 # ----------------------------------------------------------------------------- invitations
@@ -582,7 +593,10 @@ class ResendInvitation:
         token = _LinkToken(self.tokens)
         outgoing = await retry_on_conflict(lambda: self._attempt(actor, staff_id, token))
         await self.mailer.invitation(
-            outgoing.staff, team_name=outgoing.team_name, token=outgoing.token
+            outgoing.staff,
+            team_name=outgoing.team_name,
+            token=outgoing.token,
+            language=outgoing.language,
         )
         user = await _read_back(self.uow, staff_id, actor, self.clock.now())
         return AdminUserChangeView(changed=True, user=user)
@@ -596,8 +610,14 @@ class ResendInvitation:
             invitation.resend(issued.hash, now=now, actor=admin, ttl=self.mailer.invitation_ttl)
             team = await uow.teams.get(target.team_id)
             await uow.invitations.save(invitation)
+            language = await ui_language_of(uow, target.id)
             await uow.commit()
-        return _Outgoing(staff=target, team_name=team.name if team else "", token=issued.token)
+        return _Outgoing(
+            staff=target,
+            team_name=team.name if team else "",
+            token=issued.token,
+            language=language,
+        )
 
 
 @dataclass(frozen=True, slots=True)

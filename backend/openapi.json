@@ -3155,6 +3155,11 @@
             "maxLength": 64,
             "title": "Teamid",
             "type": "string"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "default": "es",
+            "description": "Slice 23c: her platform language (the invitation email, the activation screens and her first sign-in use it). Default `es`."
           }
         },
         "required": [
@@ -5336,6 +5341,10 @@
           "teamName": {
             "title": "Teamname",
             "type": "string"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "description": "Slice 23c: her platform language, as administration chose it."
           }
         },
         "required": [
@@ -5344,7 +5353,8 @@
           "roles",
           "teamName",
           "expiresAt",
-          "passwordRules"
+          "passwordRules",
+          "uiLanguage"
         ],
         "title": "InvitationCheck",
         "type": "object"
@@ -6196,13 +6206,18 @@
           },
           "passwordRules": {
             "$ref": "#/components/schemas/PasswordRules"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "description": "Slice 23c: her platform language."
           }
         },
         "required": [
           "name",
           "email",
           "expiresAt",
-          "passwordRules"
+          "passwordRules",
+          "uiLanguage"
         ],
         "title": "PasswordResetCheck",
         "type": "object"

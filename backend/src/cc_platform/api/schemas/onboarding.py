@@ -19,6 +19,7 @@ from cc_platform.application.people.onboarding.dto import (
 )
 from cc_platform.application.ports.email import EmailKind, SentEmail
 from cc_platform.domain.people.password_policy import MAX_LENGTH, MIN_LENGTH, PasswordRule
+from cc_platform.domain.people.preferences import UiLanguage
 from cc_platform.domain.people.staff import StaffRole
 
 _TOKEN = Field(min_length=1, max_length=256, description="The token of the link (?token=).")
@@ -70,6 +71,9 @@ class InvitationCheck(ApiModel):
     team_name: str
     expires_at: datetime
     password_rules: PasswordRules
+    ui_language: UiLanguage = Field(
+        description="Slice 23c: her platform language, as administration chose it."
+    )
 
     @classmethod
     def from_view(cls, view: InvitationPreview) -> InvitationCheck:
@@ -80,6 +84,7 @@ class InvitationCheck(ApiModel):
             team_name=view.team_name,
             expires_at=view.expires_at,
             password_rules=PasswordRules.current(),
+            ui_language=view.ui_language,
         )
 
 
@@ -119,6 +124,7 @@ class PasswordResetCheck(ApiModel):
     email: str
     expires_at: datetime
     password_rules: PasswordRules
+    ui_language: UiLanguage = Field(description="Slice 23c: her platform language.")
 
     @classmethod
     def from_view(cls, view: PasswordResetPreview) -> PasswordResetCheck:
@@ -127,6 +133,7 @@ class PasswordResetCheck(ApiModel):
             email=view.email,
             expires_at=view.expires_at,
             password_rules=PasswordRules.current(),
+            ui_language=view.ui_language,
         )
 
 

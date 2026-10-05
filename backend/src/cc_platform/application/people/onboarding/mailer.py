@@ -18,6 +18,7 @@ from cc_platform.application.people.onboarding.links import AppLinks
 from cc_platform.application.ports.email import EmailSender
 from cc_platform.domain.people.invitation import INVITATION_TTL
 from cc_platform.domain.people.password_reset import PASSWORD_RESET_TTL
+from cc_platform.domain.people.preferences import DEFAULT_UI_LANGUAGE, UiLanguage
 from cc_platform.domain.people.staff import Staff
 
 
@@ -28,12 +29,27 @@ class OnboardingMailer:
     invitation_ttl: timedelta = INVITATION_TTL
     reset_ttl: timedelta = PASSWORD_RESET_TTL
 
-    async def invitation(self, staff: Staff, *, team_name: str, token: str) -> None:
+    async def invitation(
+        self,
+        staff: Staff,
+        *,
+        team_name: str,
+        token: str,
+        language: UiLanguage = DEFAULT_UI_LANGUAGE,
+    ) -> None:
+        """In the language administration chose for her (slice 23c)."""
         link = self.links.activation(token)
         await self.sender.send(
-            invitation_email(staff, team_name=team_name, link=link, ttl=self.invitation_ttl)
+            invitation_email(
+                staff, team_name=team_name, link=link, ttl=self.invitation_ttl, language=language
+            )
         )
 
-    async def password_reset(self, staff: Staff, *, token: str) -> None:
+    async def password_reset(
+        self, staff: Staff, *, token: str, language: UiLanguage = DEFAULT_UI_LANGUAGE
+    ) -> None:
+        """In her UI language (slice 23c)."""
         link = self.links.password_reset(token)
-        await self.sender.send(password_reset_email(staff, link=link, ttl=self.reset_ttl))
+        await self.sender.send(
+            password_reset_email(staff, link=link, ttl=self.reset_ttl, language=language)
+        )

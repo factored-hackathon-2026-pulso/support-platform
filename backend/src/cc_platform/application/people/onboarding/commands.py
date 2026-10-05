@@ -47,6 +47,7 @@ from cc_platform.application.people.onboarding.errors import (
     TotpCodeInvalidError,
 )
 from cc_platform.application.people.ports import UnknownLoginAttempts
+from cc_platform.application.people.preferences import ui_language_of
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.security import (
     OneTimeTokens,
@@ -188,12 +189,14 @@ class CheckInvitation:
                 raise await self.guard.unusable(client)
             invitation, staff = found
             team = await uow.teams.get(staff.team_id)
+            language = await ui_language_of(uow, staff.id)
         return InvitationPreview(
             name=staff.name,
             email=staff.email,
             roles=canonical_roles(staff.roles),
             team_name=team.name if team is not None else "",
             expires_at=invitation.expires_at,
+            ui_language=language,
         )
 
 
@@ -316,10 +319,13 @@ class CheckPasswordReset:
         await self.guard.ensure_open(client)
         async with self.uow() as uow:
             found = await _reset_for(uow, self.tokens, token, self.clock.now())
-        if found is None:
+            language = await ui_language_of(uow, found[1].id) if found else None
+        if found is None or language is None:
             raise await self.guard.unusable(client)
         reset, staff, _account = found
-        return PasswordResetPreview(name=staff.name, email=staff.email, expires_at=reset.expires_at)
+        return PasswordResetPreview(
+            name=staff.name, email=staff.email, expires_at=reset.expires_at, ui_language=language
+        )
 
 
 @dataclass(frozen=True, slots=True)

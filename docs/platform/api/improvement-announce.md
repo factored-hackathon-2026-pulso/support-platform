@@ -16,6 +16,7 @@ Request (camelCase, unknown fields rejected):
 | `evidence` | 1-600 characters. |
 | `expectedEffect` | 1-400 characters. |
 | `evidenceLinks` | 0-8 distinct case ids (`CASE-…`). |
+| `caseTypeHint` | Optional. The case type the proposal serves (a `CaseType` value, e.g. `app_issue`). An unknown value or `none` is ignored (never a 422); a known one rides in the notification and the bell opens the proposal with `?type=`, so Activar offers that type. |
 
 Free text must not contain an email address or a run of 9 or more digits (personal data). An email is `x@y.<letters>`: the address must end in an alphabetic label, so an artifact id such as `recepcion@1.0.0` is allowed in the text. The platform never truncates: a `title` over 120 (or any field over its cap) is a `422` and nothing is adopted, so **the engine must cut to these caps before calling**.
 
@@ -36,7 +37,8 @@ Errors: `401` missing or wrong token; `404` token not configured, AI switched of
 ```json
 "improvement": {
   "proposalId": "…", "agentId": "disputas", "title": "…", "problem": "…",
-  "evidence": "…", "expectedEffect": "…", "evidenceLinks": ["CASE-…"]
+  "evidence": "…", "expectedEffect": "…", "evidenceLinks": ["CASE-…"],
+  "caseTypeHint": "app_issue"   // or null
 }
 ```
 

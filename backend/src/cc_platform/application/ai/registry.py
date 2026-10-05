@@ -188,6 +188,9 @@ class ReleaseSettingChange:
     field: str
     before: JsonValue
     after: JsonValue
+    # agent-core PR 52: a value taken from the donor release (`release_settings.inherit_from`).
+    inherited: bool = False
+    inherited_from: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

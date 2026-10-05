@@ -33,7 +33,7 @@ import {
   toolName,
   type EndStep,
 } from '../proposals'
-import type { MaturingType, ProposalDetail } from '../types'
+import type { MaturingType, ProposalDetail, ReleaseSettingChange } from '../types'
 import { AutomationFrame, EngineMissing, type Crumb } from './AutomationFrame'
 import { EvaluationReport } from './EvaluationReport'
 import { ImprovementDossier } from './ImprovementDossier'
@@ -157,6 +157,7 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
       ) : record.data ? (
         <ProposalHistory entries={history} />
       ) : null}
+      <ReleaseValues changes={detail.review?.releaseChanges ?? []} />
       <Changes detail={detail} />
     </>
   )
@@ -196,6 +197,51 @@ function Stepper({ state, done, endStep }: { state: string; done: boolean; endSt
         </li>
       ))}
     </ol>
+  )
+}
+
+/** A setting value as the approver reads it (`null` is "no value"). */
+function settingText(value: unknown, empty: string): string {
+  if (value === null || value === undefined) return empty
+  return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
+/**
+ * The release settings the candidate takes (interrupts, language detection, injection rules, input
+ * limit): each value before and after, and, when it comes from a donor release
+ * (`release_settings.inherit_from`), which one ("heredado de <release>").
+ */
+function ReleaseValues({ changes }: { changes: ReleaseSettingChange[] }) {
+  const { t } = useTranslation('automation')
+  if (changes.length === 0) return null
+  return (
+    <section aria-labelledby="proposal-release-values" className="flex flex-col gap-3">
+      <h2 id="proposal-release-values" className="m-0 text-15 font-semibold">
+        {t('proposal.releaseValues')}
+      </h2>
+      <span className="text-12 text-muted">{t('proposal.releaseValuesNote')}</span>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {changes.map((change) => (
+          <li
+            key={change.field}
+            className="flex flex-wrap items-center gap-2 rounded-12 border border-border bg-surface px-4 py-3"
+          >
+            <span className="font-mono text-13">{change.field}</span>
+            <span className="text-13 text-ink-2">
+              {settingText(change.before, t('proposal.noValue'))} {'→'}{' '}
+              <span className="font-semibold text-ink">
+                {settingText(change.after, t('proposal.noValue'))}
+              </span>
+            </span>
+            {change.inherited ? (
+              <Badge tone="neutral">
+                {t('proposal.inheritedFrom', { release: change.inheritedFrom ?? '?' })}
+              </Badge>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

@@ -545,7 +545,7 @@ renders the Spanish text with fixed templates. No AI.
 | `score` | integer, null | `case_rated`: the rating (1 to 4) |
 | `failed_attempts` | integer, null | `account_locked`: failed attempts |
 | `read_at` | date, null | when it was read (once) |
-| `proposal_id`, `agent_id`, `improvement` | text(64), text(64), JSON; null | `improvement_proposed` (ADR 0007): agent-core's proposal id, its agent and the engine's dossier summary (`title`, `problem`, `evidence`, `expectedEffect`, `evidenceLinks`); source key `improve:<proposal id>` |
+| `proposal_id`, `agent_id`, `improvement` | text(64), text(64), JSON; null | `improvement_proposed` (ADR 0007): agent-core's proposal id, its agent and the engine's dossier summary (`title`, `problem`, `evidence`, `expectedEffect`, `evidenceLinks`, optional `caseTypeHint`); source key `improve:<proposal id>` |
 | `version` | integer | optimistic concurrency (reading one is a compare-and-set; "Marcar todas" is a conditional `UPDATE … WHERE read_at IS NULL`) |
 
 Indexes: unique `(recipient_id, source_key)`; `(recipient_id, created_at, id)` (the list, newest

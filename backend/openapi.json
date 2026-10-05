@@ -5583,6 +5583,17 @@
             "title": "Agentid",
             "type": "string"
           },
+          "caseTypeHint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The case type the engine says the proposal serves; open it with `?type=`."
+          },
           "evidence": {
             "description": "Up to 600 characters.",
             "title": "Evidence",
@@ -5624,7 +5635,8 @@
           "problem",
           "evidence",
           "expectedEffect",
-          "evidenceLinks"
+          "evidenceLinks",
+          "caseTypeHint"
         ],
         "title": "ImprovementNotice",
         "type": "object"
@@ -8435,12 +8447,31 @@
           "field": {
             "title": "Field",
             "type": "string"
+          },
+          "inherited": {
+            "description": "The value comes from the donor release of `release_settings.inherit_from`.",
+            "title": "Inherited",
+            "type": "boolean"
+          },
+          "inheritedFrom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The donor release id; set only when `inherited`.",
+            "title": "Inheritedfrom"
           }
         },
         "required": [
           "field",
           "before",
-          "after"
+          "after",
+          "inherited",
+          "inheritedFrom"
         ],
         "title": "ReleaseSettingChange",
         "type": "object"

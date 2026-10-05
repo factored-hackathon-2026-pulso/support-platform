@@ -70,6 +70,8 @@ def make_settings(**overrides: Any) -> Settings:
         "argon2_memory_cost": 1024,
         "argon2_parallelism": 1,
         "log_level": "WARNING",
+        # The demo seed links three synthetic customers to the assistant; tests link their own.
+        "seed_demo_bank_links": False,
         "session_secret": TEST_SECRET,
         "build": "test-build",
         # Slice 10: no periodic SLA sweep (tests run ``sweep_sla_risk.execute`` themselves).

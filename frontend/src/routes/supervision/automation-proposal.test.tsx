@@ -271,6 +271,48 @@ describe('a proposal (slice 22)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  it('shows each release value and the donor release of an inherited one', async () => {
+    vi.mocked(fetchProposal).mockResolvedValue(
+      makeProposalDetail(
+        { state: 'evaluated', candidateHash: 'h1' },
+        {
+          review: {
+            functionalChanges: [],
+            releaseChanges: [
+              {
+                field: 'max_input_chars',
+                before: null,
+                after: 4000,
+                inherited: true,
+                inheritedFrom: 'rel-donor',
+              },
+              {
+                field: 'language_detection',
+                before: 'off',
+                after: 'on',
+                inherited: false,
+                inheritedFrom: null,
+              },
+            ],
+            suite: { kind: 'eval_suite', id: 'suite-cobros', version: '1.0.0' },
+            suiteChanges: [],
+            gate: [],
+            yardstickLoosened: [],
+          },
+        },
+      ),
+    )
+    renderProposal()
+    const section = await screen.findByRole('region', { name: 'Valores de la release' })
+    const items = within(section).getAllByRole('listitem')
+    expect(items).toHaveLength(2)
+    expect(within(items[0]!).getByText('max_input_chars')).toBeInTheDocument()
+    expect(within(items[0]!).getByText('heredado de rel-donor')).toBeInTheDocument()
+    expect(within(items[0]!).getByText(/sin valor/)).toBeInTheDocument()
+    expect(within(items[1]!).getByText('language_detection')).toBeInTheDocument()
+    expect(within(items[1]!).queryByText(/heredado de/)).not.toBeInTheDocument()
+  })
+
   it('asks to accept a looser yardstick before approving', async () => {
     vi.mocked(fetchProposal).mockResolvedValue(
       makeProposalDetail({ state: 'evaluated', candidateHash: 'h1' }),

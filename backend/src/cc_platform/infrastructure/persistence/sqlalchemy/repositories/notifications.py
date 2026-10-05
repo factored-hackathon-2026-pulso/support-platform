@@ -177,6 +177,7 @@ def _dossier_to_json(dossier: ImprovementDossier | None) -> dict[str, Any] | Non
         "evidence": dossier.evidence,
         "expectedEffect": dossier.expected_effect,
         "evidenceLinks": list(dossier.evidence_links),
+        "caseTypeHint": dossier.case_type_hint,
     }
 
 
@@ -189,4 +190,5 @@ def _dossier_from_json(value: dict[str, Any] | None) -> ImprovementDossier | Non
         evidence=value["evidence"],
         expected_effect=value["expectedEffect"],
         evidence_links=tuple(value["evidenceLinks"]),
+        case_type_hint=value.get("caseTypeHint"),
     )

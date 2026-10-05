@@ -135,6 +135,7 @@ edge requirements are in [deploy-env.md](./deploy-env.md) and [deploy/edge.md](.
 | `CC_ASSISTANT_LANGUAGES` | `["es", "pt"]` | Slice 14: case languages the assistant serves (JSON list, policy `H1`); others go straight to people |
 | `CC_ASSISTANT_STEP_UP_CODE` | `000000` | Slice 14: the **simulated** second-factor code (a development stand-in) |
 | `CC_BANK_CUSTOMER_LINKS_FILE` | unset | Slice 14: private JSON `{"CUS-…": "<dataset customer_id>"}` read at startup; only linked customers can talk to the assistant. Never commit it |
+| `CC_SEED_DEMO_BANK_LINKS` | `true` | With the demo seed: link three SYNTHETIC simulator customers (Natalia `CUS-…2001`, Ximena `2002`, Rafael `2004`) to invented ids `SYNTHETIC-DEMO-BANK-*`, so their `/customer` chats reach the assistant without a links file; Santiago (`2003`) stays unlinked (people-only path). `CC_BANK_CUSTOMER_LINKS_FILE` is applied after and wins |
 | `CC_LOG_LEVEL` | `INFO` | Log level |
 | `CC_LOG_FORMAT` | `json` | `console` to read the logs in the terminal |
 

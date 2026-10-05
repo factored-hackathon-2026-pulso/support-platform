@@ -166,7 +166,16 @@ async def test_the_last_decision_is_read_when_agent_core_reports_it(
 async def test_the_review_is_parsed_once_there_is_an_evaluation() -> None:
     review = {
         "functional_changes": [DRAFT],
-        "release_changes": [{"field": "max_input_chars", "before": 4000, "after": 6000}],
+        "release_changes": [
+            {"field": "max_input_chars", "before": 4000, "after": 6000},
+            {
+                "field": "language_detection",
+                "before": None,
+                "after": "on",
+                "inherited": True,
+                "inherited_from": "rel-donor",
+            },
+        ],
         "suite": {"kind": "eval_suite", "id": "suite-disputas", "version": "1.0.0"},
         "suite_changes": [],
         "gate": REPORT["items"],
@@ -184,6 +193,10 @@ async def test_the_review_is_parsed_once_there_is_an_evaluation() -> None:
 
     assert detail.review is not None
     assert detail.review.release_changes[0].after == 6000
+    assert detail.review.release_changes[0].inherited is False  # an older agent-core says nothing
+    assert detail.review.release_changes[0].inherited_from is None
+    assert detail.review.release_changes[1].inherited is True
+    assert detail.review.release_changes[1].inherited_from == "rel-donor"
     assert detail.review.yardstick_loosened[0].kind == "floor_loosened"
     assert detail.review.gate[0].passed is True
 

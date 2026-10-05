@@ -271,7 +271,12 @@ from cc_platform.infrastructure.events.in_process_bus import InProcessEventBus
 from cc_platform.infrastructure.ids import UlidIdGenerator
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
-from cc_platform.infrastructure.persistence.sqlalchemy.database import Database, DatabaseProbe
+from cc_platform.infrastructure.persistence.sqlalchemy.database import (
+    Database,
+    DatabaseProbe,
+    PoolOptions,
+)
+from cc_platform.infrastructure.persistence.sqlalchemy.migrator import ensure_at_head, migrate
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from cc_platform.infrastructure.realtime.in_memory_hub import InMemoryRealtimeHub
 from cc_platform.infrastructure.security.customer_tokens import HmacCustomerTokenService
@@ -349,7 +354,17 @@ class Container:
 
     async def startup(self) -> None:
         if self.database is not None:
-            await self.database.create_schema()
+            if self.settings.migrate_on_start:
+                report = await migrate(self.database)
+                if report.changed:
+                    _log.info(
+                        "database_migrated",
+                        before=report.before,
+                        after=report.after,
+                        adopted=report.adopted,
+                    )
+            else:
+                await ensure_at_head(self.database)
         if self.settings.seed_demo_data:
             await self.seed_demo_data()
         # Slice 4 §2.3: the admin roster exists from the start (idempotent).
@@ -763,7 +778,15 @@ def build_container(
     probes: list[HealthProbe] = []
     uow: UnitOfWorkFactory
     if settings.persistence == "sqlalchemy":
-        database = Database(settings.database_url, echo=settings.database_echo)
+        database = Database(
+            settings.database_url,
+            echo=settings.database_echo,
+            pool=PoolOptions(
+                size=settings.database_pool_size,
+                max_overflow=settings.database_max_overflow,
+                timeout_seconds=settings.database_pool_timeout_seconds,
+            ),
+        )
         probes.append(DatabaseProbe(database))
         session_factory = database.session_factory
 

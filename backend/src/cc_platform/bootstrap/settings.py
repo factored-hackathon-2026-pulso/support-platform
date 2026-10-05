@@ -26,8 +26,16 @@ class Settings(BaseSettings):
 
     # Persistence
     persistence: Literal["sqlalchemy", "memory"] = "sqlalchemy"
+    #: SQLite (``sqlite+aiosqlite:///…``) or Postgres (``postgresql://…``, psycopg 3).
     database_url: str = DEFAULT_DATABASE_URL
     database_echo: bool = False
+    #: Postgres connection pool, per process (docs/platform/deploy/database.md).
+    database_pool_size: int = Field(default=5, ge=1)
+    database_max_overflow: int = Field(default=5, ge=0)
+    database_pool_timeout_seconds: float = Field(default=10.0, gt=0)
+    #: Apply the pending migrations at startup (under a lock). Off: the database must already be
+    #: at the head revision (``cc-migrate`` ran before), else the process refuses to start.
+    migrate_on_start: bool = True
     seed_demo_data: bool = True
 
     # Auth (brief §4.5, canvas BoLogin/BoMfa/BoLocked)

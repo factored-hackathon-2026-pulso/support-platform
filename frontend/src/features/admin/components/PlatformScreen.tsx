@@ -3,8 +3,9 @@ import { Sparkles } from 'lucide-react'
 import { Page, PageBody } from '@/components/layout'
 import { Callout, Card, FactList, PageHeader, QueryState, Skeleton, Switch } from '@/components/ui'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import { useAdminPlatform, useSetAiEnabled } from '../hooks'
-import { AI_SWITCH_DESCRIPTION, platformChangeFacts } from '../model'
+import { aiSwitchDescription, platformChangeFacts } from '../platform'
 import type { AdminPlatformSettings } from '../types'
 
 /** The "hace 2 min" of the last change ticks with the screen. */
@@ -18,8 +19,9 @@ const TICK_MS = 30_000
  */
 export function PlatformScreen() {
   const settings = useAdminPlatform()
+  const { t } = useTranslation('admin', { keyPrefix: 'platform' })
   return (
-    <Page header={<PageHeader title="Plataforma" subtitle="Ajustes para todo el equipo" />}>
+    <Page header={<PageHeader title={t('title')} subtitle={t('subtitle')} />}>
       <PageBody>
         <QueryState query={settings} skeleton={<Skeleton className="h-24 max-w-[640px]" />}>
           {(data) => <AiSwitchCard settings={data} />}
@@ -34,6 +36,7 @@ function AiSwitchCard({ settings }: { settings: AdminPlatformSettings }) {
   const descriptionId = useId()
   const now = useNow(TICK_MS)
   const toggle = useSetAiEnabled()
+  const { t } = useTranslation('admin', { keyPrefix: 'platform' })
   return (
     <Card padding="md" className="flex max-w-[640px] flex-col gap-3">
       <div className="flex items-start gap-3">
@@ -45,10 +48,10 @@ function AiSwitchCard({ settings }: { settings: AdminPlatformSettings }) {
         </span>
         <div className="flex min-w-0 grow flex-col gap-0.5">
           <h2 id={titleId} className="m-0 text-15 font-semibold">
-            Funciones de IA
+            {t('aiTitle')}
           </h2>
           <p id={descriptionId} className="m-0 text-13 text-ink-2">
-            {AI_SWITCH_DESCRIPTION}
+            {aiSwitchDescription()}
           </p>
         </div>
         <Switch
@@ -62,8 +65,8 @@ function AiSwitchCard({ settings }: { settings: AdminPlatformSettings }) {
       </div>
       <FactList items={platformChangeFacts(settings, now)} size="sm" className="pl-11" />
       {settings.aiEnabled && !settings.agentCoreConfigured ? (
-        <Callout tone="neutral" title="El motor de IA no está conectado">
-          Mientras tanto, la plataforma sigue atendiendo solo con personas.
+        <Callout tone="neutral" title={t('engineMissing')}>
+          {t('engineMissingText')}
         </Callout>
       ) : null}
     </Card>

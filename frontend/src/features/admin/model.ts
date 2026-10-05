@@ -18,7 +18,6 @@ import {
 import { isApiProblem } from '@/lib/api'
 import { formatRelativeTime, formatTime, joinEs, pluralize } from '@/lib/format'
 import type {
-  AdminPlatformSettings,
   AccountStatus,
   AdminInvitation,
   AdminTeam,
@@ -1005,61 +1004,4 @@ export function sortMembers(members: readonly AdminTeamMember[]): AdminTeamMembe
     const inactive = Number(a.status === 'inactive') - Number(b.status === 'inactive')
     return inactive !== 0 ? inactive : byName(a, b)
   })
-}
-
-// ─── Plataforma (slice 18: the AI switch) ──────────────────────────────────────
-
-/** What the AI switch does, under its name (one line). */
-export const AI_SWITCH_DESCRIPTION =
-  'Asistente, copiloto y tipos de caso. Apagadas, la plataforma atiende solo con personas.'
-
-/**
- * The last change as short facts (slice 6 UI rule: icon + 1–3 words, never a dot-joined
- * line): who, and when (clock). Never changed: "Valor de la instalación".
- */
-export function platformChangeFacts(
-  settings: Pick<AdminPlatformSettings, 'updatedAt' | 'updatedByName'>,
-  now: Date | string | number,
-): FactItem[] {
-  if (!settings.updatedAt) {
-    return [{ key: 'default', icon: 'history', text: 'Valor de la instalación', tone: 'muted' }]
-  }
-  return [
-    {
-      key: 'by',
-      icon: 'user',
-      text: settings.updatedByName ?? 'Alguien',
-      label: 'Último cambio',
-    },
-    {
-      key: 'at',
-      icon: 'clock',
-      text: formatRelativeTime(settings.updatedAt, now),
-      label: 'Cuándo',
-    },
-  ]
-}
-
-/** The toast after turning it on or off, for the admin herself. */
-export function aiToggledToast(enabled: boolean): { title: string; description: string } {
-  return enabled
-    ? { title: 'Funciones de IA encendidas', description: 'Todos lo ven en este momento.' }
-    : {
-        title: 'Funciones de IA apagadas',
-        description: 'La plataforma atiende solo con personas.',
-      }
-}
-
-/** The toast when the switch could not change (it shows the previous state again). */
-export function describeAiToggleFailure(error: unknown): { title: string; description: string } {
-  const title = 'No pudimos cambiar las funciones de IA'
-  if (isApiProblem(error)) {
-    if (error.code === 'forbidden') {
-      return { title, description: 'Ya no tienes el rol de Administración.' }
-    }
-    if (error.code === 'network_error') {
-      return { title, description: 'Revisa tu conexión e inténtalo de nuevo.' }
-    }
-  }
-  return { title, description: 'Inténtalo de nuevo.' }
 }

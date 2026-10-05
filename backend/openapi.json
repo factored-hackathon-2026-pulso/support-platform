@@ -2530,7 +2530,7 @@
         "type": "object"
       },
       "CaseType": {
-        "description": "What the case is about (slice 18, ADR 0005): the AI matures per case type.\n\nThe values are the dataset's complaint subcategories (``complaints.subcategory`` in\ndata-lab; names from its aggregate report ``reports/demand/complaints_by_subcategory.csv``,\nnever from records) plus ``none`` (the dataset's ``(null)`` subcategory, and every case\nwhen it opens). ``virtual_card`` (\"Tarjeta virtual\") is **team-generated**: a new product\nthe demo shows maturing from zero; it is not in the dataset.",
+        "description": "What the case is about (slice 18, ADR 0006): the AI matures per case type.\n\nThe values are the dataset's complaint subcategories (``complaints.subcategory`` in\ndata-lab; names from its aggregate report ``reports/demand/complaints_by_subcategory.csv``,\nnever from records) plus ``none`` (the dataset's ``(null)`` subcategory, and every case\nwhen it opens). ``virtual_card`` (\"Tarjeta virtual\") is **team-generated**: a new product\nthe demo shows maturing from zero; it is not in the dataset.",
         "enum": [
           "none",
           "unrecognized_charge",

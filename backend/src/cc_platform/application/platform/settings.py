@@ -1,4 +1,4 @@
-"""The AI switch ("Funciones de IA", slice 18 contract §2, ADR 0005).
+"""The AI switch ("Funciones de IA", slice 18 contract §2, ADR 0006).
 
 One platform-wide setting, persisted (``PlatformSettings``), changed by Administración and read
 by every place where the AI layer could act:

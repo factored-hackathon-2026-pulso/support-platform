@@ -1,4 +1,4 @@
-"""Platform settings (slice 18, ADR 0005): the AI switch ("Funciones de IA").
+"""Platform settings (slice 18, ADR 0006): the AI switch ("Funciones de IA").
 
 Administración reads and changes it (``/admin/platform``); the customer simulator reads it
 (``/customer/platform``); staff read it in ``/auth/me``. A change records

@@ -263,7 +263,7 @@ export interface CaseTypeConfig {
 }
 
 /**
- * The one case-type map of the staff UI (slice 18, ADR 0005): the AI matures per case type.
+ * The one case-type map of the staff UI (slice 18, ADR 0006): the AI matures per case type.
  * The names are the dataset's complaint subcategories (`complaints.subcategory`, from
  * data-lab's aggregate report); "Tarjeta virtual" is team-generated (a new product the demo
  * shows maturing from zero). Menu order as Linear: none first, then the dataset's order by

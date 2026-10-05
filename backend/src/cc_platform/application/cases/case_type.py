@@ -1,5 +1,5 @@
 """``ChangeCaseType`` (slice 18 contract §3): the assignee or supervision says what a case is
-about (a dataset complaint subcategory, ``CaseType``). The AI matures per case type (ADR 0005).
+about (a dataset complaint subcategory, ``CaseType``). The AI matures per case type (ADR 0006).
 
 It mirrors ``ChangeCasePriority`` (slice 8) in every respect. A ``PUT`` that sets a state, so
 it is safe to repeat: the whole body runs in ``retry_on_conflict`` and every rule is

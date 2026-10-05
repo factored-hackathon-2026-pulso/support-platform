@@ -156,7 +156,7 @@ class CasePriorityChanged(DomainEvent):
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class CaseTypeChanged(DomainEvent):
-    """The assignee or supervision changed what the case is about (slice 18, ADR 0005).
+    """The assignee or supervision changed what the case is about (slice 18, ADR 0006).
     Payload ``{"from": "none", "to": "undue_charge"}``, like ``case.priority_changed``."""
 
     event_type = "case.type_changed"

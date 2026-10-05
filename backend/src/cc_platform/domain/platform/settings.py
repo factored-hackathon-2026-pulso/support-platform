@@ -1,4 +1,4 @@
-"""``PlatformSettings`` (slice 18, ADR 0005): the platform-wide switches Administración owns.
+"""``PlatformSettings`` (slice 18, ADR 0006): the platform-wide switches Administración owns.
 
 A singleton aggregate (``id = "default"``, like ``AdminRoster``) saved with its
 compare-and-set ``version``. Today it holds one switch, the AI functions ("Funciones de IA"):

@@ -49,7 +49,7 @@ class CasePriority(StrEnum):
 
 
 class CaseType(StrEnum):
-    """What the case is about (slice 18, ADR 0005): the AI matures per case type.
+    """What the case is about (slice 18, ADR 0006): the AI matures per case type.
 
     The values are the dataset's complaint subcategories (``complaints.subcategory`` in
     data-lab; names from its aggregate report ``reports/demand/complaints_by_subcategory.csv``,

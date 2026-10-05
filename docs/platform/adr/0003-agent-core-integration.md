@@ -3,7 +3,7 @@
 - Status: **Accepted in principle** (user decisions of 2026-10-04); the open points in §6 are settled slice by slice. **S13, the backend of S14 and the backend of S15 (copilot) are built** (contract: `api/slice-14-assistant.md`); decided while building S14: the assistant's replies never stop the first-response SLA and the SLA restarts when the case reaches people; only chat cases and `CC_ASSISTANT_LANGUAGES` (default Spanish and Portuguese since 2026-10-04, policy `H1` rewritten) start with the assistant; a call or an email cannot join an assistant conversation; delegations are minted per call and live 10 minutes. **The backend of S16 (agent builder) is built** (contract: `api/slice-16-agent-builder.md`); decided while building S16: a fresh authenticator code (`stepUpCode`) in the body of each call is what raises the person to the registry's `step_up`, nothing is remembered; the registry and the builder chat use two credentials signed with two keys; the platform keeps an index of proposals because agent-core cannot list them (§7).
 - Date: 2026-10-04
 - Scope: `backend/`, `frontend/`, and the contract with the sibling repo `agent-core`.
-- Related: `ENGINEERING_BRIEF.md` §1 (scope, amended by this ADR), ADR 0001 (architecture, still stands), ADR 0002 (superseded; not revived).
+- Related: `ENGINEERING_BRIEF.md` §1 (scope, amended by this ADR), ADR 0001 (architecture, still stands), ADR 0002 (superseded; not revived), ADR 0006 (AI maturity by case type: the AI switch that gates the assistant, the copilot and the builder, and the slices S18–S22 that put them on screen).
   In `agent-core`: M9 (access and API), M10 (handoff), ADR 0006 (principals and delegation), ADR 0019 (internal agents), `docs/plan-e2e-produccion.md`.
 
 ## Context

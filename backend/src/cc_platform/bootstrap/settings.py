@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     # first response ("Caso por vencer sin respuesta"); 0 turns it off (tests).
     notification_sweep_seconds: float = Field(default=30.0, ge=0)
 
-    # The AI switch ("Funciones de IA", slice 18, ADR 0005): its value until Administración
+    # The AI switch ("Funciones de IA", slice 18, ADR 0006): its value until Administración
     # changes it (then the stored setting wins). Off = the people-only platform, whatever
     # agent-core says; on without agent-core = also people-only.
     ai_enabled: bool = True

@@ -1,6 +1,6 @@
 # Platform data model
 
-Version: slices 0 to 12 (slice 7: customer rating; slice 8: case priority; slice 9: escalations to supervision; slice 10: notifications; slice 11: secure onboarding by invitation, part 4; slice 12: simulated phone and email). Source of truth: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tables) and `backend/src/cc_platform/domain/` (rules and allowed values). The API contract is `backend/openapi.json`.
+Version: slices 0 to 12 (slice 7: customer rating; slice 8: case priority; slice 9: escalations to supervision; slice 10: notifications; slice 11: secure onboarding by invitation, part 4; slice 12: simulated phone and email; slice 18: the case type and the AI switch). Source of truth: `backend/src/cc_platform/infrastructure/persistence/sqlalchemy/tables.py` (tables) and `backend/src/cc_platform/domain/` (rules and allowed values). The API contract is `backend/openapi.json`.
 
 The platform is for people only: customers and support staff talk by chat and, since slice 12, by **simulated** phone and email (no telephony and no mail server: it stores the call's state, its times and what each person said, and the case's email thread). It stores the conversations, who handles each case, the staff accounts and the event log; nothing else (the [last section](#differences-from-data-labcontractssynthetic-sampleplatform_historyjson) compares this model with the synthetic sample).
 
@@ -52,6 +52,7 @@ erDiagram
         string channel "chat_app chat_web phone_inbound phone_outbound email"
         string language "es pt"
         string priority "none low medium high critical"
+        string case_type "none unrecognized_charge undue_charge app_issue branch_service service_quality virtual_card"
         string status "queued assigned in_progress closed"
         datetime opened_at
         datetime sla_due_at
@@ -159,6 +160,13 @@ erDiagram
     admin_roster {
         string id PK "default"
         json admin_ids
+        int version
+    }
+    platform_settings {
+        string id PK "default"
+        bool ai_enabled
+        datetime updated_at
+        string updated_by_id
         int version
     }
     login_accounts {
@@ -345,6 +353,7 @@ not (answering the call already was the reply).
 | `channel` | text | how it opened (slice 12): `chat_app`, `chat_web`, `phone_inbound` (the customer called), `phone_outbound` (an analyst opened it to call the customer; sample data only), `email`. Formerly `app_chat` / `web_chat` |
 | `language` | text | `es`, `pt` |
 | `priority` | text | `none` (on open), `low`, `medium`, `high`, `critical` (slice 8); changed by the assigned analyst or Supervisión |
+| `case_type` | text | what the case is about (slice 18, ADR 0006): `none` (on open), the dataset's complaint subcategories `unrecognized_charge` (Cargo no reconocido), `undue_charge` (Cobro indebido), `app_issue` (Problema con app), `branch_service` (Atención en sucursal), `service_quality` (Calidad de servicio), and the team-generated `virtual_card` (Tarjeta virtual); changed by the assigned analyst or Supervisión, like the priority |
 | `status` | text | `queued`, `assigned`, `in_progress`, `closed`, and (ADR 0003) `with_assistant`: the agent handles the case, nobody holds it and it is in no queue or inbox |
 | `opened_at` | date | |
 | `sla_due_at` | date | first-response deadline |
@@ -546,6 +555,7 @@ See `api/slice-10-notifications.md`.
 | `staff` | staff members | `id` (`STF-…`), `name`, `email` (unique), `roles` (JSON: `analyst`, `supervisor`, `admin`, combinable, at least one), `languages` (JSON: `es`, `pt`), `team_id` (FK → teams), `active`, `created_at`, `creation_key`, `setup` (part 4: `invited` = pending invitation, no password, cannot sign in; `withdrawn` = invitation cancelled before activation, not listed in the directory; `complete` = activated or seeded. Only a `complete` account can be `active`), `version` |
 | `teams` | teams | `id` (`TEAM-…`), `name`, `name_key` (name without case or accents, unique), `active` (only deactivated with no active members), `created_at`, `creation_key`, `version` |
 | `admin_roster` | guarantees there is always at least one active admin | a single row (`id = default`), `admin_ids` (JSON), `version` |
+| `platform_settings` | platform-wide settings of Administración (slice 18): the AI switch "Funciones de IA" | a single row (`id = default`), `ai_enabled`, `updated_at`, `updated_by_id`, `version`; absent until the first change (then `CC_AI_ENABLED` applies) |
 | `login_accounts` | credentials and lockout | `staff_id`, `password_hash` (Argon2id), `failed_attempts`, `locked_until` (5 failed attempts → 15 min), `last_login_at`, `totp_secret` (part 4: the key of her authenticator app, RFC 6238, **sealed** with Fernet; never shown again; null only on the seeded development accounts, which use the code `000000`). An invited person has no row until she activates her account |
 | `invitations` | email invitations (part 4) | `id` (`INV-…`), `staff_id` (unique: one per person), `token_hash` (SHA-256 of the single-use link; the link is never stored), `state` (`pending`, `accepted`, `cancelled`; "expired" is computed: pending after `expires_at`), `created_at`, `sent_at` (last send), `expires_at` (48 h after the last send), `created_by`, `resend_count`, `accepted_at`, `cancelled_at`, `password_hash` and `totp_secret` (sealed) while the person is between step 1 and step 2, `failed_codes` / `locked_until` (5 wrong codes → 15 min), `version`. Resending replaces the link (the previous one stops working) |
 | `password_resets` | password reset links (part 4) | `id` (`PWR-…`), `staff_id` (unique: one live link per person; a new one replaces the previous), `token_hash` (SHA-256), `state` (`pending`, `used`; expired is computed), `sent_at`, `expires_at` (1 h), `created_by`, `used_at`, `version` |
@@ -579,15 +589,18 @@ Event types:
 
 | Family | Events |
 |---|---|
-| Cases | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.rated` (the customer rated; `payload`: `score`, `comment`, `analyst_id`; the audit shows only the comment's length), `case.priority_changed` (slice 8; `payload`: `from`, `to`; audit: "Cambió la prioridad a Alta"), `case.viewed` (supervision opened the case) |
+| Cases | `case.opened`, `case.queued`, `case.assigned`, `case.status_changed`, `case.read`, `case.first_responded`, `case.closed`, `case.rated` (the customer rated; `payload`: `score`, `comment`, `analyst_id`; the audit shows only the comment's length), `case.priority_changed` (slice 8; `payload`: `from`, `to`; audit: "Cambió la prioridad a Alta"), `case.type_changed` (slice 18; `payload`: `from`, `to`; audit: "Cambió el tipo de caso a Cobro indebido"), `case.viewed` (supervision opened the case) |
 | Escalations (slice 9) | `escalation.opened` (`motive`, `analyst_id`; audit: "Escaló el caso a supervisión", only the motive's length), `escalation.withdrawn`, `escalation.answered` (`note`; only its length), `escalation.taken`, `escalation.reassigned` (`previous_analyst_id`, `analyst_id`), `escalation.closed`, `escalation.acknowledged` |
 | Messages | `turn.created` (slice 12: also call lines, internal notes and emails; emails carry `subject`, which the audit shows only as a length) |
 | Calls (slice 12) | `call.started` (`direction`, `customer_id`, `analyst_id`, `reason`: only its length in the audit; "Llamó a la línea de atención" / "Llamó a {cliente}"), `call.answered` (`answered_by_role`, `analyst_id`, `ring_seconds`), `call.held`, `call.resumed` (`hold_seconds`), `call.mute_changed` (`muted`), `call.ended` (`end_reason`, `ended_by_role`, `answered`, `duration_seconds`, `hold_seconds`); `conversation` family, all of them change something |
 | Staff | `staff.availability_changed` |
-| Administration | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated`; part 4: `staff.invitation_sent` (`invitation_id`, `expires_at`), `staff.invitation_resent` (+ `resend_count`), `staff.invitation_cancelled`, `staff.password_reset_link_sent` (`reset_id`, `expires_at`, `revoked_sessions`, `cleared_lock`) |
+| Administration | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated`; part 4: `staff.invitation_sent` (`invitation_id`, `expires_at`), `staff.invitation_resent` (+ `resend_count`), `staff.invitation_cancelled`, `staff.password_reset_link_sent` (`reset_id`, `expires_at`, `revoked_sessions`, `cleared_lock`); slice 18: `platform.ai_toggled` (entity `platform`, `payload`: `enabled`; audit: "Activó / Desactivó las funciones de IA") |
 | Access | `auth.login_failed`, `auth.password_accepted`, `auth.mfa_challenge_issued`, `auth.mfa_failed`, `auth.account_locked`, `auth.session_started`, `auth.session_ended`, `customer.session_started`; part 4 (the person herself): `staff.invitation_accepted` (`invitation_id`), `staff.mfa_enrolled` (`method: totp`), `staff.password_reset` (`cleared_lock`: she created her new password with the link) |
 
 ## What may still change
+
+- Slice 18 adds `cases.case_type` and the `platform_settings` table: a database created earlier
+  fails on startup (`OutdatedSchemaError`); delete it.
 
 - Slice 7 adds the rating columns to `cases`: a database created earlier fails on startup
   (`OutdatedSchemaError`) until it is deleted.

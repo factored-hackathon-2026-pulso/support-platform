@@ -686,7 +686,7 @@ def build_container(
 
     # ADR 0003: the assistant (agent-core). It exists only when agent-core is configured.
     agent_core = agent_core or _agent_core_services(settings, clock)
-    # Slice 18 (ADR 0005): the AI switch, asked by every AI entry point.
+    # Slice 18 (ADR 0006): the AI switch, asked by every AI entry point.
     platform_defaults = PlatformDefaults(
         ai_enabled=settings.ai_enabled, agent_core_configured=agent_core is not None
     )

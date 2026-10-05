@@ -58,8 +58,6 @@ export const PENDING_AREAS: readonly PendingArea[] = [
   { area: 'copilot', paths: ['src/features/copilot/'], strings: 91 },
   // ── home: Inicio
   { area: 'home', paths: ['src/features/home/'], strings: 90 },
-  // ── audit: Auditoría
-  { area: 'audit', paths: ['src/features/audit/'], strings: 81 },
   // ── notifications: the bell, its panel and the live toasts
   { area: 'notifications', paths: ['src/features/notifications/'], strings: 57 },
   // ── workspace: the analyst Workspace frame (right panel tabs)

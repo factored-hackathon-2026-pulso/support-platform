@@ -11,6 +11,7 @@ import {
 } from '@/components/ui'
 import { shortCaseId } from '@/features/conversation'
 import { useDebouncedValue } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import {
   AUDIT_FAMILIES,
   AUDIT_KIND_FILTERS,
@@ -36,6 +37,7 @@ type StateChange = (patch: Partial<AuditUrlState>, options?: AuditStateChangeOpt
 
 /** Header search: ids of cases, customers or people (the API matches ids only). */
 export function AuditSearch({ value, onChange }: { value: string; onChange(query: string): void }) {
+  const { t } = useTranslation('audit')
   const [draft, setDraft] = useState(value)
   const [synced, setSynced] = useState(value)
   // The URL changed from outside ("Limpiar filtros", back button): show it.
@@ -51,8 +53,8 @@ export function AuditSearch({ value, onChange }: { value: string; onChange(query
 
   return (
     <SearchInput
-      aria-label="Buscar"
-      placeholder="Buscar por id de caso, cliente o persona"
+      aria-label={t('search.label')}
+      placeholder={t('search.placeholder')}
       maxLength={AUDIT_SEARCH_MAX_LENGTH}
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
@@ -74,6 +76,7 @@ export interface AuditToolbarProps {
  * "Limpiar filtros" · "Actualizar". Every change replaces the history entry.
  */
 export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: AuditToolbarProps) {
+  const { t } = useTranslation(['audit', 'common'])
   const staff = useStaffDirectory()
   const replace = (patch: Partial<AuditUrlState>) => onStateChange(patch, { replace: true })
   const rangeError = dateRangeError(state)
@@ -82,7 +85,7 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
     a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }),
   )
   const personOptions = [
-    { value: ALL, label: 'Todas las personas' },
+    { value: ALL, label: t('filters.allPeople') },
     ...people.map((person) => ({ value: person.id, label: personOptionLabel(person) })),
   ]
   if (state.actorId && !people.some((person) => person.id === state.actorId)) {
@@ -93,7 +96,7 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
     <div className="flex shrink-0 flex-col gap-2.5 border-b border-border px-7 py-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <SegmentedControl<string>
-          label="Quién"
+          label={t('filters.who')}
           variant="pills"
           value={state.actorKind ?? KIND_ALL}
           onValueChange={(value) => {
@@ -106,7 +109,7 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
           }))}
         />
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Tipo" className="w-[180px]">
+          <Field label={t('filters.type')} className="w-[180px]">
             <Select
               size="sm"
               value={state.family ?? ALL}
@@ -114,13 +117,13 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
                 replace({ family: (event.target.value || null) as AuditFamily | null })
               }
               options={[
-                { value: ALL, label: 'Todos los tipos' },
+                { value: ALL, label: t('filters.allTypes') },
                 ...AUDIT_FAMILIES.map((family) => ({ value: family.value, label: family.label })),
               ]}
             />
           </Field>
           {showsPersonFilter(state) ? (
-            <Field label="Persona" className="w-[200px]">
+            <Field label={t('filters.person')} className="w-[200px]">
               <Select
                 size="sm"
                 value={state.actorId ?? ALL}
@@ -129,7 +132,7 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
               />
             </Field>
           ) : null}
-          <Field label="Desde" className="w-[150px]">
+          <Field label={t('filters.from')} className="w-[150px]">
             <Input
               size="sm"
               type="date"
@@ -137,7 +140,7 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
               onChange={(event) => replace({ fromDate: event.target.value || null })}
             />
           </Field>
-          <Field label="Hasta" error={rangeError} className="w-[150px]">
+          <Field label={t('filters.to')} error={rangeError} className="w-[150px]">
             <Input
               size="sm"
               type="date"
@@ -149,7 +152,7 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Checkbox
-          label="Solo acciones que cambian algo"
+          label={t('filters.changesOnly')}
           checked={state.changesOnly}
           onChange={(event) => replace({ changesOnly: event.target.checked })}
           className="font-semibold"
@@ -159,16 +162,17 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
             size="sm"
             variant="secondary"
             iconEnd={<X size={14} aria-hidden="true" />}
-            aria-label={`Quitar el filtro del caso ${state.caseId}`}
+            aria-label={t('filters.removeCase', { caseId: state.caseId })}
             onClick={() => replace({ caseId: null })}
           >
-            Caso <span className="font-mono text-12">{shortCaseId(state.caseId)}</span>
+            {t('filters.caseChip')}{' '}
+            <span className="font-mono text-12">{shortCaseId(state.caseId)}</span>
           </Button>
         ) : null}
         <span className="grow" />
         {hasAuditFilters(state) ? (
           <Button size="sm" variant="ghost" onClick={() => replace(clearAuditFilters(state))}>
-            Limpiar filtros
+            {t('common:filters.clear')}
           </Button>
         ) : null}
         <Button
@@ -178,7 +182,7 @@ export function AuditToolbar({ state, onStateChange, onRefresh, refreshing }: Au
           loading={refreshing}
           onClick={onRefresh}
         >
-          Actualizar
+          {t('common:actions.refresh')}
         </Button>
       </div>
     </div>

@@ -34,7 +34,7 @@ Design: `IaAutomatizacion` (views `panorama`, `tipo`, `propuesta`, `prueba`, `ac
 | Path | Screen |
 |---|---|
 | `/supervision/automation?type=` | Tipos de caso: the panorama; `?type=` opens a type in the side panel |
-| `/supervision/automation/proposals` | Propuestas: every proposal the platform knows, "Seguir" by id |
+| `/supervision/automation/proposals` | Propuestas: every proposal agent-core has, with who brought it here; "Seguir" by id when agent-core's list does not answer |
 | `/supervision/automation/proposals/:proposalId?type=` | One proposal; `type` is the case type it is for (what "Activar" serves) |
 | `/supervision/automation/agents` | Agentes |
 | `/supervision/automation/agents/:agentId` | One agent |
@@ -90,22 +90,42 @@ served by `disputas` (agent-core's demo agent for card disputes).
 | `agente` | aliases, releases, `GET /builder/versions/agent/{id}`, the index | Dónde corre (prod and staging with version, release and date), the types it serves, its versions (changelog, date), its proposals. **"Volver a la versión anterior"** (prod back to the release the current one was based on) and **"Pasar a producción"** (prod to what staging holds) are real alias promotions with her code. **No "Pausar"**: the registry has nothing that stops an agent. |
 
 "Proponer un agente" uses **the builder chat** (`constructor-chat`), because it is the only path that
-writes a draft a supervisor can read: agent-core's flow `construir` collects the agent (`agente`)
-and the goal (`objetivo`), drafts the entities, creates the proposal itself, writes and validates
-the draft, and answers. The chat opens with a first message she can edit:
-`Agente: cobros. Objetivo: un agente nuevo que atienda los chats de los casos de tipo "Cobro indebido" …`
-plus the evidence ("El equipo envía 84 de los últimos 100 borradores …"). It is **Spanish whatever
-the UI language**: `constructor-chat` supports `es` only and the platform sends `lang: es`. The
-agent id is the type's own once an agent serves it, otherwise a suggestion (`disputas` for "Cargo
-no reconocido", agent-core's demo agent; `cobros`, `soporte-app`, `sucursales`, `calidad-servicio`,
-`tarjeta-virtual`: **team-generated**). Proposals the answer names are tracked by the backend and
-offered as "Abrir propuesta" (the link carries `?type=`); the type panel lists the proposals for
-its agent id. Creating an empty proposal (`POST /builder/proposals`) was not used: nobody could
-write its draft from the platform.
+writes a draft a supervisor can read: agent-core's flow `construir` asks for the agent (`agente`), then
+the goal (`objetivo`), drafts the entities, creates the proposal itself, writes and validates the
+draft, and answers. **Updated 2026-10-05 (agent-core 1.4.0), in the builder's format** (slice 16 §4,
+"How `constructor-chat` takes a request"):
 
-The proposals list is **ready for the improvement engine** (PR #17, not merged): `source` is read as
-text and `engine` reads "Del motor de mejora" (sparkles icon); a row the registry did not answer for
-says "Sin confirmar". Nothing depends on that PR.
+- The sheet starts a new conversation; the restart starts the builder's run, so the thread opens with
+  its question ("¿Qué agente quieres modificar?").
+- The footer is a short form, "Pedido para el constructor": **Agente** (the id, agent-core's pattern
+  `^[a-z0-9][a-z0-9_/-]*$`) and **Objetivo** (at most 200 characters, with a counter: it becomes the
+  proposal's title), both prefilled and editable. "Enviar al constructor" answers the builder's
+  questions **one by one, in its order**: the id alone, then (only if the answer has `awaiting:
+  slot`) the goal. She sees both exchanges. If the builder does not ask for the goal (or a message
+  fails), the sequence stops, a note says so and the goal waits in the composer.
+- The goal is written in **her UI language** (es / pt-BR), and so is the chat: the platform sends
+  agent-core `lang: es` or `pt` from her preference (`constructor-chat` supports both). Spanish goal:
+  `Atender los chats de "Cobro indebido" como lo hace el equipo y pasar a una persona lo que no pueda
+  resolver.` plus the evidence ("El equipo envía 84 de 100 borradores del copiloto sin cambios o con
+  cambios menores.") when it fits in 200 characters.
+- The agent id is the type's own once an agent serves it, otherwise a suggestion (`disputas` for
+  "Cargo no reconocido", agent-core's demo agent; `cobros`, `soporte-app`, `sucursales`,
+  `calidad-servicio`, `tarjeta-virtual`: **team-generated**).
+- The builder's answer names no proposal id, so the sheet reads the proposals list before and after:
+  what is new for that agent is offered as "Abrir propuesta" (the link carries `?type=`). Proposals an
+  answer does name are still tracked by the backend. The type panel lists the proposals for its agent
+  id. Creating an empty proposal (`POST /builder/proposals`) is not used: nobody could write its draft
+  from the platform.
+- Before: one prefilled Spanish message ("Agente: cobros. Objetivo: …") that `constructor-chat` took
+  whole as the agent id (its first question was asked when the run started, and the platform did not
+  show it): the run handed over and no proposal was made.
+
+The proposals list shows **every proposal agent-core has** (slice 16 §4, agent-core 1.4.0) with who
+brought it here: "Creada aquí", "Del constructor", "Seguida por id", "Del motor de mejora" (sparkles,
+PR #17) or **"Del registro"** (database icon: only agent-core's list has it, e.g. the builder chat's).
+A row the registry did not answer for says "Sin confirmar". When agent-core's list does not answer
+(`registryListed: false`), a quiet notice says only the known proposals show, and "Seguir" (by id)
+appears; otherwise "Seguir" is not drawn.
 
 ## 4. Frontend
 
@@ -116,10 +136,12 @@ New feature `features/automation` (public `index.ts`; no `core.ts`: the shell ne
   `draftBreakdown`, `moveBackOptions`, `agentIdFor`, `agentName`), `proposals.ts` (states, steps,
   sources, `changeView`, `draftTools`, `draftLanguages`, `suiteFor`, `reportView`,
   `describeBuilderFailure`), `agents.ts` (`agentIds`, `agentRunStatus`, `agentRow`,
-  `rollbackTarget`, `promotionTarget`), `builder-chat.ts` (`chatEntries`, `newAgentRequest`).
+  `rollbackTarget`, `promotionTarget`), `builder-chat.ts` (`chatEntries`, `agentRequest`,
+  `isValidAgentId`, `fitGoal`, `goalLength`, `newProposals`).
 - `hooks/use-automation.ts`: builder status, proposals (refetched on focus), proposal, aliases,
   releases, versions, the proposal steps, activation, track, prod promotion, the chat (one message
-  at a time, retry with the same `clientMessageId`, restart).
+  at a time, retry with the same `clientMessageId`, restart; `useProposeAgent` answers the builder's
+  two questions in order and finds the proposal it made).
 - Components: `AutomationFrame` (path, title, sections, the chat sheet any screen opens),
   `AutomationGate` (AI unknown → spinner, off → Colas), `TypesScreen`, `TypePanel`,
   `ProposalsScreen`, `ProposalScreen`, `ProposalNextStep`, `EvaluationReport`, `ActivatePanel`,
@@ -137,7 +159,15 @@ New feature `features/automation` (public `index.ts`; no `core.ts`: the shell ne
   promotion; a wrong code leaves the type ready; roles; AI off; no registry), `tests/api/test_builder_api.py`
   (the activation route: schema, wrong code, idempotent, `agentId` in the stages, the audit text,
   409, 403, 422; the chat restart starts a new run; both 404 without agent-core).
-- Frontend: `model.test.ts`, `proposals.test.ts`, `agents.test.ts`, `builder-chat.test.ts`,
+  2026-10-05: `tests/unit/application/test_builder_constructor.py` runs the chat against
+  `ScriptedConstructor` (`tests/builder_support.py`), a double of `constructor-chat`'s flow
+  `construir` (asks at run start, takes answers verbatim, creates the proposal unnamed, hands over on a
+  refused id or title): the id then the goal make a proposal, one message with both is swallowed, a
+  201-character goal is refused, Portuguese, a message that starts a run answers its question.
+- Frontend (2026-10-05: `scriptedConstructor` in `automation-fixtures.ts` fakes the same flow behind
+  the chat API; `automation.test.tsx` proposes in order, stops when the goal is not asked, checks the
+  id and the length, retries a failed restart, Portuguese): `model.test.ts`, `proposals.test.ts`,
+  `agents.test.ts`, `builder-chat.test.ts`,
   `url.test.ts`; routes `automation.test.tsx` (panorama, the type panel, move back and its failure,
   live `ai.stage_updated`, "Proponer un agente" through the chat, retry and "Nueva conversación",
   AI off and turned off, pt-BR), `automation-proposal.test.tsx` (draft: validate with violations
@@ -169,9 +199,13 @@ New feature `features/automation` (public `index.ts`; no `core.ts`: the shell ne
   starts conversations with `CC_ASSISTANT_AGENT` (`recepcion@prod`). The platform's "Con agente"
   (`agent: active`, `agentId`) is the record of Supervisión's decision and drives the analyst's
   strip; it does not route.
-- **Whether `constructor-chat`'s answer names the proposal id** (slice 16 §8, not verified live):
-  if not, she uses "Seguir" by id in Propuestas. A list call in the registry
-  (`GET /v1/registry/proposals?agent=&state=`) would remove the index.
+- ~~Whether `constructor-chat`'s answer names the proposal id~~ It never does (its prompt forbids
+  identifiers); the list now reads agent-core's own (slice 16 §4), so its proposals show as "Del
+  registro" and the sheet finds the new one.
+- **The builder's draft** (checked live 2026-10-05, es and pt): agent-core creates the proposal, then
+  refuses its own draft (`put_draft` `invalid_args`: the model's entity lacks `id` / `version`) and
+  hands over. The proposal stays a draft with no changes. AI team: the drafting prompt / model, and a
+  validator on the flow's `agente` and `objetivo` slots (slice 16 §8).
 - **No agent catalog** in the registry: the agents list is derived (types served + proposals). A
   display name per agent would replace the humanized id.
 - **"Hoy: resueltos vs pasados a personas" per agent** (the canvas's agent row and detail) is not

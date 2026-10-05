@@ -1,9 +1,10 @@
 import { createContext, useContext } from 'react'
+import type { AgentRequest } from '../builder-chat'
 import type { MaturingType } from '../types'
 
 export interface BuilderChatRequest {
-  /** A first message in the composer; she can edit it. */
-  prefill?: string
+  /** "Proponer un agente": the agent id and the goal for the builder's questions (editable). */
+  request?: AgentRequest | null
   /** The case type the conversation is about (the proposal links carry it). */
   type?: MaturingType | null
   /** Start a new conversation instead of continuing her thread ("Proponer un agente"). */

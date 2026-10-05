@@ -142,6 +142,7 @@ class InMemoryAgentRuntime:
             text=text,
             confirm_token=confirm_token,
             confirm_answer=confirm_answer,
+            lang=lang,
         )
         if not self.script:
             raise AgentRuntimeError(status=500, code="script_exhausted")

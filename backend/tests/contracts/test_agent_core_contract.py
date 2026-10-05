@@ -118,5 +118,5 @@ async def test_every_call_of_the_adapter_matches_the_published_contract() -> Non
 def test_the_copied_contract_is_the_version_the_adapter_was_written_for() -> None:
     version = (HERE / "agent-core-contract-version.txt").read_text(encoding="utf-8").strip()
 
-    assert version == "1.3.0"
-    assert SPEC["info"]["version"] == "1.3.0"
+    assert version == "1.4.0"
+    assert SPEC["info"]["version"] == "1.4.0"

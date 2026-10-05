@@ -52,7 +52,8 @@ def registry(clock: FixedClock, keys: AgentSigningKeys) -> InMemoryAgentRegistry
 
 @pytest.fixture
 def runtime(keys: AgentSigningKeys) -> InMemoryAgentRuntime:
-    return InMemoryAgentRuntime(principal_kid=keys.principal.kid)
+    # a free script whose runs open without a word (a test sets ``greeting`` to see an opening)
+    return InMemoryAgentRuntime(principal_kid=keys.principal.kid, greeting="")
 
 
 @pytest.fixture
@@ -312,11 +313,19 @@ def test_reject_sends_the_proposal_back_to_draft(
     assert reopened.status_code == 409  # already in draft: nothing to reopen
 
 
-def test_a_proposal_made_elsewhere_is_tracked_by_id(
+def test_a_proposal_made_elsewhere_is_listed_from_agent_core_and_tracked_by_id(
     client: TestClient, supervisor: dict[str, str], registry: InMemoryAgentRegistry
 ) -> None:
     proposal_id = registry.seed_proposal(agent_id="disputas", title="Del chat")
-    assert client.get(f"{API}/proposals", headers=supervisor).json() == {"items": []}
+    listed = client.get(f"{API}/proposals", headers=supervisor).json()
+    assert listed["registryListed"] is True
+    [row] = listed["items"]
+    assert (row["proposalId"], row["source"], row["registeredBy"], row["live"]) == (
+        proposal_id,
+        "registry",
+        None,
+        True,
+    )
 
     tracked = client.post(
         f"{API}/proposals/track", headers=supervisor, json={"proposalId": proposal_id}
@@ -325,11 +334,32 @@ def test_a_proposal_made_elsewhere_is_tracked_by_id(
     assert tracked.status_code == 200
     assert (tracked.json()["source"], tracked.json()["createdBy"]) == ("tracked", "constructor-bot")
     assert [
-        p["proposalId"] for p in client.get(f"{API}/proposals", headers=supervisor).json()["items"]
-    ] == [proposal_id]
+        (p["proposalId"], p["source"])
+        for p in client.get(f"{API}/proposals", headers=supervisor).json()["items"]
+    ] == [(proposal_id, "tracked")]
     assert client.get(f"{API}/proposals?state=published", headers=supervisor).json() == {
-        "items": []
+        "items": [],
+        "registryListed": True,
     }
+
+
+def test_without_agent_core_s_list_the_index_comes_back_with_a_flag(
+    client: TestClient, supervisor: dict[str, str], registry: InMemoryAgentRegistry
+) -> None:
+    from cc_platform.application.ai.registry import AgentRegistryError
+
+    created = client.post(
+        f"{API}/proposals", headers=supervisor, json={"agentId": "disputas", "title": "Uno"}
+    ).json()
+    registry.seed_proposal(agent_id="cobros", title="Solo en agent-core")
+    registry.listing_failure = AgentRegistryError(status=404, code="not_found")
+
+    listed = client.get(f"{API}/proposals", headers=supervisor).json()
+
+    assert listed["registryListed"] is False
+    assert [(p["proposalId"], p["live"]) for p in listed["items"]] == [
+        (created["proposalId"], True)
+    ]
 
 
 def test_versions_and_entities_pass_through_with_slashes_in_the_id(
@@ -433,6 +463,7 @@ def test_the_chat_with_the_builder_agent(
     assert client.get(f"{API}/chat", headers=supervisor).json() == {
         "available": True,
         "messages": [],
+        "awaiting": None,
     }
     runtime.script.append(turn(f"Creé la propuesta {made} con el borrador."))
 
@@ -441,6 +472,7 @@ def test_the_chat_with_the_builder_agent(
     assert sent.status_code == 201, sent.text
     body = sent.json()
     assert body["replayed"] is False
+    assert body["awaiting"] == "input"
     assert body["message"]["role"] == "person"
     assert body["answers"][0]["answers"] == body["message"]["id"]
     assert [p["proposalId"] for p in body["proposals"]] == [made]
@@ -453,6 +485,7 @@ def test_the_chat_with_the_builder_agent(
     again = chat(client, supervisor, "Acorta el resumen de disputas", "msg-00000001")
     assert again.status_code == 200
     assert again.headers["Idempotent-Replayed"] == "true"
+    assert again.json()["awaiting"] is None  # not known on a replay
     other = chat(client, supervisor, "Otra cosa", "msg-00000001")
     assert (other.status_code, other.json()["code"]) == (409, "idempotency_conflict")
     mismatch = client.post(
@@ -480,31 +513,71 @@ def test_a_failed_chat_call_keeps_the_message_and_a_retry_works(
     assert ok.json()["answers"][0]["text"] == "ahora sí"
 
 
-def test_a_new_conversation_starts_over_and_the_next_message_starts_another_run(
+def test_a_new_conversation_starts_the_builder_at_once_with_its_question(
     client: TestClient, supervisor: dict[str, str], runtime: InMemoryAgentRuntime
 ) -> None:
-    runtime.script.append(turn("¿Qué agente quieres cambiar?"))
+    runtime.script.append(turn("Cuéntame qué cambio quieres."))
     assert chat(client, supervisor, "Quiero un agente nuevo", "msg-00000011").status_code == 201
     starts = sum(c.operation == "start_run" for c in runtime.calls)
+    runtime.greeting = "¿Qué agente quieres modificar? (por ejemplo: disputas)"
 
     restarted = client.post(f"{API}/chat/restart", headers=supervisor)
 
     assert restarted.status_code == 200, restarted.text
-    assert restarted.json() == {"available": True, "messages": []}
-    assert client.get(f"{API}/chat", headers=supervisor).json()["messages"] == []
+    body = restarted.json()
+    assert [(m["role"], m["text"], m["answers"]) for m in body["messages"]] == [
+        ("agent", "¿Qué agente quieres modificar? (por ejemplo: disputas)", None)
+    ]
+    assert body["awaiting"] == "input"
+    # a new run, started by the restart, in her language
+    assert sum(c.operation == "start_run" for c in runtime.calls) == starts + 1
+    assert [c.arguments["lang"] for c in runtime.calls if c.operation == "start_run"][-1] == "es"
+    assert client.get(f"{API}/chat", headers=supervisor).json()["messages"] == body["messages"]
+
     runtime.script.append(turn("Cuéntame qué cambio quieres."))
-    assert chat(client, supervisor, "Otra cosa", "msg-00000012").status_code == 201
-    # a new run, not the old one
+    assert chat(client, supervisor, "cobros", "msg-00000012").status_code == 201
+    # her message answered that run's question: no other run
     assert sum(c.operation == "start_run" for c in runtime.calls) == starts + 1
     assert [
         m["role"] for m in client.get(f"{API}/chat", headers=supervisor).json()["messages"]
-    ] == [
-        "person",
-        "agent",
-    ]
+    ] == ["agent", "person", "agent"]
     again = client.post(f"{API}/chat/restart", headers=supervisor)
-    assert again.status_code == 200  # safe to repeat
-    assert client.post(f"{API}/chat/restart", headers=supervisor).status_code == 200
+    assert again.status_code == 200  # each call starts over
+    assert sum(c.operation == "start_run" for c in runtime.calls) == starts + 2
+
+
+def test_a_new_conversation_without_agent_core_comes_back_empty(
+    client: TestClient, supervisor: dict[str, str], runtime: InMemoryAgentRuntime
+) -> None:
+    runtime.unavailable = True
+
+    restarted = client.post(f"{API}/chat/restart", headers=supervisor)
+
+    assert restarted.status_code == 200
+    assert restarted.json() == {"available": True, "messages": [], "awaiting": None}
+    runtime.unavailable = False
+    runtime.greeting = "¿Qué agente quieres modificar?"
+    runtime.script.append(turn("Cuéntame qué cambio quieres."))
+    sent = chat(client, supervisor, "cobros", "msg-00000013")
+    # her message started the run: the run's question comes first in the answer
+    assert [a["text"] for a in sent.json()["answers"]] == [
+        "¿Qué agente quieres modificar?",
+        "Cuéntame qué cambio quieres.",
+    ]
+
+
+def test_the_builder_speaks_the_person_s_ui_language(
+    client: TestClient, supervisor: dict[str, str], runtime: InMemoryAgentRuntime
+) -> None:
+    saved = client.put("/api/v1/me/preferences", headers=supervisor, json={"uiLanguage": "pt-BR"})
+    assert saved.status_code == 200, saved.text
+    client.post(f"{API}/chat/restart", headers=supervisor)
+    runtime.script.append(turn("Conte-me qual mudança você quer nesse agente."))
+
+    chat(client, supervisor, "cobros", "msg-00000014")
+
+    assert [c.arguments["lang"] for c in runtime.calls if c.operation == "start_run"] == ["pt"]
+    assert [c.arguments.get("lang") for c in runtime.calls if c.operation == "post_turn"] == ["pt"]
 
 
 # ----------------------------------------------------------------------------- activation (S22)
@@ -626,6 +699,7 @@ def test_without_agent_core_the_builder_is_off(tmp_path: Path, clock: FixedClock
         assert client.get(f"{API}/chat", headers=headers).json() == {
             "available": False,
             "messages": [],
+            "awaiting": None,
         }
         for response in (
             client.get(f"{API}/proposals", headers=headers),

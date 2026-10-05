@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { FileText, Sparkles } from 'lucide-react'
+import { Database, FileText, Sparkles } from 'lucide-react'
 import { automationProposalPath } from '@/app/paths'
 import { PageBody } from '@/components/layout'
 import {
   Button,
+  Callout,
   EmptyState,
   Field,
   Input,
@@ -34,9 +35,11 @@ import { AutomationFrame, EngineMissing } from './AutomationFrame'
 const TICK_MS = 60_000
 
 /**
- * "Propuestas" (slice 16 §6 on IaAutomatizacion's frame): every proposal the platform knows (made
- * here, by the builder chat, tracked by id and, once the improvement engine announces them, by the
- * engine), its state and where it came from; "Seguir" brings one in by id.
+ * "Propuestas" (slice 16 §6 on IaAutomatizacion's frame): every proposal agent-core has, merged
+ * with the platform's index (made here, named by the builder chat, tracked by id, announced by the
+ * improvement engine; the rest read "Del registro"), its state and where it came from. When
+ * agent-core's list does not answer, a quiet notice says only the known ones show, and "Seguir"
+ * brings one in by id.
  */
 export function ProposalsScreen() {
   const { t } = useTranslation('automation')
@@ -53,13 +56,24 @@ export function ProposalsScreen() {
         <div className="flex flex-col gap-4">
           {builder ? (
             <>
-              <TrackForm />
               <QueryState
                 query={proposals}
                 skeleton={<Skeleton className="h-40 w-full" />}
                 errorTitle={t('proposals.loadError')}
               >
-                {(data: ProposalList) => <ProposalTable data={data} />}
+                {(data: ProposalList) => (
+                  <>
+                    {data.registryListed ? null : (
+                      <>
+                        <Callout tone="neutral" title={t('proposals.partialTitle')}>
+                          {t('proposals.partialText')}
+                        </Callout>
+                        <TrackForm />
+                      </>
+                    )}
+                    <ProposalTable data={data} />
+                  </>
+                )}
               </QueryState>
             </>
           ) : (
@@ -121,8 +135,9 @@ function ProposalTable({ data }: { data: ProposalList }) {
                   </span>
                 </TCell>
                 <TCell muted>
-                  <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                     {source.engine ? <Sparkles size={13} aria-hidden="true" /> : null}
+                    {source.registry ? <Database size={13} aria-hidden="true" /> : null}
                     {source.label}
                   </span>
                 </TCell>

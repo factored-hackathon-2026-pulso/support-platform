@@ -5,7 +5,7 @@ import { automationAgentPath, automationProposalPath } from '@/app/paths'
 import { Button, Dialog, IconButton, RadioGroup, Status, useToast } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
-import { newAgentRequest } from '../builder-chat'
+import { agentRequest } from '../builder-chat'
 import { useBuilderAvailable, useMoveStageBack, useProposals } from '../hooks/use-automation'
 import {
   agentIdFor,
@@ -259,8 +259,9 @@ function AgentSection({ type, entry }: { type: MaturingType; entry: CaseTypeStag
 }
 
 /**
- * "Proponer un agente": a new conversation with the builder, the type's first message in the
- * composer (agent-core needed). It never continues an older thread.
+ * "Proponer un agente": a new conversation with the builder and the type's request (the agent id,
+ * then the goal, the order its questions take; agent-core needed). It never continues an older
+ * thread.
  */
 function ProposeButton({ type, entry }: { type: MaturingType; entry: CaseTypeStage }) {
   const { t } = useTranslation('automation')
@@ -273,7 +274,7 @@ function ProposeButton({ type, entry }: { type: MaturingType; entry: CaseTypeSta
       size="sm"
       icon={<Bot size={16} />}
       onClick={() =>
-        chat.open({ prefill: newAgentRequest(type, agentIdFor(entry), entry), type, fresh: true })
+        chat.open({ request: agentRequest(type, agentIdFor(entry), entry), type, fresh: true })
       }
     >
       {t('type.propose')}

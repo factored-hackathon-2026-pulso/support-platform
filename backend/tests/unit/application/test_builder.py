@@ -25,6 +25,7 @@ from cc_platform.application.ai.errors import (
 )
 from cc_platform.application.ai.registry import (
     AgentRegistryError,
+    ProposalOrigin,
     ProposalState,
     Violation,
     YardstickChange,
@@ -418,7 +419,7 @@ async def test_only_administration_revokes_and_not_the_release_prod_points_at(
     assert principal["auth"]["level"] == "step_up"
 
 
-# ----------------------------------------------------------------------------- the platform's list
+# ----------------------------------------------------------------------------- the list
 async def test_the_list_remembers_what_the_platform_made_and_refreshes_it(
     world: BuilderWorld,
 ) -> None:
@@ -428,11 +429,11 @@ async def test_the_list_remembers_what_the_platform_made_and_refreshes_it(
 
     listed = await api.list_proposals(who)
 
-    assert {p.proposal_id for p in listed} == {first.proposal_id, second.proposal_id}
-    assert all(p.live and p.source == "platform" and p.registered_by == LUCIA for p in listed)
-    assert [p.proposal_id for p in await api.list_proposals(who, agent_id="consultas")] == [
-        second.proposal_id
-    ]
+    assert listed.registry_listed is True
+    assert [p.proposal_id for p in listed.items] == [second.proposal_id, first.proposal_id]
+    assert all(p.live and p.source == "platform" and p.registered_by == LUCIA for p in listed.items)
+    only = await api.list_proposals(who, agent_id="consultas")
+    assert [p.proposal_id for p in only.items] == [second.proposal_id]
 
     # the registry moves on without the platform (the builder chat saves a draft)...
     await world.registry.put_draft(
@@ -441,26 +442,114 @@ async def test_the_list_remembers_what_the_platform_made_and_refreshes_it(
         expected_rev=0,
         changes=[draft()],
     )
-    refreshed = {p.proposal_id: p for p in await api.list_proposals(who)}
+    refreshed = {p.proposal_id: p for p in (await api.list_proposals(who)).items}
     assert refreshed[first.proposal_id].rev == 1
+    # one call to agent-core's list refreshed every row: no read by id
+    assert calls(world, "get_proposal") == []
     # ...and with the registry down the cached rows come back, marked as such
     world.registry.unavailable = True
     stale = await api.list_proposals(who)
-    assert stale
-    assert not any(p.live for p in stale)
-    assert (await api.list_proposals(who, refresh=False))[0].live is False
+    assert stale.registry_listed is False
+    assert len(stale.items) == 2
+    assert not any(p.live for p in stale.items)
+    cached = await api.list_proposals(who, refresh=False)
+    assert (cached.items[0].live, cached.registry_listed) == (False, False)
+
+
+async def test_the_list_reads_agent_core_as_the_person(world: BuilderWorld) -> None:
+    await builder(world).list_proposals(actor_for(SUPERVISOR), agent_id=AGENT, state="draft")
+
+    [call] = calls(world, "list_proposals")
+    assert call.arguments == {"agent_id": AGENT, "state": "draft", "limit": 50, "offset": 0}
+    assert (call.principal["id"], call.principal["auth"]["level"]) == (LUCIA, "session")
+
+
+async def test_a_proposal_only_agent_core_has_is_listed_as_from_the_registry(
+    world: BuilderWorld,
+) -> None:
+    api, who = builder(world), actor_for(SUPERVISOR)
+    mine = await api.create_proposal(who, agent_id=AGENT, title="Desde la plataforma")
+    orphan = world.registry.seed_proposal(agent_id="cobros", title="Del chat, sin id")
+
+    listed = await api.list_proposals(who)
+
+    by_id = {p.proposal_id: p for p in listed.items}
+    assert [p.proposal_id for p in listed.items] == [orphan, mine.proposal_id]  # newest first
+    assert (by_id[orphan].source, by_id[orphan].registered_by) == ("registry", None)
+    assert (by_id[orphan].origin, by_id[orphan].created_by) == ("builder_chat", "constructor-bot")
+    assert by_id[orphan].live is True
+    assert by_id[mine.proposal_id].source == "platform"
+    # listing does not adopt it: nothing joins the index, nothing is audited
+    events = await builder_events(world.container)
+    assert [e for e in events if e[0] == "builder.proposal_tracked"] == []
+    cached = await api.list_proposals(who, refresh=False)
+    assert [p.proposal_id for p in cached.items] == [mine.proposal_id]
+
+
+async def test_the_filters_apply_to_both_and_follow_the_registry_state(
+    world: BuilderWorld,
+) -> None:
+    api, who = builder(world), actor_for(SUPERVISOR)
+    moved = await api.create_proposal(who, agent_id=AGENT, title="Se congela")
+    await api.save_draft(who, moved.proposal_id, expected_rev=0, changes=[draft()])
+    await api.list_proposals(who)  # the index caches it as a draft
+    # the registry freezes it behind the platform's back
+    await world.registry.freeze(builder(world)._credentials(who), proposal_id=moved.proposal_id)
+    orphan = world.registry.seed_proposal(agent_id="cobros", title="Borrador del chat")
+
+    drafts = await api.list_proposals(who, state="draft")
+    candidates = await api.list_proposals(who, state="candidate")
+    for_cobros = await api.list_proposals(who, agent_id="cobros")
+
+    assert [p.proposal_id for p in drafts.items] == [orphan]  # not the cached draft any more
+    assert [(p.proposal_id, p.state) for p in candidates.items] == [
+        (moved.proposal_id, "candidate")
+    ]
+    assert [p.proposal_id for p in for_cobros.items] == [orphan]
+
+
+async def test_without_agent_core_s_list_the_index_is_read_by_id(world: BuilderWorld) -> None:
+    """An agent-core without the list call (before contract 1.4.0), or one whose list fails."""
+    api, who = builder(world), actor_for(SUPERVISOR)
+    mine = await api.create_proposal(who, agent_id=AGENT, title="Uno")
+    world.registry.seed_proposal(agent_id="cobros", title="Del chat")
+    world.registry.listing_failure = AgentRegistryError(status=404, code="not_found")
+
+    listed = await api.list_proposals(who)
+
+    assert listed.registry_listed is False
+    assert [(p.proposal_id, p.live) for p in listed.items] == [(mine.proposal_id, True)]
+    assert len(calls(world, "get_proposal")) == 1
+
+
+async def test_who_brought_a_proposal_here_survives_the_merge(world: BuilderWorld) -> None:
+    api, who = builder(world), actor_for(SUPERVISOR)
+    engine = world.registry.seed_proposal(
+        agent_id=AGENT, title="Del motor", created_by="engine", origin=ProposalOrigin.AUTO_DETECT
+    )
+    await api.announce_proposal(engine)
+    chat = world.registry.seed_proposal(agent_id=AGENT, title="Del chat")
+    await api.track_proposal(who, chat)
+
+    listed = {p.proposal_id: p for p in (await api.list_proposals(who)).items}
+
+    assert (listed[engine].source, listed[engine].registered_by) == ("engine", "engine")
+    assert (listed[chat].source, listed[chat].registered_by) == ("tracked", LUCIA)
 
 
 async def test_a_proposal_the_chat_made_is_tracked_once(world: BuilderWorld) -> None:
     api, who = builder(world), actor_for(SUPERVISOR)
     proposal_id = world.registry.seed_proposal(agent_id=AGENT, title="Del chat")
-    assert await api.list_proposals(who) == []  # unknown to the platform
+    [listed] = (await api.list_proposals(who)).items
+    assert (listed.proposal_id, listed.source) == (proposal_id, "registry")
 
     tracked = await api.track_proposal(who, proposal_id)
     again = await api.track_proposal(who, proposal_id)
 
     assert (tracked.source, tracked.created_by) == ("tracked", "constructor-bot")
     assert again.proposal_id == proposal_id
+    [now_listed] = (await api.list_proposals(who)).items
+    assert (now_listed.source, now_listed.registered_by) == ("tracked", LUCIA)
     events = [
         e for e in await builder_events(world.container) if e[0] == "builder.proposal_tracked"
     ]
@@ -469,13 +558,25 @@ async def test_a_proposal_the_chat_made_is_tracked_once(world: BuilderWorld) -> 
         await api.track_proposal(who, "00000000-0000-7000-8000-888888888888")
 
 
+async def test_agent_core_refuses_an_invalid_agent_id_or_a_long_title(world: BuilderWorld) -> None:
+    """agent-core's ``Proposal``: ``agent_id`` ``^[a-z0-9][a-z0-9_/-]*$``, ``title`` 1-200."""
+    api, who = builder(world), actor_for(SUPERVISOR)
+
+    with pytest.raises(RegistryValidationFailedError):
+        await api.create_proposal(who, agent_id="Quiero un agente para cobros", title="Uno")
+    with pytest.raises(RegistryValidationFailedError):
+        await api.create_proposal(who, agent_id="cobros", title="x" * 201)
+    assert (await api.create_proposal(who, agent_id="cobros", title="x" * 200)).agent_id == "cobros"
+
+
 async def test_operating_on_an_unknown_proposal_adds_it_to_the_list(world: BuilderWorld) -> None:
     api, who = builder(world), actor_for(SUPERVISOR)
     proposal_id = world.registry.seed_proposal(agent_id=AGENT, title="Del chat")
 
     await api.save_draft(who, proposal_id, expected_rev=0, changes=[draft()])
 
-    assert [p.proposal_id for p in await api.list_proposals(who)] == [proposal_id]
+    [listed] = (await api.list_proposals(who)).items
+    assert (listed.proposal_id, listed.source) == (proposal_id, "tracked")
 
 
 # ----------------------------------------------------------------------------- the audit

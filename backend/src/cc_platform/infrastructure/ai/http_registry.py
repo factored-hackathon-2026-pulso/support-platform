@@ -37,6 +37,7 @@ from cc_platform.application.ai.registry import (
     Proposal,
     ProposalDetail,
     ProposalOrigin,
+    ProposalPage,
     ProposalState,
     ReleaseDetail,
     ReleaseDiff,
@@ -322,6 +323,29 @@ class HttpAgentRegistry:
             json={"agent_id": agent_id, "origin": origin.value, "title": title},
         )
         return _proposal(data)
+
+    async def list_proposals(
+        self,
+        credentials: AgentCredentials,
+        *,
+        agent_id: str | None = None,
+        state: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ProposalPage:
+        params = {"limit": str(limit), "offset": str(offset)}
+        if agent_id is not None:
+            params["agent_id"] = agent_id
+        if state is not None:
+            params["state"] = state
+        data = await self._call("GET", "/proposals", credentials, params=params)
+        items = data.get("items") if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            raise AgentRuntimeUnavailableError("agent-core answered an unexpected body")
+        return ProposalPage(
+            items=tuple(_proposal(item) for item in items),
+            total=int(data.get("total", len(items))),
+        )
 
     async def get_proposal(
         self, credentials: AgentCredentials, *, proposal_id: str

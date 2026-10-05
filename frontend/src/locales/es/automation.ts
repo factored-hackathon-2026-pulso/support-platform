@@ -175,11 +175,15 @@ export default {
     notLive: 'Sin confirmar',
     notLiveTooltip: 'El registro no respondió: es el último estado que vimos.',
     loadError: 'No pudimos cargar las propuestas',
+    partialTitle: 'Solo ves las propuestas que la plataforma conoce',
+    partialText:
+      'El registro de agentes no entregó su lista. Si falta una propuesta, síguela por su id.',
     source: {
       platform: 'Creada aquí',
       chat: 'Del constructor',
       tracked: 'Seguida por id',
       engine: 'Del motor de mejora',
+      registry: 'Del registro',
       other: 'Otro origen',
     },
     state: {
@@ -194,7 +198,7 @@ export default {
     track: {
       label: 'Id de la propuesta',
       submit: 'Seguir',
-      hint: 'Para una propuesta que el constructor hizo sin nombrarla.',
+      hint: 'Trae a la lista una propuesta que ya existe en el registro.',
       notFound: 'El registro no tiene una propuesta con ese id.',
       done: 'La propuesta ya está en la lista',
     },
@@ -380,6 +384,26 @@ export default {
     proposalReady: 'Propuesta lista',
     openProposal: 'Abrir propuesta',
     loadError: 'No pudimos cargar la conversación',
+    request: {
+      title: 'Pedido para el constructor',
+      intro:
+        'El constructor pregunta primero qué agente y después qué cambiar: le respondemos en ese orden.',
+      agent: 'Agente',
+      agentHint: 'Su identificador: minúsculas, números y guiones.',
+      agentInvalid: 'Usa minúsculas, números, guiones o "/", y empieza por una letra o un número.',
+      goal: 'Objetivo',
+      goalHint: 'Será el título de la propuesta.',
+      goalCount: '{{count, number}} de {{max, number}}',
+      goalEmpty: 'Escribe qué debe hacer el agente.',
+      goalTooLong: 'El objetivo no puede pasar de {{max, number}} caracteres.',
+      submit: 'Enviar al constructor',
+      goalText:
+        'Atender los chats de "{{type}}" como lo hace el equipo y pasar a una persona lo que no pueda resolver.',
+      goalEvidence:
+        'El equipo envía {{asIs, number}} de {{drafts, number}} borradores del copiloto sin cambios o con cambios menores.',
+      stopped:
+        'El constructor no pidió el objetivo. Lee su respuesta: dejamos el objetivo en el mensaje por si quieres enviarlo.',
+    },
   },
   failure: {
     generic: 'No pudimos completar la acción. Vuelve a intentarlo.',

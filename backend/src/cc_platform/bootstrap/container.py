@@ -683,7 +683,14 @@ def _build_builder(
             builder=registry,
             agent=settings.builder_agent,
         ),
-        restart=RestartBuilderThread(uow=uow, clock=clock),
+        restart=RestartBuilderThread(
+            uow=uow,
+            clock=clock,
+            ids=ids,
+            runtime=agent_core.runtime,
+            issuer=agent_core.issuer,
+            agent=settings.builder_agent,
+        ),
         announce=AnnounceImprovement(uow=uow, clock=clock, builder=registry, writer=notifications),
     )
 

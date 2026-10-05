@@ -480,12 +480,14 @@ New feature `automation` (only `index.ts`: the shell needs nothing from it). Sup
   `draftBreakdown`, `moveBackOptions`, `agentIdFor`: the type's `agentId` or a suggested id), `proposals.ts`
   (states and steps, `proposalSource` incl. the improvement engine's `engine`, `changeView`, `draftTools`,
   `draftLanguages`, `suiteFor`, `reportView`, `describeBuilderFailure`), `agents.ts` (derived list, run status,
-  rollback and promotion targets), `builder-chat.ts` (`chatEntries`, `newAgentRequest`: Spanish on purpose, the
-  builder agent speaks only Spanish), `url.ts` (`?type=`).
+  rollback and promotion targets), `builder-chat.ts` (`chatEntries`; `agentRequest`, `isValidAgentId`, `fitGoal`,
+  `newProposals`: "Proponer un agente" in `constructor-chat`'s format, the agent id then a goal of at most
+  200 characters, in the UI language), `url.ts` (`?type=`).
 - **Hooks** (`hooks/use-automation.ts`): builder status, proposals (refetched on focus), one proposal, aliases,
   releases, versions, `useProposalStep` (validate, freeze, reopen, evaluate, approve, reject, publish),
   `useActivateAgent`, `useTrackProposal`, `usePromoteProd`, the chat (`useAskBuilder`: one at a time, retry with the
-  same `clientMessageId`; `useRestartBuilderChat`). Every step refreshes the proposal, the list, the aliases and the
+  same `clientMessageId`, `sendAndWait`; `useRestartBuilderChat`; `useProposeAgent`: the builder's two questions in
+  order, then the new proposal from the list). Every step refreshes the proposal, the list, the aliases and the
   stages.
 - **Screens**: `AutomationGate` (AI unknown → spinner, off → Colas), `AutomationFrame` (path, title, section links
   Tipos de caso · Agentes · Propuestas as `nav` + `aria-current`, the "Constructor de agentes" sheet any screen opens

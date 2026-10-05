@@ -1,0 +1,222 @@
+{
+  "$comment": "Extract of agent-core/contracts/registry-openapi.json (contract 1.4.0, registry API 1.0.0): the GET /v1/registry/proposals operation and the schemas it uses. Refresh with the version file.",
+  "info": {
+    "description": "Gobierno de artefactos: propuestas, evaluación, aprobación y publicación. Solo principales `builder` (spec del registry §8); aprobar, publicar, promover y revocar exigen una persona con step-up.",
+    "title": "agent-core registry",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/registry/proposals": {
+      "get": {
+        "description": "Más recientes primero. Solo lectura, para cualquier `builder`.",
+        "operationId": "listing_v1_registry_proposals_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProposalState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "created_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created By"
+            }
+          },
+          {
+            "description": "1 a 200; más grande se acota",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "1 a 200; más grande se acota",
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalPage"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Origin": {
+        "enum": [
+          "manual",
+          "builder_chat",
+          "auto_detect",
+          "import"
+        ],
+        "title": "Origin",
+        "type": "string"
+      },
+      "Proposal": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_id": {
+            "pattern": "^[a-z0-9][a-z0-9_/-]*$",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "base_release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Release Id"
+          },
+          "candidate_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Hash"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Origin"
+          },
+          "proposal_id": {
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "rev": {
+            "default": 0,
+            "title": "Rev",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ProposalState"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "agent_id",
+          "origin",
+          "state",
+          "base_release_id",
+          "title",
+          "created_by",
+          "updated_at"
+        ],
+        "title": "Proposal",
+        "type": "object"
+      },
+      "ProposalPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Proposal"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ProposalPage",
+        "type": "object"
+      },
+      "ProposalState": {
+        "enum": [
+          "draft",
+          "candidate",
+          "evaluated",
+          "approved",
+          "published"
+        ],
+        "title": "ProposalState",
+        "type": "string"
+      }
+    }
+  }
+}

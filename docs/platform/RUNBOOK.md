@@ -159,6 +159,21 @@ uv run python -m cc_platform.scripts.gen_agent_keys --suffix 2026-10
 4. Rotating: generate into a new `--out` with a new `--suffix`, publish both public files side by
    side (agent-core re-reads them every few seconds), switch `CC_AGENT_KEYS_FILE`, retire the old key.
 
+5. Loading the seed agents into a deployed agent-core (its registry starts empty): sign a
+   short-lived admin credential with the platform's **staff** key and use it at once (valid two
+   minutes, the step-up window):
+   ```bash
+   uv run python -m cc_platform.scripts.registry_admin_credential --staff-id <staff id>
+   ```
+   It prints one JWS for `AGENTCORE_CREDENTIAL` of `agentcore registry --verifier
+   agent_core.composition.registry:staff_verifier import <seed dir>` (agent-core verifies it with
+   the same `staff-keys.json`). Whoever reads `private.json` can sign anything: the script only
+   spares typing the claims.
+6. The copilot's run carries the case's assistant session (`input.assistant_session_id`, from
+   the case's `AssistantSession`), so agent-core's `obtener_handoff` and `leer_transcript` read the
+   conversation the analyst inherited; agent-core refuses it unless that session is about the same
+   customer as the delegation. A case that never had the assistant sends no input.
+
 `private.json` holds the seeds: never commit it; in a deployment it belongs in a secrets manager.
 `tests/contracts/agent-core-openapi.json` is a copy of agent-core's contract (`1.3.0`); refresh it and
 `agent-core-contract-version.txt` when agent-core's contract changes, and the contract test tells

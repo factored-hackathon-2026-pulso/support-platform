@@ -273,3 +273,18 @@ async def test_every_copilot_event_has_an_audit_description_and_never_the_text(
         assert describe(event, AuditNames()) != fallback_description(event.event_type)
         assert "pregunta con datos" not in repr(event.payload)
         assert "1.342" not in repr(event.payload)
+
+
+async def test_the_copilot_run_names_the_assistant_session_of_the_case(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    case_id = await case_with_daniela(world, runtime)
+    async with world.uow() as uow:
+        assistant = await uow.assistant_sessions.get_by_case(case_id)
+    assert assistant is not None
+    assert assistant.agent_session_id is not None
+    runtime.script.append(turn("Escaló por el monto.", agent="copiloto-asesor@1.0.0"))
+    await ask(world, case_id)
+    starts = [c for c in runtime.calls if c.operation == "start_run"]
+    assert len(starts) == 1
+    assert starts[0].arguments["input"] == {"assistant_session_id": assistant.agent_session_id}

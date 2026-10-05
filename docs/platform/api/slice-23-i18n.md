@@ -1,8 +1,9 @@
 # Slice 23 · The platform in Spanish and Brazilian Portuguese
 
-**Status:** 23a (foundation) implemented (2026-10-04) on `feat/i18n-foundation`. 23b and 23c planned (§6).
-Gates in `../ENGINEERING_BRIEF.md` §6.
-**Date:** 2026-10-04.
+**Status:** 23a (foundation) implemented (2026-10-04) on `feat/i18n-foundation`. 23b (the areas)
+implemented (2026-10-05) on `feat/i18n-areas` (the seven area branches merged on top of 23a, then the
+cross-area pass, §8). 23c planned (§9). Gates in `../ENGINEERING_BRIEF.md` §6.
+**Date:** 2026-10-04 (23a), 2026-10-05 (23b).
 
 **Scope.** The platform UI (the staff app: analyst, Supervisión, Administración, sign-in and onboarding) in
 **es** and **pt-BR**, chosen by each person in the account menu and kept on her profile (ADR 0008). Chat
@@ -18,8 +19,8 @@ Read first: `../ENGINEERING_BRIEF.md` (it wins), `../adr/0008-platform-i18n.md` 
 | Phase | What | State |
 |---|---|---|
 | **23a** | Foundation: i18next, catalogs and types, the format layer, the preference (API + account menu + pre-login detection), the guard rails, and the shared layer migrated (shell, rail, account menu, role names, `components/ui`, toasts and generic errors, session and route-error screens, not found, sign-in, MFA, lockout, invitation, reset, dev mailbox, "Plataforma"). | done |
-| **23b** | The areas, in parallel, one agent per area (§5): each moves its copy to its namespace, adds pt-BR tests of its screens and deletes its block from the allow-list. | planned |
-| **23c** | Server-rendered texts in the person's language (audit descriptions, notifications, problem `title`/`detail`, emails: the server reads `ui_language_of`; emails to a person not yet signed in use the inviter's choice or a stored one), the customer simulator folded into `customer` (with `getFixedT`, behaviour unchanged), and a Portuguese pass of the browser e2e. | planned |
+| **23b** | The areas, in parallel, one agent per area (§5): each moves its copy to its namespace, adds pt-BR tests of its screens and deletes its block from the allow-list. Then the cross-area pass (§8): shared vocabulary loaded with every screen that shows it, the simulator's bubble authors in the customer's language, the pt-BR terminology, a cold-load test and a Portuguese browser scenario. The customer simulator moved to `customer` here (with `getFixedT`). | done |
+| **23c** | Server-rendered texts in the person's language (§9). | planned |
 
 ## 2. The preference (API)
 
@@ -75,7 +76,7 @@ person speaks with customers, `es` | `pt`). Default `es`.
 - e2e: `e2e/i18n.spec.ts` (a throwaway admin switches to Português on "Plataforma": the rail, the menu and the
   screen change, `<html lang>`, the tab title; a reload keeps it; signed out, the login is in Portuguese).
 
-## 5. The areas left for 23b
+## 5. The areas of 23b (as split; all migrated)
 
 Rough counts from `I18N_REPORT=1` at the end of 23a (prose-like literals, `.ts` included; a few are technical
 noise). Suggested split for parallel agents, each on its own branch, each editing only its namespace, its
@@ -96,16 +97,77 @@ Shared vocabulary that several areas show (case status words, priority, channel,
 switch language by themselves once migrated, because they read `i18n.t` at call time). The route modules
 (`src/routes/*`) have no copy left.
 
-## 6. Done when (23b, per area)
+## 6. Done when (23b, per area): met by every area
 
 - No block of the area in `i18n-allowlist.ts`; `pnpm test` green (the guard, the catalogs test).
 - Every screen of the area has a render test in pt-BR (`renderRoute(…, { locale: 'pt-BR' })`).
 - Spanish copy unchanged (the existing tests still pass untouched, except imports of renamed copy constants).
 - No `joinEs` / `pluralize` left in the area (use `formatList` and catalog plurals).
 
-## 7. Known gaps (after 23a)
+## 7. Known gaps (after 23b)
 
-- Server-rendered texts are Spanish (audit "Qué hizo", notifications, problem details, emails) until 23c.
-- The customer simulator page around the phone frame and its own copy are not in the catalogs until 23b/23c.
+- Server-rendered texts are Spanish in a pt-BR UI until 23c (§9).
 - `es` and `pt-BR` only. CLDR also has a `many` plural category for large round numbers (1 000 000); catalogs
   write `_one` and `_other`, so such a count would show the key; no screen counts that high.
+
+## 8. 23b: the cross-area pass (2026-10-05)
+
+After the merge of the seven area branches (`feat/i18n-{audit,supervision,cases,copilot,customer,admin,
+conversation}`; the allow-list is empty):
+
+- **Shared vocabulary loads with the screen.** A model that calls another area's helper reads that
+  namespace at call time; when it is not loaded yet (a deep link on a first visit, before the background
+  prefetch arrives) i18next prints the key and nothing re-renders when it arrives. Every `supervision` and
+  `notifications` component that reads its own namespace now loads `cases` and `conversation` with it
+  (case vocabulary; language and queue names), the `home` components and the Workspace load `cases`; `conversation` and the
+  `cases` components already did. Rule in `frontend/ARCHITECTURE.md` §12.
+- **Whole sentences.** The supervision and notification sentences around a language name ("Casos
+  abiertos en {{language}}", "Nadie con ese nombre habla {{language}}.", "(regla 3)", "Un caso espera en
+  la cola en {{language}}") are whole catalog keys with the language as a parameter; `countryName` and
+  `channelFact` read `cases`. Spanish output unchanged.
+- **The simulator's bubble authors** follow the customer's language: "{{name}}, de LATAM Bank" / "{{name}},
+  do LATAM Bank" (`customer:chat.bankAuthor`), and the fallback assistant name "Asistente virtual" /
+  "Assistente virtual" (`customer:assistant.name`); `toChatItems(cache, language)`.
+- **Terminology** in the pt-BR catalogs (checked across all namespaces): atribuir / reatribuir, assumir o
+  caso, sem responsável, escalonamento (verb escalar), fila, encerrar / encerrado (a case; "Fechar" only
+  closes a panel), Status, A responder, transferência, perfil, convite, Assistente virtual.
+- **`pluralize` and `joinEs`** (Spanish-only) are gone from `lib/format.ts`: nothing used them.
+- **Tests.** `src/test/i18n-cold-load.test.tsx`: Início, a case in Casos, a case under supervision, Filas,
+  Equipe, Escalados, Auditoria, Usuários e perfis and a team in Equipes, each a deep link in pt-BR with
+  only `common` and `shell` loaded (`src/test/cold-catalogs.ts`), asserting no catalog key on screen
+  (before the fix: Início, Filas and Escalados printed `status.*`, `channel.*`, `languageName.*`,
+  `queueLabel.*`, `escalation.*` keys). `e2e/i18n.spec.ts` adds a scenario: a person with the three roles
+  switches to Português; Início (she starts working, a Portuguese customer's case arrives), the case in
+  Casos (and after a reload, a cold start), Supervisão Filas / Equipe / Escalados / Auditoria,
+  Administração Usuários e perfis / Equipes / Plataforma; Portuguese headings and no key on any of them.
+- **Gates (2026-10-05):** backend `ruff check`, `ruff format --check` (410 files), `mypy src` (286 files),
+  `pytest` 1567 passed, `export_openapi --check` clean (no backend change in 23b); frontend `typecheck`,
+  `lint`, `format:check`, `test` 1206 passed in 124 files, `build` (feature catalogs only in lazy chunks),
+  `check:api`; `pnpm e2e` 18/18 twice in a row.
+
+**Spanish still reaching a pt-BR screen (on purpose or for 23c).** Data: names, team names ("Equipo
+Andes"), case subjects, the escalation motive, messages and the customer notices (chat content is in the
+case language, never translated). Languages by their own name ("Español", "Português"). Server texts
+(§9): the audit's "Qué hizo" ("Reasignó el caso de …"), the staff-only system lines of the transcript
+("Asignado a Daniela Ríos porque está disponible y habla español."), the dev mailbox's emails.
+
+## 9. 23c: what is left (server-rendered texts)
+
+The server reads the viewer's `ui_language_of` (or, for an email to someone not signed in yet, the inviter's
+choice or a stored one) and renders:
+
+- **Audit descriptions** ("Qué hizo", the `description` of each audit event): Spanish sentences built when
+  the log is read (`application/audit/queries.py`).
+- **Staff-only transcript lines** (`routing` / `system` turns: assigned on arrival, from the queue, by
+  supervision, reassigned, escalated / withdrawn / answered / taken, released by the assistant, follow-up
+  call), `application/cases/copy.py`: written once in Spanish and stored, so each viewer's language needs
+  the facts kept with the turn (or the event) and the sentence rendered on read. Customer notices keep the
+  case language.
+- **Problem details** (`title` / `detail` of every `application/problem+json`): the SPA shows its own copy
+  per `code`, so this is for API consumers and logs; low priority.
+- **Emails** (invitation, password reset; the dev mailbox shows them): subject and body.
+- The audit row of a language change ("Cambió el idioma de la plataforma a Português") follows the audit
+  descriptions.
+
+Notifications need nothing: the API sends no text, the SPA builds their copy from the kind (`notifications`
+namespace).

@@ -333,6 +333,7 @@ async def test_every_emitted_event_has_a_description() -> None:
         "case.assistant_started",
         "case.assistant_released",
         "copilot.tool_used",  # slice 21: needs a suggestion (``test_maturity.py``)
+        "case.handoff_rated",  # catalog 1.3.0: needs an assistant handoff (API tests)
         *(
             event.event_type
             for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS, *SUGGESTION_EVENTS, *BUILDER_EVENTS)

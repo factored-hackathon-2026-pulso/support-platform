@@ -43,6 +43,7 @@ from cc_platform.application.security import Actor
 from cc_platform.domain.people.preferences import DEFAULT_UI_LANGUAGE, UiLanguage
 from cc_platform.domain.shared.actor import ActorRole
 from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
+from cc_platform.domain.shared.events import SCHEMA_VERSION_KEY
 from cc_platform.domain.shared.json import JsonObject
 
 DEFAULT_AUDIT_PAGE = 50
@@ -130,10 +131,12 @@ class AuditEventPageView:
 
 def redact(event_type: str, payload: JsonObject) -> tuple[JsonObject, tuple[str, ...]]:
     """Remove message text (contract §5.4) and rating comments (slice 7); ``<key>_length``
-    keeps their size (0 for none)."""
+    keeps their size (0 for none). ``schema_version`` (event catalog metadata) is not an
+    event detail: the audit leaves it out."""
+    payload = {k: v for k, v in payload.items() if k != SCHEMA_VERSION_KEY}
     keys = tuple(key for key in REDACTED_TEXT.get(event_type, ()) if key in payload)
     if not keys:
-        return dict(payload), ()
+        return payload, ()
     redacted = {k: v for k, v in payload.items() if k not in keys}
     for key in keys:
         value = payload[key]

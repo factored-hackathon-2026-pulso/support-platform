@@ -141,6 +141,7 @@ FAMILY: Mapping[str, AuditFamily] = {
     "ai.stage_moved_back": AuditFamily.AGENTS,
     "ai.agent_ready": AuditFamily.AGENTS,
     "ai.agent_activated": AuditFamily.AGENTS,
+    "ai.agent_renamed": AuditFamily.AGENTS,
     # the AI switch (slice 18): a platform-wide setting of Administración
     "platform.ai_toggled": AuditFamily.ADMINISTRATION,
     # …and what the person does with the link (her own access)
@@ -182,6 +183,7 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "ai.stage_moved_back",
         "ai.agent_ready",
         "ai.agent_activated",
+        "ai.agent_renamed",
         "escalation.opened",
         "escalation.withdrawn",
         "escalation.answered",
@@ -731,6 +733,7 @@ _DESCRIBERS: Mapping[str, Describer] = {
     "ai.stage_moved_back": _stage_moved_back,
     "ai.agent_ready": _about_type("audit.stage.agentReady"),
     "ai.agent_activated": _about_type("audit.stage.agentActivated"),
+    "ai.agent_renamed": _about_type("audit.stage.agentRenamed"),
     # slice 16: the agent builder (the audit never shows a draft, a reason or a chat text)
     "builder.proposal_created": _fixed("audit.builder.proposalCreated"),
     "builder.proposal_tracked": _fixed("audit.builder.proposalTracked"),

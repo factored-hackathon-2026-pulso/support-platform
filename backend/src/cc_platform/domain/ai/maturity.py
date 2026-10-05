@@ -35,6 +35,7 @@ from enum import IntEnum, StrEnum
 from cc_platform.domain.ai.maturity_events import (
     CaseTypeAgentActivated,
     CaseTypeAgentReady,
+    CaseTypeAgentRenamed,
     CaseTypeStageAdvanced,
     CaseTypeStageMovedBack,
 )
@@ -214,6 +215,8 @@ class CaseTypeMaturity(AggregateRoot):
     agent_since: datetime | None = None
     agent_id: str | None = None
     """The agent-core agent that serves the type (set when Supervisión activates it, slice 22)."""
+    agent_name: str | None = None
+    """The name shown for that agent (ADR 0009; ``None``: the screens humanize the id)."""
     changed_at: datetime | None = None
     changed_by_id: str | None = None
     """Who made the last change (``None``: the system, by the rule)."""
@@ -312,6 +315,7 @@ class CaseTypeMaturity(AggregateRoot):
         self.agent = AgentStatus.NONE
         self.agent_since = None
         self.agent_id = None
+        self.agent_name = None
         self.stage_since = {k: v for k, v in self.stage_since.items() if k <= int(to_stage)}
         self.signals = StageSignals()
         self._changed(StageChange.MOVED_BACK, actor.actor_id, at)
@@ -354,6 +358,27 @@ class CaseTypeMaturity(AggregateRoot):
         self._changed(StageChange.AGENT_ACTIVE, actor.actor_id, at)
         self._record(
             CaseTypeAgentActivated(
+                occurred_at=at,
+                actor=actor,
+                entity_id=self.case_type.value,
+                case_type=self.case_type.value,
+                agent_id=self.agent_id,
+            )
+        )
+        return True
+
+    def rename_agent(self, name: str, *, actor: ActorRef, at: datetime) -> bool:
+        """Supervisión names the agent that serves the type (ADR 0009). False: nothing changed."""
+        clean = " ".join(name.split())
+        if not clean or len(clean) > 80:
+            raise InvalidValueError("The agent's name takes 1 to 80 characters.", field="name")
+        if self.agent is not AgentStatus.ACTIVE or self.agent_id is None:
+            raise InvalidTransitionError("The type has no agent to name.")
+        if clean == self.agent_name:
+            return False
+        self.agent_name = clean
+        self._record(
+            CaseTypeAgentRenamed(
                 occurred_at=at,
                 actor=actor,
                 entity_id=self.case_type.value,

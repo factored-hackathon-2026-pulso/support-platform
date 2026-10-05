@@ -16,6 +16,7 @@ import structlog
 from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
+from cc_platform.application.ai.agents import AgentCatalogUseCases, GetAgents, RenameAgent
 from cc_platform.application.ai.announce import AnnounceImprovement
 from cc_platform.application.ai.builder import AgentBuilder
 from cc_platform.application.ai.builder_chat import (
@@ -1061,6 +1062,10 @@ def build_container(
                     else None
                 ),
             ),
+        ),
+        agent_catalog=AgentCatalogUseCases(
+            agents=GetAgents(uow=uow, switch=ai_switch),
+            rename=RenameAgent(uow=uow, clock=clock, switch=ai_switch),
         ),
         assistant=assistant_use_cases,
     )

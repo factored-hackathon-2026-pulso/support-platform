@@ -629,6 +629,72 @@
         "title": "AdminUserList",
         "type": "object"
       },
+      "AgentResults": {
+        "properties": {
+          "active": {
+            "description": "…still open.",
+            "title": "Active",
+            "type": "integer"
+          },
+          "handedToPeople": {
+            "description": "Escalated, ended without a resolution, failed or taken by Supervisión.",
+            "title": "Handedtopeople",
+            "type": "integer"
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "integer"
+          },
+          "sessions": {
+            "description": "Assistant sessions whose last answering agent it was.",
+            "title": "Sessions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sessions",
+          "active",
+          "resolved",
+          "handedToPeople"
+        ],
+        "title": "AgentResults",
+        "type": "object"
+      },
+      "AgentRow": {
+        "properties": {
+          "agentId": {
+            "title": "Agentid",
+            "type": "string"
+          },
+          "caseType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The type it serves; null: serves none."
+          },
+          "displayName": {
+            "description": "Supervisión's name for it, or the id humanized.",
+            "title": "Displayname",
+            "type": "string"
+          },
+          "results": {
+            "$ref": "#/components/schemas/AgentResults"
+          }
+        },
+        "required": [
+          "agentId",
+          "displayName",
+          "caseType",
+          "results"
+        ],
+        "title": "AgentRow",
+        "type": "object"
+      },
       "AgentStatus": {
         "enum": [
           "none",
@@ -637,6 +703,28 @@
         ],
         "title": "AgentStatus",
         "type": "string"
+      },
+      "AiAgents": {
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/AgentRow"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "available": {
+            "description": "false while the AI switch is off (`agents` is empty).",
+            "title": "Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "agents"
+        ],
+        "title": "AiAgents",
+        "type": "object"
       },
       "AiStages": {
         "properties": {
@@ -2730,6 +2818,18 @@
             "description": "agent-core's id of the agent that serves the type (set while `agent` is `active`, slice 22).",
             "title": "Agentid"
           },
+          "agentName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name Supervisión gave the agent (ADR 0009); null: show the humanized id.",
+            "title": "Agentname"
+          },
           "agentSince": {
             "anyOf": [
               {
@@ -2798,6 +2898,7 @@
           "reached",
           "agentSince",
           "agentId",
+          "agentName",
           "lastChange",
           "version"
         ],
@@ -7824,6 +7925,22 @@
         "title": "ReleaseSettingChange",
         "type": "object"
       },
+      "RenameAgentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RenameAgentRequest",
+        "type": "object"
+      },
       "RenameTeamRequest": {
         "additionalProperties": false,
         "properties": {
@@ -11251,6 +11368,53 @@
         "summary": "Unlock a locked account (resets the failed-attempt counter)",
         "tags": [
           "administration"
+        ]
+      }
+    },
+    "/api/v1/ai/agents": {
+      "get": {
+        "description": "ADR 0009. One row per agent that serves a case type or has held an assistant session: `displayName` (Supervisión's name, else the id humanized), the type it serves and its results (sessions, still open, resolved, handed to people), counted from the assistant sessions by their last answering agent. AI off: `available: false`.",
+        "operationId": "ai-stages_get_ai_agents",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAgents"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The agents the platform knows: name to show and results (analysts and Supervisión)",
+        "tags": [
+          "ai-stages"
         ]
       }
     },
@@ -20136,6 +20300,98 @@
           }
         ],
         "summary": "Activate the agent of a case type (Supervisión)",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/stages/{caseType}/agent/name": {
+      "put": {
+        "description": "ADR 0009. 1 to 80 characters. 404 `not_found`: the type has no agent; 404 `assistant_disabled`: AI off. Audited (`ai.agent_renamed`, without the name), live on `ai:stages`.",
+        "operationId": "ai-stages_rename_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseType",
+            "required": true,
+            "schema": {
+              "examples": [
+                "undue_charge"
+              ],
+              "maxLength": 40,
+              "title": "Casetype",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseTypeStage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Name the agent that serves a case type (Supervisión)",
         "tags": [
           "ai-stages"
         ]

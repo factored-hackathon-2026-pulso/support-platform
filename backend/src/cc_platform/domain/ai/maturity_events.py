@@ -63,6 +63,18 @@ class CaseTypeAgentActivated(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CaseTypeAgentRenamed(DomainEvent):
+    """Supervisión changed the name the platform shows for the agent of the type (ADR 0009). The
+    name itself is not in the payload (free text); ``agent_id`` is agent-core's id."""
+
+    event_type = "ai.agent_renamed"
+    entity = "case_type"
+
+    case_type: str
+    agent_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CopilotToolUsed(DomainEvent):
     """The analyst used a ``tool`` the copilot proposed ("Usar" in Herramientas)."""
 
@@ -78,6 +90,7 @@ STAGE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseTypeStageMovedBack,
     CaseTypeAgentReady,
     CaseTypeAgentActivated,
+    CaseTypeAgentRenamed,
 )
 
 #: Every event of the maturity model (the stage changes and the tool feedback).

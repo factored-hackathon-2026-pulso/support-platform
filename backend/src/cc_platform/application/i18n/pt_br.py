@@ -150,6 +150,7 @@ CATALOG: Final[Mapping[str, str]] = {
     "audit.stage.proposalWithdrawn": "Retirou a proposta de agente de {type}",
     "audit.stage.agentReady": "Propôs um agente para {type}",
     "audit.stage.agentActivated": "Ativou o agente de {type}",
+    "audit.stage.agentRenamed": "Mudou o nome do agente de {type}",
     # the agent builder
     "audit.builder.proposalCreated": "Criou uma proposta de mudança de um agente",
     "audit.builder.proposalTracked": "Adicionou uma proposta do construtor à lista",

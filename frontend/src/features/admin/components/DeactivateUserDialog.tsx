@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { supervisionAnalystPath } from '@/app/paths'
 import { Button, Callout, Dialog, LinkButton } from '@/components/ui'
-import { DEACTIVATE_CONSEQUENCES, deactivateBlockedCopy } from '../model'
+import { useTranslation } from '@/lib/i18n'
+import { deactivateBlockedCopy, deactivateConsequences } from '../model'
 import { useDeactivateUser, useFailureHandler, useRecheckAdminUser } from '../hooks'
 import type { AdminUser, AdminUserChange } from '../types'
 
@@ -29,6 +30,7 @@ export function DeactivateUserDialog({
   const deactivate = useDeactivateUser(user.id)
   const handleFailure = useFailureHandler()
   const [error, setError] = useState<string | null>(null)
+  const { t } = useTranslation('admin')
   const checking = useRecheckAdminUser(user.id)
   const blocked = !checking && user.openCases.total > 0
 
@@ -47,11 +49,11 @@ export function DeactivateUserDialog({
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title={`¿Desactivar la cuenta de ${user.name}?`}
+      title={t('deactivateDialog.title', { name: user.name })}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button
             variant="danger"
@@ -59,13 +61,13 @@ export function DeactivateUserDialog({
             loading={deactivate.isPending}
             onClick={confirm}
           >
-            Desactivar cuenta
+            {t('person.deactivate')}
           </Button>
         </>
       }
     >
       <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-14 text-ink-2">
-        {DEACTIVATE_CONSEQUENCES.map((line) => (
+        {deactivateConsequences().map((line) => (
           <li key={line}>{line}</li>
         ))}
       </ul>
@@ -76,7 +78,7 @@ export function DeactivateUserDialog({
           actions={
             canOpenSupervision ? (
               <LinkButton size="sm" variant="secondary" to={supervisionAnalystPath(user.id)}>
-                Ver en Equipo
+                {t('deactivateDialog.openTeam')}
               </LinkButton>
             ) : null
           }

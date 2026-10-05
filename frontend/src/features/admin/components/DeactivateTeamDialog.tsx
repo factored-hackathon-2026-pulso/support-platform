@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button, Callout, Dialog } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { useDeactivateTeam, useFailureHandler } from '../hooks'
 import type { AdminTeam } from '../types'
 
@@ -14,6 +15,7 @@ export function DeactivateTeamDialog({ team, onClose, onDone }: DeactivateTeamDi
   const deactivate = useDeactivateTeam(team.id)
   const handleFailure = useFailureHandler()
   const [error, setError] = useState<string | null>(null)
+  const { t } = useTranslation('admin')
 
   function confirm() {
     setError(null)
@@ -30,21 +32,19 @@ export function DeactivateTeamDialog({ team, onClose, onDone }: DeactivateTeamDi
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title={`¿Desactivar el equipo ${team.name}?`}
+      title={t('team.deactivateTitle', { name: team.name })}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button variant="danger" loading={deactivate.isPending} onClick={confirm}>
-            Desactivar equipo
+            {t('team.deactivate')}
           </Button>
         </>
       }
     >
-      <p className="m-0 text-14 text-ink-2">
-        Ya no se podrá mover a nadie a este equipo. Su historial se conserva.
-      </p>
+      <p className="m-0 text-14 text-ink-2">{t('team.deactivateText')}</p>
       {error ? <Callout tone="danger">{error}</Callout> : null}
     </Dialog>
   )

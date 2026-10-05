@@ -1,4 +1,5 @@
 import { Status } from '@/components/ui'
+import { useActiveLocale } from '@/lib/i18n'
 import { ACCOUNT_STATUS, accountStatusAt, lockedUntilTitle } from '../model'
 import type { AdminUser } from '../types'
 
@@ -14,6 +15,7 @@ export interface AccountStatusTextProps {
  * ticking clock: an expired lock reads "Activa".
  */
 export function AccountStatusText({ user, now, className }: AccountStatusTextProps) {
+  useActiveLocale()
   const status = accountStatusAt(user, now)
   return (
     <Status

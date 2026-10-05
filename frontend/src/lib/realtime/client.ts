@@ -12,6 +12,15 @@
  * - Close code 4401 (token rejected, session ended or expired), 4403 and 1008
  *   stop reconnecting and call `onAuthError` (the session then ends and the user
  *   goes to /login). 1013 ("try again later") and network drops reconnect.
+ * - Close code 1012 (the API is restarting: graceful shutdown or deploy) is a
+ *   normal unexpected close: reconnect with backoff, to the restarted process.
+ * - Liveness: the server sends a `heartbeat` every `data.intervalSeconds`. After
+ *   the first one, a socket that stays silent for `staleAfterBeats` intervals is
+ *   presumed dead (a half-open TCP connection after a network change or a
+ *   proxy restart never fires `onclose`) and is replaced. Heartbeats never
+ *   reach the listeners.
+ * - `retryNow()` skips a pending backoff (the browser came back online or the
+ *   tab became visible again): the user should not wait up to 15 s.
  * - Close code 4409 (`access_changed`: an admin changed this person's roles) is
  *   not an auth error: the token is still valid, so the client reconnects at
  *   once (no backoff) and tells the `onAccessChanged` listeners, which reload
@@ -35,6 +44,11 @@ export const AUTH_CLOSE_CODES: ReadonlySet<number> = new Set([1008, 4401, 4403])
 
 /** The person's roles changed (slice-4-administration.md §9.3): reconnect now, reload the session. */
 export const ACCESS_CHANGED_CLOSE_CODE = 4409
+
+/** Close code the client uses for a socket it presumes dead (no heartbeat). */
+export const STALE_CLOSE_CODE = 4000
+
+const HEARTBEAT = 'heartbeat'
 
 /** Minimal WebSocket surface the client needs (the browser one, or a fake in tests). */
 export interface WebSocketLike {
@@ -64,6 +78,8 @@ export interface RealtimeClientOptions {
   onAuthError?: () => void
   /** How many recent envelope keys to remember for dedupe (default 512). */
   dedupeWindow?: number
+  /** Missed heartbeats before the socket counts as dead (default 3). */
+  staleAfterBeats?: number
 }
 
 type EnvelopeListener = (envelope: RealtimeEnvelope) => void
@@ -76,6 +92,9 @@ export class RealtimeClient {
   private status: ConnectionStatus = 'idle'
   private attempt = 0
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  /** Armed once the server announced its heartbeat interval; reset by every frame. */
+  private staleTimer: ReturnType<typeof setTimeout> | null = null
+  private heartbeatMs: number | null = null
   /** Set by `disconnect()`: an intentional close must not reconnect. */
   private stopped = true
   private readonly topicRefs = new Map<RealtimeTopic, number>()
@@ -105,10 +124,21 @@ export class RealtimeClient {
     this.open()
   }
 
+  /**
+   * Reconnect now instead of waiting for the pending backoff (no-op unless a
+   * reconnect is scheduled), e.g. when the browser comes back online.
+   */
+  retryNow(): void {
+    if (this.stopped || !this.reconnectTimer) return
+    this.clearReconnectTimer()
+    this.open(true)
+  }
+
   /** Closes the socket for good (sign out, unmount). Subscriptions are kept for a later connect. */
   disconnect(): void {
     this.stopped = true
     this.clearReconnectTimer()
+    this.clearStaleTimer()
     const socket = this.socket
     this.socket = null
     if (socket) {
@@ -185,8 +215,13 @@ export class RealtimeClient {
       for (const topic of this.activeTopics()) this.send({ action: 'subscribe', topic })
     }
     socket.onmessage = (event) => {
+      this.armStaleTimer(socket)
       const envelope = parseEnvelope(event.data)
       if (!envelope) return
+      if (envelope.type === HEARTBEAT) {
+        this.noteHeartbeat(envelope.data, socket)
+        return
+      }
       if (!isControlEnvelope(envelope) && !this.seen.add(envelopeKey(envelope))) return
       for (const listener of this.envelopeListeners) listener(envelope)
     }
@@ -197,6 +232,7 @@ export class RealtimeClient {
       if (this.socket !== socket) return
       this.detach(socket)
       this.socket = null
+      this.clearStaleTimer()
       if (this.stopped) {
         this.setStatus('closed')
         return
@@ -228,6 +264,37 @@ export class RealtimeClient {
       this.reconnectTimer = null
       if (!this.stopped) this.open()
     }, delay)
+  }
+
+  /** The server's heartbeat interval: from now on, silence means a dead socket. */
+  private noteHeartbeat(data: unknown, socket: WebSocketLike): void {
+    const seconds = (data as { intervalSeconds?: unknown } | null)?.intervalSeconds
+    if (typeof seconds !== 'number' || !(seconds > 0)) return
+    this.heartbeatMs = seconds * 1000
+    this.armStaleTimer(socket)
+  }
+
+  private armStaleTimer(socket: WebSocketLike): void {
+    if (this.heartbeatMs === null) return
+    this.clearStaleTimer()
+    const beats = this.options.staleAfterBeats ?? 3
+    this.staleTimer = setTimeout(() => this.replaceStale(socket), this.heartbeatMs * beats)
+  }
+
+  /** No frame for several heartbeats: drop the socket and reconnect right away. */
+  private replaceStale(socket: WebSocketLike): void {
+    this.staleTimer = null
+    if (this.socket !== socket || this.stopped) return
+    this.detach(socket)
+    this.socket = null
+    socket.close(STALE_CLOSE_CODE, 'stale')
+    this.attempt = 0
+    this.open(true)
+  }
+
+  private clearStaleTimer(): void {
+    if (this.staleTimer) clearTimeout(this.staleTimer)
+    this.staleTimer = null
   }
 
   private clearReconnectTimer(): void {

@@ -76,13 +76,16 @@ export type ClientMessage =
 
 /**
  * Control envelopes the server sends besides domain events: `welcome` on connect,
- * `subscribed` / `unsubscribed` acks, `pong`, and `error` (`data.code`, e.g. forbidden topic).
+ * `subscribed` / `unsubscribed` acks, `pong`, `heartbeat` (every
+ * `data.intervalSeconds` while connected, keeps the edge from closing an idle
+ * socket) and `error` (`data.code`, e.g. forbidden topic).
  */
 export const CONTROL_ENVELOPE_TYPES = [
   'welcome',
   'subscribed',
   'unsubscribed',
   'pong',
+  'heartbeat',
   'error',
 ] as const
 export type ControlEnvelopeType = (typeof CONTROL_ENVELOPE_TYPES)[number]

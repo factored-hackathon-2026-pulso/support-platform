@@ -1059,8 +1059,7 @@ in its dependencies.
 
 **Interpolation and plurals.** `{{name}}` placeholders (React escapes; never concatenate translated pieces:
 the word order differs). Plurals by `count`: write `key_one` and `key_other` in both languages and call
-`t('key', { count })`; numbers in the text as `{{count, number}}` ("4.412"). Lists with `formatList` (not
-`joinEs`). Rich text (a link inside a sentence): `<Trans>` with components, or split the sentence in two
+`t('key', { count })`; numbers in the text as `{{count, number}}` ("4.412"). Lists with `formatList`. Rich text (a link inside a sentence): `<Trans>` with components, or split the sentence in two
 keys around the element as `LoginScreen` does with its dev-mailbox link.
 
 **Formatting.** Dates, times, relative times, numbers and money only through `lib/format.ts` (it follows the

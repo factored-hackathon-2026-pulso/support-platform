@@ -76,7 +76,11 @@ FAMILY: Mapping[str, AuditFamily] = {
     "copilot.suggestion_none": AuditFamily.CONVERSATION,
     "copilot.suggestion_failed": AuditFamily.CONVERSATION,
     "copilot.suggestion_decided": AuditFamily.CONVERSATION,
+    "copilot.suggestion_shown": AuditFamily.CONVERSATION,
+    "copilot.suggestion_ignored": AuditFamily.CONVERSATION,
     "copilot.tool_used": AuditFamily.CONVERSATION,
+    # catalog 1.3.0: how useful the assistant's handoff was, said when closing
+    "case.handoff_rated": AuditFamily.LIFECYCLE,
     # the agent builder (slice 16): who changed which agent, and who approved and published it
     "builder.proposal_created": AuditFamily.AGENTS,
     "builder.proposal_tracked": AuditFamily.AGENTS,
@@ -457,9 +461,20 @@ _SUGGESTION_DECISIONS = frozenset({"used", "edited", "discarded", "ignored"})
 
 def _suggestion_decided(event: StoredEvent, _names: AuditNames, t: Texts) -> str:
     if _text(event.payload, "subject") == "escalation":
+        if _text(event.payload, "decision") == "dismissed":
+            return t("audit.suggestion.escalationDismissed")
         return t("audit.suggestion.escalation")
     decision = _text(event.payload, "decision")
     return t(f"audit.suggestion.{decision if decision in _SUGGESTION_DECISIONS else 'other'}")
+
+
+#: ``case.handoff_rated`` qualities with their own words.
+_HANDOFF_QUALITIES = frozenset({"useful", "incomplete", "unnecessary"})
+
+
+def _handoff_rated(event: StoredEvent, _names: AuditNames, t: Texts) -> str:
+    quality = _text(event.payload, "quality")
+    return t(f"audit.handoffRated.{quality if quality in _HANDOFF_QUALITIES else 'other'}")
 
 
 # --------------------------------------------------------------------------- stages (slice 21)
@@ -725,7 +740,10 @@ _DESCRIBERS: Mapping[str, Describer] = {
     "copilot.suggestion_none": _fixed("audit.copilot.suggestionNone"),
     "copilot.suggestion_failed": _fixed("audit.copilot.suggestionFailed"),
     "copilot.suggestion_decided": _suggestion_decided,
+    "copilot.suggestion_shown": _fixed("audit.copilot.suggestionShown"),
+    "copilot.suggestion_ignored": _fixed("audit.copilot.suggestionIgnored"),
     "copilot.tool_used": _fixed("audit.copilot.toolUsed"),
+    "case.handoff_rated": _handoff_rated,
     # slice 21: the stages per case type (the rule's steps are the system's)
     "ai.stage_advanced": _stage_advanced,
     "ai.stage_moved_back": _stage_moved_back,

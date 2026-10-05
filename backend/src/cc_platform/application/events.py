@@ -6,7 +6,8 @@ ingested_at). It is what the Unit of Work appends to the event log and what the 
 delivers to subscribers.
 
 ``StoredEvent`` is the same row read back from the log (the original Python event class is
-not reconstructed: readers work with the flat, contract-shaped row).
+not reconstructed: readers work with the flat, contract-shaped row). Rows written since event
+catalog 1.3.0 carry ``schema_version`` in their payload; older rows do not.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from cc_platform.domain.shared.events import DomainEvent
+from cc_platform.domain.shared.events import SCHEMA_VERSION_KEY, DomainEvent
 from cc_platform.domain.shared.json import JsonObject
 
 
@@ -53,7 +54,9 @@ class EventRecord:
         return self.event.actor.actor_id
 
     def payload(self) -> JsonObject:
-        return self.event.payload()
+        """The event's payload plus its type's ``schema_version`` (event catalog 1.3.0): what
+        the event log stores and the sockets carry."""
+        return {**self.event.payload(), SCHEMA_VERSION_KEY: self.event.schema_version}
 
 
 @dataclass(frozen=True, slots=True)

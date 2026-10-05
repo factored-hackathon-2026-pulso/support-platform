@@ -165,8 +165,10 @@ class CopilotThread(AggregateRoot):
         trace_id: str,
         status: str,
         at: datetime,
+        release: str | None = None,
     ) -> tuple[CopilotMessage, ...]:
-        """Store what the copilot answered (empty texts are skipped; long ones are cut)."""
+        """Store what the copilot answered (empty texts are skipped; long ones are cut).
+        ``release`` is the agent release of the run that answered (it goes in the event)."""
         if len(texts) != len(message_ids):
             raise InvalidValueError("one id per answer message", field="message_ids")
         written: list[CopilotMessage] = []
@@ -192,6 +194,7 @@ class CopilotThread(AggregateRoot):
                 trace_id=trace_id,
                 status=status,
                 messages=len(written),
+                release=release,
             )
         )
         return tuple(written)

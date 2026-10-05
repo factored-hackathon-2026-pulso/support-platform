@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.domain.shared.events import DomainEvent
-from cc_platform.domain.shared.json import JsonObject
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -91,11 +90,7 @@ class StaffAvailabilityChanged(DomainEvent):
     to_status: str
     reason: str | None = None
 
-    def payload(self) -> JsonObject:
-        payload = DomainEvent.payload(self)
-        if payload.get("reason") is None:
-            payload.pop("reason", None)
-        return payload
+    omitted_when_null = frozenset({"reason"})
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -121,6 +116,7 @@ class StaffUiLanguageChanged(DomainEvent):
 @dataclass(frozen=True, kw_only=True, slots=True)
 class StaffCreated(DomainEvent):
     event_type = "staff.created"
+    free_text_keys = frozenset({"name", "team_name"})
     entity = "staff"
 
     name: str
@@ -135,6 +131,7 @@ class StaffProfileUpdated(DomainEvent):
     """Name and/or email changed (one event for both). Never carries the email."""
 
     event_type = "staff.profile_updated"
+    free_text_keys = frozenset({"from_name", "to_name"})
     entity = "staff"
 
     changed_fields: tuple[str, ...]
@@ -167,6 +164,7 @@ class StaffLanguagesChanged(DomainEvent):
 @dataclass(frozen=True, kw_only=True, slots=True)
 class StaffTeamChanged(DomainEvent):
     event_type = "staff.team_changed"
+    free_text_keys = frozenset({"from_team_name", "to_team_name"})
     entity = "staff"
 
     from_team_id: str
@@ -285,6 +283,7 @@ class StaffPasswordResetLinkSent(DomainEvent):
 @dataclass(frozen=True, kw_only=True, slots=True)
 class TeamCreated(DomainEvent):
     event_type = "team.created"
+    free_text_keys = frozenset({"name"})
     entity = "team"
 
     name: str
@@ -293,6 +292,7 @@ class TeamCreated(DomainEvent):
 @dataclass(frozen=True, kw_only=True, slots=True)
 class TeamRenamed(DomainEvent):
     event_type = "team.renamed"
+    free_text_keys = frozenset({"from_name", "to_name"})
     entity = "team"
 
     from_name: str
@@ -302,6 +302,7 @@ class TeamRenamed(DomainEvent):
 @dataclass(frozen=True, kw_only=True, slots=True)
 class TeamDeactivated(DomainEvent):
     event_type = "team.deactivated"
+    free_text_keys = frozenset({"name"})
     entity = "team"
 
     name: str
@@ -310,6 +311,7 @@ class TeamDeactivated(DomainEvent):
 @dataclass(frozen=True, kw_only=True, slots=True)
 class TeamReactivated(DomainEvent):
     event_type = "team.reactivated"
+    free_text_keys = frozenset({"name"})
     entity = "team"
 
     name: str

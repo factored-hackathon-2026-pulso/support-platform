@@ -25,6 +25,7 @@ Message text is never stored here: it lives in the case's turns.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -52,6 +53,30 @@ from cc_platform.domain.shared.ids import IdPrefix, require_id
 
 #: How an analyst labels the usefulness of the assistant's handoff when she closes the case.
 HANDOFF_QUALITIES: frozenset[str] = frozenset({"useful", "incomplete", "unnecessary"})
+
+
+class HandoffReask(StrEnum):
+    """What the analyst had to ask the customer again after an ``incomplete`` handoff: a closed
+    list, after what the assistant's handoff packet collects for a dispute (who the customer is,
+    the transaction's amount, merchant and date, the product, and why they claim)."""
+
+    IDENTITY = "identity"
+    AMOUNT = "amount"
+    MERCHANT = "merchant"
+    DATE = "date"
+    PRODUCT = "product"
+    REASON = "reason"
+    OTHER = "other"
+
+
+def handoff_reasks(values: Sequence[str]) -> tuple[HandoffReask, ...]:
+    """The values in the list's order, once each. ``InvalidValueError`` on an unknown one."""
+    try:
+        picked = {HandoffReask(value) for value in values}
+    except ValueError:
+        raise InvalidValueError("handoffReasked is not valid", field="handoffReasked") from None
+    return tuple(reask for reask in HandoffReask if reask in picked)
+
 
 MAX_STEP_UP_ATTEMPTS = 3
 #: How long a verified second factor keeps elevating the customer's credentials.
@@ -404,6 +429,7 @@ class AssistantSession(AggregateRoot):
                 result=state.value,
                 handoff_ref=handoff_ref,
                 code=code,
+                release=self.agent_release,
             )
         )
 

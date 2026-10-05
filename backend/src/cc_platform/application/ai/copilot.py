@@ -33,11 +33,13 @@ from cc_platform.application.ai.staff import advisor_credentials
 from cc_platform.application.cases.queries import load_case_for
 from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.ports.clock import Clock
+from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.application.ports.ids import IdGenerator
-from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
+from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor, ensure_any_role
 from cc_platform.domain.ai.copilot import CopilotMessage, CopilotThread
 from cc_platform.domain.ai.errors import CopilotBusyError, CopilotUnavailableError
+from cc_platform.domain.ai.events import CopilotAnswered
 from cc_platform.domain.cases.errors import CaseClosedError
 from cc_platform.domain.people.staff import StaffRole
 from cc_platform.domain.shared.errors import NotFoundError
@@ -146,10 +148,8 @@ class AskCopilot:
                 answers=tuple(_view(m) for m in stored.answered),
                 replayed=True,
             )
-        turn, session_id, run_started = await self._ask_agent(stored.credentials, stored)
-        answers = await retry_on_conflict(
-            partial(self._store_answer, actor, stored, turn, session_id, run_started)
-        )
+        asked = await self._ask_agent(stored.credentials, stored)
+        answers = await retry_on_conflict(partial(self._store_answer, actor, stored, asked))
         return CopilotExchangeView(
             question=_view(stored.question),
             answers=tuple(_view(m) for m in answers),
@@ -206,10 +206,7 @@ class AskCopilot:
             )
 
     # ------------------------------------------------------------------ 2. the call (no UoW)
-    async def _ask_agent(
-        self, creds: AgentCredentials, stored: _Question
-    ) -> tuple[AgentTurn, str, bool]:
-        """Returns ``(turn, agent session id, started a run now)``."""
+    async def _ask_agent(self, creds: AgentCredentials, stored: _Question) -> _Asked:
         try:
             return await self._call(creds, stored, stored.agent_session_id, stored.run_key)
         except AgentRuntimeError as error:
@@ -217,12 +214,11 @@ class AskCopilot:
                 # agent-core closed that run: start another (a new idempotency key) and ask again
                 next_key = f"{stored.thread_id}.{_next_run(stored.run_key)}"
                 try:
-                    turn, session_id, _ = await self._call(creds, stored, None, next_key)
+                    return await self._call(creds, stored, None, next_key)
                 except AgentRuntimeError as retry:
                     raise self._translate(retry) from None
                 except AgentRuntimeUnavailableError:
                     raise AgentCoreUnavailableError() from None
-                return turn, session_id, True
             raise self._translate(error) from None
         except AgentRuntimeUnavailableError:
             raise AgentCoreUnavailableError() from None
@@ -233,7 +229,8 @@ class AskCopilot:
         stored: _Question,
         session_id: str | None,
         run_key: str,
-    ) -> tuple[AgentTurn, str, bool]:
+    ) -> _Asked:
+        release: str | None = None
         started = False
         if session_id is None:
             run = await self.runtime.start_run(
@@ -249,7 +246,7 @@ class AskCopilot:
             )
             if run.session_id is None:
                 raise AgentRuntimeError(status=502, code="no_agent_session")
-            session_id, started = run.session_id, True
+            session_id, started, release = run.session_id, True, run.release
         turn = await self.runtime.post_turn(
             credentials,
             session_id=session_id,
@@ -258,7 +255,7 @@ class AskCopilot:
             text=stored.question.text,
             lang=stored.language,
         )
-        return turn, session_id, started
+        return _Asked(turn=turn, session_id=session_id, started=started, release=release)
 
     @staticmethod
     def _translate(error: AgentRuntimeError) -> Exception:
@@ -271,19 +268,21 @@ class AskCopilot:
         self,
         actor: Actor,
         stored: _Question,
-        turn: AgentTurn,
-        session_id: str,
-        run_started: bool,
+        asked: _Asked,
     ) -> tuple[CopilotMessage, ...]:
+        turn = asked.turn
         async with self.uow() as uow:
             thread = await uow.copilot_threads.get_for(stored.case_id, actor.staff_id)
             if thread is None:  # stored with the question a moment ago
                 raise NotFoundError("No encontramos la conversación con el copiloto.")
             now = self.clock.now()
-            if run_started:
+            if asked.started:
                 if stored.agent_session_id is not None:
                     thread.new_run(at=now)
-                thread.link_run(agent_session_id=session_id, run_id=turn.run_id, at=now)
+                thread.link_run(agent_session_id=asked.session_id, run_id=turn.run_id, at=now)
+                release = asked.release
+            else:  # the run started on an earlier question: its answer said the release
+                release = await _run_release(uow, thread.id, stored.case_id, thread.run_id)
             answers = thread.record_answer(
                 question_id=stored.question.id,
                 texts=[m.text for m in turn.messages],
@@ -291,12 +290,47 @@ class AskCopilot:
                 trace_id=turn.trace_id,
                 status=turn.status,
                 at=now,
+                release=release,
             )
             if turn.status == "closed":  # the run is over: the next question starts another
                 thread.new_run(at=now)
             await uow.copilot_threads.save(thread)
             await uow.commit()
             return answers
+
+
+@dataclass(frozen=True, slots=True)
+class _Asked:
+    """agent-core's answer: the turn, the agent session, and whether this call started the run
+    (then ``release`` is the run's release)."""
+
+    turn: AgentTurn
+    session_id: str
+    started: bool
+    release: str | None
+
+
+#: How many of a case's ``copilot.answered`` events are read to find a run's release.
+_RELEASE_LOOKBACK = 50
+
+
+async def _run_release(
+    uow: UnitOfWork, thread_id: str, case_id: str, run_id: str | None
+) -> str | None:
+    """The release of a run that started on an earlier question: what the thread's last answer
+    on that run recorded (the thread does not store it). ``None`` when nothing says."""
+    if run_id is None:
+        return None
+    events = await uow.event_log.search(
+        AuditFilters(case_id=case_id, event_types=frozenset({CopilotAnswered.event_type})),
+        before=None,
+        limit=_RELEASE_LOOKBACK,
+    )
+    for event in events:  # newest first
+        if event.entity_id == thread_id and event.payload.get("run_id") == run_id:
+            release = event.payload.get("release")
+            return release if isinstance(release, str) else None
+    return None
 
 
 def _next_run(run_key: str) -> int:

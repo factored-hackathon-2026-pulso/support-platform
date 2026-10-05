@@ -8,10 +8,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import anyio
 import pytest
 from fastapi.testclient import TestClient
 
 from cc_platform.application.ai import AgentRuntimeUnavailableError
+from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.bootstrap.app import create_app
 from cc_platform.bootstrap.container import AgentCoreServices, Container, build_container
 from cc_platform.infrastructure.ai.ed25519_issuer import Ed25519AgentCredentialIssuer
@@ -178,3 +180,36 @@ def test_without_agent_core_the_panel_just_says_it_is_not_available(
         assert thread.json()["available"] is False
         asked = ask(client, analyst, case_id, "hola", "msg-00000006")
         assert (asked.status_code, asked.json()["code"]) == (404, "assistant_disabled")
+
+
+def test_every_answer_carries_the_release_of_its_run(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+    container: Container,
+) -> None:
+    """Catalog 1.3.0: ``copilot.answered`` says which release answered, also for a question asked
+    on a run an earlier question started (the thread does not store the release)."""
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.script.extend([turn("Debe 120 USD."), turn("Desde el 3 de octubre.")])
+
+    assert ask(client, analyst, assigned_case, "¿Cuánto debe?", "msg-00000010").status_code == 201
+    assert ask(client, analyst, assigned_case, "¿Desde cuándo?", "msg-00000011").status_code == 201
+
+    starts = [c for c in runtime.calls if c.operation == "start_run"]
+    answered = logged(container, "copilot.answered")
+    assert len(starts) == 1  # the second question went to the same run
+    assert [p["release"] for p in answered] == ["rel-1", "rel-1"]
+    assert all(p["schema_version"] == 1 for p in answered)
+
+
+def logged(container: Container, event_type: str) -> list[dict[str, Any]]:
+    async def read() -> list[dict[str, Any]]:
+        async with container.uow() as uow:
+            found = await uow.event_log.search(
+                AuditFilters(event_types=frozenset({event_type})), before=None, limit=100
+            )
+        return [dict(e.payload) for e in reversed(found)]
+
+    return anyio.run(read)

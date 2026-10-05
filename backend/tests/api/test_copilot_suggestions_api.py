@@ -439,3 +439,275 @@ def test_the_assistant_turns_are_attributed_to_the_release_that_answered(
 
     assert answered
     assert {p["release"] for p in answered} == {"rel-1"}
+
+
+# ------------------------------------------------------------- event catalog 1.3.0 (engine signals)
+def shown(client: TestClient, headers: dict[str, str], case_id: str, suggestion_id: str) -> Any:
+    return client.post(
+        f"/api/v1/cases/{case_id}/copilot/suggestions/{suggestion_id}/shown", headers=headers
+    )
+
+
+def feedback(
+    client: TestClient, headers: dict[str, str], case_id: str, suggestion_id: str, **body: str
+) -> Any:
+    return client.post(
+        f"/api/v1/cases/{case_id}/copilot/suggestions/{suggestion_id}/feedback",
+        headers=headers,
+        json=body,
+    )
+
+
+def test_a_suggestion_on_screen_is_recorded_as_shown_once(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+    container: Container,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.append(FULL)
+    made = ask(client, analyst, assigned_case).json()
+
+    first = shown(client, analyst, assigned_case, made["id"])
+    again = shown(client, analyst, assigned_case, made["id"])
+
+    assert (first.status_code, again.status_code) == (204, 204)
+    (event,) = logged(container, "copilot.suggestion_shown")
+    assert event == {
+        "analyst_id": DANIELA,
+        "agent": "copiloto-sugerencias@prod",
+        "kinds": ["reply", "tool", "escalate"],
+        "count": 3,
+        "stale": False,
+        "release": "rel-1",
+        "schema_version": 1,
+    }
+    other = bearer(sign_in(JULIAN.email))
+    assert shown(client, other, assigned_case, made["id"]).status_code == 403
+    assert shown(client, analyst, assigned_case, "CPS-" + "9" * 26).status_code == 404
+
+
+def test_ahora_no_dismisses_the_recommendation_with_its_reason_code(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+    container: Container,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.append(FULL)
+    made = ask(client, analyst, assigned_case).json()
+
+    wrong = feedback(client, analyst, assigned_case, made["id"], decision="dismissed")
+    dismissed = feedback(
+        client, analyst, assigned_case, made["id"], subject="escalation", decision="dismissed"
+    )
+
+    assert wrong.status_code == 422  # `dismissed` is for the escalation only
+    assert dismissed.status_code == 200, dismissed.text
+    kinds = [item["type"] for item in dismissed.json()["suggestions"]]
+    assert kinds == ["reply", "tool"]  # the recommendation left; the draft stays
+    (decided,) = logged(container, "copilot.suggestion_decided")
+    assert decided == {
+        "subject": "escalation",
+        "decision": "dismissed",
+        "edit_distance_permille": None,
+        "turn_id": None,
+        "agent": "copiloto-sugerencias@prod",
+        "release": "rel-1",
+        "reason_code": "policy:fraude",
+        "schema_version": 1,
+    }
+    again = feedback(
+        client, analyst, assigned_case, made["id"], subject="escalation", decision="dismissed"
+    )
+    assert again.status_code == 200
+    assert len(logged(container, "copilot.suggestion_decided")) == 1
+
+
+def test_an_accepted_recommendation_carries_its_reason_code(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+    container: Container,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.append(FULL)
+    made = ask(client, analyst, assigned_case).json()
+
+    client.post(
+        f"/api/v1/cases/{assigned_case}/escalations",
+        headers={**analyst, "Idempotency-Key": "esc-key-00002"},
+        json={"motive": "Posible robo de tarjeta.", "copilotSuggestionId": made["id"]},
+    )
+
+    (decided,) = logged(container, "copilot.suggestion_decided")
+    assert (decided["subject"], decided["decision"]) == ("escalation", "accepted")
+    assert decided["reason_code"] == "policy:fraude"
+
+
+def test_a_replaced_suggestion_nobody_used_is_recorded_as_ignored(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+    container: Container,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.extend([FULL, FULL])
+    first = ask(client, analyst, assigned_case, key="key-00000001").json()
+    shown(client, analyst, assigned_case, first["id"])
+
+    ask(client, analyst, assigned_case, key="key-00000002")
+
+    (ignored,) = logged(container, "copilot.suggestion_ignored")
+    assert ignored == {
+        "analyst_id": DANIELA,
+        "agent": "copiloto-sugerencias@prod",
+        "cause": "replaced",
+        "kinds": ["reply", "tool", "escalate"],
+        "shown": True,
+        "release": "rel-1",
+        "schema_version": 1,
+    }
+    (decided,) = logged(container, "copilot.suggestion_decided")
+    assert decided["decision"] == "ignored"  # the draft, as before 1.3.0
+
+
+def test_a_suggestion_that_was_used_is_never_ignored(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+    container: Container,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.extend([FULL, FULL, FULL])
+    discarded = ask(client, analyst, assigned_case, key="key-00000001").json()
+    feedback(client, analyst, assigned_case, discarded["id"], decision="discarded")
+    with_tool = ask(client, analyst, assigned_case, key="key-00000002").json()
+    used = client.post(
+        f"/api/v1/cases/{assigned_case}/copilot/suggestions/{with_tool['id']}/tools",
+        headers=analyst,
+        json={"tool": "leer_movimientos@1", "decision": "used"},
+    )
+    assert used.status_code == 204, used.text
+
+    ask(client, analyst, assigned_case, key="key-00000003")
+
+    assert logged(container, "copilot.suggestion_ignored") == []
+
+
+def test_closing_the_case_ends_its_suggestion_and_rates_the_handoff(
+    client: TestClient,
+    *,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+    container: Container,
+    drain: Callable[[], None],
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.append(FULL)
+    ask(client, analyst, assigned_case)
+
+    wrong = client.post(
+        f"/api/v1/cases/{assigned_case}/close",
+        headers=analyst,
+        json={
+            "reason": "resolved",
+            "note": None,
+            "handoffQuality": "useful",
+            "handoffReasked": ["amount"],
+        },
+    )
+    unknown = client.post(
+        f"/api/v1/cases/{assigned_case}/close",
+        headers=analyst,
+        json={
+            "reason": "resolved",
+            "note": None,
+            "handoffQuality": "incomplete",
+            "handoffReasked": ["el monto exacto"],
+        },
+    )
+    closed = client.post(
+        f"/api/v1/cases/{assigned_case}/close",
+        headers=analyst,
+        json={
+            "reason": "resolved",
+            "note": "Le pregunté el monto y el comercio otra vez.",
+            "handoffQuality": "incomplete",
+            "handoffReasked": ["merchant", "amount", "merchant"],
+        },
+    )
+    drain()
+
+    assert (wrong.status_code, unknown.status_code) == (422, 422)
+    assert closed.status_code == 200, closed.text
+    (rated,) = logged(container, "case.handoff_rated")
+    assert rated == {
+        "handoff_ref": "hnd-7",
+        "quality": "incomplete",
+        "reasked": ["amount", "merchant"],
+        "release": "rel-1",
+        "schema_version": 1,
+    }
+    (ignored,) = logged(container, "copilot.suggestion_ignored")
+    assert (ignored["cause"], ignored["shown"]) == ("case_closed", False)
+    (ended,) = logged(container, "assistant.ended")
+    assert ended["release"] == "rel-1"
+    sent = [c for c in runtime.calls if c.operation == "record_resolution"]
+    assert [c.arguments["handoff_quality"] for c in sent] == ["incomplete"]  # unchanged call
+    assert "reasked" not in json.dumps([c.arguments for c in sent])
+
+
+def test_the_engine_signals_never_carry_a_text(
+    client: TestClient,
+    *,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    runtime: InMemoryAgentRuntime,
+    container: Container,
+    drain: Callable[[], None],
+) -> None:
+    """Every word the customer, the analyst or the copilot wrote stays out of the signals."""
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.extend([FULL, FULL])
+    first = ask(client, analyst, assigned_case, key="key-00000001").json()
+    shown(client, analyst, assigned_case, first["id"])
+    feedback(
+        client, analyst, assigned_case, first["id"], subject="escalation", decision="dismissed"
+    )
+    reply(client, analyst, assigned_case, "Natalia, ya lo estoy viendo.", first["id"])
+    second = ask(client, analyst, assigned_case, key="key-00000002").json()
+    shown(client, analyst, assigned_case, second["id"])
+    client.post(
+        f"/api/v1/cases/{assigned_case}/close",
+        headers=analyst,
+        json={
+            "reason": "resolved",
+            "note": "Nota interna SECRETA",
+            "handoffQuality": "incomplete",
+            "handoffReasked": ["identity"],
+        },
+    )
+    drain()
+
+    signals = logged(
+        container,
+        "copilot.suggestion_ready",
+        "copilot.suggestion_shown",
+        "copilot.suggestion_decided",
+        "copilot.suggestion_ignored",
+        "copilot.tool_used",
+        "copilot.answered",
+        "assistant.ended",
+        "case.handoff_rated",
+    )
+    dumped = json.dumps(signals, ensure_ascii=False)
+    assert len(signals) >= 6
+    for text in (DRAFT, "Natalia", "Posible robo", "Ver los cargos", "SECRETA", "no reconozco"):
+        assert text not in dumped

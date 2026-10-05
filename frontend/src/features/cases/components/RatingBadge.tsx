@@ -1,4 +1,5 @@
 import { Badge, FACT_ICONS } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { ratingOption } from '../model'
 import type { CaseRating } from '../types'
 
@@ -24,6 +25,7 @@ export function RatingBadge({
   size = 'md',
   className,
 }: RatingBadgeProps) {
+  useTranslation('cases') // the scale word follows the UI language
   const option = ratingOption(rating.score)
   const Icon = FACT_ICONS[option.icon]
   return (

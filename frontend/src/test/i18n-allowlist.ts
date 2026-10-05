@@ -52,8 +52,6 @@ export const PENDING_AREAS: readonly PendingArea[] = [
   },
   // ── supervision: Colas, Equipo, Escalados, the supervisor case view
   { area: 'supervision', paths: ['src/features/supervision/'], strings: 214 },
-  // ── cases: the Casos list, cards, priority, case type, close reasons, ratings
-  { area: 'cases', paths: ['src/features/cases/'], strings: 123 },
   // ── copilot: Copiloto, Herramientas, the draft, the AI stage strip
   { area: 'copilot', paths: ['src/features/copilot/'], strings: 91 },
   // ── home: Inicio

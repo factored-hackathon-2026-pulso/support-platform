@@ -338,12 +338,23 @@ def test_a_resolved_conversation_is_closed_and_rateable(
 
     seen = conversation(client, token)["conversation"]
     assert (seen["status"], seen["assistant"]) == ("closed", None)
+    # Who attended it is the assistant (the survey and the past block name it), not "nobody".
+    assert seen["agentName"] == "Asistente virtual"
     rated = client.post(
         f"/api/v1/customer/conversations/{case_id}/rating",
         headers={**bearer(token), "Idempotency-Key": "rating-key-0001"},
         json={"score": 4},
     )
     assert rated.status_code == 201, rated.text
+
+    # Once it is a past conversation, its block names the assistant too.
+    runtime.script.append(resolution())
+    write(client, token, "Otra consulta")
+    drain()
+    past = client.get("/api/v1/customer/conversations", headers=bearer(token)).json()["items"]
+    assert [item["agentName"] for item in past if item["caseId"] == case_id] == [
+        "Asistente virtual"
+    ]
 
 
 # ----------------------------------------------------------------------------- realtime

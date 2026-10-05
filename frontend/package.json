@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
+    "e2e:stack": "playwright test -c e2e-stack/playwright.config.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "gen:api": "node scripts/gen-api.mjs",

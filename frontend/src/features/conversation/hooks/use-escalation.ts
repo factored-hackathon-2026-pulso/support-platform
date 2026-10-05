@@ -3,6 +3,7 @@ import { useToast } from '@/components/ui'
 import { applyCaseSummaryToInboxes } from '@/features/cases'
 import { copilotKeys } from '@/features/copilot/core'
 import type { ApiProblem } from '@/lib/api'
+import { i18n } from '@/lib/i18n'
 import {
   acknowledgeEscalation,
   conversationKeys,
@@ -73,7 +74,7 @@ export function useWithdrawEscalation(caseId: string) {
     onSuccess: (result) => storeEscalationResult(queryClient, result),
     onError: (error) => {
       toast({
-        title: 'No se retiró el escalamiento',
+        title: i18n.t('conversation:escalation.withdrawFailed'),
         description: describeEscalationFailure(error, 'withdraw'),
         politeness: 'alert',
       })
@@ -117,7 +118,7 @@ export function useAcknowledgeEscalation(caseId: string) {
         )
       }
       toast({
-        title: 'No se marcó como leído',
+        title: i18n.t('conversation:escalation.acknowledgeFailed'),
         description: describeEscalationFailure(error, 'acknowledge'),
         politeness: 'alert',
       })

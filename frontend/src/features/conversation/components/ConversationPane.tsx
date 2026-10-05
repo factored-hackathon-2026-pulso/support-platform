@@ -20,6 +20,7 @@ import {
   type TakenDraft,
 } from '@/features/copilot'
 import { useNow } from '@/lib/hooks'
+import { useActiveLocale, useTranslation } from '@/lib/i18n'
 import {
   canEscalate,
   describeCaseLoadFailure,
@@ -135,6 +136,7 @@ function ConversationBody({
   supportPanel,
   stageStrip,
 }: ConversationPaneProps) {
+  const { t } = useTranslation(['conversation', 'common'])
   const me = useCurrentUser()
   useConversationLive(caseId)
   const detail = useCaseDetail(caseId)
@@ -159,7 +161,7 @@ function ConversationBody({
       <section
         ref={setFocusTarget}
         tabIndex={-1}
-        aria-label="Conversación"
+        aria-label={t('pane.label')}
         className="flex h-full grow flex-col justify-center p-6"
       >
         <Callout
@@ -167,7 +169,7 @@ function ConversationBody({
           title={failure.title}
           actions={
             <Button size="sm" loading={detail.isFetching} onClick={() => void detail.refetch()}>
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
           }
         >
@@ -226,6 +228,8 @@ function LoadedConversation({
   supportPanel,
   stageStrip,
 }: LoadedConversationProps) {
+  const { t } = useTranslation('conversation')
+  const locale = useActiveLocale()
   const { case: summary, capabilities } = detail
   const supervision = mode === 'supervision'
   const canReply = capabilities.canReply && !supervision
@@ -287,14 +291,16 @@ function LoadedConversation({
     setEscalating(open)
     if (!open) setEscalationPrefill(null)
   }, [])
+  // The locale too: the items carry translated words ("Tú").
   const items = useMemo(
     () => (turns.data ? toTranscriptItems(turns.data, meId, { calls: callItems }) : []),
-    [turns.data, meId, callItems],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the locale changes the items' words
+    [turns.data, meId, callItems, locale],
   )
 
   return (
     <section
-      aria-label={`Conversación con ${summary.customer.displayName}`}
+      aria-label={t('pane.labelWith', { name: summary.customer.displayName })}
       className="flex h-full min-h-0 grow flex-col bg-canvas"
     >
       <CaseHeader
@@ -402,12 +408,6 @@ interface TranscriptAreaProps {
   subject: string | null
 }
 
-const LIST_LABEL: Record<CenterMode, string> = {
-  chat: 'Mensajes',
-  call: 'Transcripción de la llamada',
-  email: 'Correos y mensajes del caso',
-}
-
 function TranscriptArea({
   caseId,
   turns,
@@ -417,6 +417,7 @@ function TranscriptArea({
   call,
   subject,
 }: TranscriptAreaProps) {
+  const { t } = useTranslation(['conversation', 'common'])
   const reason = center === 'call' ? outboundReason(call) : null
   const live = call !== null && isActiveCall(call)
   const scrollRef = useStickToBottom(items, turns.data)
@@ -430,14 +431,14 @@ function TranscriptArea({
     body = (
       <Callout
         tone="danger"
-        title="No pudimos cargar los mensajes"
+        title={t('transcript.loadFailedTitle')}
         actions={
           <Button size="sm" loading={turns.isFetching} onClick={() => void turns.refetch()}>
-            Reintentar
+            {t('common:actions.retry')}
           </Button>
         }
       >
-        Revisa tu conexión e inténtalo de nuevo.
+        {t('transcript.loadFailedText')}
       </Callout>
     )
   } else {
@@ -447,13 +448,13 @@ function TranscriptArea({
     body = (
       <div
         role="log"
-        aria-label="Conversación del caso"
+        aria-label={t('transcript.log')}
         aria-live="polite"
         aria-relevant="additions"
         aria-busy={olderBusy || undefined}
         className="flex flex-col gap-2.5"
       >
-        <ChatTranscript items={items} onRetry={onRetry} label={LIST_LABEL[center]} />
+        <ChatTranscript items={items} onRetry={onRetry} label={t(`transcript.list.${center}`)} />
       </div>
     )
   }
@@ -473,11 +474,11 @@ function TranscriptArea({
               loading={older.isPending}
               onClick={() => older.mutate()}
             >
-              Cargar mensajes anteriores
+              {t('transcript.loadOlder')}
             </Button>
             {older.isError ? (
               <span className="text-12 text-danger-strong" role="alert">
-                No pudimos cargar los mensajes anteriores. Inténtalo de nuevo.
+                {t('transcript.loadOlderFailed')}
               </span>
             ) : null}
           </div>
@@ -577,12 +578,9 @@ function TranscriptSkeleton() {
 }
 
 function ConversationSkeleton() {
+  const { t } = useTranslation('conversation')
   return (
-    <section
-      aria-label="Cargando la conversación"
-      aria-busy="true"
-      className="flex h-full grow flex-col"
-    >
+    <section aria-label={t('pane.loading')} aria-busy="true" className="flex h-full grow flex-col">
       <div className="flex flex-col gap-2 border-b border-border px-6 py-3.5">
         <Skeleton className="h-5 w-56" />
         <Skeleton className="h-4 w-96" />

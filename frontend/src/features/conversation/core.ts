@@ -8,14 +8,7 @@
  */
 export { conversationKeys } from './api'
 export { registerConversationRealtime } from './realtime'
-export {
-  LANGUAGE_NAMES,
-  PREVIOUS_CASES_LIST,
-  QUEUE_LABEL,
-  formatWait,
-  queueInSentence,
-  shortCaseId,
-} from './model'
+export { LANGUAGE_NAMES, PREVIOUS_CASES_LIST, QUEUE_LABEL, formatWait, shortCaseId } from './model'
 export type { ConversationMode, PreviousCasesSelection } from './model'
 export type {
   AssignmentOut,

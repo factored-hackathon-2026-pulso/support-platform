@@ -2,6 +2,7 @@ import type { ReactNode, Ref } from 'react'
 import { CircleArrowUp, Copy, History, PanelRight, PhoneOutgoing } from 'lucide-react'
 import { Button, FactList, IconButton, Status, useToast } from '@/components/ui'
 import { caseStatus } from '@/features/cases'
+import { useTranslation } from '@/lib/i18n'
 import {
   canEscalate,
   CUSTOMER_FILE_PANEL_ID,
@@ -63,6 +64,8 @@ export function CaseHeader({
   customerFile,
   supportPanel,
 }: CaseHeaderProps) {
+  // `cases` too: the header shows the shared case vocabulary (the status).
+  const { t } = useTranslation(['conversation', 'cases'])
   const { case: summary, capabilities } = detail
   const { toast } = useToast()
   const closed = summary.status === 'closed'
@@ -72,7 +75,7 @@ export function CaseHeader({
 
   function copyId() {
     void navigator.clipboard?.writeText(summary.id).then(
-      () => toast({ title: 'Número de caso copiado', description: summary.id, duration: 3000 }),
+      () => toast({ title: t('header.copied'), description: summary.id, duration: 3000 }),
       () => undefined,
     )
   }
@@ -87,7 +90,7 @@ export function CaseHeader({
         size="sm"
         variant="ghost"
         className="-my-1.5 size-6 text-muted"
-        aria-label="Copiar número de caso"
+        aria-label={t('header.copy')}
         icon={<Copy size={13} aria-hidden="true" />}
         onClick={copyId}
       />
@@ -97,7 +100,7 @@ export function CaseHeader({
   const rightSide = (
     <div className="flex shrink-0 items-center gap-2">
       {closed || !customerFile ? (
-        <Status {...caseStatus(summary.inboxStatus)} srLabel="Estado" />
+        <Status {...caseStatus(summary.inboxStatus)} srLabel={t('header.status')} />
       ) : null}
       {actions}
       {supportPanel ? (
@@ -107,11 +110,11 @@ export function CaseHeader({
           icon={<PanelRight size={15} aria-hidden="true" />}
           aria-expanded={supportPanel.open}
           aria-controls={supportPanel.open ? CUSTOMER_FILE_PANEL_ID : undefined}
-          title="Copiloto, herramientas y cliente"
+          title={t('header.supportTitle')}
           className={supportPanel.open ? 'bg-panel' : undefined}
           onClick={supportPanel.onToggle}
         >
-          Apoyo
+          {t('header.support')}
         </Button>
       ) : null}
       {historyLabel && onOpenHistory && !customerFile ? (
@@ -129,7 +132,7 @@ export function CaseHeader({
           icon={<PhoneOutgoing size={15} aria-hidden="true" />}
           onClick={onRequestCall}
         >
-          Llamar al cliente
+          {t('header.call')}
         </Button>
       ) : null}
       {onRequestEscalate && !hideClose && canEscalate(detail) ? (
@@ -138,12 +141,12 @@ export function CaseHeader({
           icon={<CircleArrowUp size={15} aria-hidden="true" />}
           onClick={onRequestEscalate}
         >
-          Escalar a supervisión
+          {t('header.escalate')}
         </Button>
       ) : null}
       {!closed && !hideClose && capabilities.canClose && !callOn ? (
         <Button variant="secondary" onClick={onRequestClose}>
-          Cerrar caso
+          {t('header.close')}
         </Button>
       ) : null}
     </div>
@@ -192,7 +195,7 @@ export function CaseHeader({
         </h2>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-13 text-ink-2">
           <p className="m-0 flex items-center gap-x-1">{caseNumber}</p>
-          <FactList items={caseHeaderFacts(detail)} aria-label="Datos del caso" />
+          <FactList items={caseHeaderFacts(detail)} aria-label={t('header.facts')} />
         </div>
       </div>
       {rightSide}

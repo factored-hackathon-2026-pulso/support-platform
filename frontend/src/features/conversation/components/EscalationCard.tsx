@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CircleArrowUp } from 'lucide-react'
 import { Avatar, Button, Fact } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { useAcknowledgeEscalation, useWithdrawEscalation } from '../hooks/use-escalation'
 import type { EscalationCard as EscalationCardModel } from '../model'
 
@@ -18,16 +19,21 @@ export interface EscalationCardProps {
  * Never sent to the customer: the backend keeps escalations off customer topics.
  */
 export function EscalationCard({ caseId, card }: EscalationCardProps) {
+  const { t } = useTranslation('conversation')
   const [expanded, setExpanded] = useState(false)
   const withdraw = useWithdrawEscalation(caseId)
   const acknowledge = useAcknowledgeEscalation(caseId)
   const attended = card.kind === 'attended'
-  const motiveLead = attended ? 'Tu motivo: ' : card.byName ? `${card.byName}: ` : ''
+  const motiveLead = attended
+    ? `${t('escalation.card.yourMotive')} `
+    : card.byName
+      ? `${card.byName}: `
+      : ''
 
   return (
     <div className="shrink-0 border-b border-border bg-canvas px-6 py-2.5">
       <section
-        aria-label="Escalamiento a supervisión"
+        aria-label={t('escalation.card.region')}
         className={cn(
           'mx-auto flex w-full max-w-[880px] flex-wrap items-start gap-x-3 gap-y-2 rounded-12 border px-3 py-2.5',
           attended ? 'border-accent-border bg-accent-soft' : 'border-border bg-surface',
@@ -49,7 +55,7 @@ export function EscalationCard({ caseId, card }: EscalationCardProps) {
         <div className="flex min-w-0 grow basis-64 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="text-14 font-semibold text-ink">{card.title}</span>
-            <Fact icon="users" text="Solo el equipo" tone="muted" />
+            <Fact icon="users" text={t('escalation.card.teamOnly')} tone="muted" />
             <Fact icon="clock" text={card.since} tone="muted" tooltip={card.sinceTooltip} />
           </div>
           {attended && card.note ? <p className="m-0 text-14 text-ink">{card.note}</p> : null}
@@ -70,7 +76,7 @@ export function EscalationCard({ caseId, card }: EscalationCardProps) {
               onClick={() => setExpanded((value) => !value)}
               className="shrink-0 cursor-pointer rounded-8 text-13 font-medium text-accent-strong hover:underline"
             >
-              {expanded ? 'Ver menos' : 'Ver más'}
+              {expanded ? t('escalation.card.less') : t('escalation.card.more')}
             </button>
           </div>
         </div>
@@ -82,7 +88,7 @@ export function EscalationCard({ caseId, card }: EscalationCardProps) {
             className="ml-auto self-center"
             onClick={() => withdraw.mutate(card.escalation)}
           >
-            Retirar escalamiento
+            {t('escalation.card.withdraw')}
           </Button>
         ) : null}
         {attended ? (
@@ -92,7 +98,7 @@ export function EscalationCard({ caseId, card }: EscalationCardProps) {
             className="ml-auto self-center"
             onClick={() => acknowledge.mutate(card.escalation)}
           >
-            Entendido
+            {t('escalation.card.acknowledge')}
           </Button>
         ) : null}
       </section>

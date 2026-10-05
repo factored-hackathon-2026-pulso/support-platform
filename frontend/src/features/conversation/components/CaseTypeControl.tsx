@@ -2,6 +2,7 @@ import { Tag } from 'lucide-react'
 import { useAiEnabled } from '@/app/platform'
 import { CaseTypeMenu, caseType } from '@/features/cases'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { useChangeCaseType } from '../hooks'
 import type { CaseDetail } from '../types'
 
@@ -19,6 +20,8 @@ export interface CaseTypeControlProps {
  * type is part of the AI layer.
  */
 export function CaseTypeControl({ detail, align, className }: CaseTypeControlProps) {
+  // The word is the shared case vocabulary: re-render when the UI language changes.
+  useTranslation('cases')
   const aiEnabled = useAiEnabled()
   const { case: summary, capabilities } = detail
   const { change } = useChangeCaseType(summary.id)

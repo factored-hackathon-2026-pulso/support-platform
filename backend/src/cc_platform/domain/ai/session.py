@@ -45,7 +45,7 @@ from cc_platform.domain.ai.events import (
     AssistantStepUpVerified,
     AssistantTurnAnswered,
 )
-from cc_platform.domain.shared.actor import ActorRef
+from cc_platform.domain.shared.actor import ActorRef, ActorRole
 from cc_platform.domain.shared.aggregate import AggregateRoot
 from cc_platform.domain.shared.errors import InvalidValueError
 from cc_platform.domain.shared.ids import IdPrefix, require_id
@@ -167,7 +167,7 @@ class AssistantSession(AggregateRoot):
         session._record(
             AssistantSessionStarted(
                 occurred_at=at,
-                actor=ActorRef.system(),
+                actor=ActorRef(ActorRole.ASSISTANT, entry_agent),
                 entity_id=session_id,
                 case_id=case_id,
                 customer_id=customer_id,
@@ -186,6 +186,10 @@ class AssistantSession(AggregateRoot):
         return (
             self.step_up_verified_at is not None and now - self.step_up_verified_at < STEP_UP_WINDOW
         )
+
+    def _assistant(self) -> ActorRef:
+        """The agent serving the session (ADR 0003): its events are the assistant's own."""
+        return ActorRef(ActorRole.ASSISTANT, self.agent or self.entry_agent)
 
     def _require_active(self) -> None:
         if not self.is_active:
@@ -289,7 +293,7 @@ class AssistantSession(AggregateRoot):
         self._record(
             AssistantTurnAnswered(
                 occurred_at=at,
-                actor=ActorRef.system(),
+                actor=self._assistant(),
                 entity_id=self.id,
                 case_id=self.case_id,
                 agent=self.agent,
@@ -398,7 +402,7 @@ class AssistantSession(AggregateRoot):
         self._record(
             AssistantEnded(
                 occurred_at=at,
-                actor=actor or ActorRef.system(),
+                actor=actor or self._assistant(),
                 entity_id=self.id,
                 case_id=self.case_id,
                 result=state.value,

@@ -47,8 +47,13 @@ from cc_platform.domain.ai.maturity import (
     MaturityStage,
     StageRule,
 )
-from cc_platform.domain.ai.maturity_events import STAGE_EVENTS, CopilotToolUsed
-from cc_platform.domain.ai.suggestion import SuggestionStatus
+from cc_platform.domain.ai.maturity_events import STAGE_EVENTS, CopilotItemDecided, CopilotToolUsed
+from cc_platform.domain.ai.suggestion import (
+    ActionSuggestion,
+    CopilotSuggestion,
+    SuggestionStatus,
+    ToolSuggestion,
+)
 from cc_platform.domain.cases.events import CaseClosed
 from cc_platform.domain.cases.values import CaseType, CloseReason
 from cc_platform.domain.people.staff import StaffRole
@@ -101,6 +106,15 @@ async def copilot_mode_for(uow: UnitOfWork, case_type: CaseType) -> CopilotMode 
         return None
     maturity = await uow.case_type_maturity.get(case_type)
     return maturity.copilot_mode if maturity is not None else None
+
+
+_MODE_RANK = {CopilotMode.ANSWER: 1, CopilotMode.TOOLS: 2, CopilotMode.DRAFTS: 3}
+
+
+async def mode_allows(uow: UnitOfWork, case_type: CaseType, minimum: CopilotMode) -> bool:
+    """Whether the case type's stage reaches ``minimum`` (the SPA hides it, the server refuses)."""
+    mode = await copilot_mode_for(uow, case_type)
+    return mode is not None and _MODE_RANK[mode] >= _MODE_RANK[minimum]
 
 
 # ----------------------------------------------------------------------------------- signals
@@ -431,12 +445,77 @@ class RecordToolUsed:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordItemDecision:
+    """``POST /cases/{caseId}/copilot/suggestions/{suggestionId}/items``: what the analyst did with
+    a tool, an action or the escalation recommendation of her suggestion (used or dismissed).
+    A used ``tool`` is also ``copilot.tool_used`` (the stage 2 signal); everything else is
+    ``copilot.item_decided``. Her own ``ready`` suggestion, on her open case, an item it holds."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+    switch: AiSwitch
+
+    async def execute(
+        self, actor: Actor, case_id: str, suggestion_id: str, *, item: str, ref: str, decision: str
+    ) -> None:
+        ensure_any_role(actor, {StaffRole.ANALYST})
+        async with self.uow() as uow:
+            if not await self.switch.is_on_in(uow):
+                raise AssistantDisabledError()
+            case = await load_case_for(uow, actor, case_id, write=True)
+            suggestion = await uow.copilot_suggestions.get(suggestion_id)
+            if (
+                suggestion is None
+                or suggestion.case_id != case.id
+                or suggestion.analyst_id != actor.staff_id
+                or suggestion.status is not SuggestionStatus.READY
+                or not _holds(suggestion, item, ref)
+            ):
+                raise NotFoundError("No encontramos ese elemento en la sugerencia.")
+            now = self.clock.now()
+            who = actor.acting_as({StaffRole.ANALYST})
+            event: DomainEvent
+            if item == "tool" and decision == "used":
+                event = CopilotToolUsed(
+                    occurred_at=now,
+                    actor=who,
+                    entity_id=suggestion.id,
+                    case_id=case.id,
+                    tool=ref,
+                )
+            else:
+                event = CopilotItemDecided(
+                    occurred_at=now,
+                    actor=who,
+                    entity_id=suggestion.id,
+                    case_id=case.id,
+                    item=item,
+                    ref=ref,
+                    decision=decision,
+                )
+            uow.record(event)
+            await uow.commit()
+
+
+def _holds(suggestion: CopilotSuggestion, item: str, ref: str) -> bool:
+    if item == "escalate":
+        return suggestion.recommends_escalation
+    held = {
+        i.tool
+        for i in suggestion.items
+        if i.kind == item and isinstance(i, ToolSuggestion | ActionSuggestion)
+    }
+    return ref in held
+
+
+@dataclass(frozen=True, slots=True)
 class MaturityUseCases:
     """Slice 21: the stages per case type (whatever agent-core says: they are platform data)."""
 
     stages: GetAiStages
     move_back: MoveStageBack
     tool_used: RecordToolUsed
+    item_decided: RecordItemDecision
     activate_agent: ActivateTypeAgent
 
 

@@ -25,6 +25,7 @@ from functools import partial
 
 from cc_platform.application.ai.credentials import AgentCredentialIssuer, AgentCredentials
 from cc_platform.application.ai.errors import AgentCoreRejectedError, AgentCoreUnavailableError
+from cc_platform.application.ai.maturity import copilot_mode_for, mode_allows
 from cc_platform.application.ai.runtime import (
     AgentRun,
     AgentRuntime,
@@ -40,6 +41,7 @@ from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor, ensure_any_role
 from cc_platform.domain.ai.errors import CopilotBusyError, CopilotUnavailableError
+from cc_platform.domain.ai.maturity import CopilotMode
 from cc_platform.domain.ai.suggestion import (
     DRAFT_TTL,
     CopilotSuggestion,
@@ -135,6 +137,10 @@ def previous_state(previous: CopilotSuggestion | None) -> tuple[str | None, bool
     return draft, previous.escalation_accepted
 
 
+#: The stages that suggest (stage 2 proposes tools, 3 also drafts): the agent's `modo_copiloto`.
+_SUGGESTING_MODES = (CopilotMode.TOOLS, CopilotMode.DRAFTS)
+
+
 def build_input(
     *,
     case: Case,
@@ -143,12 +149,15 @@ def build_input(
     previous: CopilotSuggestion | None,
     now: datetime,
     assistant_session_id: str | None = None,
+    copilot_mode: CopilotMode | None = None,
 ) -> dict[str, object]:
     """The ``input`` of a suggestion run: the recent turns and the facts of the case, **flat** as
     agent-core's ``input_schema`` takes it (scalars and one list of flat turns; a slot it does not
     declare or a null is a 422). What does not apply is **left out**, never sent as null. The
     turns' text is the customer's and the analyst's own words: agent-core treats it as untrusted.
-    ``assistant_session_id`` is traceability (the assistant's agent-core session), not memory."""
+    ``assistant_session_id`` is traceability (the assistant's agent-core session), not memory.
+    ``copilot_mode`` is the case type's stage (``modo_copiloto``: ``tools`` or ``drafts``) so the
+    agent skips the reply below stage 3; unknown, it is left out."""
     spoken = _speech(turns)[-CONTEXT_TURNS:]
     sla, minutes = sla_state(case, now)
     draft, escalation_accepted = previous_state(previous)
@@ -158,6 +167,7 @@ def build_input(
         "sugerencia_borrador": draft,
         "sugerencia_escalacion_aceptada": escalation_accepted,
         "assistant_session_id": assistant_session_id,
+        "modo_copiloto": copilot_mode.value if copilot_mode in _SUGGESTING_MODES else None,
     }
     return {
         "idioma": case.language.value,
@@ -188,6 +198,8 @@ class Prepared:
     language: str
     replay: CopilotSuggestion | None = None
     """A manual retry of a request that already has its answer: nothing to ask."""
+    drafts: bool = True
+    """False below stage 3: a ``reply`` the agent still sends is dropped, the SPA never shows it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +211,8 @@ class SuggestionService:
     issuer: AgentCredentialIssuer
     agent: str
     """The suggestions agent (``id@alias``), e.g. ``copiloto-sugerencias@prod``."""
+    stage_gate: bool = False
+    """Slice 21: a manual suggestion only for a case whose type is at stage 2 or more."""
 
     # ------------------------------------------------------------------ 1. prepare
     async def prepare_manual(self, actor: Actor, case_id: str, *, request_key: str) -> Prepared:
@@ -215,6 +229,8 @@ class SuggestionService:
             case = await load_case_for(uow, actor, case_id, write=True)
             analyst = actor.staff_id
             if await uow.bank_links.get(case.customer_id) is None:
+                raise CopilotUnavailableError()
+            if self.stage_gate and not await mode_allows(uow, case.case_type, CopilotMode.TOOLS):
                 raise CopilotUnavailableError()
             now = self.clock.now()
             existing = await uow.copilot_suggestions.get_by_request_key(
@@ -352,6 +368,7 @@ class SuggestionService:
         turns = await uow.turns.page(case.id, limit=CONTEXT_TURNS * 2)
         assignment = await uow.assignments.latest_for_case(case.id)
         assistant = await uow.assistant_sessions.get_by_case(case.id)
+        mode = await copilot_mode_for(uow, case.case_type) if self.stage_gate else None
         return Prepared(
             suggestion_id=suggestion.id,
             credentials=await advisor_credentials(uow, self.issuer, self.clock, case, analyst),
@@ -362,9 +379,11 @@ class SuggestionService:
                 previous=previous,
                 now=now,
                 assistant_session_id=assistant.agent_session_id if assistant else None,
+                copilot_mode=mode,
             ),
             language=case.language.value,
             replay=replay,
+            drafts=mode is not CopilotMode.TOOLS,
         )
 
     # ------------------------------------------------------------------ 2 and 3. produce
@@ -393,16 +412,22 @@ class SuggestionService:
                     agent_core_code=error.code, agent_core_status=error.status
                 ) from None
             return await self._read(prepared.suggestion_id)
-        return await retry_on_conflict(partial(self._store_answer, prepared.suggestion_id, run))
+        return await retry_on_conflict(
+            partial(self._store_answer, prepared.suggestion_id, run, prepared.drafts)
+        )
 
-    async def _store_answer(self, suggestion_id: str, run: AgentRun) -> CopilotSuggestion:
+    async def _store_answer(
+        self, suggestion_id: str, run: AgentRun, drafts: bool = True
+    ) -> CopilotSuggestion:
         async with self.uow() as uow:
             suggestion = await uow.copilot_suggestions.get(suggestion_id)
             if suggestion is None:
                 raise NotFoundError("No encontramos la sugerencia.")
             if suggestion.status is SuggestionStatus.PREPARING:
                 suggestion.record_answer(
-                    raw=run.suggestions,
+                    raw=run.suggestions
+                    if drafts
+                    else tuple(s for s in run.suggestions if s.kind != "reply"),
                     run_id=run.run_id,
                     trace_id=run.trace_id,
                     release=run.release,
@@ -457,12 +482,15 @@ class GetLatestSuggestion:
 
     uow: UnitOfWorkFactory
     clock: Clock
+    stage_gate: bool = False
 
     async def execute(self, actor: Actor, case_id: str) -> LatestSuggestionView:
         ensure_any_role(actor, {StaffRole.ANALYST})
         async with self.uow() as uow:
             case = await load_case_for(uow, actor, case_id, write=True)
             if await uow.bank_links.get(case.customer_id) is None:
+                return LatestSuggestionView(available=False, latest=None)
+            if self.stage_gate and not await mode_allows(uow, case.case_type, CopilotMode.TOOLS):
                 return LatestSuggestionView(available=False, latest=None)
             latest = await uow.copilot_suggestions.latest_for(case.id, actor.staff_id)
             if latest is None or latest.purged_at is not None:

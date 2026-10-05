@@ -17,9 +17,14 @@ from cc_platform.api.dependencies import ApiContextDep, require_roles
 from cc_platform.api.schemas.ai_stages import (
     ActivateAgentRequest,
     ActivateAgentResult,
+    AiAgents,
     AiStages,
+    CaseTypeStage,
+    ItemDecisionRequest,
     MoveStageBackRequest,
     MoveStageBackResult,
+    PauseAgentRequest,
+    RenameAgentRequest,
     ToolUsedRequest,
 )
 from cc_platform.api.schemas.common import problem_responses
@@ -131,4 +136,116 @@ async def record_tool_used(
     api: ApiContextDep,
 ) -> Response:
     await api.use_cases.maturity.tool_used.execute(actor, case_id, suggestion_id, tool=body.tool)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/ai/agents",
+    response_model=AiAgents,
+    summary="The agents the platform knows: name to show and results (analysts and Supervisión)",
+    description=(
+        "ADR 0009. One row per agent that serves a case type or has held an assistant session: "
+        "`displayName` (Supervisión's name, else the id humanized), the type it serves and its "
+        "results (sessions, still open, resolved, handed to people), counted from the assistant "
+        "sessions by their last answering agent. AI off: `available: false`."
+    ),
+    responses=problem_responses(401, 403),
+)
+async def get_ai_agents(actor: AnalystOrSupervisor, api: ApiContextDep) -> AiAgents:
+    return AiAgents.from_view(await api.use_cases.agent_catalog.agents.execute(actor))
+
+
+@router.put(
+    "/supervision/ai/stages/{caseType}/agent/name",
+    response_model=CaseTypeStage,
+    summary="Name the agent that serves a case type (Supervisión)",
+    description=(
+        "ADR 0009. 1 to 80 characters. 404 `not_found`: the type has no agent; 404 "
+        "`assistant_disabled`: AI off. Audited (`ai.agent_renamed`, without the name), live on "
+        "`ai:stages`."
+    ),
+    responses=problem_responses(401, 403, 404, 422),
+)
+async def rename_agent(
+    case_type: Annotated[str, Path(alias="caseType", max_length=40, examples=["undue_charge"])],
+    body: RenameAgentRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> CaseTypeStage:
+    view = await api.use_cases.agent_catalog.rename.execute(actor, case_type, name=body.name)
+    return CaseTypeStage.from_view(view)
+
+
+@router.post(
+    "/supervision/ai/stages/{caseType}/agent/pause",
+    response_model=CaseTypeStage,
+    summary="Pause the agent of a case type (Supervisión)",
+    description=(
+        "ADR 0009 §2. The agent leaves the reception directory: new cases do not reach it, "
+        "open ones carry on, `prod` is untouched. Needs her authenticator code. Audited "
+        "(`ai.agent_paused`), live on `ai:stages`. Pausing a paused agent: 200, nothing changes. "
+        "404 `not_found` (no agent), `assistant_disabled` (AI off or no agent-core); "
+        "422 `builder_step_up_invalid`; `registry_*`; 502/503."
+    ),
+    responses=problem_responses(401, 403, 404, 422, 423, 502, 503),
+)
+async def pause_agent(
+    case_type: Annotated[str, Path(alias="caseType", max_length=40, examples=["undue_charge"])],
+    body: PauseAgentRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> CaseTypeStage:
+    view = await api.use_cases.agent_catalog.pause.execute(
+        actor, case_type, paused=True, reason=body.reason, step_up_code=body.step_up_code
+    )
+    return CaseTypeStage.from_view(view)
+
+
+@router.post(
+    "/supervision/ai/stages/{caseType}/agent/resume",
+    response_model=CaseTypeStage,
+    summary="Resume the agent of a case type (Supervisión)",
+    description="ADR 0009 §2. The reverse of `pause`; the same rules and problems.",
+    responses=problem_responses(401, 403, 404, 422, 423, 502, 503),
+)
+async def resume_agent(
+    case_type: Annotated[str, Path(alias="caseType", max_length=40, examples=["undue_charge"])],
+    body: PauseAgentRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> CaseTypeStage:
+    view = await api.use_cases.agent_catalog.pause.execute(
+        actor, case_type, paused=False, reason=body.reason, step_up_code=body.step_up_code
+    )
+    return CaseTypeStage.from_view(view)
+
+
+@router.post(
+    "/cases/{caseId}/copilot/suggestions/{suggestionId}/items",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="The analyst used or dismissed a tool, an action or the escalation recommendation",
+    description=(
+        "Slice 24. `item` is `tool`, `action` or `escalate` (`ref` is the item's `tool`, empty for "
+        "`escalate`); `decision` is `used` or `dismissed`. A used tool is `copilot.tool_used` "
+        "(the stage 2 signal); anything else is `copilot.item_decided`. Both are audited and the "
+        "suggestion is not changed. Her own suggestion (`ready`), an item it holds: 404 "
+        "otherwise. AI off: 404 `assistant_disabled`."
+    ),
+    responses=problem_responses(401, 403, 404, 422),
+)
+async def record_item_decision(
+    case_id: CaseId,
+    suggestion_id: Annotated[str, Path(alias="suggestionId", max_length=64, examples=["CPS-01J…"])],
+    body: ItemDecisionRequest,
+    actor: Analyst,
+    api: ApiContextDep,
+) -> Response:
+    await api.use_cases.maturity.item_decided.execute(
+        actor,
+        case_id,
+        suggestion_id,
+        item=body.item,
+        ref=body.ref,
+        decision=body.decision,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

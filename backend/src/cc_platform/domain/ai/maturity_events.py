@@ -63,6 +63,38 @@ class CaseTypeAgentActivated(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CaseTypeAgentRenamed(DomainEvent):
+    """Supervisión changed the name the platform shows for the agent of the type (ADR 0009). The
+    name itself is not in the payload (free text); ``agent_id`` is agent-core's id."""
+
+    event_type = "ai.agent_renamed"
+    entity = "case_type"
+
+    case_type: str
+    agent_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CaseTypeAgentPaused(DomainEvent):
+    """Supervisión paused the agent of the type (out of ``recepcion``'s directory, ADR 0009 §2)."""
+
+    event_type = "ai.agent_paused"
+    entity = "case_type"
+
+    case_type: str
+    agent_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CaseTypeAgentResumed(DomainEvent):
+    event_type = "ai.agent_resumed"
+    entity = "case_type"
+
+    case_type: str
+    agent_id: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CopilotToolUsed(DomainEvent):
     """The analyst used a ``tool`` the copilot proposed ("Usar" in Herramientas)."""
 
@@ -72,13 +104,34 @@ class CopilotToolUsed(DomainEvent):
     tool: str
 
 
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotItemDecided(DomainEvent):
+    """What the analyst did with one item of a suggestion beyond a sent draft: she used or
+    dismissed a ``tool``, an ``action`` or the ``escalate`` recommendation (``ref`` is empty for
+    ``escalate``). A platform-side record next to the suggestion, which it does not change."""
+
+    event_type = "copilot.item_decided"
+    entity = "copilot"
+
+    item: str
+    ref: str
+    decision: str
+
+
 #: The stage changes of a case type: audited and signalled on ``ai:stages``.
 STAGE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseTypeStageAdvanced,
     CaseTypeStageMovedBack,
     CaseTypeAgentReady,
     CaseTypeAgentActivated,
+    CaseTypeAgentRenamed,
+    CaseTypeAgentPaused,
+    CaseTypeAgentResumed,
 )
 
 #: Every event of the maturity model (the stage changes and the tool feedback).
-MATURITY_EVENTS: tuple[type[DomainEvent], ...] = (*STAGE_EVENTS, CopilotToolUsed)
+MATURITY_EVENTS: tuple[type[DomainEvent], ...] = (
+    *STAGE_EVENTS,
+    CopilotToolUsed,
+    CopilotItemDecided,
+)

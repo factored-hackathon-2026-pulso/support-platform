@@ -16,6 +16,12 @@ import structlog
 from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
+from cc_platform.application.ai.agents import (
+    AgentCatalogUseCases,
+    GetAgents,
+    RenameAgent,
+    SetAgentPaused,
+)
 from cc_platform.application.ai.announce import AnnounceImprovement
 from cc_platform.application.ai.availability import (
     CoreStatus,
@@ -47,6 +53,7 @@ from cc_platform.application.ai.maturity import (
     MaturityRealtimeProjector,
     MaturityUseCases,
     MoveStageBack,
+    RecordItemDecision,
     RecordToolUsed,
     WhileTypeProposes,
 )
@@ -649,7 +656,7 @@ def _build_assistant(
             uow=uow, clock=clock, runtime=assistant_runtime, issuer=agent_core.issuer
         ),
         release=ReleaseAssistantCase(uow=uow, clock=clock, handover=handover),
-        copilot_thread=GetCopilotThread(uow=uow),
+        copilot_thread=GetCopilotThread(uow=uow, stage_gate=settings.stage_gates_suggestions),
         grant_status=GetGrantStatus(uow=uow),
         ask_copilot=AskCopilot(
             uow=uow,
@@ -658,6 +665,7 @@ def _build_assistant(
             runtime=agent_core.runtime_for(CallKind.COPILOT),
             issuer=agent_core.issuer,
             agent=settings.copilot_agent,
+            stage_gate=settings.stage_gates_suggestions,
         ),
         builder=_build_builder(
             settings,
@@ -733,11 +741,14 @@ def _build_suggestions(
         runtime=agent_core.runtime_for(CallKind.SUGGESTIONS),
         issuer=agent_core.issuer,
         agent=settings.copilot_suggestions_agent,
+        stage_gate=settings.stage_gates_suggestions,
     )
     return SuggestionUseCases(
         service=service,
         request=RequestSuggestion(service=service, uow=uow),
-        latest=GetLatestSuggestion(uow=uow, clock=clock),
+        latest=GetLatestSuggestion(
+            uow=uow, clock=clock, stage_gate=settings.stage_gates_suggestions
+        ),
         decide=DecideSuggestion(uow=uow, clock=clock),
         link=LinkSuggestion(uow=uow, clock=clock),
         purge=PurgeSuggestionDrafts(uow=uow, clock=clock),
@@ -1146,7 +1157,22 @@ def build_container(
             stages=GetAiStages(uow=uow, switch=ai_switch, rule=stage_rule),
             move_back=MoveStageBack(uow=uow, clock=clock, switch=ai_switch),
             tool_used=RecordToolUsed(uow=uow, clock=clock, switch=ai_switch),
+            item_decided=RecordItemDecision(uow=uow, clock=clock, switch=ai_switch),
             activate_agent=ActivateTypeAgent(
+                uow=uow,
+                clock=clock,
+                switch=ai_switch,
+                builder=(
+                    assistant_use_cases.builder.registry
+                    if assistant_use_cases is not None and assistant_use_cases.builder is not None
+                    else None
+                ),
+            ),
+        ),
+        agent_catalog=AgentCatalogUseCases(
+            agents=GetAgents(uow=uow, switch=ai_switch),
+            rename=RenameAgent(uow=uow, clock=clock, switch=ai_switch),
+            pause=SetAgentPaused(
                 uow=uow,
                 clock=clock,
                 switch=ai_switch,

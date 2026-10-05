@@ -77,6 +77,7 @@ FAMILY: Mapping[str, AuditFamily] = {
     "copilot.suggestion_failed": AuditFamily.CONVERSATION,
     "copilot.suggestion_decided": AuditFamily.CONVERSATION,
     "copilot.tool_used": AuditFamily.CONVERSATION,
+    "copilot.item_decided": AuditFamily.CONVERSATION,
     # the agent builder (slice 16): who changed which agent, and who approved and published it
     "builder.proposal_created": AuditFamily.AGENTS,
     "builder.proposal_tracked": AuditFamily.AGENTS,
@@ -141,6 +142,9 @@ FAMILY: Mapping[str, AuditFamily] = {
     "ai.stage_moved_back": AuditFamily.AGENTS,
     "ai.agent_ready": AuditFamily.AGENTS,
     "ai.agent_activated": AuditFamily.AGENTS,
+    "ai.agent_renamed": AuditFamily.AGENTS,
+    "ai.agent_paused": AuditFamily.AGENTS,
+    "ai.agent_resumed": AuditFamily.AGENTS,
     # the AI switch (slice 18): a platform-wide setting of Administración
     "platform.ai_toggled": AuditFamily.ADMINISTRATION,
     # …and what the person does with the link (her own access)
@@ -182,6 +186,9 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "ai.stage_moved_back",
         "ai.agent_ready",
         "ai.agent_activated",
+        "ai.agent_renamed",
+        "ai.agent_paused",
+        "ai.agent_resumed",
         "escalation.opened",
         "escalation.withdrawn",
         "escalation.answered",
@@ -726,11 +733,15 @@ _DESCRIBERS: Mapping[str, Describer] = {
     "copilot.suggestion_failed": _fixed("audit.copilot.suggestionFailed"),
     "copilot.suggestion_decided": _suggestion_decided,
     "copilot.tool_used": _fixed("audit.copilot.toolUsed"),
+    "copilot.item_decided": _fixed("audit.copilot.itemDecided"),
     # slice 21: the stages per case type (the rule's steps are the system's)
     "ai.stage_advanced": _stage_advanced,
     "ai.stage_moved_back": _stage_moved_back,
     "ai.agent_ready": _about_type("audit.stage.agentReady"),
     "ai.agent_activated": _about_type("audit.stage.agentActivated"),
+    "ai.agent_renamed": _about_type("audit.stage.agentRenamed"),
+    "ai.agent_paused": _about_type("audit.stage.agentPaused"),
+    "ai.agent_resumed": _about_type("audit.stage.agentResumed"),
     # slice 16: the agent builder (the audit never shows a draft, a reason or a chat text)
     "builder.proposal_created": _fixed("audit.builder.proposalCreated"),
     "builder.proposal_tracked": _fixed("audit.builder.proposalTracked"),

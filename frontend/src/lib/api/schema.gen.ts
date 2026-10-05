@@ -1129,10 +1129,30 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Dismiss the copilot's draft
-     * @description ADR 0005. `discarded` (the analyst dismissed the draft) or `ignored` (she left it). The draft leaves the list; the rest of the suggestion stays. `used` and `edited` are derived when she replies with `copilotSuggestionId`. 404 for an id that is not hers.
+     * Dismiss the copilot's draft or its recommendation to escalate
+     * @description ADR 0005. For the draft (`subject: reply`): `discarded` (the analyst dismissed it) or `ignored` (she left it). For the recommendation (`subject: escalation`): `dismissed` ("Ahora no"). What was decided leaves the list; the rest of the suggestion stays. `used` and `edited` are derived when she replies with `copilotSuggestionId`; `accepted` when she escalates with it. 404 for an id that is not hers.
      */
     post: operations['cases_decide_copilot_suggestion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/shown': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * The analyst's screen showed the copilot's suggestion
+     * @description Event catalog 1.3.0. Send it when a `ready` suggestion is on screen (the draft, the recommendation to escalate or "Herramientas"). Records `copilot.suggestion_shown` once per suggestion (audited, no text); a repeat, or one with nothing left to show, records nothing and is still 204. 404 for an id that is not hers.
+     */
+    post: operations['cases_copilot_suggestion_shown']
     delete?: never
     options?: never
     head?: never
@@ -3493,6 +3513,12 @@ export interface components {
        * @description ADR 0003: only for a case that came from the assistant. How useful its handoff was (`useful`, `incomplete`, `unnecessary`); sent to agent-core as the label of that handoff. Left out, nothing is sent.
        */
       handoffQuality?: ('useful' | 'incomplete' | 'unnecessary') | null
+      /**
+       * Handoffreasked
+       * @description Only with `handoffQuality: incomplete`: what the analyst had to ask the customer again (closed list; a repeated value counts once). Recorded in the audit event `case.handoff_rated`; not sent to agent-core. 422 with another quality.
+       */
+      handoffReasked?:
+        ('identity' | 'amount' | 'merchant' | 'date' | 'product' | 'reason' | 'other')[] | null
       /** Note */
       note: string | null
       reason: components['schemas']['CloseReason']
@@ -6075,10 +6101,17 @@ export interface components {
     SuggestionFeedbackRequest: {
       /**
        * Decision
-       * @description The analyst dismissed the draft (`discarded`) or left it (`ignored`). `used` and `edited` are not posted: send `copilotSuggestionId` with the reply.
+       * @description `reply`: the analyst dismissed the draft (`discarded`) or left it (`ignored`); `used` and `edited` are not posted: send `copilotSuggestionId` with the reply. `escalation`: she answered "Ahora no" (`dismissed`): the recommendation leaves the suggestion. Any other pair is 422.
        * @enum {string}
        */
-      decision: 'discarded' | 'ignored'
+      decision: 'discarded' | 'ignored' | 'dismissed'
+      /**
+       * Subject
+       * @description What the decision is about: the draft (`reply`, the default) or the recommendation to escalate (`escalation`).
+       * @default reply
+       * @enum {string}
+       */
+      subject: 'reply' | 'escalation'
     }
     /** SuggestionReply */
     SuggestionReply: {
@@ -11093,6 +11126,63 @@ export interface operations {
         content: {
           'application/json': components['schemas']['CopilotSuggestion']
         }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_copilot_suggestion_shown: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        suggestionId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
       /** @description Problem details (RFC 7807) */
       401: {

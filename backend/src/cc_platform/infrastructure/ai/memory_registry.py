@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from cc_platform.application.ai.credentials import AgentCredentials
 from cc_platform.application.ai.registry import (
+    MAX_PROPOSAL_PAGE,
     AgentRegistryError,
     AliasChange,
     AliasState,
@@ -39,6 +41,7 @@ from cc_platform.application.ai.registry import (
     Proposal,
     ProposalDetail,
     ProposalOrigin,
+    ProposalPage,
     ProposalState,
     ReleaseDetail,
     ReleaseDiff,
@@ -61,6 +64,11 @@ class RecordedRegistryCall:
     """The principal the platform signed (type, id, roles, attrs, auth), as the registry read it."""
 
 
+#: agent-core's ``Proposal``: ``agent_id`` matches this and ``title`` is 1-200 characters.
+AGENT_ID = re.compile(r"^[a-z0-9][a-z0-9_/-]*$")
+MAX_TITLE = 200
+
+
 def _deny(code: str, detail: str, status: int = 403) -> AgentRegistryError:
     return AgentRegistryError(status=status, code=code, detail=detail)
 
@@ -76,6 +84,8 @@ class InMemoryAgentRegistry:
     violations: list[Violation] = field(default_factory=list)
     verdicts: list[str] = field(default_factory=list)
     loosened: list[YardstickChange] = field(default_factory=list)
+    listing_failure: Exception | None = None
+    """When set, ``list_proposals`` raises it (an older agent-core, or one that fails to list)."""
     _proposals: dict[str, Proposal] = field(default_factory=dict)
     _changes: dict[str, tuple[EntityDraft, ...]] = field(default_factory=dict)
     _evals: dict[str, EvalRun] = field(default_factory=dict)
@@ -167,6 +177,24 @@ class InMemoryAgentRegistry:
             "create_proposal", credentials, agent_id=agent_id, title=title, origin=origin.value
         )
         self._require_constructor(principal)
+        problems = [
+            field
+            for field, ok in (
+                ("agent_id", AGENT_ID.fullmatch(agent_id) is not None),
+                ("title", 1 <= len(title) <= MAX_TITLE),
+            )
+            if not ok
+        ]
+        if problems:  # agent-core's ``REG-PROPOSAL`` (the model refuses the proposal)
+            raise AgentRegistryError(
+                status=422,
+                code="validation_failed",
+                detail="la propuesta no es válida",
+                violations=[
+                    Violation("REG-PROPOSAL", None, None, name, f"`{name}` no es válido")
+                    for name in problems
+                ],
+            )
         self._count += 1
         proposal = Proposal(
             proposal_id=self._proposal_id(),
@@ -210,6 +238,37 @@ class InMemoryAgentRegistry:
         self._proposals[proposal.proposal_id] = proposal
         self._changes[proposal.proposal_id] = ()
         return proposal.proposal_id
+
+    async def list_proposals(
+        self,
+        credentials: AgentCredentials,
+        *,
+        agent_id: str | None = None,
+        state: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ProposalPage:
+        """Like agent-core's listing: any ``builder``, newest first (``updated_at``, then id),
+        ``limit`` capped at 200."""
+        self._enter(
+            "list_proposals",
+            credentials,
+            agent_id=agent_id,
+            state=state,
+            limit=limit,
+            offset=offset,
+        )
+        if self.listing_failure is not None:
+            raise self.listing_failure
+        found = [
+            p
+            for p in self._proposals.values()
+            if (agent_id is None or p.agent_id == agent_id)
+            and (state is None or p.state.value == state)
+        ]
+        found.sort(key=lambda p: (p.updated_at, p.proposal_id), reverse=True)
+        page = found[offset : offset + min(limit, MAX_PROPOSAL_PAGE)]
+        return ProposalPage(items=tuple(page), total=len(found))
 
     async def get_proposal(
         self, credentials: AgentCredentials, *, proposal_id: str

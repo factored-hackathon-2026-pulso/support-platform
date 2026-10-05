@@ -175,9 +175,11 @@ uv run python -m cc_platform.scripts.gen_agent_keys --suffix 2026-10
    customer as the delegation. A case that never had the assistant sends no input.
 
 `private.json` holds the seeds: never commit it; in a deployment it belongs in a secrets manager.
-`tests/contracts/agent-core-openapi.json` is a copy of agent-core's contract (`1.3.0`); refresh it and
-`agent-core-contract-version.txt` when agent-core's contract changes, and the contract test tells
-whether the adapter still fits.
+`tests/contracts/agent-core-openapi.json` is a copy of agent-core's contract (`1.4.0`); refresh it,
+`agent-core-registry/*.json` (agent-core's `contracts/registry/`), the listing extract
+`agent-core-registry-listing.json` (`GET /v1/registry/proposals` from `contracts/registry-openapi.json`)
+and `agent-core-contract-version.txt` when agent-core's contract changes, and the contract tests tell
+whether the adapters still fit.
 
 Frontend (`frontend/.env.local`, template in `frontend/.env.example`):
 

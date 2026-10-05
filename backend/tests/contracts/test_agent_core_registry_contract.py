@@ -13,6 +13,11 @@ Two directions are checked:
 - what agent-core **answers**: every canned answer below is validated against the published model
   *before* the adapter reads it, so the fixtures stay truthful and the adapter parses real shapes.
 
+The proposal list (``GET /v1/registry/proposals``, contract 1.4.0) is not in
+``contracts/registry/``: ``agent-core-registry-listing.json`` is an extract of
+``agent-core/contracts/registry-openapi.json`` (that operation and the schemas it uses). Its query
+parameters and its ``ProposalPage`` answer are checked against it.
+
 ``ProposalDetail``, ``ValidationReport`` and ``CandidateView`` are not published as schemas yet;
 they are composed from published pieces (``Proposal``, ``EntityDraft``, ``EvalRun``) and the fields
 ``registry/service.py`` declares. Ask agent-core to publish them.
@@ -34,6 +39,10 @@ from cc_platform.infrastructure.ai.http_registry import HttpAgentRegistry
 
 HERE = Path(__file__).parent
 SCHEMAS = HERE / "agent-core-registry"
+LISTING: dict[str, Any] = json.loads(
+    (HERE / "agent-core-registry-listing.json").read_text(encoding="utf-8")
+)
+LISTING_OPERATION: dict[str, Any] = LISTING["paths"]["/v1/registry/proposals"]["get"]
 BUILDER = AgentCredentials("a.b.c")
 NOW = "2026-10-04T15:00:00Z"
 HASH = "ab" * 32
@@ -42,6 +51,7 @@ HASH = "ab" * 32
 #: (a published schema name) or ``None``. From ``agent_core/registry/http.py``.
 ROUTES: dict[tuple[str, str], str | None] = {
     ("POST", "/v1/registry/proposals"): "CreateProposalBody",
+    ("GET", "/v1/registry/proposals"): None,  # query parameters: the listing extract
     ("GET", "/v1/registry/proposals/{pid}"): None,
     ("PUT", "/v1/registry/proposals/{pid}/draft"): "PutDraftBody",
     ("POST", "/v1/registry/proposals/{pid}/validate"): None,
@@ -126,6 +136,10 @@ def conforms(  # noqa: PLR0912 - one branch per JSON Schema keyword
 
 
 def check_answer(model: str, value: Any) -> None:
+    if model == "ProposalPage":  # from the listing extract (OpenAPI components)
+        components = LISTING["components"]["schemas"]
+        conforms(value, components[model], components, model)
+        return
     schema = load(model)
     conforms(value, schema, schema.get("$defs", {}), model)
 
@@ -201,6 +215,11 @@ def answer(method: str, template: str) -> tuple[int, Any]:
     """The answer agent-core gives to ``(method, template)``, validated against its schemas."""
     published: dict[tuple[str, str], tuple[int, str | None, Any]] = {
         ("POST", "/v1/registry/proposals"): (201, "Proposal", PROPOSAL),
+        ("GET", "/v1/registry/proposals"): (
+            200,
+            "ProposalPage",
+            {"items": [PROPOSAL, {**PROPOSAL, "origin": "builder_chat"}], "total": 2},
+        ),
         ("GET", "/v1/registry/proposals/{pid}"): (
             200,
             None,
@@ -346,6 +365,13 @@ def check_request(request: httpx.Request) -> str:
         conforms(body, schema, schema.get("$defs", {}), body_schema)
     if template.endswith("/publish"):
         assert request.headers["idempotency-key"], "publish needs an Idempotency-Key"
+    declared = (
+        {p["name"] for p in LISTING_OPERATION["parameters"] if p["in"] == "query"}
+        if (request.method, template) == ("GET", "/v1/registry/proposals")
+        else {"version"}  # ``GET /entities/{kind}/{eid}?version=``
+    )
+    sent = set(request.url.params.keys())
+    assert sent <= declared, f"{template}: query {sorted(sent - declared)} is not in the contract"
     return template
 
 
@@ -366,6 +392,10 @@ async def test_every_call_of_the_adapter_matches_the_published_registry_contract
         BUILDER, agent_id="disputas", title="Resumen", origin=ProposalOrigin.MANUAL
     )
     await api.get_proposal(BUILDER, proposal_id=pid)
+    page = await api.list_proposals(BUILDER, agent_id="disputas", state="draft", limit=50)
+    assert [p.proposal_id for p in page.items] == [pid, pid]
+    assert page.items[1].origin is ProposalOrigin.BUILDER_CHAT
+    assert page.total == 2
     await api.put_draft(
         BUILDER,
         proposal_id=pid,
@@ -425,7 +455,9 @@ def test_the_fixtures_would_fail_a_wrong_shape(model: str) -> None:
 def test_the_copied_registry_schemas_are_the_version_the_adapter_was_written_for() -> None:
     version = (HERE / "agent-core-contract-version.txt").read_text(encoding="utf-8").strip()
 
-    assert version == "1.3.0"
+    assert version == "1.4.0"
+    assert LISTING["info"]["version"] == "1.0.0"  # the registry API's own version
+    assert {p["name"] for p in LISTING_OPERATION["parameters"]} >= {"agent_id", "state", "limit"}
     assert {path.stem for path in SCHEMAS.glob("*.json")} >= {
         "CreateProposalBody",
         "PutDraftBody",

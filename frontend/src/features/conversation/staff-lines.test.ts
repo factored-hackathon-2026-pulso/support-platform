@@ -83,9 +83,13 @@ const LINES: readonly [StaffLine, string, string][] = [
     'Felipe Echeverri assumiu o caso de Daniela Ríos.',
   ],
   [
-    line('assistant_released', { reason: 'escalated', ref: 'HND-7' }),
-    'El asistente escaló el caso a una persona (traspaso HND-7).',
-    'O assistente escalou o caso para uma pessoa (transferência HND-7).',
+    // The handoff's reference stays in the facts, not in the text.
+    line('assistant_released', {
+      reason: 'escalated',
+      ref: '01a10aeb-5d3c-4e0f-9b52-7d1c2e3f4a5b',
+    }),
+    'El asistente escaló el caso a una persona.',
+    'O assistente escalou o caso para uma pessoa.',
   ],
   [
     line('assistant_released', { reason: 'supervision' }),

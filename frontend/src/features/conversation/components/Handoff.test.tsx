@@ -62,7 +62,7 @@ const banner = makeTurn({
   authorRole: 'system',
   authorId: null,
   authorName: null,
-  text: 'El asistente escaló el caso a una persona (traspaso hnd-7).',
+  text: 'El asistente escaló el caso a una persona.',
 })
 
 beforeEach(() => {
@@ -97,9 +97,7 @@ describe('the assistant in the analyst conversation (slice 19)', () => {
     const bubble = text.closest('div')
     expect(bubble).toHaveClass('bg-assistant-bubble', 'border-accent-border')
     expect(bubble).toHaveTextContent('Asistente virtual: Listo')
-    expect(
-      screen.getByText('El asistente escaló el caso a una persona (traspaso hnd-7).'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('El asistente escaló el caso a una persona.')).toBeInTheDocument()
   })
 
   it('explains how it arrived and leads the handoff card with why, priority and queue', async () => {

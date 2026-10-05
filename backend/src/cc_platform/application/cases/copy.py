@@ -292,9 +292,11 @@ def confirmation_notice(language: Language, *, confirmed: bool) -> str:
     return (NOTICE_CONFIRMED if confirmed else NOTICE_DECLINED)[language]
 
 
-#: Staff-only banner (``routing`` turn) when the case leaves the assistant, by release reason.
+#: Staff-only banner (``routing`` turn) when the case leaves the assistant, by release reason. The
+#: handoff's reference is not in the text: it is an agent-core UUID the analyst has no use for (the
+#: handoff card shows its content); the line's facts keep it.
 _ASSISTANT_RELEASE_TEXT: dict[str, str] = {
-    "escalated": "El asistente escaló el caso a una persona (traspaso {ref}).",
+    "escalated": "El asistente escaló el caso a una persona.",
     "ended": "El asistente terminó su atención sin resolver el caso ({code}).",
     "failed": "El asistente no pudo seguir atendiendo ({code}). El caso pasa a una persona.",
     "supervision": "{who} tomó el caso del asistente.",

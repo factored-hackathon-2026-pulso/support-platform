@@ -469,7 +469,7 @@ export default {
     escalationAnswered: '{{supervisor}} respondeu ao escalonamento.',
     escalationTaken: '{{supervisor}} assumiu o caso de {{previous}}.',
     assistantReleased: {
-      escalated: 'O assistente escalou o caso para uma pessoa (transferência {{ref}}).',
+      escalated: 'O assistente escalou o caso para uma pessoa.',
       ended: 'O assistente encerrou o atendimento sem resolver o caso ({{code}}).',
       failed:
         'O assistente não conseguiu continuar o atendimento ({{code}}). O caso passa para uma pessoa.',
@@ -477,7 +477,6 @@ export default {
       customer_request: 'O cliente pediu para falar com uma pessoa.',
       ai_disabled: 'IA desativada: o caso passou do assistente para uma pessoa.',
     },
-    noReference: 'sem referência',
     noDetail: 'sem detalhe',
     supervision: 'Supervisão',
     followUpCall: '{{analyst}} abriu este caso para ligar para {{customer}} (acompanhamento).',

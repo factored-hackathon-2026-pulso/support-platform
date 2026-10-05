@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { IconButton } from './IconButton'
 import { useModal } from './use-modal'
+import { useTranslation } from '@/lib/i18n'
 
 export interface SheetProps {
   open: boolean
@@ -37,6 +38,7 @@ export function Sheet({
   initialFocusRef,
   className,
 }: SheetProps) {
+  const { t } = useTranslation()
   const titleId = useId()
   const descriptionId = useId()
   const close = () => onOpenChange(false)
@@ -79,7 +81,7 @@ export function Sheet({
               ) : null}
             </div>
           )}
-          <IconButton aria-label="Cerrar" icon={<X size={16} />} onClick={close} />
+          <IconButton aria-label={t('actions.close')} icon={<X size={16} />} onClick={close} />
         </div>
         <div className="flex min-h-0 grow flex-col gap-5 overflow-y-auto p-6">{children}</div>
         {footer ? (

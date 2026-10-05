@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { ToastContext, type ToastOptions, type ToastRecord } from './toast-context'
+import { useTranslation } from '@/lib/i18n'
 
 /** Default time on screen for toasts without actions (ms). */
 export const TOAST_DURATION = 6000
@@ -39,6 +40,7 @@ const CLEARANCE_GAP = 12
  * while a modal is open is still announced.
  */
 export function ToastProvider({ children, limit = 3 }: ToastProviderProps) {
+  const { t } = useTranslation()
   const [toasts, setToasts] = useState<ToastRecord[]>([])
   const nextId = useRef(1)
 
@@ -72,7 +74,7 @@ export function ToastProvider({ children, limit = 3 }: ToastProviderProps) {
       {children}
       {createPortal(
         <section
-          aria-label="Avisos"
+          aria-label={t('toast.region')}
           data-toast-region
           style={{ bottom: clearance > 0 ? clearance + CLEARANCE_GAP : EDGE_GAP }}
           className="pointer-events-none fixed right-6 z-40 flex w-[380px] max-w-[calc(100vw-48px)] flex-col"
@@ -102,6 +104,7 @@ interface ToastItemProps {
 }
 
 function ToastItem({ toast, dismiss }: ToastItemProps) {
+  const { t } = useTranslation()
   const { id, title, description, tag, meta, actions = [] } = toast
   const duration =
     toast.duration === undefined ? (actions.length > 0 ? null : TOAST_DURATION) : toast.duration
@@ -175,7 +178,7 @@ function ToastItem({ toast, dismiss }: ToastItemProps) {
         {actions.length === 0 ? (
           <button
             type="button"
-            aria-label="Cerrar aviso"
+            aria-label={t('toast.dismiss')}
             onClick={() => dismiss(id)}
             className="-mt-1 -mr-1 flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-8 text-on-dark-muted hover:bg-rail-active hover:text-white focus-visible:outline-accent-muted"
           >

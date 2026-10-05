@@ -4,6 +4,7 @@ import { useRailIndicators, useRailPresence } from '@/app/rail-indicators'
 import { useCurrentRole } from '@/app/session'
 import { NavigationProgress } from './NavigationProgress'
 import { Rail } from './Rail'
+import { ScreenSuspense } from './ScreenSuspense'
 
 export interface AppShellProps {
   /** The rail's bell (slice 10), composed by the route table: layout never imports features. */
@@ -23,7 +24,9 @@ export function AppShell({ notifications }: AppShellProps = {}) {
       <NavigationProgress />
       <Rail role={role} indicators={indicators} presence={presence} notifications={notifications} />
       <div className="flex min-w-0 grow flex-col overflow-hidden">
-        <Outlet />
+        <ScreenSuspense>
+          <Outlet />
+        </ScreenSuspense>
       </div>
     </div>
   )

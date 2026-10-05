@@ -5,7 +5,7 @@
  * ("ES PT"), never the globe alone; a pt-BR customer shows PT. Where a name is shown
  * it is the language's own name ("Español", "Português"), never a translation of it.
  */
-import { joinEs } from '@/lib/format'
+import { formatList } from '@/lib/format'
 
 /** The API's `Language` values. */
 export type LanguageCode = 'es' | 'pt'
@@ -18,8 +18,8 @@ export const LANGUAGE_MARK_CODE: Record<LanguageCode, string> = { es: 'ES', pt: 
 
 /** Each language's own name (the tooltip and screen-reader name of its mark). */
 export const LANGUAGE_NATIVE_NAME: Record<LanguageCode, string> = {
-  es: 'Español',
-  pt: 'Português',
+  es: 'Español', // i18n-ignore: a language's own name, the same in every UI language
+  pt: 'Português', // i18n-ignore
 }
 
 /** The known languages of a list, once each, in canonical order. */
@@ -27,7 +27,10 @@ export function sortLanguages(languages: readonly string[]): LanguageCode[] {
   return LANGUAGE_CODES.filter((language) => languages.includes(language))
 }
 
-/** "Español", "Español y Português"; "" for none. The name of a group of marks. */
+/**
+ * "Español", "Español y Português" ("Español e Português" in a Portuguese UI); "" for none.
+ * The name of a group of marks.
+ */
 export function languagesName(languages: readonly string[]): string {
-  return joinEs(sortLanguages(languages).map((language) => LANGUAGE_NATIVE_NAME[language]))
+  return formatList(sortLanguages(languages).map((language) => LANGUAGE_NATIVE_NAME[language]))
 }

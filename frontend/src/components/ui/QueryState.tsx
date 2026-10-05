@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Button } from './Button'
 import { Callout } from './Callout'
+import { useTranslation } from '@/lib/i18n'
 
 /** The part of a TanStack Query result QueryState needs (structural, no import). */
 export interface QueryLike<T> {
@@ -42,23 +43,24 @@ export function QueryState<T>({
   skeleton,
   empty,
   isEmpty = defaultIsEmpty,
-  errorTitle = 'No pudimos cargar esta información',
-  errorDescription = 'Revisa tu conexión e inténtalo de nuevo.',
+  errorTitle,
+  errorDescription,
   children,
 }: QueryStateProps<T>) {
+  const { t } = useTranslation()
   if (query.status === 'pending') return <div aria-busy="true">{skeleton}</div>
   if (query.status === 'error' || query.data === undefined) {
     return (
       <Callout
         tone="danger"
-        title={errorTitle}
+        title={errorTitle ?? t('query.errorTitle')}
         actions={
           <Button size="sm" loading={query.isFetching} onClick={() => void query.refetch()}>
-            Reintentar
+            {t('actions.retry')}
           </Button>
         }
       >
-        {errorDescription}
+        {errorDescription ?? t('query.errorDescription')}
       </Callout>
     )
   }

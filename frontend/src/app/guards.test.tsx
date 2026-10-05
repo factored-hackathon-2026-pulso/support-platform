@@ -122,3 +122,29 @@ describe('route guards', () => {
     expect(screen.queryByRole('navigation', { name: 'Principal' })).not.toBeInTheDocument()
   })
 })
+
+describe('the shell in Brazilian Portuguese (slice 23)', () => {
+  it('names the session screens, the rail and the not found page in Portuguese', async () => {
+    renderRoute('/admin/rules', { staff: adminStaff, locale: 'pt-BR' })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Página não encontrada' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Este endereço não existe')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ir para administração' })).toBeInTheDocument()
+    const rail = screen.getByRole('navigation', { name: 'Principal' })
+    expect(
+      [...rail.querySelectorAll('a[aria-label]')].map((link) => link.getAttribute('aria-label')),
+    ).toEqual(['Usuários e perfis', 'Equipes', 'Auditoria', 'Plataforma'])
+  })
+
+  it('explains a missing role in Portuguese', async () => {
+    renderRoute('/analyst/cases', { staff: { ...analystStaff, roles: [] }, locale: 'pt-BR' })
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Sua conta não tem um perfil atribuído',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument()
+  })
+})

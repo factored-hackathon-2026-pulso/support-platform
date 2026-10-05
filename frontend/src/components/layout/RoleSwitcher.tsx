@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { LogOut } from 'lucide-react'
+import { Check, Globe, LogOut } from 'lucide-react'
+import { useSetUiLanguage } from '@/app/preferences'
 import { ROLES, type RailPresence, type RoleDefinition } from '@/app/roles'
 import { useCurrentUser, useSession } from '@/app/session'
 import { Avatar, Fact, Kicker } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { APP_LOCALES, LOCALE_NAME, useActiveLocale, useTranslation } from '@/lib/i18n'
 
 export interface RoleSwitcherProps {
   currentRole: RoleDefinition
@@ -15,7 +17,8 @@ export interface RoleSwitcherProps {
 const itemClass = 'flex min-h-10 w-full items-center rounded-8 px-2.5 text-14 text-ink'
 
 /**
- * Avatar button at the bottom of the rail. Opens a popover with the user, the
+ * Avatar button at the bottom of the rail. Opens a popover with the user, the language of
+ * the platform (slice 23: each by its own name, saved on her profile), the
  * CAMBIAR DE ROL list (only the roles the user holds, current one marked) and
  * sign out. Disclosure pattern: button[aria-expanded] + panel; Escape, an
  * outside click and tabbing out close it. 220px wide like the role boards
@@ -29,6 +32,10 @@ export function RoleSwitcher({ currentRole, presence = null }: RoleSwitcherProps
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelId = useId()
   const labelId = `${panelId}-label`
+  const languageId = `${panelId}-language`
+  const { t } = useTranslation(['shell', 'common'])
+  const locale = useActiveLocale()
+  const { setUiLanguage } = useSetUiLanguage()
 
   useEffect(() => {
     if (!open) return
@@ -64,7 +71,7 @@ export function RoleSwitcher({ currentRole, presence = null }: RoleSwitcherProps
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={`${user.name}, cambiar de rol`}
+        aria-label={t('accountMenu.open', { name: user.name })}
         title={`${user.name} (${user.id})`}
         onClick={() => setOpen((value) => !value)}
         className="cursor-pointer rounded-full focus-visible:outline-white"
@@ -112,10 +119,43 @@ export function RoleSwitcher({ currentRole, presence = null }: RoleSwitcherProps
           ) : null}
           <Kicker
             size="sm"
+            id={languageId}
+            className="flex items-center gap-1.5 border-t border-border-soft px-2.5 pt-1.5 pb-0.5"
+          >
+            <Globe size={12} aria-hidden="true" />
+            {t('accountMenu.language')}
+          </Kicker>
+          <ul aria-labelledby={languageId} className="m-0 flex list-none flex-col gap-0.5 p-0">
+            {APP_LOCALES.map((option) => {
+              const current = option === locale
+              return (
+                <li key={option}>
+                  <button
+                    type="button"
+                    lang={option}
+                    aria-pressed={current}
+                    onClick={() => {
+                      if (!current) setUiLanguage(option)
+                    }}
+                    className={cn(
+                      itemClass,
+                      'cursor-pointer justify-between',
+                      current ? 'bg-canvas font-semibold' : 'hover:bg-subtle',
+                    )}
+                  >
+                    {LOCALE_NAME[option]}
+                    {current ? <Check size={14} aria-hidden="true" /> : null}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <Kicker
+            size="sm"
             id={labelId}
             className="border-t border-border-soft px-2.5 pt-1.5 pb-0.5"
           >
-            Cambiar de rol
+            {t('accountMenu.switchRole')}
           </Kicker>
           <ul aria-labelledby={labelId} className="m-0 flex list-none flex-col gap-0.5 p-0">
             {user.roleIds.map((id) => {
@@ -150,7 +190,7 @@ export function RoleSwitcher({ currentRole, presence = null }: RoleSwitcherProps
             )}
           >
             <LogOut size={16} aria-hidden="true" />
-            Cerrar sesión
+            {t('common:actions.signOut')}
           </button>
         </div>
       ) : null}

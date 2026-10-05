@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 
 export type IconButtonVariant = 'secondary' | 'ghost' | 'primary' | 'soft'
 export type IconButtonSize = 'sm' | 'md'
@@ -40,11 +41,12 @@ export function IconButton({
   'aria-label': label,
   ...props
 }: IconButtonProps) {
+  const { t } = useTranslation()
   return (
     <button
       type={type}
       // aria-label replaces the content, so the alert state goes into the name itself.
-      aria-label={dot ? `${label}, con alertas` : label}
+      aria-label={dot ? t('withAlerts', { name: label }) : label}
       title={title ?? label}
       className={cn(
         'relative inline-flex shrink-0 cursor-pointer items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-50',

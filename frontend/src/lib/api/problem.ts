@@ -5,6 +5,7 @@
  */
 
 import type { Schemas } from './client'
+import { i18n } from '@/lib/i18n'
 
 /** Every code the server can answer: generated from `ProblemCode` in the OpenAPI contract. */
 export type ServerProblemCode = Schemas['ProblemCode']
@@ -30,8 +31,9 @@ export interface ProblemBody {
   [extension: string]: unknown
 }
 
-const GENERIC_MESSAGE = 'No pudimos completar la solicitud. Intenta de nuevo.'
-const NETWORK_MESSAGE = 'No hay conexión con el servidor. Revisa tu red e intenta de nuevo.'
+/** Read when a problem is built, so it is in the UI language of that moment. */
+const genericMessage = () => i18n.t('errors.generic')
+const networkMessage = () => i18n.t('errors.network')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -62,11 +64,11 @@ export class ApiProblem extends Error {
     detail?: string | null
     extensions?: Record<string, unknown>
   }) {
-    super(init.detail || init.title || GENERIC_MESSAGE)
+    super(init.detail || init.title || genericMessage())
     this.name = 'ApiProblem'
     this.status = init.status
     this.code = init.code
-    this.title = init.title ?? GENERIC_MESSAGE
+    this.title = init.title ?? genericMessage()
     this.detail = init.detail ?? null
     this.extensions = init.extensions ?? {}
   }
@@ -94,7 +96,7 @@ export class ApiProblem extends Error {
 
   /** The request never reached the server (DNS, CORS, offline, aborted). */
   static network(cause?: unknown): ApiProblem {
-    const problem = new ApiProblem({ status: 0, code: 'network_error', title: NETWORK_MESSAGE })
+    const problem = new ApiProblem({ status: 0, code: 'network_error', title: networkMessage() })
     if (cause !== undefined) Object.defineProperty(problem, 'cause', { value: cause })
     return problem
   }

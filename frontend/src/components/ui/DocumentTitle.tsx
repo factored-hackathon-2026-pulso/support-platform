@@ -1,3 +1,4 @@
+import { useTranslation } from '@/lib/i18n'
 import { formatDocumentTitle } from './document-title'
 
 export interface DocumentTitleProps {
@@ -12,5 +13,6 @@ export interface DocumentTitleProps {
  * do it from their `title`.
  */
 export function DocumentTitle({ title }: DocumentTitleProps) {
+  useTranslation() // the app suffix follows the UI language
   return <title>{formatDocumentTitle(title)}</title>
 }

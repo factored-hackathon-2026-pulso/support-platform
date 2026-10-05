@@ -1,5 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 
 export interface SpinnerProps {
   /** Accessible label. Pass `null` when the parent already announces loading. */
@@ -9,7 +10,8 @@ export interface SpinnerProps {
 }
 
 /** Indeterminate loading indicator. */
-export function Spinner({ label = 'Cargando', size = 16, className }: SpinnerProps) {
+export function Spinner({ label, size = 16, className }: SpinnerProps) {
+  const { t } = useTranslation()
   const icon = (
     <LoaderCircle
       aria-hidden="true"
@@ -17,13 +19,13 @@ export function Spinner({ label = 'Cargando', size = 16, className }: SpinnerPro
       className="animate-spin motion-reduce:animate-none"
     />
   )
-  if (!label)
+  if (label === null)
     return <span className={cn('inline-flex items-center text-current', className)}>{icon}</span>
   // <output> has the implicit "status" role: the label is announced politely.
   return (
     <output className={cn('inline-flex items-center text-current', className)}>
       {icon}
-      <span className="sr-only">{label}</span>
+      <span className="sr-only">{label ?? t('loading')}</span>
     </output>
   )
 }

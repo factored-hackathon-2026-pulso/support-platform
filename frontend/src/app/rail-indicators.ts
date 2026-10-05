@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useActiveLocale } from '@/lib/i18n'
 import { useLockedAccountsCount } from '@/features/admin/core'
 import { useAvailabilityPresence, useToReplyCount } from '@/features/cases/core'
 import { useOpenEscalationsCount, useQueuedCasesCount } from '@/features/supervision/core'
@@ -30,10 +31,8 @@ export function useRailIndicators(role: RoleId): RailIndicators {
   const toReply = useToReplyCount({ enabled: role === 'analyst', staffId: user?.id ?? null })
   return useMemo(() => {
     const indicators: RailIndicators = {}
-    if (queued) indicators.queuedCases = { count: queued, noun: ['sin asignar', 'sin asignar'] }
-    if (escalations) {
-      indicators.openEscalations = { count: escalations, noun: ['abierto', 'abiertos'] }
-    }
+    if (queued) indicators.queuedCases = { count: queued, noun: 'queued' }
+    if (escalations) indicators.openEscalations = { count: escalations, noun: 'escalations' }
     if (locked) indicators.lockedAccounts = { count: locked }
     if (toReply) indicators.toReplyCases = { count: toReply }
     return indicators
@@ -43,5 +42,6 @@ export function useRailIndicators(role: RoleId): RailIndicators {
 /** The presence dot on the rail avatar: the analyst's availability (slice 6 §4.4). */
 export function useRailPresence(role: RoleId): RailPresence | null {
   const status = useAvailabilityPresence({ enabled: role === 'analyst' })
-  return useMemo(() => presenceFor(status), [status])
+  const locale = useActiveLocale() // the dot's label follows the UI language
+  return useMemo(() => presenceFor(status, locale), [status, locale])
 }

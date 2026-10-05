@@ -106,6 +106,27 @@ export const routes: RouteObject[] = [
               () => import('@/routes/supervision/case'),
             ),
             lazyRoute(PATHS.supervision.audit, () => import('@/routes/supervision/audit')),
+            // Slice 22: "Automatización" (only with the AI switch on; the screens check it).
+            lazyRoute(
+              PATHS.supervision.automation,
+              () => import('@/routes/supervision/automation'),
+            ),
+            lazyRoute(
+              PATHS.supervision.automationProposals,
+              () => import('@/routes/supervision/automation-proposals'),
+            ),
+            lazyRoute(
+              `${PATHS.supervision.automationProposals}/:proposalId`,
+              () => import('@/routes/supervision/automation-proposal'),
+            ),
+            lazyRoute(
+              PATHS.supervision.automationAgents,
+              () => import('@/routes/supervision/automation-agents'),
+            ),
+            lazyRoute(
+              `${PATHS.supervision.automationAgents}/:agentId`,
+              () => import('@/routes/supervision/automation-agent'),
+            ),
             lazyRoute('*', () => import('@/routes/not-found')),
           ]),
           roleSection('admin', PATHS.admin.root, [

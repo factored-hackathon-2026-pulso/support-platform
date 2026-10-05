@@ -7,6 +7,7 @@
  */
 import type admin from './es/admin'
 import type audit from './es/audit'
+import type automation from './es/automation'
 import type auth from './es/auth'
 import type cases from './es/cases'
 import type common from './es/common'
@@ -32,6 +33,7 @@ export const NAMESPACES = [
   'workspace',
   'supervision',
   'audit',
+  'automation',
   'admin',
   'notifications',
   'customer',
@@ -54,6 +56,7 @@ export interface Resources {
   workspace: typeof workspace
   supervision: typeof supervision
   audit: typeof audit
+  automation: typeof automation
   admin: typeof admin
   notifications: typeof notifications
   customer: typeof customer

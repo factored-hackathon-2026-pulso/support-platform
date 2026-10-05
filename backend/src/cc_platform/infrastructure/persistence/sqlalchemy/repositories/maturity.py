@@ -65,6 +65,7 @@ class SqlCaseTypeMaturityRepository(VersionedRepository[CaseTypeMaturity]):
             "signals": signals_to_json(aggregate.signals),
             "stage_since": {str(k): v.isoformat() for k, v in aggregate.stage_since.items()},
             "agent_since": aggregate.agent_since,
+            "agent_id": aggregate.agent_id,
             "changed_at": aggregate.changed_at,
             "changed_by_id": aggregate.changed_by_id,
             "last_change": aggregate.last_change.value if aggregate.last_change else None,
@@ -80,6 +81,7 @@ class SqlCaseTypeMaturityRepository(VersionedRepository[CaseTypeMaturity]):
                 int(k): datetime.fromisoformat(v) for k, v in dict(row["stage_since"]).items()
             },
             agent_since=row["agent_since"],
+            agent_id=row["agent_id"],
             changed_at=row["changed_at"],
             changed_by_id=row["changed_by_id"],
             last_change=StageChange(row["last_change"]) if row["last_change"] else None,

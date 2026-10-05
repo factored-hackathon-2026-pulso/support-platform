@@ -62,3 +62,9 @@ export function stageStrip(stage: CaseTypeStage): StageStripView {
       : t('stage.line', { stage: stage.stage, text: stageText(stage.stage) }),
   }
 }
+
+/** How many case types the system proposes an agent for (slice 22: the rail's dot). */
+export function agentProposalCount(stages: AiStages | undefined): number {
+  if (!stages?.available) return 0
+  return stages.types.filter((entry) => entry.agent === 'ready').length
+}

@@ -212,6 +212,8 @@ class CaseTypeMaturity(AggregateRoot):
     stage_since: dict[int, datetime] = field(default_factory=dict)
     """When each reached stage (1-3) was reached; a stage left by moving back is removed."""
     agent_since: datetime | None = None
+    agent_id: str | None = None
+    """The agent-core agent that serves the type (set when Supervisión activates it, slice 22)."""
     changed_at: datetime | None = None
     changed_by_id: str | None = None
     """Who made the last change (``None``: the system, by the rule)."""
@@ -309,6 +311,7 @@ class CaseTypeMaturity(AggregateRoot):
         self.stage = to_stage
         self.agent = AgentStatus.NONE
         self.agent_since = None
+        self.agent_id = None
         self.stage_since = {k: v for k, v in self.stage_since.items() if k <= int(to_stage)}
         self.signals = StageSignals()
         self._changed(StageChange.MOVED_BACK, actor.actor_id, at)
@@ -325,15 +328,29 @@ class CaseTypeMaturity(AggregateRoot):
         )
         return True
 
-    def activate_agent(self, *, actor: ActorRef, at: datetime) -> bool:
-        """An agent now serves the type (slice 22's activation; the seed tells the story with
-        it). Only from "ready for an agent"."""
+    def check_activation(self, agent_id: str) -> bool:
+        """Whether ``agent_id`` may start serving the type: True when it would change it, False
+        when that agent already serves it (a no-op). Refused for a type not ready for an agent,
+        or while another agent serves it."""
+        if not agent_id.strip():
+            raise InvalidValueError("An agent id is required.", field="agent_id")
         if self.agent is AgentStatus.ACTIVE:
-            return False
+            if self.agent_id in (None, agent_id.strip()):
+                return False
+            raise InvalidTransitionError("Another agent already serves this case type.")
         if self.agent is not AgentStatus.READY:
             raise InvalidTransitionError("El tipo de caso todavía no está listo para un agente.")
+        return True
+
+    def activate_agent(self, *, agent_id: str, actor: ActorRef, at: datetime) -> bool:
+        """``agent_id`` now serves the type (slice 22: Supervisión promoted its release to
+        ``prod`` and activates it here; the seed tells the demo story with it). Only from "ready
+        for an agent"; activating the same agent again is a no-op (False)."""
+        if not self.check_activation(agent_id):
+            return False
         self.agent = AgentStatus.ACTIVE
         self.agent_since = at
+        self.agent_id = agent_id.strip()
         self._changed(StageChange.AGENT_ACTIVE, actor.actor_id, at)
         self._record(
             CaseTypeAgentActivated(
@@ -341,6 +358,7 @@ class CaseTypeMaturity(AggregateRoot):
                 actor=actor,
                 entity_id=self.case_type.value,
                 case_type=self.case_type.value,
+                agent_id=self.agent_id,
             )
         )
         return True

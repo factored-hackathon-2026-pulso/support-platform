@@ -1,4 +1,5 @@
 import {
+  Bot,
   CircleArrowUp,
   House,
   Inbox,
@@ -32,6 +33,8 @@ export type RailIndicatorKey =
   | 'lockedAccounts'
   /** Her open cases "Por responder" (fed by `useToReplyCount`, cases; slice 6). */
   | 'toReplyCases'
+  /** A case type is ready for an agent (fed by `useAiStages`, copilot; slice 22): a dot. */
+  | 'agentProposals'
 
 /**
  * What a rail count counts, for the accessible name: "Casos, 2 pendientes" (default),
@@ -83,6 +86,8 @@ export interface NavItem {
   end?: boolean
   /** Extra path prefixes that also mark this item as current (detail screens). */
   alsoActiveOn?: readonly string[]
+  /** Only while the AI functions are on (slice 22: "Automatización"); hidden otherwise. */
+  ai?: boolean
 }
 
 export interface RoleDefinition {
@@ -159,6 +164,13 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
         icon: CircleArrowUp,
         indicator: 'openEscalations',
       }),
+      // Slice 22: the case types' maturity, proposals and agents. Only with the AI switch on.
+      navItem('automation', {
+        to: PATHS.supervision.automation,
+        icon: Bot,
+        indicator: 'agentProposals',
+        ai: true,
+      }),
       navItem('audit', { to: PATHS.supervision.audit, icon: Shield }),
     ],
   }),
@@ -225,6 +237,11 @@ export function rolesNowCopy(roles: readonly string[]): string {
 export function firstRoleHome(roles: readonly string[]): string | null {
   const first = sortRoles(roles)[0]
   return first ? ROLES[first].home : null
+}
+
+/** The rail items to show: the AI ones only while the AI functions are on (slice 22). */
+export function visibleNav(items: readonly NavItem[], aiEnabled: boolean): NavItem[] {
+  return items.filter((item) => !item.ai || aiEnabled)
 }
 
 /** Whether a rail item is the current page for `pathname`. */

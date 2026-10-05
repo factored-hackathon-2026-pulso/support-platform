@@ -52,13 +52,14 @@ class CaseTypeAgentReady(DomainEvent):
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class CaseTypeAgentActivated(DomainEvent):
-    """An agent serves the type (Supervisión activated it; slice 22 owns that step, the seed
-    uses it to tell the demo story)."""
+    """An agent serves the type (Supervisión activated it, slice 22; the seed uses it to tell the
+    demo story). ``agent_id`` is agent-core's id of the agent (``disputas``)."""
 
     event_type = "ai.agent_activated"
     entity = "case_type"
 
     case_type: str
+    agent_id: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)

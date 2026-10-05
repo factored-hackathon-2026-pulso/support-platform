@@ -15,6 +15,8 @@ from fastapi import APIRouter, Depends, Path, Response, status
 
 from cc_platform.api.dependencies import ApiContextDep, require_roles
 from cc_platform.api.schemas.ai_stages import (
+    ActivateAgentRequest,
+    ActivateAgentResult,
     AiStages,
     MoveStageBackRequest,
     MoveStageBackResult,
@@ -59,8 +61,9 @@ async def get_ai_stages(actor: AnalystOrSupervisor, api: ApiContextDep) -> AiSta
         "Slice 21. A desired state, safe to repeat: the same stage answers `changed: false`. "
         "`toStage` 3 on a type `ready` for an agent withdraws the proposal. Moving up is only "
         "the team rule's. 409 `invalid_transition` for a higher stage or a type an agent serves "
-        "(slice 22 deactivates the agent). Records `ai.stage_moved_back` (audited); the type "
-        "earns the stages above again from zero. AI off: 404 `assistant_disabled`."
+        "(slice 22 activates one; deactivating is not built). Records `ai.stage_moved_back` "
+        "(audited); the type earns the stages above again from zero. AI off: 404 "
+        "`assistant_disabled`."
     ),
     responses=problem_responses(401, 403, 404, 409, 422),
 )
@@ -72,6 +75,40 @@ async def move_stage_back(
 ) -> MoveStageBackResult:
     view = await api.use_cases.maturity.move_back.execute(actor, case_type, to_stage=body.to_stage)
     return MoveStageBackResult.from_view(view)
+
+
+@router.post(
+    "/supervision/ai/stages/{caseType}/agent",
+    response_model=ActivateAgentResult,
+    summary="Activate the agent of a case type (Supervisión)",
+    description=(
+        'Slice 22, "Activar". For a type `ready` for an agent: points the agent\'s `prod` alias '
+        "at the published release (the registry's promotion, audited as `builder.alias_promoted`) "
+        "and records that the agent serves the type (`agent: active`, `agentId`; audited as "
+        "`ai.agent_activated`, live on `ai:stages`). Needs a fresh authenticator code "
+        "(`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it "
+        "counts toward the account lock, 423 `account_locked`). Safe to repeat: the agent that "
+        "already serves the type answers `changed: false` without promoting. 409 "
+        "`invalid_transition` for a type not ready or served by another agent (checked before "
+        "anything is promoted); registry refusals are `registry_*`. AI off or no agent-core: "
+        "404 `assistant_disabled`."
+    ),
+    responses=problem_responses(401, 403, 404, 409, 422, 423, 429, 502, 503),
+)
+async def activate_agent(
+    case_type: Annotated[str, Path(alias="caseType", max_length=40, examples=["undue_charge"])],
+    body: ActivateAgentRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> ActivateAgentResult:
+    view = await api.use_cases.maturity.activate_agent.execute(
+        actor,
+        case_type,
+        agent_id=body.agent_id,
+        release_id=body.release_id,
+        step_up_code=body.step_up_code,
+    )
+    return ActivateAgentResult.from_view(view)
 
 
 @router.post(

@@ -25,7 +25,9 @@ from datetime import datetime
 from functools import partial
 from typing import Protocol
 
+from cc_platform.application.ai.builder import AgentBuilder
 from cc_platform.application.ai.errors import AssistantDisabledError
+from cc_platform.application.ai.registry import AliasChange
 from cc_platform.application.cases.queries import load_case_for
 from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.events import EventRecord
@@ -315,6 +317,82 @@ class MoveStageBack:
             return MoveStageResultView(changed=changed, type=await _view(uow, maturity))
 
 
+#: The alias customers feel: activating an agent points it at the published release.
+PROD_ALIAS = "prod"
+
+
+@dataclass(frozen=True, slots=True)
+class ActivateAgentResultView:
+    changed: bool
+    """False: that agent already served the type (nothing promoted, nothing recorded)."""
+    type: CaseTypeStageView
+    alias: AliasChange | None
+    """The registry's ``prod`` change (None when nothing changed)."""
+
+
+@dataclass(frozen=True, slots=True)
+class ActivateTypeAgent:
+    """Slice 22, "Activar": Supervisión points the agent's ``prod`` alias at the release she
+    published (the registry's promotion: a fresh authenticator code, audited as
+    ``builder.alias_promoted``) and the type records that the agent serves it (``agent``
+    ``active`` with its ``agent_id``, audited as ``ai.agent_activated``, live on ``ai:stages``).
+
+    The type is checked before anything is promoted (ready for an agent, or already served by
+    that same agent: a no-op). Needs the AI switch on and the builder (agent-core's registry)."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+    switch: AiSwitch
+    builder: AgentBuilder | None
+
+    async def execute(
+        self,
+        actor: Actor,
+        case_type: str,
+        *,
+        agent_id: str,
+        release_id: str,
+        step_up_code: str,
+    ) -> ActivateAgentResultView:
+        ensure_any_role(actor, {StaffRole.SUPERVISOR})
+        kind = maturing_type(case_type)
+        if self.builder is None:
+            raise AssistantDisabledError()
+        async with self.uow() as uow:
+            if not await self.switch.is_on_in(uow):
+                raise AssistantDisabledError()
+            maturity, _ = await load_maturity(uow, kind)
+            if not maturity.check_activation(agent_id):
+                return ActivateAgentResultView(
+                    changed=False, type=await _view(uow, maturity), alias=None
+                )
+        change = await self.builder.promote(
+            actor,
+            agent_id,
+            PROD_ALIAS,
+            release_id=release_id,
+            reason=f"case type {kind.value}",
+            step_up_code=step_up_code,
+        )
+        changed, view = await retry_on_conflict(partial(self._activate, actor, kind, agent_id))
+        return ActivateAgentResultView(changed=changed, type=view, alias=change)
+
+    async def _activate(
+        self, actor: Actor, case_type: CaseType, agent_id: str
+    ) -> tuple[bool, CaseTypeStageView]:
+        async with self.uow() as uow:
+            maturity, new = await load_maturity(uow, case_type)
+            changed = maturity.activate_agent(
+                agent_id=agent_id,
+                actor=actor.acting_as({StaffRole.SUPERVISOR}),
+                at=self.clock.now(),
+            )
+            if changed:
+                await store_maturity(uow, maturity, new=new)
+                await uow.commit()
+            return changed, await _view(uow, maturity)
+
+
 @dataclass(frozen=True, slots=True)
 class RecordToolUsed:
     """``POST /cases/{caseId}/copilot/suggestions/{suggestionId}/tools``: the analyst used a tool
@@ -359,6 +437,7 @@ class MaturityUseCases:
     stages: GetAiStages
     move_back: MoveStageBack
     tool_used: RecordToolUsed
+    activate_agent: ActivateTypeAgent
 
 
 def stage_since(maturity: CaseTypeMaturity) -> list[tuple[int, datetime]]:

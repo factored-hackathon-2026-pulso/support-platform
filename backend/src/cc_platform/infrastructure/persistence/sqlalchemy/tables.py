@@ -481,6 +481,7 @@ case_type_maturity = Table(
     Column("signals", JSON, nullable=False),
     Column("stage_since", JSON, nullable=False),
     Column("agent_since", UtcDateTime, nullable=True),
+    Column("agent_id", String(120), nullable=True),
     Column("changed_at", UtcDateTime, nullable=True),
     Column("changed_by_id", String(ID), nullable=True),
     Column("last_change", String(20), nullable=True),

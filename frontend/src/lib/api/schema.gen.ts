@@ -489,6 +489,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/builder/chat/restart': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start a new conversation with the builder agent
+     * @description Slice 22, "Nueva conversación": the caller's thread starts over, empty (the transcript stays in agent-core), and her next message starts another run of the builder agent, whatever state the current one is in. Proposals already made stay in the list. Safe to repeat. AI off or no agent-core: 404 `assistant_disabled`.
+     */
+    post: operations['builder_restart_chat']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/builder/entities/{kind}/{entityId}': {
     parameters: {
       query?: never
@@ -1979,6 +1999,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/supervision/ai/stages/{caseType}/agent': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Activate the agent of a case type (Supervisión)
+     * @description Slice 22, "Activar". For a type `ready` for an agent: points the agent's `prod` alias at the published release (the registry's promotion, audited as `builder.alias_promoted`) and records that the agent serves the type (`agent: active`, `agentId`; audited as `ai.agent_activated`, live on `ai:stages`). Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`). Safe to repeat: the agent that already serves the type answers `changed: false` without promoting. 409 `invalid_transition` for a type not ready or served by another agent (checked before anything is promoted); registry refusals are `registry_*`. AI off or no agent-core: 404 `assistant_disabled`.
+     */
+    post: operations['ai-stages_activate_agent']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/supervision/ai/stages/{caseType}/move-back': {
     parameters: {
       query?: never
@@ -1990,7 +2030,7 @@ export interface paths {
     put?: never
     /**
      * Move a case type back to an earlier stage (Supervisión)
-     * @description Slice 21. A desired state, safe to repeat: the same stage answers `changed: false`. `toStage` 3 on a type `ready` for an agent withdraws the proposal. Moving up is only the team rule's. 409 `invalid_transition` for a higher stage or a type an agent serves (slice 22 deactivates the agent). Records `ai.stage_moved_back` (audited); the type earns the stages above again from zero. AI off: 404 `assistant_disabled`.
+     * @description Slice 21. A desired state, safe to repeat: the same stage answers `changed: false`. `toStage` 3 on a type `ready` for an agent withdraws the proposal. Moving up is only the team rule's. 409 `invalid_transition` for a higher stage or a type an agent serves (slice 22 activates one; deactivating is not built). Records `ai.stage_moved_back` (audited); the type earns the stages above again from zero. AI off: 404 `assistant_disabled`.
      */
     post: operations['ai-stages_move_stage_back']
     delete?: never
@@ -2166,6 +2206,35 @@ export interface components {
      * @enum {string}
      */
     AccountStatus: 'active' | 'locked' | 'invited' | 'inactive' | 'cancelled'
+    /** ActivateAgentRequest */
+    ActivateAgentRequest: {
+      /**
+       * Agentid
+       * @description agent-core's id of the agent that will serve the type.
+       */
+      agentId: string
+      /**
+       * Releaseid
+       * @description The published release `prod` will point at (the proposal's publication).
+       */
+      releaseId: string
+      /**
+       * Stepupcode
+       * @description A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.
+       */
+      stepUpCode: string
+    }
+    /** ActivateAgentResult */
+    ActivateAgentResult: {
+      /** @description The registry's `prod` change; null if none. */
+      alias: components['schemas']['AliasChange'] | null
+      /**
+       * Changed
+       * @description false: that agent already served the type (nothing promoted or recorded).
+       */
+      changed: boolean
+      type: components['schemas']['CaseTypeStage']
+    }
     /** ActivateRequest */
     ActivateRequest: {
       /**
@@ -3358,6 +3427,11 @@ export interface components {
     CaseTypeStage: {
       /** @description `ready`: the drafts met the rule, the system proposes an agent to Supervisión (slice 22). `active`: an agent serves the type. */
       agent: components['schemas']['AgentStatus']
+      /**
+       * Agentid
+       * @description agent-core's id of the agent that serves the type (set while `agent` is `active`, slice 22).
+       */
+      agentId: string | null
       /** Agentsince */
       agentSince: string | null
       caseType: components['schemas']['CaseType']
@@ -8168,6 +8242,53 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_restart_chat: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BuilderThread']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
         headers: {
           [name: string]: unknown
         }
@@ -13608,6 +13729,113 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807): validation_error */
       422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_activate_agent': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseType: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ActivateAgentRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivateAgentResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      423: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
         headers: {
           [name: string]: unknown
         }

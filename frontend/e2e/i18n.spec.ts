@@ -132,7 +132,7 @@ test.describe('The platform in Portuguese (slice 23b)', () => {
     await expect(conversation.getByText(text)).toBeVisible()
     await expect.poll(() => rawKeys(page)).toEqual([])
 
-    // Supervisão: Filas (her case in the Portuguese queue), Equipe, Escalados.
+    // Supervisão: Filas (her case in the Portuguese queue), Equipe, Escalados, Automação (AI on).
     await goToRole(rail, person.name, 'Supervisão')
     await expectScreen(page, 'Filas')
     await page.goto('/supervision/queues?language=pt')
@@ -144,6 +144,8 @@ test.describe('The platform in Portuguese (slice 23b)', () => {
     await expectScreen(page, 'Equipe')
     await rail.getByRole('link', { name: /^Escalados/ }).click()
     await expectScreen(page, 'Escalados')
+    await rail.getByRole('link', { name: /^Automação/ }).click()
+    await expectScreen(page, 'Automação')
     await rail.getByRole('link', { name: /^Auditoria/ }).click()
     await expectScreen(page, 'Auditoria')
     // Slice 23c: "O que fez" is rendered by the server in her language.

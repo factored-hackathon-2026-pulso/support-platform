@@ -17,7 +17,11 @@ from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
 from cc_platform.application.ai.builder import AgentBuilder
-from cc_platform.application.ai.builder_chat import AskBuilder, GetBuilderThread
+from cc_platform.application.ai.builder_chat import (
+    AskBuilder,
+    GetBuilderThread,
+    RestartBuilderThread,
+)
 from cc_platform.application.ai.builder_step_up import BuilderStepUp
 from cc_platform.application.ai.config import AssistantConfig, AssistantGate
 from cc_platform.application.ai.copilot import AskCopilot, GetCopilotThread
@@ -30,6 +34,7 @@ from cc_platform.application.ai.engine import AssistantEngine, AssistantHandover
 from cc_platform.application.ai.grants import GetGrantStatus
 from cc_platform.application.ai.maturity import (
     MATURITY_SIGNAL_EVENTS,
+    ActivateTypeAgent,
     GetAiStages,
     MaturityProjector,
     MaturityRealtimeProjector,
@@ -668,6 +673,7 @@ def _build_builder(
             builder=registry,
             agent=settings.builder_agent,
         ),
+        restart=RestartBuilderThread(uow=uow, clock=clock),
     )
 
 
@@ -1025,6 +1031,16 @@ def build_container(
             stages=GetAiStages(uow=uow, switch=ai_switch, rule=stage_rule),
             move_back=MoveStageBack(uow=uow, clock=clock, switch=ai_switch),
             tool_used=RecordToolUsed(uow=uow, clock=clock, switch=ai_switch),
+            activate_agent=ActivateTypeAgent(
+                uow=uow,
+                clock=clock,
+                switch=ai_switch,
+                builder=(
+                    assistant_use_cases.builder.registry
+                    if assistant_use_cases is not None and assistant_use_cases.builder is not None
+                    else None
+                ),
+            ),
         ),
         assistant=assistant_use_cases,
     )

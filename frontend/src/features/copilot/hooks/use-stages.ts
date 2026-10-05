@@ -9,9 +9,13 @@ import type { AiStages } from '../stages'
  * GET /ai/stages (slice 21): every case type's stage, while AI is on. Live: it follows
  * `ai:stages` (`ai.stage_updated` reads it again, realtime.ts) and refetches after a reconnect.
  * A switch turned off disables it (the stages and the copilot go away with the switch).
+ * `enabled: false` reads nothing (the rail asks only for the role on screen, slice 22).
  */
-export function useAiStages(): UseQueryResult<AiStages, ApiProblem> {
-  const aiEnabled = useAiEnabled()
+export function useAiStages({ enabled = true }: { enabled?: boolean } = {}): UseQueryResult<
+  AiStages,
+  ApiProblem
+> {
+  const aiEnabled = useAiEnabled() && enabled
   const queryClient = useQueryClient()
   useRealtimeSubscription(aiEnabled ? topics.aiStages() : null)
   useOnReconnect(

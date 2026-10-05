@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from cc_platform.api.schemas.ai_stages import ActivateAgentResult
 from cc_platform.application.ai.registry import Violation
 from cc_platform.bootstrap.app import create_app
 from cc_platform.bootstrap.container import AgentCoreServices, Container, build_container
@@ -479,6 +480,101 @@ def test_a_failed_chat_call_keeps_the_message_and_a_retry_works(
     assert ok.json()["answers"][0]["text"] == "ahora sí"
 
 
+def test_a_new_conversation_starts_over_and_the_next_message_starts_another_run(
+    client: TestClient, supervisor: dict[str, str], runtime: InMemoryAgentRuntime
+) -> None:
+    runtime.script.append(turn("¿Qué agente quieres cambiar?"))
+    assert chat(client, supervisor, "Quiero un agente nuevo", "msg-00000011").status_code == 201
+    starts = sum(c.operation == "start_run" for c in runtime.calls)
+
+    restarted = client.post(f"{API}/chat/restart", headers=supervisor)
+
+    assert restarted.status_code == 200, restarted.text
+    assert restarted.json() == {"available": True, "messages": []}
+    assert client.get(f"{API}/chat", headers=supervisor).json()["messages"] == []
+    runtime.script.append(turn("Cuéntame qué cambio quieres."))
+    assert chat(client, supervisor, "Otra cosa", "msg-00000012").status_code == 201
+    # a new run, not the old one
+    assert sum(c.operation == "start_run" for c in runtime.calls) == starts + 1
+    assert [
+        m["role"] for m in client.get(f"{API}/chat", headers=supervisor).json()["messages"]
+    ] == [
+        "person",
+        "agent",
+    ]
+    again = client.post(f"{API}/chat/restart", headers=supervisor)
+    assert again.status_code == 200  # safe to repeat
+    assert client.post(f"{API}/chat/restart", headers=supervisor).status_code == 200
+
+
+# ----------------------------------------------------------------------------- activation (S22)
+def published(client: TestClient, headers: dict[str, str], agent_id: str) -> str:
+    created = client.post(
+        f"{API}/proposals", headers=headers, json={"agentId": agent_id, "title": "Agente nuevo"}
+    )
+    base = f"{API}/proposals/{created.json()['proposalId']}"
+    client.put(f"{base}/draft", headers=headers, json={"expectedRev": 0, "changes": [DRAFT]})
+    candidate_hash = client.post(f"{base}/freeze", headers=headers).json()["candidateHash"]
+    client.post(f"{base}/evaluate", headers=headers, json={"suiteId": f"suite-{agent_id}"})
+    client.post(
+        f"{base}/approve",
+        headers=headers,
+        json={"candidateHash": candidate_hash, "stepUpCode": CODE},
+    )
+    release = client.post(
+        f"{base}/publish",
+        headers={**headers, "Idempotency-Key": f"publish-{agent_id}"},
+        json={"stepUpCode": CODE},
+    )
+    assert release.status_code == 201, release.text
+    release_id: str = release.json()["releaseId"]
+    return release_id
+
+
+def test_supervision_activates_the_agent_of_a_ready_type(
+    client: TestClient, supervisor: dict[str, str], sign_in: Callable[[str], str]
+) -> None:
+    release_id = published(client, supervisor, "cobros")
+    url = "/api/v1/supervision/ai/stages/undue_charge/agent"
+    body = {"agentId": "cobros", "releaseId": release_id, "stepUpCode": CODE}
+
+    wrong = client.post(url, headers=supervisor, json={**body, "stepUpCode": "123456"})
+    assert (wrong.status_code, wrong.json()["code"]) == (422, "builder_step_up_invalid")
+    activated = client.post(url, headers=supervisor, json=body)
+
+    assert activated.status_code == 200, activated.text
+    result = activated.json()
+    assert ActivateAgentResult.model_validate(result).model_dump(mode="json", by_alias=True) == (
+        result
+    )
+    assert result["changed"] is True
+    assert (result["type"]["agent"], result["type"]["agentId"]) == ("active", "cobros")
+    assert (result["alias"]["alias"], result["alias"]["after"]) == ("prod", release_id)
+    assert client.get(f"{API}/aliases/cobros/prod", headers=supervisor).json()["releaseId"] == (
+        release_id
+    )
+    again = client.post(url, headers=supervisor, json=body).json()
+    assert (again["changed"], again["alias"]) == (False, None)
+
+    stages = client.get("/api/v1/ai/stages", headers=supervisor).json()["types"]
+    by_type = {t["caseType"]: t for t in stages}
+    assert by_type["undue_charge"]["agentId"] == "cobros"
+    assert by_type["unrecognized_charge"]["agentId"] == "disputas"  # the seeded story
+    assert by_type["app_issue"]["agentId"] is None
+    audit = client.get("/api/v1/audit/events?family=agents&limit=100", headers=supervisor).json()
+    row = next(e for e in audit["items"] if e["type"] == "ai.agent_activated")
+    assert row["description"] == "Activó el agente de Cobro indebido"
+
+    other = client.post(
+        "/api/v1/supervision/ai/stages/app_issue/agent", headers=supervisor, json=body
+    )
+    assert (other.status_code, other.json()["code"]) == (409, "invalid_transition")
+    analyst = bearer(sign_in(ANALYST.email))
+    assert client.post(url, headers=analyst, json=body).status_code == 403
+    bad = client.post(url, headers=supervisor, json={**body, "agentId": "Con Espacios"})
+    assert bad.status_code == 422
+
+
 # ----------------------------------------------------------------------------- the audit
 def test_the_audit_shows_who_did_what_without_the_content(
     client: TestClient, supervisor: dict[str, str]
@@ -535,5 +631,11 @@ def test_without_agent_core_the_builder_is_off(tmp_path: Path, clock: FixedClock
             client.get(f"{API}/proposals", headers=headers),
             client.post(f"{API}/proposals", headers=headers, json={"agentId": "x", "title": "y"}),
             chat(client, headers, "hola", "msg-00000009"),
+            client.post(f"{API}/chat/restart", headers=headers),
+            client.post(
+                "/api/v1/supervision/ai/stages/undue_charge/agent",
+                headers=headers,
+                json={"agentId": "cobros", "releaseId": "rel-1", "stepUpCode": CODE},
+            ),
         ):
             assert (response.status_code, response.json()["code"]) == (404, "assistant_disabled")

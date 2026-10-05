@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import {
   isNavItemActive,
+  visibleNav,
   type NavItem,
   type RailIndicator,
   type RailIndicators,
@@ -24,6 +25,8 @@ export interface RailProps {
    * imports a feature; the route table composes it (app/router.tsx).
    */
   notifications?: ReactNode
+  /** The AI functions are on: AI destinations ("Automatización", slice 22) show. Default false. */
+  aiEnabled?: boolean
 }
 
 /** The count and dot of an item, or nothing when its indicator has no value. */
@@ -42,7 +45,13 @@ function navAccessibleName(label: string, { count, dot, noun = 'pending' }: Rail
  * Dark 64px left rail: brand mark, the current role's destinations and, at the bottom, the
  * notification bell above the role switcher.
  */
-export function Rail({ role, indicators = {}, presence = null, notifications }: RailProps) {
+export function Rail({
+  role,
+  indicators = {},
+  presence = null,
+  notifications,
+  aiEnabled = false,
+}: RailProps) {
   const { pathname } = useLocation()
   const { t } = useTranslation(['shell', 'common'])
   return (
@@ -59,7 +68,7 @@ export function Rail({ role, indicators = {}, presence = null, notifications }: 
         {t('common:brand.mark')}
       </span>
       <ul className="m-0 flex list-none flex-col items-center gap-2 p-0">
-        {role.nav.map((item) => {
+        {visibleNav(role.nav, aiEnabled).map((item) => {
           const Icon = item.icon
           const active = isNavItemActive(item, pathname)
           const { count, dot, noun } = indicatorFor(item, indicators)

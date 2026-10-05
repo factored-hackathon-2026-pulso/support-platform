@@ -11,6 +11,7 @@ import {
   setInvitationPassword,
 } from '@/features/onboarding/api'
 import { ApiProblem } from '@/lib/api'
+import { readStoredLocale } from '@/lib/i18n'
 import { adminStaff } from '@/test/fixtures'
 import { renderRoute } from '@/test/render'
 
@@ -36,6 +37,7 @@ const invitation = {
   teamName: 'Equipo Andes',
   expiresAt: '2026-10-05T10:12:00Z',
   passwordRules: RULES as never,
+  uiLanguage: 'es' as const,
 }
 const enrollment = {
   otpauthUri:
@@ -270,6 +272,7 @@ describe('/reset-password', () => {
       email: 'tomas.arango@latambank.example',
       expiresAt: '2026-10-03T17:00:00Z',
       passwordRules: RULES as never,
+      uiLanguage: 'es',
     })
     vi.mocked(completePasswordReset).mockResolvedValue({
       email: 'tomas.arango@latambank.example',
@@ -384,7 +387,7 @@ describe('/dev/mailbox', () => {
 
 describe('in Brazilian Portuguese (slice 23)', () => {
   it('activates an invitation in Portuguese', async () => {
-    vi.mocked(checkInvitation).mockResolvedValue(invitation)
+    vi.mocked(checkInvitation).mockResolvedValue({ ...invitation, uiLanguage: 'pt-BR' })
     vi.mocked(setInvitationPassword).mockResolvedValue(enrollment)
     const { user } = renderRoute('/activate?token=tok', { locale: 'pt-BR' })
     expect(
@@ -408,6 +411,30 @@ describe('in Brazilian Portuguese (slice 23)', () => {
     expect(await screen.findByText('Digite os 6 dígitos que o seu app mostra.')).toBeInTheDocument()
   })
 
+  it('opens an invitation in the language administration chose (slice 23c)', async () => {
+    vi.mocked(checkInvitation).mockResolvedValue({ ...invitation, uiLanguage: 'pt-BR' })
+    renderRoute('/activate?token=tok') // this browser was in Spanish
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Ative sua conta' }),
+    ).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('pt-BR')
+    expect(readStoredLocale()).toBe('pt-BR') // the sign-in that follows remembers it
+  })
+
+  it('opens a reset link in her language', async () => {
+    vi.mocked(checkPasswordReset).mockResolvedValue({
+      name: 'Tomás Arango',
+      email: 'tomas.arango@latambank.example',
+      expiresAt: '2026-10-03T17:00:00Z',
+      passwordRules: RULES as never,
+      uiLanguage: 'es',
+    })
+    renderRoute('/reset-password?token=rst', { locale: 'pt-BR' })
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Crea una contraseña nueva' }),
+    ).toBeInTheDocument()
+  })
+
   it('says a link is no longer valid in Portuguese', async () => {
     vi.mocked(checkPasswordReset).mockRejectedValue(linkInvalid())
     renderRoute('/reset-password?token=used', { locale: 'pt-BR' })
@@ -424,6 +451,7 @@ describe('in Brazilian Portuguese (slice 23)', () => {
       email: 'tomas.arango@latambank.example',
       expiresAt: '2026-10-03T17:00:00Z',
       passwordRules: RULES as never,
+      uiLanguage: 'pt-BR',
     })
     renderRoute('/reset-password?token=rst', { locale: 'pt-BR' })
     expect(

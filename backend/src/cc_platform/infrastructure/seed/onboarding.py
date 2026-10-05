@@ -22,6 +22,11 @@ from cc_platform.application.ports.security import OneTimeTokens, PasswordHasher
 from cc_platform.application.ports.unit_of_work import UnitOfWork
 from cc_platform.domain.people.invitation import INVITATION_TTL, Invitation
 from cc_platform.domain.people.login_account import LoginAccount
+from cc_platform.domain.people.preferences import (
+    DEFAULT_UI_LANGUAGE,
+    StaffPreferences,
+    UiLanguage,
+)
 from cc_platform.domain.people.staff import Staff
 from cc_platform.domain.people.team import Team
 from cc_platform.domain.shared.actor import ActorRef, ActorRole
@@ -49,6 +54,7 @@ BRUNA = StaffSeed(15, "Bruna Esteves", "bruna.esteves", frozenset({A}), frozense
 TATIANA_INVITED_BEFORE = timedelta(days=2)
 TATIANA_ACCEPTED_BEFORE = timedelta(hours=1)
 BRUNA_INVITED_BEFORE = timedelta(hours=3)
+BRUNA_LANGUAGE = UiLanguage.PORTUGUESE_BRAZIL
 
 
 def seed_invitation_id(number: int) -> str:
@@ -62,6 +68,7 @@ class PendingInvitationEmail:
     staff: Staff
     team_name: str
     token: str
+    language: UiLanguage = DEFAULT_UI_LANGUAGE
 
 
 @dataclass(slots=True)
@@ -133,9 +140,13 @@ async def add_demo_invitations(
     )
     await unit.staff.add(bruna)
     await unit.invitations.add(pending)
+    # Slice 23c: administration invited her in Portuguese (her email and her first sign-in).
+    await unit.preferences.add(StaffPreferences(staff_id=bruna.id, ui_language=BRUNA_LANGUAGE))
     timeline.take(bruna, pending)
     onboarding.emails.append(
-        PendingInvitationEmail(staff=bruna, team_name=team.name, token=issued.token)
+        PendingInvitationEmail(
+            staff=bruna, team_name=team.name, token=issued.token, language=BRUNA_LANGUAGE
+        )
     )
     return 1
 

@@ -35,6 +35,7 @@ from cc_platform.application.people.admin.dto import (
 )
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.names import PERSON_NAME_LENGTH, TEAM_NAME_LENGTH
+from cc_platform.domain.people.preferences import UiLanguage
 from cc_platform.domain.people.staff import MAX_EMAIL_LENGTH, Language, StaffRole
 
 # Generous transport limits; the domain applies the real ones after trimming (§1.3) and
@@ -196,6 +197,13 @@ class CreateUserRequest(RequestModel):
         max_length=2, description="Unique; at least one with analyst (else invalid_value)."
     )
     team_id: str = Field(max_length=_ID_MAX, description="An active team (TEAM-…).")
+    ui_language: UiLanguage = Field(
+        default=UiLanguage.SPANISH,
+        description=(
+            "Slice 23c: her platform language (the invitation email, the activation screens "
+            "and her first sign-in use it). Default `es`."
+        ),
+    )
 
     @model_validator(mode="after")
     def _unique_items(self) -> Self:

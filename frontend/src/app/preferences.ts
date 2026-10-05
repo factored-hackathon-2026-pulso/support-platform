@@ -9,6 +9,8 @@
  * - `UiLanguageSync` applies it: the i18n language (no reload) and the stored choice, which the
  *   sign-in screens use next time (`lib/i18n/locale`).
  * - `useSetUiLanguage` changes it from the account menu: optimistic, rolled back with a toast.
+ * - Slice 23c: some texts are rendered by the server in her language (the audit's "Qué hizo"):
+ *   once a new language is saved (here or in another tab), those queries refetch.
  *
  * Keep this module light: it is part of the main bundle.
  */
@@ -33,6 +35,20 @@ export async function fetchPreferences(signal?: AbortSignal): Promise<Preference
 
 export async function updatePreferences(uiLanguage: AppLocale): Promise<Preferences> {
   return unwrap(api.PUT('/api/v1/me/preferences', { body: { uiLanguage } }))
+}
+
+/**
+ * Queries whose text the server renders in her UI language (slice 23c): the audit log and
+ * its events (`features/audit` keys start with 'audit'). Kept as plain keys so this module
+ * stays light (it is in the main bundle).
+ */
+const SERVER_RENDERED_QUERIES: readonly (readonly string[])[] = [['audit']]
+
+/** Refetch what the server wrote in her previous language. */
+export function refetchServerRenderedTexts(queryClient: QueryClient): void {
+  for (const queryKey of SERVER_RENDERED_QUERIES) {
+    void queryClient.invalidateQueries({ queryKey })
+  }
 }
 
 /** The session's /auth/me answer carries the preferences: keep them (no second request). */
@@ -83,7 +99,10 @@ export function useSetUiLanguage() {
       queryClient.setQueryData<Preferences>(preferencesKeys.me(), { ...previous, uiLanguage })
       return { previous }
     },
-    onSuccess: (preferences) => primePreferences(queryClient, preferences),
+    onSuccess: (preferences) => {
+      primePreferences(queryClient, preferences)
+      refetchServerRenderedTexts(queryClient)
+    },
     onError: (_error, _uiLanguage, context) => {
       const previous = context?.previous
       if (previous) primePreferences(queryClient, previous)
@@ -108,7 +127,10 @@ export function readPreferences(envelope: RealtimeEnvelope): Preferences | null 
 
 function applyPreferences(envelope: RealtimeEnvelope, queryClient: QueryClient): void {
   const preferences = readPreferences(envelope)
-  if (preferences) primePreferences(queryClient, preferences)
+  if (!preferences) return
+  const before = queryClient.getQueryData<Preferences>(preferencesKeys.me())?.uiLanguage
+  primePreferences(queryClient, preferences)
+  if (before !== preferences.uiLanguage) refetchServerRenderedTexts(queryClient)
 }
 
 export const registerPreferencesRealtime: RealtimeRegistration = (registry) => {

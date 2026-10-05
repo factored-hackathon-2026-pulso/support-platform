@@ -105,3 +105,21 @@ def test_her_other_sessions_follow(client: TestClient, sign_in: SignIn) -> None:
     assert [e["data"]["payload"] for e in of_type(later, "preferences.updated")] == [
         {"uiLanguage": "es"}
     ]
+
+
+def test_the_audit_speaks_the_readers_language(client: TestClient, sign_in: SignIn) -> None:
+    """Slice 23c: "Qué hizo" is rendered in the reader's UI language when the log is read."""
+    put_language(client, sign_in(ANALYST.email), "pt-BR")
+    lucia = sign_in(SUPERVISOR.email)
+    params = {"actorId": DANIELA_ID, "family": "access", "limit": 50}
+
+    def descriptions() -> list[str]:
+        rows = client.get("/api/v1/audit/events", params=params, headers=bearer(lucia))
+        return [r["description"] for r in rows.json()["items"] if r["type"].startswith("staff.ui")]
+
+    assert descriptions() == ["Cambió el idioma de la plataforma a Português"]
+    put_language(client, lucia, "pt-BR")  # the reader switches: the same row, in Portuguese
+    assert descriptions() == ["Mudou o idioma da plataforma para Português"]
+    rows = client.get("/api/v1/audit/events", params=params, headers=bearer(lucia)).json()
+    one = client.get(f"/api/v1/audit/events/{rows['items'][0]['id']}", headers=bearer(lucia))
+    assert one.json()["description"] == rows["items"][0]["description"]

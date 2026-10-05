@@ -27,7 +27,8 @@ from datetime import UTC, datetime
 from functools import partial
 from typing import Protocol
 
-from cc_platform.application.cases import copy
+from cc_platform.application.cases import copy, staff_lines
+from cc_platform.application.cases.staff_lines import Banner
 from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.events import EventRecord
 from cc_platform.application.ports.background import BackgroundTasks
@@ -214,7 +215,7 @@ class AssignCase:
                 policy_rule_id=language_rule(case.language),
                 at=now,
             )
-            await self._banner(uow, case, copy.queued(case.language, label), now)
+            await self._banner(uow, case, staff_lines.queued(case.language, label), now)
             return None
 
         waited: int | None = None
@@ -237,26 +238,28 @@ class AssignCase:
         await uow.assignments.add(assignment)
         if waited is not None:
             label = case.queue_label or copy.QUEUE_LABEL[case.language]
-            text = copy.assigned_from_queue(chosen.name, copy.queue_wait_minutes(waited), label)
+            minutes = copy.queue_wait_minutes(waited)
+            banner = staff_lines.assigned_from_queue(chosen.name, minutes, label, case.language)
         elif reason is AssignmentReason.ASSISTANT_HANDOFF:
-            text = copy.assigned_from_assistant(chosen.name, case.language)
+            banner = staff_lines.assigned_from_assistant(chosen.name, case.language)
         else:
-            text = copy.assigned_on_arrival(chosen.name, case.language)
-        await self._banner(uow, case, text, now)
+            banner = staff_lines.assigned_on_arrival(chosen.name, case.language)
+        await self._banner(uow, case, banner, now)
         candidates[candidates.index(chosen)] = replace(
             chosen, open_case_count=chosen.open_case_count + 1, last_assigned_at=now
         )
         return chosen
 
-    async def _banner(self, uow: UnitOfWork, case: Case, text: str, now: datetime) -> None:
+    async def _banner(self, uow: UnitOfWork, case: Case, banner: Banner, now: datetime) -> None:
         turn = case.append_turn(
             turn_id=self.ids.new_id(IdPrefix.TURN),
             kind=TurnKind.ROUTING,
             audience=TurnAudience.STAFF,
             author_role=TurnAuthorRole.SYSTEM,
             author_id=None,
-            text=text,
+            text=banner.text,
             created_at=now,
+            staff_line=banner.line,
         )
         await uow.cases.save(case)
         await uow.turns.add(turn)

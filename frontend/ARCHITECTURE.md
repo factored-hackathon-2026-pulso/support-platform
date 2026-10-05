@@ -1073,7 +1073,10 @@ UI locale). Never `toLocaleString` or a hand-made month list in a feature.
 
 **What is not copy.** Brand and product names that do not change, a language's own name ("Español",
 "Português": `LOCALE_NAME`, `LANGUAGE_NATIVE_NAME`), identifiers, URLs, data from the API (names, case ids,
-messages, server texts until 23c). Mark a deliberate literal that the guard flags with `// i18n-ignore` on
+messages, the stored `text` of a turn). Server texts since 23c: the audit's descriptions arrive in the
+reader's language (refetched when it changes: `app/preferences.ts`); a staff-only transcript line is
+written from its facts (`Turn.staffLine`, `conversation:staffLine.*`, `turnText`), never from its stored
+Spanish `text` when facts exist. Mark a deliberate literal that the guard flags with `// i18n-ignore` on
 its line or `// i18n-ignore-next-line` above it, with the reason.
 
 **Portuguese.** Natural Brazilian Portuguese for a bank's support team, not a literal translation; keep the

@@ -328,6 +328,7 @@ export function emailToTurn(email: EmailMessage, language: Language): Turn {
     language,
     createdAt: email.createdAt,
     clientMessageId: email.clientMessageId,
+    staffLine: null,
   }
 }
 

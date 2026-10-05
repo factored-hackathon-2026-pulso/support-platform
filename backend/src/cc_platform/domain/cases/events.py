@@ -42,12 +42,17 @@ class TurnCreated(DomainEvent):
     language: str
     client_message_id: str | None
     subject: str | None = None
+    staff_line: JsonObject | None = None
+    """Slice 23c: the facts of a staff-only line (``StaffLine.to_json``), when it has them."""
 
     def payload(self) -> JsonObject:
-        """``subject`` only on emails: the payload of every other turn is unchanged."""
+        """``subject`` only on emails and ``staff_line`` only on the routing banners that
+        carry facts: the payload of every other turn is unchanged."""
         data = DomainEvent.payload(self)
         if self.subject is None:
             data.pop("subject", None)
+        if self.staff_line is None:
+            data.pop("staff_line", None)
         return data
 
 

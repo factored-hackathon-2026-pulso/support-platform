@@ -124,6 +124,9 @@ export default {
       'As mudanças de perfil valem na hora: a pessoa vê o menu atualizado sem precisar entrar de novo.',
     languagesHint:
       'Quem atende casos precisa de pelo menos um idioma. Os casos em português só chegam a quem fala o idioma (regra 3).',
+    uiLanguage: 'Idioma da plataforma',
+    uiLanguageHint:
+      'O convite chega neste idioma e a plataforma abre assim. Depois dá para mudar no menu da conta.',
   },
   fieldError: {
     name: 'Digite o nome completo (pelo menos 2 caracteres).',

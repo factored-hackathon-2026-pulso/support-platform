@@ -172,6 +172,7 @@ async def create_user(
             languages=tuple(body.languages),
             team_id=body.team_id,
             idempotency_key=idempotency_key,
+            ui_language=body.ui_language,
         ),
     )
     _replayed(response, result.replayed)

@@ -307,7 +307,7 @@ def test_turn_pages(client: TestClient, daniela: dict[str, str]) -> None:
     assert latest["lastSequence"] == 6
     assert set(latest["items"][0]) == {
         "id", "caseId", "sequence", "kind", "audience", "authorRole", "authorId",
-        "authorName", "text", "language", "createdAt", "clientMessageId", "subject",
+        "authorName", "text", "language", "createdAt", "clientMessageId", "subject", "staffLine",
     }  # fmt: skip
     older = client.get(
         f"/api/v1/cases/{BEATRIZ}/turns", params={"cursor": latest["olderCursor"]}, headers=daniela

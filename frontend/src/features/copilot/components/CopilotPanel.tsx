@@ -3,14 +3,15 @@ import { CircleAlert, Eye, RefreshCcw, Send, Sparkles } from 'lucide-react'
 import { Button, IconButton, Spinner, Textarea } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { formatTime } from '@/lib/format'
+import { useTranslation } from '@/lib/i18n'
 import {
-  STARTER_QUESTIONS,
   copilotNotice,
   copilotTurns,
   emptyThreadTitle,
   isAsking,
   normalizeQuestion,
   questionCounter,
+  starterQuestions,
   MAX_QUESTION_LENGTH,
   type CopilotTurnView,
 } from '../model'
@@ -32,6 +33,7 @@ export interface CopilotPanelProps {
  * `GET …/copilot` says `available` (the Workspace decides the tab).
  */
 export function CopilotPanel({ caseId, customerName, closed }: CopilotPanelProps) {
+  const { t } = useTranslation('copilot')
   const thread = useCopilotThread(caseId, true)
   const asks = useCopilotAsks(caseId)
   const { ask, retry } = useAskCopilot(caseId)
@@ -89,15 +91,13 @@ export function CopilotPanel({ caseId, customerName, closed }: CopilotPanelProps
               <Sparkles size={16} aria-hidden="true" className="text-accent-strong" />
               {emptyThreadTitle(customerName)}
             </h3>
-            <p className="m-0 text-13 text-ink-2">
-              Responde en unos segundos con lo que puedes ver de este cliente.
-            </p>
+            <p className="m-0 text-13 text-ink-2">{t('thread.emptyText')}</p>
             {closed ? null : (
               <div className="mt-2 flex flex-col gap-1.5">
                 <span className="text-11 font-semibold tracking-[0.05em] text-muted uppercase">
-                  Ejemplos
+                  {t('thread.examples')}
                 </span>
-                {STARTER_QUESTIONS.map((text) => (
+                {starterQuestions().map((text) => (
                   <button
                     key={text}
                     type="button"
@@ -111,7 +111,7 @@ export function CopilotPanel({ caseId, customerName, closed }: CopilotPanelProps
             )}
           </div>
         ) : (
-          <ol aria-label="Preguntas al copiloto" className="m-0 flex list-none flex-col gap-3 p-0">
+          <ol aria-label={t('thread.listLabel')} className="m-0 flex list-none flex-col gap-3 p-0">
             {turns.map((turn) => (
               <CopilotTurn
                 key={turn.key}
@@ -128,7 +128,7 @@ export function CopilotPanel({ caseId, customerName, closed }: CopilotPanelProps
           {asking ? (
             <span className="inline-flex items-center gap-2">
               <Spinner size={14} label={null} />
-              Buscando la respuesta: suele tardar unos segundos.
+              {t('thread.asking')}
             </span>
           ) : null}
         </output>
@@ -138,7 +138,7 @@ export function CopilotPanel({ caseId, customerName, closed }: CopilotPanelProps
         className="flex shrink-0 flex-col gap-1.5 border-t border-border-soft px-5 pt-3 pb-4"
       >
         <label htmlFor={id} className="sr-only">
-          Pregúntale al copiloto
+          {t('box.label')}
         </label>
         <div className="flex items-end gap-2">
           <Textarea
@@ -149,7 +149,7 @@ export function CopilotPanel({ caseId, customerName, closed }: CopilotPanelProps
             // Read-only, not disabled, while it answers: the focus stays in the box.
             readOnly={blocked}
             aria-disabled={blocked || undefined}
-            placeholder={closed ? 'El caso está cerrado' : 'Pregúntale al copiloto'}
+            placeholder={closed ? t('box.placeholderClosed') : t('box.placeholder')}
             aria-describedby={hintId}
             aria-invalid={tooLong || undefined}
             onChange={(event) => setDraft(event.target.value)}
@@ -159,7 +159,7 @@ export function CopilotPanel({ caseId, customerName, closed }: CopilotPanelProps
           <IconButton
             type="submit"
             variant="primary"
-            aria-label="Preguntar"
+            aria-label={t('box.submit')}
             aria-disabled={blocked || !question || undefined}
             icon={<Send size={16} aria-hidden="true" />}
           />
@@ -172,11 +172,7 @@ export function CopilotPanel({ caseId, customerName, closed }: CopilotPanelProps
           )}
         >
           <span>
-            {closed
-              ? 'El caso está cerrado: el copiloto ya no responde.'
-              : tooLong
-                ? 'La pregunta pasa de 2.000 caracteres.'
-                : 'Solo tú ves estas preguntas.'}
+            {closed ? t('box.hintClosed') : tooLong ? t('box.hintTooLong') : t('box.hint')}
           </span>
           <span aria-hidden="true">{questionCounter(draft)}</span>
         </span>
@@ -193,11 +189,12 @@ interface CopilotTurnProps {
 }
 
 function CopilotTurn({ turn, onRetry, onAskAgain, canAsk }: CopilotTurnProps) {
+  const { t } = useTranslation(['copilot', 'common'])
   return (
     <li className="flex flex-col gap-2">
       <div className="flex flex-col items-end gap-1">
         <p className="m-0 max-w-[90%] rounded-12 bg-panel px-3 py-2 text-14 whitespace-pre-wrap text-ink">
-          <span className="sr-only">Tú: </span>
+          <span className="sr-only">{t('thread.you')} </span>
           {turn.text}
         </p>
         {turn.state === 'failed' ? (
@@ -206,7 +203,7 @@ function CopilotTurn({ turn, onRetry, onAskAgain, canAsk }: CopilotTurnProps) {
             className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-12 text-danger-strong"
           >
             <CircleAlert size={13} aria-hidden="true" />
-            {turn.error ?? 'No se pudo responder.'}
+            {turn.error ?? t('thread.failed')}
             {turn.retryable && turn.clientMessageId ? (
               <Button
                 size="sm"
@@ -215,20 +212,20 @@ function CopilotTurn({ turn, onRetry, onAskAgain, canAsk }: CopilotTurnProps) {
                 onClick={() => onRetry(turn.clientMessageId!)}
                 disabled={!canAsk}
               >
-                Reintentar
+                {t('common:actions.retry')}
               </Button>
             ) : null}
           </span>
         ) : turn.state === 'unanswered' ? (
           <span className="inline-flex items-center gap-2 text-12 text-muted">
-            Sin respuesta del copiloto
+            {t('thread.unanswered')}
             <Button
               size="sm"
               variant="ghost"
               onClick={() => onAskAgain(turn.text)}
               disabled={!canAsk}
             >
-              Preguntar de nuevo
+              {t('thread.askAgain')}
             </Button>
           </span>
         ) : turn.state === 'answered' ? (
@@ -239,7 +236,7 @@ function CopilotTurn({ turn, onRetry, onAskAgain, canAsk }: CopilotTurnProps) {
       </div>
       {turn.answers.map((answer) => (
         <p key={answer.id} className="m-0 text-14 leading-[1.45] whitespace-pre-wrap text-ink">
-          <span className="sr-only">Copiloto: </span>
+          <span className="sr-only">{t('thread.copilot')} </span>
           {answer.text}
         </p>
       ))}

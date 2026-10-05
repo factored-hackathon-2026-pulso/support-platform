@@ -1,5 +1,6 @@
 import { Bot, Tag } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { stageStrip, type CaseTypeStage } from '../stages'
 
 export interface StageStripProps {
@@ -14,6 +15,7 @@ export interface StageStripProps {
  * line carries the stage for everyone.
  */
 export function StageStrip({ typeLabel, stage }: StageStripProps) {
+  const { t } = useTranslation('copilot')
   const view = stageStrip(stage)
   return (
     <div
@@ -22,7 +24,7 @@ export function StageStrip({ typeLabel, stage }: StageStripProps) {
     >
       <span className="inline-flex items-center gap-[5px] font-semibold text-ink">
         <Tag size={13} aria-hidden="true" className="shrink-0" />
-        <span className="sr-only">Tipo de caso: </span>
+        <span className="sr-only">{t('stage.typeLabel')} </span>
         {typeLabel}
       </span>
       <span aria-hidden="true" className="inline-flex items-center gap-0.5">

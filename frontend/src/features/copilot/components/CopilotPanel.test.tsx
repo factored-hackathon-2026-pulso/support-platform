@@ -137,3 +137,35 @@ describe('CopilotPanel (the "Copiloto" tab, slice 20)', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('CopilotPanel in Portuguese (slice 23)', () => {
+  it('speaks pt-BR: the notice, the starters, a failed question and its retry', async () => {
+    vi.mocked(api.askCopilot).mockRejectedValueOnce(
+      new ApiProblem({ status: 503, code: 'agent_core_unavailable' }),
+    )
+    const { user } = renderWithProviders(
+      <CopilotPanel caseId={CASE_ID} customerName="Natalia Guzmán Rincón" closed={false} />,
+      { staff: analystStaff, aiEnabled: true, locale: 'pt-BR' },
+    )
+    expect(
+      await screen.findByText(
+        'Consulta e calcula com os dados de Natalia. Não faz alterações nem escreve para o cliente.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Pergunte sobre Natalia' })).toBeInTheDocument()
+    expect(screen.getByText('Só você vê estas perguntas.')).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Ele tem reclamações anteriores e como foram encerradas?',
+      }),
+    )
+    const box = screen.getByRole('textbox', { name: 'Pergunte ao copiloto' })
+    expect(box).toHaveValue('Ele tem reclamações anteriores e como foram encerradas?')
+    await user.click(screen.getByRole('button', { name: 'Perguntar' }))
+    const thread = await screen.findByRole('list', { name: 'Perguntas ao copiloto' })
+    expect(await within(thread).findByRole('alert')).toHaveTextContent(
+      'Não foi possível responder. Tente de novo.',
+    )
+    expect(within(thread).getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument()
+  })
+})

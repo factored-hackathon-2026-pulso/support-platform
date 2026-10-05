@@ -12,10 +12,11 @@ import {
 } from 'lucide-react'
 import { Button, Spinner } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import {
-  FAILED_SUGGESTION_MESSAGE,
   copilotTurns,
   describeSuggestFailure,
+  failedSuggestionMessage,
   isAsking,
   suggestionView,
   toolQuestion,
@@ -48,6 +49,7 @@ export interface ToolsPanelProps {
  * and a failure have their own line. Shown only while the suggestions are `available`.
  */
 export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanelProps) {
+  const { t } = useTranslation(['copilot', 'common'])
   const latest = useLatestSuggestion(caseId, true)
   const suggest = useRequestSuggestion(caseId)
   const thread = useCopilotThread(caseId, canAsk)
@@ -70,7 +72,7 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
       <div className="flex items-start justify-between gap-3">
         <p className="m-0 inline-flex items-start gap-2 text-13 text-ink-2">
           <Puzzle size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-muted" />
-          Lo que el copiloto propone mirar en este caso.
+          {t('tools.intro')}
         </p>
         {closed ? null : (
           <Button
@@ -83,7 +85,7 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
               if (!preparing) suggest.mutate()
             }}
           >
-            Sugerir
+            {t('tools.suggest')}
           </Button>
         )}
       </div>
@@ -93,19 +95,19 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
         {preparing ? (
           <span className="m-0 inline-flex items-center gap-2 text-13 text-ink-2">
             <Spinner size={14} label={null} />
-            Preparando sugerencias: suele tardar unos segundos.
+            {t('tools.preparing')}
           </span>
         ) : null}
         {!preparing && view?.stale ? (
           <span className="m-0 inline-flex items-start gap-2 text-13 text-ink-2">
             <History size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-muted" />
-            El cliente escribió después de esta sugerencia. Pide otra con Sugerir.
+            {t('tools.stale')}
           </span>
         ) : null}
         {!preparing && !failure && view?.status === 'failed' ? (
           <span className="m-0 inline-flex items-start gap-2 text-13 text-danger-strong">
             <CircleAlert size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
-            {FAILED_SUGGESTION_MESSAGE}
+            {failedSuggestionMessage()}
           </span>
         ) : null}
         {failure ? (
@@ -119,7 +121,7 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
                 icon={<RefreshCcw size={13} aria-hidden="true" />}
                 onClick={() => suggest.mutate()}
               >
-                Reintentar
+                {t('common:actions.retry')}
               </Button>
             ) : null}
           </span>
@@ -128,16 +130,11 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
 
       {empty && !preparing ? (
         <div className="flex flex-col items-start gap-2 rounded-12 border border-dashed border-border px-4 py-5">
-          <h3 className="m-0 text-15 font-semibold text-ink">
-            Todavía no hay herramientas para este caso
-          </h3>
-          <p className="m-0 text-13 text-ink-2">
-            Aparecen cuando el copiloto ve algo que vale la pena consultar. Mientras tanto,
-            pregúntale en Copiloto o pídele una sugerencia.
-          </p>
+          <h3 className="m-0 text-15 font-semibold text-ink">{t('tools.emptyTitle')}</h3>
+          <p className="m-0 text-13 text-ink-2">{t('tools.emptyText')}</p>
           {onOpenCopilot && canAsk ? (
             <Button size="sm" variant="secondary" onClick={onOpenCopilot}>
-              Ir a Copiloto
+              {t('tools.goToCopilot')}
             </Button>
           ) : null}
         </div>
@@ -149,7 +146,7 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
           className={cn('flex flex-col gap-2.5', view?.stale && 'opacity-70')}
         >
           <h3 id={toolsTitle} className="m-0 text-13 font-semibold text-ink">
-            Para consultar
+            {t('tools.readsTitle')}
           </h3>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {tools.map((tool) => (
@@ -167,9 +164,7 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
               />
             ))}
           </ul>
-          <p className="m-0 text-12 text-muted">
-            Solo consultan: ninguna hace cambios en la cuenta. Cada uso queda en la auditoría.
-          </p>
+          <p className="m-0 text-12 text-muted">{t('tools.readsNote')}</p>
         </section>
       ) : null}
 
@@ -179,16 +174,14 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
           className={cn('flex flex-col gap-2.5', view?.stale && 'opacity-70')}
         >
           <h3 id={actionsTitle} className="m-0 text-13 font-semibold text-ink">
-            Preparadas, sin ejecutar
+            {t('tools.actionsTitle')}
           </h3>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {actions.map((action) => (
               <ActionCard key={`${action.tool}:${action.summary}`} action={action} />
             ))}
           </ul>
-          <p className="m-0 text-12 text-muted">
-            El copiloto no las ejecuta. Si corresponde, hazlo tú por el flujo de siempre.
-          </p>
+          <p className="m-0 text-12 text-muted">{t('tools.actionsNote')}</p>
         </section>
       ) : null}
     </>
@@ -205,6 +198,7 @@ interface ToolCardProps {
 }
 
 function ToolCard({ tool, result, canUse, onUse, onOpenCopilot }: ToolCardProps) {
+  const { t } = useTranslation('copilot')
   const used = result?.state === 'answered'
   return (
     <li className="flex flex-col gap-2 rounded-12 border border-border bg-surface px-3.5 py-3">
@@ -219,12 +213,12 @@ function ToolCard({ tool, result, canUse, onUse, onOpenCopilot }: ToolCardProps)
         {used ? (
           <span className="inline-flex shrink-0 items-center gap-1 text-12 font-semibold text-success-strong">
             <Check size={13} aria-hidden="true" />
-            Consultada
+            {t('tools.used')}
           </span>
         ) : result?.state === 'asking' ? (
           <span className="inline-flex shrink-0 items-center gap-1.5 text-12 text-ink-2">
             <Spinner size={13} label={null} />
-            Consultando
+            {t('tools.using')}
           </span>
         ) : (
           <Button
@@ -232,24 +226,24 @@ function ToolCard({ tool, result, canUse, onUse, onOpenCopilot }: ToolCardProps)
             variant="secondary"
             className="shrink-0"
             icon={<Play size={13} aria-hidden="true" />}
-            aria-label={`Usar ${tool.label}`}
+            aria-label={t('tools.useLabel', { label: tool.label })}
             aria-disabled={!canUse || undefined}
             onClick={() => {
               if (canUse) onUse()
             }}
           >
-            Usar
+            {t('tools.use')}
           </Button>
         )}
       </div>
       {result?.state === 'failed' ? (
         <p className="m-0 inline-flex items-center gap-1.5 text-12 text-danger-strong">
           <CircleAlert size={13} aria-hidden="true" />
-          {result.error ?? 'No se pudo consultar.'} Vuelve a usarla en Copiloto.
+          {t('tools.failedLine', { error: result.error ?? t('tools.failed') })}
         </p>
       ) : null}
       {result?.state === 'unanswered' ? (
-        <p className="m-0 text-12 text-muted">El copiloto no devolvió nada con esta herramienta.</p>
+        <p className="m-0 text-12 text-muted">{t('tools.empty')}</p>
       ) : null}
       {used && result ? (
         <div className="flex flex-col gap-1.5 rounded-10 bg-subtle px-3 py-2.5">
@@ -266,7 +260,7 @@ function ToolCard({ tool, result, canUse, onUse, onOpenCopilot }: ToolCardProps)
               icon={<MessageSquareText size={13} aria-hidden="true" />}
               onClick={onOpenCopilot}
             >
-              Ver en Copiloto
+              {t('tools.viewInCopilot')}
             </Button>
           ) : null}
         </div>
@@ -276,11 +270,12 @@ function ToolCard({ tool, result, canUse, onUse, onOpenCopilot }: ToolCardProps)
 }
 
 function ActionCard({ action }: { action: SuggestionAction }) {
+  const { t } = useTranslation('copilot')
   return (
     <li className="flex flex-col gap-1.5 rounded-12 border border-dashed border-border bg-subtle px-3.5 py-3">
       <span className="inline-flex items-center gap-1 self-start rounded-full border border-border bg-surface px-[7px] text-11 font-semibold text-ink-2">
         <Info size={12} aria-hidden="true" />
-        Solo información
+        {t('tools.infoOnly')}
       </span>
       <span className="text-14 text-ink">{action.summary}</span>
       <span className="truncate font-mono text-11 text-muted" title={action.tool}>

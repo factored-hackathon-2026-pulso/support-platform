@@ -40,9 +40,9 @@ describe('Rail per role', () => {
     expect(rail.getByRole('link', { name: 'Auditoría' })).toHaveAttribute('aria-current', 'page')
   })
 
-  it('admin: users and roles, teams and audit', async () => {
+  it('admin: users and roles, teams, audit and the platform settings', async () => {
     const rail = await railFor('/admin/users', 'Usuarios y roles')
-    expect(destinations(rail)).toEqual(['Usuarios y roles', 'Equipos', 'Auditoría'])
+    expect(destinations(rail)).toEqual(['Usuarios y roles', 'Equipos', 'Auditoría', 'Plataforma'])
     expect(rail.getByRole('link', { name: 'Usuarios y roles' })).toHaveAttribute(
       'aria-current',
       'page',

@@ -50,3 +50,7 @@ export interface AdminUserFilters {
   teamId?: string
   language?: Language
 }
+
+/** Slice 18: the platform settings ("Plataforma": the AI switch). */
+export type AdminPlatformSettings = Schemas['AdminPlatformSettings']
+export type SetAiEnabledResult = Schemas['SetAiEnabledResult']

@@ -25,3 +25,4 @@ export {
   useUpdateUser,
 } from './use-admin-mutations'
 export { useFailureHandler } from './use-failure-handler'
+export { useAdminPlatform, useSetAiEnabled } from './use-platform-settings'

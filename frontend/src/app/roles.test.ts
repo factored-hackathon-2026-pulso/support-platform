@@ -40,6 +40,7 @@ describe('roles', () => {
       'Usuarios y roles',
       'Equipos',
       'Auditoría',
+      'Plataforma',
     ])
     expect(ROLES.admin.nav[0]?.indicator).toBe('lockedAccounts')
   })

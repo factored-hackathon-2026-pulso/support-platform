@@ -4,6 +4,7 @@ import {
   Inbox,
   MessageSquare,
   Shield,
+  SlidersHorizontal,
   UserPlus,
   Users,
   UsersRound,
@@ -142,6 +143,8 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
       },
       { to: PATHS.admin.teams, label: 'Equipos', icon: UsersRound },
       { to: PATHS.admin.audit, label: 'Auditoría', icon: Shield },
+      // Slice 18: platform-wide settings (the AI switch). Always there: it is how AI turns on.
+      { to: PATHS.admin.platform, label: 'Plataforma', icon: SlidersHorizontal },
     ],
   },
 }

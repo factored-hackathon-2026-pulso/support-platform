@@ -40,6 +40,8 @@ export const PATHS = {
     users: '/admin/users',
     teams: '/admin/teams',
     audit: '/admin/audit',
+    /** Slice 18: "Plataforma" (the AI switch). */
+    platform: '/admin/platform',
   },
 } as const
 

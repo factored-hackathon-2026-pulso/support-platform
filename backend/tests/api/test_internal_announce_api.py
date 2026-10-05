@@ -180,7 +180,11 @@ def test_a_bad_or_oversized_payload_is_422(
     proposal_id = detected(registry)
     assert announce(client, body(proposal_id, **overrides)).status_code == 422
     supervisor = sign_in(SUPERVISOR.email)
-    assert client.get(PROPOSALS, headers=bearer(supervisor)).json() == {"items": []}
+    # nothing adopted: the platform's index (the cached list) is empty
+    assert client.get(f"{PROPOSALS}?refresh=false", headers=bearer(supervisor)).json() == {
+        "items": [],
+        "registryListed": False,
+    }
     assert improvements(client, supervisor) == []
 
 
@@ -201,5 +205,9 @@ def test_personal_data_in_free_text_is_refused_and_nothing_is_adopted(
     proposal_id = detected(registry)
     supervisor = sign_in(SUPERVISOR.email)
     assert announce(client, body(proposal_id, problem=text)).status_code == 422
-    assert client.get(PROPOSALS, headers=bearer(supervisor)).json() == {"items": []}
+    # nothing adopted: the platform's index (the cached list) is empty
+    assert client.get(f"{PROPOSALS}?refresh=false", headers=bearer(supervisor)).json() == {
+        "items": [],
+        "registryListed": False,
+    }
     assert improvements(client, supervisor) == []

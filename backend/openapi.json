@@ -7272,10 +7272,16 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "registryListed": {
+            "description": "True when `items` include every proposal agent-core has (its list call answered). False when they are only the platform's index: agent-core's list did not answer (show a quiet notice) or `refresh` was false.",
+            "title": "Registrylisted",
+            "type": "boolean"
           }
         },
         "required": [
-          "items"
+          "items",
+          "registryListed"
         ],
         "title": "ProposalList",
         "type": "object"
@@ -7352,21 +7358,29 @@
             "type": "string"
           },
           "registeredBy": {
-            "description": "The staff member who brought it into this list.",
-            "title": "Registeredby",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who brought it into the platform's index: a staff id, or `engine` (ADR 0007). Null for a `registry` row (only agent-core's list has it).",
+            "title": "Registeredby"
           },
           "rev": {
             "title": "Rev",
             "type": "integer"
           },
           "source": {
-            "description": "Created here, found through the builder chat, or tracked by id.",
+            "description": "Who brought it here: created on this platform, found through the builder chat's answer, tracked by id, announced by the improvement engine, or `registry`: only agent-core's list has it (the builder chat made it and its answer did not name it, or someone created it in agent-core directly).",
             "enum": [
               "platform",
               "chat",
               "tracked",
-              "engine"
+              "engine",
+              "registry"
             ],
             "title": "Source",
             "type": "string"
@@ -12404,7 +12418,7 @@
     },
     "/api/v1/builder/proposals": {
       "get": {
-        "description": "agent-core's registry has no list call, so this is the platform's index: the proposals created here, found through the builder chat or tracked by id. With `refresh` (default) each row is re-read from the registry (`live: true`); a row the registry did not answer for keeps its cached state (`live: false`). At most 50.",
+        "description": "Every proposal agent-core has (its `GET /v1/registry/proposals`), merged with the platform's index, which says who brought each one here (`source`: `platform`, `chat`, `tracked`, `engine`); a proposal only agent-core has is `source: registry`. With `refresh` (default) the registry is read and `live` is true; if agent-core's list does not answer, the index alone is returned (`registryListed: false`), each row re-read by id, and a row the registry did not answer for keeps its cached state (`live: false`). `refresh=false` returns the cached index. Newest first, at most 50.",
         "operationId": "builder_list_proposals",
         "parameters": [
           {
@@ -12455,13 +12469,13 @@
             }
           },
           {
-            "description": "Re-read each row from the registry.",
+            "description": "Read the registry (its list, or each row by id).",
             "in": "query",
             "name": "refresh",
             "required": false,
             "schema": {
               "default": true,
-              "description": "Re-read each row from the registry.",
+              "description": "Read the registry (its list, or each row by id).",
               "title": "Refresh",
               "type": "boolean"
             }

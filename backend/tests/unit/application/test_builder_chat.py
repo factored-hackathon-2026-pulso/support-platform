@@ -181,7 +181,7 @@ async def test_proposals_the_agent_made_join_the_list_once(world: BuilderWorld) 
     assert first.proposals[0].source == "chat"
     assert [p.proposal_id for p in second.proposals] == [made]  # the unknown id is ignored
     listed = await use_cases(world).registry.list_proposals(actor_for(SUPERVISOR))
-    assert [p.proposal_id for p in listed] == [made]
+    assert [(p.proposal_id, p.source) for p in listed.items] == [(made, "chat")]
     tracked = [
         e for e in await builder_events(world.container) if e[0] == "builder.proposal_tracked"
     ]

@@ -188,9 +188,15 @@ class ProposalSummary(ViewModel):
     base_release_id: str | None
     candidate_hash: str | None
     created_by: str
-    registered_by: str = Field(description="The staff member who brought it into this list.")
-    source: Literal["platform", "chat", "tracked", "engine"] = Field(
-        description="Created here, found through the builder chat, or tracked by id."
+    registered_by: str | None = Field(
+        description="Who brought it into the platform's index: a staff id, or `engine` (ADR "
+        "0007). Null for a `registry` row (only agent-core's list has it)."
+    )
+    source: Literal["platform", "chat", "tracked", "engine", "registry"] = Field(
+        description="Who brought it here: created on this platform, found through the builder "
+        "chat's answer, tracked by id, announced by the improvement engine, or `registry`: only "
+        "agent-core's list has it (the builder chat made it and its answer did not name it, or "
+        "someone created it in agent-core directly)."
     )
     updated_at: datetime
     refreshed_at: datetime = Field(description="When the platform last read it from the registry.")
@@ -202,6 +208,11 @@ class ProposalSummary(ViewModel):
 
 class ProposalList(ViewModel):
     items: list[ProposalSummary]
+    registry_listed: bool = Field(
+        description="True when `items` include every proposal agent-core has (its list call "
+        "answered). False when they are only the platform's index: agent-core's list did not "
+        "answer (show a quiet notice) or `refresh` was false."
+    )
 
 
 class ProposalDetail(ViewModel):

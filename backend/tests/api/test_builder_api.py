@@ -312,11 +312,19 @@ def test_reject_sends_the_proposal_back_to_draft(
     assert reopened.status_code == 409  # already in draft: nothing to reopen
 
 
-def test_a_proposal_made_elsewhere_is_tracked_by_id(
+def test_a_proposal_made_elsewhere_is_listed_from_agent_core_and_tracked_by_id(
     client: TestClient, supervisor: dict[str, str], registry: InMemoryAgentRegistry
 ) -> None:
     proposal_id = registry.seed_proposal(agent_id="disputas", title="Del chat")
-    assert client.get(f"{API}/proposals", headers=supervisor).json() == {"items": []}
+    listed = client.get(f"{API}/proposals", headers=supervisor).json()
+    assert listed["registryListed"] is True
+    [row] = listed["items"]
+    assert (row["proposalId"], row["source"], row["registeredBy"], row["live"]) == (
+        proposal_id,
+        "registry",
+        None,
+        True,
+    )
 
     tracked = client.post(
         f"{API}/proposals/track", headers=supervisor, json={"proposalId": proposal_id}
@@ -325,11 +333,32 @@ def test_a_proposal_made_elsewhere_is_tracked_by_id(
     assert tracked.status_code == 200
     assert (tracked.json()["source"], tracked.json()["createdBy"]) == ("tracked", "constructor-bot")
     assert [
-        p["proposalId"] for p in client.get(f"{API}/proposals", headers=supervisor).json()["items"]
-    ] == [proposal_id]
+        (p["proposalId"], p["source"])
+        for p in client.get(f"{API}/proposals", headers=supervisor).json()["items"]
+    ] == [(proposal_id, "tracked")]
     assert client.get(f"{API}/proposals?state=published", headers=supervisor).json() == {
-        "items": []
+        "items": [],
+        "registryListed": True,
     }
+
+
+def test_without_agent_core_s_list_the_index_comes_back_with_a_flag(
+    client: TestClient, supervisor: dict[str, str], registry: InMemoryAgentRegistry
+) -> None:
+    from cc_platform.application.ai.registry import AgentRegistryError
+
+    created = client.post(
+        f"{API}/proposals", headers=supervisor, json={"agentId": "disputas", "title": "Uno"}
+    ).json()
+    registry.seed_proposal(agent_id="cobros", title="Solo en agent-core")
+    registry.listing_failure = AgentRegistryError(status=404, code="not_found")
+
+    listed = client.get(f"{API}/proposals", headers=supervisor).json()
+
+    assert listed["registryListed"] is False
+    assert [(p["proposalId"], p["live"]) for p in listed["items"]] == [
+        (created["proposalId"], True)
+    ]
 
 
 def test_versions_and_entities_pass_through_with_slashes_in_the_id(

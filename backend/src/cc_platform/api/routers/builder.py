@@ -96,10 +96,13 @@ async def get_status(actor: Builder, api: ApiContextDep) -> schemas.BuilderStatu
     response_model=schemas.ProposalList,
     summary="The proposals to change agents, newest first",
     description=(
-        "agent-core's registry has no list call, so this is the platform's index: the proposals "
-        "created here, found through the builder chat or tracked by id. With `refresh` (default) "
-        "each row is re-read from the registry (`live: true`); a row the registry did not answer "
-        "for keeps its cached state (`live: false`). At most 50."
+        "Every proposal agent-core has (its `GET /v1/registry/proposals`), merged with the "
+        "platform's index, which says who brought each one here (`source`: `platform`, `chat`, "
+        "`tracked`, `engine`); a proposal only agent-core has is `source: registry`. With "
+        "`refresh` (default) the registry is read and `live` is true; if agent-core's list does "
+        "not answer, the index alone is returned (`registryListed: false`), each row re-read by "
+        "id, and a row the registry did not answer for keeps its cached state (`live: false`). "
+        "`refresh=false` returns the cached index. Newest first, at most 50."
     ),
     responses=problem_responses(401, 403, 404),
 )
@@ -111,16 +114,21 @@ async def list_proposals(  # noqa: PLR0917 - a filter per query parameter
         ProposalState | None, Query(description="Filter by the proposal state.")
     ] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 50,
-    refresh: Annotated[bool, Query(description="Re-read each row from the registry.")] = True,
+    refresh: Annotated[
+        bool, Query(description="Read the registry (its list, or each row by id).")
+    ] = True,
 ) -> schemas.ProposalList:
-    items = await (await builder_use_cases(api)).registry.list_proposals(
+    listing = await (await builder_use_cases(api)).registry.list_proposals(
         actor,
         agent_id=agent_id,
         state=state.value if state else None,
         limit=limit,
         refresh=refresh,
     )
-    return schemas.ProposalList(items=[schemas.ProposalSummary.model_validate(i) for i in items])
+    return schemas.ProposalList(
+        items=[schemas.ProposalSummary.model_validate(i) for i in listing.items],
+        registry_listed=listing.registry_listed,
+    )
 
 
 @router.post(

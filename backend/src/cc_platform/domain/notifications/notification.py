@@ -119,6 +119,9 @@ class ImprovementDossier:
     evidence: str
     expected_effect: str
     evidence_links: tuple[str, ...] = ()
+    case_type_hint: str | None = None
+    """A ``CaseType`` value the engine thinks the proposal serves (validated by the route, ``None``
+    when absent or unknown): the SPA opens the proposal for that type."""
 
     def __post_init__(self) -> None:
         _bounded(self.title, field="title", limit=MAX_TITLE)

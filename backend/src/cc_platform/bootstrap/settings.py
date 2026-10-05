@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     database_url: str = DEFAULT_DATABASE_URL
     database_echo: bool = False
     seed_demo_data: bool = True
+    seed_demo_bank_links: bool = True
+    """With the demo seed, link three SYNTHETIC simulator customers to the assistant (ADR 0003)."""
 
     # Auth (brief §4.5, canvas BoLogin/BoMfa/BoLocked)
     session_secret: SecretStr = SecretStr(DEV_SESSION_SECRET)

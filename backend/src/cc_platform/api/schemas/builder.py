@@ -162,6 +162,12 @@ class ReleaseSettingChange(ViewModel):
     field: str
     before: Any
     after: Any
+    inherited: bool = Field(
+        description="The value comes from the donor release of `release_settings.inherit_from`."
+    )
+    inherited_from: str | None = Field(
+        description="The donor release id; set only when `inherited`."
+    )
 
 
 class ApprovalReview(ViewModel):

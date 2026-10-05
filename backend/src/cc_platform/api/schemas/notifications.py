@@ -15,6 +15,7 @@ from cc_platform.application.notifications.dto import (
     NotificationsReadAllView,
     NotificationView,
 )
+from cc_platform.domain.cases.values import CaseType
 from cc_platform.domain.notifications.notification import NotificationKind
 from cc_platform.domain.people.staff import Language, StaffRole
 
@@ -31,6 +32,9 @@ class ImprovementNotice(ApiModel):
     expected_effect: str = Field(description="Up to 400 characters.")
     evidence_links: list[str] = Field(
         description="Up to 8 case ids (`CASE-…`); open `/supervision/cases/{id}`."
+    )
+    case_type_hint: CaseType | None = Field(
+        description="The case type the engine says the proposal serves; open it with `?type=`.",
     )
 
 
@@ -101,6 +105,11 @@ class Notification(ApiModel):
                     evidence=view.improvement.evidence,
                     expected_effect=view.improvement.expected_effect,
                     evidence_links=list(view.improvement.evidence_links),
+                    case_type_hint=(
+                        CaseType(view.improvement.case_type_hint)
+                        if view.improvement.case_type_hint
+                        else None
+                    ),
                 )
             ),
         )

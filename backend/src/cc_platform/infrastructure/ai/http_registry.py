@@ -198,6 +198,8 @@ def _review(raw: Mapping[str, Any]) -> ApprovalReview:
                 field=str(c["field"]),
                 before=cast("JsonValue", c.get("before")),
                 after=cast("JsonValue", c.get("after")),
+                inherited=c.get("inherited") is True,
+                inherited_from=_opt(c.get("inherited_from")),
             )
             for c in raw.get("release_changes", [])
         ),

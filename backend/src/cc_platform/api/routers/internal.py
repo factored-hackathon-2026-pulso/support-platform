@@ -72,6 +72,23 @@ class AnnounceProposalRequest(RequestModel):
     evidence: str = Field(min_length=1, max_length=MAX_EVIDENCE)
     expected_effect: str = Field(min_length=1, max_length=MAX_EFFECT)
     evidence_links: list[str] = Field(default_factory=list, max_length=MAX_EVIDENCE_LINKS)
+    case_type_hint: str | None = Field(
+        default=None,
+        max_length=40,
+        description=(
+            "Optional: the case type the proposal serves (a `CaseType` value). An unknown value "
+            "or `none` is ignored, never a 422."
+        ),
+    )
+
+
+def _case_type_hint(raw: str | None) -> str | None:
+    """The hint when it names a case type (``none`` is not a type), else ``None``."""
+    try:
+        value = CaseType(raw) if raw else None
+    except ValueError:
+        return None
+    return None if value is None or value is CaseType.NONE else value.value
 
 
 @router.post(
@@ -91,6 +108,7 @@ async def announce_proposal(
         evidence=body.evidence,
         expected_effect=body.expected_effect,
         evidence_links=tuple(body.evidence_links),
+        case_type_hint=_case_type_hint(body.case_type_hint),
     )
     announce = (await builder_use_cases(api)).announce
     summary = await announce.execute(body.proposal_id, dossier)

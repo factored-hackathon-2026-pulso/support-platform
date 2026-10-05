@@ -312,6 +312,7 @@ from cc_platform.infrastructure.security.secret_box import FernetSecretBox, deri
 from cc_platform.infrastructure.security.tokens import HmacSessionTokenService
 from cc_platform.infrastructure.security.totp import PyotpTotpService
 from cc_platform.infrastructure.seed.activity import seed_demo_activity
+from cc_platform.infrastructure.seed.bank_links import seed_demo_bank_links
 from cc_platform.infrastructure.seed.customers import seed_demo_customers
 from cc_platform.infrastructure.seed.notifications import mark_seed_notifications_seen
 from cc_platform.infrastructure.seed.onboarding import SeedOnboarding
@@ -445,6 +446,9 @@ class Container:
         created = {
             "staff": await seed_demo_staff(self.uow, self.password_hasher, now=self.clock.now()),
             "customers": await seed_demo_customers(self.uow),
+            "bank_links": (
+                await seed_demo_bank_links(self.uow) if self.settings.seed_demo_bank_links else 0
+            ),
             **await seed_demo_activity(
                 self.uow,
                 self.ids,

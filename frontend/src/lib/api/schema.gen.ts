@@ -4748,6 +4748,8 @@ export interface components {
     ImprovementNotice: {
       /** Agentid */
       agentId: string
+      /** @description The case type the engine says the proposal serves; open it with `?type=`. */
+      caseTypeHint: components['schemas']['CaseType'] | null
       /**
        * Evidence
        * @description Up to 600 characters.
@@ -6113,6 +6115,16 @@ export interface components {
       before: unknown
       /** Field */
       field: string
+      /**
+       * Inherited
+       * @description The value comes from the donor release of `release_settings.inherit_from`.
+       */
+      inherited: boolean
+      /**
+       * Inheritedfrom
+       * @description The donor release id; set only when `inherited`.
+       */
+      inheritedFrom: string | null
     }
     /** RenameAgentRequest */
     RenameAgentRequest: {

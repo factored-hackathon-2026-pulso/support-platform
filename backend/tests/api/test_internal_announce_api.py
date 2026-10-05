@@ -88,6 +88,32 @@ def improvements(client: TestClient, token: str) -> list[dict[str, Any]]:
     return [n for n in found.json()["items"] if n["kind"] == "improvement_proposed"]
 
 
+@pytest.mark.parametrize(
+    ("hint", "expected"),
+    [
+        ("app_issue", "app_issue"),
+        ("undue_charge", "undue_charge"),
+        ("not_a_case_type", None),  # ignored, never a 422
+        ("none", None),  # "none" is no type
+        (None, None),
+    ],
+)
+def test_the_case_type_hint_is_kept_when_it_names_a_case_type_and_ignored_otherwise(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    registry: InMemoryAgentRegistry,
+    hint: str | None,
+    expected: str | None,
+) -> None:
+    supervisor = sign_in(SUPERVISOR.email)
+
+    answer = announce(client, body(detected(registry), caseTypeHint=hint))
+
+    assert answer.status_code == 200, answer.text
+    (notice,) = improvements(client, supervisor)
+    assert notice["improvement"]["caseTypeHint"] == expected
+
+
 def test_it_needs_the_service_token(client: TestClient, registry: InMemoryAgentRegistry) -> None:
     proposal_id = detected(registry)
     missing = client.post(URL, json=body(proposal_id))
@@ -129,6 +155,7 @@ def test_it_adopts_the_proposal_and_notifies_supervisors_once(
         "evidence": "12 casos escalados por el mismo paso faltante en 7 días.",
         "expectedEffect": "Menos escalaciones por este motivo.",
         "evidenceLinks": [CASE],
+        "caseTypeHint": None,
     }
     assert improvements(client, analyst) == []  # supervisors only
     assert improvements(client, sign_in(ADMIN_ONLY.email)) == []

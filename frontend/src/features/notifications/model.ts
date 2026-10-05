@@ -196,7 +196,7 @@ export function notificationCopy(n: Notification, now: number): NotificationCopy
         }),
         n.improvement?.title ?? t('kinds.improvementDetailFallback'),
         n.improvement
-          ? automationProposalPath(n.improvement.proposalId)
+          ? automationProposalPath(n.improvement.proposalId, { type: n.improvement.caseTypeHint })
           : PATHS.supervision.automationProposals,
       )
   }

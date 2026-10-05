@@ -179,6 +179,7 @@ describe('notificationCopy: one fixed template per kind (canvas boards)', () => 
           evidence: 'e',
           expectedEffect: 'x',
           evidenceLinks: [],
+          caseTypeHint: null,
         },
       }),
     ).toMatchObject({
@@ -187,6 +188,22 @@ describe('notificationCopy: one fixed template per kind (canvas boards)', () => 
       action: 'Revisar',
       href: '/supervision/automation/proposals/p-1',
     })
+  })
+
+  it('opens an improvement for the case type the engine hinted', () => {
+    const improvement = {
+      proposalId: 'p-1',
+      agentId: 'soporte-tecnico',
+      title: 'Agente técnico',
+      problem: 'p',
+      evidence: 'e',
+      expectedEffect: 'x',
+      evidenceLinks: [],
+      caseTypeHint: 'app_issue' as const,
+    }
+    expect(
+      copyOf({ kind: 'improvement_proposed', role: 'supervisor', caseId: null, improvement }).href,
+    ).toBe('/supervision/automation/proposals/p-1?type=app_issue')
   })
 
   it('covers every kind and never joins facts with " · "', () => {

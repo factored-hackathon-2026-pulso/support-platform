@@ -14,7 +14,8 @@ an escalation's motive and supervision's answer (``motive_length``, ``note_lengt
 read them in the case and in "Escalados"). Reading the audit is not audited.
 
 Names are resolved with a fixed number of queries per page (staff, customers, the cases'
-customer and language), never one per row.
+customer and language), never one per row. Descriptions are rendered in the reader's UI
+language (slice 23c: ``ui_language_of``; Spanish when there is no reader, as in tests).
 """
 
 from __future__ import annotations
@@ -35,8 +36,11 @@ from cc_platform.application.audit.catalog import (
 )
 from cc_platform.application.events import StoredEvent
 from cc_platform.application.pagination import decode_sequence_cursor
+from cc_platform.application.people.preferences import ui_language_of
 from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from cc_platform.application.security import Actor
+from cc_platform.domain.people.preferences import DEFAULT_UI_LANGUAGE, UiLanguage
 from cc_platform.domain.shared.actor import ActorRole
 from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
 from cc_platform.domain.shared.json import JsonObject
@@ -170,8 +174,18 @@ def decode_audit_cursor(cursor: str | None) -> int | None:
     return None if cursor is None else decode_sequence_cursor(cursor)
 
 
-async def present_events(uow: UnitOfWork, events: Sequence[StoredEvent]) -> list[AuditEventView]:
-    """Rows of the audit log with names and the Spanish description (batched lookups)."""
+async def reader_language(uow: UnitOfWork, reader: Actor | None) -> UiLanguage:
+    """The UI language the log is rendered in: the reader's preference (Spanish without one)."""
+    return DEFAULT_UI_LANGUAGE if reader is None else await ui_language_of(uow, reader.staff_id)
+
+
+async def present_events(
+    uow: UnitOfWork,
+    events: Sequence[StoredEvent],
+    language: UiLanguage = DEFAULT_UI_LANGUAGE,
+) -> list[AuditEventView]:
+    """Rows of the audit log with names and the description in ``language`` (batched
+    lookups)."""
     case_ids = {e.case_id for e in events if e.case_id is not None}
     refs = await uow.cases.refs(case_ids) if case_ids else {}
     customer_ids = {e.actor_id for e in events if e.actor_role == ActorRole.CUSTOMER.value}
@@ -200,7 +214,7 @@ async def present_events(uow: UnitOfWork, events: Sequence[StoredEvent]) -> list
                 type=event.event_type,
                 family=family_of(event.event_type),
                 changes_state=event.event_type in CHANGES_STATE,
-                description=describe(event, names),
+                description=describe(event, names, language),
                 occurred_at=event.event_time,
                 ingested_at=event.ingested_at,
                 actor=AuditActorView(
@@ -222,14 +236,14 @@ async def present_events(uow: UnitOfWork, events: Sequence[StoredEvent]) -> list
 class ListAuditEvents:
     uow: UnitOfWorkFactory
 
-    async def execute(self, query: AuditQuery) -> AuditEventPageView:
+    async def execute(self, query: AuditQuery, reader: Actor | None = None) -> AuditEventPageView:
         filters = filters_of(query)
         before = decode_audit_cursor(query.cursor)
         size = max(1, min(query.limit, MAX_AUDIT_PAGE))
         async with self.uow() as uow:
             found = await uow.event_log.search(filters, before=before, limit=size + 1)
             page = found[:size]
-            items = await present_events(uow, page)
+            items = await present_events(uow, page, await reader_language(uow, reader))
         more = len(found) > size and bool(page)
         return AuditEventPageView(
             items=tuple(items), next_cursor=str(page[-1].sequence) if more else None
@@ -240,10 +254,10 @@ class ListAuditEvents:
 class GetAuditEvent:
     uow: UnitOfWorkFactory
 
-    async def execute(self, event_id: str) -> AuditEventView:
+    async def execute(self, event_id: str, reader: Actor | None = None) -> AuditEventView:
         async with self.uow() as uow:
             event = await uow.event_log.get(event_id)
             if event is None:
                 raise NotFoundError("No encontramos ese evento.", eventId=event_id)
-            (view,) = await present_events(uow, [event])
+            (view,) = await present_events(uow, [event], await reader_language(uow, reader))
         return view

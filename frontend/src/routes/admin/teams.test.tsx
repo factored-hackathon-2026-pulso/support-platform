@@ -310,3 +310,67 @@ describe('teams screen ("Equipos")', () => {
     expect(await screen.findByText('No encontramos ese equipo.')).toBeInTheDocument()
   })
 })
+
+describe('teams screen in Portuguese (slice 23)', () => {
+  const renderPt = (path = '/admin/teams') =>
+    renderRoute(path, { staff: adminStaff, locale: 'pt-BR' })
+
+  it('lists the teams with the Filtros dropdown and shows the selected one', async () => {
+    const { user } = renderPt()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Equipes' })).toBeInTheDocument()
+    const list = await screen.findByRole('table', { name: 'Equipes' })
+    expect(screen.getByText('4 equipes na plataforma')).toBeInTheDocument()
+    expect(screen.getByText('2 de 4 equipes')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remover filtro Ativas' })).toBeInTheDocument()
+    const andes = within(list).getByRole('row', { name: /Equipo Andes/ })
+    expect(
+      within(andes)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    ).toEqual(['Equipo Andes', '4', '3', 'Ativa'])
+    expect(
+      screen.getByText('Equipes e pessoas: diretório da plataforma (dados de exemplo).'),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('complementary', { name: 'Equipe selecionada' })).getByText(
+        'Escolha uma equipe para ver as pessoas dela.',
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Equipo Andes' }))
+    const panel = screen.getByRole('complementary', { name: 'Equipe selecionada' })
+    expect(await within(panel).findByRole('heading', { name: 'Equipo Andes' })).toBeInTheDocument()
+    expect(within(panel).getByText('Ativa').parentElement).toHaveTextContent('Status: Ativa')
+    expect(within(panel).getByText(/^Criada em /)).toBeInTheDocument()
+    expect(within(panel).getByRole('textbox', { name: 'Nome da equipe' })).toHaveValue(
+      'Equipo Andes',
+    )
+    expect(within(panel).getByText('Pessoas (4)')).toBeInTheDocument()
+    const deactivate = within(panel).getByRole('button', { name: 'Desativar equipe' })
+    expect(deactivate).toBeDisabled()
+    expect(deactivate).toHaveAccessibleDescription(
+      'Para desativá-la, primeiro mova as 4 pessoas desta equipe para outra.',
+    )
+  })
+
+  it('adds a person from another team', async () => {
+    vi.mocked(updateUser).mockResolvedValue({
+      changed: true,
+      user: { ...mariana, team: { id: teamAndes.id, name: teamAndes.name }, version: 4 },
+      revokedSessions: 0,
+    })
+    const { user } = renderPt(`/admin/teams?team=${teamAndes.id}`)
+    const panel = await screen.findByRole('complementary', { name: 'Equipe selecionada' })
+    await user.click(await within(panel).findByRole('button', { name: 'Adicionar pessoa' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Adicionar a Equipo Andes' })
+    const person = await within(dialog).findByRole('combobox', { name: 'Pessoa' })
+    await user.click(within(dialog).getByRole('button', { name: 'Mover para Equipo Andes' }))
+    expect(within(dialog).getByText('Escolha quem mover.')).toBeInTheDocument()
+    await user.selectOptions(person, 'Mariana Duque (Equipo Pacífico)')
+    expect(
+      within(dialog).getByText('Sai de Equipo Pacífico e vai para Equipo Andes.'),
+    ).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Mover para Equipo Andes' }))
+    expect(await screen.findByText('Mariana Duque foi para Equipo Andes')).toBeInTheDocument()
+  })
+})

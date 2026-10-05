@@ -11,6 +11,7 @@ from enum import StrEnum
 
 from cc_platform.application.people.dto import TeamRefView
 from cc_platform.domain.people.availability import AvailabilityStatus
+from cc_platform.domain.people.preferences import DEFAULT_UI_LANGUAGE, UiLanguage
 from cc_platform.domain.people.staff import Language, StaffRole
 
 
@@ -161,6 +162,8 @@ class CreateUserCommand:
     languages: tuple[Language, ...]
     team_id: str
     idempotency_key: str | None = None
+    ui_language: UiLanguage = DEFAULT_UI_LANGUAGE
+    """Slice 23c: her platform language, chosen by administration (her emails use it)."""
 
 
 @dataclass(frozen=True, slots=True)

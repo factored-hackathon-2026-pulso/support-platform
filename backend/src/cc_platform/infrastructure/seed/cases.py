@@ -40,7 +40,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from cc_platform.application.cases import copy
+from cc_platform.application.cases import copy, staff_lines
 from cc_platform.application.cases.assignment import (
     REASON_NO_ANALYST,
     LanguageLeastLoadedStrategy,
@@ -48,6 +48,7 @@ from cc_platform.application.cases.assignment import (
 )
 from cc_platform.application.cases.manual_assignment import MANUAL_STRATEGY
 from cc_platform.application.cases.sla import FirstResponseSlaPolicy
+from cc_platform.application.cases.staff_lines import Banner
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
@@ -57,7 +58,7 @@ from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.escalation import Escalation
 from cc_platform.domain.cases.events import CaseViewed
-from cc_platform.domain.cases.turn import Turn
+from cc_platform.domain.cases.turn import StaffLine, Turn
 from cc_platform.domain.cases.values import (
     AssignmentReason,
     CaseChannel,
@@ -137,6 +138,7 @@ class _Story:
         author: str | None,
         audience: TurnAudience = TurnAudience.EVERYONE,
         subject: str | None = None,
+        staff_line: StaffLine | None = None,
     ) -> None:
         self.turns.append(
             self.case.append_turn(
@@ -148,6 +150,7 @@ class _Story:
                 text=text,
                 created_at=at,
                 subject=subject,
+                staff_line=staff_line,
             )
         )
 
@@ -169,18 +172,22 @@ class _Story:
             author=None,
         )
 
-    def banner(self, at: datetime, text: str) -> None:
+    def banner(self, at: datetime, banner: Banner) -> None:
+        """A staff-only line with its facts (slice 23c), as the use cases write it."""
         self._turn(
             at,
-            text,
+            banner.text,
             kind=TurnKind.ROUTING,
             role=TurnAuthorRole.SYSTEM,
             author=None,
             audience=TurnAudience.STAFF,
+            staff_line=banner.line,
         )
 
     def wrote_again(self, at: datetime, previous_closed_at: datetime, reason: CloseReason) -> None:
-        self.banner(at, copy.wrote_again(self.customer_first_name, previous_closed_at, reason))
+        self.banner(
+            at, staff_lines.wrote_again(self.customer_first_name, previous_closed_at, reason)
+        )
 
     def assign(self, at: datetime, staff: int, *, open_cases: int) -> None:
         """Assigned on arrival (``language_least_loaded``) with its banner."""
@@ -197,7 +204,7 @@ class _Story:
         )
         self.case.assign(assignment)
         self.assignments.append(assignment)
-        self.banner(at, copy.assigned_on_arrival(_staff_name(staff), self.case.language))
+        self.banner(at, staff_lines.assigned_on_arrival(_staff_name(staff), self.case.language))
 
     def reassign(self, at: datetime, staff: int, *, by: int, open_cases: int) -> None:
         """A supervisor (``by``) passes the open case to ``staff``: staff banner and the
@@ -224,7 +231,7 @@ class _Story:
             )
             self.case.clear_escalation(escalation.id)
         previous_name = _staff_name_of(previous) if previous else ""
-        self.banner(at, copy.reassigned(_staff_name(by), previous_name, _staff_name(staff)))
+        self.banner(at, staff_lines.reassigned(_staff_name(by), previous_name, _staff_name(staff)))
         self._turn(
             at,
             copy.reassigned_notice(self.case.language, _staff_name(staff).split()[0]),
@@ -246,14 +253,14 @@ class _Story:
         )
         self.case.escalate(escalation.id)
         self.escalations.append(escalation)
-        self.banner(at, copy.escalated(_staff_name_of(staff_id)))
+        self.banner(at, staff_lines.escalated(_staff_name_of(staff_id)))
 
     def answer_escalation(self, at: datetime, *, by: int, note: str) -> None:
         """Supervision (``by``) answers the open escalation, as ``RespondEscalation`` does."""
         escalation = self._open_escalation()
         escalation.answer(actor=ActorRef(ActorRole.SUPERVISOR, seed_staff_id(by)), note=note, at=at)
         self.case.clear_escalation(escalation.id)
-        self.banner(at, copy.escalation_answered(_staff_name(by)))
+        self.banner(at, staff_lines.escalation_answered(_staff_name(by)))
 
     def _open_escalation(self) -> Escalation:
         return next(e for e in self.escalations if e.id == self.case.open_escalation_id)
@@ -266,7 +273,7 @@ class _Story:
             policy_rule_id=language_rule(self.case.language),
             at=at,
         )
-        self.banner(at, copy.queued(self.case.language, label))
+        self.banner(at, staff_lines.queued(self.case.language, label))
 
     def read_up_to(self, at: datetime, sequence: int) -> None:
         self.case.mark_read(up_to=sequence, at=at)
@@ -330,7 +337,7 @@ class _Story:
         )
         self.case.assign(assignment)
         self.assignments.append(assignment)
-        self.banner(at, copy.follow_up_call(_staff_name(staff), self.customer_first_name))
+        self.banner(at, staff_lines.follow_up_call(_staff_name(staff), self.customer_first_name))
 
     def _call(self) -> Call:
         return next(c for c in self.calls if c.id == self.case.active_call_id)

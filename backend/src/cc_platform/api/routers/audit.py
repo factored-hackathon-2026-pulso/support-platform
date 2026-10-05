@@ -2,7 +2,8 @@
 
 Reads the append-only event log, newest first, with cursor pagination. Message text is
 never returned here (``redactedFields``); it stays in the transcript, read through the
-audited supervisor case view. Reading the audit is not itself audited.
+audited supervisor case view. Reading the audit is not itself audited. Descriptions come
+in the reader's UI language (slice 23c).
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ def _utc(value: datetime | None) -> datetime | None:
 )
 async def list_events(
     *,
-    _actor: SupervisorOrAdmin,
+    actor: SupervisorOrAdmin,
     api: ApiContextDep,
     actor_kind: Annotated[AuditActorKind | None, Query(alias="actorKind")] = None,
     actor_id: Annotated[str | None, Query(alias="actorId", max_length=120)] = None,
@@ -76,7 +77,8 @@ async def list_events(
             text=q,
             cursor=cursor,
             limit=limit,
-        )
+        ),
+        reader=actor,
     )
     return AuditEventPage.from_view(page)
 
@@ -89,7 +91,8 @@ async def list_events(
 )
 async def get_event(
     event_id: Annotated[str, Path(alias="eventId", max_length=64, examples=["EVT-01J…"])],
-    _actor: SupervisorOrAdmin,
+    actor: SupervisorOrAdmin,
     api: ApiContextDep,
 ) -> AuditEvent:
-    return AuditEvent.from_view(await api.use_cases.audit.get_event.execute(event_id))
+    view = await api.use_cases.audit.get_event.execute(event_id, reader=actor)
+    return AuditEvent.from_view(view)

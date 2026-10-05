@@ -26,6 +26,9 @@ from cc_platform.application.ai.runtime import (
 from cc_platform.domain.ai.suggestion import Suggestion
 from cc_platform.infrastructure.ai.keys import read_jws
 
+#: Inputs a conversational run may carry (claimed slots in agent-core), e.g. the copilot's.
+CONVERSATIONAL_INPUTS = frozenset({"assistant_session_id"})
+
 
 @dataclass(frozen=True, slots=True)
 class RecordedCall:
@@ -84,7 +87,10 @@ class InMemoryAgentRuntime:
         self._record("start_run", credentials, **arguments)
         self._runs += 1
         run_id = f"run-{self._runs}"
-        if input is not None:  # a task run: no session, no first turn, a list of suggestions
+        # A task run carries its validated input; a conversational run may carry claimed inputs
+        # (the copilot names the assistant's session), and still opens a session.
+        if input is not None and set(input) - CONVERSATIONAL_INPUTS:
+            # a task run: no session, no first turn, a list of suggestions
             answer = self.suggestion_script.pop(0) if self.suggestion_script else ()
             if isinstance(answer, Exception):
                 raise answer

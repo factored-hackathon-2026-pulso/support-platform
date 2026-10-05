@@ -33,6 +33,7 @@ describe('roles', () => {
       ['Colas', '/supervision/queues', 'queuedCases'],
       ['Equipo', '/supervision/team', undefined],
       ['Escalados', '/supervision/escalations', 'openEscalations'],
+      ['Automatización', '/supervision/automation', 'agentProposals'],
       ['Auditoría', '/supervision/audit', undefined],
     ])
     expect(ROLES.supervisor.nav[0]?.alsoActiveOn).toEqual(['/supervision/cases'])

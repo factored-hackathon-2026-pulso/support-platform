@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import {
   isNavItemActive,
+  visibleNav,
   type NavItem,
   type RailIndicator,
   type RailIndicators,
@@ -10,6 +11,7 @@ import {
 } from '@/app/roles'
 import { CountBadge } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { i18n, useTranslation } from '@/lib/i18n'
 import { RoleSwitcher } from './RoleSwitcher'
 
 export interface RailProps {
@@ -23,6 +25,8 @@ export interface RailProps {
    * imports a feature; the route table composes it (app/router.tsx).
    */
   notifications?: ReactNode
+  /** The AI functions are on: AI destinations ("Automatización", slice 22) show. Default false. */
+  aiEnabled?: boolean
 }
 
 /** The count and dot of an item, or nothing when its indicator has no value. */
@@ -30,12 +34,10 @@ function indicatorFor(item: NavItem, indicators: RailIndicators): RailIndicator 
   return (item.indicator && indicators[item.indicator]) || {}
 }
 
-function navAccessibleName(label: string, { count, dot, noun }: RailIndicator): string {
-  if (count) {
-    const [one, many] = noun ?? ['pendiente', 'pendientes']
-    return `${label}, ${count} ${count === 1 ? one : many}`
-  }
-  if (dot) return `${label}, con novedades`
+/** "Casos, 2 pendientes", "Colas, 3 sin asignar", "Inicio, con novedades". */
+function navAccessibleName(label: string, { count, dot, noun = 'pending' }: RailIndicator): string {
+  if (count) return i18n.t(`shell:rail.${noun}`, { label, count })
+  if (dot) return i18n.t('shell:rail.withNews', { label })
   return label
 }
 
@@ -43,23 +45,30 @@ function navAccessibleName(label: string, { count, dot, noun }: RailIndicator): 
  * Dark 64px left rail: brand mark, the current role's destinations and, at the bottom, the
  * notification bell above the role switcher.
  */
-export function Rail({ role, indicators = {}, presence = null, notifications }: RailProps) {
+export function Rail({
+  role,
+  indicators = {},
+  presence = null,
+  notifications,
+  aiEnabled = false,
+}: RailProps) {
   const { pathname } = useLocation()
+  const { t } = useTranslation(['shell', 'common'])
   return (
     <nav
-      aria-label="Principal"
+      aria-label={t('rail.label')}
       data-surface="dark"
       className="flex w-16 shrink-0 flex-col items-center gap-2 bg-rail py-4"
     >
       <span
         aria-hidden="true"
         className="mb-3 font-display text-15 font-bold text-white"
-        title="Plataforma CC"
+        title={t('common:brand.name')}
       >
-        CC
+        {t('common:brand.mark')}
       </span>
       <ul className="m-0 flex list-none flex-col items-center gap-2 p-0">
-        {role.nav.map((item) => {
+        {visibleNav(role.nav, aiEnabled).map((item) => {
           const Icon = item.icon
           const active = isNavItemActive(item, pathname)
           const { count, dot, noun } = indicatorFor(item, indicators)

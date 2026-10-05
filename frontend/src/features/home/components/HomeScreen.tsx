@@ -1,7 +1,9 @@
+import { useAiEnabled } from '@/app/platform'
 import { useCurrentUser } from '@/app/session'
 import { Badge, DocumentTitle } from '@/components/ui'
 import { useAvailability, useInbox } from '@/features/cases'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import { useHome } from '../hooks'
 import { greeting, headerLine } from '../model'
 import { ActivityFeed } from './ActivityFeed'
@@ -19,27 +21,31 @@ const TICK_MS = 30_000
  * primero" (her open cases by urgency), "Mientras no estabas" (what happened
  * since her previous session, fixed templates) and "Tu equipo ahora" (counts
  * only). The tiles and "Lo primero" share the inbox cache with the Casos list;
- * the rest is `GET /me/home`. Owns the `<main>` landmark.
+ * the rest is `GET /me/home`. Slice 21 (AI on, IaHomeTurno): the assistant's line on top of
+ * "Mientras no estabas" and "Con el asistente ahora" in "Tu equipo ahora". Owns the `<main>`
+ * landmark.
  */
 export function HomeScreen() {
+  const { t } = useTranslation(['home', 'cases'])
   const user = useCurrentUser()
   const now = useNow(TICK_MS)
   const inbox = useInbox({ status: null, q: '' })
   const availability = useAvailability()
   const home = useHome()
+  const aiEnabled = useAiEnabled()
   const paused = availability.data?.status !== 'available'
   const header = headerLine(now, user.team.name)
 
   return (
     <main className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto px-10 py-7">
-      <DocumentTitle title="Inicio" />
+      <DocumentTitle title={t('title')} />
       <header className="flex items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <p className="m-0 flex items-center gap-2 text-13 text-muted">
             <span>{header.date}</span>
             {header.team ? (
               <Badge tone="neutral" size="sm">
-                <span className="sr-only">Equipo: </span>
+                <span className="sr-only">{t('header.team')} </span>
                 {header.team}
               </Badge>
             ) : null}
@@ -67,12 +73,13 @@ export function HomeScreen() {
         />
         {/* The right column takes its natural height: the page scrolls, nothing is clipped. */}
         <div className="flex flex-col gap-4">
-          <ActivityFeed home={home} now={now} />
+          <ActivityFeed home={home} now={now} aiEnabled={aiEnabled} />
           <TeamNow
             team={home.data?.teamNow}
             failed={home.status === 'error'}
             meAvailable={!paused}
             now={now}
+            withAssistant={aiEnabled ? (home.data?.assistant?.withAssistantNow ?? null) : null}
           />
         </div>
       </div>

@@ -111,4 +111,21 @@ describe('/admin/platform ("Plataforma", slice 18)', () => {
       ),
     )
   })
+
+  it('speaks Brazilian Portuguese (slice 23)', async () => {
+    vi.mocked(setAiEnabled).mockResolvedValue({
+      changed: true,
+      settings: { ...NEVER_CHANGED, aiEnabled: false, version: 1 },
+    })
+    const { user } = renderRoute('/admin/platform', { staff: adminStaff, locale: 'pt-BR' })
+    expect(await screen.findByRole('heading', { name: 'Plataforma' })).toBeInTheDocument()
+    expect(screen.getByText('Ajustes para toda a equipe')).toBeInTheDocument()
+    const control = await screen.findByRole('switch', { name: 'Funções de IA' })
+    expect(control).toHaveAccessibleDescription(
+      'Assistente, copiloto e tipos de caso. Desligadas, a plataforma atende só com pessoas.',
+    )
+    expect(screen.getByText('Valor da instalação')).toBeInTheDocument()
+    await user.click(control)
+    expect(await screen.findByText('Funções de IA desligadas')).toBeInTheDocument()
+  })
 })

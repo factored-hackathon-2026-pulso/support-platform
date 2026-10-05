@@ -3,6 +3,7 @@ import { workspacePath } from '@/app/paths'
 import {
   isCustomerFileOpen,
   openPanel,
+  parsePanel,
   parseWorkspaceSearch,
   toWorkspaceSearch,
   type WorkspaceUrlState,
@@ -40,6 +41,18 @@ describe('parseWorkspaceSearch', () => {
     expect(
       openPanel(parseWorkspaceSearch(new URLSearchParams('panel=handoff&previous=list'))),
     ).toBe('customer')
+  })
+
+  it('reads the copilot and tools tabs (slice 20) and round-trips them', () => {
+    for (const panel of ['copilot', 'tools'] as const) {
+      const state = parseWorkspaceSearch(new URLSearchParams(`case=C&panel=${panel}`))
+      expect(state.panel).toBe(panel)
+      expect(openPanel(state)).toBe(panel)
+      expect(toWorkspaceSearch(state).get('panel')).toBe(panel)
+    }
+    expect(parseWorkspaceSearch(new URLSearchParams('panel=copiloto')).panel).toBeNull()
+    expect(parsePanel('tools')).toBe('tools')
+    expect(parsePanel('herramientas')).toBeNull()
   })
 
   it('opens "Ficha del cliente" with panel=customer or a previous deep link', () => {

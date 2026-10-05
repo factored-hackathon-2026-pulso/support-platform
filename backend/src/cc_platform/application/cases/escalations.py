@@ -33,12 +33,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from cc_platform.application.cases import copy
+from cc_platform.application.cases import staff_lines
 from cc_platform.application.cases.dto import CaseSummaryView, EscalationView
 from cc_platform.application.cases.errors import AnalystNotEligibleError, CaseNotAssignedError
 from cc_platform.application.cases.manual_assignment import eligible_analyst, hand_over
 from cc_platform.application.cases.queries import load_case_for
 from cc_platform.application.cases.read_model import CaseReader
+from cc_platform.application.cases.staff_lines import Banner
 from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
@@ -123,16 +124,17 @@ async def _result(
     )
 
 
-def _staff_banner(case: Case, ids: IdGenerator, text: str, at: datetime) -> Turn:
-    """A staff-only line in the transcript (never sent to the customer)."""
+def _staff_banner(case: Case, ids: IdGenerator, banner: Banner, at: datetime) -> Turn:
+    """A staff-only line in the transcript (never sent to the customer), with its facts."""
     return case.append_turn(
         turn_id=ids.new_id(IdPrefix.TURN),
         kind=TurnKind.ROUTING,
         audience=TurnAudience.STAFF,
         author_role=TurnAuthorRole.SYSTEM,
         author_id=None,
-        text=text,
+        text=banner.text,
         created_at=at,
+        staff_line=banner.line,
     )
 
 
@@ -178,7 +180,7 @@ class EscalateCase:
                 creation_key=command.idempotency_key,
             )
             case.escalate(escalation.id)  # closed, queued or already escalated → error
-            turn = _staff_banner(case, self.ids, copy.escalated(actor.name), now)
+            turn = _staff_banner(case, self.ids, staff_lines.escalated(actor.name), now)
             await uow.cases.save(case)
             await uow.escalations.add(escalation)
             await uow.turns.add(turn)
@@ -207,7 +209,7 @@ class WithdrawEscalation:
             now = self.clock.now()
             escalation.withdraw(actor=actor.acting_as({StaffRole.ANALYST}), at=now)
             case.clear_escalation(escalation.id)
-            turn = _staff_banner(case, self.ids, copy.escalation_withdrawn(actor.name), now)
+            turn = _staff_banner(case, self.ids, staff_lines.escalation_withdrawn(actor.name), now)
             await _store(uow, case, escalation, turn)
             result = await _result(CaseReader(uow), escalation, case)
             await uow.commit()
@@ -261,7 +263,7 @@ class RespondEscalation:
             now = self.clock.now()
             escalation.answer(actor=actor.acting_as({StaffRole.SUPERVISOR}), note=note, at=now)
             case.clear_escalation(escalation.id)
-            turn = _staff_banner(case, self.ids, copy.escalation_answered(actor.name), now)
+            turn = _staff_banner(case, self.ids, staff_lines.escalation_answered(actor.name), now)
             await _store(uow, case, escalation, turn)
             result = await _result(CaseReader(uow), escalation, case)
             await uow.commit()

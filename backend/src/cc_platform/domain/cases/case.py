@@ -68,7 +68,7 @@ from cc_platform.domain.cases.rating import (
     normalize_rating_comment,
     normalize_rating_score,
 )
-from cc_platform.domain.cases.turn import Turn, normalize_turn_text
+from cc_platform.domain.cases.turn import StaffLine, Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
     CLOSABLE_STATUSES,
     CONVERSATION_KINDS,
@@ -354,6 +354,7 @@ class Case(AggregateRoot):
         created_at: datetime,
         client_message_id: str | None = None,
         subject: str | None = None,
+        staff_line: StaffLine | None = None,
     ) -> Turn:
         """Add the next turn (``sequence = last_sequence + 1``) and record ``turn.created``.
 
@@ -375,6 +376,7 @@ class Case(AggregateRoot):
             created_at=created_at,
             client_message_id=client_message_id,
             subject=subject,
+            staff_line=staff_line,
         )
         self.last_sequence = turn.sequence
         if turn.is_public:
@@ -403,6 +405,7 @@ class Case(AggregateRoot):
                 language=turn.language.value,
                 client_message_id=client_message_id,
                 subject=turn.subject,
+                staff_line=staff_line.to_json() if staff_line else None,
             )
         )
         if turn.is_analyst_message and self.first_response_at is None:

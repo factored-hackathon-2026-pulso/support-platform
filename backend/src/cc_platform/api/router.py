@@ -7,6 +7,7 @@ from fastapi.routing import APIRoute
 
 from cc_platform.api.routers import (
     administration,
+    ai_stages,
     audit,
     auth,
     availability,
@@ -21,6 +22,7 @@ from cc_platform.api.routers import (
     onboarding,
     people,
     platform,
+    preferences,
     realtime,
     supervision,
     system,
@@ -36,12 +38,14 @@ def build_api_router() -> APIRouter:
     router.include_router(onboarding.router)
     router.include_router(people.router)
     router.include_router(availability.router)
+    router.include_router(preferences.router)
     router.include_router(home.router)
     router.include_router(notifications.router)
     router.include_router(cases.router)
     router.include_router(channels.router)
     router.include_router(supervision.router)
     router.include_router(builder.router)
+    router.include_router(ai_stages.router)
     router.include_router(audit.router)
     router.include_router(administration.router)
     router.include_router(platform.router)

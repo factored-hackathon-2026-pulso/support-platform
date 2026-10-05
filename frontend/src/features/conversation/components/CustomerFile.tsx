@@ -15,6 +15,7 @@ import {
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import { useCaseDetail } from '../hooks'
 import {
   arrivalFacts,
@@ -51,6 +52,8 @@ const TICK_MS = 30_000
  * row, shown only while the AI switch is on.
  */
 export function CustomerFile({ caseId, history, onHistoryChange }: CustomerFileProps) {
+  // `cases` too: the rows show the shared case vocabulary (channel, priority, status…).
+  const { t } = useTranslation(['conversation', 'cases', 'common'])
   const me = useCurrentUser()
   const aiEnabled = useAiEnabled()
   const now = useNow(TICK_MS)
@@ -73,7 +76,7 @@ export function CustomerFile({ caseId, history, onHistoryChange }: CustomerFileP
         title={failure.title}
         actions={
           <Button size="sm" loading={detail.isFetching} onClick={() => void detail.refetch()}>
-            Reintentar
+            {t('common:actions.retry')}
           </Button>
         }
       >
@@ -85,16 +88,22 @@ export function CustomerFile({ caseId, history, onHistoryChange }: CustomerFileP
   const arrival = arrivalFacts(detail.data, me.id)
   return (
     <>
-      <SidePanelSection title="Cliente">
+      <SidePanelSection title={t('file.customer')}>
         <FileRows rows={customerRows(detail.data)} />
       </SidePanelSection>
-      <SidePanelSection title="Este caso">
+      <SidePanelSection title={t('file.thisCase')}>
         <FileRows rows={caseRows(detail.data, now, { aiEnabled })} detail={detail.data} />
       </SidePanelSection>
       {arrival ? (
         <SidePanelSection title={arrival.heading}>
           {arrival.time ? (
-            <Fact icon="clock" text={arrival.time} label="Asignado" tone="muted" size="md" />
+            <Fact
+              icon="clock"
+              text={arrival.time}
+              label={t('file.assigned')}
+              tone="muted"
+              size="md"
+            />
           ) : null}
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {arrival.facts.map(({ key, ...fact }) => (

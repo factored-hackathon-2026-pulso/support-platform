@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
 import {
   COMMON_PASSWORDS,
-  DEV_EMAIL_KIND_LABEL,
-  INVALID_LINK_COPY,
+  devEmailKindLabel,
+  invalidLinkCopy,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
   activationSteps,
@@ -190,18 +190,16 @@ describe('describeOnboardingFailure', () => {
   })
 
   it('words the invalid link per kind', () => {
-    expect(INVALID_LINK_COPY.invitation.text).toBe(
+    expect(invalidLinkCopy('invitation').text).toBe(
       'Los enlaces de invitación duran 48 horas y sirven una sola vez.',
     )
-    expect(INVALID_LINK_COPY.reset.askTitle).toBe('Pide un enlace nuevo a administración')
+    expect(invalidLinkCopy('reset').askTitle).toBe('Pide un enlace nuevo a administración')
   })
 })
 
 describe('dev mailbox', () => {
   it('labels the kinds', () => {
-    expect(DEV_EMAIL_KIND_LABEL).toEqual({
-      invitation: 'Invitación',
-      password_reset: 'Restablecer contraseña',
-    })
+    expect(devEmailKindLabel('invitation')).toBe('Invitación')
+    expect(devEmailKindLabel('password_reset')).toBe('Restablecer contraseña')
   })
 })

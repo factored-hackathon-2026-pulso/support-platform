@@ -29,6 +29,7 @@ import {
   teamsShownLabel,
   teamsSubtitle,
 } from '../model'
+import { useTranslation } from '@/lib/i18n'
 import type { TeamsUrlState, UrlStateChangeOptions } from '../url'
 import { useAdminLive, useAdminTeams } from '../hooks'
 import type { AdminTeam } from '../types'
@@ -50,6 +51,7 @@ export interface TeamsScreenProps {
  */
 export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
   useAdminLive()
+  const { t } = useTranslation(['admin', 'shell', 'common'])
   const list = useAdminTeams(teamsQueryStatus(state.statuses))
   // The subtitle counts every team, whatever the filter.
   const total = list.data?.statusCounts.all
@@ -66,7 +68,7 @@ export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
     <Page
       header={
         <PageHeader
-          title="Equipos"
+          title={t('shell:nav.teams')}
           subtitle={teamsSubtitle(total)}
           actions={
             <Button
@@ -74,7 +76,7 @@ export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
               icon={<Plus size={16} aria-hidden="true" />}
               onClick={() => onStateChange({ create: true })}
             >
-              Nuevo equipo
+              {t('teams.create')}
             </Button>
           }
         />
@@ -92,33 +94,33 @@ export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
       }
     >
       <PageBody scroll={false} padded={false} className="flex">
-        <section aria-label="Equipos" className="flex min-w-0 grow flex-col">
+        <section aria-label={t('shell:nav.teams')} className="flex min-w-0 grow flex-col">
           <div className="flex min-h-0 grow flex-col [&>[role=alert]]:mx-7 [&>[role=alert]]:my-4">
             <QueryState
               query={list}
               skeleton={<RowsSkeleton />}
-              errorTitle="No pudimos cargar los equipos"
+              errorTitle={t('teams.loadError')}
               isEmpty={(data) => data.items.length === 0}
               empty={
                 <EmptyState
                   size="compact"
                   icon={<UsersRound size={36} strokeWidth={1.6} />}
-                  title="No hay equipos en este estado."
+                  title={t('teams.empty')}
                 />
               }
             >
               {(data) => (
-                <Table aria-label="Equipos" stickyHeader wrapperClassName="grow">
+                <Table aria-label={t('shell:nav.teams')} stickyHeader wrapperClassName="grow">
                   <THead>
                     <TRow>
-                      <TH className="pl-7">Equipo</TH>
+                      <TH className="pl-7">{t('common:fields.team')}</TH>
                       <TH align="right" className="w-[110px]">
-                        Personas
+                        {t('teams.columns.people')}
                       </TH>
                       <TH align="right" className="w-[110px]">
-                        Analistas
+                        {t('teams.columns.analysts')}
                       </TH>
-                      <TH className="w-[120px] pr-7">Estado</TH>
+                      <TH className="w-[120px] pr-7">{t('teams.columns.status')}</TH>
                     </TRow>
                   </THead>
                   <TBody>
@@ -135,9 +137,7 @@ export function TeamsScreen({ state, onStateChange }: TeamsScreenProps) {
               )}
             </QueryState>
           </div>
-          <SourceNote className="px-7">
-            Equipos y personas: directorio de la plataforma (datos de ejemplo).
-          </SourceNote>
+          <SourceNote className="px-7">{t('teams.source')}</SourceNote>
         </section>
         <TeamPanel teamId={state.teamId} />
       </PageBody>

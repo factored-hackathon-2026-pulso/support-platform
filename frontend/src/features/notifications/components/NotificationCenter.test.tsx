@@ -257,3 +257,100 @@ describe('NotificationCenter: live', () => {
     expect(screen.getByRole('button', { name: 'Notificaciones, 3 sin leer' })).toBeVisible()
   })
 })
+
+describe('NotificationCenter in Brazilian Portuguese', () => {
+  it('shows the bell, the panel and its actions in pt-BR', async () => {
+    const { user, router } = renderWithProviders(<NotificationCenter />, {
+      route: '/analyst/home',
+      staff: analystStaff,
+      locale: 'pt-BR',
+    })
+    await user.click(await screen.findByRole('button', { name: 'Notificações, 3 não lidas' }))
+    const panel = within(screen.getByRole('region', { name: 'Notificações' }))
+    expect(panel.getByRole('heading', { level: 2, name: 'Notificações' })).toHaveFocus()
+    expect(panel.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'Novas',
+      'Anteriores',
+    ])
+    expect(panel.getAllByText('Não lida')).toHaveLength(3)
+    expect(panel.getByRole('button', { name: 'Fechar notificações' })).toBeInTheDocument()
+
+    const reassigned = within(item(panel, 'Supervisão reatribuiu seu caso'))
+    expect(
+      reassigned.getByText('Marcela Quintana Pardo passou para Sebastián Cárdenas'),
+    ).toBeVisible()
+    expect(reassigned.getByText('há 6 min')).toBeInTheDocument()
+    expect(reassigned.getByRole('link', { name: 'Ver caso' })).toBeInTheDocument()
+    expect(
+      within(item(panel, 'Supervisão respondeu seu escalonamento')).getByText(
+        'Lucía Herrera sobre Marcela Quintana Pardo',
+      ),
+    ).toBeInTheDocument()
+    expect(panel.getByText('O cliente voltou a escrever')).toBeInTheDocument()
+
+    await user.click(
+      within(item(panel, 'O cliente voltou a escrever')).getByRole('button', {
+        name: 'Marcar como lida',
+      }),
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Notificações, 2 não lidas' })).toBeVisible(),
+    )
+
+    await user.click(panel.getByRole('button', { name: 'Marcar todas como lidas' }))
+    expect(await panel.findByText('Você está em dia')).toBeInTheDocument()
+    expect(panel.getByText('Você não tem notificações novas.')).toBeInTheDocument()
+
+    await user.click(
+      within(item(panel, 'Você recebeu um caso novo')).getByRole('link', { name: 'Abrir caso' }),
+    )
+    await waitFor(() => expect(router.state.location.pathname).toBe('/analyst/cases'))
+  })
+
+  it('toasts a live notification with its action and "Mais tarde"', async () => {
+    const { user, sockets } = renderWithProviders(<NotificationCenter />, {
+      route: '/analyst/home',
+      staff: analystStaff,
+      locale: 'pt-BR',
+    })
+    await screen.findByRole('button', { name: 'Notificações, 3 não lidas' })
+    act(() => {
+      sockets.last()?.open()
+      sockets.last()?.receive(
+        notificationCreated(
+          makeNotification({
+            id: 'NTF-00000000000000000000000060',
+            kind: 'escalation_taken',
+            createdAt: minutesFrom(0),
+            actorName: 'Lucía Herrera',
+            customerName: 'Marcela Quintana Pardo',
+          }),
+          4,
+        ),
+      )
+    })
+    const toasts = within(screen.getByRole('region', { name: 'Avisos' }))
+    expect(await toasts.findByText('Supervisão assumiu seu caso')).toBeInTheDocument()
+    expect(toasts.getByText('Marcela Quintana Pardo passou para Lucía Herrera')).toBeInTheDocument()
+    expect(toasts.getByRole('button', { name: 'Ver caso' })).toBeInTheDocument()
+    await user.click(toasts.getByRole('button', { name: 'Mais tarde' }))
+    expect(toasts.queryByText('Supervisão assumiu seu caso')).toBeNull()
+  })
+
+  it('shows the error with "Tentar de novo"', async () => {
+    vi.mocked(fetchNotifications).mockRejectedValueOnce(
+      new ApiProblem({ status: 0, code: 'network_error', title: 'Sin conexión' }),
+    )
+    const { user } = renderWithProviders(<NotificationCenter />, {
+      route: '/analyst/home',
+      staff: analystStaff,
+      locale: 'pt-BR',
+    })
+    await user.click(screen.getByRole('button', { name: 'Notificações' }))
+    const panel = within(screen.getByRole('region', { name: 'Notificações' }))
+    expect(await panel.findByText('Não foi possível carregar suas notificações')).toBeVisible()
+    expect(panel.getByText('Verifique sua conexão.')).toBeInTheDocument()
+    await user.click(panel.getByRole('button', { name: 'Tentar de novo' }))
+    expect(await panel.findByText('Você recebeu um caso novo')).toBeInTheDocument()
+  })
+})

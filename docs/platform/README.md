@@ -42,6 +42,9 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | [api/slice-16-agent-builder.md](./api/slice-16-agent-builder.md) | English | **Hand-over for the frontend.** Slice 16 (ADR 0003 §7): the agent builder for Supervisión and Administración: proposals through agent-core's registry (`/builder/*`), the fresh authenticator code (`stepUpCode`) behind approve, reject, publish, promote and revoke, the builder chat (`constructor-chat`), errors, what to build, known gaps (no `eval_suite` yet). |
 | [api/slice-15b-copilot-suggestions.md](./api/slice-15b-copilot-suggestions.md) | English | **Hand-over for the frontend.** ADR 0005: the copilot's suggestions (a draft reply, reads, a prepared action, a recommendation to escalate; the list may be empty), `GET latest`, `POST` (*Sugerir*), feedback, `copilotSuggestionId`, the inbox signal, retention, configuration. Backend built against a fake agent-core; the real agent needs agent-core ADR 0026. |
 | [api/slice-15-copilot.md](./api/slice-15-copilot.md) | English | **Hand-over for the frontend.** Slice 15 (ADR 0003): the analyst's copilot (`copiloto-asesor`): a thread per (case, analyst), `GET` and `POST` endpoints, idempotent questions stored before the call, what to build, known gaps. |
+| [adr/0008-platform-i18n.md](./adr/0008-platform-i18n.md) | English | The staff UI in Spanish and Brazilian Portuguese: i18next, typed catalogs per area, the `uiLanguage` preference on the profile, the format layer, the literal-strings guard. |
+| [api/slice-22-automation.md](./api/slice-22-automation.md) | English | Slice 22: "Automatización" for Supervisión: the panorama and the type panel on the stages, the proposal flow on the builder (chat, test, decisions with the authenticator code, activation), the activation and chat-restart endpoints, agents, and what the AI team must provide for a real activation. |
+| [api/slice-23-i18n.md](./api/slice-23-i18n.md) | English | Slice 23: the preference API (`/me/preferences`, `/auth/me`, `preferences.updated`, the audit row), the SPA foundation, the guard rails, the phases (23a done, 23b done: the areas and the cross-area pass, 23c server texts left). |
 | [api/slice-1-cases.md](./api/slice-1-cases.md) | English | Slice 1 contract (live chat, inbox, simulator). **Partly superseded** by slice 2; kept as the record. |
 | [api/slice-2-case-lifecycle.md](./api/slice-2-case-lifecycle.md) | English | Slice 2: the scope-cut removal list and the case life cycle (statuses, close with a reason, linked case after a close, case history, first-response SLA, `AssignCase`), seed. |
 | [api/slice-3-supervision.md](./api/slice-3-supervision.md) | English | Slice 3: team and queues, manual assignment and reassignment (rule 3, paused confirmation), supervisor case view, audit queries, supervision realtime topics. |
@@ -61,7 +64,7 @@ Other sources of truth: the design boards in `warehouse/design/source/project/*.
 `data-lab/docs/policies.md`, and the event envelope of `data-lab/contracts/synthetic-sample/platform_history.json` (read-only). The
 other rules of `data-lab/docs/policies.md` and `data-lab/docs/security_questions.md` do not apply to the platform.
 
-New architecture decisions go in `adr/NNNN-title.md` (next number: 0008).
+New architecture decisions go in `adr/NNNN-title.md` (next number: 0009).
 
 ## Quick start
 

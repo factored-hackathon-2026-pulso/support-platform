@@ -1,7 +1,8 @@
 /**
  * URL state of the Workspace ("Casos", `/analyst/cases`): the selected case, the filter, the
  * search, the collapsed list and the right panel (the "Ficha del cliente"; slice 19, with AI on,
- * its tabs: `?panel=handoff` is "Traspaso", `?panel=customer` "Cliente")
+ * its tabs: `?panel=handoff` is "Traspaso", `?panel=customer` "Cliente"; slice 20 adds
+ * `?panel=copilot` "Copiloto" and `?panel=tools` "Herramientas")
  * (`?case=&status=&q=&list=&panel=&previous=`, docs/platform/api/slice-2-case-lifecycle.md
  * §9.2). Links into it are built by `workspacePath` (app/paths.ts). Pure: unit-tested in
  * url.test.ts.
@@ -9,10 +10,10 @@
 import { parseInboxStatus, type InboxStatus } from '@/features/cases'
 import type { PreviousCasesSelection } from '@/features/conversation'
 
-/** The right panel's tab (slice 19). S20 adds the copilot and the tools. */
-export type WorkspacePanel = 'customer' | 'handoff'
+/** The right panel's tab (slice 19: the ficha and "Traspaso"; slice 20: the copilot and the tools). */
+export type WorkspacePanel = 'customer' | 'handoff' | 'copilot' | 'tools'
 
-const PANELS: readonly WorkspacePanel[] = ['customer', 'handoff']
+const PANELS: readonly WorkspacePanel[] = ['customer', 'handoff', 'copilot', 'tools']
 
 export interface WorkspaceUrlState {
   /** `?case=CASE-…`. */
@@ -25,7 +26,8 @@ export interface WorkspaceUrlState {
   listCollapsed: boolean
   /**
    * `?panel=`: the right panel and its tab. `customer` is "Ficha del cliente" (slice 6 §5; the
-   * "Cliente" tab with AI on), `handoff` the "Traspaso" tab (slice 19, AI on only); null = closed.
+   * "Cliente" tab with AI on), `handoff` the "Traspaso" tab (slice 19), `copilot` "Copiloto" and
+   * `tools` "Herramientas" (slice 20); those three only with AI on. null = closed.
    */
   panel: WorkspacePanel | null
   /**
@@ -51,7 +53,8 @@ export function isCustomerFileOpen(state: Pick<WorkspaceUrlState, 'panel' | 'his
   return openPanel(state) === 'customer'
 }
 
-function parsePanel(value: string | null): WorkspacePanel | null {
+/** A tab value (or `?panel=`) → the panel, null when unknown. */
+export function parsePanel(value: string | null): WorkspacePanel | null {
   return (PANELS as readonly (string | null)[]).includes(value) ? (value as WorkspacePanel) : null
 }
 

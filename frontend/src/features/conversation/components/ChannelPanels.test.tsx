@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeCaseSummary } from '@/test/case-fixtures'
 import { CALL_ID, makeCall, makeEmail, makeLine } from '@/test/channel-fixtures'
 import { CASE_ID, envelope, makeCaseDetail, makeTurn } from '@/test/conversation-fixtures'
+import type { AppLocale } from '@/lib/i18n'
 import { analystStaff } from '@/test/fixtures'
 import { renderWithProviders } from '@/test/render'
 import * as api from '../api'
@@ -59,7 +60,13 @@ const callLines = (): Turn[] => [
   makeLine(2, 'Hola, veo dos compras que no hice.', 'customer', 6),
 ]
 
-function setup(detail: CaseDetail, turns: Turn[], calls: Call[] = [], mode?: 'supervision') {
+function setup(
+  detail: CaseDetail,
+  turns: Turn[],
+  calls: Call[] = [],
+  mode?: 'supervision',
+  locale?: AppLocale,
+) {
   vi.mocked(api.fetchCaseDetail).mockResolvedValue(detail)
   vi.mocked(api.fetchTurns).mockResolvedValue({
     items: turns,
@@ -73,6 +80,7 @@ function setup(detail: CaseDetail, turns: Turn[], calls: Call[] = [], mode?: 'su
   })
   return renderWithProviders(<ConversationPane caseId={CASE_ID} mode={mode} />, {
     staff: analystStaff,
+    locale,
   })
 }
 
@@ -377,5 +385,60 @@ describe('ConversationPane · email (slice 12)', () => {
     await user.click(await screen.findByRole('button', { name: 'Cerrar caso' }))
     const dialog = screen.getByRole('dialog', { name: 'Cerrar caso' })
     expect(within(dialog).getByText('El cliente lo recibe por correo')).toBeInTheDocument()
+  })
+})
+
+describe('ConversationPane · channels in Portuguese (slice 23)', () => {
+  it('rings, answers and talks on a call', async () => {
+    const ringing = makeCall({ state: 'ringing', answeredAt: null })
+    const { user } = setup(
+      channelDetail('phone_inbound', ringing),
+      [],
+      [ringing],
+      undefined,
+      'pt-BR',
+    )
+    const callBar = await screen.findByRole('region', { name: 'Chamada' })
+    expect(within(callBar).getByRole('status')).toHaveTextContent('Tocando')
+    expect(callBar).toHaveTextContent('Recebida')
+    expect(screen.getByText('Transcrição ao vivo')).toBeInTheDocument()
+    expect(screen.getByText('Atenda para falar com o cliente.')).toBeInTheDocument()
+
+    vi.mocked(api.commandCall).mockResolvedValue({
+      call: makeCall({ version: 2 }),
+      case: makeCaseSummary({ version: 4, activeCallId: CALL_ID }),
+    })
+    await user.click(within(callBar).getByRole('button', { name: 'Atender' }))
+    await waitFor(() => expect(within(callBar).getByRole('status')).toHaveTextContent('Em chamada'))
+    for (const name of ['Colocar em espera', 'Silenciar', 'Desligar']) {
+      expect(within(callBar).getByRole('button', { name })).toBeInTheDocument()
+    }
+    expect(screen.getByRole('textbox', { name: 'O que você diz' })).toBeEnabled()
+    expect(screen.getByRole('textbox', { name: 'Nota interna' })).toBeInTheDocument()
+  })
+
+  it('shows the email thread and the reply form', async () => {
+    const turns = [
+      makeEmail(1, 'Hola, aparece dos veces el mismo cobro.', 'customer'),
+      makeEmail(2, 'Sí, en la tienda del centro.', 'customer', 'Re: Cobro duplicado en mi tarjeta'),
+    ]
+    const { user } = setup(channelDetail('email', null), turns, [], undefined, 'pt-BR')
+    const form = await screen.findByRole('form', { name: 'Responder por e-mail' })
+    expect(form).toHaveTextContent('ParaMarcela Quintana Pardo')
+    expect(form).toHaveTextContent('A saudação e a assinatura são adicionadas automaticamente')
+    expect(
+      within(form).getByRole('button', { name: 'Anexar arquivo, em breve' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'E-mails e mensagens do caso' })).toBeInTheDocument()
+    // Both are the customer's and unanswered: "Novo" and open; a click folds one.
+    const [first, second] = screen.getAllByRole('article', { name: /^E-mail de / })
+    expect(first).toHaveTextContent('Novo')
+    expect(second).toHaveTextContent('Novo')
+    await user.click(within(first!).getByRole('button'))
+    expect(within(first!).getByRole('button')).toHaveAttribute('aria-expanded', 'false')
+    expect(within(form).getByRole('button', { name: 'Enviar e-mail' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
   })
 })

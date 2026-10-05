@@ -1,6 +1,7 @@
 import { Tag } from 'lucide-react'
 import { ChoiceMenu } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { CASE_TYPE_OPTIONS, caseType, caseTypeMenuLabel } from '../model'
 import type { CaseType } from '../types'
 
@@ -15,8 +16,6 @@ export interface CaseTypeMenuProps {
   triggerClassName?: string
 }
 
-const OPTIONS = CASE_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))
-
 /**
  * The case type as a menu button (slice 18), like `PriorityMenu`: the tag and the word
  * ("Cobro indebido") open a small menu with every type, the current one checked. Used by the
@@ -30,14 +29,16 @@ export function CaseTypeMenu({
   className,
   triggerClassName,
 }: CaseTypeMenuProps) {
+  const { t } = useTranslation('cases')
   const current = caseType(value)
+  const options = CASE_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))
   return (
     <ChoiceMenu
       value={current.value}
-      options={OPTIONS}
+      options={options}
       onChange={onChange}
       triggerLabel={caseTypeMenuLabel(current.value)}
-      menuLabel="Tipo de caso"
+      menuLabel={t('caseType.menu')}
       disabled={disabled}
       align={align}
       className={className}

@@ -1,0 +1,120 @@
+/** Namespace `onboarding`: the invitation and password-reset links, and the dev mailbox. */
+export default {
+  password: {
+    label: 'Contraseña nueva',
+    confirm: 'Repite la contraseña',
+    rules: 'Requisitos de la contraseña',
+    rule: {
+      length: 'Al menos {{min}} caracteres',
+      personal: 'No incluye tu nombre ni tu correo',
+      common: 'No es una contraseña común',
+      match: 'Las dos contraseñas coinciden',
+    },
+    ruleState: {
+      ok: ': cumple',
+      bad: ': no cumple',
+      pending: ': pendiente',
+    },
+    mismatch: 'Las dos contraseñas no coinciden.',
+    rejected: 'La contraseña {{reasons}}. Elige otra.',
+    rejectedGeneric: 'La contraseña no cumple los requisitos. Elige otra.',
+    reason: {
+      min_length: 'tiene menos de {{min}} caracteres',
+      max_length: 'tiene más de {{max}} caracteres',
+      personal_info: 'incluye tu nombre o tu correo',
+      common: 'es una contraseña común',
+    },
+    nobodyKnows:
+      'Nadie del banco conoce tu contraseña: ni administración ni supervisión pueden verla.',
+  },
+  steps: {
+    label: 'Pasos para activar tu cuenta',
+    password: 'Contraseña',
+    verification: 'Verificación en dos pasos',
+    done: ', listo',
+    current: ', paso actual',
+    pending: ', pendiente',
+  },
+  activation: {
+    title: 'Activa tu cuenta',
+    greeting:
+      'Hola, {{name}}. Administración te invitó a la Plataforma CC. Crea tu contraseña para empezar.',
+    rolePrefix: 'Rol: ',
+    form: 'Crear contraseña',
+    verifyTitle: 'Configura la verificación en dos pasos',
+    verifyText:
+      'Cada vez que entres te pediremos un código de tu app de autenticación, además de tu contraseña.',
+    qr: 'Código QR para tu app de autenticación',
+    stepOpen: 'Abre tu app de autenticación en el teléfono.',
+    stepScan: 'Agrega una cuenta y escanea el código.',
+    stepType: 'Escribe abajo el código de {{length}} dígitos que te muestra.',
+    manualKey: '¿No puedes escanear? Escribe esta clave en la app:',
+    codeForm: 'Confirmar el código',
+    code: 'Código de {{length}} dígitos',
+    codeRequired: 'Escribe los {{length}} dígitos que muestra tu app.',
+    submit: 'Activar cuenta',
+    appsNote:
+      'Sirve cualquier app de autenticación, como Google Authenticator o Microsoft Authenticator. Si cambias de teléfono, pide ayuda a administración.',
+    readyTitle: 'Tu cuenta está lista',
+    readyText: 'Desde ahora entras con tu correo, tu contraseña y el código de tu app.',
+    readyMfa: 'Verificación en dos pasos activa',
+    readyPaused: 'Empiezas En pausa: pasa a Disponible cuando quieras recibir casos',
+  },
+  reset: {
+    title: 'Crea una contraseña nueva',
+    greeting:
+      'Hola, {{name}}. Administración te envió este enlace para que crees una contraseña nueva. Tu verificación en dos pasos no cambia.',
+    form: 'Crear contraseña nueva',
+    submit: 'Guardar contraseña',
+    doneTitle: 'Contraseña actualizada',
+    doneText: 'Ya puedes entrar con tu contraseña nueva y el código de tu app.',
+  },
+  link: {
+    checking: 'Revisando el enlace',
+    checkFailed: 'No pudimos revisar el enlace',
+    invalidTitle: 'El enlace venció o ya se usó',
+    invitationText: 'Los enlaces de invitación duran 48 horas y sirven una sola vez.',
+    invitationAsk: 'Pide una nueva invitación a administración',
+    resetText: 'Los enlaces para restablecer la contraseña duran 1 hora y sirven una sola vez.',
+    resetAsk: 'Pide un enlace nuevo a administración',
+    askText: 'Te llega un correo con un enlace nuevo.',
+    invitationDone: '¿Ya activaste tu cuenta?',
+    resetDone: '¿Ya tienes tu contraseña?',
+    signIn: 'Entra con tu correo',
+  },
+  failure: {
+    generic: 'No pudimos completar este paso. Inténtalo de nuevo.',
+    rateLimitedAt: 'Demasiados intentos. Vuelve a intentarlo a las {{time}}.',
+    rateLimited: 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.',
+    totpInvalid: 'El código no coincide. Escribe el código que muestra ahora tu app.',
+    totpInvalidAttempts_one:
+      'El código no coincide. Escribe el código que muestra ahora tu app. Te queda 1 intento.',
+    totpInvalidAttempts_other:
+      'El código no coincide. Escribe el código que muestra ahora tu app. Te quedan {{count}} intentos.',
+    lockedAt:
+      'Escribiste un código equivocado demasiadas veces. Vuelve a intentarlo a las {{time}}.',
+    locked: 'Escribiste un código equivocado demasiadas veces. Espera 15 minutos.',
+    restart: 'Vuelve a crear tu contraseña para continuar.',
+  },
+  mailbox: {
+    title: 'Correos de desarrollo',
+    lead: 'Los correos más recientes de este entorno, del más nuevo al más viejo.',
+    toolTitle: 'Herramienta de desarrollo',
+    toolText:
+      'Muestra los correos que la plataforma envió en este entorno. No existe en producción.',
+    unavailable: 'No disponible',
+    unavailableText: 'Este entorno no guarda correos de desarrollo.',
+    goToSignIn: 'Ir a Entrar',
+    emptyTitle: 'Todavía no hay correos',
+    emptyText: 'Cuando administración invite a alguien o le envíe un enlace, aparece aquí.',
+    errorTitle: 'No pudimos cargar los correos',
+    list: 'Correos',
+    to: 'Para: ',
+    open: 'Abrir enlace',
+    openLabel: 'Abrir enlace: {{subject}} para {{to}}',
+    kind: {
+      invitation: 'Invitación',
+      password_reset: 'Restablecer contraseña',
+    },
+  },
+} as const

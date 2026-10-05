@@ -25,9 +25,10 @@ import {
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import {
-  ASSISTANT_HOLDER,
-  AUTOMATIC_ASSIGNMENT_NOTE,
+  assistantHolder,
+  automaticAssignmentNote,
   describeReleaseFailure,
   isWithAssistant,
   takeFromAssistantLabel,
@@ -75,6 +76,7 @@ export interface QueuesScreenProps {
  * a row opens the case view. Filters: one "Filtros" dropdown + chips, in the URL.
  */
 export function QueuesScreen({ state, onStateChange, onOpenCase }: QueuesScreenProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   useSupervisionLive()
   const now = useNow(SUPERVISION_TICK_MS)
   const aiEnabled = useAiEnabled()
@@ -105,12 +107,12 @@ export function QueuesScreen({ state, onStateChange, onOpenCase }: QueuesScreenP
     <Page
       header={
         <PageHeader
-          title="Colas"
-          subtitle="Todos los casos abiertos, por idioma"
+          title={t('queues.title')}
+          subtitle={t('queues.subtitle')}
           actions={
             <p className="m-0 flex max-w-[460px] items-start gap-2 text-13 text-ink-2">
               <Info size={15} aria-hidden="true" className="mt-0.5 shrink-0 text-muted" />
-              <span>{AUTOMATIC_ASSIGNMENT_NOTE}</span>
+              <span>{automaticAssignmentNote()}</span>
             </p>
           }
         />
@@ -125,7 +127,7 @@ export function QueuesScreen({ state, onStateChange, onOpenCase }: QueuesScreenP
             id="queues-heading"
             className="m-0 text-12 font-semibold tracking-kicker text-muted uppercase"
           >
-            Idioma
+            {t('queues.languageHeading')}
           </h2>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {QUEUE_LANGUAGES.map((language) => (
@@ -161,6 +163,7 @@ interface QueueButtonProps {
 }
 
 function QueueButton({ language, figures, selected, onSelect }: QueueButtonProps) {
+  useTranslation(['supervision', 'cases', 'conversation']) // the figures' copy follows a language switch
   const labels = figures ? queueNavLabels(figures) : null
   return (
     <button
@@ -220,6 +223,7 @@ interface QueueCasesProps {
 }
 
 function QueueCases({ query, state, now, aiEnabled, onStateChange, onOpenCase }: QueueCasesProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation', 'common'])
   const title = QUEUE_LABEL[state.language]
   const rows = query.data?.cases ?? []
   const groups = queueFilterGroups(rows, state, { aiEnabled })
@@ -267,11 +271,7 @@ function QueueCases({ query, state, now, aiEnabled, onStateChange, onOpenCase }:
           onRemove={(group, value) => update(toggleFilter(selection, group, value))}
         />
       </div>
-      <QueryState
-        query={query}
-        skeleton={<RowsSkeleton />}
-        errorTitle="No pudimos cargar los casos"
-      >
+      <QueryState query={query} skeleton={<RowsSkeleton />} errorTitle={t('queues.loadError')}>
         {(data: LanguageOpenCases) => {
           if (data.cases.length === 0) {
             return (
@@ -279,7 +279,7 @@ function QueueCases({ query, state, now, aiEnabled, onStateChange, onOpenCase }:
                 <EmptyState
                   as="h3"
                   title={emptyQueueTitle(state.language)}
-                  description="Cuando un cliente escriba en este idioma, su caso aparece aquí."
+                  description={t('queues.emptyText')}
                 />
               </div>
             )
@@ -287,9 +287,9 @@ function QueueCases({ query, state, now, aiEnabled, onStateChange, onOpenCase }:
           if (shown.length === 0) {
             return (
               <div className="flex flex-col items-center gap-2 border-t border-border-soft px-4 py-8 text-14 text-muted">
-                <span>Ningún caso coincide con los filtros.</span>
+                <span>{t('queues.noMatch')}</span>
                 <Button size="sm" variant="secondary" onClick={clear}>
-                  Limpiar filtros
+                  {t('common:filters.clear')}
                 </Button>
               </div>
             )
@@ -303,11 +303,11 @@ function QueueCases({ query, state, now, aiEnabled, onStateChange, onOpenCase }:
             >
               <THead>
                 <TRow>
-                  <TH className={CELL_X}>Cliente</TH>
-                  <TH className={CELL_X}>Estado</TH>
-                  <TH className={CELL_X}>Abierto</TH>
-                  <TH className={CELL_X}>Primera respuesta</TH>
-                  <TH className={CELL_X}>Lo tiene</TH>
+                  <TH className={CELL_X}>{t('queues.columns.customer')}</TH>
+                  <TH className={CELL_X}>{t('queues.columns.status')}</TH>
+                  <TH className={CELL_X}>{t('queues.columns.openFor')}</TH>
+                  <TH className={CELL_X}>{t('queues.columns.firstResponse')}</TH>
+                  <TH className={CELL_X}>{t('queues.columns.holder')}</TH>
                 </TRow>
               </THead>
               <TBody>
@@ -332,6 +332,7 @@ interface OpenCaseTableRowProps {
 }
 
 function OpenCaseTableRow({ row, now, onOpenCase }: OpenCaseTableRowProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const summary = row.case
   const firstResponse = firstResponseFact(summary, now)
   return (
@@ -367,7 +368,7 @@ function OpenCaseTableRow({ row, now, onOpenCase }: OpenCaseTableRowProps) {
         ) : (
           <span className="flex items-center gap-2 text-14 text-muted">
             <StatusIcon shape="dashed" tone="neutral" size={16} />
-            Sin asignar
+            {t('unassigned')}
           </span>
         )}
       </TCell>
@@ -391,6 +392,7 @@ function RowsSkeleton() {
  * row itself still opens the case view (its transcript shows the assistant's turns).
  */
 function AssistantHolder({ summary }: { summary: OpenCaseRow['case'] }) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const release = useReleaseFromAssistant(summary.id)
   const { toast } = useToast()
   return (
@@ -402,7 +404,7 @@ function AssistantHolder({ summary }: { summary: OpenCaseRow['case'] }) {
         >
           <Bot size={14} />
         </span>
-        <span className="truncate text-14">{ASSISTANT_HOLDER}</span>
+        <span className="truncate text-14">{assistantHolder()}</span>
       </span>
       <Button
         variant="secondary"
@@ -417,7 +419,7 @@ function AssistantHolder({ summary }: { summary: OpenCaseRow['case'] }) {
           })
         }
       >
-        Tomar el caso
+        {t('actions.take')}
       </Button>
     </span>
   )

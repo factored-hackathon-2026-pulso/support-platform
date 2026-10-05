@@ -15,8 +15,8 @@ import {
 import { Button, Callout, PriorityIcon, Skeleton } from '@/components/ui'
 import { casePriority } from '@/features/cases'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import {
-  HANDOFF_EMPTY,
   describeHandoffFailure,
   verifiedCountLabel,
   type HandoffItem,
@@ -27,10 +27,11 @@ import type { CaseDetail } from '../types'
 
 /** "Solo el equipo": the packet is staff-only (the customer never sees it). */
 function TeamOnlyChip() {
+  const { t } = useTranslation('conversation')
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-[7px] text-11 font-semibold text-ink-2">
       <Eye size={12} aria-hidden="true" />
-      Solo el equipo
+      {t('handoff.teamOnly')}
     </span>
   )
 }
@@ -49,26 +50,28 @@ function AssistantAvatar() {
 
 /** The priority the assistant saw: glyph + word, named for screen readers. */
 function SeenPriority({ priority }: { priority: NonNullable<HandoffView['priority']> }) {
+  const { t } = useTranslation(['conversation', 'cases'])
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-13"
-      title="Prioridad que vio el asistente"
+      title={t('handoff.seenPriority')}
     >
       <PriorityIcon level={priority} size={14} />
-      <span className="sr-only">Prioridad que vio el asistente: </span>
+      <span className="sr-only">{t('handoff.seenPriorityLead')} </span>
       <span className="font-semibold text-ink">{casePriority(priority).label}</span>
     </span>
   )
 }
 
 function SuggestedQueue({ queue }: { queue: string }) {
+  const { t } = useTranslation('conversation')
   return (
     <span
       className="inline-flex items-center gap-1.5 text-13 text-ink-2"
-      title="Cola que sugirió el asistente"
+      title={t('handoff.suggestedQueue')}
     >
       <Inbox size={14} aria-hidden="true" />
-      <span className="sr-only">Cola que sugirió el asistente: </span>
+      <span className="sr-only">{t('handoff.suggestedQueueLead')} </span>
       {queue}
     </span>
   )
@@ -89,6 +92,7 @@ export interface HandoffCardProps {
  * cannot be read at all (403, 404) shows nothing.
  */
 export function HandoffCard({ detail, onOpen }: HandoffCardProps) {
+  const { t } = useTranslation(['conversation', 'common'])
   const { handoff, available } = useCaseHandoff(detail)
   const titleId = useId()
   if (!available || detail.case.status === 'closed') return null
@@ -96,11 +100,11 @@ export function HandoffCard({ detail, onOpen }: HandoffCardProps) {
 
   let body: ReactNode
   let action: ReactNode = null
-  let title = 'El asistente te pasó este caso'
+  let title: string = t('handoff.card.title')
   if (handoff.status === 'pending') {
     body = (
       <span aria-busy="true" className="flex flex-col gap-1.5">
-        <span className="sr-only">Cargando el traspaso del asistente</span>
+        <span className="sr-only">{t('handoff.loading')}</span>
         <Skeleton className="h-4 w-64" />
       </span>
     )
@@ -116,7 +120,7 @@ export function HandoffCard({ detail, onOpen }: HandoffCardProps) {
         icon={<RefreshCcw size={14} aria-hidden="true" />}
         onClick={() => void handoff.refetch()}
       >
-        Reintentar
+        {t('common:actions.retry')}
       </Button>
     )
   } else {
@@ -126,7 +130,7 @@ export function HandoffCard({ detail, onOpen }: HandoffCardProps) {
         <p className="m-0 inline-flex items-start gap-1.5 text-13 text-ink-2">
           <Hand size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
           <span>
-            <b className="font-semibold">Por qué te lo pasó: </b>
+            <b className="font-semibold">{t('handoff.card.whyLead')} </b>
             {view.reason}
             {view.reasonDetail ? ` (${view.reasonDetail})` : null}
           </span>
@@ -146,10 +150,10 @@ export function HandoffCard({ detail, onOpen }: HandoffCardProps) {
         variant="secondary"
         size="sm"
         iconEnd={<ArrowRight size={14} aria-hidden="true" />}
-        aria-label="Ver todo el traspaso del asistente"
+        aria-label={t('handoff.card.seeAllLabel')}
         onClick={onOpen}
       >
-        Ver todo
+        {t('handoff.card.seeAll')}
       </Button>
     )
   }
@@ -222,6 +226,15 @@ function HandoffSection({
               </span>
               <span className="flex min-w-0 flex-col">
                 <span className="break-words">{item.text}</span>
+                {item.lines?.length ? (
+                  <ul className="m-0 mt-0.5 flex list-none flex-col gap-0.5 p-0 text-13 text-ink-2">
+                    {item.lines.map((line, index) => (
+                      <li key={index} className="break-words">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {item.detail ? <span className="text-12 text-muted">{item.detail}</span> : null}
               </span>
             </li>
@@ -243,13 +256,14 @@ export interface HandoffPanelProps {
  * what the customer asked in its words. Read-only, staff-only, from `GET /cases/{id}/handoff`.
  */
 export function HandoffPanel({ detail }: HandoffPanelProps) {
+  const { t } = useTranslation(['conversation', 'common'])
   const { handoff } = useCaseHandoff(detail)
   const reasonId = useId()
   const requestId = useId()
   if (handoff.status === 'pending') {
     return (
       <div aria-busy="true" className="flex flex-col gap-3">
-        <span className="sr-only">Cargando el traspaso del asistente</span>
+        <span className="sr-only">{t('handoff.loading')}</span>
         <Skeleton className="h-4 w-40" />
         <Skeleton className="h-4 w-64" />
         <Skeleton className="h-4 w-56" />
@@ -265,7 +279,7 @@ export function HandoffPanel({ detail }: HandoffPanelProps) {
         actions={
           failure.retry ? (
             <Button size="sm" loading={handoff.isFetching} onClick={() => void handoff.refetch()}>
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
           ) : undefined
         }
@@ -277,15 +291,15 @@ export function HandoffPanel({ detail }: HandoffPanelProps) {
   const view = handoff.data
   return (
     <>
-      <h2 className="sr-only">Traspaso del asistente</h2>
+      <h2 className="sr-only">{t('handoff.panel.title')}</h2>
       <div className="flex flex-wrap items-center gap-2">
         {view.priority ? <SeenPriority priority={view.priority} /> : null}
         {view.queue ? <SuggestedQueue queue={view.queue} /> : null}
         <TeamOnlyChip />
       </div>
       {view.degraded ? (
-        <Callout tone="neutral" title="El traspaso llegó incompleto">
-          El asistente no pudo armar todos los datos. Revisa la conversación.
+        <Callout tone="neutral" title={t('handoff.panel.degradedTitle')}>
+          {t('handoff.panel.degradedText')}
         </Callout>
       ) : null}
       <section aria-labelledby={reasonId} className="flex flex-col gap-2">
@@ -293,7 +307,7 @@ export function HandoffPanel({ detail }: HandoffPanelProps) {
           id={reasonId}
           className="m-0 text-11 font-semibold tracking-[0.06em] text-muted uppercase"
         >
-          Por qué te lo pasó
+          {t('handoff.panel.why')}
         </h3>
         <p className="m-0 flex items-start gap-2 text-14 leading-[1.4]">
           <Hand size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-ink-2" />
@@ -306,50 +320,50 @@ export function HandoffPanel({ detail }: HandoffPanelProps) {
         </p>
       </section>
       <HandoffSection
-        title="Verificado"
+        title={t('handoff.panel.verified')}
         icon={Check}
         tone="success"
         items={view.verified}
-        empty={HANDOFF_EMPTY.verified}
+        empty={t('handoff.empty.verified')}
       />
       <HandoffSection
-        title="Dice el cliente, sin verificar"
+        title={t('handoff.panel.claimed')}
         icon={CircleHelp}
         tone="warn"
         items={view.claimed}
-        empty={HANDOFF_EMPTY.claimed}
+        empty={t('handoff.empty.claimed')}
       />
       <HandoffSection
-        title="Lo que hizo el asistente"
+        title={t('handoff.panel.actions')}
         icon={Bot}
         tone="accent"
         items={view.actions}
-        empty={HANDOFF_EMPTY.actions}
+        empty={t('handoff.empty.actions')}
       />
       <HandoffSection
-        title="Falta resolver"
+        title={t('handoff.panel.open')}
         icon={List}
         tone="neutral"
         items={view.open}
-        empty={HANDOFF_EMPTY.open}
+        empty={t('handoff.empty.open')}
       />
       <section aria-labelledby={requestId} className="flex flex-col gap-2">
         <h3
           id={requestId}
           className="m-0 text-11 font-semibold tracking-[0.06em] text-muted uppercase"
         >
-          Qué pide
+          {t('handoff.panel.request')}
         </h3>
-        <p className="m-0 text-14 leading-[1.45]">{view.summary ?? HANDOFF_EMPTY.summary}</p>
+        <p className="m-0 text-14 leading-[1.45]">{view.summary ?? t('handoff.empty.summary')}</p>
         {view.summary ? (
           <span className="inline-flex items-center gap-1.5 text-12 text-muted">
             <MessageCircle size={12} aria-hidden="true" />
-            En palabras del asistente
+            {t('handoff.panel.inWords')}
           </span>
         ) : null}
       </section>
       <p className="m-0 border-t border-border-soft pt-3 text-12 text-muted">
-        Lo armó el asistente virtual con su conversación. Revísalo antes de responder.
+        {t('handoff.panel.footnote')}
       </p>
     </>
   )

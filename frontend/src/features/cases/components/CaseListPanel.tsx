@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { PanelLeftClose, X } from 'lucide-react'
 import { IconButton, QueryState, SearchInput, Skeleton, StatusIcon } from '@/components/ui'
 import { useDebouncedValue, useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import { useInbox, useInboxLive } from '../hooks'
 import {
   SEARCH_MAX_LENGTH,
@@ -54,6 +55,7 @@ export function CaseListPanel({
   onQueryChange,
   onCollapsedChange,
 }: CaseListPanelProps) {
+  const { t } = useTranslation(['cases', 'common'])
   const q = normalizeSearch(useDebouncedValue(query, SEARCH_DEBOUNCE_MS))
   const inbox = useInbox({ status: filter, q })
   useInboxLive()
@@ -83,18 +85,18 @@ export function CaseListPanel({
 
   return (
     <section
-      aria-label="Casos abiertos"
+      aria-label={t('list.region')}
       className="flex h-full w-[320px] shrink-0 flex-col border-r border-border bg-panel"
     >
       <div className="flex flex-col gap-3 px-4 pt-[18px] pb-3">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="m-0 font-display text-20 font-bold">Casos</h1>
+          <h1 className="m-0 font-display text-20 font-bold">{t('list.title')}</h1>
           <div className="flex items-center gap-1.5">
             <AvailabilityToggle placement="header" />
             <IconButton
               size="sm"
-              aria-label="Contraer la lista"
-              title="Contraer"
+              aria-label={t('list.collapse')}
+              title={t('list.collapseShort')}
               icon={<PanelLeftClose size={16} />}
               onClick={() => onCollapsedChange(true)}
             />
@@ -104,8 +106,8 @@ export function CaseListPanel({
         <AvailabilityToggle placement="banner" />
 
         <SearchInput
-          aria-label="Buscar caso"
-          placeholder="Buscar por cliente o número"
+          aria-label={t('list.search')}
+          placeholder={t('list.searchPlaceholder')}
           value={query}
           maxLength={SEARCH_MAX_LENGTH}
           onChange={(event) => onQueryChange(event.target.value)}
@@ -113,10 +115,10 @@ export function CaseListPanel({
 
         {filter && chip ? (
           <div className="flex items-center gap-2">
-            <span className="text-12 text-muted">Filtro:</span>
+            <span className="text-12 text-muted">{t('list.filter')}</span>
             <button
               type="button"
-              aria-label={`Quitar filtro ${chip}`}
+              aria-label={t('common:filters.remove', { label: chip })}
               onClick={() => onFilterChange(null)}
               className="inline-flex min-h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pr-1.5 pl-2.5 text-13 font-semibold text-ink hover:bg-subtle"
             >
@@ -143,10 +145,10 @@ export function CaseListPanel({
               {emptyListCopy(filter, searching)}
             </p>
           }
-          errorTitle="No pudimos cargar tus casos"
+          errorTitle={t('list.loadError')}
         >
           {(data) => (
-            <ul aria-label="Casos" className="m-0 list-none p-0">
+            <ul aria-label={t('list.title')} className="m-0 list-none p-0">
               {data.items.map((summary) => (
                 <li key={summary.id}>
                   <CaseCard

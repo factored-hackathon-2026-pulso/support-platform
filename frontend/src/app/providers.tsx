@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { Suspense, useState, type ReactNode } from 'react'
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { ToastProvider } from '@/components/ui'
 import { RealtimeProvider, type EnvelopeHandlerRegistry, type RealtimeClient } from '@/lib/realtime'
 import { queryClient as defaultQueryClient } from './query-client'
 import { realtimeClient as defaultRealtimeClient } from './realtime'
+import { UiLanguageSync } from './preferences'
 import { createAppEnvelopeHandlers } from './realtime-handlers'
 import { SessionProvider, useSession, useSessionToken } from './session'
 import { SessionLiveSync } from './session-live'
@@ -56,7 +57,9 @@ export function AppProviders({
         <SessionRealtime client={realtimeClient} handlers={handlers}>
           <ToastProvider>
             <SessionLiveSync />
-            {children}
+            <UiLanguageSync />
+            {/* Last resort while a catalog chunk loads; layouts have their own boundary. */}
+            <Suspense fallback={null}>{children}</Suspense>
           </ToastProvider>
         </SessionRealtime>
       </SessionProvider>

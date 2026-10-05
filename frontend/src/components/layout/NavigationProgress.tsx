@@ -1,4 +1,5 @@
 import { useNavigation } from 'react-router'
+import { useTranslation } from '@/lib/i18n'
 
 /**
  * Thin accent bar at the top while a lazy route is loading. The status region
@@ -6,6 +7,7 @@ import { useNavigation } from 'react-router'
  */
 export function NavigationProgress() {
   const navigation = useNavigation()
+  const { t } = useTranslation('shell')
   const loading = navigation.state !== 'idle'
   return (
     <>
@@ -14,7 +16,7 @@ export function NavigationProgress() {
           <div className="h-full w-2/5 animate-progress bg-accent motion-reduce:w-full motion-reduce:animate-none motion-reduce:opacity-60" />
         </div>
       ) : null}
-      <output className="sr-only">{loading ? 'Cargando la página' : ''}</output>
+      <output className="sr-only">{loading ? t('loadingPage') : ''}</output>
     </>
   )
 }

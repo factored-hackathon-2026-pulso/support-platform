@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AuditApi from '@/features/audit/api'
 import { fetchAuditEvent, fetchAuditEvents, fetchStaffDirectory } from '@/features/audit/api'
@@ -13,6 +13,7 @@ import {
   makeRedactedTurnEvent,
 } from '@/test/audit-fixtures'
 import { NOW } from '@/test/case-fixtures'
+import { envelope } from '@/test/conversation-fixtures'
 import { analystStaff, supervisorStaff } from '@/test/fixtures'
 import { renderRoute } from '@/test/render'
 import { makeQueueOverview } from '@/test/supervision-fixtures'
@@ -255,5 +256,37 @@ describe('audit (supervision)', () => {
     )
     renderAudit('/supervision/audit?event=EVT-NADA')
     expect(await screen.findByText('No encontramos ese evento.')).toBeInTheDocument()
+  })
+})
+
+describe('audit descriptions in the reader language (slice 23c)', () => {
+  it('reads the log again in her new language once it is saved', async () => {
+    const { sockets } = renderAudit()
+    expect(
+      await screen.findByRole('row', { name: /Reasignó el caso de Paula Medina a Julián Ortega/ }),
+    ).toBeInTheDocument()
+    const socket = sockets.last()
+    act(() => socket?.open())
+    await waitFor(() =>
+      expect(socket?.messages()).toContainEqual({
+        action: 'subscribe',
+        topic: `staff:${supervisorStaff.id}`,
+      }),
+    )
+    const calls = vi.mocked(fetchAuditEvents).mock.calls.length
+    // The server renders "Qué hizo" in the reader's saved language: now Portuguese.
+    vi.mocked(fetchAuditEvents).mockResolvedValue(
+      makeAuditPage([
+        makeAuditEvent({ description: 'Reatribuiu o caso de Paula Medina para Julián Ortega' }),
+      ]),
+    )
+    act(() => socket?.receive(envelope('preferences.updated', { uiLanguage: 'pt-BR' })))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Auditoria' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('row', {
+        name: /Reatribuiu o caso de Paula Medina para Julián Ortega/,
+      }),
+    ).toBeInTheDocument()
+    expect(vi.mocked(fetchAuditEvents).mock.calls.length).toBeGreaterThan(calls)
   })
 })

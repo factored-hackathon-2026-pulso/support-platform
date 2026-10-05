@@ -2,17 +2,10 @@ import { useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { PATHS } from '@/app/paths'
 import { Button, Callout, CodeInput, type CodeInputHandle } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import type { SessionResponse } from '../api'
 import { useVerifyMfaMutation } from '../hooks/use-auth-mutations'
-import {
-  DEV_MFA_HINT,
-  describeMfaFailure,
-  isCompleteCode,
-  MFA_CODE_LENGTH,
-  MFA_HINT,
-  MFA_INSTRUCTIONS,
-  MFA_METHOD,
-} from '../model'
+import { describeMfaFailure, isCompleteCode, MFA_CODE_LENGTH, MFA_METHOD } from '../model'
 import { AuthHeading } from './AuthHeading'
 
 export interface MfaScreenProps {
@@ -46,6 +39,7 @@ export function MfaScreen({
   const verifyMutation = useVerifyMfaMutation()
   const hintId = useId()
   const codeRef = useRef<CodeInputHandle>(null)
+  const { t } = useTranslation(['auth', 'common'])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -74,7 +68,9 @@ export function MfaScreen({
   }
 
   const hint =
-    incomplete && !isCompleteCode(code) ? `Escribe los ${MFA_CODE_LENGTH} dígitos.` : MFA_HINT
+    incomplete && !isCompleteCode(code)
+      ? t('mfa.incomplete', { length: MFA_CODE_LENGTH })
+      : t('mfa.hint')
 
   return (
     <>
@@ -83,30 +79,30 @@ export function MfaScreen({
           <span className="inline-flex flex-wrap items-center gap-x-3 text-14 text-ink-2">
             <span>{email}</span>
             <Link to={PATHS.login} replace className="text-link">
-              No soy yo
+              {t('mfa.notMe')}
             </Link>
           </span>
         }
-        title="Confirma que eres tú"
-        subtitle={MFA_INSTRUCTIONS}
+        title={t('mfa.title')}
+        subtitle={t('mfa.instructions')}
       />
 
       <form
         noValidate
         onSubmit={handleSubmit}
-        aria-label="Segundo factor"
+        aria-label={t('mfa.form')}
         className="flex flex-col gap-6"
       >
         {failure ? <Callout tone="danger">{failure}</Callout> : null}
         {showDevHint ? (
-          <Callout tone="info" title="Entorno de desarrollo">
-            {DEV_MFA_HINT}
+          <Callout tone="info" title={t('login.devTitle')}>
+            {t('mfa.devHint')}
           </Callout>
         ) : null}
         <div className="flex flex-col gap-2">
           <CodeInput
             ref={codeRef}
-            label={`Código de ${MFA_CODE_LENGTH} dígitos`}
+            label={t('mfa.code', { length: MFA_CODE_LENGTH })}
             length={MFA_CODE_LENGTH}
             value={code}
             onChange={(next) => {
@@ -122,7 +118,7 @@ export function MfaScreen({
           </span>
         </div>
         <Button type="submit" variant="primary" size="lg" block loading={verifyMutation.isPending}>
-          Entrar
+          {t('mfa.submit')}
         </Button>
       </form>
     </>

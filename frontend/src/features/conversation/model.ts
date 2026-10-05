@@ -10,6 +10,7 @@ import type { FactIcon, FactItem, StatusAppearance, Tone } from '@/components/ui
 import {
   caseStatus,
   caseChannel,
+  closeReasonLabel,
   channelFact,
   channelLabel,
   countryName,
@@ -42,6 +43,7 @@ import {
   formatTime,
   getInitials,
 } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type {
   Call,
   CaseClosure,
@@ -57,6 +59,9 @@ import type {
   Turn,
   TurnPage,
 } from './types'
+
+/** Copy comes from the `conversation` catalog, read when a function runs (the UI language then). */
+const t = i18n.getFixedT(null, 'conversation')
 
 // ── Transcript cache: merge, dedupe, order ───────────────────────────────────
 
@@ -302,23 +307,26 @@ function turnSpeaker(turn: Turn, meId: string): TranscriptSpeaker {
 export function turnAuthor(turn: Turn, variant: TranscriptVariant, meId = ''): string | null {
   switch (variant) {
     case 'own':
-      return 'Tú'
+      return t('transcript.you')
     case 'customer':
-      return turn.authorName ?? 'Cliente'
+      return turn.authorName ?? t('transcript.customer')
     case 'analyst':
-      return turn.authorName ?? 'Analista'
+      return turn.authorName ?? t('transcript.analyst')
     case 'assistant':
-      return turn.authorName ?? ASSISTANT_NAME
+      // Slice 23c: the server names it in Spanish ("Asistente virtual"); staff read their own.
+      return t('transcript.assistant')
     case 'line': {
       // The canvas labels the call's two sides "Cliente" and "Tú".
       const speaker = turnSpeaker(turn, meId)
-      if (speaker === 'customer') return 'Cliente'
-      return speaker === 'own' ? 'Tú' : (turn.authorName ?? 'Analista')
+      if (speaker === 'customer') return t('transcript.customer')
+      return speaker === 'own' ? t('transcript.you') : (turn.authorName ?? t('transcript.analyst'))
     }
     case 'note':
     case 'email':
-      if (turn.authorRole === 'customer') return turn.authorName ?? 'Cliente'
-      return turn.authorId === meId ? 'Tú' : (turn.authorName ?? 'Analista')
+      if (turn.authorRole === 'customer') return turn.authorName ?? t('transcript.customer')
+      return turn.authorId === meId
+        ? t('transcript.you')
+        : (turn.authorName ?? t('transcript.analyst'))
     default:
       return null
   }
@@ -345,19 +353,144 @@ function channelFields(
     return {
       time,
       speaker,
-      initials: getInitials(turn.authorName ?? (speaker === 'customer' ? 'Cliente' : 'Tú')),
+      initials: getInitials(
+        turn.authorName ?? t(speaker === 'customer' ? 'transcript.customer' : 'transcript.you'),
+      ),
     }
   }
   if (variant === 'email') {
     return {
       speaker: turnSpeaker(turn, meId),
-      initials: getInitials(turn.authorName ?? 'Cliente'),
+      initials: getInitials(turn.authorName ?? t('transcript.customer')),
       subject: turn.subject,
       isNew: unanswered.has(turn.id),
       latest: turn.id === lastEmailId,
     }
   }
   return {}
+}
+
+// ── Staff-only lines (slice 23c) ─────────────────────────────────────────────
+
+/** The facts of a staff-only line (`Turn.staffLine`). */
+export type StaffLine = NonNullable<Turn['staffLine']>
+
+const CLOSE_REASONS_KNOWN: readonly CloseReason[] = [
+  'resolved',
+  'customer_unresponsive',
+  'duplicate',
+  'out_of_scope',
+  'other',
+]
+const RELEASE_REASONS = [
+  'escalated',
+  'ended',
+  'failed',
+  'supervision',
+  'customer_request',
+  'ai_disabled',
+] as const
+type ReleaseReason = (typeof RELEASE_REASONS)[number]
+
+function isReleaseReason(value: string | null): value is ReleaseReason {
+  return (RELEASE_REASONS as readonly (string | null)[]).includes(value)
+}
+
+/**
+ * A staff-only line of the transcript written from its facts in the viewer's language
+ * ("Asignado a Daniela Ríos porque está disponible y habla español." / "Atribuído a Daniela
+ * Ríos porque está disponível e fala espanhol."). `null` when the facts are missing a value
+ * this version needs: the turn's stored (Spanish) text is shown instead, as for lines written
+ * before 23c. The previous case's closing time is shown in the viewer's zone.
+ */
+export function staffLineText(line: StaffLine): string | null {
+  const text = (key: string): string | null => {
+    const value = line.params[key]
+    return typeof value === 'string' && value !== '' ? value : null
+  }
+  const count = (key: string): number | null => {
+    const value = line.params[key]
+    return typeof value === 'number' ? value : null
+  }
+  const raw = text('language')
+  const language: Language | null = raw === 'es' || raw === 'pt' ? raw : null
+  const analyst = text('analyst')
+  const supervisor = text('supervisor')
+  const previous = text('previous')
+  const minutes = count('minutes')
+  const paused = text('paused')
+  switch (line.kind) {
+    case 'assigned_on_arrival':
+      return analyst && language ? t(`staffLine.assignedOnArrival.${language}`, { analyst }) : null
+    case 'assigned_from_assistant':
+      return analyst && language
+        ? t(`staffLine.assignedFromAssistant.${language}`, { analyst })
+        : null
+    case 'queued':
+      return language ? t(`staffLine.queued.${language}`) : null
+    case 'assigned_from_queue':
+      return analyst && language && minutes !== null
+        ? t(`staffLine.assignedFromQueue.${language}`, { analyst, minutes })
+        : null
+    case 'assigned_by_supervision': {
+      if (!supervisor || !analyst || !language || minutes === null) return null
+      const values = { supervisor, analyst, minutes }
+      return paused
+        ? t(`staffLine.assignedBySupervisionPaused.${language}`, { ...values, paused })
+        : t(`staffLine.assignedBySupervision.${language}`, values)
+    }
+    case 'reassigned': {
+      if (!supervisor || !previous || !analyst) return null
+      const values = { supervisor, previous, analyst }
+      return paused
+        ? t('staffLine.reassignedPaused', { ...values, paused })
+        : t('staffLine.reassigned', values)
+    }
+    case 'wrote_again': {
+      const customer = text('customer')
+      const closedAt = text('closedAt')
+      const reason = CLOSE_REASONS_KNOWN.find((value) => value === text('closeReason'))
+      if (!customer || !closedAt || !reason || Number.isNaN(Date.parse(closedAt))) return null
+      const values = {
+        customer,
+        date: formatDateTime(closedAt),
+        reason: closeReasonLabel(reason).toLocaleLowerCase(i18n.language),
+      }
+      return text('channel') === 'phone_inbound'
+        ? t('staffLine.calledAgain', values)
+        : t('staffLine.wroteAgain', values)
+    }
+    case 'escalated':
+      return analyst ? t('staffLine.escalated', { analyst }) : null
+    case 'escalation_withdrawn':
+      return analyst ? t('staffLine.escalationWithdrawn', { analyst }) : null
+    case 'escalation_answered':
+      return supervisor ? t('staffLine.escalationAnswered', { supervisor }) : null
+    case 'escalation_taken':
+      return supervisor && previous
+        ? t('staffLine.escalationTaken', { supervisor, previous })
+        : null
+    case 'assistant_released': {
+      // An unknown reason reads as a failure, as the server's Spanish text does.
+      const reason = text('reason')
+      return t(`staffLine.assistantReleased.${isReleaseReason(reason) ? reason : 'failed'}`, {
+        ref: text('ref') ?? t('staffLine.noReference'),
+        code: text('code') ?? t('staffLine.noDetail'),
+        who: text('who') ?? t('staffLine.supervision'),
+      })
+    }
+    case 'follow_up_call': {
+      const customer = text('customer')
+      return analyst && customer ? t('staffLine.followUpCall', { analyst, customer }) : null
+    }
+    default:
+      return null
+  }
+}
+
+/** What a turn says on screen: a staff-only line from its facts, else the stored text. */
+export function turnText(turn: Turn): string {
+  return (turn.staffLine ? staffLineText(turn.staffLine) : null) ?? turn.text
 }
 
 /** Confirmed turns in sequence order, then the pending messages in the order they were sent. */
@@ -373,7 +506,7 @@ export function toTranscriptItems(
     return {
       key: turn.clientMessageId ?? turn.id,
       variant,
-      text: turn.text,
+      text: turnText(turn),
       author: turnAuthor(turn, variant, meId),
       createdAt: turn.createdAt,
       sequence: turn.sequence,
@@ -389,7 +522,7 @@ export function toTranscriptItems(
     key: message.clientMessageId,
     variant: 'own',
     text: message.text,
-    author: 'Tú',
+    author: t('transcript.you'),
     createdAt: message.createdAt,
     sequence: null,
     staffOnly: false,
@@ -401,12 +534,9 @@ export function toTranscriptItems(
   return [...confirmed, ...pending]
 }
 
-/** The assistant's name in staff screens (the API's `authorName`, Spanish for staff). */
-export const ASSISTANT_NAME = 'Asistente virtual'
-
 /** Label of a centred note: staff-only notes vs notices the customer also saw. */
 export function noticeLabel(item: TranscriptItem): string {
-  return item.staffOnly ? 'Nota interna' : 'Aviso al cliente'
+  return item.staffOnly ? t('transcript.internalNote') : t('transcript.customerNotice')
 }
 
 // ── Header ──────────────────────────────────────────────────────────────────
@@ -424,12 +554,18 @@ export function caseHeaderFacts(detail: Pick<CaseDetail, 'case' | 'customer'>): 
       key: 'place',
       icon: 'map-pin',
       text: `${customer.city}, ${countryName(customer.country)}`,
-      label: 'Ciudad',
+      label: t('header.city'),
     },
     channelFact(summary.channel),
   ]
   if (summary.language === 'pt') {
-    facts.push({ key: 'language', icon: 'languages', text: '', label: 'Idioma', languages: ['pt'] })
+    facts.push({
+      key: 'language',
+      icon: 'languages',
+      text: '',
+      label: t('header.language'),
+      languages: ['pt'],
+    })
   }
   return facts
 }
@@ -447,7 +583,7 @@ export function shortCaseId(id: string): string {
 
 /** "Casos anteriores (2)": the header button, shown only when there are any. */
 export function previousCasesLabel(count: number): string | null {
-  return count > 0 ? `Casos anteriores (${count})` : null
+  return count > 0 ? t('header.previousCases', { total: count }) : null
 }
 
 function firstName(name: string | null | undefined): string {
@@ -456,17 +592,54 @@ function firstName(name: string | null | undefined): string {
 
 // ── Arrival note (people-based assignment only, contract §9.3, slice 3 §8.3) ─
 
-/** "español" / "portugués", as the copy says the case language. */
-export const LANGUAGE_NAMES: Record<Language, string> = { es: 'español', pt: 'portugués' }
+/**
+ * "español" / "portugués", as the copy says the case language (in the UI language: getters
+ * over the catalog, read when shown).
+ */
+export const LANGUAGE_NAMES: Readonly<Record<Language, string>> = {
+  get es() {
+    return t('languageName.es')
+  },
+  get pt() {
+    return t('languageName.pt')
+  },
+}
 
 /**
  * Names of the language queues (team-generated, slice 2 §3.3; the backend sends
- * the same text as `LanguageQueue.label` / `AssignmentOut.queueLabel`). Needed here
- * for a queued case, which has no assignment to carry the label yet.
+ * the same text, in Spanish, as `LanguageQueue.label` / `AssignmentOut.queueLabel`), in the
+ * UI language (getters over the catalog). Needed here for a queued case, which has no
+ * assignment to carry the label yet.
  */
-export const QUEUE_LABEL: Record<Language, string> = {
-  es: 'Cola en español',
-  pt: 'Cola en portugués',
+export const QUEUE_LABEL: Readonly<Record<Language, string>> = {
+  get es() {
+    return t('queueLabel.es')
+  },
+  get pt() {
+    return t('queueLabel.pt')
+  },
+}
+
+/**
+ * The backend's queue labels (`AssignmentOut.queueLabel`, its fixed Spanish text) → the
+ * queue's language, so the screens name the queue in the UI language. Data, not copy.
+ */
+const SERVER_QUEUE_LANGUAGE: Readonly<Partial<Record<string, Language>>> = {
+  'Cola en español': 'es',
+  'Cola en portugués': 'pt',
+}
+
+/**
+ * The queue an assignment came from: its language when the label is a known queue (or there
+ * is no label: the case's queue), else the server's label as it came.
+ */
+function assignmentQueue(
+  queueLabel: string | null | undefined,
+  caseLanguage: Language,
+): { language: Language } | { label: string } {
+  if (!queueLabel) return { language: caseLanguage }
+  const language = SERVER_QUEUE_LANGUAGE[queueLabel]
+  return language ? { language } : { label: queueLabel }
 }
 
 /** What the transcript and the panes allow (slice 3 §8.3). */
@@ -479,12 +652,6 @@ export function formatWait(seconds: number): string {
   if (s >= 3600) return formatDuration(s / 60)
   const rest = s % 60
   return rest ? `${Math.floor(s / 60)} min ${rest} s` : `${s / 60} min`
-}
-
-/** "la cola en portugués" from the server's "Cola en portugués". */
-export function queueInSentence(queueLabel: string | null): string {
-  if (!queueLabel) return 'la cola'
-  return `la ${queueLabel.charAt(0).toLowerCase()}${queueLabel.slice(1)}`
 }
 
 /**
@@ -506,40 +673,56 @@ export function supervisionArrivalLine(
   const language = LANGUAGE_NAMES[summary.language]
   if (summary.status === 'with_assistant') {
     return {
-      line: `Lo atiende el asistente virtual desde las ${formatTime(summary.openedAt)}`,
+      line: t('arrival.line.withAssistant', { time: formatTime(summary.openedAt) }),
       time: null,
     }
   }
   if (summary.status === 'queued') {
     return {
-      line: `Sin asignar desde las ${formatTime(summary.openedAt)}: nadie disponible habla ${language}`,
+      line: t('arrival.line.queued', { time: formatTime(summary.openedAt), language }),
       time: null,
     }
   }
   if (!assignment) return null
-  if (summary.status === 'closed')
-    return { line: `Lo atendió ${assignment.analystName}`, time: null }
+  const name = assignment.analystName
+  if (summary.status === 'closed') return { line: t('arrival.line.closed', { name }), time: null }
   const time = formatDateTime(assignment.assignedAt, { withYear: false })
-  const who = `Lo atiende ${assignment.analystName}`
   switch (assignment.reason) {
     case 'queue_drained': {
-      const waited =
-        assignment.waitedSeconds !== null ? ` tras ${formatWait(assignment.waitedSeconds)}` : ''
+      const from = assignmentQueue(assignment.queueLabel, summary.language)
+      const queue = 'language' in from ? t(`arrival.line.queue.${from.language}`) : from.label
       return {
-        line: `${who}: le llegó desde ${queueInSentence(assignment.queueLabel ?? QUEUE_LABEL[summary.language])}${waited}`,
+        line:
+          assignment.waitedSeconds !== null
+            ? t('arrival.line.fromQueueAfter', {
+                name,
+                queue,
+                wait: formatWait(assignment.waitedSeconds),
+              })
+            : t('arrival.line.fromQueue', { name, queue }),
         time,
       }
     }
     case 'manual': {
-      const verb = assignment.previousAnalystId === null ? 'se lo asignó' : 'se lo pasó'
-      return { line: `${who}: ${verb} ${assignment.assignedByName ?? 'supervisión'}`, time }
+      const by = assignment.assignedByName ?? t('arrival.line.bySupervision')
+      return {
+        line:
+          assignment.previousAnalystId === null
+            ? t('arrival.line.assignedBy', { name, by })
+            : t('arrival.line.passedBy', { name, by }),
+        time,
+      }
     }
     case 'assistant_handoff':
-      return { line: `${who}: le llegó tras el traspaso del asistente`, time }
-    default: {
-      const rule = summary.language === 'pt' ? ' (regla 3)' : ''
-      return { line: `${who}: le llegó al estar disponible y hablar ${language}${rule}`, time }
-    }
+      return { line: t('arrival.line.afterHandoff', { name }), time }
+    default:
+      return {
+        line:
+          summary.language === 'pt'
+            ? t('arrival.line.availableRule3', { name, language })
+            : t('arrival.line.available', { name, language }),
+        time,
+      }
   }
 }
 
@@ -548,7 +731,7 @@ export function supervisionArrivalLine(
 /** "Nota: …" under the closure facts, or null without a note. */
 export function closureNote(closure: Pick<CaseClosure, 'note'>): string | null {
   const note = closure.note?.trim()
-  return note ? `Nota: ${note}` : null
+  return note ? t('footer.note', { note }) : null
 }
 
 /**
@@ -564,16 +747,12 @@ export function supervisionFooter(
   const { case: summary, closure, assignment } = detail
   if (closure) return null
   if (summary.status === 'with_assistant') {
-    return [
-      `Lo atiende el asistente virtual. Si lo tomas, pasa a la cola en ${LANGUAGE_NAMES[summary.language]}.`,
-    ]
+    return [t('footer.supervision.withAssistant', { language: LANGUAGE_NAMES[summary.language] })]
   }
   if (summary.status === 'queued' || !assignment) {
-    return [
-      `Sin asignar: le llega automáticamente a la primera persona disponible que hable ${LANGUAGE_NAMES[summary.language]}.`,
-    ]
+    return [t('footer.supervision.queued', { language: LANGUAGE_NAMES[summary.language] })]
   }
-  return [`Solo lectura: lo atiende ${assignment.analystName}.`]
+  return [t('footer.supervision.readOnly', { name: assignment.analystName })]
 }
 
 // ── Composer ────────────────────────────────────────────────────────────────
@@ -597,38 +776,29 @@ export function describeSendFailure(error: unknown): SendFailure {
   if (isApiProblem(error)) {
     switch (error.code) {
       case 'case_closed':
-        return { message: 'No se envió: el caso ya está cerrado.', retryable: false }
+        return { message: t('sendFailure.closed'), retryable: false }
       case 'case_not_assigned':
       case 'forbidden':
-        return { message: 'No se envió: este caso ya no está asignado a ti.', retryable: false }
+        return { message: t('sendFailure.notAssigned'), retryable: false }
       case 'idempotency_conflict':
-        return { message: 'No se envió: ese mensaje ya se envió con otro texto.', retryable: false }
+        return { message: t('sendFailure.conflict'), retryable: false }
       case 'validation_error':
-        return {
-          message: 'No se envió: el mensaje está vacío o pasa de 4.000 caracteres.',
-          retryable: false,
-        }
+        return { message: t('sendFailure.invalid'), retryable: false }
       default:
         break
     }
   }
-  return { message: 'No se envió', retryable: true }
+  return { message: t('transcript.notSent'), retryable: true }
 }
 
 export function describeCaseLoadFailure(error: unknown): { title: string; description: string } {
   if (isApiProblem(error, 'case_not_assigned') || isApiProblem(error, 'forbidden')) {
-    return {
-      title: 'No tienes acceso a este caso',
-      description: 'Lo ven la persona asignada, supervisión y quien atendió antes a este cliente.',
-    }
+    return { title: t('loadFailure.forbiddenTitle'), description: t('loadFailure.forbiddenText') }
   }
   if (isApiProblem(error, 'not_found')) {
-    return { title: 'No encontramos este caso', description: 'Revisa el número o elige otro caso.' }
+    return { title: t('loadFailure.notFoundTitle'), description: t('loadFailure.notFoundText') }
   }
-  return {
-    title: 'No pudimos cargar la conversación',
-    description: 'Revisa tu conexión e inténtalo de nuevo.',
-  }
+  return { title: t('loadFailure.genericTitle'), description: t('loadFailure.genericText') }
 }
 
 // ── "Ficha del cliente" (slice 6 §5: the right panel of the Workspace) ──────
@@ -640,10 +810,12 @@ export function describeCaseLoadFailure(error: unknown): { title: string; descri
 export const CUSTOMER_FILE_PANEL_ID = 'ficha-del-cliente'
 /** Id of the name button (the focus returns to it when the panel closes). */
 export const CUSTOMER_FILE_TRIGGER_ID = 'ficha-del-cliente-boton'
+/** Slice 20: the header's "Apoyo" button (AI on), the other trigger of the same panel. */
+export const SUPPORT_PANEL_TRIGGER_ID = 'apoyo-del-caso-boton'
 
 /** The customer-name button of the slim header: "Ver ficha de Beatriz Salcedo Prieto". */
 export function customerFileTriggerLabel(customerName: string): string {
-  return `Ver ficha de ${customerName}`
+  return t('header.openFile', { name: customerName })
 }
 
 /** One row of the file: an icon and a label, then the value (text, a pill or facts). */
@@ -671,15 +843,15 @@ export interface FileRow {
 export function customerRows(detail: Pick<CaseDetail, 'customer'>): FileRow[] {
   const { customer } = detail
   return [
-    { key: 'name', icon: 'user', label: 'Nombre', text: customer.displayName },
+    { key: 'name', icon: 'user', label: t('file.name'), text: customer.displayName },
     {
       key: 'place',
       icon: 'map-pin',
-      label: 'Ciudad',
+      label: t('file.city'),
       text: `${customer.city}, ${countryName(customer.country)}`,
     },
-    { key: 'language', icon: 'languages', label: 'Idioma', language: customer.language },
-    { key: 'id', icon: 'id', label: 'Id de cliente', text: customer.id, mono: true },
+    { key: 'language', icon: 'languages', label: t('file.language'), language: customer.language },
+    { key: 'id', icon: 'id', label: t('file.customerId'), text: customer.id, mono: true },
   ]
 }
 
@@ -695,20 +867,20 @@ export function firstResponseFacts(
     const met = new Date(summary.firstResponseAt).getTime() <= new Date(summary.slaDueAt).getTime()
     return [
       met
-        ? { key: 'result', icon: 'check', text: 'A tiempo', tone: 'success' }
-        : { key: 'result', icon: 'alert', text: 'Tarde', tone: 'danger' },
+        ? { key: 'result', icon: 'check', text: t('file.onTime'), tone: 'success' }
+        : { key: 'result', icon: 'alert', text: t('file.late'), tone: 'danger' },
       {
         key: 'at',
         icon: 'clock',
         text: formatDateTime(summary.firstResponseAt, { withYear: false }),
-        label: 'Respondió',
-        tooltip: 'Respondió',
+        label: t('file.answered'),
+        tooltip: t('file.answered'),
         tone: 'muted',
       },
     ]
   }
   const sla = slaFact(summary, now)
-  return sla ? [sla] : [{ key: 'result', icon: 'alert', text: 'Sin respuesta', tone: 'muted' }]
+  return sla ? [sla] : [{ key: 'result', icon: 'alert', text: t('file.noAnswer'), tone: 'muted' }]
 }
 
 /**
@@ -722,17 +894,17 @@ export function caseRows(
 ): FileRow[] {
   const { case: summary } = detail
   return [
-    { key: 'id', icon: 'hash', label: 'Número', text: summary.id, mono: true },
+    { key: 'id', icon: 'hash', label: t('file.number'), text: summary.id, mono: true },
     {
       key: 'channel',
       icon: caseChannel(summary.channel).icon,
-      label: 'Canal',
+      label: t('file.channel'),
       text: channelLabel(summary.channel),
     },
     {
       key: 'priority',
       icon: 'flag',
-      label: 'Prioridad',
+      label: t('file.priority'),
       text: casePriority(summary.priority).label,
       priority: summary.priority,
     },
@@ -740,19 +912,19 @@ export function caseRows(
     {
       key: 'opened',
       icon: 'calendar-clock',
-      label: 'Abierto',
+      label: t('file.opened'),
       text: formatDateTime(summary.openedAt, { withYear: false }),
     },
     {
       key: 'status',
       icon: 'inbox',
-      label: 'Estado',
+      label: t('file.status'),
       status: caseStatus(summary.inboxStatus),
     },
     {
       key: 'first-response',
       icon: 'clock',
-      label: 'Primera respuesta',
+      label: t('file.firstResponse'),
       facts: firstResponseFacts(summary, now),
     },
     ...(summary.status === 'closed' ? [ratingRow(summary.rating)] : []),
@@ -764,7 +936,7 @@ export function caseTypeRow(value: CaseType): FileRow {
   return {
     key: 'case-type',
     icon: 'tag',
-    label: 'Tipo de caso',
+    label: t('file.caseType'),
     text: caseType(value).label,
     caseType: value,
   }
@@ -779,15 +951,15 @@ export function ratingRow(rating: Pick<CaseRating, 'score'> | null): FileRow {
     return {
       key: 'rating',
       icon: 'smile',
-      label: 'Calificación',
-      pill: { label: 'Sin calificar', tone: 'closed' },
+      label: t('file.rating'),
+      pill: { label: t('file.unrated'), tone: 'closed' },
     }
   }
   const option = ratingOption(rating.score)
   return {
     key: 'rating',
     icon: 'smile',
-    label: 'Calificación',
+    label: t('file.rating'),
     pill: { label: option.label, tone: option.tone, icon: option.icon },
   }
 }
@@ -824,12 +996,18 @@ export function arrivalFacts(
       ? {
           key: 'by',
           icon: 'users',
-          text: `Asignado por ${assignment.assignedByName ?? 'Supervisión'}`,
+          text: t('arrival.assignedBy', {
+            name: assignment.assignedByName ?? t('arrival.supervision'),
+          }),
         }
       : null
   const waited: FactItem | null =
     assignment.waitedSeconds !== null
-      ? { key: 'waited', icon: 'hourglass', text: `Esperó ${formatWait(assignment.waitedSeconds)}` }
+      ? {
+          key: 'waited',
+          icon: 'hourglass',
+          text: t('arrival.waited', { wait: formatWait(assignment.waitedSeconds) }),
+        }
       : null
   const keep = (facts: (FactItem | null)[]) =>
     facts.filter((fact): fact is FactItem => fact !== null)
@@ -837,7 +1015,7 @@ export function arrivalFacts(
   if (assignment.analystId !== meId) {
     const closed = summary.status === 'closed'
     return {
-      heading: closed ? 'Quién lo atendió' : 'Quién lo atiende',
+      heading: closed ? t('arrival.whoAttended') : t('arrival.whoAttends'),
       time,
       facts: keep([
         { key: 'analyst', icon: 'user', text: assignment.analystName },
@@ -845,20 +1023,20 @@ export function arrivalFacts(
       ]),
     }
   }
-  const heading = 'Cómo llegó a ti'
+  const heading = t('arrival.heading')
   if (assignment.reason === 'assistant_handoff') {
     // Slice 19: the assistant escalated it; she got it like any arrival (rule 3).
     return {
       heading,
       time,
       facts: [
-        { key: 'assistant', icon: 'bot', text: 'Tras el traspaso del asistente', tone: 'accent' },
+        { key: 'assistant', icon: 'bot', text: t('arrival.afterHandoff'), tone: 'accent' },
         {
           key: 'language',
           icon: 'languages',
-          text: 'Hablas',
+          text: t('arrival.youSpeak'),
           languages: [summary.language],
-          ...(summary.language === 'pt' ? { tag: 'Regla 3' } : {}),
+          ...(summary.language === 'pt' ? { tag: t('arrival.rule3') } : {}),
         },
       ],
     }
@@ -868,20 +1046,23 @@ export function arrivalFacts(
       ? {
           key: 'previous',
           icon: 'user' as const,
-          text: `Antes: ${assignment.previousAnalystName ?? 'otra persona'}`,
+          text: t('arrival.previous', {
+            name: assignment.previousAnalystName ?? t('arrival.someoneElse'),
+          }),
         }
       : null
     return { heading, time, facts: keep([by, previous ?? waited]) }
   }
   if (assignment.reason === 'queue_drained') {
-    const queue = assignment.queueLabel ?? QUEUE_LABEL[summary.language]
+    const from = assignmentQueue(assignment.queueLabel, summary.language)
+    const queue = 'language' in from ? QUEUE_LABEL[from.language] : from.label
     return {
       heading,
       time,
       facts: keep([
         waited,
         { key: 'queue', icon: 'inbox', text: queue },
-        { key: 'available', icon: 'check', text: 'Quedaste disponible', tone: 'success' },
+        { key: 'available', icon: 'check', text: t('arrival.becameAvailable'), tone: 'success' },
       ]),
     }
   }
@@ -889,13 +1070,13 @@ export function arrivalFacts(
     heading,
     time,
     facts: [
-      { key: 'available', icon: 'check', text: 'Estabas disponible', tone: 'success' },
+      { key: 'available', icon: 'check', text: t('arrival.wereAvailable'), tone: 'success' },
       {
         key: 'language',
         icon: 'languages',
-        text: 'Hablas',
+        text: t('arrival.youSpeak'),
         languages: [summary.language],
-        ...(summary.language === 'pt' ? { tag: 'Regla 3' } : {}),
+        ...(summary.language === 'pt' ? { tag: t('arrival.rule3') } : {}),
       },
     ],
   }
@@ -924,9 +1105,13 @@ export function footerFacts(
   const { capabilities, closure, assignment } = detail
   if (capabilities.canReply) return null
   if (closure) return closedFooter({ closure, case: detail.case }, meId)
-  const facts: FactItem[] = [{ key: 'read-only', icon: 'lock', text: 'Solo lectura' }]
+  const facts: FactItem[] = [{ key: 'read-only', icon: 'lock', text: t('footer.readOnly') }]
   if (assignment && assignment.analystId !== meId) {
-    facts.push({ key: 'owner', icon: 'user', text: `Lo atiende ${assignment.analystName}` })
+    facts.push({
+      key: 'owner',
+      icon: 'user',
+      text: t('footer.owner', { name: assignment.analystName }),
+    })
   }
   return { reason: null, facts, note: null, rating: null }
 }
@@ -949,8 +1134,8 @@ export function closedFooter(
       key: 'closed-at',
       icon: 'clock',
       text: formatDateTime(closure.closedAt, { withYear: false }),
-      label: 'Cerrado',
-      tooltip: 'Cerrado',
+      label: t('footer.closedAt'),
+      tooltip: t('footer.closedAt'),
     },
   ]
   if (closure.closedById !== meId && closure.closedByName) {
@@ -958,8 +1143,8 @@ export function closedFooter(
       key: 'closed-by',
       icon: 'user',
       text: closure.closedByName,
-      label: 'Lo cerró',
-      tooltip: 'Lo cerró',
+      label: t('footer.closedBy'),
+      tooltip: t('footer.closedBy'),
     })
   }
   return {
@@ -982,8 +1167,8 @@ export function historyItemFacts(
 ): FactItem[] {
   const rating = ratingFact(item.rating)
   return [
-    { key: 'date', icon: 'calendar', text: formatDate(item.openedAt), label: 'Abierto' },
-    { key: 'analyst', icon: 'user', text: item.analystName ?? 'Sin asignar' },
+    { key: 'date', icon: 'calendar', text: formatDate(item.openedAt), label: t('history.opened') },
+    { key: 'analyst', icon: 'user', text: item.analystName ?? t('history.unassigned') },
     ...(rating ? [rating] : []),
   ]
 }
@@ -995,7 +1180,7 @@ export function ratingComment(rating: Pick<CaseRating, 'comment'> | null): strin
 
 /** "Casos anteriores (2)", the panel section title (also without any: "(0)"). */
 export function previousCasesSectionTitle(count: number): string {
-  return `Casos anteriores (${count})`
+  return t('header.previousCases', { total: count })
 }
 
 // ── "Casos anteriores de este cliente" (contract §4.7, §9.4) ────────────────
@@ -1003,20 +1188,20 @@ export function previousCasesSectionTitle(count: number): string {
 /** "Casos anteriores de Patricia". */
 export function historySheetTitle(customerName: string): string {
   const first = firstName(customerName)
-  return first ? `Casos anteriores de ${first}` : 'Casos anteriores'
+  return first ? t('history.title', { name: first }) : t('history.titlePlain')
 }
 
 /** Shown under the list when the server capped it (it returns at most 20). */
 export function historyTruncatedNote(shown: number, total: number): string | null {
-  return total > shown ? 'Se muestran los 20 más recientes.' : null
+  return total > shown ? t('history.truncated') : null
 }
 
 // ── Priority (slice 8) ───────────────────────────────────────────────────────
 
 /** The toast after a priority change failed (the menu shows the previous level again). */
 export function describePriorityFailure(error: unknown): { title: string; description: string } {
-  const title = 'No pudimos cambiar la prioridad'
-  if (!isApiProblem(error)) return { title, description: 'Inténtalo de nuevo.' }
+  const title = t('priorityFailure.title')
+  if (!isApiProblem(error)) return { title, description: t('failure.retry') }
   switch (error.code) {
     case 'version_conflict': {
       const current = error.extensions.current
@@ -1027,19 +1212,19 @@ export function describePriorityFailure(error: unknown): { title: string; descri
       return {
         title,
         description: priority
-          ? `Alguien más la cambió: ahora es ${casePriority(priority).label}.`
-          : 'Alguien más la cambió mientras elegías.',
+          ? t('priorityFailure.conflictNow', { priority: casePriority(priority).label })
+          : t('priorityFailure.conflict'),
       }
     }
     case 'case_closed':
-      return { title, description: 'El caso ya está cerrado.' }
+      return { title, description: t('failure.caseClosed') }
     case 'case_not_assigned':
     case 'forbidden':
-      return { title, description: 'Ya no puedes cambiar la prioridad de este caso.' }
+      return { title, description: t('priorityFailure.forbidden') }
     case 'network_error':
-      return { title, description: 'Revisa tu conexión e inténtalo de nuevo.' }
+      return { title, description: t('failure.network') }
     default:
-      return { title, description: 'Inténtalo de nuevo.' }
+      return { title, description: t('failure.retry') }
   }
 }
 
@@ -1047,27 +1232,27 @@ export function describePriorityFailure(error: unknown): { title: string; descri
 
 /** The toast after a case-type change failed (the menu shows the previous type again). */
 export function describeCaseTypeFailure(error: unknown): { title: string; description: string } {
-  const title = 'No pudimos cambiar el tipo de caso'
-  if (!isApiProblem(error)) return { title, description: 'Inténtalo de nuevo.' }
+  const title = t('caseTypeFailure.title')
+  if (!isApiProblem(error)) return { title, description: t('failure.retry') }
   switch (error.code) {
     case 'version_conflict': {
       const current = conflictCurrentCase(error)
       return {
         title,
         description: current
-          ? `Alguien más lo cambió: ahora es ${caseType(current.caseType).label}.`
-          : 'Alguien más lo cambió mientras elegías.',
+          ? t('caseTypeFailure.conflictNow', { caseType: caseType(current.caseType).label })
+          : t('caseTypeFailure.conflict'),
       }
     }
     case 'case_closed':
-      return { title, description: 'El caso ya está cerrado.' }
+      return { title, description: t('failure.caseClosed') }
     case 'case_not_assigned':
     case 'forbidden':
-      return { title, description: 'Ya no puedes cambiar el tipo de este caso.' }
+      return { title, description: t('caseTypeFailure.forbidden') }
     case 'network_error':
-      return { title, description: 'Revisa tu conexión e inténtalo de nuevo.' }
+      return { title, description: t('failure.network') }
     default:
-      return { title, description: 'Inténtalo de nuevo.' }
+      return { title, description: t('failure.retry') }
   }
 }
 
@@ -1090,11 +1275,14 @@ export function conflictCurrentCase(error: unknown): CaseSummary | null {
 export const CLOSE_NOTE_MAX_LENGTH = 500
 
 /**
- * The notice the customer gets when the case closes, in the case language. It
- * must stay identical to the backend text (contract §3.3); a model test pins it.
+ * The notice the customer gets when the case closes, in the case language (not the UI
+ * language: it is what the customer reads). It must stay identical to the backend text
+ * (contract §3.3); a model test pins it.
  */
 export const CLOSED_NOTICE: Record<Language, string> = {
+  // i18n-ignore-next-line: the customer's text in the case language, mirrored from the backend
   es: 'La conversación terminó. Si necesitas algo más, escríbenos y te atendemos en una nueva conversación.',
+  // i18n-ignore-next-line: the customer's text in the case language, mirrored from the backend
   pt: 'A conversa foi encerrada. Se precisar de algo mais, escreva para nós e abrimos uma nova conversa.',
 }
 
@@ -1116,9 +1304,9 @@ export type CloseFormErrors = Partial<Record<keyof CloseCaseForm, string>>
 
 export function validateCloseForm(form: CloseCaseForm): CloseFormErrors {
   const errors: CloseFormErrors = {}
-  if (form.reason === null) errors.reason = 'Elige un motivo.'
+  if (form.reason === null) errors.reason = t('close.reasonRequired')
   if (form.note.trim().length > CLOSE_NOTE_MAX_LENGTH) {
-    errors.note = 'La nota puede tener hasta 500 caracteres.'
+    errors.note = t('close.noteTooLong')
   }
   return errors
 }
@@ -1138,16 +1326,12 @@ export function noteCounter(note: string): string {
 }
 
 export function describeCloseFailure(error: unknown): string {
-  if (isApiProblem(error, 'case_closed')) return 'Este caso ya estaba cerrado.'
-  if (isApiProblem(error, 'call_in_progress')) return 'Cuelga la llamada antes de cerrar el caso.'
-  if (isApiProblem(error, 'invalid_transition')) {
-    return 'Este caso no se puede cerrar en su estado actual.'
-  }
-  if (isApiProblem(error, 'case_not_assigned')) {
-    return 'Ya no puedes cerrarlo: supervisión pasó este caso a otra persona.'
-  }
-  if (isApiProblem(error, 'validation_error')) return 'Revisa el motivo y la nota.'
-  return 'No pudimos cerrar el caso. Inténtalo de nuevo.'
+  if (isApiProblem(error, 'case_closed')) return t('close.failure.alreadyClosed')
+  if (isApiProblem(error, 'call_in_progress')) return t('close.failure.callInProgress')
+  if (isApiProblem(error, 'invalid_transition')) return t('close.failure.invalidTransition')
+  if (isApiProblem(error, 'case_not_assigned')) return t('close.failure.notAssigned')
+  if (isApiProblem(error, 'validation_error')) return t('close.failure.validation')
+  return t('close.failure.generic')
 }
 
 // ── Escalation to supervision (slice 9) ──────────────────────────────────────
@@ -1160,9 +1344,9 @@ export function motiveCounter(motive: string): string {
 /** Client check of the motive before the request: required, at most 500 characters. */
 export function validateMotive(motive: string): string | null {
   const length = motive.trim().length
-  if (length === 0) return 'Escribe el motivo.'
+  if (length === 0) return t('escalation.motiveRequired')
   if (length > MAX_ESCALATION_TEXT) {
-    return `El motivo puede tener hasta ${MAX_ESCALATION_TEXT} caracteres.`
+    return t('escalation.motiveTooLong', { max: MAX_ESCALATION_TEXT })
   }
   return null
 }
@@ -1179,34 +1363,30 @@ export function canEscalate(detail: Pick<CaseDetail, 'case' | 'capabilities'>): 
 
 export type EscalationAction = 'escalate' | 'withdraw' | 'acknowledge'
 
-/** One Spanish line per failure of the escalation commands (branch on the code, never the text). */
+/** One line per failure of the escalation commands (branch on the code, never the text). */
 export function describeEscalationFailure(error: unknown, action: EscalationAction): string {
-  const fallback: Record<EscalationAction, string> = {
-    escalate: 'No pudimos escalar el caso. Inténtalo de nuevo.',
-    withdraw: 'No pudimos retirar el escalamiento. Inténtalo de nuevo.',
-    acknowledge: 'No pudimos marcarlo como leído. Inténtalo de nuevo.',
-  }
-  if (!isApiProblem(error)) return fallback[action]
+  const fallback = t(`escalation.failure.${action}`)
+  if (!isApiProblem(error)) return fallback
   switch (error.code) {
     case 'escalation_open':
-      return 'Este caso ya está escalado a supervisión.'
+      return t('escalation.failure.alreadyOpen')
     case 'escalation_not_open':
       return error.stringExtension('currentState') === 'withdrawn'
-        ? 'Este escalamiento ya se retiró.'
-        : 'Supervisión ya atendió este escalamiento.'
+        ? t('escalation.failure.withdrawn')
+        : t('escalation.failure.attended')
     case 'case_closed':
-      return 'Este caso ya se cerró.'
+      return t('escalation.failure.caseClosed')
     case 'case_not_assigned':
       return action === 'escalate'
-        ? 'Ya no puedes escalarlo: el caso pasó a otra persona.'
-        : 'Ya no puedes cambiar este escalamiento.'
+        ? t('escalation.failure.notAssignedEscalate')
+        : t('escalation.failure.notAssigned')
     case 'validation_error':
     case 'invalid_value':
-      return 'Escribe el motivo (hasta 500 caracteres).'
+      return t('escalation.failure.invalid')
     case 'network_error':
-      return 'Revisa tu conexión e inténtalo de nuevo.'
+      return t('failure.network')
     default:
-      return fallback[action]
+      return fallback
   }
 }
 
@@ -1236,17 +1416,30 @@ export type EscalationCard =
 
 type DateInput = Date | string | number
 
-function attendedTitle(escalation: Escalation, name: string): { title: string; verb: string } {
+function attendedTitle(
+  escalation: Escalation,
+  name: string,
+  since: string,
+): { title: string; sinceTooltip: string } {
   switch (escalation.state) {
     case 'taken':
-      return { title: `${name} tomó el caso`, verb: 'Tomó el caso' }
+      return {
+        title: t('escalation.card.taken', { name }),
+        sinceTooltip: t('escalation.card.takenSince', { since }),
+      }
     case 'reassigned':
       return {
-        title: `${name} lo reasignó a ${escalation.reassignedToName ?? 'otra persona del equipo'}`,
-        verb: 'Lo reasignó',
+        title: t('escalation.card.reassigned', {
+          name,
+          to: escalation.reassignedToName ?? t('escalation.card.reassignedFallback'),
+        }),
+        sinceTooltip: t('escalation.card.reassignedSince', { since }),
       }
     default:
-      return { title: `${name} respondió`, verb: 'Respondió' }
+      return {
+        title: t('escalation.card.answered', { name }),
+        sinceTooltip: t('escalation.card.answeredSince', { since }),
+      }
   }
 }
 
@@ -1268,15 +1461,15 @@ export function escalationCardOf(
   if (!escalation || detail.case.status === 'closed') return null
   if (escalation.state === 'open') {
     if (mode === 'supervision') {
-      const by = escalation.escalatedByName ?? 'Alguien del equipo'
+      const by = escalation.escalatedByName ?? t('escalation.card.someone')
       const since = formatRelativeTime(escalation.escalatedAt, now)
       return {
         kind: 'open',
         escalation,
-        title: 'Escalado a supervisión',
+        title: t('escalation.card.title'),
         byName: by,
         since,
-        sinceTooltip: `Escaló ${since}`,
+        sinceTooltip: t('escalation.card.escalatedSince', { since }),
         canWithdraw: false,
       }
     }
@@ -1285,10 +1478,10 @@ export function escalationCardOf(
     return {
       kind: 'open',
       escalation,
-      title: 'Escalado a supervisión',
+      title: t('escalation.card.title'),
       byName: null,
       since,
-      sinceTooltip: `Escalaste ${since}`,
+      sinceTooltip: t('escalation.card.youEscalatedSince', { since }),
       canWithdraw: true,
     }
   }
@@ -1300,9 +1493,9 @@ export function escalationCardOf(
   ) {
     return null
   }
-  const name = escalation.resolvedByName ?? 'Supervisión'
-  const { title, verb } = attendedTitle(escalation, name)
+  const name = escalation.resolvedByName ?? t('escalation.card.supervision')
   const since = formatRelativeTime(escalation.resolvedAt ?? escalation.escalatedAt, now)
+  const { title, sinceTooltip } = attendedTitle(escalation, name, since)
   return {
     kind: 'attended',
     escalation,
@@ -1310,6 +1503,6 @@ export function escalationCardOf(
     resolverName: name,
     note: escalation.state === 'answered' ? escalation.note : null,
     since,
-    sinceTooltip: `${verb} ${since}`,
+    sinceTooltip,
   }
 }

@@ -6,6 +6,8 @@
  * search, rule 3, the pause confirmation, what the customer sees, failures),
  * "Escalados" (groups, outcomes, failures) and the notices (the URL state is in url.ts).
  * Time-dependent figures take `now`. No React, no I/O: unit-tested in model.test.ts.
+ * Copy comes from the `supervision` catalog, read when a function runs (slice 23), so it is
+ * in the UI language of that moment; the constants of copy are getters for the same reason.
  *
  * Assignment is automatic (rule 3, the least loaded first): supervision never assigns
  * a queued case by hand any more; "Reasignar" stays as the exception.
@@ -43,7 +45,8 @@ import {
   type CaseCustomer,
 } from '@/features/conversation'
 import { isApiProblem } from '@/lib/api'
-import { formatRelativeTime, localDayKey, pluralize } from '@/lib/format'
+import { formatRelativeTime, localDayKey } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type {
   AnalystActivity,
   CaseSummary,
@@ -59,6 +62,23 @@ import type {
 import type { QueuesUrlState, TeamUrlState } from './url'
 
 export { QUEUE_LABEL }
+
+const t = i18n.getFixedT(null, 'supervision')
+
+/** "Listo" (the result strips' prefix). */
+function done(): string {
+  return i18n.t('common:actions.done')
+}
+
+/** "Revisa tu conexión e inténtalo de nuevo." */
+function connectionHint(): string {
+  return i18n.t('common:query.errorDescription')
+}
+
+/** The role's name, where nobody signs what supervision did ("Supervisión"). */
+export function supervisionName(): string {
+  return i18n.t('shell:roles.supervisor.name')
+}
 
 /** "Carga alta" from this many open cases (team-generated, slice 3 §1.2). */
 export const HIGH_LOAD_OPEN_CASES = 5
@@ -95,11 +115,23 @@ export type ActivityMeta = StatusAppearance
  * cases, ring = free to take one, pause glyph = paused, grey ring = not connected.
  * Per-person labels are gender-neutral ("Sin conexión").
  */
+function activityMeta(
+  activity: AnalystActivity,
+  appearance: Omit<ActivityMeta, 'label'>,
+): ActivityMeta {
+  return {
+    ...appearance,
+    get label() {
+      return t(`activity.${activity}`)
+    },
+  }
+}
+
 export const ACTIVITY_META: Readonly<Record<AnalystActivity, ActivityMeta>> = {
-  busy: { shape: 'dot', tone: 'success', label: 'Atendiendo' },
-  available: { shape: 'ring', tone: 'success', label: 'Disponible' },
-  paused: { shape: 'pause', tone: 'warn', label: 'En pausa' },
-  offline: { shape: 'ring', tone: 'neutral', label: 'Sin conexión' },
+  busy: activityMeta('busy', { shape: 'dot', tone: 'success' }),
+  available: activityMeta('available', { shape: 'ring', tone: 'success' }),
+  paused: activityMeta('paused', { shape: 'pause', tone: 'warn' }),
+  offline: activityMeta('offline', { shape: 'ring', tone: 'neutral' }),
 }
 
 /** Order of the activities ("Equipo" rows, the filter options). */
@@ -115,10 +147,14 @@ export function presenceTone(activity: AnalystActivity): PresenceTone {
 }
 
 /** Hint of an available analyst without a session: cases keep landing on her. */
-export const NO_SESSION_HINT = {
-  label: 'sin sesión abierta',
-  title: 'Le siguen llegando casos aunque no haya iniciado sesión.',
-} as const
+export const NO_SESSION_HINT: { readonly label: string; readonly title: string } = {
+  get label() {
+    return t('noSessionHint.label')
+  },
+  get title() {
+    return t('noSessionHint.title')
+  },
+}
 
 export function showsNoSessionHint(analyst: Pick<TeamAnalyst, 'activity' | 'signedIn'>): boolean {
   return (analyst.activity === 'busy' || analyst.activity === 'available') && !analyst.signedIn
@@ -201,9 +237,9 @@ export function firstResponseFact(
       key: 'first-response',
       icon: 'pause',
       tone: 'muted',
-      text: 'No corre',
-      label: 'Primera respuesta',
-      tooltip: 'No corre mientras lo atiende el asistente',
+      text: t('firstResponse.notRunning'),
+      label: t('firstResponse.label'),
+      tooltip: t('firstResponse.notRunningTooltip'),
     }
   }
   const sla = slaFact(summary, now)
@@ -212,9 +248,9 @@ export function firstResponseFact(
       key: 'first-response',
       icon: 'check',
       tone: 'muted',
-      text: 'Respondida',
-      label: 'Primera respuesta',
-      tooltip: 'Primera respuesta enviada',
+      text: t('firstResponse.answered'),
+      label: t('firstResponse.label'),
+      tooltip: t('firstResponse.answeredTooltip'),
     }
   }
   if (sla.level === 'overdue') {
@@ -222,9 +258,9 @@ export function firstResponseFact(
       key: 'first-response',
       icon: 'flame-filled',
       tone: 'danger',
-      text: 'Vencida',
-      label: 'Primera respuesta',
-      tooltip: 'Primera respuesta vencida',
+      text: t('firstResponse.overdue'),
+      label: t('firstResponse.label'),
+      tooltip: t('firstResponse.overdueTooltip'),
     }
   }
   return {
@@ -232,13 +268,15 @@ export function firstResponseFact(
     icon: sla.icon,
     tone: sla.level === 'at_risk' ? 'warn' : 'default',
     text: sla.text,
-    label: 'Primera respuesta: vence en',
-    tooltip: `Primera respuesta: vence en ${sla.text}`,
+    label: t('firstResponse.dueLabel'),
+    tooltip: t('firstResponse.dueTooltip', { time: sla.text }),
   }
 }
 
 /** The assistant's name where Supervisión sees who holds a case ("Lo tiene"). */
-export const ASSISTANT_HOLDER = 'Asistente virtual'
+export function assistantHolder(): string {
+  return t('assistantHolder')
+}
 
 export function isWithAssistant(summary: Pick<CaseSummary, 'status'>): boolean {
   return summary.status === 'with_assistant'
@@ -300,30 +338,32 @@ export function queueNavLabels(figures: QueueNavFigures): {
   withAssistant: string
 } {
   return {
-    open: pluralize(figures.open, 'abierto'),
-    unassigned: `${figures.unassigned} sin asignar`,
-    atRisk: `${figures.atRisk} en riesgo`,
-    withAssistant: `${figures.withAssistant} con el asistente`,
+    open: t('queues.open', { count: figures.open }),
+    unassigned: t('queues.unassigned', { count: figures.unassigned }),
+    atRisk: t('queues.atRisk', { count: figures.atRisk }),
+    withAssistant: t('queues.withAssistant', { count: figures.withAssistant }),
   }
 }
 
 /** Header copy of "Colas": assignment is automatic (rule 3). */
-export const AUTOMATIC_ASSIGNMENT_NOTE =
-  'La asignación es automática: cada caso le llega a la primera persona disponible que habla su idioma.'
+export function automaticAssignmentNote(): string {
+  return t('queues.automaticNote')
+}
 
 /** "11 casos abiertos" / "3 de 11 casos abiertos" under the queue title. */
 export function shownCasesLabel(shown: number, total: number, filtered: boolean): string {
-  const all = pluralize(total, 'caso abierto', 'casos abiertos')
-  return filtered ? `${shown} de ${all}` : all
+  return filtered
+    ? t('queues.shownFiltered', { shown, count: total })
+    : t('queues.shown', { count: total })
 }
 
 /** Name of the queue's table: "Casos abiertos en portugués". */
 export function openCasesTableLabel(language: Language): string {
-  return `Casos abiertos en ${LANGUAGE_NAMES[language]}`
+  return t('queues.tableLabel', { language: LANGUAGE_NAMES[language] })
 }
 
 export function emptyQueueTitle(language: Language): string {
-  return `No hay casos abiertos en ${LANGUAGE_NAMES[language]}`
+  return t('queues.emptyTitle', { language: LANGUAGE_NAMES[language] })
 }
 
 /**
@@ -426,7 +466,7 @@ export function queueFilterGroups(
   return [
     {
       key: 'status',
-      legend: 'Estado',
+      legend: t('filters.status'),
       options: OPEN_CASE_STATUS_KEYS.filter(
         (key) => key !== 'with_assistant' || aiEnabled || state.statuses.includes('with_assistant'),
       ).map((key) => ({
@@ -437,7 +477,7 @@ export function queueFilterGroups(
     },
     {
       key: 'priority',
-      legend: 'Prioridad',
+      legend: t('filters.priority'),
       options: PRIORITY_OPTIONS.map((config) => ({
         value: config.value,
         label: config.label,
@@ -446,7 +486,7 @@ export function queueFilterGroups(
     },
     {
       key: 'analyst',
-      legend: 'Analista',
+      legend: t('filters.analyst'),
       options: [...holders.entries()]
         .sort((a, b) => a[1].localeCompare(b[1], 'es', { sensitivity: 'base' }))
         .map(([id, name]) => ({ value: id, label: name, count: count('analyst', id) })),
@@ -522,7 +562,7 @@ export function teamFilterGroups(
   return [
     {
       key: 'status',
-      legend: 'Estado',
+      legend: t('filters.status'),
       options: ACTIVITY_ORDER.map((activity) => ({
         value: activity,
         label: ACTIVITY_META[activity].label,
@@ -531,7 +571,7 @@ export function teamFilterGroups(
     },
     {
       key: 'language',
-      legend: 'Idioma',
+      legend: t('filters.language'),
       options: QUEUE_LANGUAGES.map((language) => ({
         value: language,
         label: LANGUAGE_NATIVE_NAME[language],
@@ -541,7 +581,7 @@ export function teamFilterGroups(
     },
     {
       key: 'team',
-      legend: 'Equipo',
+      legend: t('filters.team'),
       options: [...teams.entries()]
         .sort((a, b) => a[1].localeCompare(b[1], 'es', { sensitivity: 'base' }))
         .map(([id, name]) => ({ value: id, label: name, count: count('team', id) })),
@@ -551,8 +591,9 @@ export function teamFilterGroups(
 
 /** Header subtitle: "6 analistas" / "3 de 6 analistas". */
 export function teamSubtitle(shown: number, total: number, filtered: boolean): string {
-  const all = pluralize(total, 'analista')
-  return filtered ? `${shown} de ${all}` : all
+  return filtered
+    ? t('team.subtitleFiltered', { shown, count: total })
+    : t('team.subtitle', { count: total })
 }
 
 /** "Analistas" heading aside: "7 casos abiertos" and the risk ("2 en riesgo"). */
@@ -562,7 +603,7 @@ export function analystsFigures(
 ): { open: string; atRisk: number } {
   const open = analysts.reduce((sum, analyst) => sum + analyst.counts.open, 0)
   const atRisk = analysts.reduce((sum, analyst) => sum + atRiskCount(analyst.openCases, now), 0)
-  return { open: pluralize(open, 'caso abierto', 'casos abiertos'), atRisk }
+  return { open: t('analysts.openCases', { count: open }), atRisk }
 }
 
 /** The `CaseSummary` of `caseId` among the analysts' open cases, or null. */
@@ -640,29 +681,31 @@ export function reassignList(
   const chosen = chosenId ? matches.find((a) => a.id === chosenId) : undefined
   if (chosen && !shown.includes(chosen)) shown.push(chosen)
   return {
-    title: needle ? 'Resultados' : 'Sugeridos',
+    title: needle ? t('reassign.results') : t('reassign.suggested'),
     shown,
     hidden: matches.length - shown.length,
   }
 }
 
 export function moreResultsLabel(hidden: number): string | null {
-  return hidden > 0 ? `+${hidden} más: escribe un nombre para encontrarlos` : null
+  return hidden > 0 ? t('reassign.more', { hidden }) : null
 }
 
 export function noMatchCopy(language: Language): string {
-  return `Nadie con ese nombre habla ${LANGUAGE_NAMES[language]}.`
+  return t('reassign.noMatch', { language: LANGUAGE_NAMES[language] })
 }
 
 export function onlySpeakersCopy(language: Language): string {
-  return `Solo quienes hablan ${LANGUAGE_NAMES[language]}`
+  return t('reassign.onlySpeakers', { language: LANGUAGE_NAMES[language] })
 }
 
-export const INCLUDE_AWAY_LABEL = 'Incluir a quienes están en pausa o desconectados'
+export function includeAwayLabel(): string {
+  return t('reassign.includeAway')
+}
 
 /** "2 abiertos". */
 export function openCountLabel(analyst: Pick<TeamAnalyst, 'counts'>): string {
-  return pluralize(analyst.counts.open, 'abierto')
+  return t('reassign.openCount', { count: analyst.counts.open })
 }
 
 /** A paused or offline choice needs "Pasarlo aunque esté en pausa" (slice 3 rule 8). */
@@ -670,20 +713,27 @@ export function needsPauseConfirmation(analyst: Pick<TeamAnalyst, 'activity'>): 
   return isAway(analyst)
 }
 
-export const CONFIRM_PAUSED_LABEL = 'Pasarlo aunque esté en pausa'
+export function confirmPausedLabel(): string {
+  return t('reassign.confirmPaused')
+}
 
 /** Warning shown when the chosen person is paused (offline adds the missing session). */
 export function pausedWarning(analyst: Pick<TeamAnalyst, 'name' | 'activity'>): string {
-  const base = `${firstName(analyst.name)} está en pausa: no recibe casos nuevos. Si se lo pasas igual, le llega a su lista.`
-  return analyst.activity === 'offline' ? `${base} Tampoco tiene una sesión abierta.` : base
+  const name = firstName(analyst.name)
+  return analyst.activity === 'offline'
+    ? t('reassign.pausedWarningOffline', { name })
+    : t('reassign.pausedWarning', { name })
 }
 
 /**
- * The notice the customer gets on a reassignment, in the case language. It must stay
- * identical to the backend text (slice 3 §3.5); a model test pins it.
+ * The notice the customer gets on a reassignment, in the case language (never the UI's):
+ * chat content, not UI copy. It must stay identical to the backend text (slice 3 §3.5); a
+ * model test pins it.
  */
 export const REASSIGNED_NOTICE: Record<Language, (firstName: string) => string> = {
+  // i18n-ignore-next-line: chat content in the case language, mirrored from the backend
   es: (name) => `Ahora te atiende ${name}, de nuestro equipo.`,
+  // i18n-ignore-next-line: chat content in the case language, mirrored from the backend
   pt: (name) => `Agora quem te atende é ${name}, da nossa equipe.`,
 }
 
@@ -696,11 +746,16 @@ export function customerSeesCopy(
 
 /** Primary button: "Reasignar a Daniela" ("Reasignar" with nobody chosen). */
 export function reassignSubmitLabel(analyst: Pick<TeamAnalyst, 'name'> | null): string {
-  return analyst ? `Reasignar a ${firstName(analyst.name)}` : 'Reasignar'
+  return analyst ? t('reassign.submitTo', { name: firstName(analyst.name) }) : t('actions.reassign')
 }
 
-export const PICK_ANALYST_ERROR = 'Elige a quién pasarlo.'
-export const CONFIRM_PAUSED_ERROR = 'Confirma que quieres pasarlo aunque esté en pausa.'
+export function pickAnalystError(): string {
+  return t('reassign.pickError')
+}
+
+export function confirmPausedError(): string {
+  return t('reassign.confirmError')
+}
 
 /** What the dialog does after a failure. */
 export type AssignFailureAction = 'none' | 'confirm_paused' | 'refetch' | 'close' | 'refetch_team'
@@ -722,30 +777,32 @@ export function describeAssignFailure(
         const language =
           fromServer === 'es' || fromServer === 'pt' ? fromServer : context.caseLanguage
         return {
-          message: `Ese caso es en ${LANGUAGE_NAMES[language]} y ${name} no lo habla (regla 3).`,
+          message: t('reassign.failure.languageMismatch', {
+            language: LANGUAGE_NAMES[language],
+            name,
+          }),
           action: 'none',
         }
       }
       case 'analyst_paused':
         return {
-          message: `${name} está en pausa. Marca «${CONFIRM_PAUSED_LABEL}» para seguir.`,
+          message: t('reassign.failure.analystPaused', { name, confirm: confirmPausedLabel() }),
           action: 'confirm_paused',
         }
       case 'assignment_changed':
         return {
-          message:
-            'Alguien más movió este caso mientras decidías. Revisa a quién está asignado ahora.',
+          message: t('reassign.failure.assignmentChanged'),
           action: 'refetch',
         }
       case 'case_closed':
-        return { message: 'Este caso ya se cerró.', action: 'close' }
+        return { message: t('reassign.failure.caseClosed'), action: 'close' }
       case 'analyst_not_eligible':
-        return { message: 'Esa persona ya no puede recibir casos.', action: 'refetch_team' }
+        return { message: t('reassign.failure.notEligible'), action: 'refetch_team' }
       default:
         break
     }
   }
-  return { message: 'No pudimos reasignar el caso. Inténtalo de nuevo.', action: 'none' }
+  return { message: t('reassign.failure.generic'), action: 'none' }
 }
 
 /** The "Listo ·" strip after a reassignment. */
@@ -755,19 +812,23 @@ export function reassignResultCopy(input: {
   analystName: string
 }): { prefix: string; message: string } {
   const message = input.previousAnalystName
-    ? `El caso de ${input.customerName} pasó de ${input.previousAnalystName} a ${input.analystName}.`
-    : `El caso de ${input.customerName} pasó a ${input.analystName}.`
-  return { prefix: 'Listo', message }
+    ? t('reassign.movedFromTo', {
+        customer: input.customerName,
+        from: input.previousAnalystName,
+        to: input.analystName,
+      })
+    : t('reassign.movedTo', { customer: input.customerName, to: input.analystName })
+  return { prefix: done(), message }
 }
 
 /** Toast after reassigning from the case view. */
 export function reassignedToastTitle(customerName: string, analystName: string): string {
-  return `El caso de ${customerName} pasó a ${analystName}`
+  return t('reassign.movedToast', { customer: customerName, to: analystName })
 }
 
 /** Info toast when the chosen analyst already had the case (200 no-op). */
 export function unchangedToastTitle(analystName: string): string {
-  return `${firstName(analystName)} ya tenía este caso.`
+  return t('reassign.unchanged', { name: firstName(analystName) })
 }
 
 // ── "Escalados" (slice 9) ────────────────────────────────────────────────────
@@ -802,19 +863,27 @@ export function escalationGroups(
     )
     .sort((a, b) => toMs(b.escalation.resolvedAt ?? 0) - toMs(a.escalation.resolvedAt ?? 0))
   const groups: EscalationGroup[] = []
-  if (open.length) groups.push({ key: 'open', label: `Abiertos (${open.length})`, items: open })
-  if (attended.length) groups.push({ key: 'attended', label: 'Atendidos hoy', items: attended })
+  if (open.length) {
+    groups.push({
+      key: 'open',
+      label: t('escalations.groups.open', { total: open.length }),
+      items: open,
+    })
+  }
+  if (attended.length) {
+    groups.push({ key: 'attended', label: t('escalations.groups.attended'), items: attended })
+  }
   return groups
 }
 
 /** "2 abiertos" / "1 abierto" (header aside). */
 export function openEscalationsLabel(count: number): string {
-  return pluralize(count, 'abierto')
+  return t('escalations.open', { count })
 }
 
 /** "Escaló hace 6 min" (the panel's time fact). */
 export function escalatedAgo(escalation: Pick<Escalation, 'escalatedAt'>, now: DateInput): string {
-  return `Escaló ${formatRelativeTime(escalation.escalatedAt, now)}`
+  return t('escalations.escalatedAgo', { ago: formatRelativeTime(escalation.escalatedAt, now) })
 }
 
 /**
@@ -824,17 +893,21 @@ export function escalatedAgo(escalation: Pick<Escalation, 'escalatedAt'>, now: D
  */
 export function escalationOutcomeTitle(escalation: Escalation, meId: string): string | null {
   const mine = escalation.resolvedById === meId
-  const who = escalation.resolvedByName ?? 'Supervisión'
+  const who = escalation.resolvedByName ?? supervisionName()
   switch (escalation.state) {
     case 'answered':
       return mine
-        ? `Respondiste a ${firstName(escalation.escalatedByName ?? 'quien escaló')}`
-        : `${who} respondió`
+        ? t('escalations.outcome.answeredMine', { name: escalatorName(escalation) })
+        : t('escalations.outcome.answeredOther', { who })
     case 'taken':
-      return mine ? 'Tomaste el caso' : `${who} tomó el caso`
+      return mine
+        ? t('escalations.outcome.takenMine')
+        : t('escalations.outcome.takenOther', { who })
     case 'reassigned': {
-      const to = escalation.reassignedToName ?? 'otra persona del equipo'
-      return mine ? `Lo reasignaste a ${to}` : `${who} lo reasignó a ${to}`
+      const to = escalation.reassignedToName ?? t('someoneElse')
+      return mine
+        ? t('escalations.outcome.reassignedMine', { to })
+        : t('escalations.outcome.reassignedOther', { who, to })
     }
     default:
       return null
@@ -856,30 +929,37 @@ export function escalationCaseFacts(
     {
       key: 'holder',
       icon: 'user',
-      text: input.holderName ?? 'Sin asignar',
-      label: 'Lo atiende',
+      text: input.holderName ?? t('unassigned'),
+      label: t('escalations.facts.holder'),
     },
-    place ? { key: 'place', icon: 'map-pin', text: place, label: 'Ciudad' } : null,
+    place
+      ? { key: 'place', icon: 'map-pin', text: place, label: t('escalations.facts.place') }
+      : null,
     {
       key: 'language',
       icon: 'languages',
       text: LANGUAGE_NATIVE_NAME[summary.language],
       language: summary.language,
-      label: 'Idioma',
+      label: t('escalations.facts.language'),
     },
     {
       key: 'channel',
       icon: caseChannel(summary.channel).icon,
       text: channelLabel(summary.channel),
-      label: 'Canal',
+      label: t('escalations.facts.channel'),
     },
     {
       key: 'priority',
       icon: CASE_PRIORITY[summary.priority].icon,
       text: CASE_PRIORITY[summary.priority].label,
-      label: 'Prioridad',
+      label: t('escalations.facts.priority'),
     },
-    { key: 'open-for', icon: 'clock', text: openForText(summary, now), label: 'Abierto hace' },
+    {
+      key: 'open-for',
+      icon: 'clock',
+      text: openForText(summary, now),
+      label: t('escalations.facts.openFor'),
+    },
   ]
   return facts.filter((fact): fact is FactItem => fact !== null)
 }
@@ -893,32 +973,43 @@ export function escalationResultCopy(
   switch (kind) {
     case 'answered':
       return {
-        prefix: 'Listo',
-        message: `Le llegó tu respuesta a ${analyst} en el caso de ${item.customerName}.`,
+        prefix: done(),
+        message: t('escalations.result.answered', { analyst, customer: item.customerName }),
       }
     case 'taken':
       return {
-        prefix: 'Listo',
-        message: `Tomaste el caso de ${item.customerName}. ${analyst} lo puede leer, pero ya no responder.`,
+        prefix: done(),
+        message: t('escalations.result.taken', { analyst, customer: item.customerName }),
       }
     case 'reassigned':
       return {
-        prefix: 'Listo',
-        message: `El caso de ${item.customerName} pasó de ${item.analystName} a ${item.toName ?? 'otra persona del equipo'}.`,
+        prefix: done(),
+        message: t('reassign.movedFromTo', {
+          customer: item.customerName,
+          from: item.analystName,
+          to: item.toName ?? t('someoneElse'),
+        }),
       }
   }
 }
 
-export const REPLY_REQUIRED_ERROR = 'Escribe tu respuesta.'
+export function replyRequiredError(): string {
+  return t('escalations.replyRequired')
+}
+
+/** "Daniela" (who escalated), or "quien escaló". */
+function escalatorName(escalation: Pick<Escalation, 'escalatedByName'>): string {
+  return firstName(escalation.escalatedByName ?? t('escalations.whoEscalated'))
+}
 
 /** "Tu respuesta para Daniela". */
 export function replyLabel(escalation: Pick<Escalation, 'escalatedByName'>): string {
-  return `Tu respuesta para ${firstName(escalation.escalatedByName ?? 'quien escaló')}`
+  return t('escalations.replyLabel', { name: escalatorName(escalation) })
 }
 
 /** "Le llega a Daniela dentro del caso. El cliente no la ve." */
 export function replyHelp(escalation: Pick<Escalation, 'escalatedByName'>): string {
-  return `Le llega a ${firstName(escalation.escalatedByName ?? 'quien escaló')} dentro del caso. El cliente no la ve.`
+  return t('escalations.replyHelp', { name: escalatorName(escalation) })
 }
 
 export interface EscalationFailure {
@@ -935,42 +1026,47 @@ export function describeEscalationFailure(
     switch (error.code) {
       case 'escalation_not_open':
         return {
-          message:
-            'Este escalamiento ya no está abierto: lo retiraron o alguien de supervisión ya lo atendió.',
+          message: t('escalations.failure.notOpen'),
           refetch: true,
         }
       case 'analyst_not_eligible':
         return {
-          message: 'Para tomar el caso necesitas también el rol de Analista.',
+          message: t('escalations.failure.notEligible'),
           refetch: false,
         }
       case 'language_mismatch':
         return {
-          message: `Ese caso es en ${LANGUAGE_NAMES[context.caseLanguage]} y no lo hablas (regla 3).`,
+          message: t('escalations.failure.languageMismatch', {
+            language: LANGUAGE_NAMES[context.caseLanguage],
+          }),
           refetch: false,
         }
       case 'case_closed':
-        return { message: 'Este caso ya se cerró.', refetch: true }
+        return { message: t('escalations.failure.caseClosed'), refetch: true }
       case 'validation_error':
-        return { message: 'Escribe tu respuesta (hasta 500 caracteres).', refetch: false }
+        return { message: t('escalations.failure.validation'), refetch: false }
       case 'network_error':
-        return { message: 'Revisa tu conexión e inténtalo de nuevo.', refetch: false }
+        return { message: connectionHint(), refetch: false }
       default:
         break
     }
   }
-  return { message: 'No pudimos completar la acción. Inténtalo de nuevo.', refetch: false }
+  return { message: t('escalations.failure.generic'), refetch: false }
 }
 
 // ── Supervisor case view ─────────────────────────────────────────────────────
 
 /** Where "Volver" goes from the case view, by the screen it came from. */
 export function backLabelFor(from: string | null): string {
-  if (!from) return 'Volver a Colas'
-  if (from.startsWith(PATHS.supervision.audit)) return 'Volver a Auditoría'
-  if (from.startsWith(PATHS.supervision.team)) return 'Volver a Equipo'
-  if (from.startsWith(PATHS.supervision.escalations)) return 'Volver a Escalados'
-  return 'Volver a Colas'
+  return t('caseView.back', { place: i18n.t(`shell:nav.${backPlace(from)}`) })
+}
+
+function backPlace(from: string | null): 'queues' | 'audit' | 'team' | 'escalations' {
+  if (!from) return 'queues'
+  if (from.startsWith(PATHS.supervision.audit)) return 'audit'
+  if (from.startsWith(PATHS.supervision.team)) return 'team'
+  if (from.startsWith(PATHS.supervision.escalations)) return 'escalations'
+  return 'queues'
 }
 
 /** "CASE-…0101" under a customer's name. */
@@ -1004,22 +1100,31 @@ export function recentRatingCell(stats: RatingStats): RecentRatingCell | null {
   if (stats.count <= 0 || stats.average === null) return null
   const average = formatRatingAverage(stats.average)
   const tone: FactTone = stats.average < 2.5 ? 'danger' : stats.average < 3 ? 'warn' : 'success'
-  const cases = stats.count === 1 ? '1 caso calificado' : `${stats.count} casos calificados`
   return {
     icon: ratingOption(stats.average).icon,
     tone,
     average,
     count: `(${stats.count})`,
-    tooltip: `Promedio ${average} de 4 en ${cases}`,
+    tooltip: t('rating.tooltip', { average, count: stats.count }),
   }
 }
 
 /** Header tooltip of the column. */
-export const RECENT_RATING_HEADER = {
-  label: 'Calificación 7 días',
-  title: 'Promedio de calificaciones de clientes, escala 1 a 4, últimos 7 días',
-  empty: 'Sin calificaciones en los últimos 7 días',
-} as const
+export const RECENT_RATING_HEADER: {
+  readonly label: string
+  readonly title: string
+  readonly empty: string
+} = {
+  get label() {
+    return t('rating.header')
+  },
+  get title() {
+    return t('rating.headerTitle')
+  },
+  get empty() {
+    return t('rating.empty')
+  },
+}
 
 /** Teams by id → name (the analyst sheet's team fact). */
 export function teamNames(teams: readonly TeamSummary[]): Record<string, string> {
@@ -1036,7 +1141,7 @@ export function withoutKey<T extends { key: string }>(fact: T): Omit<T, 'key'> {
 
 /** "Tomar el caso de Ximena Robles" (the row button's accessible name). */
 export function takeFromAssistantLabel(customerName: string): string {
-  return `Tomar el caso de ${customerName}`
+  return t('actions.takeOf', { name: customerName })
 }
 
 /** The confirmation toast: where the case went. */
@@ -1045,26 +1150,26 @@ export function takenFromAssistantToast(summary: Pick<CaseSummary, 'status' | 'l
   description: string
 } {
   return {
-    title: 'Tomaste el caso del asistente',
+    title: t('release.takenTitle'),
     description:
       summary.status === 'queued'
-        ? `Quedó en la cola en ${LANGUAGE_NAMES[summary.language]}: le llega a la primera persona disponible.`
-        : 'Ya lo tiene una persona del equipo.',
+        ? t('release.takenQueued', { language: LANGUAGE_NAMES[summary.language] })
+        : t('release.takenHeld'),
   }
 }
 
 export function describeReleaseFailure(error: unknown): { title: string; description: string } {
   if (isApiProblem(error, 'assistant_not_active')) {
     return {
-      title: 'El asistente ya no tiene este caso',
-      description: 'Ya pasó a una persona o terminó. La lista se actualizó.',
+      title: t('release.notActiveTitle'),
+      description: t('release.notActiveText'),
     }
   }
   if (isApiProblem(error, 'network_error')) {
     return {
-      title: 'No pudimos tomar el caso',
-      description: 'Revisa tu conexión e inténtalo de nuevo.',
+      title: t('release.failedTitle'),
+      description: connectionHint(),
     }
   }
-  return { title: 'No pudimos tomar el caso', description: 'Inténtalo de nuevo en un momento.' }
+  return { title: t('release.failedTitle'), description: t('release.retryLater') }
 }

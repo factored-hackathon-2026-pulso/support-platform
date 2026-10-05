@@ -26,8 +26,8 @@ import {
 } from '@/test/supervision-fixtures'
 import {
   ACTIVITY_META,
-  AUTOMATIC_ASSIGNMENT_NOTE,
-  CONFIRM_PAUSED_LABEL,
+  automaticAssignmentNote,
+  confirmPausedLabel,
   HIGH_LOAD_OPEN_CASES,
   QUEUE_LABEL,
   REASSIGNED_NOTICE,
@@ -141,7 +141,7 @@ describe('"Colas"', () => {
   const rows = makeOpenCases().cases
 
   it('explains that assignment is automatic', () => {
-    expect(AUTOMATIC_ASSIGNMENT_NOTE).toBe(
+    expect(automaticAssignmentNote()).toBe(
       'La asignación es automática: cada caso le llega a la primera persona disponible que habla su idioma.',
     )
     expect(QUEUE_LABEL).toEqual({ es: 'Cola en español', pt: 'Cola en portugués' })
@@ -337,7 +337,7 @@ describe('reassign dialog', () => {
   it('asks to confirm a paused or offline choice and previews the customer notice', () => {
     expect(needsPauseConfirmation(julian)).toBe(true)
     expect(needsPauseConfirmation(daniela)).toBe(false)
-    expect(CONFIRM_PAUSED_LABEL).toBe('Pasarlo aunque esté en pausa')
+    expect(confirmPausedLabel()).toBe('Pasarlo aunque esté en pausa')
     expect(pausedWarning(julian)).toBe(
       'Julián está en pausa: no recibe casos nuevos. Si se lo pasas igual, le llega a su lista.',
     )

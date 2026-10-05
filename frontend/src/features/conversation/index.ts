@@ -21,5 +21,12 @@ export { useCaseHandoff } from './hooks/use-handoff'
 export { describeHandoffFailure } from './handoff'
 export type { HandoffView } from './handoff'
 export type { CustomerFileProps } from './components/CustomerFile'
-export { CUSTOMER_FILE_PANEL_ID, CUSTOMER_FILE_TRIGGER_ID } from './model'
+export {
+  CUSTOMER_FILE_PANEL_ID,
+  CUSTOMER_FILE_TRIGGER_ID,
+  SUPPORT_PANEL_TRIGGER_ID,
+  staffLineText,
+  turnText,
+} from './model'
+export type { StaffLine } from './model'
 export { useCaseDetail } from './hooks/use-case-detail'

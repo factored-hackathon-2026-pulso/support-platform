@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblem } from '@/lib/api'
+import type { AppLocale } from '@/lib/i18n'
 import { NOW } from '@/test/case-fixtures'
 import {
   makeAnsweredEscalation,
@@ -44,7 +45,11 @@ function result(detail: CaseDetail, escalation: Escalation): EscalationResult {
   }
 }
 
-function setup(detail: CaseDetail, mode: 'workspace' | 'supervision' = 'workspace') {
+function setup(
+  detail: CaseDetail,
+  mode: 'workspace' | 'supervision' = 'workspace',
+  locale?: AppLocale,
+) {
   vi.mocked(api.fetchCaseDetail).mockResolvedValue(detail)
   vi.mocked(api.fetchTurns).mockResolvedValue({
     items: seededTurns(),
@@ -54,6 +59,7 @@ function setup(detail: CaseDetail, mode: 'workspace' | 'supervision' = 'workspac
   vi.mocked(api.markCaseRead).mockResolvedValue(detail.case)
   return renderWithProviders(<ConversationPane caseId={detail.case.id} mode={mode} />, {
     staff: analystStaff,
+    locale,
   })
 }
 
@@ -184,5 +190,44 @@ describe('Escalation card (slice 9)', () => {
     expect(within(card).queryByRole('button', { name: 'Retirar escalamiento' })).toBeNull()
     expect(within(card).queryByRole('button', { name: 'Entendido' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Escalar a supervisión' })).toBeNull()
+  })
+})
+
+describe('escalation in Portuguese (slice 23)', () => {
+  it('asks for a motive and escalates', async () => {
+    const user = userEvent.setup()
+    const detail = escalatable()
+    vi.mocked(api.escalateCase).mockResolvedValue(result(detail, makeEscalation()))
+    setup(detail, 'workspace', 'pt-BR')
+    await user.click(await screen.findByRole('button', { name: 'Escalar para a supervisão' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Escalar para a supervisão' })
+    expect(within(dialog).getByText('A equipe vê. O cliente não.')).toBeInTheDocument()
+    expect(within(dialog).getByText('O caso continua com você')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Escalar' }))
+    expect(within(dialog).getByText('Escreva o motivo.')).toBeInTheDocument()
+    await user.type(within(dialog).getByRole('textbox', { name: 'Motivo' }), 'Pede supervisão')
+    await user.click(within(dialog).getByRole('button', { name: 'Escalar' }))
+    expect(await screen.findByText('Você escalou o caso para a supervisão')).toBeInTheDocument()
+    const card = await screen.findByRole('region', { name: 'Escalonamento para a supervisão' })
+    expect(within(card).getByText('Escalado para a supervisão')).toBeInTheDocument()
+    expect(within(card).getByText('Só a equipe')).toBeInTheDocument()
+    expect(within(card).getByRole('button', { name: 'Retirar escalonamento' })).toBeInTheDocument()
+  })
+
+  it('shows what supervision answered until "Entendi"', async () => {
+    const user = userEvent.setup()
+    const answered = makeAnsweredEscalation()
+    const detail = makeCaseDetail({ escalation: answered })
+    vi.mocked(api.acknowledgeEscalation).mockResolvedValue(
+      result(detail, { ...answered, acknowledgedAt: NOW.toISOString() }),
+    )
+    setup(detail, 'workspace', 'pt-BR')
+    const card = await screen.findByRole('region', { name: 'Escalonamento para a supervisão' })
+    expect(within(card).getByText('Lucía Herrera respondeu')).toBeInTheDocument()
+    expect(within(card).getByText('Seu motivo:')).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'Entendi' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Escalonamento para a supervisão' })).toBeNull(),
+    )
   })
 })

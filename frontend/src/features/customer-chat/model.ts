@@ -3,14 +3,15 @@
  * (dedupe by id, reconcile optimistic messages by `clientMessageId`, order by
  * sequence), the switch to a new conversation after a close, past conversations,
  * and the copy of the picker and the chat. The chat inside the phone frame speaks
- * the customer's language (`es` | `pt`, `customerChatCopy`); the simulator page
- * around it is staff/dev chrome and stays in Spanish. Contract:
- * docs/platform/api/slice-2-case-lifecycle.md §6, §9.6.
+ * the customer's language (`es` | `pt`, `customerT`); the simulator page around it is
+ * dev chrome in the UI language (`chromeT`). Both read the `customer` catalog (slice 23).
+ * Contract: docs/platform/api/slice-2-case-lifecycle.md §6, §9.6.
  */
 import type { StatusAppearance } from '@/components/ui'
 import { assistantCopy, hadAssistant, isAssistantName } from './assistant'
 import { formatDate } from '@/lib/format'
 import { isApiProblem } from '@/lib/api'
+import { chromeT, customerLocale, customerT } from './locale'
 import type {
   CaseRating,
   CustomerChatCache,
@@ -193,7 +194,7 @@ export interface ChatItem {
    */
   key: string
   side: ChatSide
-  /** "Daniela, de LATAM Bank", "Asistente virtual"; null for the customer and notices. */
+  /** "Daniela, de LATAM Bank" / "Daniela, do LATAM Bank", "Asistente virtual"; null for the customer and notices. */
   author: string | null
   text: string
   createdAt: string
@@ -201,8 +202,10 @@ export interface ChatItem {
   clientMessageId: string | null
 }
 
-function bankAuthor(turn: CustomerTurn): string {
-  return turn.authorName ? `${turn.authorName}, de LATAM Bank` : 'LATAM Bank'
+function bankAuthor(turn: CustomerTurn, language: Language): string {
+  return turn.authorName
+    ? customerT(language)('chat.bankAuthor', { name: turn.authorName })
+    : 'LATAM Bank'
 }
 
 function chatSide(turn: CustomerTurn): ChatSide {
@@ -214,8 +217,15 @@ function chatSide(turn: CustomerTurn): ChatSide {
 /**
  * Customer bubbles right, the analyst left (first name), the assistant left with its own
  * name (slice 19), platform notices centred.
+ *
+ * The author line follows the customer's language ("Daniela, de LATAM Bank" / "Daniela, do
+ * LATAM Bank"); the assistant's name comes from the server, else "Asistente virtual" /
+ * "Assistente virtual".
  */
-export function toChatItems(cache: Pick<CustomerChatCache, 'turns' | 'pending'>): ChatItem[] {
+export function toChatItems(
+  cache: Pick<CustomerChatCache, 'turns' | 'pending'>,
+  language: Language,
+): ChatItem[] {
   const confirmed = cache.turns.map((turn): ChatItem => {
     const side = chatSide(turn)
     return {
@@ -223,9 +233,9 @@ export function toChatItems(cache: Pick<CustomerChatCache, 'turns' | 'pending'>)
       side,
       author:
         side === 'bank'
-          ? bankAuthor(turn)
+          ? bankAuthor(turn, language)
           : side === 'assistant'
-            ? (turn.authorName ?? 'Asistente virtual')
+            ? (turn.authorName ?? customerT(language)('assistant.name'))
             : null,
       text: turn.text,
       createdAt: turn.createdAt,
@@ -245,7 +255,7 @@ export function toChatItems(cache: Pick<CustomerChatCache, 'turns' | 'pending'>)
   return [...confirmed, ...pending]
 }
 
-// ── Customer-facing copy (es | pt) ──────────────────────────────────────────
+// ── Customer-facing copy (the customer's language) ─────────────────────────
 
 /** Everything the customer reads in the chat, in their own language. */
 export interface CustomerChatCopy {
@@ -269,56 +279,33 @@ export interface CustomerChatCopy {
   currentConversation: string
 }
 
-const CUSTOMER_CHAT_COPY: Record<Language, CustomerChatCopy> = {
-  es: {
-    support: 'Soporte',
-    loading: 'Cargando…',
-    greeting: 'Hola, ¿en qué te podemos ayudar?',
-    loadErrorTitle: 'No pudimos cargar la conversación',
-    loadErrorBody: 'Revisa tu conexión e inténtalo de nuevo.',
-    retry: 'Reintentar',
-    logLabel: 'Conversación con soporte',
-    messagesLabel: 'Mensajes',
-    suggestionsLabel: 'Sugerencias',
-    inputLabel: 'Escribe tu mensaje',
-    send: 'Enviar',
-    you: 'Tú',
-    sending: 'Enviando…',
-    notSent: 'No se envió',
-    pastLoadError: 'No pudimos cargar las conversaciones anteriores.',
-    pastBlockLoadError: 'No pudimos cargar esta conversación.',
-    pastSectionLabel: 'Conversaciones anteriores',
-    currentConversation: 'Conversación actual',
-  },
-  pt: {
-    support: 'Suporte',
-    loading: 'Carregando…',
-    greeting: 'Olá, como podemos ajudar?',
-    loadErrorTitle: 'Não foi possível carregar a conversa',
-    loadErrorBody: 'Verifique sua conexão e tente de novo.',
-    retry: 'Tentar de novo',
-    logLabel: 'Conversa com o suporte',
-    messagesLabel: 'Mensagens',
-    suggestionsLabel: 'Sugestões',
-    inputLabel: 'Escreva sua mensagem',
-    send: 'Enviar',
-    you: 'Você',
-    sending: 'Enviando…',
-    notSent: 'Não enviada',
-    pastLoadError: 'Não foi possível carregar as conversas anteriores.',
-    pastBlockLoadError: 'Não foi possível carregar esta conversa.',
-    pastSectionLabel: 'Conversas anteriores',
-    currentConversation: 'Conversa atual',
-  },
-}
-
 export function customerChatCopy(language: Language): CustomerChatCopy {
-  return CUSTOMER_CHAT_COPY[language] ?? CUSTOMER_CHAT_COPY.es
+  const t = customerT(language)
+  return {
+    support: t('chat.support'),
+    loading: t('chat.loading'),
+    greeting: t('chat.greeting'),
+    loadErrorTitle: t('chat.loadErrorTitle'),
+    loadErrorBody: t('chat.loadErrorBody'),
+    retry: t('chat.retry'),
+    logLabel: t('chat.logLabel'),
+    messagesLabel: t('chat.messagesLabel'),
+    suggestionsLabel: t('chat.suggestionsLabel'),
+    inputLabel: t('chat.inputLabel'),
+    send: t('chat.send'),
+    you: t('chat.you'),
+    sending: t('chat.sending'),
+    notSent: t('chat.notSent'),
+    pastLoadError: t('chat.pastLoadError'),
+    pastBlockLoadError: t('chat.pastBlockLoadError'),
+    pastSectionLabel: t('chat.pastSectionLabel'),
+    currentConversation: t('chat.currentConversation'),
+  }
 }
 
 /** `lang` of the chat frame, so assistive tech reads it in the customer's language. */
 export function chatLang(language: Language): string {
-  return language === 'pt' ? 'pt-BR' : 'es'
+  return customerLocale(language)
 }
 
 /**
@@ -331,24 +318,18 @@ export function conversationStatusLine(
   language: Language,
   turns: readonly Pick<CustomerTurn, 'authorRole'>[] = [],
 ): string {
-  const pt = language === 'pt'
-  if (!conversation) {
-    return pt
-      ? 'Escreva sua mensagem e uma pessoa da equipe vai te atender'
-      : 'Escribe tu mensaje y te responde una persona del equipo'
-  }
+  const t = customerT(language)
+  if (!conversation) return t('chat.status.idle')
   switch (conversation.status) {
     case 'with_assistant':
       return assistantCopy(language).statusLine
     case 'waiting_agent':
       if (hadAssistant(turns)) return assistantCopy(language).handingOver
-      return pt ? 'Procurando uma pessoa da equipe…' : 'Buscando a una persona del equipo…'
-    case 'with_agent': {
-      const who = conversation.agentName ?? (pt ? 'uma pessoa da equipe' : 'una persona del equipo')
-      return pt ? `Você está falando com ${who}, do LATAM Bank` : `Te atiende ${who}, de LATAM Bank`
-    }
+      return t('chat.status.searching')
+    case 'with_agent':
+      return t('chat.status.withAgent', { name: conversation.agentName ?? t('someone') })
     default:
-      return pt ? 'Conversa encerrada' : 'Conversación terminada'
+      return t('chat.status.closed')
   }
 }
 
@@ -380,13 +361,8 @@ export function inputPlaceholder(
   conversation: CustomerConversation | null,
   language: Language,
 ): string {
-  const pt = language === 'pt'
-  if (conversation?.status === 'closed') {
-    return pt
-      ? 'Escreva para começar uma nova conversa'
-      : 'Escribe para empezar una nueva conversación'
-  }
-  return pt ? 'Escreva aqui' : 'Escribe aquí'
+  const t = customerT(language)
+  return conversation?.status === 'closed' ? t('chat.placeholderClosed') : t('chat.placeholder')
 }
 
 /** Muted note above the input while the current conversation is closed. */
@@ -395,9 +371,7 @@ export function closedConversationNote(
   language: Language,
 ): string | null {
   if (conversation?.status !== 'closed') return null
-  return language === 'pt'
-    ? 'Esta conversa terminou. Se você escrever, começamos uma nova.'
-    : 'Esta conversación terminó. Si escribes, empezamos una nueva.'
+  return customerT(language)('chat.closedNote')
 }
 
 // ── Past conversations (contract §6, §9.6) ──────────────────────────────────
@@ -415,9 +389,7 @@ export function hiddenPastCount(
 /** "Ver conversaciones anteriores (3)" / "Ver conversas anteriores (3)", or null for none. */
 export function pastConversationsButton(count: number, language: Language): string | null {
   if (count <= 0) return null
-  return language === 'pt'
-    ? `Ver conversas anteriores (${count})`
-    : `Ver conversaciones anteriores (${count})`
+  return customerT(language)('chat.showPast', { total: count })
 }
 
 /**
@@ -432,34 +404,13 @@ export function pastBlocks(
   return items.filter((item) => !shown.has(item.caseId)).reverse()
 }
 
-/** Spanish month abbreviations of `formatDate` → Portuguese. */
-const PT_MONTHS: Record<string, string> = {
-  ene: 'jan',
-  feb: 'fev',
-  may: 'mai',
-  sep: 'set',
-  oct: 'out',
-  dic: 'dez',
-}
-
-/**
- * "3 mar 2026" in the viewer's zone (`formatDate`); in Portuguese only the
- * month abbreviation changes ("3 fev 2026", "12 dez 2025").
- */
-function formatCustomerDate(value: string, language: Language): string {
-  const date = formatDate(value)
-  if (language !== 'pt') return date
-  const [day, month = '', year] = date.split(' ')
-  return [day, PT_MONTHS[month] ?? month, year].join(' ')
-}
-
-/** "Conversación del 3 mar 2026" / "Conversa de 3 mar 2026": a past block's title. */
+/** "Conversación del 3 mar 2026" / "Conversa de 3 fev 2026": a past block's title. */
 export function pastBlockTitle(
   conversation: Pick<CustomerConversationSummary, 'openedAt'>,
   language: Language,
 ): string {
-  const date = formatCustomerDate(conversation.openedAt, language)
-  return language === 'pt' ? `Conversa de ${date}` : `Conversación del ${date}`
+  const date = formatDate(conversation.openedAt, { locale: customerLocale(language) })
+  return customerT(language)('chat.pastTitle', { date })
 }
 
 /**
@@ -472,9 +423,7 @@ export function pastBlockByline(
 ): string | null {
   if (!conversation.agentName) return null
   if (isAssistantName(conversation.agentName)) return assistantCopy(language).attendedBy
-  return language === 'pt'
-    ? `Atendida por ${conversation.agentName}`
-    : `Te atendió ${conversation.agentName}`
+  return customerT(language)('chat.pastBy', { name: conversation.agentName })
 }
 
 /** Last visible message of a past conversation (the list's `preview`, or from its turns). */
@@ -512,63 +461,54 @@ export function normalizeCustomerMessage(text: string): string | null {
 
 // ── Picker ──────────────────────────────────────────────────────────────────
 
-const LOCALE_LABELS: Record<CustomerLocale, string> = {
-  'es-CO': 'Español de Colombia',
-  'es-MX': 'Español de México',
-  'es-AR': 'Español de Argentina',
-  'pt-BR': 'Portugués de Brasil',
-}
-
+/** "Español de Colombia", "Portugués de Brasil" (UI language). */
 export function localeLabel(locale: CustomerLocale): string {
-  return LOCALE_LABELS[locale] ?? locale
-}
-
-const COUNTRY_NAMES: Record<CountryCode, string> = {
-  CO: 'Colombia',
-  MX: 'México',
-  AR: 'Argentina',
-  BR: 'Brasil',
+  return chromeT(`picker.locale.${locale}`, { defaultValue: locale })
 }
 
 export function placeLabel(city: string, country: CountryCode): string {
-  return `${city}, ${COUNTRY_NAMES[country] ?? country}`
+  return `${city}, ${chromeT(`picker.country.${country}`, { defaultValue: country })}`
+}
+
+type PickerStatusKey = 'waiting' | 'open' | 'assistant'
+
+const PICKER_STATUS_LOOK: Readonly<Record<PickerStatusKey, Omit<StatusAppearance, 'label'>>> = {
+  waiting: { shape: 'dashed', tone: 'warn', strong: true },
+  open: { shape: 'pie-50', tone: 'success' },
+  // Slice 19: the assistant holds the open conversation.
+  assistant: { shape: 'bot', tone: 'accent' },
 }
 
 /**
  * The picker's conversation status (glyph + word, the staff glyphs): still
  * waiting for a person (dashed ring, nobody has it yet) or open with someone
- * (half pie, in progress); null without an open conversation.
+ * (half pie, in progress); null without an open conversation. Label in the UI language.
  */
-export const PICKER_STATUS: Readonly<Record<'waiting' | 'open' | 'assistant', StatusAppearance>> = {
-  waiting: { shape: 'dashed', tone: 'warn', label: 'Esperando a una persona', strong: true },
-  open: { shape: 'pie-50', tone: 'success', label: 'Conversación abierta' },
-  // Slice 19: the assistant holds the open conversation.
-  assistant: { shape: 'bot', tone: 'accent', label: 'Con el asistente virtual' },
-}
-
 export function pickerStatus(
   customer: Pick<DemoCustomer, 'openConversation'>,
 ): StatusAppearance | null {
   const open = customer.openConversation
   if (!open) return null
-  if (open.status === 'with_assistant') return PICKER_STATUS.assistant
-  return PICKER_STATUS[open.status === 'waiting_agent' ? 'waiting' : 'open']
+  const key: PickerStatusKey =
+    open.status === 'with_assistant'
+      ? 'assistant'
+      : open.status === 'waiting_agent'
+        ? 'waiting'
+        : 'open'
+  return { ...PICKER_STATUS_LOOK[key], label: chromeT(`picker.status.${key}`) }
 }
 
 /** "1 conversación anterior", "3 conversaciones anteriores"; null for none. */
 export function closedConversationsLine(count: number): string | null {
   if (count <= 0) return null
-  return count === 1 ? '1 conversación anterior' : `${count} conversaciones anteriores`
+  return chromeT('picker.pastConversations', { count })
 }
 
+/** Why the customer session did not open (UI language). */
 export function describeStartFailure(error: unknown): string {
-  if (isApiProblem(error, 'not_found')) {
-    return 'Ese cliente ya no está disponible para el simulador. Elige otro.'
-  }
-  if (isApiProblem(error, 'network_error')) {
-    return 'No hay conexión con el servidor. Revisa que el backend esté corriendo.'
-  }
-  return 'No pudimos abrir la sesión del cliente. Inténtalo de nuevo.'
+  if (isApiProblem(error, 'not_found')) return chromeT('picker.failure.notFound')
+  if (isApiProblem(error, 'network_error')) return chromeT('picker.failure.network')
+  return chromeT('picker.failure.generic')
 }
 
 // ── Satisfaction survey (slice 7: CSAT 1–4, in the customer's language) ─────
@@ -585,19 +525,16 @@ export interface CustomerRatingOption {
   tone: 'danger' | 'warn' | 'good' | 'great'
 }
 
-const RATING_WORDS: Record<Language, readonly [string, string, string, string]> = {
-  es: ['Mal', 'Regular', 'Bien', 'Excelente'],
-  pt: ['Ruim', 'Regular', 'Bom', 'Excelente'],
-}
+const RATING_SCORES: readonly CustomerRatingScore[] = [1, 2, 3, 4]
 const RATING_ICONS = ['frown', 'meh', 'smile', 'laugh'] as const
 const RATING_TONES = ['danger', 'warn', 'good', 'great'] as const
 
 /** The four answers, worst to best, in the customer's language. */
 export function ratingOptions(language: Language): CustomerRatingOption[] {
-  const words = RATING_WORDS[language] ?? RATING_WORDS.es
-  return words.map((label, index) => ({
-    score: (index + 1) as CustomerRatingScore,
-    label,
+  const t = customerT(language)
+  return RATING_SCORES.map((score, index) => ({
+    score,
+    label: t(`rating.option.${score}`),
     icon: RATING_ICONS[index] ?? 'smile',
     tone: RATING_TONES[index] ?? 'good',
   }))
@@ -653,48 +590,30 @@ export interface RatingSurveyCopy {
  * conversation the assistant resolved (slice 19), "¿Cómo te atendió el asistente virtual?".
  */
 export function ratingSurveyCopy(agentName: string | null, language: Language): RatingSurveyCopy {
-  const assistant = isAssistantName(agentName)
-  if (language === 'pt') {
-    return {
-      title: assistant
-        ? assistantCopy('pt').surveyTitle
-        : `Como foi o atendimento de ${agentName ?? 'nossa equipe'}?`,
-      legend: 'Avalie o atendimento',
-      commentLabel: 'Quer contar algo mais? (opcional)',
-      commentPlaceholder: 'O que podemos melhorar',
-      skip: 'Agora não',
-      send: 'Enviar',
-      pickFirst: 'Escolha uma opção para enviar.',
-    }
-  }
+  const t = customerT(language)
   return {
-    title: assistant
-      ? assistantCopy('es').surveyTitle
-      : `¿Cómo te atendió ${agentName ?? 'nuestro equipo'}?`,
-    legend: 'Califica la atención',
-    commentLabel: '¿Quieres contarnos algo más? (opcional)',
-    commentPlaceholder: 'Qué podemos mejorar o qué te gustó',
-    skip: 'Ahora no',
-    send: 'Enviar',
-    pickFirst: 'Elige una opción para enviar.',
+    title: isAssistantName(agentName)
+      ? assistantCopy(language).surveyTitle
+      : t('rating.title', { name: agentName ?? t('rating.ourTeam') }),
+    legend: t('rating.legend'),
+    commentLabel: t('rating.commentLabel'),
+    commentPlaceholder: t('rating.commentPlaceholder'),
+    skip: t('rating.skip'),
+    send: t('rating.send'),
+    pickFirst: t('rating.pickFirst'),
   }
 }
 
 /** "¡Gracias! Calificaste: Excelente" / "Obrigado! Você avaliou: Excelente". */
 export function ratedThanks(rating: Pick<CaseRating, 'score'>, language: Language): string {
   const { label } = customerRatingOption(rating.score, language)
-  return language === 'pt' ? `Obrigado! Você avaliou: ${label}` : `¡Gracias! Calificaste: ${label}`
+  return customerT(language)('rating.thanks', { label })
 }
 
 /** A failed send, in the customer's language (already rated / no longer closed: refetch). */
 export function describeRatingFailure(error: unknown, language: Language): string {
-  const pt = language === 'pt'
-  if (isApiProblem(error, 'network_error')) {
-    return pt ? 'Sem conexão. Tente de novo.' : 'No hay conexión. Inténtalo de nuevo.'
-  }
-  return pt
-    ? 'Não foi possível enviar sua avaliação. Tente de novo.'
-    : 'No pudimos enviar tu calificación. Inténtalo de nuevo.'
+  const t = customerT(language)
+  return isApiProblem(error, 'network_error') ? t('networkFailure') : t('rating.failure')
 }
 
 /** Problems after which the conversation itself changed: refetch it, the survey follows. */

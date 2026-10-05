@@ -1,6 +1,7 @@
 import { isRouteErrorResponse, useLocation, useNavigate, useRouteError } from 'react-router'
 import { TriangleAlert } from 'lucide-react'
 import { Button, DocumentTitle, EmptyState, LinkButton } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 
 /** A lazy route chunk that failed to download (new deploy, network drop). */
 function isChunkLoadError(error: unknown): boolean {
@@ -24,6 +25,7 @@ export function RouteErrorBoundary() {
   const navigate = useNavigate()
   const location = useLocation()
   const notFound = isRouteErrorResponse(error) && error.status === 404
+  const { t } = useTranslation(['shell', 'common'])
 
   function retry() {
     if (isChunkLoadError(error)) {
@@ -39,22 +41,21 @@ export function RouteErrorBoundary() {
   if (import.meta.env.DEV && !notFound) console.error(error)
 
   const detail = isRouteErrorResponse(error)
-    ? `Error ${error.status}: ${error.statusText}`
+    ? // i18n-ignore-next-line: a development-only detail
+      `Error ${error.status}: ${error.statusText}`
     : error instanceof Error
       ? error.message
       : null
 
   return (
     <div role="alert" className="flex h-full grow items-center justify-center bg-canvas">
-      <DocumentTitle title={notFound ? 'Página no encontrada' : 'Error'} />
+      <DocumentTitle title={notFound ? t('routeError.notFoundTab') : t('routeError.errorTab')} />
       <EmptyState
         icon={<TriangleAlert size={40} strokeWidth={1.6} />}
-        title={notFound ? 'No encontramos esta página' : 'Algo salió mal en esta pantalla'}
+        title={notFound ? t('routeError.notFoundTitle') : t('routeError.errorTitle')}
         description={
           <>
-            {notFound
-              ? 'Revisa la dirección o vuelve al inicio.'
-              : 'El resto de la plataforma sigue funcionando. Intenta cargarla de nuevo.'}
+            {notFound ? t('routeError.notFoundText') : t('routeError.errorText')}
             {detail && import.meta.env.DEV ? (
               <span className="mt-2 block font-mono text-12 text-muted">{detail}</span>
             ) : null}
@@ -64,11 +65,11 @@ export function RouteErrorBoundary() {
           <>
             {notFound ? null : (
               <Button variant="primary" onClick={retry}>
-                Reintentar
+                {t('common:actions.retry')}
               </Button>
             )}
             <LinkButton to="/" variant="secondary">
-              Ir al inicio
+              {t('routeError.goHome')}
             </LinkButton>
           </>
         }

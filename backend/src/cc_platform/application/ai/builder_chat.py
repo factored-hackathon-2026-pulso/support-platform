@@ -108,6 +108,27 @@ class GetBuilderThread:
 
 
 @dataclass(frozen=True, slots=True)
+class RestartBuilderThread:
+    """``POST /builder/chat/restart`` ("Nueva conversación", slice 22): the person's thread starts
+    over, empty, and her next message starts another run of the builder agent."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+
+    async def execute(self, actor: Actor) -> BuilderThreadView:
+        ensure_any_role(actor, BUILDER_ROLES)
+        await retry_on_conflict(partial(self._attempt, actor))
+        return BuilderThreadView(messages=())
+
+    async def _attempt(self, actor: Actor) -> None:
+        async with self.uow() as uow:
+            thread = await uow.builder_threads.get_for(actor.staff_id)
+            if thread is not None and thread.restart(at=self.clock.now()):
+                await uow.builder_threads.save(thread)
+                await uow.commit()
+
+
+@dataclass(frozen=True, slots=True)
 class _Stored:
     thread_id: str
     message: BuilderMessage

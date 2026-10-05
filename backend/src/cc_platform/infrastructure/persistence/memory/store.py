@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from cc_platform.application.events import StoredEvent
 from cc_platform.domain.ai.builder import BuilderProposal, BuilderThread
 from cc_platform.domain.ai.copilot import CopilotThread
+from cc_platform.domain.ai.maturity import CaseTypeMaturity
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.ai.suggestion import CopilotSuggestion
 from cc_platform.domain.cases.assignment import Assignment
@@ -23,6 +24,7 @@ from cc_platform.domain.people.invitation import Invitation
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge
 from cc_platform.domain.people.password_reset import PasswordReset
+from cc_platform.domain.people.preferences import StaffPreferences
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Staff
 from cc_platform.domain.people.team import Team
@@ -39,6 +41,7 @@ class InMemoryStore:
     mfa_challenges: dict[str, MfaChallenge] = field(default_factory=dict)
     sessions: dict[str, StaffSession] = field(default_factory=dict)
     availability: dict[str, AnalystAvailability] = field(default_factory=dict)
+    preferences: dict[str, StaffPreferences] = field(default_factory=dict)
     invitations: dict[str, Invitation] = field(default_factory=dict)
     password_resets: dict[str, PasswordReset] = field(default_factory=dict)
     customers: dict[str, Customer] = field(default_factory=dict)
@@ -52,6 +55,7 @@ class InMemoryStore:
     assistant_sessions: dict[str, AssistantSession] = field(default_factory=dict)
     copilot_threads: dict[str, CopilotThread] = field(default_factory=dict)
     copilot_suggestions: dict[str, CopilotSuggestion] = field(default_factory=dict)
+    case_type_maturity: dict[str, CaseTypeMaturity] = field(default_factory=dict)
     builder_threads: dict[str, BuilderThread] = field(default_factory=dict)
     builder_proposals: dict[str, BuilderProposal] = field(default_factory=dict)
     bank_links: dict[str, str] = field(default_factory=dict)

@@ -94,8 +94,9 @@ MAX_PROPOSAL_ID = 64
 MAX_AGENT_ID = 64
 
 #: Free text that must not carry personal data: an email address, or a run of digits that
-#: could be a card, account, phone or national id number.
-_EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
+#: could be a card, account, phone or national id number. The address must end in an alphabetic
+#: top-level label, so an artifact reference such as ``recepcion@1.0.0`` (an id, ADR 0007) passes.
+_EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[A-Za-z]{2,}")
 _LONG_NUMBER = re.compile(r"(?:\d[ \-.]?){9,}")
 
 

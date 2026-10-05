@@ -185,6 +185,17 @@ class BuilderThread(AggregateRoot):
         self.run_id = None
         self.updated_at = at
 
+    def restart(self, *, at: datetime) -> bool:
+        """ "Nueva conversación" (slice 22): the person starts over. The messages are cleared (the
+        transcript stays in agent-core) and the next message starts another run, whatever state
+        the current one is in (a run can end, or wait on a question the person no longer wants to
+        answer). Returns whether anything changed."""
+        if not self.messages and self.agent_session_id is None:
+            return False
+        self.messages = ()
+        self.new_run(at=at)
+        return True
+
     def record_answer(
         self,
         *,

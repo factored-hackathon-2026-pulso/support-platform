@@ -19,6 +19,7 @@ from cc_platform.domain.people.invitation import Invitation, InvitationState
 from cc_platform.domain.people.login_account import LoginAccount
 from cc_platform.domain.people.mfa import MfaChallenge, MfaChallengeStatus, MfaMethod
 from cc_platform.domain.people.password_reset import PasswordReset, PasswordResetState
+from cc_platform.domain.people.preferences import StaffPreferences, UiLanguage
 from cc_platform.domain.people.session import SessionEndReason, StaffSession
 from cc_platform.domain.people.staff import AccountSetup, Language, Staff, StaffRole
 from cc_platform.domain.people.team import Team
@@ -329,6 +330,27 @@ class SqlAnalystAvailabilityRepository(VersionedRepository[AnalystAvailability])
         table = tables.analyst_availability
         result = await self._session.execute(select(table).order_by(table.c.staff_id))
         return [self._materialize(row) for row in result.mappings()]
+
+
+# ----------------------------------------------------------------------------- preferences
+class SqlStaffPreferencesRepository(VersionedRepository[StaffPreferences]):
+    table = tables.staff_preferences
+    insert_race_is_retryable = True
+
+    @property
+    def _key_column(self) -> Column[Any]:
+        return tables.staff_preferences.c.staff_id
+
+    def _key(self, aggregate: StaffPreferences) -> str:
+        return aggregate.staff_id
+
+    def _to_row(self, aggregate: StaffPreferences) -> dict[str, Any]:
+        return {"staff_id": aggregate.staff_id, "ui_language": aggregate.ui_language.value}
+
+    def _from_row(self, row: Row) -> StaffPreferences:
+        return StaffPreferences(
+            staff_id=row["staff_id"], ui_language=UiLanguage(row["ui_language"])
+        )
 
 
 # ----------------------------------------------------------------------------- invitations

@@ -1,5 +1,6 @@
 import { Fact, FACT_ICONS, LanguageMarks, Skeleton } from '@/components/ui'
-import { TEAM_PAUSED_NOTE, teamRows } from '../model'
+import { useTranslation } from '@/lib/i18n'
+import { teamPausedNote, teamRows } from '../model'
 import type { HomeTeam } from '../types'
 
 export interface TeamNowProps {
@@ -8,6 +9,8 @@ export interface TeamNowProps {
   failed: boolean
   meAvailable: boolean
   now: number
+  /** Slice 21 (AI on): conversations of her languages the assistant holds now. */
+  withAssistant?: number | null
 }
 
 /**
@@ -15,19 +18,20 @@ export interface TeamNowProps {
  * count, no names) and, per language she speaks (its mark), how many cases wait
  * in that queue and the oldest wait (its own clock fact). Nobody else's cases.
  */
-export function TeamNow({ team, failed, meAvailable, now }: TeamNowProps) {
+export function TeamNow({ team, failed, meAvailable, now, withAssistant = null }: TeamNowProps) {
+  const { t } = useTranslation(['home', 'cases'])
   return (
     <section
       aria-labelledby="home-team"
       className="flex flex-col gap-2.5 rounded-14 bg-panel px-5 py-4"
     >
       <h2 id="home-team" className="m-0 text-17 font-semibold">
-        Tu equipo ahora
+        {t('team.title')}
       </h2>
       {team ? (
         <>
           <dl className="m-0 flex flex-col gap-2.5">
-            {teamRows(team, meAvailable, now).map((row) => {
+            {teamRows(team, meAvailable, now, withAssistant).map((row) => {
               const Icon = FACT_ICONS[row.icon]
               return (
                 <div key={row.key} className="flex items-center justify-between gap-3 text-14">
@@ -60,10 +64,10 @@ export function TeamNow({ team, failed, meAvailable, now }: TeamNowProps) {
               )
             })}
           </dl>
-          {meAvailable ? null : <p className="m-0 text-12 text-ink-2">{TEAM_PAUSED_NOTE}</p>}
+          {meAvailable ? null : <p className="m-0 text-12 text-ink-2">{teamPausedNote()}</p>}
         </>
       ) : failed ? (
-        <p className="m-0 text-14 text-ink-2">Sin datos del equipo por ahora.</p>
+        <p className="m-0 text-14 text-ink-2">{t('team.noData')}</p>
       ) : (
         <div aria-busy="true" className="flex flex-col gap-2">
           <Skeleton className="h-4 w-full" />

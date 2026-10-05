@@ -28,9 +28,12 @@ from cc_platform.application.cases.ports import CustomerCaseFact
 from cc_platform.application.cases.read_model import UNKNOWN_CUSTOMER, inbox_status
 from cc_platform.application.cases.supervision import QUEUE_LANGUAGES, queue_counts
 from cc_platform.application.events import StoredEvent
+from cc_platform.application.platform.settings import AiSwitch
 from cc_platform.application.ports.clock import Clock
-from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
+from cc_platform.application.ports.event_log import AuditFilters
+from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
+from cc_platform.domain.ai.events import AssistantEnded
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.events import CaseAssigned, CaseOpened, TurnCreated
 from cc_platform.domain.cases.values import (
@@ -75,6 +78,8 @@ class HomeActivityKind(StrEnum):
     - ``customer_returned``: the case continues a closed one of the same customer (it
       replaces the arrival row of that case).
     - ``customer_messages``: the customer wrote in one of her cases (one row per case).
+    - ``assigned_by_assistant``: the assistant (ADR 0003) handed the case over and it went to her
+      (slice 21; before it, such an assignment had no row).
     """
 
     ASSIGNED_ON_ARRIVAL = "assigned_on_arrival"
@@ -83,17 +88,23 @@ class HomeActivityKind(StrEnum):
     REASSIGNED_AWAY = "reassigned_away"
     CUSTOMER_RETURNED = "customer_returned"
     CUSTOMER_MESSAGES = "customer_messages"
+    ASSIGNED_BY_ASSISTANT = "assigned_by_assistant"
 
 
 _ASSIGNED_KIND: dict[AssignmentReason, HomeActivityKind] = {
     AssignmentReason.LANGUAGE_LEAST_LOADED: HomeActivityKind.ASSIGNED_ON_ARRIVAL,
     AssignmentReason.QUEUE_DRAINED: HomeActivityKind.ASSIGNED_FROM_QUEUE,
     AssignmentReason.MANUAL: HomeActivityKind.ASSIGNED_BY_SUPERVISOR,
+    AssignmentReason.ASSISTANT_HANDOFF: HomeActivityKind.ASSIGNED_BY_ASSISTANT,
 }
 
 #: Arrival rows a ``customer_returned`` row of the same case replaces.
 _ARRIVAL_KINDS = frozenset(
-    {HomeActivityKind.ASSIGNED_ON_ARRIVAL, HomeActivityKind.ASSIGNED_FROM_QUEUE}
+    {
+        HomeActivityKind.ASSIGNED_ON_ARRIVAL,
+        HomeActivityKind.ASSIGNED_FROM_QUEUE,
+        HomeActivityKind.ASSIGNED_BY_ASSISTANT,
+    }
 )
 
 #: Tie-break of rows with the same time (stable, documented order).
@@ -145,12 +156,26 @@ class HomeTeamView:
 
 
 @dataclass(frozen=True, slots=True)
+class HomeAssistantView:
+    """The assistant in her languages (slice 21, IaHomeTurno), from the event log and the cases."""
+
+    resolved: int
+    """Conversations of her languages the assistant resolved since ``since``."""
+    handed_to_you: int
+    """Cases the assistant handed over that went to her since ``since``."""
+    with_assistant_now: int
+    """Open conversations of her languages the assistant holds now."""
+
+
+@dataclass(frozen=True, slots=True)
 class AnalystHomeView:
     since: datetime
     since_source: SinceSource
     activity: HomeActivityView
     team_now: HomeTeamView
     server_time: datetime
+    assistant: HomeAssistantView | None = None
+    """Slice 21: ``None`` while the AI switch is off."""
 
 
 # ----------------------------------------------------------------------------- pure rules
@@ -364,6 +389,8 @@ class GetAnalystHome:
 
     uow: UnitOfWorkFactory
     clock: Clock
+    switch: AiSwitch | None = None
+    """Slice 21: with it on, the assistant's summary (``AnalystHomeView.assistant``)."""
 
     async def execute(self, actor: Actor) -> AnalystHomeView:
         now = self.clock.now()
@@ -389,6 +416,11 @@ class GetAnalystHome:
 
             available = {a.staff_id for a in await uow.availability.list() if a.is_available}
             queues = await queue_counts(uow, now)
+            assistant = (
+                await _assistant_summary(uow, me.languages, actor.staff_id, since, events)
+                if self.switch is not None and await self.switch.is_on_in(uow)
+                else None
+            )
 
         activity = project_activity(
             actor.staff_id,
@@ -422,4 +454,44 @@ class GetAnalystHome:
                 queues=_team_queues(me.languages, queue_views),
             ),
             server_time=now,
+            assistant=assistant,
         )
+
+
+#: The assistant's ``assistant.ended`` results that mean "it resolved the conversation".
+_ASSISTANT_RESOLVED = "resolved"
+#: The most ``assistant.ended`` events one summary reads (a shift is far below it).
+_ASSISTANT_EVENTS_LIMIT = 1000
+
+
+async def _assistant_summary(
+    uow: UnitOfWork,
+    languages: Collection[Language],
+    staff_id: str,
+    since: datetime,
+    events: Sequence[StoredEvent],
+) -> HomeAssistantView:
+    """What the assistant did in her languages since ``since`` and holds now (IaHomeTurno)."""
+    ended = await uow.event_log.search(
+        AuditFilters(event_types=frozenset({AssistantEnded.event_type}), occurred_from=since),
+        before=None,
+        limit=_ASSISTANT_EVENTS_LIMIT,
+    )
+    resolved_ids = {
+        e.case_id for e in ended if e.case_id and e.payload.get("result") == _ASSISTANT_RESOLVED
+    }
+    resolved_cases = await uow.cases.get_many(resolved_ids) if resolved_ids else {}
+    handed = {
+        e.case_id
+        for e in events
+        if e.event_type == CaseAssigned.event_type
+        and e.event_time > since
+        and e.payload.get("assigned_analyst_id") == staff_id
+        and e.payload.get("reason") == AssignmentReason.ASSISTANT_HANDOFF.value
+    }
+    holding = await uow.cases.list_by_status(CaseStatus.WITH_ASSISTANT)
+    return HomeAssistantView(
+        resolved=sum(c.language in languages for c in resolved_cases.values()),
+        handed_to_you=len(handed),
+        with_assistant_now=sum(c.language in languages for c in holding),
+    )

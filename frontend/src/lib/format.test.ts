@@ -5,6 +5,7 @@ import {
   formatDate,
   formatDateTime,
   formatDuration,
+  formatList,
   formatMoney,
   formatNumber,
   formatPercent,
@@ -12,7 +13,6 @@ import {
   formatTime,
   localDayKey,
   getInitials,
-  joinEs,
   maskLast4,
 } from './format'
 
@@ -24,6 +24,15 @@ describe('format', () => {
     expect(formatMoney(12400, 'ARS')).toBe('$12.400,00 ARS')
     expect(formatMoney(-305909, 'COP')).toBe('-$305.909 COP')
     expect(formatMoney(99.9, 'USD', { fractionDigits: 2 })).toBe('$99,90 USD')
+  })
+
+  it('joins lists in the active locale (Spanish by default)', () => {
+    expect(formatList([])).toBe('')
+    expect(formatList(['Analista'])).toBe('Analista')
+    expect(formatList(['Analista', 'Supervisión'])).toBe('Analista y Supervisión')
+    expect(formatList(['Analista', 'Supervisión', 'Administración'])).toBe(
+      'Analista, Supervisión y Administración',
+    )
   })
 
   it('groups thousands even with four digits', () => {
@@ -78,15 +87,6 @@ describe('format', () => {
     expect(getInitials('Samuel Óscar Campos Cruz')).toBe('SC')
     expect(getInitials('Ana Díaz')).toBe('AD')
   })
-
-  it('joins lists in Spanish', () => {
-    expect(joinEs([])).toBe('')
-    expect(joinEs(['Analista'])).toBe('Analista')
-    expect(joinEs(['Analista', 'Supervisión'])).toBe('Analista y Supervisión')
-    expect(joinEs(['Analista', 'Supervisión', 'Administración'])).toBe(
-      'Analista, Supervisión y Administración',
-    )
-  })
 })
 
 describe('formatLongDate / localHour', () => {
@@ -97,5 +97,23 @@ describe('formatLongDate / localHour', () => {
     expect(formatLongDate('2026-01-05T15:00:00Z', { timeZone: 'UTC' })).toBe('Lunes 5 de enero')
     expect(localHour('2026-10-04T02:00:00Z')).toBe(21)
     expect(localHour('2026-10-04T02:00:00Z', { timeZone: 'UTC' })).toBe(2)
+  })
+
+  it('speaks Brazilian Portuguese with the same compact forms (slice 23)', () => {
+    const locale = 'pt-BR'
+    expect(formatNumber(4412, { locale })).toBe('4.412')
+    expect(formatMoney(12400.5, 'MXN', { locale })).toBe('$12.400,50 MXN')
+    expect(formatDate('2025-03-05T11:02:00-05:00', { locale })).toBe('5 mar 2025')
+    expect(formatDate('2025-02-05T11:02:00-05:00', { locale, withYear: false })).toBe('5 fev')
+    expect(formatLongDate('2026-10-03T15:00:00Z', { locale })).toBe('Sábado, 3 de outubro')
+    const now = '2026-10-04T15:10:00Z'
+    expect(formatRelativeTime('2026-10-04T15:09:50Z', now, { locale })).toBe('agora')
+    expect(formatRelativeTime('2026-10-04T13:10:00Z', now, { locale })).toBe('há 2 h')
+    expect(formatRelativeTime('2026-10-04T15:19:00Z', now, { locale })).toBe('em 9 min')
+    expect(formatRelativeTime('2026-10-02T15:10:00Z', now, { locale })).toBe('há 2 dias')
+    expect(formatRelativeTime('2026-10-03T15:10:00Z', now, { locale })).toBe('há 1 dia')
+    expect(formatList(['A', 'B', 'C'], { locale })).toBe('A, B e C')
+    expect(formatList(['A', 'B', 'C'])).toBe('A, B y C')
+    expect(formatLongDate('2026-10-03T15:00:00Z')).toBe('Sábado 3 de octubre')
   })
 })

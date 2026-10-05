@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { Check } from 'lucide-react'
 import { PATHS } from '@/app/paths'
 import { Button, Callout, DocumentTitle, Fact, LinkButton } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import {
   describeOnboardingFailure,
   firstName,
@@ -54,6 +55,7 @@ function ResetForm({ token, reset }: { token: string; reset: PasswordResetCheck 
   const owner = { email: reset.email, name: reset.name }
   const checks = passwordChecks(password, confirmation, owner)
   const ready = passwordReady(checks)
+  const { t } = useTranslation(['onboarding', 'common'])
 
   if (state === 'invalid') return <LinkInvalid kind="reset" />
   if (state === 'done') return <PasswordUpdated />
@@ -83,19 +85,16 @@ function ResetForm({ token, reset }: { token: string; reset: PasswordResetCheck 
   return (
     <>
       <div className="flex flex-col gap-2.5">
-        <DocumentTitle title="Crea una contraseña nueva" />
-        <h1 className="m-0 font-display text-30 font-bold text-balance">
-          Crea una contraseña nueva
-        </h1>
+        <DocumentTitle title={t('reset.title')} />
+        <h1 className="m-0 font-display text-30 font-bold text-balance">{t('reset.title')}</h1>
         <p className="m-0 text-15 leading-[1.5] text-ink-2">
-          Hola, {firstName(reset.name)}. Administración te envió este enlace para que crees una
-          contraseña nueva. Tu verificación en dos pasos no cambia.
+          {t('reset.greeting', { name: firstName(reset.name) })}
         </p>
-        <Fact icon="mail" text={reset.email} label="Correo" />
+        <Fact icon="mail" text={reset.email} label={t('common:fields.email')} />
       </div>
       <form
         noValidate
-        aria-label="Crear contraseña nueva"
+        aria-label={t('reset.form')}
         className="flex flex-col gap-3.5"
         onSubmit={onSubmit}
       >
@@ -122,20 +121,19 @@ function ResetForm({ token, reset }: { token: string; reset: PasswordResetCheck 
           className={ready ? undefined : 'opacity-50'}
           loading={complete.isPending}
         >
-          Guardar contraseña
+          {t('reset.submit')}
         </Button>
       </form>
-      <p className="m-0 text-13 leading-[1.5] text-muted">
-        Nadie del banco conoce tu contraseña: ni administración ni supervisión pueden verla.
-      </p>
+      <p className="m-0 text-13 leading-[1.5] text-muted">{t('password.nobodyKnows')}</p>
     </>
   )
 }
 
 function PasswordUpdated() {
+  const { t } = useTranslation(['onboarding', 'common'])
   return (
     <>
-      <DocumentTitle title="Contraseña actualizada" />
+      <DocumentTitle title={t('reset.doneTitle')} />
       <span
         aria-hidden="true"
         className="flex size-14 items-center justify-center rounded-16 bg-success-soft text-success-strong"
@@ -143,13 +141,11 @@ function PasswordUpdated() {
         <Check size={28} strokeWidth={2.2} />
       </span>
       <div className="flex flex-col gap-2">
-        <h1 className="m-0 font-display text-30 font-bold text-balance">Contraseña actualizada</h1>
-        <p className="m-0 text-15 leading-[1.5] text-ink-2">
-          Ya puedes entrar con tu contraseña nueva y el código de tu app.
-        </p>
+        <h1 className="m-0 font-display text-30 font-bold text-balance">{t('reset.doneTitle')}</h1>
+        <p className="m-0 text-15 leading-[1.5] text-ink-2">{t('reset.doneText')}</p>
       </div>
       <LinkButton to={PATHS.login} variant="primary" size="lg" block>
-        Entrar
+        {t('common:actions.signIn')}
       </LinkButton>
     </>
   )

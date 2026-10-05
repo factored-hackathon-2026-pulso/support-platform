@@ -5,6 +5,7 @@ import { EmptyState, Fact, PageHeader, QueryState, Skeleton, Status } from '@/co
 import { ESCALATION_STATE, escalationWaitFact } from '@/features/cases'
 import { cn } from '@/lib/cn'
 import { useNow } from '@/lib/hooks'
+import { useTranslation } from '@/lib/i18n'
 import { escalationGroups, openEscalationsLabel, withoutKey } from '../model'
 import type { EscalationsUrlState, UrlStateChangeOptions } from '../url'
 import { useEscalationOverview, useSupervisionLive } from '../hooks'
@@ -29,6 +30,7 @@ export interface EscalationsScreenProps {
  * facts, the last messages, and Responder / Tomar el caso / Reasignar.
  */
 export function EscalationsScreen({ state, onStateChange, onOpenCase }: EscalationsScreenProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   useSupervisionLive()
   const overview = useEscalationOverview()
   const now = useNow(SUPERVISION_TICK_MS)
@@ -57,8 +59,8 @@ export function EscalationsScreen({ state, onStateChange, onOpenCase }: Escalati
     <Page
       header={
         <PageHeader
-          title="Escalados"
-          subtitle="Casos en los que el equipo pidió ayuda de supervisión"
+          title={t('escalations.title')}
+          subtitle={t('escalations.subtitle')}
           actions={
             overview.data ? (
               <span className="text-14 font-medium text-ink-2">
@@ -78,13 +80,13 @@ export function EscalationsScreen({ state, onStateChange, onOpenCase }: Escalati
         )}
       >
         <section
-          aria-label="Escalamientos"
+          aria-label={t('escalations.list')}
           className="flex min-h-0 flex-col overflow-hidden rounded-12 border border-border bg-surface"
         >
           <QueryState
             query={overview}
             skeleton={<ListSkeleton />}
-            errorTitle="No pudimos cargar los escalamientos"
+            errorTitle={t('escalations.loadError')}
           >
             {(data: EscalationOverview) => (
               <EscalationList
@@ -121,14 +123,15 @@ interface EscalationListProps {
 }
 
 function EscalationList({ data, now, selectedId, onSelect }: EscalationListProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const groups = escalationGroups(data.items, now)
   if (groups.length === 0) {
     return (
       <div className="flex grow items-center justify-center p-10">
         <EmptyState
           icon={<CircleArrowUp size={28} aria-hidden="true" />}
-          title="Nadie escaló un caso"
-          description="Cuando alguien del equipo escale un caso, aparece aquí y te avisamos."
+          title={t('escalations.emptyTitle')}
+          description={t('escalations.emptyText')}
         />
       </div>
     )
@@ -142,11 +145,11 @@ function EscalationList({ data, now, selectedId, onSelect }: EscalationListProps
           'sticky top-0 z-[1] border-b border-border-soft bg-surface px-4 py-2 text-12 font-semibold tracking-label text-muted uppercase',
         )}
       >
-        <span>Analista</span>
-        <span>Cliente</span>
-        <span>Motivo</span>
-        <span>Esperando</span>
-        <span>Estado</span>
+        <span>{t('escalations.columns.analyst')}</span>
+        <span>{t('escalations.columns.customer')}</span>
+        <span>{t('escalations.columns.motive')}</span>
+        <span>{t('escalations.columns.waiting')}</span>
+        <span>{t('escalations.columns.status')}</span>
       </div>
       {groups.map((group) => (
         <div key={group.key} className="flex flex-col">
@@ -181,9 +184,10 @@ interface EscalationRowProps {
 }
 
 function EscalationRow({ item, now, selected, onSelect }: EscalationRowProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const { escalation } = item
   const wait = escalationWaitFact(escalation, now)
-  const analyst = escalation.escalatedByName ?? 'Alguien del equipo'
+  const analyst = escalation.escalatedByName ?? t('someoneFromTeam')
   return (
     <li className="border-b border-canvas">
       <button

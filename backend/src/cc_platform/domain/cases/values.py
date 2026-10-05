@@ -147,6 +147,26 @@ class TurnKind(StrEnum):
     EMAIL = "email"
 
 
+class StaffLineKind(StrEnum):
+    """Slice 23c: what a staff-only transcript line (a ``routing`` turn) says. The turn keeps
+    the facts (``StaffLine``: this kind and its parameters) next to its stored Spanish text,
+    so each viewer's UI writes the sentence in her own language."""
+
+    ASSIGNED_ON_ARRIVAL = "assigned_on_arrival"
+    ASSIGNED_FROM_ASSISTANT = "assigned_from_assistant"
+    QUEUED = "queued"
+    ASSIGNED_FROM_QUEUE = "assigned_from_queue"
+    WROTE_AGAIN = "wrote_again"
+    ASSIGNED_BY_SUPERVISION = "assigned_by_supervision"
+    REASSIGNED = "reassigned"
+    ESCALATED = "escalated"
+    ESCALATION_WITHDRAWN = "escalation_withdrawn"
+    ESCALATION_ANSWERED = "escalation_answered"
+    ESCALATION_TAKEN = "escalation_taken"
+    ASSISTANT_RELEASED = "assistant_released"
+    FOLLOW_UP_CALL = "follow_up_call"
+
+
 class EmailDirection(StrEnum):
     """Slice 12: ``in`` = the customer wrote to the bank; ``out`` = an analyst answered."""
 

@@ -9,6 +9,7 @@ from enum import StrEnum
 
 from cc_platform.domain.cases.call import CallDirection, CallEndReason, CallState
 from cc_platform.domain.cases.escalation import EscalationState
+from cc_platform.domain.cases.turn import StaffLine
 from cc_platform.domain.cases.values import (
     AssignmentReason,
     CaseChannel,
@@ -233,6 +234,8 @@ class TurnView:
     client_message_id: str | None
     subject: str | None = None
     """Slice 12: the subject of an ``email`` turn."""
+    staff_line: StaffLine | None = None
+    """Slice 23c: the facts of a staff-only line (the UI writes it in the viewer's language)."""
 
 
 @dataclass(frozen=True, slots=True)

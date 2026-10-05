@@ -13,8 +13,10 @@ import { useLocation } from 'react-router'
 import { api, isApiProblem, unwrap, type Schemas } from '@/lib/api'
 import { sortLanguages, type FactItem } from '@/components/ui'
 import { getInitials } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import { sessionToken } from '@/lib/session-token'
 import { primePlatformSettings } from './platform'
+import { primePreferences } from './preferences'
 import { ROLES, roleFromPath, sortRoles, type RoleDefinition, type RoleId } from './roles'
 
 export type Staff = Schemas['StaffOut']
@@ -26,9 +28,17 @@ export type Staff = Schemas['StaffOut']
  */
 export function summaryFacts(staff: Pick<Staff, 'team' | 'languages'>): FactItem[] {
   const languages = sortLanguages(staff.languages)
-  const facts: FactItem[] = [{ key: 'team', icon: 'users', text: staff.team.name, label: 'Equipo' }]
+  const facts: FactItem[] = [
+    { key: 'team', icon: 'users', text: staff.team.name, label: i18n.t('fields.team') },
+  ]
   if (languages.length > 0) {
-    facts.push({ key: 'languages', icon: 'languages', text: '', label: 'Idiomas', languages })
+    facts.push({
+      key: 'languages',
+      icon: 'languages',
+      text: '',
+      label: i18n.t('fields.languages'),
+      languages,
+    })
   }
   return facts
 }
@@ -86,12 +96,16 @@ export const sessionKeys = {
 
 /**
  * GET /auth/me → the staff member (the session part is not used by the UI yet). Slice 18: the
- * answer also carries the platform settings (the AI switch); `queryClient` keeps them in their
- * own cache (`app/platform.ts`), so they need no second request.
+ * answer also carries the platform settings (the AI switch); slice 23: her preferences (the UI
+ * language). `queryClient` keeps them in their own caches (`app/platform.ts`,
+ * `app/preferences.ts`), so they need no second request.
  */
 export async function fetchMe(signal?: AbortSignal, queryClient?: QueryClient): Promise<Staff> {
-  const { staff, platform } = await unwrap(api.GET('/api/v1/auth/me', { signal }))
-  if (queryClient) primePlatformSettings(queryClient, platform)
+  const { staff, platform, preferences } = await unwrap(api.GET('/api/v1/auth/me', { signal }))
+  if (queryClient) {
+    primePlatformSettings(queryClient, platform)
+    primePreferences(queryClient, preferences)
+  }
   return staff
 }
 
@@ -103,6 +117,7 @@ export async function fetchMe(signal?: AbortSignal, queryClient?: QueryClient): 
  */
 function endServerSession(token: string): void {
   void unwrap(
+    // i18n-ignore-next-line: the auth scheme, not copy
     api.POST('/api/v1/auth/logout', { headers: { Authorization: `Bearer ${token}` } }),
   ).catch(() => {
     // Expired or unreachable: the local token is dropped anyway.

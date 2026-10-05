@@ -24,7 +24,7 @@ from cc_platform.domain.cases.case import Case, CaseClosure
 from cc_platform.domain.cases.customer_case_slot import CustomerCaseSlot
 from cc_platform.domain.cases.escalation import Escalation, EscalationState
 from cc_platform.domain.cases.rating import CaseRating
-from cc_platform.domain.cases.turn import Turn
+from cc_platform.domain.cases.turn import StaffLine, Turn
 from cc_platform.domain.cases.values import (
     OPEN_ASSIGNED_STATUSES,
     OPEN_STATUSES,
@@ -532,6 +532,7 @@ class SqlTurnRepository(_AppendOnly):
                 "created_at": turn.created_at,
                 "client_message_id": turn.client_message_id,
                 "subject": turn.subject,
+                "staff_line": turn.staff_line.to_json() if turn.staff_line else None,
             },
             race=True,
         )
@@ -551,6 +552,7 @@ class SqlTurnRepository(_AppendOnly):
             created_at=row["created_at"],
             client_message_id=row["client_message_id"],
             subject=row["subject"],
+            staff_line=StaffLine.from_json(row["staff_line"]),
         )
 
     async def list_of_kind(self, case_id: str, kind: TurnKind, *, limit: int) -> list[Turn]:

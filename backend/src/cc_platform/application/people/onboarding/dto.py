@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.application.ports.email import SentEmail
+from cc_platform.domain.people.preferences import DEFAULT_UI_LANGUAGE, UiLanguage
 from cc_platform.domain.people.staff import StaffRole
 
 
@@ -18,6 +19,8 @@ class InvitationPreview:
     roles: tuple[StaffRole, ...]
     team_name: str
     expires_at: datetime
+    ui_language: UiLanguage = DEFAULT_UI_LANGUAGE
+    """Slice 23c: her platform language (the activation screens switch to it)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +46,7 @@ class PasswordResetPreview:
     name: str
     email: str
     expires_at: datetime
+    ui_language: UiLanguage = DEFAULT_UI_LANGUAGE
 
 
 @dataclass(frozen=True, slots=True)

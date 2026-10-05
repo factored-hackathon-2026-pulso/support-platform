@@ -149,7 +149,7 @@ function PastBlock({
   const [expanded, setExpanded] = useState(defaultExpanded)
   const detail = usePastConversation(customerId, summary.caseId, expanded && !turns)
   const shown = turns ?? detail.data?.turns
-  const items = shown ? toChatItems({ turns: shown, pending: [] }) : []
+  const items = shown ? toChatItems({ turns: shown, pending: [] }, language) : []
   const panelId = `past-${summary.caseId}`
   const title = pastBlockTitle(summary, language)
   const byline = pastBlockByline(summary, language)

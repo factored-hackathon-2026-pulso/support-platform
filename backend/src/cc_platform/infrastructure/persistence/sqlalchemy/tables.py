@@ -202,6 +202,15 @@ analyst_availability = Table(
     _version(),
 )
 
+# Slice 23: a person's own settings (the UI language). Absent = the defaults (``es``).
+staff_preferences = Table(
+    "staff_preferences",
+    metadata,
+    Column("staff_id", String(ID), ForeignKey("staff.id"), primary_key=True),
+    Column("ui_language", String(10), nullable=False),
+    _version(),
+)
+
 # Minimal customer profile (seeded "Datos de ejemplo"; no use case writes it yet).
 customers = Table(
     "customers",
@@ -288,6 +297,9 @@ turns = Table(
     Column("client_message_id", String(64), nullable=True),
     # slice 12: the subject of an ``email`` turn (null on every other kind)
     Column("subject", String(200), nullable=True),
+    # slice 23c: the facts of a staff-only line (``{kind, params}``; null on every other turn
+    # and on routing banners written before 23c, which show their stored text)
+    Column("staff_line", JSON, nullable=True),
     UniqueConstraint("case_id", "sequence", name="uq_turns_case_sequence"),
     UniqueConstraint("author_id", "client_message_id", name="uq_turns_author_client_message"),
 )
@@ -454,6 +466,26 @@ copilot_suggestions = Table(
     ),
     Index("ix_copilot_suggestions_case_analyst_created", "case_id", "analyst_id", "created_at"),
     Index("ix_copilot_suggestions_status_created", "status", "created_at"),
+)
+
+# Slice 21 (ADR 0006): how far the AI matured for each case type. One row per type, created the
+# first time something happens to it (absent = stage 0). ``signals`` is a JSON object (the
+# counters since the current stage, ``StageSignals``); ``stage_since`` maps a reached stage (1-3)
+# to when it was reached.
+case_type_maturity = Table(
+    "case_type_maturity",
+    metadata,
+    Column("case_type", String(40), primary_key=True),
+    Column("stage", Integer, nullable=False),
+    Column("agent", String(20), nullable=False),
+    Column("signals", JSON, nullable=False),
+    Column("stage_since", JSON, nullable=False),
+    Column("agent_since", UtcDateTime, nullable=True),
+    Column("agent_id", String(120), nullable=True),
+    Column("changed_at", UtcDateTime, nullable=True),
+    Column("changed_by_id", String(ID), nullable=True),
+    Column("last_change", String(20), nullable=True),
+    _version(),
 )
 
 # ADR 0003 (slice 16): a supervisor's conversation with the builder agent. One per person.

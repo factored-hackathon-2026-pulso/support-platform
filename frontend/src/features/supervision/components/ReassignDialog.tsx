@@ -12,20 +12,21 @@ import {
 } from '@/components/ui'
 import { shortCaseId } from '@/features/conversation'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import {
   ACTIVITY_META,
-  CONFIRM_PAUSED_ERROR,
-  CONFIRM_PAUSED_LABEL,
-  INCLUDE_AWAY_LABEL,
-  PICK_ANALYST_ERROR,
+  confirmPausedError,
+  confirmPausedLabel,
   customerSeesCopy,
   describeAssignFailure,
+  includeAwayLabel,
   moreResultsLabel,
   needsPauseConfirmation,
   noMatchCopy,
   onlySpeakersCopy,
   openCountLabel,
   pausedWarning,
+  pickAnalystError,
   reassignList,
   reassignPool,
   reassignSubmitLabel,
@@ -62,6 +63,7 @@ export function ReassignDialog({
   onClose,
   onReassigned,
 }: ReassignDialogProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   const assign = useSetAssignee(summary.id)
   const refetch = useRefetchAssignmentData(summary.id)
   const { toast } = useToast()
@@ -98,12 +100,12 @@ export function ReassignDialog({
 
   function submit() {
     if (!chosen) {
-      setErrors({ pick: PICK_ANALYST_ERROR })
+      setErrors({ pick: pickAnalystError() })
       listRef.current?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus()
       return
     }
     if (askPause && !confirmPaused) {
-      setErrors({ confirm: CONFIRM_PAUSED_ERROR })
+      setErrors({ confirm: confirmPausedError() })
       confirmRef.current?.focus()
       return
     }
@@ -159,7 +161,7 @@ export function ReassignDialog({
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
-      title="Reasignar caso"
+      title={t('reassign.title')}
       description={
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-medium text-ink">{summary.customer.displayName}</span>
@@ -168,13 +170,13 @@ export function ReassignDialog({
             icon="languages"
             text=""
             languages={[summary.language]}
-            label="Idioma"
+            label={t('reassign.language')}
             size="md"
             focusable={false}
           />
           <Fact
             icon="user"
-            text={`Lo atiende ${holderName ?? 'otra persona del equipo'}`}
+            text={t('reassign.holder', { name: holderName ?? t('someoneElse') })}
             size="md"
             focusable={false}
           />
@@ -183,7 +185,7 @@ export function ReassignDialog({
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Cancelar
+            {t('actions.cancel')}
           </Button>
           <Button variant="primary" loading={assign.isPending} onClick={submit}>
             {reassignSubmitLabel(chosen)}
@@ -193,7 +195,7 @@ export function ReassignDialog({
     >
       <div className="flex flex-col gap-4">
         {failure ? (
-          <Callout tone="danger" title="No se reasignó">
+          <Callout tone="danger" title={t('reassign.failedTitle')}>
             {failure}
           </Callout>
         ) : null}
@@ -202,11 +204,11 @@ export function ReassignDialog({
           aria-describedby={errors.pick ? pickErrorId : undefined}
         >
           <legend className="mb-1 p-0 text-14 font-semibold text-ink">
-            ¿A quién? <span aria-hidden="true">*</span>
+            {t('reassign.who')} <span aria-hidden="true">*</span>
           </legend>
           <SearchInput
-            aria-label="Buscar a alguien del equipo"
-            placeholder="Buscar a alguien del equipo"
+            aria-label={t('reassign.search')}
+            placeholder={t('reassign.search')}
             size="sm"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -220,7 +222,7 @@ export function ReassignDialog({
           <div
             ref={listRef}
             role="radiogroup"
-            aria-label="Personas"
+            aria-label={t('reassign.people')}
             aria-required="true"
             className="flex flex-col gap-1"
           >
@@ -271,7 +273,7 @@ export function ReassignDialog({
             </span>
           ) : null}
           <Checkbox
-            label={INCLUDE_AWAY_LABEL}
+            label={includeAwayLabel()}
             checked={includeAway}
             onChange={(event) => setIncludeAway(event.target.checked)}
           />
@@ -283,7 +285,7 @@ export function ReassignDialog({
             </Callout>
             <Checkbox
               ref={confirmRef}
-              label={CONFIRM_PAUSED_LABEL}
+              label={confirmPausedLabel()}
               checked={confirmPaused}
               required
               aria-invalid={errors.confirm ? true : undefined}
@@ -301,7 +303,7 @@ export function ReassignDialog({
           </div>
         ) : null}
         {chosen ? (
-          <Callout tone="neutral" title="El cliente verá">
+          <Callout tone="neutral" title={t('reassign.customerSees')}>
             <span lang={summary.language}>{customerSeesCopy(summary, chosen)}</span>
           </Callout>
         ) : null}

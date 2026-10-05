@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { IconButton } from './IconButton'
 import { useModal } from './use-modal'
+import { useTranslation } from '@/lib/i18n'
 
 export type DialogSize = 'sm' | 'md' | 'lg'
 
@@ -51,6 +52,7 @@ export function Dialog({
   initialFocusRef,
   className,
 }: DialogProps) {
+  const { t } = useTranslation()
   const titleId = useId()
   const descriptionId = useId()
   const close = () => onOpenChange(false)
@@ -93,7 +95,7 @@ export function Dialog({
             ) : null}
           </div>
           <IconButton
-            aria-label="Cerrar"
+            aria-label={t('actions.close')}
             size="sm"
             className="size-9"
             icon={<X size={16} />}

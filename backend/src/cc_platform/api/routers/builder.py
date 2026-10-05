@@ -471,6 +471,25 @@ async def get_chat(actor: Builder, api: ApiContextDep) -> schemas.BuilderThread:
 
 
 @router.post(
+    "/chat/restart",
+    response_model=schemas.BuilderThread,
+    summary="Start a new conversation with the builder agent",
+    description=(
+        'Slice 22, "Nueva conversación": the caller\'s thread starts over, empty (the transcript '
+        "stays in agent-core), and her next message starts another run of the builder agent, "
+        "whatever state the current one is in. Proposals already made stay in the list. Safe to "
+        "repeat. AI off or no agent-core: 404 `assistant_disabled`."
+    ),
+    responses=problem_responses(401, 403, 404),
+)
+async def restart_chat(actor: Builder, api: ApiContextDep) -> schemas.BuilderThread:
+    view = await (await builder_use_cases(api)).restart.execute(actor)
+    return schemas.BuilderThread(
+        available=True, messages=[schemas.BuilderMessage.model_validate(m) for m in view.messages]
+    )
+
+
+@router.post(
     "/chat/messages",
     response_model=schemas.BuilderExchange,
     status_code=status.HTTP_201_CREATED,

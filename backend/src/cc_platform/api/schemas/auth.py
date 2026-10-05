@@ -10,6 +10,7 @@ from pydantic import Field
 from cc_platform.api.schemas.common import ApiModel, RequestModel
 from cc_platform.api.schemas.people import StaffOut
 from cc_platform.api.schemas.platform import PlatformSettings
+from cc_platform.api.schemas.preferences import Preferences
 from cc_platform.domain.people.mfa import MfaMethod
 
 
@@ -49,4 +50,8 @@ class MeResponse(ApiModel):
     platform: PlatformSettings = Field(
         description="Slice 18: the platform settings the SPA needs (the AI switch); live as "
         "`platform.updated` on `platform:settings`."
+    )
+    preferences: Preferences = Field(
+        description="Slice 23: her own settings (the UI language); changed with "
+        "`PUT /me/preferences`, live as `preferences.updated` on `staff:<id>`."
     )

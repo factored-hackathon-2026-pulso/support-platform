@@ -29,6 +29,7 @@ erDiagram
     staff ||--o{ mfa_challenges : "codes"
     staff ||--o{ staff_sessions : "sessions"
     staff ||--o| analyst_availability : "available / paused"
+    staff ||--o| staff_preferences : "her UI language"
     cases ||--o{ event_log : "case_id"
     cases ||--o{ escalations : "escalations (one open at a time)"
     cases ||--o{ calls : "calls (one active at a time, slice 12)"
@@ -214,6 +215,10 @@ erDiagram
         string staff_id PK
         string status "available paused"
         datetime since
+    }
+    staff_preferences {
+        string staff_id PK
+        string ui_language "es pt-BR"
     }
     notifications {
         string id PK "NTF-…"
@@ -510,6 +515,8 @@ locking like every aggregate. No message text is stored here (it lives in `turns
 
 `builder_threads` (slice 16) — one row per person, unique `staff_id`: `id` `BLT-…`, `staff_id` → staff, `agent` (`constructor-chat@prod`), agent-core's `agent_session_id` / `run_id`, `runs` (the idempotency suffix of each run), `messages` (JSON list of `{id, role: person|agent, text, created_at, client_message_id, answers}`, newest 200), `last_trace_id`, `version`. The text lives here; the event log carries sizes only.
 
+`case_type_maturity` (slice 21) — one row per case type that matured (absent = stage 0): `case_type` (key), `stage` (0-3), `agent` (`none|ready|active`), `signals` (JSON counters since the current stage, the last drafts as letters), `stage_since` (JSON stage → when), `agent_since`, **`agent_id`** (slice 22: agent-core's id of the agent that serves the type, set by "Activar"), `changed_at`, `changed_by_id`, `last_change`, `version`.
+
 `builder_proposals` (slice 16) — the platform's index of agent-core's proposals (its registry cannot list them): `id` is **agent-core's proposal id** (a UUID, not a platform id), `agent_id`, `title`, `origin` (`manual|builder_chat|auto_detect|import`), `created_by` (a staff id or the builder service's identity), `registered_by` (the staff id who brought it into the list, or `engine`, ADR 0007; no foreign key), `source` (`platform|chat|tracked|engine`), and the last state read from the registry: `state` (`draft|candidate|evaluated|approved|published`), `rev`, `base_release_id`, `candidate_hash`, `updated_at` (the registry's), `refreshed_at` (when the platform read it), `created_at`, `version`. Indexes `(agent_id, updated_at)` and `(state, updated_at)`. The registry is the source of truth: this is a cache plus "who brought it here".
 
 `bank_customer_links` (`customer_id` PK → customers, `bank_customer_id`) — which dataset customer each
@@ -569,6 +576,7 @@ See `api/slice-10-notifications.md`.
 | `mfa_challenges` | verification code | `id`, `staff_id`, `issued_at`, `expires_at`, `max_attempts`, `attempts`, `status` (cancelled if the password is reset or the person is deactivated), `verified_at`, `method` |
 | `staff_sessions` | started sessions | `id`, `staff_id`, `issued_at`, `expires_at`, `mfa_method`, `ended_at`, `end_reason` |
 | `analyst_availability` | available or paused | `staff_id`, `status` (`available`, `paused`), `since` |
+| `staff_preferences` | a person's own settings (slice 23) | `staff_id`, `ui_language` (`es`, `pt-BR`: the language of her platform UI, never of the conversations), `version`; absent = the defaults (`es`). Apart from `staff` so that her own change never makes an administrator's edit (`expectedVersion`) stale |
 
 **Secure onboarding (part 4).** No table stores a plaintext password, a link or a readable
 verification key: only hashes (Argon2id for passwords, SHA-256 for single-use links) and the
@@ -607,6 +615,7 @@ Event types:
 
 - Slice 18 adds `cases.case_type` and the `platform_settings` table: a database created earlier
   fails on startup (`OutdatedSchemaError`); delete it.
+- Slice 22 adds `case_type_maturity.agent_id`: delete the database (`OutdatedSchemaError` otherwise).
 
 - Slice 7 adds the rating columns to `cases`: a database created earlier fails on startup
   (`OutdatedSchemaError`) until it is deleted.

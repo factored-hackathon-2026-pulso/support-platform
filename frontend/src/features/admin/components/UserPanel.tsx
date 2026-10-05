@@ -15,6 +15,7 @@ import {
 import { isApiProblem } from '@/lib/api'
 import { RoleChips } from './RoleChips'
 import { formatDate, formatRelativeTime } from '@/lib/format'
+import { useTranslation } from '@/lib/i18n'
 import {
   cancelledInvitationToast,
   deactivatedToast,
@@ -80,6 +81,7 @@ export function UserPanel({
   onInvitationCancelled,
 }: UserPanelProps) {
   const query = useAdminUser(staffId)
+  const { t } = useTranslation(['admin', 'common'])
   let body
   if (!staffId) {
     body = (
@@ -87,7 +89,7 @@ export function UserPanel({
         size="compact"
         as="h2"
         icon={<UserRound size={32} strokeWidth={1.6} />}
-        title="Elige una persona para ver y editar su cuenta."
+        title={t('person.none')}
         className="grow"
       />
     )
@@ -104,32 +106,32 @@ export function UserPanel({
     )
   } else if (query.isError) {
     body = isApiProblem(query.error, 'not_found') ? (
-      <EmptyState size="compact" as="h2" title="No encontramos a esa persona." className="grow" />
+      <EmptyState size="compact" as="h2" title={t('person.notFound')} className="grow" />
     ) : (
       <div className="p-5">
         <Callout
           tone="danger"
-          title="No pudimos cargar a esta persona"
+          title={t('person.loadError')}
           actions={
             <Button size="sm" loading={query.isFetching} onClick={() => void query.refetch()}>
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
           }
         >
-          Revisa tu conexión e inténtalo de nuevo.
+          {t('common:query.errorDescription')}
         </Callout>
       </div>
     )
   } else {
     body = (
       <div className="flex grow items-center justify-center text-muted">
-        <Spinner label="Cargando la persona" size={24} />
+        <Spinner label={t('person.loading')} size={24} />
       </div>
     )
   }
   return (
     <aside
-      aria-label="Persona seleccionada"
+      aria-label={t('person.aside')}
       className="flex w-[400px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface"
     >
       {body}
@@ -155,6 +157,7 @@ function UserDetail({
   onInvitationCancelled,
 }: UserDetailProps) {
   const { toast } = useToast()
+  const { t } = useTranslation('admin')
   const update = useUpdateUser(user.id)
   const resend = useResendInvitation(user.id)
   const unlock = useUnlockUser(user.id)
@@ -226,7 +229,7 @@ function UserDetail({
         onSuccess: () => {
           setDraft(null)
           setErrors({})
-          toast({ title: 'Cambios guardados' })
+          toast({ title: t('toast.saved') })
         },
         onError: (problem) => {
           const failure = handleFailure(problem, { kind: 'user', id: user.id })
@@ -285,7 +288,7 @@ function UserDetail({
 
   function copyId() {
     void navigator.clipboard?.writeText(user.id).then(
-      () => toast({ title: 'Id copiado', description: user.id, duration: 3000 }),
+      () => toast({ title: t('toast.idCopied'), description: user.id, duration: 3000 }),
       () => undefined,
     )
   }
@@ -305,7 +308,7 @@ function UserDetail({
             size="sm"
             variant="ghost"
             className="-my-1.5 size-6 text-muted"
-            aria-label="Copiar id de la persona"
+            aria-label={t('person.copyId')}
             icon={<Copy size={13} aria-hidden="true" />}
             onClick={copyId}
           />
@@ -314,7 +317,7 @@ function UserDetail({
 
       <form
         noValidate
-        aria-label={`Cuenta de ${user.name}`}
+        aria-label={t('person.form', { name: user.name })}
         className="flex min-h-0 grow flex-col"
         onSubmit={(event) => {
           event.preventDefault()
@@ -334,7 +337,7 @@ function UserDetail({
                     loading={unlock.isPending}
                     onClick={() => onAccountAction('unlock')}
                   >
-                    Desbloquear
+                    {t('person.unlock')}
                   </Button>
                 ) : (
                   <Button
@@ -343,7 +346,7 @@ function UserDetail({
                     loading={reactivate.isPending}
                     onClick={() => onAccountAction('reactivate')}
                   >
-                    Reactivar cuenta
+                    {t('person.reactivate')}
                   </Button>
                 )
               }
@@ -352,19 +355,18 @@ function UserDetail({
             </Callout>
           ) : null}
           {invitation && invitationExpired(invitation, now) ? (
-            <Callout tone="warn" title="La invitación venció">
-              El enlace ya no funciona. Reenvíala para enviarle uno nuevo.
+            <Callout tone="warn" title={t('person.expiredTitle')}>
+              {t('person.expiredText')}
             </Callout>
           ) : null}
           {cancelled ? (
-            <Callout tone="neutral" title="Invitación cancelada">
-              Para invitarle de nuevo, usa Nuevo usuario con el mismo correo.
+            <Callout tone="neutral" title={t('person.cancelledTitle')}>
+              {t('person.cancelledText')}
             </Callout>
           ) : null}
           {stale ? (
             <Callout tone="info" icon>
-              Alguien más acaba de cambiar a esta persona. Si guardas, revisaremos que no choquen
-              tus cambios.
+              {t('person.stale')}
             </Callout>
           ) : null}
           {message ? (
@@ -393,23 +395,36 @@ function UserDetail({
                 : [
                     {
                       key: 'login',
-                      label: 'Último ingreso',
-                      value: user.lastLoginAt ? formatRelativeTime(user.lastLoginAt, now) : 'Nunca',
+                      label: t('person.facts.lastLogin'),
+                      value: user.lastLoginAt
+                        ? formatRelativeTime(user.lastLoginAt, now)
+                        : t('person.facts.never'),
                     },
                     ...(user.availability
                       ? [
                           {
                             key: 'now',
-                            label: 'Ahora',
-                            value: user.availability === 'available' ? 'Disponible' : 'En pausa',
+                            label: t('person.facts.now'),
+                            value:
+                              user.availability === 'available'
+                                ? t('person.facts.available')
+                                : t('person.facts.paused'),
                           },
                         ]
                       : []),
-                    { key: 'open', label: 'Casos abiertos', value: openCasesFact(user.openCases) },
+                    {
+                      key: 'open',
+                      label: t('person.facts.openCases'),
+                      value: openCasesFact(user.openCases),
+                    },
                     ...(secondFactor
-                      ? [{ key: 'mfa', label: 'Verificación en dos pasos', value: secondFactor }]
+                      ? [{ key: 'mfa', label: t('person.facts.secondFactor'), value: secondFactor }]
                       : []),
-                    { key: 'created', label: 'Cuenta creada', value: formatDate(user.createdAt) },
+                    {
+                      key: 'created',
+                      label: t('person.facts.created'),
+                      value: formatDate(user.createdAt),
+                    },
                   ]
             }
           />
@@ -423,7 +438,7 @@ function UserDetail({
               disabled={!dirty}
               loading={update.isPending || rechecking}
             >
-              Guardar cambios
+              {t('person.save')}
             </Button>
             {invited ? (
               <>
@@ -433,14 +448,14 @@ function UserDetail({
                   loading={resend.isPending}
                   onClick={onResend}
                 >
-                  Reenviar invitación
+                  {t('person.resend')}
                 </Button>
                 <Button
                   variant="ghost"
                   className="text-danger hover:text-danger-strong"
                   onClick={() => setDialog('cancel-invitation')}
                 >
-                  Cancelar invitación
+                  {t('person.cancelInvitation')}
                 </Button>
               </>
             ) : null}
@@ -451,7 +466,7 @@ function UserDetail({
                 aria-describedby={guards.resetBlocked ? `${hintId}-reset` : undefined}
                 onClick={() => setDialog('reset')}
               >
-                Enviar enlace para restablecer
+                {t('person.sendReset')}
               </Button>
             ) : null}
             {!inactive && !invited && !cancelled ? (
@@ -462,7 +477,7 @@ function UserDetail({
                 aria-describedby={guards.deactivateBlocked ? `${hintId}-deactivate` : undefined}
                 onClick={() => setDialog('deactivate')}
               >
-                Desactivar cuenta
+                {t('person.deactivate')}
               </Button>
             ) : null}
           </div>
@@ -480,7 +495,7 @@ function UserDetail({
             to={adminAuditPath(user.id)}
             className="self-start text-13 font-semibold text-accent hover:text-accent-strong"
           >
-            Ver en auditoría
+            {t('actions.seeInAudit')}
           </Link>
         </div>
       </form>

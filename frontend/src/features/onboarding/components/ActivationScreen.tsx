@@ -11,9 +11,10 @@ import {
   LinkButton,
   type CodeInputHandle,
 } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import {
   CODE_LENGTH,
-  CODE_REQUIRED_ERROR,
+  codeRequiredError,
   describeOnboardingFailure,
   firstName,
   firstPasswordField,
@@ -131,6 +132,7 @@ function PasswordStep({
   const owner = { email: invitation.email, name: invitation.name }
   const checks = passwordChecks(password, confirmation, owner)
   const ready = passwordReady(checks)
+  const { t } = useTranslation(['onboarding', 'common'])
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -158,29 +160,28 @@ function PasswordStep({
   return (
     <>
       <div className="flex flex-col gap-2.5">
-        <DocumentTitle title="Activa tu cuenta" />
-        <h1 className="m-0 font-display text-30 font-bold text-balance">Activa tu cuenta</h1>
+        <DocumentTitle title={t('activation.title')} />
+        <h1 className="m-0 font-display text-30 font-bold text-balance">{t('activation.title')}</h1>
         <p className="m-0 text-15 leading-[1.5] text-ink-2">
-          Hola, {firstName(invitation.name)}. Administración te invitó a la Plataforma CC. Crea tu
-          contraseña para empezar.
+          {t('activation.greeting', { name: firstName(invitation.name) })}
         </p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-14 text-ink-2">
-          <Fact icon="mail" text={invitation.email} label="Correo" />
+          <Fact icon="mail" text={invitation.email} label={t('common:fields.email')} />
           <span className="flex items-center gap-1">
-            <span className="sr-only">Rol: </span>
+            <span className="sr-only">{t('activation.rolePrefix')}</span>
             {roleLabels(invitation.roles).map((role) => (
               <Badge key={role} tone="neutral" size="sm">
                 {role}
               </Badge>
             ))}
           </span>
-          <Fact icon="users" text={invitation.teamName} label="Equipo" />
+          <Fact icon="users" text={invitation.teamName} label={t('common:fields.team')} />
         </div>
       </div>
       {notice ? <Callout tone="warn">{notice}</Callout> : null}
       <form
         noValidate
-        aria-label="Crear contraseña"
+        aria-label={t('activation.form')}
         className="flex flex-col gap-3.5"
         onSubmit={onSubmit}
       >
@@ -207,12 +208,10 @@ function PasswordStep({
           className={ready ? undefined : 'opacity-50'}
           loading={submit.isPending}
         >
-          Continuar
+          {t('common:actions.continue')}
         </Button>
       </form>
-      <p className="m-0 text-13 leading-[1.5] text-muted">
-        Nadie del banco conoce tu contraseña: ni administración ni supervisión pueden verla.
-      </p>
+      <p className="m-0 text-13 leading-[1.5] text-muted">{t('password.nobodyKnows')}</p>
     </>
   )
 }
@@ -240,12 +239,13 @@ function VerificationStep({
   const activate = useActivateInvitation(token)
   const errorId = 'activation-code-error'
   const key = groupKey(enrollment.secret)
+  const { t } = useTranslation(['onboarding', 'common'])
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setFormError(null)
     if (code.length < CODE_LENGTH) {
-      setError(CODE_REQUIRED_ERROR)
+      setError(codeRequiredError())
       codeRef.current?.focus()
       return
     }
@@ -276,22 +276,19 @@ function VerificationStep({
   return (
     <>
       <div className="flex flex-col gap-2">
-        <DocumentTitle title="Configura la verificación en dos pasos" />
+        <DocumentTitle title={t('activation.verifyTitle')} />
         <h1 className="m-0 font-display text-30 font-bold text-balance">
-          Configura la verificación en dos pasos
+          {t('activation.verifyTitle')}
         </h1>
-        <p className="m-0 text-15 leading-[1.5] text-ink-2">
-          Cada vez que entres te pediremos un código de tu app de autenticación, además de tu
-          contraseña.
-        </p>
+        <p className="m-0 text-15 leading-[1.5] text-ink-2">{t('activation.verifyText')}</p>
       </div>
       <div className="flex items-start gap-5">
-        <QrCode value={enrollment.otpauthUri} label="Código QR para tu app de autenticación" />
+        <QrCode value={enrollment.otpauthUri} label={t('activation.qr')} />
         <ol className="m-0 flex list-none flex-col gap-2.5 p-0 text-14 leading-[1.4] text-ink-2">
           {[
-            'Abre tu app de autenticación en el teléfono.',
-            'Agrega una cuenta y escanea el código.',
-            `Escribe abajo el código de ${CODE_LENGTH} dígitos que te muestra.`,
+            t('activation.stepOpen'),
+            t('activation.stepScan'),
+            t('activation.stepType', { length: CODE_LENGTH }),
           ].map((text, index) => (
             <li key={text} className="flex gap-2">
               <span
@@ -307,7 +304,7 @@ function VerificationStep({
       </div>
       <div className="flex flex-col gap-1.5">
         <span id="setup-key-label" className="text-13 text-ink-2">
-          ¿No puedes escanear? Escribe esta clave en la app:
+          {t('activation.manualKey')}
         </span>
         <div className="flex items-center justify-between gap-3 rounded-10 border border-border bg-subtle py-2 pr-2 pl-3.5">
           <span
@@ -328,19 +325,21 @@ function VerificationStep({
             }
             onClick={copyKey}
           >
-            {copied ? 'Copiada' : 'Copiar'}
+            {copied ? t('common:actions.copied') : t('common:actions.copy')}
           </Button>
         </div>
       </div>
       <form
         noValidate
-        aria-label="Confirmar el código"
+        aria-label={t('activation.codeForm')}
         className="flex flex-col gap-3.5"
         onSubmit={onSubmit}
       >
         {formError ? <Callout tone="danger">{formError}</Callout> : null}
         <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
-          <legend className="mb-2 p-0 text-14 font-semibold">Código de 6 dígitos</legend>
+          <legend className="mb-2 p-0 text-14 font-semibold">
+            {t('activation.code', { length: CODE_LENGTH })}
+          </legend>
           <CodeInput
             ref={codeRef}
             value={code}
@@ -349,7 +348,7 @@ function VerificationStep({
               setError(null)
             }}
             length={CODE_LENGTH}
-            label="Código de 6 dígitos"
+            label={t('activation.code', { length: CODE_LENGTH })}
             describedBy={error ? errorId : undefined}
             invalid={error !== null}
           />
@@ -360,13 +359,10 @@ function VerificationStep({
           ) : null}
         </fieldset>
         <Button type="submit" variant="primary" size="lg" block loading={activate.isPending}>
-          Activar cuenta
+          {t('activation.submit')}
         </Button>
       </form>
-      <p className="m-0 text-13 leading-[1.5] text-muted">
-        Sirve cualquier app de autenticación, como Google Authenticator o Microsoft Authenticator.
-        Si cambias de teléfono, pide ayuda a administración.
-      </p>
+      <p className="m-0 text-13 leading-[1.5] text-muted">{t('activation.appsNote')}</p>
     </>
   )
 }
@@ -374,9 +370,10 @@ function VerificationStep({
 // ── Done ─────────────────────────────────────────────────────────────────────
 
 function AccountReady({ email }: { email: string }) {
+  const { t } = useTranslation(['onboarding', 'common'])
   return (
     <>
-      <DocumentTitle title="Tu cuenta está lista" />
+      <DocumentTitle title={t('activation.readyTitle')} />
       <span
         aria-hidden="true"
         className="flex size-14 items-center justify-center rounded-16 bg-success-soft text-success-strong"
@@ -384,10 +381,10 @@ function AccountReady({ email }: { email: string }) {
         <Check size={28} strokeWidth={2.2} />
       </span>
       <div className="flex flex-col gap-2">
-        <h1 className="m-0 font-display text-30 font-bold text-balance">Tu cuenta está lista</h1>
-        <p className="m-0 text-15 leading-[1.5] text-ink-2">
-          Desde ahora entras con tu correo, tu contraseña y el código de tu app.
-        </p>
+        <h1 className="m-0 font-display text-30 font-bold text-balance">
+          {t('activation.readyTitle')}
+        </h1>
+        <p className="m-0 text-15 leading-[1.5] text-ink-2">{t('activation.readyText')}</p>
       </div>
       <ul className="m-0 flex list-none flex-col gap-2.5 rounded-12 bg-panel px-4 py-3.5 text-14 text-ink-2">
         <li className="flex items-center gap-2.5">
@@ -396,17 +393,17 @@ function AccountReady({ email }: { email: string }) {
         </li>
         <li className="flex items-center gap-2.5">
           <Smartphone size={16} aria-hidden="true" className="shrink-0 text-muted" />
-          Verificación en dos pasos activa
+          {t('activation.readyMfa')}
         </li>
         <li className="flex items-center gap-2.5">
           <span aria-hidden="true" className="flex w-4 justify-center">
             <span className="size-2 rounded-full bg-warn" />
           </span>
-          Empiezas En pausa: pasa a Disponible cuando quieras recibir casos
+          {t('activation.readyPaused')}
         </li>
       </ul>
       <LinkButton to={PATHS.login} variant="primary" size="lg" block>
-        Entrar
+        {t('common:actions.signIn')}
       </LinkButton>
     </>
   )

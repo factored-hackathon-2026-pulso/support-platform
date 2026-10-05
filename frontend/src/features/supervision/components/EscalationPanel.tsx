@@ -12,10 +12,10 @@ import {
   Textarea,
 } from '@/components/ui'
 import { ESCALATION_STATE, MAX_ESCALATION_TEXT } from '@/features/cases'
-import { shortCaseId, useCaseDetail } from '@/features/conversation'
+import { shortCaseId, turnText, useCaseDetail } from '@/features/conversation'
 import { formatRelativeTime, formatTime } from '@/lib/format'
+import { useTranslation } from '@/lib/i18n'
 import {
-  REPLY_REQUIRED_ERROR,
   describeEscalationFailure,
   escalatedAgo,
   escalationCaseFacts,
@@ -23,6 +23,8 @@ import {
   escalationResultCopy,
   replyHelp,
   replyLabel,
+  replyRequiredError,
+  supervisionName,
 } from '../model'
 import { useLastTurns, useRespondEscalation, useTakeEscalatedCase, useTeamOverview } from '../hooks'
 import type { EscalationItem, Turn } from '../types'
@@ -56,6 +58,7 @@ export function EscalationPanel({
   onOpenCase,
   onResult,
 }: EscalationPanelProps) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation', 'common'])
   const { escalation } = item
   const me = useCurrentUser()
   // Reading the case here is a supervision read: the server audits it (case.viewed).
@@ -74,7 +77,7 @@ export function EscalationPanel({
   const replyErrorId = useId()
   const open = escalation.state === 'open'
   const outcome = escalationOutcomeTitle(escalation, me.id)
-  const analystName = escalation.escalatedByName ?? 'Alguien del equipo'
+  const analystName = escalation.escalatedByName ?? t('someoneFromTeam')
 
   function fail(error: unknown) {
     setFailure(describeEscalationFailure(error, { caseLanguage: item.case.language }).message)
@@ -83,7 +86,7 @@ export function EscalationPanel({
   function sendReply() {
     const note = reply.trim()
     if (!note) {
-      setReplyError(REPLY_REQUIRED_ERROR)
+      setReplyError(replyRequiredError())
       replyRef.current?.focus()
       return
     }
@@ -134,7 +137,7 @@ export function EscalationPanel({
         <IconButton
           size="sm"
           variant="ghost"
-          aria-label="Cerrar"
+          aria-label={t('common:actions.close')}
           icon={<X size={16} aria-hidden="true" />}
           onClick={onClose}
         />
@@ -142,7 +145,7 @@ export function EscalationPanel({
 
       <div className="flex min-h-0 grow flex-col gap-5 overflow-y-auto px-5 py-4">
         {failure ? (
-          <Callout tone="danger" title="No se pudo">
+          <Callout tone="danger" title={t('escalations.panel.failedTitle')}>
             {failure}
           </Callout>
         ) : null}
@@ -153,7 +156,7 @@ export function EscalationPanel({
               id={`${titleId}-motive`}
               className="m-0 text-12 font-semibold tracking-kicker text-muted uppercase"
             >
-              Motivo
+              {t('escalations.panel.motive')}
             </h3>
             <Fact icon="clock" text={escalatedAgo(escalation, now)} tone="muted" />
           </div>
@@ -170,7 +173,7 @@ export function EscalationPanel({
 
         {outcome ? (
           <div className="flex gap-2.5 rounded-10 bg-success-soft px-3 py-2.5">
-            <AnalystAvatar name={escalation.resolvedByName ?? 'Supervisión'} />
+            <AnalystAvatar name={escalation.resolvedByName ?? supervisionName()} />
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="flex flex-wrap items-center gap-x-2">
                 <span className="text-13 font-semibold">{outcome}</span>
@@ -194,7 +197,7 @@ export function EscalationPanel({
             id={`${titleId}-case`}
             className="m-0 text-12 font-semibold tracking-kicker text-muted uppercase"
           >
-            El caso
+            {t('escalations.panel.case')}
           </h3>
           <FactList
             size="md"
@@ -216,7 +219,7 @@ export function EscalationPanel({
               id={`${titleId}-turns`}
               className="m-0 text-12 font-semibold tracking-kicker text-muted uppercase"
             >
-              Últimos mensajes
+              {t('escalations.panel.lastMessages')}
             </h3>
             <CaseLink
               caseId={escalation.caseId}
@@ -224,7 +227,7 @@ export function EscalationPanel({
               className="text-13 font-medium"
             >
               <span className="inline-flex items-center gap-1">
-                Ver caso completo
+                {t('escalations.panel.viewFullCase')}
                 <ArrowRight size={13} aria-hidden="true" />
               </span>
             </CaseLink>
@@ -234,7 +237,7 @@ export function EscalationPanel({
 
         {open && replying ? (
           <form
-            aria-label={`Responder a ${analystName}`}
+            aria-label={t('escalations.panel.replyTo', { name: analystName })}
             className="flex flex-col gap-1.5"
             onSubmit={(event) => {
               event.preventDefault()
@@ -283,7 +286,7 @@ export function EscalationPanel({
           {replying ? (
             <>
               <Button variant="primary" loading={respond.isPending} onClick={sendReply}>
-                Enviar respuesta
+                {t('escalations.panel.send')}
               </Button>
               <Button
                 variant="secondary"
@@ -293,7 +296,7 @@ export function EscalationPanel({
                   setReplyError(null)
                 }}
               >
-                Cancelar
+                {t('actions.cancel')}
               </Button>
             </>
           ) : (
@@ -306,15 +309,15 @@ export function EscalationPanel({
                   requestAnimationFrame(() => replyRef.current?.focus())
                 }}
               >
-                Responder
+                {t('escalations.panel.reply')}
               </Button>
               {item.canTake ? (
                 <Button variant="secondary" loading={take.isPending} onClick={takeCase}>
-                  Tomar el caso
+                  {t('actions.take')}
                 </Button>
               ) : null}
               <Button variant="secondary" onClick={() => onReassign(true)}>
-                Reasignar
+                {t('actions.reassign')}
               </Button>
             </>
           )}
@@ -341,19 +344,27 @@ export function EscalationPanel({
 }
 
 function LastTurns({ turns, loading }: { turns: Turn[] | undefined; loading: boolean }) {
+  const { t } = useTranslation(['supervision', 'cases', 'conversation'])
   if (loading) return <Skeleton className="h-24 w-full" />
   const items = (turns ?? []).slice(-4)
-  if (items.length === 0) return <p className="m-0 text-13 text-muted">Sin mensajes todavía.</p>
+  if (items.length === 0) {
+    return <p className="m-0 text-13 text-muted">{t('escalations.panel.noMessages')}</p>
+  }
   return (
-    <ol aria-label="Últimos mensajes del caso" className="m-0 flex list-none flex-col gap-2 p-0">
+    <ol
+      aria-label={t('escalations.panel.lastMessagesOfCase')}
+      className="m-0 flex list-none flex-col gap-2 p-0"
+    >
       {items.map((turn) => {
         if (turn.kind !== 'message') {
           return (
             <li key={turn.id} className="text-12 text-muted italic">
               <span className="sr-only">
-                {turn.audience === 'staff' ? 'Nota interna: ' : 'Aviso: '}
+                {turn.audience === 'staff'
+                  ? t('escalations.panel.internalNote')
+                  : t('escalations.panel.notice')}{' '}
               </span>
-              {turn.text}
+              {turnText(turn)}
             </li>
           )
         }

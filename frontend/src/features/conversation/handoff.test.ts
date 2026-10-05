@@ -3,7 +3,9 @@ import { ApiProblem } from '@/lib/api'
 import {
   HANDOFF_QUALITY_OPTIONS,
   describeHandoffFailure,
+  MAX_VALUE_LINES,
   formatValue,
+  valueLines,
   handoffReason,
   hasHandoff,
   humanizeKey,
@@ -125,6 +127,23 @@ describe('words for agent-core codes', () => {
     expect(formatValue(false)).toBe('No')
     expect(formatValue(null)).toBeNull()
     expect(formatValue({ a: 'x'.repeat(200) })).toHaveLength(120)
+  })
+
+  it('reads a nested value as lines: one per item, keys humanized, long lists cut', () => {
+    expect(valueLines(120)).toBeNull()
+    expect(valueLines(['a', 'b'])).toEqual(['a', 'b'])
+    expect(valueLines({ last_4: '3307', tags: ['x', 'y'], extra: { is_new: true } })).toEqual([
+      'Last 4: 3307',
+      'Tags: x, y',
+      'Extra: Is new: Sí',
+    ])
+    expect(valueLines([{ transaction_id: 'TX-1', amount: 9 }, null, {}])).toEqual([
+      'Transaction id: TX-1, Amount: 9',
+    ])
+    const many = valueLines(Array.from({ length: MAX_VALUE_LINES + 3 }, (_, k) => `t${k}`))
+    expect(many).toHaveLength(MAX_VALUE_LINES + 1)
+    expect(many?.at(-1)).toBe('y 3 más')
+    expect(valueLines(['x'.repeat(400)])?.[0]).toHaveLength(160)
   })
 
   it('counts verified facts', () => {

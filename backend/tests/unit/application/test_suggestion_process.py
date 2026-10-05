@@ -61,6 +61,8 @@ async def world(
         copilot_suggestions_agent="copiloto-sugerencias@prod",
         copilot_suggestions_auto=True,
         copilot_suggestions_coalesce_seconds=0,
+        # Slice 21: these cases have no type (stage 0); the process is what is under test here.
+        stage_gates_suggestions=False,
     ):
         yield container
 

@@ -8,6 +8,7 @@ import type { FactItem, StatusAppearance } from '@/components/ui'
 import { caseChannel } from '@/features/cases/core'
 import { isApiProblem } from '@/lib/api'
 import { formatTimer } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type {
   Call,
   CallDirection,
@@ -19,6 +20,9 @@ import type {
   Language,
   Turn,
 } from './types'
+
+/** Copy comes from the `conversation` catalog, read when a function runs (the UI language then). */
+const t = i18n.getFixedT(null, 'conversation')
 
 // ── Which central panel ──────────────────────────────────────────────────────
 
@@ -46,12 +50,22 @@ export function centerMode(
 
 // ── Calls ────────────────────────────────────────────────────────────────────
 
+/** A call state's look, its word read from `conversation:call.status.<state>` when shown. */
+function callStatus(state: CallState, look: Omit<StatusAppearance, 'label'>): StatusAppearance {
+  return {
+    ...look,
+    get label() {
+      return t(`call.status.${state}`)
+    },
+  }
+}
+
 /** Linear-style glyph + word of each call state (the call bar). */
 export const CALL_STATUS: Readonly<Record<CallState, StatusAppearance>> = {
-  ringing: { shape: 'ring', tone: 'accent', label: 'Sonando', strong: true },
-  in_call: { shape: 'dot', tone: 'success', label: 'En llamada', strong: true },
-  on_hold: { shape: 'pause', tone: 'warn', label: 'En espera', strong: true },
-  ended: { shape: 'check', tone: 'neutral', label: 'Llamada terminada' },
+  ringing: callStatus('ringing', { shape: 'ring', tone: 'accent', strong: true }),
+  in_call: callStatus('in_call', { shape: 'dot', tone: 'success', strong: true }),
+  on_hold: callStatus('on_hold', { shape: 'pause', tone: 'warn', strong: true }),
+  ended: callStatus('ended', { shape: 'check', tone: 'neutral' }),
 }
 
 export function isActiveCall(call: Pick<Call, 'state'>): boolean {
@@ -95,11 +109,11 @@ export function callStateLabel(
   call: Pick<Call, 'state' | 'endReason' | 'durationSeconds' | 'answeredAt'>,
 ): string {
   if (call.state !== 'ended') return CALL_STATUS[call.state].label
-  if (call.endReason === 'rejected') return 'Llamada rechazada'
-  if (call.endReason === 'cancelled' || call.answeredAt === null) return 'Llamada sin respuesta'
+  if (call.endReason === 'rejected') return t('call.rejected')
+  if (call.endReason === 'cancelled' || call.answeredAt === null) return t('call.unanswered')
   return call.durationSeconds !== null
-    ? `Llamada terminada, ${formatCallDuration(call.durationSeconds)}`
-    : 'Llamada terminada'
+    ? t('call.endedAfter', { duration: formatCallDuration(call.durationSeconds) })
+    : t('call.status.ended')
 }
 
 /** The direction as a fact: phone with an arrow in / out, "Entrante" / "Saliente". */
@@ -108,8 +122,8 @@ export function callDirectionFact(direction: CallDirection): FactItem {
   return {
     key: 'direction',
     icon: outbound ? 'phone-outgoing' : 'phone-incoming',
-    text: outbound ? 'Saliente' : 'Entrante',
-    tooltip: outbound ? 'Llamada saliente' : 'Llamada entrante',
+    text: outbound ? t('call.outbound') : t('call.inbound'),
+    tooltip: outbound ? t('call.outboundTooltip') : t('call.inboundTooltip'),
     tone: 'muted',
   }
 }
@@ -193,7 +207,7 @@ export function outboundReason(call: Pick<Call, 'direction' | 'reason'> | null):
 
 /** "Transcripción en vivo" while a call is on, else "Transcripción". */
 export function transcriptCaption(call: Pick<Call, 'state'> | null): string {
-  return call && isActiveCall(call) ? 'Transcripción en vivo' : 'Transcripción'
+  return call && isActiveCall(call) ? t('call.transcriptLive') : t('call.transcript')
 }
 
 /** The call a transcript line belongs to (lines are written between a call's start and end). */
@@ -215,6 +229,7 @@ export function lineOffset(call: Pick<Call, 'startedAt' | 'answeredAt'>, created
 /** The kind of a system line of a call (the backend's fixed texts, both languages). */
 export type CallEventKind = 'hold' | 'resume' | 'end'
 
+/** Matched against the turn text, never shown: data, not copy. */
 const CALL_EVENT_TEXTS: Readonly<Record<string, CallEventKind>> = {
   'Llamada en espera.': 'hold',
   'Chamada em espera.': 'hold',
@@ -235,39 +250,33 @@ export const MAX_CALL_REASON = 500
 /** "Motivo" of "Llamar al cliente": required, at most 500 characters. */
 export function validateCallReason(reason: string): string | null {
   const length = reason.trim().length
-  if (length === 0) return 'Escribe por qué llamas.'
-  if (length > MAX_CALL_REASON) return 'El motivo puede tener hasta 500 caracteres.'
+  if (length === 0) return t('call.reasonRequired')
+  if (length > MAX_CALL_REASON) return t('call.reasonTooLong')
   return null
 }
 
 /** What a failed call command means for the analyst. */
 export function describeCallFailure(error: unknown): string {
-  if (isApiProblem(error, 'call_in_progress')) return 'Ya hay una llamada en curso en este caso.'
-  if (isApiProblem(error, 'call_not_active')) return 'La llamada ya terminó.'
-  if (isApiProblem(error, 'invalid_transition')) {
-    return 'La llamada cambió de estado. Revisa la barra de la llamada.'
-  }
-  if (isApiProblem(error, 'case_closed')) return 'Este caso ya está cerrado.'
-  if (isApiProblem(error, 'case_not_assigned')) {
-    return 'Ya no puedes hacerlo: supervisión pasó este caso a otra persona.'
-  }
-  if (isApiProblem(error, 'network_error')) return 'No hay conexión. Inténtalo de nuevo.'
-  return 'No pudimos completar la acción. Inténtalo de nuevo.'
+  if (isApiProblem(error, 'call_in_progress')) return t('call.failure.inProgress')
+  if (isApiProblem(error, 'call_not_active')) return t('call.failure.notActive')
+  if (isApiProblem(error, 'invalid_transition')) return t('call.failure.invalidTransition')
+  if (isApiProblem(error, 'case_closed')) return t('failure.thisCaseClosed')
+  if (isApiProblem(error, 'case_not_assigned')) return t('call.failure.notAssigned')
+  if (isApiProblem(error, 'network_error')) return t('failure.noConnection')
+  return t('call.failure.generic')
 }
 
 /** A line, a note or an email that did not go out. */
 export function describeWriteFailure(error: unknown): string {
   if (isApiProblem(error, 'call_not_active') || isApiProblem(error, 'invalid_transition')) {
-    return 'La llamada no está activa: no se guardó lo que dijiste.'
+    return t('writeFailure.callNotActive')
   }
-  if (isApiProblem(error, 'case_closed')) return 'Este caso ya está cerrado.'
-  if (isApiProblem(error, 'case_not_assigned')) {
-    return 'Ya no puedes escribir: supervisión pasó este caso a otra persona.'
-  }
-  if (isApiProblem(error, 'invalid_value')) return 'Escribe el asunto del correo.'
-  if (isApiProblem(error, 'validation_error')) return 'Revisa el texto: es muy largo o está vacío.'
-  if (isApiProblem(error, 'network_error')) return 'No hay conexión. Inténtalo de nuevo.'
-  return 'No se envió. Inténtalo de nuevo.'
+  if (isApiProblem(error, 'case_closed')) return t('failure.thisCaseClosed')
+  if (isApiProblem(error, 'case_not_assigned')) return t('writeFailure.notAssigned')
+  if (isApiProblem(error, 'invalid_value')) return t('writeFailure.subject')
+  if (isApiProblem(error, 'validation_error')) return t('writeFailure.validation')
+  if (isApiProblem(error, 'network_error')) return t('failure.noConnection')
+  return t('writeFailure.generic')
 }
 
 // ── Email ────────────────────────────────────────────────────────────────────
@@ -319,6 +328,7 @@ export function emailToTurn(email: EmailMessage, language: Language): Turn {
     language,
     createdAt: email.createdAt,
     clientMessageId: email.clientMessageId,
+    staffLine: null,
   }
 }
 

@@ -13,6 +13,69 @@
         "title": "AccountStatus",
         "type": "string"
       },
+      "ActivateAgentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "agentId": {
+            "description": "agent-core's id of the agent that will serve the type.",
+            "maxLength": 120,
+            "pattern": "^[a-z0-9][a-z0-9_/-]*$",
+            "title": "Agentid",
+            "type": "string"
+          },
+          "releaseId": {
+            "description": "The published release `prod` will point at (the proposal's publication).",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Releaseid",
+            "type": "string"
+          },
+          "stepUpCode": {
+            "description": "A fresh code from the person's authenticator app (6 digits). Asked again on every call that needs it: the platform raises that one call to the registry's `step_up`.",
+            "maxLength": 12,
+            "minLength": 4,
+            "title": "Stepupcode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentId",
+          "releaseId",
+          "stepUpCode"
+        ],
+        "title": "ActivateAgentRequest",
+        "type": "object"
+      },
+      "ActivateAgentResult": {
+        "properties": {
+          "alias": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AliasChange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The registry's `prod` change; null if none."
+          },
+          "changed": {
+            "description": "false: that agent already served the type (nothing promoted or recorded).",
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/CaseTypeStage"
+          }
+        },
+        "required": [
+          "changed",
+          "type",
+          "alias"
+        ],
+        "title": "ActivateAgentResult",
+        "type": "object"
+      },
       "ActivateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -566,6 +629,42 @@
         "title": "AdminUserList",
         "type": "object"
       },
+      "AgentStatus": {
+        "enum": [
+          "none",
+          "ready",
+          "active"
+        ],
+        "title": "AgentStatus",
+        "type": "string"
+      },
+      "AiStages": {
+        "properties": {
+          "available": {
+            "description": "false while the AI switch is off: hide every stage (`types` is empty).",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/StageRule"
+          },
+          "types": {
+            "description": "Every case type but `none` (a case without a type gets no copilot).",
+            "items": {
+              "$ref": "#/components/schemas/CaseTypeStage"
+            },
+            "title": "Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "rule",
+          "types"
+        ],
+        "title": "AiStages",
+        "type": "object"
+      },
       "AliasChange": {
         "properties": {
           "actor": {
@@ -693,6 +792,17 @@
           "activity": {
             "$ref": "#/components/schemas/HomeActivity"
           },
+          "assistant": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HomeAssistant"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 21: the assistant in her languages; null while the AI switch is off."
+          },
           "serverTime": {
             "format": "date-time",
             "title": "Servertime",
@@ -717,7 +827,8 @@
           "sinceSource",
           "activity",
           "teamNow",
-          "serverTime"
+          "serverTime",
+          "assistant"
         ],
         "title": "AnalystHome",
         "type": "object"
@@ -2561,6 +2672,98 @@
         "title": "CaseTypeResult",
         "type": "object"
       },
+      "CaseTypeStage": {
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentStatus",
+            "description": "`ready`: the drafts met the rule, the system proposes an agent to Supervisión (slice 22). `active`: an agent serves the type."
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "agent-core's id of the agent that serves the type (set while `agent` is `active`, slice 22).",
+            "title": "Agentid"
+          },
+          "agentSince": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agentsince"
+          },
+          "caseType": {
+            "$ref": "#/components/schemas/CaseType"
+          },
+          "copilotMode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CopilotMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the copilot offers a case of the type (ADR 0005's `copilot_mode`); null at stage 0: no copilot."
+          },
+          "lastChange": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StageLastChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reached": {
+            "description": "The stages reached (1-3) and since when.",
+            "items": {
+              "$ref": "#/components/schemas/StageReached"
+            },
+            "title": "Reached",
+            "type": "array"
+          },
+          "signals": {
+            "$ref": "#/components/schemas/StageSignals"
+          },
+          "stage": {
+            "description": "0 people only · 1 the analyst asks the copilot · 2 it proposes tools · 3 it shadows (drafts above the composer).",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Stage",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "caseType",
+          "stage",
+          "agent",
+          "copilotMode",
+          "signals",
+          "reached",
+          "agentSince",
+          "agentId",
+          "lastChange",
+          "version"
+        ],
+        "title": "CaseTypeStage",
+        "type": "object"
+      },
       "ChangeCaseTypeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2749,6 +2952,16 @@
         ],
         "title": "CopilotMessage",
         "type": "object"
+      },
+      "CopilotMode": {
+        "description": "ADR 0005's ``copilot_mode``: what the copilot offers for a case of the type.",
+        "enum": [
+          "answer",
+          "tools",
+          "drafts"
+        ],
+        "title": "CopilotMode",
+        "type": "string"
       },
       "CopilotSuggestion": {
         "properties": {
@@ -3018,6 +3231,11 @@
             "maxLength": 64,
             "title": "Teamid",
             "type": "string"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "default": "es",
+            "description": "Slice 23c: her platform language (the invitation email, the activation screens and her first sign-in use it). Default `es`."
           }
         },
         "required": [
@@ -4982,17 +5200,45 @@
         "type": "object"
       },
       "HomeActivityKind": {
-        "description": "One row kind of \"Mientras no estabas\" (each has one fixed template in the frontend).\n\n- ``assigned_on_arrival``: a new case went to her on arrival (rule 3, least loaded).\n- ``assigned_from_queue``: a queued case went to her when she became available.\n- ``assigned_by_supervisor``: a supervisor assigned it to her (from the queue or another\n  analyst).\n- ``reassigned_away``: a supervisor gave one of her cases to someone else (read-only now).\n- ``customer_returned``: the case continues a closed one of the same customer (it\n  replaces the arrival row of that case).\n- ``customer_messages``: the customer wrote in one of her cases (one row per case).",
+        "description": "One row kind of \"Mientras no estabas\" (each has one fixed template in the frontend).\n\n- ``assigned_on_arrival``: a new case went to her on arrival (rule 3, least loaded).\n- ``assigned_from_queue``: a queued case went to her when she became available.\n- ``assigned_by_supervisor``: a supervisor assigned it to her (from the queue or another\n  analyst).\n- ``reassigned_away``: a supervisor gave one of her cases to someone else (read-only now).\n- ``customer_returned``: the case continues a closed one of the same customer (it\n  replaces the arrival row of that case).\n- ``customer_messages``: the customer wrote in one of her cases (one row per case).\n- ``assigned_by_assistant``: the assistant (ADR 0003) handed the case over and it went to her\n  (slice 21; before it, such an assignment had no row).",
         "enum": [
           "assigned_on_arrival",
           "assigned_from_queue",
           "assigned_by_supervisor",
           "reassigned_away",
           "customer_returned",
-          "customer_messages"
+          "customer_messages",
+          "assigned_by_assistant"
         ],
         "title": "HomeActivityKind",
         "type": "string"
+      },
+      "HomeAssistant": {
+        "description": "Slice 21 (IaHomeTurno): the assistant in her languages.",
+        "properties": {
+          "handedToYou": {
+            "description": "Cases it handed over that went to her since `since`.",
+            "title": "Handedtoyou",
+            "type": "integer"
+          },
+          "resolved": {
+            "description": "Conversations of her languages it resolved since `since`.",
+            "title": "Resolved",
+            "type": "integer"
+          },
+          "withAssistantNow": {
+            "description": "Open conversations of her languages it holds.",
+            "title": "Withassistantnow",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resolved",
+          "handedToYou",
+          "withAssistantNow"
+        ],
+        "title": "HomeAssistant",
+        "type": "object"
       },
       "HomeQueue": {
         "properties": {
@@ -5224,6 +5470,10 @@
           "teamName": {
             "title": "Teamname",
             "type": "string"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "description": "Slice 23c: her platform language, as administration chose it."
           }
         },
         "required": [
@@ -5232,7 +5482,8 @@
           "roles",
           "teamName",
           "expiresAt",
-          "passwordRules"
+          "passwordRules",
+          "uiLanguage"
         ],
         "title": "InvitationCheck",
         "type": "object"
@@ -5506,6 +5757,10 @@
             "$ref": "#/components/schemas/PlatformSettings",
             "description": "Slice 18: the platform settings the SPA needs (the AI switch); live as `platform.updated` on `platform:settings`."
           },
+          "preferences": {
+            "$ref": "#/components/schemas/Preferences",
+            "description": "Slice 23: her own settings (the UI language); changed with `PUT /me/preferences`, live as `preferences.updated` on `staff:<id>`."
+          },
           "session": {
             "$ref": "#/components/schemas/SessionOut"
           },
@@ -5516,7 +5771,8 @@
         "required": [
           "staff",
           "session",
-          "platform"
+          "platform",
+          "preferences"
         ],
         "title": "MeResponse",
         "type": "object"
@@ -5597,6 +5853,41 @@
           "code"
         ],
         "title": "MfaRequest",
+        "type": "object"
+      },
+      "MoveStageBackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "toStage": {
+            "description": "An earlier stage (or 3 to withdraw `ready`).",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Tostage",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "toStage"
+        ],
+        "title": "MoveStageBackRequest",
+        "type": "object"
+      },
+      "MoveStageBackResult": {
+        "properties": {
+          "changed": {
+            "description": "false: the type was already there (nothing recorded).",
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/CaseTypeStage"
+          }
+        },
+        "required": [
+          "changed",
+          "type"
+        ],
+        "title": "MoveStageBackResult",
         "type": "object"
       },
       "MuteCallRequest": {
@@ -6057,13 +6348,18 @@
           },
           "passwordRules": {
             "$ref": "#/components/schemas/PasswordRules"
+          },
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "description": "Slice 23c: her platform language."
           }
         },
         "required": [
           "name",
           "email",
           "expiresAt",
-          "passwordRules"
+          "passwordRules",
+          "uiLanguage"
         ],
         "title": "PasswordResetCheck",
         "type": "object"
@@ -6271,6 +6567,20 @@
           "case"
         ],
         "title": "PostTurnResponse",
+        "type": "object"
+      },
+      "Preferences": {
+        "description": "Her own settings (in ``/auth/me``; live as ``preferences.updated`` on ``staff:<id>``).",
+        "properties": {
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage",
+            "description": "The language of her platform UI (BCP 47): `es` (default) or `pt-BR`. Never the language of the conversations."
+          }
+        },
+        "required": [
+          "uiLanguage"
+        ],
+        "title": "Preferences",
         "type": "object"
       },
       "ProblemCode": {
@@ -7783,6 +8093,54 @@
         "title": "SinceSource",
         "type": "string"
       },
+      "StaffLine": {
+        "description": "Slice 23c: the facts of a staff-only transcript line; the staff UI writes the sentence\nin the viewer's language (``text`` keeps the Spanish one).\n\n``params`` by ``kind`` (names as they were when the line was written; ``language`` is the\ncase language ``es`` | ``pt``):\n``assigned_on_arrival`` / ``assigned_from_assistant`` {analyst, language};\n``queued`` {language}; ``assigned_from_queue`` {analyst, minutes, language};\n``wrote_again`` {customer (first name), closedAt (ISO), closeReason, channel};\n``assigned_by_supervision`` {supervisor, analyst, minutes, language, paused?};\n``reassigned`` {supervisor, previous, analyst, paused?} (``paused``: the first name of\nthe analyst who was paused); ``escalated`` / ``escalation_withdrawn`` {analyst};\n``escalation_answered`` {supervisor}; ``escalation_taken`` {supervisor, previous};\n``assistant_released`` {reason, ref?, code?, who?}; ``follow_up_call`` {analyst, customer}.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/StaffLineKind"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "params"
+        ],
+        "title": "StaffLine",
+        "type": "object"
+      },
+      "StaffLineKind": {
+        "description": "Slice 23c: what a staff-only transcript line (a ``routing`` turn) says. The turn keeps\nthe facts (``StaffLine``: this kind and its parameters) next to its stored Spanish text,\nso each viewer's UI writes the sentence in her own language.",
+        "enum": [
+          "assigned_on_arrival",
+          "assigned_from_assistant",
+          "queued",
+          "assigned_from_queue",
+          "wrote_again",
+          "assigned_by_supervision",
+          "reassigned",
+          "escalated",
+          "escalation_withdrawn",
+          "escalation_answered",
+          "escalation_taken",
+          "assistant_released",
+          "follow_up_call"
+        ],
+        "title": "StaffLineKind",
+        "type": "string"
+      },
       "StaffListResponse": {
         "properties": {
           "items": {
@@ -7858,6 +8216,179 @@
         ],
         "title": "StaffRole",
         "type": "string"
+      },
+      "StageChange": {
+        "description": "What the last change of the type was.",
+        "enum": [
+          "advanced",
+          "moved_back",
+          "agent_ready",
+          "agent_active"
+        ],
+        "title": "StageChange",
+        "type": "string"
+      },
+      "StageLastChange": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "byName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who did it; null: the system, by the team rule.",
+            "title": "Byname"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StageChange"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "byName"
+        ],
+        "title": "StageLastChange",
+        "type": "object"
+      },
+      "StageReached": {
+        "properties": {
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          },
+          "stage": {
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Stage",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stage",
+          "since"
+        ],
+        "title": "StageReached",
+        "type": "object"
+      },
+      "StageRule": {
+        "description": "**Team rule** (example thresholds for the demo, not learned from data; show it as \"Regla\ndel equipo (ejemplo)\"). Configurable with ``CC_STAGE_*``.",
+        "properties": {
+          "askedCasesToProposeTools": {
+            "description": "1 → 2: closed cases of the type in which the analyst asked the copilot.",
+            "title": "Askedcasestoproposetools",
+            "type": "integer"
+          },
+          "draftAsIsPercentForAgent": {
+            "description": "3 → agent: % of them sent as is or with minor changes.",
+            "title": "Draftasispercentforagent",
+            "type": "integer"
+          },
+          "draftWindow": {
+            "description": "3 → agent: the last drafts looked at.",
+            "title": "Draftwindow",
+            "type": "integer"
+          },
+          "minorEditPermille": {
+            "description": "An edited draft counts as minor changes up to this edit distance (0-1000).",
+            "title": "Minoreditpermille",
+            "type": "integer"
+          },
+          "resolvedCasesToAsk": {
+            "description": "0 → 1: cases of the type resolved by people.",
+            "title": "Resolvedcasestoask",
+            "type": "integer"
+          },
+          "toolCasesMinimum": {
+            "description": "2 → 3: …once there are at least this many.",
+            "title": "Toolcasesminimum",
+            "type": "integer"
+          },
+          "toolUsePercentToShadow": {
+            "description": "2 → 3: % of the closed cases with tool proposals in which one was used.",
+            "title": "Toolusepercenttoshadow",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resolvedCasesToAsk",
+          "askedCasesToProposeTools",
+          "toolUsePercentToShadow",
+          "toolCasesMinimum",
+          "draftWindow",
+          "draftAsIsPercentForAgent",
+          "minorEditPermille"
+        ],
+        "title": "StageRule",
+        "type": "object"
+      },
+      "StageSignals": {
+        "description": "What the platform recorded for the type **since it reached its current stage**.",
+        "properties": {
+          "askedCases": {
+            "description": "Closed cases in which someone asked the copilot.",
+            "title": "Askedcases",
+            "type": "integer"
+          },
+          "closedCases": {
+            "title": "Closedcases",
+            "type": "integer"
+          },
+          "drafts": {
+            "description": "Decided drafts in the window (at most `rule.draftWindow`).",
+            "title": "Drafts",
+            "type": "integer"
+          },
+          "draftsAsIs": {
+            "description": "Sent as is or with minor changes.",
+            "title": "Draftsasis",
+            "type": "integer"
+          },
+          "draftsDiscarded": {
+            "title": "Draftsdiscarded",
+            "type": "integer"
+          },
+          "draftsEdited": {
+            "title": "Draftsedited",
+            "type": "integer"
+          },
+          "resolvedCases": {
+            "title": "Resolvedcases",
+            "type": "integer"
+          },
+          "toolCases": {
+            "description": "Closed cases in which the copilot proposed tools.",
+            "title": "Toolcases",
+            "type": "integer"
+          },
+          "toolUsedCases": {
+            "description": "…and the analyst used one.",
+            "title": "Toolusedcases",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "closedCases",
+          "resolvedCases",
+          "askedCases",
+          "toolCases",
+          "toolUsedCases",
+          "drafts",
+          "draftsAsIs",
+          "draftsEdited",
+          "draftsDiscarded"
+        ],
+        "title": "StageSignals",
+        "type": "object"
       },
       "StartCallRequest": {
         "additionalProperties": false,
@@ -8254,6 +8785,37 @@
         "title": "TeamSummary",
         "type": "object"
       },
+      "ToolDecision": {
+        "description": "What the analyst did with a ``tool`` the copilot proposed (only ``used`` for now).",
+        "enum": [
+          "used"
+        ],
+        "title": "ToolDecision",
+        "type": "string"
+      },
+      "ToolUsedRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/ToolDecision",
+            "default": "used"
+          },
+          "tool": {
+            "examples": [
+              "leer_movimientos@1"
+            ],
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool"
+        ],
+        "title": "ToolUsedRequest",
+        "type": "object"
+      },
       "TotpEnrollment": {
         "description": "Step 2 of the activation, shown once: the QR code content and the manual key.",
         "properties": {
@@ -8376,6 +8938,17 @@
             "title": "Sequence",
             "type": "integer"
           },
+          "staffLine": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaffLine"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 23c: the facts of a staff-only `routing` line, written in the viewer's language by the UI; null on other turns and on lines written before 23c (show `text`)."
+          },
           "subject": {
             "anyOf": [
               {
@@ -8406,7 +8979,8 @@
           "language",
           "createdAt",
           "clientMessageId",
-          "subject"
+          "subject",
+          "staffLine"
         ],
         "title": "Turn",
         "type": "object"
@@ -8478,6 +9052,15 @@
         "title": "TurnPage",
         "type": "object"
       },
+      "UiLanguage": {
+        "description": "Languages of the platform UI (BCP 47 tags, as the browser and ``Intl`` use them).\n\nNot the same set as ``Language`` (what a person speaks with customers: ``es`` | ``pt``).",
+        "enum": [
+          "es",
+          "pt-BR"
+        ],
+        "title": "UiLanguage",
+        "type": "string"
+      },
       "UpdateAvailabilityRequest": {
         "additionalProperties": false,
         "properties": {
@@ -8489,6 +9072,19 @@
           "status"
         ],
         "title": "UpdateAvailabilityRequest",
+        "type": "object"
+      },
+      "UpdatePreferencesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "uiLanguage": {
+            "$ref": "#/components/schemas/UiLanguage"
+          }
+        },
+        "required": [
+          "uiLanguage"
+        ],
+        "title": "UpdatePreferencesRequest",
         "type": "object"
       },
       "UpdateUserRequest": {
@@ -10598,6 +11194,53 @@
         ]
       }
     },
+    "/api/v1/ai/stages": {
+      "get": {
+        "description": "Slice 21. Every case type but `none`, with its stage (0-3), whether an agent is proposed (`ready`) or serves it (`active`), the copilot mode a case of the type gets, the signals counted since its current stage and the team rule (example thresholds). A type nothing happened to is at stage 0. AI off: `available: false` and no types. Live: `ai.stage_updated` on `ai:stages`.",
+        "operationId": "ai-stages_get_ai_stages",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiStages"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The AI stage of every case type (analysts and Supervisión)",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
     "/api/v1/audit/events": {
       "get": {
         "description": "Filters combine with AND. `actorKind`: staff (any staff role), customer or system. `family` and `changesOnly` come from the backend catalog. `from` is inclusive and `to` exclusive (on the event time). `q` is a case-insensitive contains on ids only (event, entity, case, actor). `nextCursor` is opaque: pass it as `cursor`.",
@@ -11538,6 +12181,63 @@
           }
         ],
         "summary": "Tell the builder agent what to change",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/chat/restart": {
+      "post": {
+        "description": "Slice 22, \"Nueva conversación\": the caller's thread starts over, empty (the transcript stays in agent-core), and her next message starts another run of the builder agent, whatever state the current one is in. Proposals already made stay in the list. Safe to repeat. AI off or no agent-core: 404 `assistant_disabled`.",
+        "operationId": "builder_restart_chat",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuilderThread"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Start a new conversation with the builder agent",
         "tags": [
           "builder"
         ]
@@ -15479,6 +16179,104 @@
         ]
       }
     },
+    "/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/tools": {
+      "post": {
+        "description": "Slice 21. Send it when \"Usar\" asks the copilot about a `tool` of the suggestion. Records `copilot.tool_used` (audited; the suggestion is not changed); it feeds the stage 2 signal of the case's type. Her own suggestion (`ready`), a tool it proposed: 404 otherwise. AI off: 404 `assistant_disabled`.",
+        "operationId": "ai-stages_record_tool_used",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CASE-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Caseid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "suggestionId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "CPS-01J…"
+              ],
+              "maxLength": 64,
+              "title": "Suggestionid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolUsedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The analyst used a tool the copilot proposed",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
     "/api/v1/cases/{caseId}/emails": {
       "get": {
         "operationId": "channels_get_email_thread",
@@ -18604,6 +19402,97 @@
         ]
       }
     },
+    "/api/v1/me/preferences": {
+      "get": {
+        "operationId": "preferences_get_preferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "My preferences (never changed = the defaults)",
+        "tags": [
+          "preferences"
+        ]
+      },
+      "put": {
+        "description": "Records `staff.ui_language_changed` (audited) and sends `preferences.updated` to her other sessions on `staff:<id>`.",
+        "operationId": "preferences_set_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePreferencesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Change my preferences (same value = no change, no event)",
+        "tags": [
+          "preferences"
+        ]
+      }
+    },
     "/api/v1/meta": {
       "get": {
         "operationId": "system_meta",
@@ -19047,6 +19936,250 @@
         "summary": "List staff (active only unless includeInactive), optionally by role",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/stages/{caseType}/agent": {
+      "post": {
+        "description": "Slice 22, \"Activar\". For a type `ready` for an agent: points the agent's `prod` alias at the published release (the registry's promotion, audited as `builder.alias_promoted`) and records that the agent serves the type (`agent: active`, `agentId`; audited as `ai.agent_activated`, live on `ai:stages`). Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`). Safe to repeat: the agent that already serves the type answers `changed: false` without promoting. 409 `invalid_transition` for a type not ready or served by another agent (checked before anything is promoted); registry refusals are `registry_*`. AI off or no agent-core: 404 `assistant_disabled`.",
+        "operationId": "ai-stages_activate_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseType",
+            "required": true,
+            "schema": {
+              "examples": [
+                "undue_charge"
+              ],
+              "maxLength": 40,
+              "title": "Casetype",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivateAgentResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "423": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Activate the agent of a case type (Supervisión)",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/stages/{caseType}/move-back": {
+      "post": {
+        "description": "Slice 21. A desired state, safe to repeat: the same stage answers `changed: false`. `toStage` 3 on a type `ready` for an agent withdraws the proposal. Moving up is only the team rule's. 409 `invalid_transition` for a higher stage or a type an agent serves (slice 22 activates one; deactivating is not built). Records `ai.stage_moved_back` (audited); the type earns the stages above again from zero. AI off: 404 `assistant_disabled`.",
+        "operationId": "ai-stages_move_stage_back",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseType",
+            "required": true,
+            "schema": {
+              "examples": [
+                "undue_charge"
+              ],
+              "maxLength": 40,
+              "title": "Casetype",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveStageBackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveStageBackResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Move a case type back to an earlier stage (Supervisión)",
+        "tags": [
+          "ai-stages"
         ]
       }
     },

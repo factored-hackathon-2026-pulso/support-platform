@@ -1,4 +1,5 @@
 import { Fact } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { arrivalFacts, supervisionArrivalLine, type ConversationMode } from '../model'
 import type { CaseDetail } from '../types'
 
@@ -20,20 +21,21 @@ export interface ArrivalNoteProps {
  * explain.
  */
 export function ArrivalNote({ detail, meId, mode = 'workspace' }: ArrivalNoteProps) {
+  const { t } = useTranslation('conversation')
   if (mode === 'supervision') {
     const arrival = supervisionArrivalLine(detail)
     if (!arrival) return null
     return (
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border bg-subtle px-6 py-2 text-12 text-muted">
         <p className="m-0">
-          <span className="font-semibold text-ink-2">Cómo llegó</span>
+          <span className="font-semibold text-ink-2">{t('arrival.supervisionLead')}</span>
           <span className="sr-only">: </span> {arrival.line}
         </p>
         {arrival.time ? (
           <Fact
             icon="clock"
             text={arrival.time}
-            label="Asignado"
+            label={t('arrival.assigned')}
             tone="muted"
             className="ml-auto"
           />
@@ -54,7 +56,13 @@ export function ArrivalNote({ detail, meId, mode = 'workspace' }: ArrivalNotePro
         ))}
       </ul>
       {arrival.time ? (
-        <Fact icon="clock" text={arrival.time} label="Asignado" tone="muted" className="ml-auto" />
+        <Fact
+          icon="clock"
+          text={arrival.time}
+          label={t('arrival.assigned')}
+          tone="muted"
+          className="ml-auto"
+        />
       ) : null}
     </div>
   )

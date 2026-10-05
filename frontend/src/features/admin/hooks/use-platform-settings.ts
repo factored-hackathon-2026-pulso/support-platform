@@ -4,7 +4,7 @@ import { useToast } from '@/components/ui'
 import type { ApiProblem } from '@/lib/api'
 import { topics, useOnReconnect, useRealtimeSubscription } from '@/lib/realtime'
 import { adminKeys, adminMutationKeys, fetchAdminPlatform, setAiEnabled } from '../api'
-import { aiToggledToast, describeAiToggleFailure } from '../model'
+import { aiToggledToast, describeAiToggleFailure } from '../platform'
 import type { AdminPlatformSettings, SetAiEnabledResult } from '../types'
 
 /**

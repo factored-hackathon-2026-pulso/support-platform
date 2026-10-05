@@ -159,6 +159,21 @@ uv run python -m cc_platform.scripts.gen_agent_keys --suffix 2026-10
 4. Rotating: generate into a new `--out` with a new `--suffix`, publish both public files side by
    side (agent-core re-reads them every few seconds), switch `CC_AGENT_KEYS_FILE`, retire the old key.
 
+5. Loading the seed agents into a deployed agent-core (its registry starts empty): sign a
+   short-lived admin credential with the platform's **staff** key and use it at once (valid two
+   minutes, the step-up window):
+   ```bash
+   uv run python -m cc_platform.scripts.registry_admin_credential --staff-id <staff id>
+   ```
+   It prints one JWS for `AGENTCORE_CREDENTIAL` of `agentcore registry --verifier
+   agent_core.composition.registry:staff_verifier import <seed dir>` (agent-core verifies it with
+   the same `staff-keys.json`). Whoever reads `private.json` can sign anything: the script only
+   spares typing the claims.
+6. The copilot's run carries the case's assistant session (`input.assistant_session_id`, from
+   the case's `AssistantSession`), so agent-core's `obtener_handoff` and `leer_transcript` read the
+   conversation the analyst inherited; agent-core refuses it unless that session is about the same
+   customer as the delegation. A case that never had the assistant sends no input.
+
 `private.json` holds the seeds: never commit it; in a deployment it belongs in a secrets manager.
 `tests/contracts/agent-core-openapi.json` is a copy of agent-core's contract (`1.3.0`); refresh it and
 `agent-core-contract-version.txt` when agent-core's contract changes, and the contract test tells
@@ -286,6 +301,10 @@ After updating to slice 8, delete `backend/cc_platform.db`: the seed only adds m
 an older database keeps the old priorities and deadlines. Slice 9 adds the `escalations` table
 and the `cases.open_escalation_id` column: an older database does not start
 (`OutdatedSchemaError`) until it is deleted.
+Slice 23 adds the `staff_preferences` table (each person's UI language): delete an older
+database too. The UI language is chosen in the account menu ("Idioma de la plataforma": Español /
+Português); before signing in, the app uses the language this browser last used, else the
+browser's (Spanish or Portuguese), else Spanish.
 
 ### Simulator customers
 
@@ -376,6 +395,46 @@ running. The scenarios live in `frontend/e2e/` and the configuration in
 To run a part: `pnpm e2e e2e/auth.spec.ts` (one file) or `pnpm e2e -g "Casos anteriores"` (by
 title). What each scenario covers, the isolation rules and the known gaps are in
 [api/slice-5-e2e.md](./api/slice-5-e2e.md).
+
+### 9.1 The assistant against the full stack (`pnpm e2e:stack`)
+
+The assistant's flows need a real agent-core, so they have their own suite, outside `pnpm e2e`:
+`frontend/e2e-stack/` (configuration `frontend/e2e-stack/playwright.config.ts`). It starts
+nothing: it drives the local AI stack (`stack/up.sh` next to the repositories: this platform's API
+on 8100 and web on 5174, agent-core on 8001 with its demo doubles, llm-gateway on 8080 to
+OpenRouter).
+
+```bash
+../stack/up.sh        # from the folder that holds the repositories; see stack/README.md
+cd frontend
+pnpm e2e:stack        # 8 scenarios, about 40 s; STACK_API_URL / STACK_WEB_URL change the origins
+pnpm exec playwright show-report playwright-report/stack   # screenshots of each step
+```
+
+| Scenario | What it checks |
+|---|---|
+| 1 | Natalia (Spanish) writes; "El asistente virtual está escribiendo…", then the assistant's bubble |
+| 2 | "Hablar con una persona": the hand-over in the simulator; Tomás (available) gets the case "Tras el traspaso del asistente" with the banner, replies, and the customer reads him |
+| 3 | A charge over agent-core's amount policy escalates with a handoff packet: "El asistente te pasó este caso", the "Traspaso" tab, and the close with "¿Te sirvió el traspaso?" → `handoffQuality: useful`, 200 |
+| 4 | A smaller charge: "Confirma para seguir" (Sí) and "Confirma que eres tú" (a wrong code, then `000000`), whichever the assistant asks; the assistant's survey when it resolves |
+| 5 | Colas: the row "Con el asistente", "No corre", "Asistente virtual"; "Tomar el caso" sends it to the queue and the customer is told |
+| 6 | Rafael (Portuguese) is answered in Portuguese |
+| 7 | Administración turns "Funciones de IA" off while the assistant holds a chat: the customer and Tomás see the hand-over ("IA desactivada" banner); it is turned on again |
+| 8 | Auditoría, filtered by the case: rows with the actor "Asistente virtual" and its detail |
+
+- **Only synthetic data reaches the model**: the scenarios write as the two simulator customers
+  linked to agent-core's demo ids (Natalia `CUS-…2001` → `cust-001`, Rafael `CUS-…2004` →
+  `cust-002`).
+- **Seeded accounts only** (the stack's database outlives a run): Tomás Arango receives the
+  hand-overs, Sebastián Cárdenas (paused) closes what a scenario left open, Lucía Herrera is
+  Supervisión, Valeria Quintero is Administración. Before the run every seeded Analista is paused;
+  if someone else is available the run stops and names her. Each scenario starts and ends with AI
+  on, nobody available and both customers without an open conversation.
+- **The model is nondeterministic**: the scenarios check states and structure (statuses, bubbles,
+  cards, tabs, banners, the close request), never its words. A conversation that went elsewhere
+  is closed and tried again, at most three times, and the retry is noted on the report ("model
+  variance"); when agent-core refused with `rate_limited` the next attempt waits a minute.
+- A failure leaves a trace and screenshots under `frontend/test-results/stack/`.
 
 ## 10. Troubleshooting
 

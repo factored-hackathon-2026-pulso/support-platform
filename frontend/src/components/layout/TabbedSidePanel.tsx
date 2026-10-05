@@ -6,6 +6,11 @@ export interface SidePanelTab {
   value: string
   label: string
   content: ReactNode
+  /**
+   * `scroll` (default): the tab pads and scrolls its content. `fill`: the content takes the whole
+   * tab and handles its own scroll (a thread with its box pinned at the bottom: "Copiloto").
+   */
+  layout?: 'scroll' | 'fill'
 }
 
 export interface TabbedSidePanelProps {
@@ -28,7 +33,7 @@ export interface TabbedSidePanelProps {
 /**
  * The right panel of the Workspace with tabs (slice 19, AI on): the same slot as `SidePanel`
  * (not modal, Escape inside it closes it and the focus returns to the trigger), but its header
- * is a tab list ("Traspaso", "Cliente"; S20 adds "Copiloto" and "Herramientas") with the close
+ * is a tab list ("Traspaso", "Copiloto", "Herramientas", "Cliente") with the close
  * button at its end. 400 px wide (IaWorkspace). Each tab's content scrolls inside it.
  */
 export function TabbedSidePanel({
@@ -98,7 +103,11 @@ export function TabbedSidePanel({
           <TabPanel
             key={tab.value}
             value={tab.value}
-            className="flex min-h-0 grow scrollbar-thin flex-col gap-6 overflow-y-auto px-5 py-4"
+            className={
+              tab.layout === 'fill'
+                ? 'flex min-h-0 grow flex-col'
+                : 'flex min-h-0 grow scrollbar-thin flex-col gap-6 overflow-y-auto px-5 py-4'
+            }
           >
             {tab.content}
           </TabPanel>

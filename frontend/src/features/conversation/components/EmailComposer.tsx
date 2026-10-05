@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { Info, Paperclip, Send } from 'lucide-react'
 import { Button, ComposerFrame, Input, Textarea, Tooltip } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { MASKED_ADDRESS, describeWriteFailure, replySubject } from '../channels'
 import { useEmailReply } from '../hooks'
 import { newClientMessageId } from '../hooks/use-send-message'
@@ -23,6 +24,7 @@ export interface EmailComposerProps {
  * agregan solos", attach (not yet: "Pronto") and "Enviar correo".
  */
 export function EmailComposer({ caseId, language, customerName, subject }: EmailComposerProps) {
+  const { t } = useTranslation('conversation')
   const id = useId()
   const reply = useEmailReply(caseId, language)
   const [body, setBody] = useState('')
@@ -60,19 +62,23 @@ export function EmailComposer({ caseId, language, customerName, subject }: Email
   }
 
   return (
-    <form onSubmit={submit} aria-label="Responder por correo">
+    <form onSubmit={submit} aria-label={t('email.form')}>
       <ComposerFrame className="flex flex-col gap-2 px-3 py-2.5">
         <dl className="m-0 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 text-13">
-          <dt className="text-muted">Para</dt>
+          <dt className="text-muted">{t('email.to')}</dt>
           <dd className="m-0 flex min-w-0 items-center gap-2 text-ink">
             <span className="truncate">{customerName}</span>
-            <span className="font-mono text-12 text-muted" title="Dirección oculta">
+            <span className="font-mono text-12 text-muted" title={t('email.hidden')}>
               <span aria-hidden="true">{MASKED_ADDRESS}</span>
-              <span className="sr-only">dirección oculta</span>
+              <span className="sr-only">{t('email.hiddenSr')}</span>
             </span>
           </dd>
           <dt className="text-muted">
-            {subject ? 'Asunto' : <label htmlFor={`${id}-subject`}>Asunto</label>}
+            {subject ? (
+              t('email.subject')
+            ) : (
+              <label htmlFor={`${id}-subject`}>{t('email.subject')}</label>
+            )}
           </dt>
           <dd className="m-0 min-w-0 text-ink">
             {subject ? (
@@ -93,14 +99,14 @@ export function EmailComposer({ caseId, language, customerName, subject }: Email
           </dd>
         </dl>
         <label htmlFor={id} className="sr-only">
-          Respuesta por correo
+          {t('email.body')}
         </label>
         <Textarea
           ref={bodyRef}
           id={id}
           variant="bare"
           rows={3}
-          placeholder="Escribe tu respuesta"
+          placeholder={t('email.placeholder')}
           aria-describedby={`${id}-hint`}
           value={body}
           onChange={(event) => {
@@ -111,13 +117,13 @@ export function EmailComposer({ caseId, language, customerName, subject }: Email
         <div className="flex items-center justify-between gap-2">
           <span id={`${id}-hint`} className="inline-flex items-center gap-1.5 text-12 text-muted">
             <Info size={13} aria-hidden="true" />
-            El saludo y la firma se agregan solos
+            {t('email.signature')}
           </span>
           <span className="flex items-center gap-2">
-            <Tooltip content="Pronto" focusable={false}>
+            <Tooltip content={t('email.soon')} focusable={false}>
               <button
                 type="button"
-                aria-label="Adjuntar archivo, pronto"
+                aria-label={t('email.attach')}
                 aria-disabled="true"
                 className="flex size-10 cursor-not-allowed items-center justify-center rounded-10 border border-border bg-subtle text-muted"
               >
@@ -131,7 +137,7 @@ export function EmailComposer({ caseId, language, customerName, subject }: Email
               iconEnd={<Send size={15} aria-hidden="true" />}
               aria-disabled={!ready || undefined}
             >
-              Enviar correo
+              {t('email.send')}
             </Button>
           </span>
         </div>

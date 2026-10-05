@@ -16,6 +16,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryBuilderThreadRepository,
     InMemoryCallRepository,
     InMemoryCaseRepository,
+    InMemoryCaseTypeMaturityRepository,
     InMemoryCopilotSuggestionRepository,
     InMemoryCopilotThreadRepository,
     InMemoryCustomerCaseSlotRepository,
@@ -28,6 +29,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryNotificationRepository,
     InMemoryPasswordResetRepository,
     InMemoryPlatformSettingsRepository,
+    InMemoryStaffPreferencesRepository,
     InMemoryStaffRepository,
     InMemoryStaffSessionRepository,
     InMemoryTeamRepository,
@@ -46,6 +48,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     mfa_challenges: InMemoryMfaChallengeRepository
     sessions: InMemoryStaffSessionRepository
     availability: InMemoryAnalystAvailabilityRepository
+    preferences: InMemoryStaffPreferencesRepository
     invitations: InMemoryInvitationRepository
     password_resets: InMemoryPasswordResetRepository
     customers: InMemoryCustomerRepository
@@ -59,6 +62,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     assistant_sessions: InMemoryAssistantSessionRepository
     copilot_threads: InMemoryCopilotThreadRepository
     copilot_suggestions: InMemoryCopilotSuggestionRepository
+    case_type_maturity: InMemoryCaseTypeMaturityRepository
     builder_threads: InMemoryBuilderThreadRepository
     builder_proposals: InMemoryBuilderProposalRepository
     bank_links: InMemoryBankCustomerLinks
@@ -81,6 +85,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.mfa_challenges = InMemoryMfaChallengeRepository(store.mfa_challenges, track)
         self.sessions = InMemoryStaffSessionRepository(store.sessions, track)
         self.availability = InMemoryAnalystAvailabilityRepository(store.availability, track)
+        self.preferences = InMemoryStaffPreferencesRepository(store.preferences, track)
         self.invitations = InMemoryInvitationRepository(store.invitations, track)
         self.password_resets = InMemoryPasswordResetRepository(store.password_resets, track)
         self.customers = InMemoryCustomerRepository(store.customers)
@@ -97,6 +102,9 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.copilot_threads = InMemoryCopilotThreadRepository(store.copilot_threads, track)
         self.copilot_suggestions = InMemoryCopilotSuggestionRepository(
             store.copilot_suggestions, track
+        )
+        self.case_type_maturity = InMemoryCaseTypeMaturityRepository(
+            store.case_type_maturity, track
         )
         self.builder_threads = InMemoryBuilderThreadRepository(store.builder_threads, track)
         self.builder_proposals = InMemoryBuilderProposalRepository(store.builder_proposals, track)
@@ -117,6 +125,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryMfaChallengeRepository
         | InMemoryStaffSessionRepository
         | InMemoryAnalystAvailabilityRepository
+        | InMemoryStaffPreferencesRepository
         | InMemoryInvitationRepository
         | InMemoryPasswordResetRepository
         | InMemoryCustomerRepository
@@ -130,6 +139,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryAssistantSessionRepository
         | InMemoryCopilotThreadRepository
         | InMemoryCopilotSuggestionRepository
+        | InMemoryCaseTypeMaturityRepository
         | InMemoryBuilderThreadRepository
         | InMemoryBuilderProposalRepository
         | InMemoryBankCustomerLinks
@@ -146,6 +156,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.mfa_challenges,
             self.sessions,
             self.availability,
+            self.preferences,
             self.invitations,
             self.password_resets,
             self.case_slots,
@@ -155,6 +166,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.assistant_sessions,
             self.copilot_threads,
             self.copilot_suggestions,
+            self.case_type_maturity,
             self.builder_threads,
             self.builder_proposals,
             self.bank_links,

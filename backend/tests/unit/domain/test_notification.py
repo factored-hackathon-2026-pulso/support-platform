@@ -67,6 +67,11 @@ def test_never_read_before_it_happened() -> None:
         make(read_at=T - timedelta(seconds=1))
 
 
+def test_an_artifact_reference_is_not_an_email_address() -> None:
+    kept = dossier(problem="recepcion@1.0.0 y disputas@2.1.0-rc.1 responden tarde")
+    assert "recepcion@1.0.0" in kept.problem
+
+
 @pytest.mark.parametrize(
     "changes",
     [

@@ -1,7 +1,9 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useToast } from '@/components/ui'
 import { applyCaseSummaryToInboxes } from '@/features/cases'
+import { copilotKeys } from '@/features/copilot/core'
 import type { ApiProblem } from '@/lib/api'
+import { i18n } from '@/lib/i18n'
 import {
   acknowledgeEscalation,
   conversationKeys,
@@ -35,16 +37,30 @@ export function storeEscalationResult(queryClient: QueryClient, result: Escalati
   void queryClient.invalidateQueries({ queryKey: conversationKeys.turns(caseId), exact: true })
 }
 
+interface EscalateInput {
+  motive: string
+  idempotencyKey: string
+  /** Slice 20: she escalated through the copilot's recommendation. */
+  copilotSuggestionId?: string | null
+}
+
 /**
  * POST /cases/{caseId}/escalations. The dialog owns the `Idempotency-Key` (one per opening),
  * so a retry after a lost answer replays the escalation instead of `escalation_open`.
  */
 export function useEscalateCase(caseId: string) {
   const queryClient = useQueryClient()
-  return useMutation<EscalationResult, ApiProblem, { motive: string; idempotencyKey: string }>({
+  return useMutation<EscalationResult, ApiProblem, EscalateInput>({
     mutationKey: conversationMutationKeys.escalate(caseId),
-    mutationFn: ({ motive, idempotencyKey }) => escalateCase(caseId, motive, idempotencyKey),
-    onSuccess: (result) => storeEscalationResult(queryClient, result),
+    mutationFn: ({ motive, idempotencyKey, copilotSuggestionId }) =>
+      escalateCase(caseId, motive, idempotencyKey, copilotSuggestionId),
+    onSuccess: (result, { copilotSuggestionId }) => {
+      storeEscalationResult(queryClient, result)
+      // The recommendation was accepted: it leaves the newest suggestion.
+      if (copilotSuggestionId) {
+        void queryClient.invalidateQueries({ queryKey: copilotKeys.latest(caseId), exact: true })
+      }
+    },
   })
 }
 
@@ -58,7 +74,7 @@ export function useWithdrawEscalation(caseId: string) {
     onSuccess: (result) => storeEscalationResult(queryClient, result),
     onError: (error) => {
       toast({
-        title: 'No se retiró el escalamiento',
+        title: i18n.t('conversation:escalation.withdrawFailed'),
         description: describeEscalationFailure(error, 'withdraw'),
         politeness: 'alert',
       })
@@ -102,7 +118,7 @@ export function useAcknowledgeEscalation(caseId: string) {
         )
       }
       toast({
-        title: 'No se marcó como leído',
+        title: i18n.t('conversation:escalation.acknowledgeFailed'),
         description: describeEscalationFailure(error, 'acknowledge'),
         politeness: 'alert',
       })

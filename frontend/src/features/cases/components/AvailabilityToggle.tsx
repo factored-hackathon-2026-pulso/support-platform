@@ -1,6 +1,7 @@
 import { Pause, Play } from 'lucide-react'
 import { useToast } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { useAvailability, useUpdateAvailability } from '../hooks'
 import { availabilityControlCopy } from '../model'
 
@@ -24,6 +25,7 @@ export interface AvailabilityToggleProps {
  * states the action ("En pausa. Volver a disponible").
  */
 export function AvailabilityToggle({ placement }: AvailabilityToggleProps) {
+  const { t } = useTranslation(['cases', 'common'])
   const availability = useAvailability()
   const update = useUpdateAvailability()
   const { toast } = useToast()
@@ -32,7 +34,7 @@ export function AvailabilityToggle({ placement }: AvailabilityToggleProps) {
     return placement === 'header' ? (
       <span className={cn(pill, 'text-muted')} aria-busy="true">
         <span aria-hidden="true" className="size-2 rounded-full bg-offline" />
-        Estado…
+        {t('availability.loading')}
       </span>
     ) : null
   }
@@ -45,7 +47,8 @@ export function AvailabilityToggle({ placement }: AvailabilityToggleProps) {
         onClick={() => void availability.refetch()}
       >
         <span aria-hidden="true" className="size-2 rounded-full bg-offline" />
-        Sin estado<span className="sr-only">. Reintentar</span>
+        {t('availability.unknown')}
+        <span className="sr-only">. {t('common:actions.retry')}</span>
       </button>
     ) : null
   }
@@ -57,8 +60,8 @@ export function AvailabilityToggle({ placement }: AvailabilityToggleProps) {
     update.mutate(paused ? 'available' : 'paused', {
       onError: () =>
         toast({
-          title: 'No pudimos cambiar tu estado',
-          description: 'Revisa tu conexión e inténtalo de nuevo.',
+          title: t('availability.failedTitle'),
+          description: t('availability.failedDetail'),
           politeness: 'alert',
         }),
     })

@@ -49,6 +49,7 @@ from cc_platform.domain.ai.events import (
 from cc_platform.domain.cases import CloseReason
 from cc_platform.domain.people.availability import AvailabilityStatus
 from cc_platform.domain.people.errors import AccountLockedError
+from cc_platform.domain.people.preferences import UiLanguage
 from cc_platform.domain.people.staff import Language, StaffRole
 from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
@@ -185,6 +186,16 @@ def test_the_ai_switch_says_on_or_off() -> None:
     assert "platform.ai_toggled" in CHANGES_STATE
 
 
+def test_the_ui_language_change_names_the_language_by_its_own_name() -> None:
+    names = AuditNames()
+    to_pt = stored("staff.ui_language_changed", {"from_language": "es", "to_language": "pt-BR"})
+    to_es = stored("staff.ui_language_changed", {"from_language": "pt-BR", "to_language": "es"})
+    assert describe(to_pt, names) == "Cambió el idioma de la plataforma a Português"
+    assert describe(to_es, names) == "Cambió el idioma de la plataforma a Español"
+    assert family_of("staff.ui_language_changed") is AuditFamily.ACCESS
+    assert "staff.ui_language_changed" in CHANGES_STATE
+
+
 async def emit_everything(container: Container) -> None:
     """Drive every kind of event the platform emits through the real use cases."""
     people, cases = container.use_cases.people, container.use_cases.cases
@@ -226,6 +237,8 @@ async def emit_everything(container: Container) -> None:
     # Slice 9: every escalation outcome (the seed opened, answered and reassigned some).
     await cases.acknowledge_escalation.execute(daniela, seed_case_id(107), seed_escalation_id(107))
     await cases.withdraw_escalation.execute(daniela, seed_case_id(101), seed_escalation_id(101))
+    # Slice 21: Supervisión moves a seeded type back (the seed climbed the others).
+    await container.use_cases.maturity.move_back.execute(lucia, "app_issue", to_stage=1)
     taken = await cases.escalate.execute(
         daniela, seed_case_id(108), EscalateCommand("Pide hablar con supervisión.", "esc-key-01")
     )
@@ -236,6 +249,8 @@ async def emit_everything(container: Container) -> None:
     await cases.close.execute(daniela, seed_case_id(102), CloseCaseCommand(CloseReason.RESOLVED))
     await cases.close.execute(daniela, seed_case_id(107), CloseCaseCommand(CloseReason.DUPLICATE))
     await people.set_availability.execute(daniela, AvailabilityStatus.PAUSED)
+    # Slice 23: her own UI language.
+    await people.set_preferences.execute(daniela, UiLanguage.PORTUGUESE_BRAZIL)
     await people.set_availability.execute(daniela, AvailabilityStatus.AVAILABLE)
     await container.background.drain()  # the drain assigns what is left in the queues
     await emit_administration(container)
@@ -317,6 +332,7 @@ async def test_every_emitted_event_has_a_description() -> None:
     assistant_types = {
         "case.assistant_started",
         "case.assistant_released",
+        "copilot.tool_used",  # slice 21: needs a suggestion (``test_maturity.py``)
         *(
             event.event_type
             for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS, *SUGGESTION_EVENTS, *BUILDER_EVENTS)
@@ -361,6 +377,10 @@ async def test_every_emitted_event_has_a_description() -> None:
         "Reasignó el caso escalado de Julián Ortega a Daniela Ríos",
         "El escalamiento terminó porque se cerró el caso",
         "Leyó lo que hizo supervisión con su escalamiento",
+        "Subió Cobro indebido a la etapa 3: el copiloto propone respuestas",
+        "Propuso un agente para Cobro indebido",
+        "Activó el agente de Cargo no reconocido",
+        "Devolvió Problema con app a la etapa 1: el copiloto responde",
     } <= descriptions
     assert any(
         d.startswith("Asignó el caso a Daniela Ríos desde la cola en español después de ")

@@ -3,6 +3,7 @@ import { Check, Languages } from 'lucide-react'
 import { ROLE_LABEL, ROLE_ORDER, type RoleId } from '@/app/roles'
 import { Checkbox, Field, Input, Kicker, LANGUAGE_NATIVE_NAME, Select } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import {
   EMAIL_MAX_LENGTH,
   LANGUAGES,
@@ -39,12 +40,6 @@ export interface UserFormProps {
   disabled?: boolean
 }
 
-export const ROLES_NOTE =
-  'Los cambios de rol se aplican de inmediato: la persona ve su menú actualizado sin volver a ingresar.'
-
-export const LANGUAGES_HINT =
-  'Quien atiende casos necesita al menos un idioma. Los casos en portugués solo llegan a quien lo habla (regla 3).'
-
 /**
  * The person form (Admin `usuarios` aside, contract §10.2), shared by the edit
  * aside and the create dialog: name, email, the ROLES checkbox cards, IDIOMAS
@@ -63,6 +58,7 @@ export function UserForm({
   disabled = false,
 }: UserFormProps) {
   const id = useId()
+  const { t } = useTranslation(['admin', 'common'])
   const rolesErrorId = `${id}-roles-error`
   const languagesErrorId = `${id}-languages-error`
   const languagesHintId = `${id}-languages-hint`
@@ -87,7 +83,7 @@ export function UserForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Nombre completo" error={errors.name}>
+      <Field label={t('form.name')} error={errors.name}>
         <Input
           ref={register('name')}
           value={draft.name}
@@ -97,7 +93,7 @@ export function UserForm({
           onChange={(event) => set({ name: event.target.value })}
         />
       </Field>
-      <Field label="Correo" error={errors.email}>
+      <Field label={t('common:fields.email')} error={errors.email}>
         <Input
           ref={register('email')}
           type="email"
@@ -112,7 +108,7 @@ export function UserForm({
 
       <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
         <Kicker as="legend" className="mb-2 p-0">
-          Roles
+          {t('form.roles')}
         </Kicker>
         {ROLE_ORDER.map((role, index) => {
           const locked = role === 'admin' && adminLocked !== null && draft.roles.includes('admin')
@@ -138,13 +134,13 @@ export function UserForm({
             {errors.roles}
           </span>
         ) : null}
-        {showRolesNote ? <p className="m-0 text-12 text-ink-2">{ROLES_NOTE}</p> : null}
+        {showRolesNote ? <p className="m-0 text-12 text-ink-2">{t('form.rolesNote')}</p> : null}
       </fieldset>
 
       <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
         <Kicker as="legend" className="mb-2 flex items-center gap-1.5 p-0">
           <Languages size={14} aria-hidden="true" />
-          Idiomas
+          {t('common:fields.languages')}
         </Kicker>
         {/*
           Option cards (Admin.dc.html): only the language's own name, a native checkbox
@@ -206,15 +202,15 @@ export function UserForm({
           </span>
         ) : null}
         <span id={languagesHintId} className="text-12 text-muted">
-          {LANGUAGES_HINT}
+          {t('form.languagesHint')}
         </span>
       </fieldset>
 
-      <Field label="Equipo" error={errors.teamId}>
+      <Field label={t('common:fields.team')} error={errors.teamId}>
         <Select
           ref={register('teamId')}
           value={draft.teamId}
-          placeholder="Elige un equipo"
+          placeholder={t('form.teamPlaceholder')}
           disabled={disabled}
           options={options}
           onChange={(event) => set({ teamId: event.target.value })}

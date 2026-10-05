@@ -2,14 +2,16 @@
  * Notification center rules and copy (docs/platform/api/slice-10-notifications.md §5):
  * pure, no React, unit-tested.
  *
- * The API sends structured facts only (`kind` + who + which case); every word lives here, in
- * fixed templates (people-only, no AI, gender-neutral roles: "Supervisión"). One map,
+ * The API sends structured facts only (`kind` + who + which case); every word lives in the
+ * `notifications` catalog, in fixed templates read when a function runs (people-only, no AI,
+ * gender-neutral roles: "Supervisión"). One map,
  * `NOTIFICATION_KIND`, gives each kind its icon tile, tone and primary action; the canvas
  * boards (Workspace "notificaciones", SuColas / Admin `notificaciones`, HomeTurno) are the
  * source of the copy.
  */
 import {
   adminUserPath,
+  automationProposalPath,
   PATHS,
   supervisionCasePath,
   supervisionEscalationPath,
@@ -20,6 +22,7 @@ import type { RoleId } from '@/app/roles'
 import { ratingOption } from '@/features/cases/core'
 import { LANGUAGE_NAMES } from '@/features/conversation/core'
 import { formatDate } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type {
   Notification,
   NotificationCreatedPayload,
@@ -28,6 +31,8 @@ import type {
   NotificationPages,
   NotificationsReadPayload,
 } from './types'
+
+const t = i18n.getFixedT(null, 'notifications')
 
 /** Icon of a kind's tile (drawn by `NotificationTile`). */
 export type NotificationIcon =
@@ -39,28 +44,44 @@ export type NotificationTone = 'accent' | 'success' | 'warn' | 'danger'
 export interface NotificationAppearance {
   icon: NotificationIcon
   tone: NotificationTone
-  /** The primary action ("Abrir caso", "Revisar", "Ver en la cola", "Ver usuarios"). */
-  action: string
+  /** The primary action ("Abrir caso", "Revisar", "Ver en la cola", "Ver usuarios"), in the
+   * active UI language (read on access). */
+  readonly action: string
+}
+
+type NotificationAction = 'openCase' | 'viewCase' | 'review' | 'viewInQueue' | 'viewUsers'
+
+function appearance(
+  icon: NotificationIcon,
+  tone: NotificationTone,
+  action: NotificationAction,
+): NotificationAppearance {
+  return {
+    icon,
+    tone,
+    get action() {
+      return t(`actions.${action}`)
+    },
+  }
 }
 
 /** The one map of kinds: tile and primary action. */
 export const NOTIFICATION_KIND: Record<NotificationKind, NotificationAppearance> = {
-  assigned_on_arrival: { icon: 'inbox', tone: 'accent', action: 'Abrir caso' },
-  assigned_from_queue: { icon: 'inbox', tone: 'accent', action: 'Abrir caso' },
-  assigned_by_supervisor: { icon: 'inbox', tone: 'accent', action: 'Abrir caso' },
-  reassigned_away: { icon: 'move', tone: 'warn', action: 'Ver caso' },
-  customer_returned: { icon: 'back', tone: 'accent', action: 'Abrir caso' },
-  escalation_answered: { icon: 'reply', tone: 'success', action: 'Revisar' },
-  escalation_taken: { icon: 'move', tone: 'warn', action: 'Ver caso' },
-  escalation_reassigned: { icon: 'move', tone: 'warn', action: 'Ver caso' },
-  case_rated: { icon: 'smile', tone: 'success', action: 'Ver caso' },
-  case_escalated: { icon: 'up', tone: 'accent', action: 'Revisar' },
-  case_queued: { icon: 'clock', tone: 'warn', action: 'Ver en la cola' },
-  sla_at_risk: { icon: 'flame', tone: 'danger', action: 'Ver en la cola' },
-  account_locked: { icon: 'lock', tone: 'danger', action: 'Revisar' },
-  invitation_accepted: { icon: 'user-check', tone: 'success', action: 'Ver usuarios' },
-  // ADR 0007: the improvement engine proposed a change to an agent (no Agentes screen yet).
-  improvement_proposed: { icon: 'up', tone: 'accent', action: 'Revisar' },
+  assigned_on_arrival: appearance('inbox', 'accent', 'openCase'),
+  assigned_from_queue: appearance('inbox', 'accent', 'openCase'),
+  assigned_by_supervisor: appearance('inbox', 'accent', 'openCase'),
+  reassigned_away: appearance('move', 'warn', 'viewCase'),
+  customer_returned: appearance('back', 'accent', 'openCase'),
+  escalation_answered: appearance('reply', 'success', 'review'),
+  escalation_taken: appearance('move', 'warn', 'viewCase'),
+  escalation_reassigned: appearance('move', 'warn', 'viewCase'),
+  case_rated: appearance('smile', 'success', 'viewCase'),
+  case_escalated: appearance('up', 'accent', 'review'),
+  case_queued: appearance('clock', 'warn', 'viewInQueue'),
+  sla_at_risk: appearance('flame', 'danger', 'viewInQueue'),
+  account_locked: appearance('lock', 'danger', 'review'),
+  invitation_accepted: appearance('user-check', 'success', 'viewUsers'),
+  improvement_proposed: appearance('up', 'accent', 'review'),
 }
 
 /** What one notification says and where its action goes. */
@@ -71,11 +92,8 @@ export interface NotificationCopy extends NotificationAppearance {
   href: string
 }
 
-const SOMEONE = 'Alguien del equipo'
-const A_CUSTOMER = 'Un cliente'
-
 function customerOf(n: Notification): string {
-  return n.customerName ?? A_CUSTOMER
+  return n.customerName ?? t('aCustomer')
 }
 
 function caseHref(n: Notification): string {
@@ -85,22 +103,24 @@ function caseHref(n: Notification): string {
 /** "Beatriz Salcedo Prieto, vence en 1 min" / "…, vencido" / "…, ya tiene respuesta". */
 export function slaRiskDetail(n: Notification, now: number): string {
   const name = customerOf(n)
-  if (n.firstResponseAt) return `${name}, ya tiene respuesta`
+  if (n.firstResponseAt) return t('sla.answered', { name })
   if (!n.slaDueAt) return name
   const minutes = Math.ceil((new Date(n.slaDueAt).getTime() - now) / 60_000)
-  if (minutes <= 0) return `${name}, vencido`
-  return `${name}, vence en ${minutes} min`
+  if (minutes <= 0) return t('sla.overdue', { name })
+  return t('sla.dueIn', { name, minutes })
 }
 
 /** The fixed template of each kind (`now` only matters for the SLA countdown). */
 export function notificationCopy(n: Notification, now: number): NotificationCopy {
-  const appearance = NOTIFICATION_KIND[n.kind]
+  const kind = NOTIFICATION_KIND[n.kind]
   const customer = customerOf(n)
-  const actor = n.actorName ?? SOMEONE
-  const target = n.targetName ?? SOMEONE
+  const actor = n.actorName ?? t('someone')
+  const target = n.targetName ?? t('someone')
   const language = n.language ?? 'es'
   const copy = (title: string, detail: string, href: string): NotificationCopy => ({
-    ...appearance,
+    icon: kind.icon,
+    tone: kind.tone,
+    action: kind.action,
     title,
     detail,
     href,
@@ -108,64 +128,76 @@ export function notificationCopy(n: Notification, now: number): NotificationCopy
   switch (n.kind) {
     case 'assigned_on_arrival':
     case 'assigned_from_queue':
-      return copy('Te llegó un caso nuevo', customer, caseHref(n))
+      return copy(t('kinds.assigned'), customer, caseHref(n))
     case 'assigned_by_supervisor':
-      return copy('Supervisión te asignó un caso', customer, caseHref(n))
+      return copy(t('kinds.assignedBySupervisor'), customer, caseHref(n))
     case 'reassigned_away':
-      return copy('Supervisión reasignó tu caso', `${customer} pasó a ${target}`, caseHref(n))
+      return copy(
+        t('kinds.reassignedAway'),
+        t('kinds.passedTo', { customer, name: target }),
+        caseHref(n),
+      )
     case 'customer_returned':
-      return copy('El cliente volvió a escribir', customer, caseHref(n))
+      return copy(t('kinds.customerReturned'), customer, caseHref(n))
     case 'escalation_answered':
       return copy(
-        'Supervisión respondió tu escalamiento',
-        `${actor} sobre ${customer}`,
+        t('kinds.escalationAnswered'),
+        t('kinds.escalationAnsweredDetail', { actor, customer }),
         caseHref(n),
       )
     case 'escalation_taken':
-      return copy('Supervisión tomó tu caso', `${customer} pasó a ${actor}`, caseHref(n))
+      return copy(
+        t('kinds.escalationTaken'),
+        t('kinds.passedTo', { customer, name: actor }),
+        caseHref(n),
+      )
     case 'escalation_reassigned':
       return copy(
-        'Supervisión reasignó tu caso escalado',
-        `${customer} pasó a ${target}`,
+        t('kinds.escalationReassigned'),
+        t('kinds.passedTo', { customer, name: target }),
         caseHref(n),
       )
     case 'case_rated':
       return copy(
-        `El cliente calificó tu atención: ${ratingOption(n.score ?? 1).label}`,
+        t('kinds.caseRated', { rating: ratingOption(n.score ?? 1).label }),
         customer,
         workspacePath({ caseId: n.caseId, status: 'closed' }),
       )
     case 'case_escalated':
-      return copy(`${actor} escaló un caso`, customer, supervisionEscalationPath(n.escalationId))
+      return copy(
+        t('kinds.caseEscalated', { actor }),
+        customer,
+        supervisionEscalationPath(n.escalationId),
+      )
     case 'case_queued':
       return copy(
-        `Un caso espera en la cola en ${LANGUAGE_NAMES[language]}`,
+        t('kinds.caseQueued', { language: LANGUAGE_NAMES[language] }),
         customer,
         supervisionQueuesPath(language),
       )
     case 'sla_at_risk':
-      return copy(
-        'Caso por vencer sin respuesta',
-        slaRiskDetail(n, now),
-        supervisionQueuesPath(language),
-      )
+      return copy(t('kinds.slaAtRisk'), slaRiskDetail(n, now), supervisionQueuesPath(language))
     case 'account_locked':
       return copy(
-        `Cuenta bloqueada: ${target}`,
-        `${n.failedAttempts ?? 5} intentos fallidos al entrar`,
+        t('kinds.accountLocked', { name: target }),
+        t('kinds.failedAttempts', { count: n.failedAttempts ?? 5 }),
         n.targetId ? adminUserPath(n.targetId) : PATHS.admin.users,
       )
     case 'invitation_accepted':
       return copy(
-        `Invitación aceptada: ${target}`,
-        'Ya puede entrar a la plataforma',
+        t('kinds.invitationAccepted', { name: target }),
+        t('kinds.invitationAcceptedDetail'),
         n.targetId ? adminUserPath(n.targetId) : PATHS.admin.users,
       )
     case 'improvement_proposed':
       return copy(
-        `Nueva propuesta de mejora para ${n.improvement?.agentId ?? 'un agente'}`,
-        n.improvement?.title ?? 'Propuesta del motor de mejora',
-        PATHS.supervision.root,
+        t('kinds.improvementProposed', {
+          agent: n.improvement?.agentId ?? t('kinds.improvementAgentFallback'),
+        }),
+        n.improvement?.title ?? t('kinds.improvementDetailFallback'),
+        n.improvement
+          ? automationProposalPath(n.improvement.proposalId)
+          : PATHS.supervision.automationProposals,
       )
   }
 }
@@ -173,20 +205,23 @@ export function notificationCopy(n: Notification, now: number): NotificationCopy
 /** "ahora", "hace 6 min", "hace 2 h"; from a day on, the date ("1 oct"). */
 export function notificationTime(createdAt: string, now: number): string {
   const minutes = Math.floor((now - new Date(createdAt).getTime()) / 60_000)
-  if (minutes < 1) return 'ahora'
-  if (minutes < 60) return `hace ${minutes} min`
+  if (minutes < 1) return t('time.now')
+  if (minutes < 60) return t('time.minutes', { minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `hace ${hours} h`
+  if (hours < 24) return t('time.hours', { hours })
   return formatDate(createdAt, { withYear: false })
 }
 
 /** Accessible name of the bell: "Notificaciones, 3 sin leer" (count also on the badge). */
 export function bellLabel(unread: number): string {
-  return unread > 0 ? `Notificaciones, ${unread} sin leer` : 'Notificaciones'
+  return unread > 0 ? t('bell.unread', { count: unread }) : t('bell.label')
 }
 
 export interface NotificationSection {
-  title: 'Nuevas' | 'Anteriores'
+  /** `new` = unread ("Nuevas"), `earlier` = read ("Anteriores"). */
+  id: 'new' | 'earlier'
+  /** The section heading, in the UI language of the call. */
+  title: string
   items: Notification[]
 }
 
@@ -195,8 +230,10 @@ export function notificationSections(items: readonly Notification[]): Notificati
   const fresh = items.filter((n) => !n.readAt)
   const seen = items.filter((n) => n.readAt)
   const sections: NotificationSection[] = []
-  if (fresh.length) sections.push({ title: 'Nuevas', items: fresh })
-  if (seen.length) sections.push({ title: 'Anteriores', items: seen })
+  if (fresh.length) sections.push({ id: 'new', title: t('panel.sections.new'), items: fresh })
+  if (seen.length) {
+    sections.push({ id: 'earlier', title: t('panel.sections.earlier'), items: seen })
+  }
   return sections
 }
 

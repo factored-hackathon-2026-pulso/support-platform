@@ -34,6 +34,8 @@ export type KnownRealtimeEventType =
   | 'notifications.read'
   // Slice 18 (the AI switch, slice-18-ai-foundation.md §5): on `platform:settings`
   | 'platform.updated'
+  // Slice 15b / 20 (the copilot's suggestions): on `inbox:<staffId>`, the suggestion id and status only
+  | 'copilot.suggestion_updated'
 
 export type RealtimeEventType = KnownRealtimeEventType | ControlEnvelopeType | (string & {})
 
@@ -64,6 +66,7 @@ export type RealtimeTopic =
   | 'admin:directory'
   | `staff:${string}`
   | 'platform:settings'
+  | 'ai:stages'
 
 /** Messages the client sends (one topic per message, backend `api/routers/realtime.py`). */
 export type ClientMessage =
@@ -100,6 +103,7 @@ export const topics = {
   adminDirectory: (): RealtimeTopic => 'admin:directory',
   staff: (staffId: string): RealtimeTopic => `staff:${staffId}`,
   platformSettings: (): RealtimeTopic => 'platform:settings',
+  aiStages: (): RealtimeTopic => 'ai:stages',
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {

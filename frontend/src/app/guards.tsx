@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router'
 import { CloudOff, UserX } from 'lucide-react'
 import { FullScreenStatus } from '@/components/layout'
 import { Button, DocumentTitle, EmptyState } from '@/components/ui'
+import { useTranslation } from '@/lib/i18n'
 import { firstRoleHome, resolvePostLoginPath, type RoleId } from './roles'
 import { PATHS } from './paths'
 import { readRedirectFrom, type LoginRedirectState } from './redirect'
@@ -16,21 +17,22 @@ const STAFF_FALLBACK = PATHS.analyst.root
  */
 function SessionUnavailable() {
   const { retry, signOut } = useSession()
+  const { t } = useTranslation(['shell', 'common'])
   return (
     <main className="flex h-dvh items-center justify-center bg-canvas">
-      <DocumentTitle title="Sin conexión" />
+      <DocumentTitle title={t('session.unavailableTab')} />
       <EmptyState
         as="h1"
         icon={<CloudOff size={40} strokeWidth={1.6} />}
-        title="No pudimos cargar tu sesión"
-        description="La plataforma no responde en este momento. Tu sesión sigue abierta: intenta de nuevo en unos segundos."
+        title={t('session.unavailableTitle')}
+        description={t('session.unavailableText')}
         action={
           <>
             <Button variant="primary" onClick={retry}>
-              Reintentar
+              {t('common:actions.retry')}
             </Button>
             <Button variant="secondary" onClick={signOut}>
-              Cerrar sesión
+              {t('common:actions.signOut')}
             </Button>
           </>
         }
@@ -43,8 +45,9 @@ function SessionUnavailable() {
 export function RequireSession() {
   const { status, user, signOut } = useSession()
   const location = useLocation()
+  const { t } = useTranslation(['shell', 'common'])
 
-  if (status === 'loading') return <FullScreenStatus label="Cargando tu sesión" />
+  if (status === 'loading') return <FullScreenStatus label={t('session.loading')} />
   if (status === 'error') return <SessionUnavailable />
   if (!user) {
     const state: LoginRedirectState = { from: `${location.pathname}${location.search}` }
@@ -53,15 +56,15 @@ export function RequireSession() {
   if (user.roleIds.length === 0) {
     return (
       <main className="flex h-dvh items-center justify-center bg-canvas">
-        <DocumentTitle title="Sin rol asignado" />
+        <DocumentTitle title={t('session.noRoleTab')} />
         <EmptyState
           as="h1"
           icon={<UserX size={40} strokeWidth={1.6} />}
-          title="Tu cuenta no tiene un rol asignado"
-          description="Pide a Administración que te asigne un rol (Analista, Supervisión o Administración)."
+          title={t('session.noRoleTitle')}
+          description={t('session.noRoleText')}
           action={
             <Button variant="primary" onClick={signOut}>
-              Cerrar sesión
+              {t('common:actions.signOut')}
             </Button>
           }
         />
@@ -86,7 +89,8 @@ export function RequireRole({ role }: { role: RoleId }) {
 export function GuestOnly() {
   const { status, user } = useSession()
   const location = useLocation()
-  if (status === 'loading') return <FullScreenStatus label="Cargando tu sesión" />
+  const { t } = useTranslation(['shell', 'common'])
+  if (status === 'loading') return <FullScreenStatus label={t('session.loading')} />
   if (status === 'error') return <SessionUnavailable />
   if (user) {
     // No role at all: any staff URL shows the "sin rol" screen of RequireSession.
@@ -100,7 +104,8 @@ export function GuestOnly() {
 /** `/`: home of the signed-in user, or the login. */
 export function RootRedirect() {
   const { status, user } = useSession()
-  if (status === 'loading') return <FullScreenStatus label="Cargando tu sesión" />
+  const { t } = useTranslation(['shell', 'common'])
+  if (status === 'loading') return <FullScreenStatus label={t('session.loading')} />
   if (status === 'error') return <SessionUnavailable />
   if (!user) return <Navigate to={PATHS.login} replace />
   return <Navigate to={firstRoleHome(user.roleIds) ?? STAFF_FALLBACK} replace />

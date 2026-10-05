@@ -101,6 +101,10 @@ class GetCopilotThread:
         )
 
 
+#: The run input that names the assistant's agent-core session (agent-core ``engine_tools``).
+SESSION_INPUT = "assistant_session_id"
+
+
 @dataclass(frozen=True, slots=True)
 class _Question:
     thread_id: str
@@ -113,6 +117,10 @@ class _Question:
     run_key: str
     case_id: str
     credentials: AgentCredentials
+    assistant_session_id: str | None
+    """agent-core's session of the assistant that held this case, if any: the copilot run gets it
+    as its input so agent-core's ``obtener_handoff``/``leer_transcript`` read that conversation
+    (agent-core checks it is the same customer as the delegation)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +188,7 @@ class AskCopilot:
             if is_new:
                 await uow.copilot_threads.save(thread)
                 await uow.commit()
+            assistant = await uow.assistant_sessions.get_by_case(case.id)
             return _Question(
                 thread_id=thread.id,
                 question=question,
@@ -193,6 +202,7 @@ class AskCopilot:
                 credentials=await advisor_credentials(
                     uow, self.issuer, self.clock, case, actor.staff_id
                 ),
+                assistant_session_id=assistant.agent_session_id if assistant else None,
             )
 
     # ------------------------------------------------------------------ 2. the call (no UoW)
@@ -231,6 +241,11 @@ class AskCopilot:
                 agent=self.agent,
                 idempotency_key=run_key,
                 lang=stored.language,
+                input=(
+                    {SESSION_INPUT: stored.assistant_session_id}
+                    if stored.assistant_session_id is not None
+                    else None
+                ),
             )
             if run.session_id is None:
                 raise AgentRuntimeError(status=502, code="no_agent_session")

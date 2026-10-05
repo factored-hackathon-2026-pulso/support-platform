@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@/components/ui'
 import { topics, useOnReconnect, useRealtimeClient, useRealtimeSubscription } from '@/lib/realtime'
+import { useTranslation } from '@/lib/i18n'
 import { platformKeys } from './platform'
+import { preferencesKeys } from './preferences'
 import { rolesNowCopy } from './roles'
 import { sessionKeys, useSession } from './session'
 
@@ -17,17 +19,21 @@ import { sessionKeys, useSession } from './session'
  *   the role switcher follow `useSession()`; `RequireRole` sends her home if
  *   the section she is in is gone;
  * - (slice 18) subscribes `platform:settings` (`platform.updated` → the AI switch,
- *   app/platform.ts) and refetches the settings after a reconnect.
+ *   app/platform.ts) and refetches the settings after a reconnect;
+ * - (slice 23) `preferences.updated` on `staff:<me.id>` → her UI language
+ *   (app/preferences.ts), refetched after a reconnect too.
  */
 export function SessionLiveSync() {
   const { user } = useSession()
   const client = useRealtimeClient()
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { t } = useTranslation('shell')
   useRealtimeSubscription(user ? topics.staff(user.id) : null)
   useRealtimeSubscription(user ? topics.platformSettings() : null)
   useOnReconnect(() => {
     void queryClient.invalidateQueries({ queryKey: platformKeys.settings() })
+    void queryClient.invalidateQueries({ queryKey: preferencesKeys.me() })
   }, user !== null)
 
   useEffect(
@@ -48,8 +54,8 @@ export function SessionLiveSync() {
     const before = previous.current
     previous.current = { id: user.id, roles }
     if (!before || before.id !== user.id || before.roles === roles) return
-    toast({ title: 'Cambiaron tus roles', description: rolesNowCopy(user.roleIds) })
-  }, [user, roles, toast])
+    toast({ title: t('rolesChanged.title'), description: rolesNowCopy(user.roleIds) })
+  }, [user, roles, toast, t])
 
   return null
 }

@@ -8,6 +8,7 @@ import {
   type FilterSelection,
 } from './filter-selection'
 import { LanguageMark } from './LanguageMark'
+import { useTranslation } from '@/lib/i18n'
 
 export interface FilterMenuProps {
   groups: readonly FilterGroup[]
@@ -37,6 +38,7 @@ export function FilterMenu({
   align = 'start',
   className,
 }: FilterMenuProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -85,11 +87,11 @@ export function FilterMenu({
         )}
       >
         <SlidersHorizontal size={15} aria-hidden="true" />
-        Filtros
+        {t('filters.button')}
         {active > 0 ? ' ' : null}
         {active > 0 ? (
           <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-12 font-semibold text-white">
-            {active} <span className="sr-only">activos</span>
+            {active} <span className="sr-only">{t('filters.active')}</span>
           </span>
         ) : null}
       </button>
@@ -103,7 +105,7 @@ export function FilterMenu({
             align === 'end' ? 'right-0' : 'left-0',
           )}
         >
-          <legend className="sr-only">Filtros</legend>
+          <legend className="sr-only">{t('filters.legend')}</legend>
           <div className="flex max-h-[360px] flex-wrap gap-x-6 gap-y-3 overflow-y-auto p-4">
             {groups.map((group) => (
               <fieldset
@@ -149,14 +151,14 @@ export function FilterMenu({
               }}
               className="cursor-pointer rounded-8 px-1 text-13 font-medium text-ink-2 hover:text-ink aria-disabled:cursor-default aria-disabled:opacity-50"
             >
-              Limpiar filtros
+              {t('filters.clear')}
             </button>
             <button
               type="button"
               onClick={close}
               className="inline-flex h-8 cursor-pointer items-center rounded-8 bg-ink px-3 text-13 font-semibold text-white"
             >
-              Listo
+              {t('actions.done')}
             </button>
           </div>
         </fieldset>
@@ -175,15 +177,16 @@ export interface FilterChipsProps {
 
 /** The active filters as removable chips ("Quitar filtro Por responder"). Nothing when none. */
 export function FilterChips({ chips, onRemove, onClear, className }: FilterChipsProps) {
+  const { t } = useTranslation()
   if (chips.length === 0) return null
   return (
     <fieldset className={cn('m-0 flex flex-wrap items-center gap-1.5 border-0 p-0', className)}>
-      <legend className="sr-only">Filtros activos</legend>
+      <legend className="sr-only">{t('filters.activeLegend')}</legend>
       {chips.map((chip) => (
         <button
           key={`${chip.groupKey}:${chip.value}`}
           type="button"
-          aria-label={`Quitar filtro ${chip.label}`}
+          aria-label={t('filters.remove', { label: chip.label })}
           onClick={() => onRemove(chip.groupKey, chip.value)}
           className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-surface pr-2 pl-3 text-13 text-ink hover:bg-subtle"
         >
@@ -197,7 +200,7 @@ export function FilterChips({ chips, onRemove, onClear, className }: FilterChips
           onClick={onClear}
           className="cursor-pointer rounded-8 px-1.5 text-13 font-medium text-ink-2 hover:text-ink"
         >
-          Limpiar filtros
+          {t('filters.clear')}
         </button>
       ) : null}
     </fieldset>

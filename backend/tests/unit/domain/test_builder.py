@@ -153,6 +153,20 @@ def test_a_closed_run_is_replaced_keeping_the_thread() -> None:
     assert chat.run_key == f"{THREAD}.1"
 
 
+def test_a_new_conversation_clears_the_thread_and_starts_another_run() -> None:
+    chat = thread()
+    assert chat.restart(at=T) is False  # nothing to start over
+    chat.say(message_id="BLM-1", text="Hola", client_message_id="c-1", at=T, actor=ACTOR)
+    chat.link_run(agent_session_id="ses-1", run_id="run-1", at=T)
+
+    assert chat.restart(at=T + timedelta(minutes=1)) is True
+
+    assert chat.messages == ()
+    assert (chat.agent_session_id, chat.run_id, chat.runs) == (None, None, 1)
+    assert chat.updated_at == T + timedelta(minutes=1)
+    assert chat.restart(at=T) is False
+
+
 def test_the_thread_keeps_the_newest_200_messages() -> None:
     chat = thread()
     for number in range(205):

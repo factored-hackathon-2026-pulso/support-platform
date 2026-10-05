@@ -46,6 +46,7 @@ from cc_platform.domain.cases.call import CallDirection, CallEndReason, CallStat
 from cc_platform.domain.cases.case import MAX_CLOSE_NOTE
 from cc_platform.domain.cases.escalation import MAX_ESCALATION_TEXT, EscalationState
 from cc_platform.domain.cases.turn import MAX_TURN_TEXT
+from cc_platform.domain.cases.turn import StaffLine as StaffLineFacts
 from cc_platform.domain.cases.values import (
     AssignmentReason,
     CaseChannel,
@@ -54,6 +55,7 @@ from cc_platform.domain.cases.values import (
     CaseType,
     CloseReason,
     InboxStatus,
+    StaffLineKind,
     TurnAudience,
     TurnAuthorRole,
     TurnKind,
@@ -496,6 +498,30 @@ class CaseHistory(ApiModel):
 
 
 # ----------------------------------------------------------------------------- turns
+class StaffLine(ApiModel):
+    """Slice 23c: the facts of a staff-only transcript line; the staff UI writes the sentence
+    in the viewer's language (``text`` keeps the Spanish one).
+
+    ``params`` by ``kind`` (names as they were when the line was written; ``language`` is the
+    case language ``es`` | ``pt``):
+    ``assigned_on_arrival`` / ``assigned_from_assistant`` {analyst, language};
+    ``queued`` {language}; ``assigned_from_queue`` {analyst, minutes, language};
+    ``wrote_again`` {customer (first name), closedAt (ISO), closeReason, channel};
+    ``assigned_by_supervision`` {supervisor, analyst, minutes, language, paused?};
+    ``reassigned`` {supervisor, previous, analyst, paused?} (``paused``: the first name of
+    the analyst who was paused); ``escalated`` / ``escalation_withdrawn`` {analyst};
+    ``escalation_answered`` {supervisor}; ``escalation_taken`` {supervisor, previous};
+    ``assistant_released`` {reason, ref?, code?, who?}; ``follow_up_call`` {analyst, customer}.
+    """
+
+    kind: StaffLineKind
+    params: dict[str, str | int]
+
+    @classmethod
+    def from_facts(cls, facts: StaffLineFacts) -> StaffLine:
+        return cls(kind=facts.kind, params=dict(facts.params))
+
+
 class Turn(ApiModel):
     id: str
     case_id: str
@@ -510,6 +536,13 @@ class Turn(ApiModel):
     created_at: datetime
     client_message_id: str | None
     subject: str | None = Field(description="Slice 12: the subject of an `email` turn.")
+    staff_line: StaffLine | None = Field(
+        description=(
+            "Slice 23c: the facts of a staff-only `routing` line, written in the viewer's "
+            "language by the UI; null on other turns and on lines written before 23c (show "
+            "`text`)."
+        ),
+    )
 
     @classmethod
     def from_view(cls, view: TurnView) -> Turn:
@@ -527,6 +560,7 @@ class Turn(ApiModel):
             created_at=view.created_at,
             client_message_id=view.client_message_id,
             subject=view.subject,
+            staff_line=StaffLine.from_facts(view.staff_line) if view.staff_line else None,
         )
 
 

@@ -1,6 +1,7 @@
 import { registerAdminRealtime } from '@/features/admin/core'
 import { registerCasesRealtime } from '@/features/cases/core'
 import { registerConversationRealtime } from '@/features/conversation/core'
+import { registerCopilotRealtime } from '@/features/copilot/core'
 import { registerHomeRealtime } from '@/features/home/core'
 import { registerNotificationsRealtime } from '@/features/notifications/core'
 import { registerSupervisionRealtime } from '@/features/supervision/core'
@@ -10,6 +11,7 @@ import {
   type RealtimeRegistration,
 } from '@/lib/realtime'
 import { registerPlatformRealtime } from './platform'
+import { registerPreferencesRealtime } from './preferences'
 import { registerSessionRealtime } from './session-realtime'
 
 /**
@@ -35,6 +37,8 @@ export const FEATURE_REALTIME_REGISTRATIONS: readonly RealtimeRegistration[] = [
   registerSessionRealtime, // me.updated → the signed-in staff member (roles, team, name)
   registerNotificationsRealtime, // notification.created, notifications.read → the bell (slice 10)
   registerPlatformRealtime, // platform.updated → the AI switch (slice 18)
+  registerPreferencesRealtime, // preferences.updated → her UI language (slice 23)
+  registerCopilotRealtime, // copilot.suggestion_updated, a customer's turn → the newest suggestion (slice 20)
 ]
 
 /** Builds a fresh registry with every feature's handlers (one per AppProviders). */

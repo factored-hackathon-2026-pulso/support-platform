@@ -11,6 +11,7 @@
  */
 import { isApiProblem } from '@/lib/api'
 import { formatTime } from '@/lib/format'
+import { customerT } from './locale'
 import type { CustomerConversation, CustomerTurn, Language } from './types'
 
 export type AssistantState = NonNullable<CustomerConversation['assistant']>
@@ -76,7 +77,7 @@ export function isConfirmationExpired(
   return new Date(confirmation.expiresAt).getTime() <= now
 }
 
-// ── Copy (es | pt) ───────────────────────────────────────────────────────────
+// ── Copy (the customer's language) ───────────────────────────────────────────
 
 export interface AssistantCopy {
   name: string
@@ -101,47 +102,27 @@ export interface AssistantCopy {
   attendedBy: string
 }
 
-const COPY: Record<Language, AssistantCopy> = {
-  es: {
-    name: 'Asistente virtual',
-    typing: 'El asistente virtual está escribiendo…',
-    askPerson: 'Hablar con una persona',
-    confirmTitle: 'Confirma para seguir',
-    yes: 'Sí',
-    no: 'No',
-    expired: 'Esta confirmación venció.',
-    stepUpTitle: 'Confirma que eres tú',
-    stepUpReason: 'El asistente lo necesita para seguir con lo que pediste.',
-    codeLabel: 'Código de verificación',
-    verify: 'Verificar',
-    simulated: `Código simulado de desarrollo: ${SIMULATED_STEP_UP_CODE}`,
-    statusLine: 'Te atiende el asistente virtual',
-    handingOver: 'Te estamos pasando con una persona del equipo…',
-    surveyTitle: '¿Cómo te atendió el asistente virtual?',
-    attendedBy: 'Te atendió el asistente virtual',
-  },
-  pt: {
-    name: 'Assistente virtual',
-    typing: 'O assistente virtual está escrevendo…',
-    askPerson: 'Falar com uma pessoa',
-    confirmTitle: 'Confirme para continuar',
-    yes: 'Sim',
-    no: 'Não',
-    expired: 'Esta confirmação venceu.',
-    stepUpTitle: 'Confirme que é você',
-    stepUpReason: 'O assistente precisa disso para continuar com o seu pedido.',
-    codeLabel: 'Código de verificação',
-    verify: 'Verificar',
-    simulated: `Código simulado de desenvolvimento: ${SIMULATED_STEP_UP_CODE}`,
-    statusLine: 'Você está falando com o assistente virtual',
-    handingOver: 'Estamos te passando para uma pessoa da equipe…',
-    surveyTitle: 'Como foi o atendimento do assistente virtual?',
-    attendedBy: 'Atendida pelo assistente virtual',
-  },
-}
-
+/** Everything the assistant's controls say, in the customer's language (`customer:assistant`). */
 export function assistantCopy(language: Language): AssistantCopy {
-  return COPY[language] ?? COPY.es
+  const t = customerT(language)
+  return {
+    name: t('assistant.name'),
+    typing: t('assistant.typing'),
+    askPerson: t('assistant.askPerson'),
+    confirmTitle: t('assistant.confirmTitle'),
+    yes: t('assistant.yes'),
+    no: t('assistant.no'),
+    expired: t('assistant.expired'),
+    stepUpTitle: t('assistant.stepUpTitle'),
+    stepUpReason: t('assistant.stepUpReason'),
+    codeLabel: t('assistant.codeLabel'),
+    verify: t('assistant.verify'),
+    simulated: t('assistant.simulated', { code: SIMULATED_STEP_UP_CODE }),
+    statusLine: t('assistant.statusLine'),
+    handingOver: t('assistant.handingOver'),
+    surveyTitle: t('assistant.surveyTitle'),
+    attendedBy: t('assistant.attendedBy'),
+  }
 }
 
 /** "Vence a las 19:28" / "Vence às 19:28" in the viewer's zone. */
@@ -149,16 +130,12 @@ export function confirmationExpiry(
   confirmation: Pick<AssistantConfirmation, 'expiresAt'>,
   language: Language,
 ): string {
-  const time = formatTime(confirmation.expiresAt)
-  return language === 'pt' ? `Vence às ${time}` : `Vence a las ${time}`
+  return customerT(language)('assistant.expiresAt', { time: formatTime(confirmation.expiresAt) })
 }
 
 /** "Código incorrecto. Te quedan 2 intentos." (one attempt: "1 intento"). */
 export function wrongCodeMessage(remaining: number, language: Language): string {
-  if (language === 'pt') {
-    return `Código incorreto. ${remaining === 1 ? 'Resta 1 tentativa' : `Restam ${remaining} tentativas`}.`
-  }
-  return `Código incorrecto. Te ${remaining === 1 ? 'queda 1 intento' : `quedan ${remaining} intentos`}.`
+  return customerT(language)('assistant.wrongCode', { count: remaining })
 }
 
 // ── Failures (contract §8) ───────────────────────────────────────────────────
@@ -179,7 +156,7 @@ export function describeAssistantFailure(
   action: AssistantAction,
   language: Language,
 ): AssistantFailure {
-  const pt = language === 'pt'
+  const t = customerT(language)
   const fail = (message: string, refetch = false): AssistantFailure => ({
     message,
     refetch,
@@ -189,9 +166,7 @@ export function describeAssistantFailure(
     const remaining = Math.max(0, error.numberExtension('remainingAttempts') ?? 0)
     if (remaining === 0) {
       return {
-        message: pt
-          ? 'Código incorreto. Vamos te passar para uma pessoa da equipe.'
-          : 'Código incorrecto. Te pasamos con una persona del equipo.',
+        message: t('assistant.failure.handedOver'),
         refetch: true,
         remainingAttempts: 0,
       }
@@ -203,63 +178,30 @@ export function describeAssistantFailure(
     }
   }
   if (isApiProblem(error, 'assistant_not_active')) {
-    return fail(
-      pt
-        ? 'Uma pessoa da equipe já está com a sua conversa.'
-        : 'Una persona del equipo ya tiene tu conversación.',
-      true,
-    )
+    return fail(t('assistant.failure.notActive'), true)
   }
   if (isApiProblem(error, 'assistant_busy')) {
-    return fail(
-      pt
-        ? 'O assistente ainda está respondendo. Tente de novo em um instante.'
-        : 'El asistente todavía está respondiendo. Inténtalo en un momento.',
-      true,
-    )
+    return fail(t('assistant.failure.busy'), true)
   }
   if (isApiProblem(error, 'confirmation_expired')) {
-    return fail(
-      pt
-        ? 'A confirmação venceu. Escreva de novo o que você precisa.'
-        : 'La confirmación venció. Escribe de nuevo lo que necesitas.',
-      true,
-    )
+    return fail(t('assistant.failure.confirmationExpired'), true)
   }
   if (
     isApiProblem(error, 'confirmation_not_pending') ||
     isApiProblem(error, 'step_up_not_pending')
   ) {
-    return fail(pt ? 'Isso já foi respondido.' : 'Eso ya se respondió.', true)
+    return fail(t('assistant.failure.answered'), true)
   }
   if (isApiProblem(error, 'assistant_disabled')) {
-    return fail(
-      pt ? 'O assistente não está disponível agora.' : 'El asistente no está disponible ahora.',
-      true,
-    )
+    return fail(t('assistant.failure.disabled'), true)
   }
   if (isApiProblem(error, 'validation_error')) {
-    return fail(pt ? 'Digite os 6 números do código.' : 'Escribe los 6 números del código.')
+    return fail(t('assistant.failure.codeFormat'))
   }
   if (isApiProblem(error, 'network_error')) {
-    return fail(pt ? 'Sem conexão. Tente de novo.' : 'No hay conexión. Inténtalo de nuevo.')
+    return fail(t('networkFailure'))
   }
-  const generic: Record<AssistantAction, [string, string]> = {
-    confirm: [
-      'No pudimos enviar tu respuesta. Inténtalo de nuevo.',
-      'Não foi possível enviar sua resposta. Tente de novo.',
-    ],
-    step_up: [
-      'No pudimos verificar el código. Inténtalo de nuevo.',
-      'Não foi possível verificar o código. Tente de novo.',
-    ],
-    person: [
-      'No pudimos pasarte con una persona. Inténtalo de nuevo.',
-      'Não foi possível te passar para uma pessoa. Tente de novo.',
-    ],
-  }
-  const [es, ptText] = generic[action]
-  return fail(pt ? ptText : es)
+  return fail(t(`assistant.failure.${action}`))
 }
 
 /**
@@ -271,7 +213,5 @@ export function isAssistantActive(error: unknown): boolean {
 }
 
 export function assistantActiveMessage(language: Language): string {
-  return language === 'pt'
-    ? 'O assistente virtual está te atendendo pelo chat. Escreva por lá ou peça para falar com uma pessoa.'
-    : 'El asistente virtual te está atendiendo por chat. Escríbele por ahí o pide hablar con una persona.'
+  return customerT(language)('assistant.active')
 }

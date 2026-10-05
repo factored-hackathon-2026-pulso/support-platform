@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { useActiveLocale } from '@/lib/i18n'
 import { useLockedAccountsCount } from '@/features/admin/core'
 import { useAvailabilityPresence, useToReplyCount } from '@/features/cases/core'
+import { agentProposalCount, useAiStages } from '@/features/copilot/core'
 import { useOpenEscalationsCount, useQueuedCasesCount } from '@/features/supervision/core'
 import { presenceFor, type RailIndicators, type RailPresence, type RoleId } from './roles'
 import { useSession } from './session'
@@ -28,20 +30,24 @@ export function useRailIndicators(role: RoleId): RailIndicators {
   // `inbox:<id>` topic subscribed on every analyst screen (Inicio and Casos).
   const { user } = useSession()
   const toReply = useToReplyCount({ enabled: role === 'analyst', staffId: user?.id ?? null })
+  // "Automatización, con novedades": a case type is ready for an agent (slice 22). The stages
+  // are read only while AI is on (the item is hidden otherwise).
+  const stages = useAiStages({ enabled: role === 'supervisor' })
+  const proposals = agentProposalCount(stages.data)
   return useMemo(() => {
     const indicators: RailIndicators = {}
-    if (queued) indicators.queuedCases = { count: queued, noun: ['sin asignar', 'sin asignar'] }
-    if (escalations) {
-      indicators.openEscalations = { count: escalations, noun: ['abierto', 'abiertos'] }
-    }
+    if (queued) indicators.queuedCases = { count: queued, noun: 'queued' }
+    if (escalations) indicators.openEscalations = { count: escalations, noun: 'escalations' }
     if (locked) indicators.lockedAccounts = { count: locked }
     if (toReply) indicators.toReplyCases = { count: toReply }
+    if (proposals) indicators.agentProposals = { dot: true }
     return indicators
-  }, [queued, escalations, locked, toReply])
+  }, [queued, escalations, locked, toReply, proposals])
 }
 
 /** The presence dot on the rail avatar: the analyst's availability (slice 6 §4.4). */
 export function useRailPresence(role: RoleId): RailPresence | null {
   const status = useAvailabilityPresence({ enabled: role === 'analyst' })
-  return useMemo(() => presenceFor(status), [status])
+  const locale = useActiveLocale() // the dot's label follows the UI language
+  return useMemo(() => presenceFor(status, locale), [status, locale])
 }

@@ -1,4 +1,5 @@
 import {
+  Bot,
   CircleArrowUp,
   House,
   Inbox,
@@ -11,7 +12,9 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { AvatarTone } from '@/components/ui'
-import { joinEs } from '@/lib/format'
+import { formatList } from '@/lib/format'
+import { i18n, type AppLocale } from '@/lib/i18n'
+import type shellCatalog from '@/locales/es/shell'
 import { PATHS } from './paths'
 
 /** Same values as the API `StaffRole` enum. */
@@ -30,13 +33,21 @@ export type RailIndicatorKey =
   | 'lockedAccounts'
   /** Her open cases "Por responder" (fed by `useToReplyCount`, cases; slice 6). */
   | 'toReplyCases'
+  /** A case type is ready for an agent (fed by `useAiStages`, copilot; slice 22): a dot. */
+  | 'agentProposals'
+
+/**
+ * What a rail count counts, for the accessible name: "Casos, 2 pendientes" (default),
+ * "Colas, 3 sin asignar", "Escalados, 2 abiertos" (`shell:rail.*`).
+ */
+export type RailCountNoun = 'pending' | 'queued' | 'escalations'
 
 /** Value of one indicator: a count (orange badge) and/or a dot (something new). */
 export interface RailIndicator {
   count?: number
   dot?: boolean
-  /** What the count counts, for the accessible name (default "pendiente(s)"): "sin asignar". */
-  noun?: readonly [singular: string, plural: string]
+  /** What the count counts (default `pending`). */
+  noun?: RailCountNoun
 }
 
 export type RailIndicators = Partial<Record<RailIndicatorKey, RailIndicator>>
@@ -52,15 +63,22 @@ export interface RailPresence {
 }
 
 /** Availability → the avatar dot: orange "En pausa", green "Disponible". */
-export function presenceFor(status: 'available' | 'paused' | undefined): RailPresence | null {
-  if (status === 'paused') return { tone: 'warn', label: 'Estado: En pausa' }
-  if (status === 'available') return { tone: 'success', label: 'Estado: Disponible' }
+export function presenceFor(
+  status: 'available' | 'paused' | undefined,
+  locale?: AppLocale,
+): RailPresence | null {
+  const lng = locale ? { lng: locale } : {}
+  if (status === 'paused') return { tone: 'warn', label: i18n.t('shell:presence.paused', lng) }
+  if (status === 'available') {
+    return { tone: 'success', label: i18n.t('shell:presence.available', lng) }
+  }
   return null
 }
 
 export interface NavItem {
   to: string
-  label: string
+  /** The destination's name in the active UI language (read at render time). */
+  readonly label: string
   icon: LucideIcon
   /** Live badge / dot for this destination (count from real data, never a constant). */
   indicator?: RailIndicatorKey
@@ -68,12 +86,14 @@ export interface NavItem {
   end?: boolean
   /** Extra path prefixes that also mark this item as current (detail screens). */
   alsoActiveOn?: readonly string[]
+  /** Only while the AI functions are on (slice 22: "Automatización"); hidden otherwise. */
+  ai?: boolean
 }
 
 export interface RoleDefinition {
   id: RoleId
-  /** Label in the role switcher. */
-  label: string
+  /** Label in the role switcher, in the active UI language (read at render time). */
+  readonly label: string
   /** URL prefix that identifies the role. */
   basePath: string
   /** Where the role lands after login or when switching to it. */
@@ -83,70 +103,90 @@ export interface RoleDefinition {
   nav: NavItem[]
 }
 
+type NavKey = keyof (typeof shellCatalog)['nav']
+
+/** A rail destination whose label is read from `shell:nav.<key>` when shown. */
+function navItem(key: NavKey, item: Omit<NavItem, 'label'>): NavItem {
+  return {
+    ...item,
+    get label() {
+      return i18n.t(`shell:nav.${key}`)
+    },
+  }
+}
+
+/** A role whose switcher label is read from `shell:roles.<id>.switcher` when shown. */
+function role(definition: Omit<RoleDefinition, 'label'>): RoleDefinition {
+  return {
+    ...definition,
+    get label() {
+      return i18n.t(`shell:roles.${definition.id}.switcher`)
+    },
+  }
+}
+
 /**
  * Role navigation, straight from the canvas rails (Workspace, SuTeam, Admin).
  * Badges and dots are not part of this static config: items name an `indicator`
- * and the rail reads its live value (app/rail-indicators.ts).
+ * and the rail reads its live value (app/rail-indicators.ts). Labels are getters over the
+ * `shell` catalog, so they follow the UI language (slice 23).
  */
 export const ROLES: Record<RoleId, RoleDefinition> = {
-  analyst: {
+  analyst: role({
     id: 'analyst',
-    label: 'Analista de casos',
     basePath: PATHS.analyst.root,
     // Slice 6: the analyst lands on "Inicio"; "Casos" is the Workspace.
     home: PATHS.analyst.home,
     avatarTone: 'accent',
     nav: [
-      { to: PATHS.analyst.home, label: 'Inicio', icon: House },
-      { to: PATHS.analyst.cases, label: 'Casos', icon: MessageSquare, indicator: 'toReplyCases' },
+      navItem('home', { to: PATHS.analyst.home, icon: House }),
+      navItem('cases', { to: PATHS.analyst.cases, icon: MessageSquare, indicator: 'toReplyCases' }),
     ],
-  },
-  supervisor: {
+  }),
+  // Gender-neutral (slice 9): the role, not a person ("Supervisión", never "Supervisora").
+  supervisor: role({
     id: 'supervisor',
-    // Gender-neutral (slice 9): the role, not a person ("Supervisión", never "Supervisora").
-    label: 'Supervisión',
     basePath: PATHS.supervision.root,
     // Slice 9: supervision lands on "Colas" (every open case, by language).
     home: PATHS.supervision.queues,
     avatarTone: 'peach',
     nav: [
-      {
+      navItem('queues', {
         to: PATHS.supervision.queues,
-        label: 'Colas',
         icon: Inbox,
         indicator: 'queuedCases',
         // The read-only case view is reached from Colas (and the other screens).
         alsoActiveOn: [PATHS.supervision.cases],
-      },
-      { to: PATHS.supervision.team, label: 'Equipo', icon: Users },
-      {
+      }),
+      navItem('team', { to: PATHS.supervision.team, icon: Users }),
+      navItem('escalations', {
         to: PATHS.supervision.escalations,
-        label: 'Escalados',
         icon: CircleArrowUp,
         indicator: 'openEscalations',
-      },
-      { to: PATHS.supervision.audit, label: 'Auditoría', icon: Shield },
+      }),
+      // Slice 22: the case types' maturity, proposals and agents. Only with the AI switch on.
+      navItem('automation', {
+        to: PATHS.supervision.automation,
+        icon: Bot,
+        indicator: 'agentProposals',
+        ai: true,
+      }),
+      navItem('audit', { to: PATHS.supervision.audit, icon: Shield }),
     ],
-  },
-  admin: {
+  }),
+  admin: role({
     id: 'admin',
-    label: 'Administración',
     basePath: PATHS.admin.root,
     home: PATHS.admin.users,
     avatarTone: 'success',
     nav: [
-      {
-        to: PATHS.admin.users,
-        label: 'Usuarios y roles',
-        icon: UserPlus,
-        indicator: 'lockedAccounts',
-      },
-      { to: PATHS.admin.teams, label: 'Equipos', icon: UsersRound },
-      { to: PATHS.admin.audit, label: 'Auditoría', icon: Shield },
+      navItem('users', { to: PATHS.admin.users, icon: UserPlus, indicator: 'lockedAccounts' }),
+      navItem('teams', { to: PATHS.admin.teams, icon: UsersRound }),
+      navItem('audit', { to: PATHS.admin.audit, icon: Shield }),
       // Slice 18: platform-wide settings (the AI switch). Always there: it is how AI turns on.
-      { to: PATHS.admin.platform, label: 'Plataforma', icon: SlidersHorizontal },
+      navItem('platform', { to: PATHS.admin.platform, icon: SlidersHorizontal }),
     ],
-  },
+  }),
 }
 
 /** Display order in the role switcher and priority for "first role home". */
@@ -168,28 +208,40 @@ export function sortRoles(roles: readonly string[]): RoleId[] {
 
 /**
  * Role names in sentences, chips and toasts ("Analista", not the switcher's
- * "Analista de casos"). Pinned by a test to the backend `copy.ROLE_LABEL`.
+ * "Analista de casos"), in the active UI language (`shell:roles.<id>.name`, read on access).
+ * The Spanish names are pinned by a test to the backend `copy.ROLE_LABEL`.
  */
-export const ROLE_LABEL: Record<RoleId, string> = {
-  analyst: 'Analista',
-  supervisor: 'Supervisión',
-  admin: 'Administración',
+export const ROLE_LABEL: Readonly<Record<RoleId, string>> = {
+  get analyst() {
+    return i18n.t('shell:roles.analyst.name')
+  },
+  get supervisor() {
+    return i18n.t('shell:roles.supervisor.name')
+  },
+  get admin() {
+    return i18n.t('shell:roles.admin.name')
+  },
 }
 
 /** "Analista y Supervisión": the user's roles in canonical order. */
 export function rolesLabel(roles: readonly string[]): string {
-  return joinEs(sortRoles(roles).map((role) => ROLE_LABEL[role]))
+  return formatList(sortRoles(roles).map((id) => ROLE_LABEL[id]))
 }
 
 /** Description of the "Cambiaron tus roles" toast (app/session-live.tsx, slice 4 §10.7). */
 export function rolesNowCopy(roles: readonly string[]): string {
-  return `Ahora tienes: ${rolesLabel(roles)}.`
+  return i18n.t('shell:rolesChanged.description', { roles: rolesLabel(roles) })
 }
 
 /** Landing page after login: the home of the first role the user holds. */
 export function firstRoleHome(roles: readonly string[]): string | null {
   const first = sortRoles(roles)[0]
   return first ? ROLES[first].home : null
+}
+
+/** The rail items to show: the AI ones only while the AI functions are on (slice 22). */
+export function visibleNav(items: readonly NavItem[], aiEnabled: boolean): NavItem[] {
+  return items.filter((item) => !item.ai || aiEnabled)
 }
 
 /** Whether a rail item is the current page for `pathname`. */

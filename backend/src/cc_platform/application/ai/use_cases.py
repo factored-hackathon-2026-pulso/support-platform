@@ -8,7 +8,11 @@ from dataclasses import dataclass
 
 from cc_platform.application.ai.announce import AnnounceImprovement
 from cc_platform.application.ai.builder import AgentBuilder
-from cc_platform.application.ai.builder_chat import AskBuilder, GetBuilderThread
+from cc_platform.application.ai.builder_chat import (
+    AskBuilder,
+    GetBuilderThread,
+    RestartBuilderThread,
+)
 from cc_platform.application.ai.copilot import AskCopilot, GetCopilotThread
 from cc_platform.application.ai.customer import (
     AnswerAssistantConfirmation,
@@ -34,6 +38,7 @@ class BuilderUseCases:
     registry: AgentBuilder
     thread: GetBuilderThread
     ask: AskBuilder
+    restart: RestartBuilderThread
     # ADR 0007: the improvement engine's announcement (service token, no human session)
     announce: AnnounceImprovement
 

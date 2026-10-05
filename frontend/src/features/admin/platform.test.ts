@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiProblem } from '@/lib/api'
-import { aiToggledToast, describeAiToggleFailure, platformChangeFacts } from './model'
+import { aiToggledToast, describeAiToggleFailure, platformChangeFacts } from './platform'
 
 const NOW = '2026-10-04T15:10:00Z'
 

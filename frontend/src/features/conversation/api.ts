@@ -147,17 +147,19 @@ export async function changeCaseType(
 /**
  * POST /cases/{caseId}/escalations (slice 9): the assignee asks supervision for help with a
  * required motive. `idempotencyKey`: one per open dialog, so a retry replays the escalation
- * it created instead of failing with `escalation_open`.
+ * it created instead of failing with `escalation_open`. Slice 20: `copilotSuggestionId` when she
+ * escalated through the copilot's recommendation (recorded as accepted; never fails the call).
  */
 export async function escalateCase(
   caseId: string,
   motive: string,
   idempotencyKey: string,
+  copilotSuggestionId?: string | null,
 ): Promise<EscalationResult> {
   return unwrap(
     api.POST('/api/v1/cases/{caseId}/escalations', {
       params: { path: { caseId }, header: { 'Idempotency-Key': idempotencyKey } },
-      body: { motive },
+      body: copilotSuggestionId ? { motive, copilotSuggestionId } : { motive },
     }),
   )
 }

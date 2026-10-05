@@ -9,6 +9,7 @@ import {
   Status,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import { closedConversationsLine, localeLabel, pickerStatus, placeLabel } from '../model'
 import { useDemoCustomers } from '../hooks'
 import type { DemoCustomer } from '../types'
@@ -23,6 +24,7 @@ export interface DemoCustomerPickerProps {
 
 /** "Elige un cliente de ejemplo": seeded customers (invented people) to chat as. */
 export function DemoCustomerPicker({ startingId, error, onPick }: DemoCustomerPickerProps) {
+  const { t } = useTranslation('customer', { keyPrefix: 'picker' })
   const customers = useDemoCustomers()
   return (
     <section
@@ -32,15 +34,13 @@ export function DemoCustomerPicker({ startingId, error, onPick }: DemoCustomerPi
       <div className="flex items-baseline justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 id="picker-title" className="m-0 font-display text-20 font-bold">
-            Elige un cliente de ejemplo
+            {t('title')}
           </h2>
-          <p className="m-0 text-14 text-ink-2">
-            Escribe como ese cliente. El caso llega a una analista disponible que hable su idioma.
-          </p>
+          <p className="m-0 text-14 text-ink-2">{t('subtitle')}</p>
         </div>
       </div>
       {error ? (
-        <Callout tone="danger" title="No se abrió la sesión">
+        <Callout tone="danger" title={t('startFailed')}>
           {error}
         </Callout>
       ) : null}
@@ -51,12 +51,12 @@ export function DemoCustomerPicker({ startingId, error, onPick }: DemoCustomerPi
         empty={
           <EmptyState
             icon={<UserRound size={36} strokeWidth={1.6} aria-hidden="true" />}
-            title="No hay clientes de ejemplo"
-            description="El backend no cargó datos de ejemplo (CC_SEED_DEMO_DATA)."
+            title={t('emptyTitle')}
+            description={t('emptyDescription')}
           />
         }
-        errorTitle="No pudimos cargar los clientes de ejemplo"
-        errorDescription="Revisa que el backend esté corriendo e inténtalo de nuevo."
+        errorTitle={t('errorTitle')}
+        errorDescription={t('errorDescription')}
       >
         {(list) => (
           <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
@@ -88,6 +88,7 @@ function CustomerCard({
   disabled: boolean
   onPick: (customerId: string) => void
 }) {
+  const { t } = useTranslation('customer', { keyPrefix: 'picker' })
   const status = pickerStatus(customer)
   const past = closedConversationsLine(customer.closedConversationCount)
   return (
@@ -114,7 +115,7 @@ function CustomerCard({
       />
       <span className="text-13 text-ink-2">{placeLabel(customer.city, customer.country)}</span>
       {past ? <span className="text-12 text-muted">{past}</span> : null}
-      {busy ? <span className="text-12 text-muted">Abriendo sesión…</span> : null}
+      {busy ? <span className="text-12 text-muted">{t('opening')}</span> : null}
     </button>
   )
 }

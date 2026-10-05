@@ -378,6 +378,43 @@ additive: with the switch off the app is the people-only one, unchanged.
   the simulator's own socket); exposed as `data-ai-enabled` on the session root until S19 gives it
   an element to show.
 
+### The assistant in the app (slice 19)
+
+Contract: `docs/platform/api/slice-19-assistant-screens.md` (screens of `slice-14-assistant.md`). No new
+feature folder and no new dependency direction. The assistant's look: lucide's stroke `bot` and a pale blue
+bubble (`assistant-bubble`, `accent-border`); its name "Asistente virtual". AI elements follow
+`useAiEnabled()`; the assistant's conversation states follow the data (a `with_assistant` conversation only
+exists while AI is on: turning it off hands them to people).
+
+- **`components/ui`**: `StatusShape` `bot` ("Con el asistente"), the fact icon `bot`, the token
+  `assistant-bubble`. **`components/layout`**: `TabbedSidePanel` (the Workspace's right panel as tabs: `aside`
+  named by `label`, a tab list with the close button at its end, 400 px, Escape and the focus return of
+  `SidePanel`; tabs are `{ value, label, content }`, S20 adds entries).
+- **`customer-chat`**: `assistant.ts` (pure: `assistantView`, the copy in es / pt, `describeAssistantFailure`
+  for every §8 code, `isAssistantName`, `confirmationExpiry`, `wrongCodeMessage`), `use-assistant.ts`
+  (`useAnswerConfirmation`, `useVerifyStepUp`, `useRequestPerson`: the answer goes into the chat cache; a
+  failure that means the conversation moved on refetches it), `AssistantControls.tsx` (`AssistantTyping`,
+  `ConfirmationCard`, `StepUpCard`, `AskPersonButton`). `toChatItems` has the `assistant` side;
+  `conversationStatusLine(conversation, language, turns)` says "Te atiende el asistente virtual" and, after
+  it, "Te estamos pasando con una persona del equipo…"; the survey and past blocks name the assistant;
+  `PICKER_STATUS.assistant`. Calls and emails show "Hablar con una persona" on `assistant_active`.
+- **`conversation`**: `handoff.ts` (pure: `readHandoff` reads agent-core's snake_case packet defensively and
+  words its codes; `describeHandoffFailure`, `HANDOFF_QUALITY_OPTIONS`, `hasHandoff`), `useCaseHandoff`
+  (AI on, her own `assistant_handoff` case, once; shared by the card, the tab and the close dialog),
+  `HandoffCard` (on top of the conversation: why, priority, queue, verified; "Ver todo"; a retry on
+  502 / 503; nothing on 403 / 404) and `HandoffPanel` (the "Traspaso" tab), the transcript variant
+  `assistant`, `arrivalFacts` for `assistant_handoff`, the supervision line and footer of a
+  `with_assistant` case, `CloseCaseForm.handoffQuality` (sent only when answered, asked only when the
+  handoff loaded). `ConversationPane onOpenHandoff` turns the card on.
+- **`workspace`**: `WorkspaceUrlState.panel` (`customer` | `handoff`, `?panel=`; was `customerFile`,
+  `openPanel`). With AI on the right panel is `TabbedSidePanel` "Apoyo del caso" ("Traspaso" for a handoff
+  case, "Cliente" = the ficha); with AI off it is the slice 6 `SidePanel`, unchanged.
+- **`cases`** (core): `WITH_ASSISTANT_STATUS`; `caseLifecycleStatus('with_assistant')`.
+- **`supervision`**: `releaseFromAssistant` / `useReleaseFromAssistant` ("Tomar el caso", in Colas and the
+  case view), the row's status, "No corre" and holder, `QueueNavFigures.withAssistant`, the "Con el
+  asistente" filter option (AI on), the toasts. **`audit`**: "Asistente virtual" badge, no name next to it
+  (`showsActorName`).
+
 ### Supervision and audit (slice 3)
 
 Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
@@ -519,7 +556,7 @@ comma-separated. Unknown values (old Spanish links included) fall back to the de
 | `/activate?token=`, `/reset-password?token=`                                 | invitation and password-reset links (part 4)       | —          |
 | `/dev/mailbox`                                                               | dev mailbox (only with the backend's dev mailbox)  | —          |
 | `/analyst` → `/analyst/home`                                                 | Inicio (the analyst's landing, slice 6)            | analyst    |
-| `/analyst/cases?case=&status=&q=&list=&panel=&previous=`                     | Workspace ("Casos")                                | analyst    |
+| `/analyst/cases?case=&status=&q=&list=&panel=&previous=`                     | Workspace ("Casos"; `panel=customer\|handoff`)     | analyst    |
 | `/supervision/queues?language=&status=&priority=&analyst=`                   | Colas (the landing of Supervisión, slice 9)        | supervisor |
 | `/supervision/team?status=&language=&team=&analyst=&reassign=`               | Equipo (slice 9)                                   | supervisor |
 | `/supervision/escalations?escalation=&reassign=`                             | Escalados (slice 9)                                | supervisor |

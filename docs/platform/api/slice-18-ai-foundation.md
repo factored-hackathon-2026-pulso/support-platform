@@ -68,8 +68,8 @@ analyst did with an earlier suggestion, best effort). And, so that a conversatio
 already holds can finish: the customer's
 confirmation, step-up and "ask for a person", `GET /cases/{caseId}/handoff`, Supervisión's
 `POST /supervision/cases/{caseId}/assistant/release`, the assistant sweep and agent-core's
-`GET /internal/grants/{grantRef}`. Turning AI off does not hand the assistant's open
-conversations to people; S19 decides whether its screens offer that.
+`GET /internal/grants/{grantRef}`. Slice 19: turning AI off hands the assistant's open
+conversations to people (`ai_disabled`, `api/slice-19-assistant-screens.md` §5).
 
 ### 2.3 REST
 
@@ -180,7 +180,7 @@ shows these rows whatever the switch says.
   the ficha ("Este caso" › "Tipo de caso", after "Prioridad") and in the supervisor case header
   (before the priority).
 - **Customer simulator**: `useSimulatorAiEnabled()` (`GET /customer/platform`, live on its own
-  socket); it has no AI element yet (S19), so today it only exposes the state on its root
+  socket); it had no AI element yet (slice 19 added the assistant), so it exposed the state on its root
   (`data-ai-enabled`).
 
 ## 5. Tests
@@ -204,6 +204,5 @@ shows these rows whatever the switch says.
 
 - No migration: delete `backend/cc_platform.db` (new column `cases.case_type`, new table
   `platform_settings`; the startup check says so).
-- Turning AI off does not move the assistant's open conversations to people (§2.2).
 - Nothing classifies a case automatically yet (the assistant's handoff or the copilot): S21.
 - No stages yet: S21 computes them per type.

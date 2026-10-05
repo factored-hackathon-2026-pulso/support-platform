@@ -44,9 +44,11 @@ describe('labels', () => {
       'access',
       'administration',
       'escalation',
+      'agents',
       'other',
     ])
     expect(familyLabel('escalation')).toBe('Escalamientos')
+    expect(familyLabel('agents')).toBe('Agentes e IA')
     expect(familyLabel('administration')).toBe('Administración')
     expect(personOptionLabel({ name: 'Andrés Villamil', active: false })).toBe(
       'Andrés Villamil (desactivada)',

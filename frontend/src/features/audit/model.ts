@@ -50,6 +50,8 @@ export const AUDIT_FAMILIES: readonly FamilyOption[] = [
   { value: 'administration', label: 'Administración' },
   // Slice 9: escalations to supervision (motive and answer redacted).
   { value: 'escalation', label: 'Escalamientos' },
+  // Slice 16 (the agent builder) and 21 (the AI stages per case type).
+  { value: 'agents', label: 'Agentes e IA' },
   { value: 'other', label: 'Otros' },
 ]
 

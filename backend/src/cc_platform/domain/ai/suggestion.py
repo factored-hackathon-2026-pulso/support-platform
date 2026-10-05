@@ -282,6 +282,8 @@ class CopilotSuggestion(AggregateRoot):
     """agent-core proposed more than was kept (see ``normalize_report``): said, never silent."""
     run_id: str | None = None
     trace_id: str | None = None
+    release: str | None = None
+    """The agent release that answered (agent-core's run), kept for outcome attribution."""
     failure_code: str | None = None
     purged_at: datetime | None = None
 
@@ -354,9 +356,11 @@ class CopilotSuggestion(AggregateRoot):
         run_id: str | None,
         trace_id: str,
         at: datetime,
+        release: str | None = None,
     ) -> None:
         """agent-core answered: ``ready`` with something, ``none`` with nothing."""
         self._require_preparing()
+        self.release = release
         report = normalize_report(raw)
         items = report.items
         self.truncated = report.truncated
@@ -375,6 +379,7 @@ class CopilotSuggestion(AggregateRoot):
                     agent=self.agent,
                     run_id=run_id,
                     trace_id=trace_id,
+                    release=release,
                 )
             )
             return
@@ -399,6 +404,7 @@ class CopilotSuggestion(AggregateRoot):
                 truncated=self.truncated,
                 run_id=run_id,
                 trace_id=trace_id,
+                release=release,
             )
         )
 
@@ -444,9 +450,10 @@ class CopilotSuggestion(AggregateRoot):
         return now - self.created_at >= DRAFT_TTL
 
     # ------------------------------------------------------------------ what the analyst did
-    def reply_sent(self, *, sent_text: str, at: datetime) -> bool:
+    def reply_sent(self, *, sent_text: str, at: datetime, turn_id: str | None = None) -> bool:
         """She sent a message that came from this draft. ``used`` if it is the draft, ``edited``
-        (with the distance) if she changed it. Returns whether anything changed."""
+        (with the distance) if she changed it. ``turn_id`` is the turn she sent (it travels in the
+        event, not the text). Returns whether anything changed."""
         reply = self._reply()
         if not self.reply_pending or reply is None:
             return False
@@ -456,7 +463,9 @@ class CopilotSuggestion(AggregateRoot):
             decision = ReplyDecision.EDITED
             distance = edit_distance_permille(reply.text, sent_text)
         self.edit_distance_permille = distance
-        self._decide_reply(decision, ActorRef(ActorRole.ANALYST, self.analyst_id), at)
+        self._decide_reply(
+            decision, ActorRef(ActorRole.ANALYST, self.analyst_id), at, turn_id=turn_id
+        )
         return True
 
     def discard_reply(self, *, at: datetime) -> bool:
@@ -475,7 +484,14 @@ class CopilotSuggestion(AggregateRoot):
         self._decide_reply(ReplyDecision.IGNORED, ActorRef.system(), at)
         return True
 
-    def _decide_reply(self, decision: ReplyDecision, actor: ActorRef, at: datetime) -> None:
+    def _decide_reply(
+        self,
+        decision: ReplyDecision,
+        actor: ActorRef,
+        at: datetime,
+        *,
+        turn_id: str | None = None,
+    ) -> None:
         self.reply_decision = decision
         self.items = tuple(i for i in self.items if not isinstance(i, ReplySuggestion))
         self.updated_at = at
@@ -488,6 +504,9 @@ class CopilotSuggestion(AggregateRoot):
                 subject="reply",
                 decision=decision.value,
                 edit_distance_permille=self.edit_distance_permille,
+                turn_id=turn_id,
+                agent=self.agent,
+                release=self.release,
             )
         )
 
@@ -509,6 +528,8 @@ class CopilotSuggestion(AggregateRoot):
                 case_id=self.case_id,
                 subject="escalation",
                 decision="accepted",
+                agent=self.agent,
+                release=self.release,
             )
         )
         return True

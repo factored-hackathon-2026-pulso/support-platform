@@ -169,6 +169,7 @@ async def test_the_case_facts_come_from_the_event_log(world: Container) -> None:
         agent="copiloto-sugerencias@prod",
         kinds=("reply", "tool"),
         count=2,
+        truncated=False,
         run_id=None,
         trace_id="t",
     )

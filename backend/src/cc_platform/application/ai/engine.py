@@ -320,6 +320,7 @@ class AssistantEngine:
                 agent_session_id=started.session_id,
                 run_id=started.run_id,
                 agent=work.entry_agent,
+                release=started.release,
                 at=now,
             )
         agent = turn.agent or _agent_ref(session)

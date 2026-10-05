@@ -44,6 +44,7 @@ from cc_platform.application.cases.escalations import (
     TakeEscalatedCase,
     WithdrawEscalation,
 )
+from cc_platform.application.cases.evidence import SampleEvidenceCases
 from cc_platform.application.cases.manual_assignment import SetCaseAssignee
 from cc_platform.application.cases.priority import ChangeCasePriority
 from cc_platform.application.cases.queries import (
@@ -89,6 +90,8 @@ class CasesUseCases:
     respond_escalation: RespondEscalation
     take_escalated_case: TakeEscalatedCase
     escalation_overview: GetEscalationOverview
+    # ADR 0007: the improvement engine asks which real cases sit in a cell (service token)
+    sample_evidence: SampleEvidenceCases
 
 
 @dataclass(frozen=True, slots=True)

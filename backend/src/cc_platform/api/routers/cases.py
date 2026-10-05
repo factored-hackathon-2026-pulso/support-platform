@@ -232,7 +232,11 @@ async def post_turn(
     suggestions = api.use_cases.assistant.suggestions if api.use_cases.assistant else None
     if body.copilot_suggestion_id and suggestions is not None:  # best effort: never fails the reply
         await suggestions.link.reply_sent(
-            actor, case_id, body.copilot_suggestion_id, sent_text=result.turn.text
+            actor,
+            case_id,
+            body.copilot_suggestion_id,
+            sent_text=result.turn.text,
+            turn_id=result.turn.id,
         )
     if result.replayed:
         response.status_code = status.HTTP_200_OK

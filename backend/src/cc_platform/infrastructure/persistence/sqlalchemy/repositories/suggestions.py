@@ -100,6 +100,7 @@ class SqlCopilotSuggestionRepository(VersionedRepository[CopilotSuggestion]):
             "truncated": aggregate.truncated,
             "run_id": aggregate.run_id,
             "trace_id": aggregate.trace_id,
+            "release": aggregate.release,
             "failure_code": aggregate.failure_code,
             "purged_at": aggregate.purged_at,
             "created_at": aggregate.created_at,
@@ -129,6 +130,7 @@ class SqlCopilotSuggestionRepository(VersionedRepository[CopilotSuggestion]):
             truncated=bool(row["truncated"]),
             run_id=row["run_id"],
             trace_id=row["trace_id"],
+            release=row["release"],
             failure_code=row["failure_code"],
             purged_at=row["purged_at"],
         )

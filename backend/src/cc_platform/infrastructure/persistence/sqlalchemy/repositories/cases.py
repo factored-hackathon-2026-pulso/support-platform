@@ -11,7 +11,14 @@ from sqlalchemy import case as sql_case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cc_platform.application.cases.ports import AssigneeLoad, CaseRef, OpenCaseRef, RatingTotals
+from cc_platform.application.cases.ports import (
+    AssigneeLoad,
+    CaseRef,
+    EvidenceCell,
+    EvidenceSample,
+    OpenCaseRef,
+    RatingTotals,
+)
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.call import (
     Call,
@@ -60,6 +67,33 @@ class SqlCaseRepository(VersionedRepository[Case]):
 
     def _key(self, aggregate: Case) -> str:
         return aggregate.id
+
+    async def sample_cell(self, cell: EvidenceCell, *, limit: int) -> EvidenceSample:
+        c = self.table.c
+        conditions = [
+            column == value
+            for column, value in (
+                (c.case_type, cell.case_type),
+                (c.channel, cell.channel),
+                (c.language, cell.language),
+                (c.priority, cell.priority),
+                (c.close_reason, cell.close_reason),
+            )
+            if value is not None
+        ]
+        if cell.opened_from is not None:
+            conditions.append(c.opened_at >= cell.opened_from)
+        if cell.opened_before is not None:
+            conditions.append(c.opened_at < cell.opened_before)
+        matched = (
+            await self._session.execute(
+                select(func.count()).select_from(self.table).where(*conditions)
+            )
+        ).scalar_one()
+        rows = await self._session.execute(
+            select(c.id).where(*conditions).order_by(c.opened_at.desc(), c.id.desc()).limit(limit)
+        )
+        return EvidenceSample(matched=int(matched), case_ids=tuple(r[0] for r in rows))
 
     def _to_row(self, aggregate: Case) -> dict[str, Any]:
         closure = aggregate.closure

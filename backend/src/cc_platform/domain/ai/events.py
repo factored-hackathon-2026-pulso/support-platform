@@ -35,6 +35,9 @@ class AssistantTurnAnswered(DomainEvent):
     outcome: str | None
     trace_id: str
     messages: int
+    release: str | None = None
+    """The agent release the run started on (agent-core's id), so an outcome can be attributed to
+    the release that produced it; ``None`` when the runtime did not say."""
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -146,6 +149,8 @@ class CopilotSuggestionReady(DomainEvent):
     """More was proposed than kept (a cap or a limit): a flag, never the text."""
     run_id: str | None
     trace_id: str
+    release: str | None = None
+    """The agent release that answered (see ``AssistantTurnAnswered.release``)."""
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -159,6 +164,7 @@ class CopilotSuggestionNone(DomainEvent):
     agent: str
     run_id: str | None
     trace_id: str
+    release: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -183,6 +189,13 @@ class CopilotSuggestionDecided(DomainEvent):
     subject: str
     decision: str
     edit_distance_permille: int | None = None
+    turn_id: str | None = None
+    """The turn the analyst sent when she used or edited the draft (``None`` for the other
+    decisions): the join with ``turn.created`` for the engine, an id and never the text."""
+    agent: str | None = None
+    release: str | None = None
+    """Who produced the suggestion (copied from it), so acceptance can be sliced by agent and
+    release without reading the suggestion's table."""
 
 
 #: Every suggestion event: audited and silent on sockets.

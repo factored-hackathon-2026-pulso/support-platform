@@ -5,6 +5,11 @@ import { DocumentTitle } from './DocumentTitle'
 export interface PageHeaderProps {
   title: ReactNode
   subtitle?: ReactNode
+  /**
+   * Let a long subtitle (an explanatory sentence) wrap instead of cutting it with "…". Short
+   * subtitles stay on one line by default.
+   */
+  wrapSubtitle?: boolean
   /** Buttons, filters or a summary link at the right. */
   actions?: ReactNode
   /** Element before the title (back link, kicker). */
@@ -21,6 +26,7 @@ export interface PageHeaderProps {
 export function PageHeader({
   title,
   subtitle,
+  wrapSubtitle = false,
   actions,
   eyebrow,
   documentTitle,
@@ -38,7 +44,16 @@ export function PageHeader({
       <div className="flex min-w-0 flex-col gap-0.5">
         {eyebrow}
         <h1 className="m-0 truncate font-display text-22 font-bold">{title}</h1>
-        {subtitle ? <p className="m-0 truncate text-13 text-ink-2">{subtitle}</p> : null}
+        {subtitle ? (
+          <p
+            className={cn(
+              'm-0 text-13 text-ink-2',
+              wrapSubtitle ? 'max-w-[110ch] text-pretty' : 'truncate',
+            )}
+          >
+            {subtitle}
+          </p>
+        ) : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-3">{actions}</div> : null}
     </header>

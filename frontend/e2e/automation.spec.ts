@@ -1,5 +1,21 @@
+import type { Page } from '@playwright/test'
 import { SEEDED } from './support/data'
 import { expect, test } from './support/fixtures'
+
+/**
+ * The screen's intro under the title is whole: it wraps, never cut with "…". Without agent-core
+ * there is no "Constructor de agentes" button next to it, so the check narrows the window to
+ * leave the intro less room than at 1440 px with the button.
+ */
+async function expectIntroWhole(page: Page, start: string) {
+  const viewport = page.viewportSize()!
+  await page.setViewportSize({ width: 1100, height: viewport.height })
+  const intro = page.locator('header p', { hasText: start })
+  await expect(intro).toBeVisible()
+  const cut = await intro.evaluate((el) => el.scrollWidth > el.clientWidth + 1)
+  await page.setViewportSize(viewport)
+  expect(cut).toBe(false)
+}
 
 test.describe('Automatización (slice 22)', () => {
   // The dev default is on: whatever happens, the next scenario starts with AI on.
@@ -33,6 +49,7 @@ test.describe('Automatización (slice 22)', () => {
     const item = shell.rail.getByRole('link', { name: /^Automatización/ })
     await item.click()
     await expect(page.getByRole('heading', { level: 1, name: 'Automatización' })).toBeVisible()
+    await expectIntroWhole(page, 'Cada tipo de caso madura')
 
     // The panorama from the seed: every type, the agent of "Cargo no reconocido".
     const table = page.getByRole('table', { name: 'Tipos de caso y su etapa' })
@@ -87,6 +104,7 @@ test.describe('Automatización (slice 22)', () => {
     await shell.chooseLanguage('Português')
     await page.goto('/supervision/automation?type=undue_charge')
     await expect(page.getByRole('complementary', { name: /Cobrança indevida/ })).toBeVisible()
+    await expectIntroWhole(page, 'Cada tipo de caso amadurece')
     const table = page.getByRole('table', { name: 'Tipos de caso e sua etapa' })
     await expect(table.getByRole('row')).toHaveCount(7)
     // Nothing of the table is cut by its card (the longer Portuguese labels made it overflow).

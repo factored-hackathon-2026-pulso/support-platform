@@ -78,6 +78,8 @@ export function AutomationFrame({
             eyebrow={crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} /> : undefined}
             title={title}
             subtitle={subtitle}
+            // The screens' intros are whole sentences: they wrap, never cut with "…".
+            wrapSubtitle
             documentTitle={documentTitle}
             actions={
               <div className="flex items-center gap-2">

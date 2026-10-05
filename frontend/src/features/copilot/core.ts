@@ -9,7 +9,8 @@ export { copilotKeys } from './api'
 export { registerCopilotRealtime } from './realtime'
 export { copilotSurfaces, composerTextWithDraft } from './model'
 export type { CopilotMode, CopilotSurfaces } from './model'
-export { copilotModeOf, stageOfType, stageStrip, stageText } from './stages'
+export { agentProposalCount, copilotModeOf, stageOfType, stageStrip, stageText } from './stages'
+export { useAiStages } from './hooks/use-stages'
 export type { AiStages, CaseTypeStage, StageStripView } from './stages'
 export type {
   CopilotSuggestion,

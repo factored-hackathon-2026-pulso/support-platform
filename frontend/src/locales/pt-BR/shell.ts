@@ -23,6 +23,7 @@ export default {
     queues: 'Filas',
     team: 'Equipe',
     escalations: 'Escalados',
+    automation: 'Automação',
     audit: 'Auditoria',
     users: 'Usuários e perfis',
     teams: 'Equipes',

@@ -34,6 +34,12 @@ export const PATHS = {
     /** Prefix of the read-only case view (`/supervision/cases/:caseId`). */
     cases: '/supervision/cases',
     audit: '/supervision/audit',
+    /** Slice 22: "Automatización" (only with the AI switch on): the case types and their stage. */
+    automation: '/supervision/automation',
+    /** Prefix of the proposals list and of one proposal (`…/proposals/:proposalId`). */
+    automationProposals: '/supervision/automation/proposals',
+    /** Prefix of the agents list and of one agent (`…/agents/:agentId`). */
+    automationAgents: '/supervision/automation/agents',
   },
   admin: {
     root: '/admin',
@@ -97,4 +103,28 @@ export function adminTeamPath(teamId: string): string {
 /** The admin audit entry searching an id: what she did and what was done to her (slice 4 §7.2). */
 export function adminAuditPath(q: string): string {
   return withSearch(PATHS.admin.audit, { q })
+}
+
+/** "Automatización" with one case type open in the side panel (slice 22: `?type=`). */
+export function automationTypePath(caseType?: string | null): string {
+  return withSearch(PATHS.supervision.automation, caseType ? { type: caseType } : {})
+}
+
+/**
+ * One proposal to change an agent (slice 22). `type` is the case type the proposal is for, when
+ * it came from one (it is what "Activar" serves).
+ */
+export function automationProposalPath(
+  proposalId: string,
+  { type }: { type?: string | null } = {},
+): string {
+  return withSearch(
+    `${PATHS.supervision.automationProposals}/${encodeURIComponent(proposalId)}`,
+    type ? { type } : {},
+  )
+}
+
+/** One agent of agent-core's registry (slice 22). */
+export function automationAgentPath(agentId: string): string {
+  return `${PATHS.supervision.automationAgents}/${encodeURIComponent(agentId)}`
 }

@@ -25,6 +25,7 @@ export default {
     queues: 'Colas',
     team: 'Equipo',
     escalations: 'Escalados',
+    automation: 'Automatización',
     audit: 'Auditoría',
     users: 'Usuarios y roles',
     teams: 'Equipos',

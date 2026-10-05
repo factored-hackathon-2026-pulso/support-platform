@@ -40,6 +40,21 @@ describe('Rail per role', () => {
     expect(rail.getByRole('link', { name: 'Auditoría' })).toHaveAttribute('aria-current', 'page')
   })
 
+  it('supervisor with AI on: "Automatización" before audit (slice 22)', () => {
+    renderWithProviders(<Rail role={ROLES.supervisor} aiEnabled />, {
+      route: '/supervision/team',
+      staff: allRolesStaff,
+    })
+    const rail = within(screen.getByRole('navigation', { name: 'Principal' }))
+    expect(destinations(rail)).toEqual([
+      'Colas',
+      'Equipo',
+      'Escalados',
+      'Automatización',
+      'Auditoría',
+    ])
+  })
+
   it('admin: users and roles, teams, audit and the platform settings', async () => {
     const rail = await railFor('/admin/users', 'Usuarios y roles')
     expect(destinations(rail)).toEqual(['Usuarios y roles', 'Equipos', 'Auditoría', 'Plataforma'])

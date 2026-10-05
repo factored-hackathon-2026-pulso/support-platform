@@ -15,6 +15,7 @@ import { SidePanel, TabbedSidePanel, type SidePanelTab } from '@/components/layo
 import {
   CUSTOMER_FILE_PANEL_ID,
   CUSTOMER_FILE_TRIGGER_ID,
+  SUPPORT_PANEL_TRIGGER_ID,
   ConversationPane,
   CustomerFile,
   HandoffPanel,
@@ -22,11 +23,22 @@ import {
   useCaseDetail,
   useCaseHandoff,
 } from '@/features/conversation'
+import {
+  CopilotPanel,
+  FULL_COPILOT_MODE,
+  ToolsPanel,
+  copilotSurfaces,
+  useCopilotAccess,
+  useCopilotThread,
+  useLatestSuggestion,
+  type CopilotMode,
+} from '@/features/copilot'
 import { useNow } from '@/lib/hooks'
 import { topics, useRealtimeSubscription } from '@/lib/realtime'
 import { emptyWorkspaceCopy, firstSelectableCase, nextCaseAfterClose } from '../model'
 import {
   openPanel,
+  parsePanel,
   type WorkspacePanel,
   type WorkspaceStateChangeOptions,
   type WorkspaceUrlState,
@@ -48,7 +60,10 @@ export interface WorkspaceScreenProps {
  * "Ficha del cliente" (slice 6 §5: the customer, this case and "Casos
  * anteriores"; `?panel=customer`, opened from the customer's name). Slice 19: with AI on the
  * panel has tabs ("Traspaso" for a case the assistant handed over, `?panel=handoff`, opened by
- * the card's "Ver todo"; "Cliente", the ficha); with AI off it is the ficha, as before. All shareable state
+ * the card's "Ver todo"; "Cliente", the ficha); with AI off it is the ficha, as before. Slice 20
+ * adds "Copiloto" (`?panel=copilot`, also opened by the header's "Apoyo") and "Herramientas"
+ * (`?panel=tools`), the copilot's draft above the composer and its recommendation to escalate,
+ * all gated by one `copilotMode` (S21: the case type's stage). All shareable state
  * lives in the URL (`state`); the screen reports changes through
  * `onStateChange` and the route writes them back.
  *
@@ -106,11 +121,16 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
     onStateChange({ caseId: first }, { replace: true })
   }, [state.caseId, state.filter, ready, items, onStateChange])
 
-  // Slice 19: the "Traspaso" tab exists only while AI is on; with AI off it is the old ficha.
+  // Slice 19/20: the AI tabs exist only while AI is on; with AI off the panel is the old ficha.
   const aiEnabled = useAiEnabled()
+  /** How far the copilot goes. S21: the case type's stage; S20 offers everything. */
+  const copilotMode: CopilotMode | null = aiEnabled ? FULL_COPILOT_MODE : null
   const requested = openPanel(state)
-  const panel: WorkspacePanel | null = requested === 'handoff' && !aiEnabled ? null : requested
+  const panel: WorkspacePanel | null =
+    requested !== null && requested !== 'customer' && !aiEnabled ? null : requested
   const panelOpen = panel !== null
+  /** Which trigger opened the panel: the focus goes back to it when it closes. */
+  const [openedBy, setOpenedBy] = useState<'name' | 'support'>('name')
   // Another case resets "Casos anteriores": it belongs to the previous customer. The
   // panel itself stays open (the next customer's file).
   const selectCase = useCallback(
@@ -138,8 +158,19 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
       return
     }
     setPanelOpenedHere(true)
+    setOpenedBy('name')
     onStateChange({ panel: 'customer' })
   }, [fileOpen, onStateChange])
+  // Slice 20: "Apoyo" opens the panel at "Copiloto" (or its first tab) and closes it.
+  const toggleSupportPanel = useCallback(() => {
+    if (panelOpen) {
+      onStateChange({ panel: null, history: null })
+      return
+    }
+    setPanelOpenedHere(true)
+    setOpenedBy('support')
+    onStateChange({ panel: 'copilot' })
+  }, [panelOpen, onStateChange])
   const closeCustomerFile = useCallback(
     () => onStateChange({ panel: null, history: null }),
     [onStateChange],
@@ -150,10 +181,7 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
   }, [onStateChange])
   const selectPanel = useCallback(
     (next: string) =>
-      onStateChange(
-        { panel: next === 'handoff' ? 'handoff' : 'customer', history: null },
-        { replace: true },
-      ),
+      onStateChange({ panel: parsePanel(next) ?? 'customer', history: null }, { replace: true }),
     [onStateChange],
   )
   const selectHistory = useCallback(
@@ -204,6 +232,8 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
             onClosed={handleClosed}
             customerFile={{ open: fileOpen, onToggle: toggleCustomerFile }}
             onOpenHandoff={aiEnabled ? openHandoff : undefined}
+            copilotMode={copilotMode}
+            supportPanel={aiEnabled ? { open: panelOpen, onToggle: toggleSupportPanel } : undefined}
             focusOnLoad={focusRequest?.kind === 'case' && focusRequest.caseId === state.caseId}
             onFocused={clearFocusRequest}
           />
@@ -239,6 +269,10 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
           onPanelChange={selectPanel}
           onClose={closeCustomerFile}
           focusOnOpen={panelOpenedHere}
+          copilotMode={copilotMode}
+          returnFocusTo={
+            openedBy === 'support' ? SUPPORT_PANEL_TRIGGER_ID : CUSTOMER_FILE_TRIGGER_ID
+          }
         />
       ) : state.caseId && panelOpen ? (
         <SidePanel
@@ -269,12 +303,16 @@ interface SupportPanelProps {
   onPanelChange(panel: string): void
   onClose(): void
   focusOnOpen: boolean
+  /** Which copilot tabs the case type's stage allows (S21); S20: all of them. */
+  copilotMode: CopilotMode | null
+  returnFocusTo: string
 }
 
 /**
- * The right panel with AI on (slice 19, IaWorkspace "Apoyo del caso"): "Traspaso" for a case
- * the assistant handed to her (while the handoff loads, or can be retried), then "Cliente" (the
- * ficha). S20 adds "Copiloto" and "Herramientas" here.
+ * The right panel with AI on (IaWorkspace "Apoyo del caso"): "Traspaso" for a case the assistant
+ * handed to her (slice 19: while the handoff loads, or can be retried), "Copiloto" while her
+ * thread is `available` and "Herramientas" while the suggestions are (slice 20; both only for her
+ * own case and as far as `copilotMode` allows), then "Cliente" (the ficha).
  */
 function SupportPanel({
   caseId,
@@ -284,6 +322,8 @@ function SupportPanel({
   onPanelChange,
   onClose,
   focusOnOpen,
+  copilotMode,
+  returnFocusTo,
 }: SupportPanelProps) {
   const detail = useCaseDetail(caseId)
   const { handoff, available } = useCaseHandoff(detail.data)
@@ -291,9 +331,49 @@ function SupportPanel({
   // outage; a handoff that cannot be read at all (403, 404) has no tab.
   const showsHandoff =
     available && (handoff.status !== 'error' || describeHandoffFailure(handoff.error).retry)
+  const surfaces = copilotSurfaces(copilotMode)
+  const access = useCopilotAccess(detail.data?.case)
+  const thread = useCopilotThread(caseId, access && surfaces.copilot)
+  const latest = useLatestSuggestion(caseId, access && surfaces.tools)
+  const showsCopilot = surfaces.copilot && access && thread.data?.available === true
+  const showsTools = surfaces.tools && access && latest.data?.available === true
+  const summary = detail.data?.case
+  const closed = summary?.status === 'closed'
   const tabs: SidePanelTab[] = [
     ...(showsHandoff && detail.data
       ? [{ value: 'handoff', label: 'Traspaso', content: <HandoffPanel detail={detail.data} /> }]
+      : []),
+    ...(showsCopilot && summary
+      ? [
+          {
+            value: 'copilot',
+            label: 'Copiloto',
+            layout: 'fill' as const,
+            content: (
+              <CopilotPanel
+                caseId={caseId}
+                customerName={summary.customer.displayName}
+                closed={closed}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(showsTools
+      ? [
+          {
+            value: 'tools',
+            label: 'Herramientas',
+            content: (
+              <ToolsPanel
+                caseId={caseId}
+                closed={closed}
+                canAsk={showsCopilot}
+                onOpenCopilot={showsCopilot ? () => onPanelChange('copilot') : undefined}
+              />
+            ),
+          },
+        ]
       : []),
     {
       value: 'customer',
@@ -312,7 +392,7 @@ function SupportPanel({
       closeLabel="Cerrar el panel de apoyo"
       onClose={onClose}
       focusOnOpen={focusOnOpen}
-      returnFocusTo={CUSTOMER_FILE_TRIGGER_ID}
+      returnFocusTo={returnFocusTo}
     />
   )
 }

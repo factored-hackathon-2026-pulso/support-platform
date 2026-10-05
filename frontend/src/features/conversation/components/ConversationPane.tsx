@@ -9,8 +9,19 @@ import {
 } from 'react'
 import { useCurrentUser } from '@/app/session'
 import { Button, Callout, Skeleton, useToastClearance } from '@/components/ui'
+import {
+  CopilotDraft,
+  EscalationSuggestion,
+  composerTextWithDraft,
+  copilotSurfaces,
+  useCopilotAccess,
+  type CopilotMode,
+  type EscalationPrefill,
+  type TakenDraft,
+} from '@/features/copilot'
 import { useNow } from '@/lib/hooks'
 import {
+  canEscalate,
   describeCaseLoadFailure,
   escalationCardOf,
   toTranscriptItems,
@@ -47,7 +58,7 @@ import { EmailComposer } from './EmailComposer'
 import { EscalateCaseDialog } from './EscalateCaseDialog'
 import { EscalationCard } from './EscalationCard'
 import { HandoffCard } from './Handoff'
-import { Composer } from './Composer'
+import { Composer, type ComposerHandle } from './Composer'
 import { ReadOnlyFooter } from './ReadOnlyFooter'
 import { StartCallDialog } from './StartCallDialog'
 import { UnsentDraft } from './UnsentDraft'
@@ -85,6 +96,14 @@ export interface ConversationPaneProps {
    * opens the tab.
    */
   onOpenHandoff?(): void
+  /**
+   * Slice 20 (AI on): how far the copilot goes for this case (S21: the case type's stage). With
+   * it, the draft above the composer (`drafts`) and the copilot's recommendation to escalate
+   * show for her own open case. Absent: no copilot (supervision).
+   */
+  copilotMode?: CopilotMode | null
+  /** Slice 20: the "Apoyo" button of the header (the Workspace's tabbed right panel). */
+  supportPanel?: { open: boolean; onToggle(): void }
 }
 
 /**
@@ -110,6 +129,8 @@ function ConversationBody({
   headerActions,
   customerFile,
   onOpenHandoff,
+  copilotMode,
+  supportPanel,
 }: ConversationPaneProps) {
   const me = useCurrentUser()
   useConversationLive(caseId)
@@ -164,6 +185,8 @@ function ConversationBody({
       headerActions={headerActions}
       customerFile={customerFile}
       onOpenHandoff={onOpenHandoff}
+      copilotMode={copilotMode}
+      supportPanel={supportPanel}
     />
   )
 }
@@ -179,6 +202,8 @@ interface LoadedConversationProps {
   headerActions?: ReactNode
   customerFile?: { open: boolean; onToggle(): void }
   onOpenHandoff?(): void
+  copilotMode?: CopilotMode | null
+  supportPanel?: { open: boolean; onToggle(): void }
 }
 
 function LoadedConversation({
@@ -192,12 +217,16 @@ function LoadedConversation({
   headerActions,
   customerFile,
   onOpenHandoff,
+  copilotMode,
+  supportPanel,
 }: LoadedConversationProps) {
   const { case: summary, capabilities } = detail
   const supervision = mode === 'supervision'
   const canReply = capabilities.canReply && !supervision
   const [closing, setClosing] = useState(false)
   const [escalating, setEscalating] = useState(false)
+  /** Slice 20: the copilot's recommendation the escalate dialog was opened from. */
+  const [escalationPrefill, setEscalationPrefill] = useState<EscalationPrefill | null>(null)
   const [calling, setCalling] = useState(false)
   const center = centerMode(detail, turns.data?.turns)
   const activeCall = detail.activeCall && isActiveCall(detail.activeCall) ? detail.activeCall : null
@@ -217,6 +246,41 @@ function LoadedConversation({
   const [draft, setDraft] = useState('')
   const toastClearance = useToastClearance<HTMLDivElement>()
   const { send, retry } = useSendMessage(summary.id)
+
+  // Slice 20: the copilot's draft and its recommendation to escalate (her open case, AI on).
+  const surfaces = copilotSurfaces(supervision ? null : copilotMode)
+  const copilotAccess = useCopilotAccess(summary) && summary.status !== 'closed'
+  const chatComposer = canReply && !activeCall && center === 'chat'
+  const composerRef = useRef<ComposerHandle>(null)
+  /** The copilot's draft she put in the composer: the reply carries its id. */
+  const [takenDraft, setTakenDraft] = useState<TakenDraft | null>(null)
+  const changeDraft = useCallback((text: string) => {
+    setDraft(text)
+    if (!text.trim()) setTakenDraft(null)
+  }, [])
+  const takeDraft = useCallback((text: string, taken: TakenDraft) => {
+    setDraft((current) => composerTextWithDraft(current, text))
+    setTakenDraft(taken)
+    requestAnimationFrame(() => {
+      if (taken.mode === 'edit') composerRef.current?.focusInput()
+      else composerRef.current?.focusSend()
+    })
+  }, [])
+  const sendReply = useCallback(
+    (text: string) => {
+      send(text, { copilotSuggestionId: takenDraft?.suggestionId ?? null })
+      setTakenDraft(null)
+    },
+    [send, takenDraft],
+  )
+  const reviewEscalation = useCallback((prefill: EscalationPrefill) => {
+    setEscalationPrefill(prefill)
+    setEscalating(true)
+  }, [])
+  const changeEscalating = useCallback((open: boolean) => {
+    setEscalating(open)
+    if (!open) setEscalationPrefill(null)
+  }, [])
   const items = useMemo(
     () => (turns.data ? toTranscriptItems(turns.data, meId, { calls: callItems }) : []),
     [turns.data, meId, callItems],
@@ -237,6 +301,7 @@ function LoadedConversation({
         actions={headerActions}
         hideClose={supervision}
         customerFile={customerFile}
+        supportPanel={supervision ? undefined : supportPanel}
       />
       {bar ? (
         <CallBar
@@ -250,6 +315,11 @@ function LoadedConversation({
       {!supervision && onOpenHandoff ? (
         <HandoffCard detail={detail} onOpen={onOpenHandoff} />
       ) : null}
+      <EscalationSuggestion
+        caseId={summary.id}
+        enabled={surfaces.copilot && copilotAccess && canEscalate(detail)}
+        onReview={reviewEscalation}
+      />
       <TranscriptArea
         caseId={summary.id}
         turns={turns}
@@ -272,7 +342,15 @@ function LoadedConversation({
               subject={subject}
             />
           ) : canReply ? (
-            <Composer value={draft} onChange={setDraft} onSend={send} />
+            <div className="flex flex-col gap-2.5">
+              <CopilotDraft
+                caseId={summary.id}
+                enabled={surfaces.draft && copilotAccess && chatComposer}
+                taken={takenDraft}
+                onTake={takeDraft}
+              />
+              <Composer ref={composerRef} value={draft} onChange={changeDraft} onSend={sendReply} />
+            </div>
           ) : (
             <div className="flex flex-col gap-2.5">
               {!supervision && draft.trim() ? (
@@ -292,7 +370,12 @@ function LoadedConversation({
             onOpenChange={setClosing}
             onClosed={onClosed}
           />
-          <EscalateCaseDialog summary={summary} open={escalating} onOpenChange={setEscalating} />
+          <EscalateCaseDialog
+            summary={summary}
+            open={escalating}
+            onOpenChange={changeEscalating}
+            suggestion={escalationPrefill}
+          />
           <StartCallDialog summary={summary} open={calling} onOpenChange={setCalling} />
         </>
       )}

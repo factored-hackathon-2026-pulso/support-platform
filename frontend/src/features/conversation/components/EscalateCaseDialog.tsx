@@ -1,15 +1,26 @@
 import { useRef, useState } from 'react'
-import { CircleArrowUp, Users } from 'lucide-react'
+import { CircleArrowUp, Users, WandSparkles } from 'lucide-react'
 import { Button, Callout, Dialog, Field, Textarea, useToast } from '@/components/ui'
 import { MAX_ESCALATION_TEXT } from '@/features/cases'
 import { describeEscalationFailure, motiveCounter, shortCaseId, validateMotive } from '../model'
 import { useEscalateCase } from '../hooks/use-escalation'
 import type { CaseSummary } from '../types'
 
+/** Slice 20: the copilot's recommendation the dialog opened from (its motive draft). */
+export interface EscalationDialogPrefill {
+  suggestionId: string
+  motive: string
+}
+
 export interface EscalateCaseDialogProps {
   summary: CaseSummary
   open: boolean
   onOpenChange(open: boolean): void
+  /**
+   * Opened through the copilot's recommendation: the motive starts with its draft, the dialog
+   * says it was suggested, and the escalation carries `copilotSuggestionId`.
+   */
+  suggestion?: EscalationDialogPrefill | null
 }
 
 function newKey(): string {
@@ -22,20 +33,35 @@ function newKey(): string {
  * "Escalar a supervisión" (Workspace.dc.html "escalar", slice 9): a required motive
  * (≤ 500, counter), seen by the team only, and the reminder that the case stays with her.
  * One `Idempotency-Key` per opening: a retry after a lost answer replays the escalation.
+ * Slice 20: opened from the copilot's recommendation, the motive is filled in with its draft
+ * (she confirms or edits it) and the escalation carries `copilotSuggestionId`.
  */
-export function EscalateCaseDialog({ summary, open, onOpenChange }: EscalateCaseDialogProps) {
+export function EscalateCaseDialog({
+  summary,
+  open,
+  onOpenChange,
+  suggestion = null,
+}: EscalateCaseDialogProps) {
   const escalate = useEscalateCase(summary.id)
   const { toast } = useToast()
   const [motive, setMotive] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [key, setKey] = useState(newKey)
   const motiveRef = useRef<HTMLTextAreaElement>(null)
+  /** The recommendation whose draft filled the motive in this opening. */
+  const [suggestedBy, setSuggestedBy] = useState<string | null>(null)
+  if (open && suggestion && suggestedBy !== suggestion.suggestionId) {
+    setSuggestedBy(suggestion.suggestionId)
+    setMotive(suggestion.motive.slice(0, MAX_ESCALATION_TEXT))
+    setError(null)
+  }
 
   function changeOpen(next: boolean) {
     if (!next) {
       setMotive('')
       setError(null)
       setKey(newKey())
+      setSuggestedBy(null)
       escalate.reset()
     }
     onOpenChange(next)
@@ -49,7 +75,7 @@ export function EscalateCaseDialog({ summary, open, onOpenChange }: EscalateCase
       return
     }
     escalate.mutate(
-      { motive: motive.trim(), idempotencyKey: key },
+      { motive: motive.trim(), idempotencyKey: key, copilotSuggestionId: suggestedBy },
       {
         onSuccess: () => {
           changeOpen(false)
@@ -89,6 +115,12 @@ export function EscalateCaseDialog({ summary, open, onOpenChange }: EscalateCase
       }
     >
       <div className="flex flex-col gap-4">
+        {suggestedBy ? (
+          <p className="m-0 inline-flex items-center gap-1.5 text-13 text-accent-strong">
+            <WandSparkles size={14} aria-hidden="true" />
+            El copiloto sugirió este motivo. Revísalo antes de escalar.
+          </p>
+        ) : null}
         <Field
           label="Motivo"
           required

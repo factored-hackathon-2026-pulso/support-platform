@@ -1,11 +1,12 @@
 import type { ReactNode, Ref } from 'react'
-import { CircleArrowUp, Copy, History, PhoneOutgoing } from 'lucide-react'
+import { CircleArrowUp, Copy, History, PanelRight, PhoneOutgoing } from 'lucide-react'
 import { Button, FactList, IconButton, Status, useToast } from '@/components/ui'
 import { caseStatus } from '@/features/cases'
 import {
   canEscalate,
   CUSTOMER_FILE_PANEL_ID,
   CUSTOMER_FILE_TRIGGER_ID,
+  SUPPORT_PANEL_TRIGGER_ID,
   caseHeaderFacts,
   customerFileTriggerLabel,
   previousCasesLabel,
@@ -34,6 +35,11 @@ export interface CaseHeaderProps {
    * anteriores (n)" move into the panel. Absent = the full header (supervision).
    */
   customerFile?: { open: boolean; onToggle(): void }
+  /**
+   * Slice 20 (AI on): "Apoyo" opens or closes the right panel at "Copiloto" (IaWorkspace: the
+   * copilot, the tools and the customer).
+   */
+  supportPanel?: { open: boolean; onToggle(): void }
 }
 
 /**
@@ -55,6 +61,7 @@ export function CaseHeader({
   actions,
   hideClose = false,
   customerFile,
+  supportPanel,
 }: CaseHeaderProps) {
   const { case: summary, capabilities } = detail
   const { toast } = useToast()
@@ -93,6 +100,20 @@ export function CaseHeader({
         <Status {...caseStatus(summary.inboxStatus)} srLabel="Estado" />
       ) : null}
       {actions}
+      {supportPanel ? (
+        <Button
+          id={SUPPORT_PANEL_TRIGGER_ID}
+          variant="secondary"
+          icon={<PanelRight size={15} aria-hidden="true" />}
+          aria-expanded={supportPanel.open}
+          aria-controls={supportPanel.open ? CUSTOMER_FILE_PANEL_ID : undefined}
+          title="Copiloto, herramientas y cliente"
+          className={supportPanel.open ? 'bg-panel' : undefined}
+          onClick={supportPanel.onToggle}
+        >
+          Apoyo
+        </Button>
+      ) : null}
       {historyLabel && onOpenHistory && !customerFile ? (
         <Button
           variant="secondary"

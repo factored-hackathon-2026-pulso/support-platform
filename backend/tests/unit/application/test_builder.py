@@ -456,6 +456,33 @@ async def test_the_list_remembers_what_the_platform_made_and_refreshes_it(
     assert (cached.items[0].live, cached.registry_listed) == (False, False)
 
 
+async def test_the_improvement_engine_s_proof_scratch_is_not_listed(world: BuilderWorld) -> None:
+    """The engine proves a patch on throwaway evaluation drafts titled with a prefix.
+
+    They are evidence, not deliverables: no supervisor should see, approve or publish one."""
+    api, who = builder(world), actor_for(SUPERVISOR)
+    real = await api.create_proposal(
+        who, agent_id=AGENT, title="[improvement-engine] template:t/estado_pqr M4"
+    )
+    scratch = await api.create_proposal(
+        who,
+        agent_id=AGENT,
+        title="[improvement-engine] [proof-scratch] evaluation base reg-1 - not a deliverable",
+    )
+
+    listed = await api.list_proposals(who)
+    assert [p.proposal_id for p in listed.items] == [real.proposal_id]
+    cached = await api.list_proposals(who, refresh=False)
+    assert [p.proposal_id for p in cached.items] == [real.proposal_id]
+    world.registry.unavailable = True  # the index read by id does not bring it back either
+    assert [p.proposal_id for p in (await api.list_proposals(who)).items] == [real.proposal_id]
+    world.registry.unavailable = False
+    # still readable by its id (a link, the audit trail): hidden from the list, not erased
+    assert (
+        await api.get_proposal(who, scratch.proposal_id)
+    ).proposal.proposal_id == scratch.proposal_id
+
+
 async def test_the_list_reads_agent_core_as_the_person(world: BuilderWorld) -> None:
     await builder(world).list_proposals(actor_for(SUPERVISOR), agent_id=AGENT, state="draft")
 

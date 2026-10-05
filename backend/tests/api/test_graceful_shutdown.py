@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -74,9 +74,9 @@ async def test_container_shutdown_closes_every_socket_for_a_restart() -> None:
 
 
 def test_a_server_shutdown_closes_the_socket_with_1012(
-    client: TestClient, container: Container, sign_in: object
+    client: TestClient, container: Container, sign_in: Callable[[str], str]
 ) -> None:
-    token = sign_in("daniela.rios@latambank.example")  # type: ignore[operator]
+    token = sign_in("daniela.rios@latambank.example")
     with client.websocket_connect(f"/api/v1/ws?token={token}") as ws:
         assert ws.receive_json()["type"] == "welcome"
 

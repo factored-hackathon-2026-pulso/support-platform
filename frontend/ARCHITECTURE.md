@@ -75,7 +75,7 @@ transitively (anything it loads imports other features through their `core.ts`).
 route table, and `main.tsx`) imports features only through `core.ts`: an import of
 an `index.ts` there would put every screen of that feature in the entry chunk, since
 the barrel statically depends on them (lazy routes would then be empty shells).
-Today `cases`, `conversation`, `supervision`, `admin`, `home`, `notifications` and `onboarding` have one. The vocabulary the
+Today `cases`, `conversation`, `copilot`, `supervision`, `admin`, `home`, `notifications` and `onboarding` have one. The vocabulary the
 shell itself shows (role names, "Ahora tienes: …") lives in `app/roles.ts`.
 
 Rules:
@@ -415,6 +415,34 @@ exists while AI is on: turning it off hands them to people).
   asistente" filter option (AI on), the toasts. **`audit`**: "Asistente virtual" badge, no name next to it
   (`showsActorName`).
 
+### The support panel: the copilot (slice 20)
+
+Contract: `docs/platform/api/slice-20-support-panel.md` (screens of `slice-15-copilot.md` and
+`slice-15b-copilot-suggestions.md`). New feature `copilot`; dependency direction `workspace` → `conversation` →
+`copilot` (it imports no feature). Everything follows `useAiEnabled()` and her own case (`useCopilotAccess`), and
+shows only what the API says is `available`.
+
+- **The stage as one value**: `CopilotMode` (`answer | tools | drafts`, ADR 0005's `copilot_mode`) and
+  `copilotSurfaces(mode)` → `{ copilot, tools, draft }`. The Workspace computes `copilotMode` once (S20:
+  `FULL_COPILOT_MODE` with AI on, `null` off) and passes it to the panel and to `ConversationPane`; S21 swaps that one
+  line for the case type's stage.
+- **`copilot`**: `api.ts` (`copilotKeys.thread | asks | latest`), `model.ts` (pure: `copilotTurns`, `mergeExchange`,
+  `describeAskFailure`, `suggestionView`, `toolQuestion` / `toolResult`, `escalationReason`, `describeSuggestFailure`,
+  `composerTextWithDraft`), hooks (`useCopilotThread`, `useCopilotAsks` (questions in flight in a UI-only cache entry,
+  never fetched), `useAskCopilot` (same `clientMessageId` on retry, one at a time), `useLatestSuggestion`
+  (refetched on reconnect), `useRequestSuggestion` (one key per attempt, kept for a retry), `useDiscardDraft`
+  (optimistic)), `realtime.ts` (`copilot.suggestion_updated` and a customer's `turn.created` → the newest suggestion),
+  components `CopilotPanel` ("Copiloto"), `ToolsPanel` ("Herramientas"), `CopilotDraft` (above the composer),
+  `EscalationSuggestion`.
+- **`conversation`**: `ConversationPane copilotMode / supportPanel` (the draft over the chat composer, the
+  recommendation under the header, "Apoyo" in the header), `useSendMessage().send(text, { copilotSuggestionId })`
+  (kept on the pending message for a retry), `escalateCase(…, copilotSuggestionId)`, `EscalateCaseDialog suggestion`
+  (motive prefilled, "El copiloto sugirió este motivo"), the `Composer` focus handle (`ComposerHandle`),
+  `SUPPORT_PANEL_TRIGGER_ID`.
+- **`workspace`**: `WorkspacePanel` adds `copilot` and `tools` (`parsePanel`); the tabs are Traspaso · Copiloto ·
+  Herramientas · Cliente, each only when it applies; "Apoyo" opens at Copiloto; the focus returns to the trigger that
+  opened the panel. **`components/layout`**: `SidePanelTab.layout` (`fill`: the tab handles its own scroll).
+
 ### Supervision and audit (slice 3)
 
 Contract: `docs/platform/api/slice-3-supervision.md` §8. Dependency direction:
@@ -702,7 +730,8 @@ right role section; its query string goes in the feature's `url.ts`. Until it is
   `notification.created` and `notifications.read` on `staff:<id>` (the bell). Slice 12:
   `call.updated` (`Call` on `case:` / `inbox:`, `CustomerCall` on `customer:`). Slice 18:
   `platform.updated` (topic `platform:settings`, every staff member and every simulator session:
-  `{ aiEnabled }`): `topics.platformSettings()`.
+  `{ aiEnabled }`): `topics.platformSettings()`. Slice 20: `copilot.suggestion_updated` (on `inbox:<staffId>`, the
+  suggestion id and status only; the content is read over REST).
 
 ## 8. Tokens and styling
 

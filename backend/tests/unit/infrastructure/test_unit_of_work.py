@@ -30,10 +30,8 @@ from cc_platform.infrastructure.events.in_process_bus import InProcessEventBus
 from cc_platform.infrastructure.ids import SequentialIdGenerator
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
-from cc_platform.infrastructure.persistence.sqlalchemy.database import (
-    Database,
-    OutdatedSchemaError,
-)
+from cc_platform.infrastructure.persistence.sqlalchemy.database import Database
+from cc_platform.infrastructure.persistence.sqlalchemy.migrator import OutdatedSchemaError, migrate
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from tests.support import RecordingHandler, emit
 
@@ -84,7 +82,7 @@ async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
         return
 
     database = Database("sqlite+aiosqlite:///:memory:")
-    await database.create_schema()
+    await migrate(database)
 
     def sql() -> UnitOfWork:
         return SqlAlchemyUnitOfWork(database.session_factory, bus=bus, ids=ids, clock=clock)
@@ -201,11 +199,12 @@ async def test_error_inside_block_rolls_back(harness: Harness) -> None:
         assert await uow.staff.get(STAFF_ID) is None
 
 
+@pytest.mark.sqlite_only
 async def test_sqlite_lock_contention_is_a_concurrent_update(tmp_path: Path) -> None:
     """``database is locked`` rolls back like a lost CAS, so ``retry_on_conflict`` re-runs
     the command instead of the API answering 500; any other driver error stays as it is."""
     database = Database(f"sqlite+aiosqlite:///{tmp_path / 'lock.db'}")
-    await database.create_schema()
+    await migrate(database)
     bus = InProcessEventBus()
 
     def factory() -> UnitOfWork:
@@ -379,6 +378,7 @@ async def test_in_memory_commit_rechecks_versions_before_applying() -> None:
     assert store.staff[STAFF_ID].name == "Primera"
 
 
+@pytest.mark.sqlite_only
 async def test_an_outdated_database_fails_fast_at_startup(tmp_path: Path) -> None:
     url = f"sqlite+aiosqlite:///{tmp_path / 'old.db'}"
     old = Database(url)
@@ -390,10 +390,11 @@ async def test_an_outdated_database_fails_fast_at_startup(tmp_path: Path) -> Non
 
     database = Database(url)
     with pytest.raises(OutdatedSchemaError, match=r"staff\.version"):
-        await database.create_schema()
+        await migrate(database)
     await database.dispose()
 
 
+@pytest.mark.sqlite_only
 async def test_a_slice_2_database_lists_the_new_assignment_columns(tmp_path: Path) -> None:
     url = f"sqlite+aiosqlite:///{tmp_path / 'slice2.db'}"
     old = Database(url)
@@ -411,7 +412,7 @@ async def test_a_slice_2_database_lists_the_new_assignment_columns(tmp_path: Pat
 
     database = Database(url)
     with pytest.raises(OutdatedSchemaError) as raised:
-        await database.create_schema()
+        await migrate(database)
     assert "assignments.previous_staff_id" in str(raised.value)
     assert "assignments.paused_override" in str(raised.value)
     await database.dispose()

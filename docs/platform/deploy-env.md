@@ -81,21 +81,24 @@ about 2 s at worst.
 
 | Situation | Status | Body |
 | --- | --- | --- |
-| Database reachable and schema current; Core ready | 200 | `{"status": "ready", "checks": {"database": "ok", "core": "ok"}}` |
+| Database reachable and Alembic at head; Core ready | 200 | `{"status": "ready", "checks": {"database": "ok", "core": "ok"}}` |
 | Same, `CC_AGENT_CORE_URL` unset (people-only) | 200 | `{"status": "ready", "checks": {"database": "ok", "core": "disabled"}}` |
 | Core down, slow, or its own `/readyz` not 200 | **200** | `{"status": "ready", "checks": {"database": "ok", "core": "degraded"}}` |
 | Database unreachable (or slower than the timeout) | 503 | `{"status": "not_ready", "checks": {"database": "unreachable", …}}` |
-| Database reachable, schema not current (not migrated) | 503 | `{"status": "not_ready", "checks": {"database": "not_migrated", …}}` |
+| Database reachable, Alembic not at head (not migrated) | 503 | `{"status": "not_ready", "checks": {"database": "not_migrated", …}}` |
 | `CC_PERSISTENCE=memory` | 200 | no `database` check |
 
 The Core is **not critical**: without it the platform keeps serving every screen that needs no
 AI (the assistant hands customers to people, the copilot stays silent), so the instance stays
 in rotation and reports `core: "degraded"` for monitoring.
 
-"Schema current" is one function, `schema_is_current(connection)` in
-`backend/src/cc_platform/infrastructure/persistence/sqlalchemy/readiness.py`. Today it checks
-that every table and column of the code's metadata exists (the same stand-in the startup check
-uses). With Alembic it becomes "the database revision is at head": only that function changes.
+"Migrated" means Alembic is at head: `schema_at_head(connection)` in
+`backend/src/cc_platform/infrastructure/persistence/sqlalchemy/readiness.py` compares the revision
+in `alembic_version` with the head of the migrations this build ships (the same check
+`CC_MIGRATE_ON_START=false` makes at startup). By default `cc-api` migrates on start (under the
+advisory lock), so `/readyz` turns 200 once that finishes; with `CC_MIGRATE_ON_START=false` run
+`cc-migrate` first, and `/readyz` stays 503 `not_migrated` until then
+([database.md](deploy/database.md)).
 
 Use `/readyz` for the container health check and for the reverse proxy's upstream check, and
 `/healthz` for liveness (restart) decisions.
@@ -173,8 +176,12 @@ written as JSON (`CC_CORS_ORIGINS=["https://a.example"]`).
 | Variable | Required | Default | Secret | Example shape | Description |
 | --- | --- | --- | --- | --- | --- |
 | `CC_PERSISTENCE` | no | `sqlalchemy` | no | `sqlalchemy` | `memory` keeps nothing across restarts (tests, demos without a database). One of: `sqlalchemy`, `memory`. |
-| `CC_DATABASE_URL` | staging, prod | `sqlite+aiosqlite:///<backend>/cc_platform.db` | yes (holds the password) | `postgresql+asyncpg://<app_role>:<password>@<host>:5432/<db>` | SQLAlchemy async URL. SQLite for local development and tests; Postgres when deployed (roles and grants: [database.md](deploy/database.md)). |
+| `CC_DATABASE_URL` | staging, prod | `sqlite+aiosqlite:///<backend>/cc_platform.db` | yes (holds the password) | `postgresql+asyncpg://<app_role>:<password>@<host>:5432/<db>` | SQLite (`sqlite+aiosqlite:///…`) or Postgres (`postgresql://…`, psycopg 3). |
 | `CC_DATABASE_ECHO` | no | `false` | no | `false` | Log every SQL statement (development only). |
+| `CC_DATABASE_POOL_SIZE` | no | `5` | no | `5` | Postgres connection pool, per process (docs/platform/deploy/database.md). |
+| `CC_DATABASE_MAX_OVERFLOW` | no | `5` | no | `5` | Extra Postgres connections the pool may open beyond the pool size, per process. |
+| `CC_DATABASE_POOL_TIMEOUT_SECONDS` | no | `10.0` | no | `10.0` | Seconds to wait for a free Postgres connection before failing the request. |
+| `CC_MIGRATE_ON_START` | no | `true` | no | `true` | Apply the pending migrations at startup (under a lock). Off: the database must already be at the head revision (`cc-migrate` ran before), else the process refuses to start. |
 | `CC_SEED_DEMO_DATA` | prod (false) | `true` | no | `true` | Insert the synthetic demo data (accounts, customers, cases) that is missing; idempotent. Refused in prod. |
 
 #### Auth

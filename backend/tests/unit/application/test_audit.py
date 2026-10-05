@@ -60,6 +60,7 @@ from cc_platform.infrastructure.ids import SequentialIdGenerator
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from cc_platform.infrastructure.persistence.sqlalchemy.database import Database
+from cc_platform.infrastructure.persistence.sqlalchemy.migrator import migrate
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from cc_platform.infrastructure.seed.cases import (
     seed_case_id,
@@ -449,7 +450,7 @@ async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
 
     else:
         database = Database("sqlite+aiosqlite:///:memory:")
-        await database.create_schema()
+        await migrate(database)
         session_factory = database.session_factory
 
         def factory() -> UnitOfWork:

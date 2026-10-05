@@ -61,7 +61,14 @@ def _role(value: str | None) -> TurnAuthorRole | None:
     return TurnAuthorRole(value) if value else None
 
 
+#: ``turns.sequence`` is a 32-bit integer; a cursor beyond it (valid up to 2**63 - 1) is clamped,
+#: or Postgres refuses the comparison ("integer out of range").
+_MAX_TURN_SEQUENCE = 2**31 - 1
+
+
 # ----------------------------------------------------------------------------- cases
+
+
 class SqlCaseRepository(VersionedRepository[Case]):
     table = tables.cases
 
@@ -614,11 +621,12 @@ class SqlTurnRepository(_AppendOnly):
         if audience is not None:
             statement = statement.where(c.audience == audience.value)
         if after is not None:
+            after = min(after, _MAX_TURN_SEQUENCE)
             statement = statement.where(c.sequence > after).order_by(c.sequence).limit(limit)
             rows = (await self._session.execute(statement)).mappings().all()
             return [self._from_row(row) for row in rows]
         if before is not None:
-            statement = statement.where(c.sequence < before)
+            statement = statement.where(c.sequence < min(before, _MAX_TURN_SEQUENCE))
         statement = statement.order_by(c.sequence.desc()).limit(limit)
         rows = (await self._session.execute(statement)).mappings().all()
         return [self._from_row(row) for row in reversed(rows)]

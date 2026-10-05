@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import TracebackType
 
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from cc_platform.application.ports.clock import Clock
@@ -63,10 +63,16 @@ from cc_platform.infrastructure.persistence.unit_of_work_base import BaseUnitOfW
 
 #: SQLite's busy answers: another connection holds the write lock past the busy timeout.
 _LOCK_CONTENTION = ("database is locked", "database table is locked")
+#: Postgres' equivalents (SQLSTATE): serialization failure, deadlock, lock not available.
+_POSTGRES_CONTENTION = frozenset({"40001", "40P01", "55P03"})
 
 
 def is_lock_contention(error: BaseException) -> bool:
     """Whether a driver error means "another writer holds the lock" (nothing was written)."""
+    if not isinstance(error, DBAPIError):
+        return False
+    if getattr(error.orig, "sqlstate", None) in _POSTGRES_CONTENTION:
+        return True
     return isinstance(error, OperationalError) and any(
         marker in str(error.orig) for marker in _LOCK_CONTENTION
     )

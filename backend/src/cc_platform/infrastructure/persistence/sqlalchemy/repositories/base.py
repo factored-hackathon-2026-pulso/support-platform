@@ -81,6 +81,12 @@ class VersionedRepository[A: AggregateRoot](ABC):
         try:
             await self._session.execute(statement)
         except IntegrityError as exc:
+            if getattr(aggregate, "creation_key", None) is not None:
+                # Created with an ``Idempotency-Key``: the database names only the first unique
+                # key it checks (SQLite and Postgres check them in different orders), so a
+                # concurrent replay may surface as the email or the name. Retry: the command
+                # re-reads by key (a replay) or meets the other rule on fresh state.
+                raise ConcurrentUpdateError(entity=self.table.name) from exc
             raise self._integrity_error(exc, insert=True) from exc
         aggregate.mark_persisted(1)
         self._track(aggregate)

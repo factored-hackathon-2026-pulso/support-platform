@@ -6,12 +6,12 @@ The platform is for people only: customers and support staff talk by chat and, s
 
 ## How it is stored
 
-- SQLite by default, written in portable SQL so it moves to Postgres unchanged.
-- **No migrations yet**: the schema is created on startup. If it changes, delete `backend/cc_platform.db` and it is recreated with the sample data.
+- SQLite for development and tests, Postgres in production (psycopg 3), written in portable SQL. JSON columns are `jsonb` on Postgres; `event_log.sequence` is a `bigint` identity there.
+- **Alembic migrations** (`backend/src/cc_platform/infrastructure/persistence/sqlalchemy/migrations/versions/`) build and upgrade the schema, on every start or with `cc-migrate`; `tables.py` and the head revision must agree (a test checks it). Operations, roles and grants: [deploy/database.md](./deploy/database.md).
 - Prefixed text ids: `CASE-…`, `TRN-…` (message), `ASG-…` (assignment), `CUS-…` (customer), `STF-…` (staff member), `SES-…` (session), `MFA-…`, `TEAM-…` (team), `EVT-…` (event), `CSN-…` (customer session), `ESC-…` (escalation), `NTF-…` (notification), `INV-…` (invitation), `PWR-…` (password reset link), `EML-…` (dev mailbox email), `CALL-…` (call, slice 12).
 - Dates in UTC (ISO-8601).
 - Tables with a `version` column use optimistic concurrency control: if two people change the same thing at once, the second write is rejected and retried on fresh data.
-- `turns` and `event_log` are append-only: rows are never edited or deleted.
+- `turns` and `event_log` are append-only: rows are never edited or deleted. On Postgres a trigger rejects any UPDATE, DELETE or TRUNCATE of `event_log`.
 
 ## Diagram
 
@@ -516,7 +516,7 @@ locking like every aggregate. No message text is stored here (it lives in `turns
 
 `builder_threads` (slice 16) — one row per person, unique `staff_id`: `id` `BLT-…`, `staff_id` → staff, `agent` (`constructor-chat@prod`), agent-core's `agent_session_id` / `run_id`, `runs` (the idempotency suffix of each run), `messages` (JSON list of `{id, role: person|agent, text, created_at, client_message_id, answers}`, newest 200), `last_trace_id`, `version`. The text lives here; the event log carries sizes only.
 
-`case_type_maturity` (slice 21) — one row per case type that matured (absent = stage 0): `case_type` (key), `stage` (0-3), `agent` (`none|ready|active`), `signals` (JSON counters since the current stage, the last drafts as letters), `stage_since` (JSON stage → when), `agent_since`, **`agent_id`** (slice 22: agent-core's id of the agent that serves the type, set by "Activar"), `changed_at`, `changed_by_id`, `last_change`, `version`.
+`case_type_maturity` (slice 21) — one row per case type that matured (absent = stage 0): `case_type` (key), `stage` (0-3), `agent` (`none|ready|active`), `signals` (JSON counters since the current stage, the last drafts as letters), `stage_since` (JSON stage → when), `agent_since`, **`agent_id`** (slice 22: agent-core's id of the agent that serves the type, set by "Activar"), **`agent_name`** (PR 31: the display name, optional) and **`agent_paused`** (ADR 0009), `changed_at`, `changed_by_id`, `last_change`, `version`.
 
 `builder_proposals` (slice 16) — the platform's index of agent-core's proposals (merged with agent-core's own list since contract 1.4.0; a proposal only agent-core has is listed with `source: registry` and is not stored here): `id` is **agent-core's proposal id** (a UUID, not a platform id), `agent_id`, `title`, `origin` (`manual|builder_chat|auto_detect|import`), `created_by` (a staff id or the builder service's identity), `registered_by` (the staff id who brought it into the list, or `engine`, ADR 0007; no foreign key), `source` (`platform|chat|tracked|engine`), and the last state read from the registry: `state` (`draft|candidate|evaluated|approved|published`), `rev`, `base_release_id`, `candidate_hash`, `updated_at` (the registry's), `refreshed_at` (when the platform read it), `created_at`, `version`. Indexes `(agent_id, updated_at)` and `(state, updated_at)`. The registry is the source of truth: this is a cache plus "who brought it here".
 
@@ -613,28 +613,9 @@ Event types:
 | Engine signals (catalog 1.3.0) | `copilot.suggestion_shown`, `copilot.suggestion_ignored`, `case.handoff_rated` and the rest of the copilot, assistant and `ai.*` events: see `api/engine-signals.md` |
 | Access | `auth.login_failed`, `auth.password_accepted`, `auth.mfa_challenge_issued`, `auth.mfa_failed`, `auth.account_locked`, `auth.session_started`, `auth.session_ended`, `customer.session_started`; part 4 (the person herself): `staff.invitation_accepted` (`invitation_id`), `staff.mfa_enrolled` (`method: totp`), `staff.password_reset` (`cleared_lock`: she created her new password with the link) |
 
-## What may still change
+## Schema history
 
-- Slice 18 adds `cases.case_type` and the `platform_settings` table: a database created earlier
-  fails on startup (`OutdatedSchemaError`); delete it.
-- Slice 22 adds `case_type_maturity.agent_id`: delete the database (`OutdatedSchemaError` otherwise).
-
-- Slice 7 adds the rating columns to `cases`: a database created earlier fails on startup
-  (`OutdatedSchemaError`) until it is deleted.
-- Slice 8 adds no columns, but it changes the `priority` values, the first-response deadline and
-  the seeded story: delete `backend/cc_platform.db` to see them (an older database starts, with
-  `medium` on its cases and the old deadlines).
-- Slice 9 adds the `escalations` table and the `cases.open_escalation_id` column: an older
-  database fails on startup (`OutdatedSchemaError`) until it is deleted.
-- Slice 10 adds the `notifications` table: an older database fails on startup
-  (`OutdatedSchemaError`) until it is deleted.
-- Slice 11 (part 4) adds the `invitations`, `password_resets` and `dev_mailbox` tables and the
-  `staff.setup` and `login_accounts.totp_secret` columns: an older database fails on startup
-  (`OutdatedSchemaError`) until it is deleted.
-- Slice 12 adds the `calls` table and the `cases.active_call_id` and `turns.subject` columns, and
-  renames the channels (`app_chat` → `chat_app`, `web_chat` → `chat_web`): an older database
-  fails on startup (`OutdatedSchemaError`) until it is deleted.
-- Known gap: there are no migrations. Any future schema change requires deleting `backend/cc_platform.db` until they are added.
+The migrations start at slice 22 (`0001_baseline`, the schema built with `create_all` until then); later changes are revisions: `0002_suggestion_truncated` (PR 25), `0003_engine_announce` (PR 17), `0004_engine_release` (PR 27), `0005_agent_catalog` (PR 31). A database created by an older build is adopted on its next start (stamped with the revision its columns match, then upgraded); a SQLite file from before slice 22 cannot be adopted (`OutdatedSchemaError`). Schema changes no longer require deleting the database.
 
 ## Differences from `data-lab/contracts/synthetic-sample/platform_history.json`
 

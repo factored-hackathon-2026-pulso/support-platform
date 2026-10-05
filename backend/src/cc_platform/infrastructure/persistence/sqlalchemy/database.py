@@ -1,11 +1,13 @@
-"""Async engine and session factory lifecycle."""
+"""Async engine and session factory lifecycle (SQLite for development and tests, Postgres in
+production). The schema comes from the Alembic migrations (``migrator``), never from here."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import Connection, event, inspect, text
-from sqlalchemy.engine import make_url
+from sqlalchemy import event, text
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -14,15 +16,39 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
-from cc_platform.infrastructure.persistence.sqlalchemy.tables import metadata
+#: The async driver for Postgres (psycopg 3); ``postgresql://`` and ``postgres://`` mean it.
+POSTGRES_DRIVER = "postgresql+psycopg"
+
+
+@dataclass(frozen=True, slots=True)
+class PoolOptions:
+    """Connection pool of a server database (Postgres); SQLite ignores it."""
+
+    size: int = 5
+    max_overflow: int = 5
+    #: Seconds a request waits for a free connection before failing.
+    timeout_seconds: float = 10.0
+    #: Connections older than this are replaced (proxies and failovers drop idle ones).
+    recycle_seconds: int = 1800
+    #: Seconds to wait for the server when opening a connection.
+    connect_timeout_seconds: int = 5
+
+
+def normalize_url(url: str) -> URL:
+    """``postgres://`` / ``postgresql://`` (what infrastructure hands out) use psycopg 3."""
+    parsed = make_url(url)
+    if parsed.drivername in ("postgres", "postgresql"):
+        parsed = parsed.set(drivername=POSTGRES_DRIVER)
+    return parsed
 
 
 class Database:
-    """Owns the engine. ``create_schema`` is the stand-in for migrations (known gap)."""
+    """Owns the engine and the session factory."""
 
-    def __init__(self, url: str, *, echo: bool = False) -> None:
-        parsed = make_url(url)
-        is_sqlite = parsed.get_backend_name() == "sqlite"
+    def __init__(self, url: str, *, echo: bool = False, pool: PoolOptions | None = None) -> None:
+        parsed = normalize_url(url)
+        backend = parsed.get_backend_name()
+        is_sqlite = backend == "sqlite"
         in_memory = is_sqlite and parsed.database in (None, "", ":memory:")
         if is_sqlite and not in_memory and parsed.database:
             Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
@@ -33,18 +59,32 @@ class Database:
         if in_memory:
             # One shared connection, otherwise every session would see an empty database.
             engine_kwargs |= {"poolclass": StaticPool, "connect_args": {"check_same_thread": False}}
-        self.engine: AsyncEngine = create_async_engine(url, **engine_kwargs)
+        elif backend == "postgresql":
+            options = pool or PoolOptions()
+            engine_kwargs |= {
+                "pool_size": options.size,
+                "max_overflow": options.max_overflow,
+                "pool_timeout": options.timeout_seconds,
+                "pool_recycle": options.recycle_seconds,
+                "pool_pre_ping": True,
+                "connect_args": {
+                    "connect_timeout": options.connect_timeout_seconds,
+                    "application_name": "cc-platform",
+                },
+            }
+        self.engine: AsyncEngine = create_async_engine(parsed, **engine_kwargs)
         if is_sqlite:
             event.listen(self.engine.sync_engine, "connect", _enable_sqlite_foreign_keys)
         self.session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             self.engine, expire_on_commit=False, autoflush=False
         )
-        self.url = url
+        #: The URL as given (with its password): never log it; ``safe_url`` is for logs.
+        self.url = parsed.render_as_string(hide_password=False)
+        self.safe_url = parsed.render_as_string(hide_password=True)
 
-    async def create_schema(self) -> None:
-        async with self.engine.begin() as connection:
-            await connection.run_sync(_ensure_schema_is_current)
-            await connection.run_sync(metadata.create_all)
+    @property
+    def dialect(self) -> str:
+        return self.engine.dialect.name
 
     async def ping(self) -> bool:
         try:
@@ -56,44 +96,6 @@ class Database:
 
     async def dispose(self) -> None:
         await self.engine.dispose()
-
-
-class OutdatedSchemaError(RuntimeError):
-    """An existing database lacks columns of the current schema (no migrations yet)."""
-
-
-def _ensure_schema_is_current(connection: Connection) -> None:
-    """``create_all`` never alters existing tables; fail loudly instead of at the first query.
-
-    Runs before ``create_all``. An empty database is created from scratch; a database that
-    already has some of the tables must have all of them, with every column. Stand-in until
-    Alembic exists (known gap): a local dev database created by an older build must be
-    deleted and is re-created and re-seeded on the next start.
-    """
-    inspector = inspect(connection)
-    existing = set(inspector.get_table_names())
-    if not existing & {table.name for table in metadata.sorted_tables}:
-        return  # a new database
-    missing_tables = [t.name for t in metadata.sorted_tables if t.name not in existing]
-    missing_columns = [
-        f"{table.name}.{column.name}"
-        for table in metadata.sorted_tables
-        if table.name in existing
-        for column in table.columns
-        if column.name not in {c["name"] for c in inspector.get_columns(table.name)}
-    ]
-    if missing_tables or missing_columns:
-        parts = []
-        if missing_tables:
-            parts.append("missing tables: " + ", ".join(missing_tables))
-        if missing_columns:
-            parts.append("missing columns: " + ", ".join(missing_columns))
-        raise OutdatedSchemaError(
-            "The database schema is older than the code ("
-            + "; ".join(parts)
-            + "). Delete the local database (e.g. backend/cc_platform.db) and restart; "
-            "there are no migrations yet."
-        )
 
 
 def _enable_sqlite_foreign_keys(dbapi_connection: object, _record: object) -> None:

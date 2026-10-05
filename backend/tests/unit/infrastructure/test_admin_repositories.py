@@ -24,10 +24,8 @@ from cc_platform.infrastructure.events.in_process_bus import InProcessEventBus
 from cc_platform.infrastructure.ids import SequentialIdGenerator
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
-from cc_platform.infrastructure.persistence.sqlalchemy.database import (
-    Database,
-    OutdatedSchemaError,
-)
+from cc_platform.infrastructure.persistence.sqlalchemy.database import Database
+from cc_platform.infrastructure.persistence.sqlalchemy.migrator import OutdatedSchemaError, migrate
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from cc_platform.infrastructure.seed.cases import seed_case_id
 from cc_platform.infrastructure.seed.people import seed_staff_id
@@ -50,7 +48,7 @@ async def factory(request: pytest.FixtureRequest) -> AsyncIterator[UnitOfWorkFac
         yield memory
         return
     database = Database("sqlite+aiosqlite:///:memory:")
-    await database.create_schema()
+    await migrate(database)
 
     def sql() -> UnitOfWork:
         return SqlAlchemyUnitOfWork(database.session_factory, bus=bus, ids=ids, clock=clock)
@@ -301,6 +299,7 @@ async def test_open_refs_on_sqlite(tmp_path: Path) -> None:
     await container.shutdown()
 
 
+@pytest.mark.sqlite_only
 async def test_a_slice_3_database_lists_the_missing_tables_and_columns(tmp_path: Path) -> None:
     url = f"sqlite+aiosqlite:///{tmp_path / 'slice3.db'}"
     old = Database(url)
@@ -315,10 +314,10 @@ async def test_a_slice_3_database_lists_the_missing_tables_and_columns(tmp_path:
     await old.dispose()
     database = Database(url)
     with pytest.raises(OutdatedSchemaError) as raised:
-        await database.create_schema()
+        await migrate(database)
     message = str(raised.value)
-    missing_tables = message.split("missing tables: ")[1].split(";", maxsplit=1)[0].split(", ")
-    assert {"teams", "admin_roster", "cases", "event_log"} <= set(missing_tables)
+    missing = set(message.split("missing: ")[1].split(")", maxsplit=1)[0].split(", "))
+    assert {"teams", "admin_roster", "cases", "event_log"} <= missing
     assert "staff.team_id" in message
     assert "staff.created_at" in message
     await database.dispose()

@@ -30,6 +30,7 @@ from cc_platform.infrastructure.ids import SequentialIdGenerator
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from cc_platform.infrastructure.persistence.sqlalchemy.database import Database
+from cc_platform.infrastructure.persistence.sqlalchemy.migrator import migrate
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from cc_platform.infrastructure.security.one_time_tokens import SecretsOneTimeTokens
 from cc_platform.infrastructure.security.secret_box import FernetSecretBox, derive_key
@@ -53,7 +54,7 @@ async def factory(request: pytest.FixtureRequest) -> AsyncIterator[UnitOfWorkFac
         yield memory
         return
     database = Database("sqlite+aiosqlite:///:memory:")
-    await database.create_schema()
+    await migrate(database)
 
     def sql() -> UnitOfWork:
         return SqlAlchemyUnitOfWork(database.session_factory, bus=bus, ids=ids, clock=clock)
@@ -236,7 +237,7 @@ async def test_the_dev_mailbox_keeps_the_newest(kind: str, monkeypatch: pytest.M
         mailbox = InMemoryDevMailbox(clock=clock, ids=ids)
     else:
         database = Database("sqlite+aiosqlite:///:memory:")
-        await database.create_schema()
+        await migrate(database)
         mailbox = SqlDevMailbox(database.session_factory, clock=clock, ids=ids)
     for number in range(1, 5):
         await mailbox.send(message(number))

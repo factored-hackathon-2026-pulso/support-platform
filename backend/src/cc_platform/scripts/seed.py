@@ -26,6 +26,7 @@ from cc_platform.application.ports.unit_of_work import UnitOfWork
 from cc_platform.bootstrap.container import Container, build_container
 from cc_platform.bootstrap.settings import Settings
 from cc_platform.infrastructure.events.in_process_bus import InProcessEventBus
+from cc_platform.infrastructure.persistence.sqlalchemy.migrator import migrate
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from cc_platform.infrastructure.seed.volume import seed_volume
 
@@ -49,7 +50,7 @@ async def run_seed(container: Container, profile: str) -> dict[str, Any]:
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r}; expected one of {', '.join(PROFILES)}")
     if container.database is not None:
-        await container.database.create_schema()
+        await migrate(container.database)
     await container.seed_demo_data()
     summary: dict[str, Any] = {"profile": profile}
     if profile == "volume":

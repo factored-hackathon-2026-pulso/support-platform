@@ -30,9 +30,9 @@ export function makeTypeStage(
     },
     reached: [],
     agentSince: null,
+    agentId: agent === 'active' ? 'disputas' : null,
     agentName: null,
     agentPaused: false,
-    agentId: agent === 'active' ? 'disputas' : null,
     lastChange: null,
     version: 1,
   }

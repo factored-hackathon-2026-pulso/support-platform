@@ -21,9 +21,10 @@ from cc_platform.infrastructure.ai.core_readiness import CoreReadinessProbe
 from cc_platform.infrastructure.ai.keys import AgentSigningKeys
 from cc_platform.infrastructure.ids import SequentialIdGenerator
 from cc_platform.infrastructure.persistence.sqlalchemy.database import Database
+from cc_platform.infrastructure.persistence.sqlalchemy.migrator import migrate
 from cc_platform.infrastructure.persistence.sqlalchemy.readiness import (
     DatabaseReadinessProbe,
-    schema_is_current,
+    schema_at_head,
 )
 from tests.support import make_settings
 
@@ -51,18 +52,19 @@ def test_probes_stay_out_of_the_openapi_contract(client: TestClient) -> None:
     assert "/readyz" not in paths
 
 
-def test_readyz_is_503_when_the_schema_is_not_migrated(
+def test_readyz_is_503_when_alembic_is_not_at_head(
     client: TestClient, container: Container
 ) -> None:
     assert container.database is not None
     engine = container.database.engine
 
-    async def drop_a_table() -> None:
+    async def roll_back_a_revision() -> None:
         async with engine.begin() as connection:
-            await connection.execute(text("PRAGMA foreign_keys=OFF"))
-            await connection.execute(text("DROP TABLE copilot_suggestions"))
+            await connection.execute(
+                text("UPDATE alembic_version SET version_num = '0004_engine_release'")
+            )
 
-    client.portal.call(drop_a_table)  # type: ignore[union-attr]
+    client.portal.call(roll_back_a_revision)  # type: ignore[union-attr]
 
     response = client.get("/readyz")
     assert response.status_code == 503
@@ -71,6 +73,7 @@ def test_readyz_is_503_when_the_schema_is_not_migrated(
     assert client.get("/healthz").status_code == 200  # liveness never depends on the DB
 
 
+@pytest.mark.sqlite_only  # a directory standing in for the file / an empty file: SQLite itself
 def test_readyz_is_503_and_healthz_200_when_the_database_is_down(
     client: TestClient, container: Container, tmp_path: Path
 ) -> None:
@@ -174,16 +177,17 @@ def test_the_container_wires_the_core_probe_when_the_core_is_configured(
     assert isinstance(container.readiness_probes[1], CoreReadinessProbe)
 
 
-async def test_schema_is_current_is_false_for_an_empty_database(tmp_path: Path) -> None:
+@pytest.mark.sqlite_only  # a directory standing in for the file / an empty file: SQLite itself
+async def test_schema_at_head_is_false_for_an_empty_database(tmp_path: Path) -> None:
     container = build_container(
         make_settings(database_url=f"sqlite+aiosqlite:///{tmp_path / 'empty.db'}"),
         ids=SequentialIdGenerator(),
     )
     assert container.database is not None
     async with container.database.engine.connect() as connection:
-        assert not await connection.run_sync(schema_is_current)
+        assert not await connection.run_sync(schema_at_head)
     assert await DatabaseReadinessProbe(container.database).state() == "not_migrated"
-    await container.database.create_schema()
+    await migrate(container.database)
     assert await DatabaseReadinessProbe(container.database).state() == "ok"
     await container.shutdown()
 

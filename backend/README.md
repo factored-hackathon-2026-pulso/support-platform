@@ -24,9 +24,11 @@ uv run cc-api    # http://127.0.0.1:8000 (reloads on code changes when CC_ENV=de
 
 - Swagger UI: http://127.0.0.1:8000/api/v1/docs · OpenAPI JSON: `/api/v1/openapi.json` ·
   health: `GET /api/v1/health` · build info: `GET /api/v1/meta`.
-- Data lives in `backend/cc_platform.db` (SQLite, git-ignored). The first start creates the
-  schema and seeds the demo data; the seed only inserts what is missing. Delete the file to
-  reset, or run with `CC_PERSISTENCE=memory`.
+- Data lives in `backend/cc_platform.db` (SQLite, git-ignored). Every start applies the pending
+  migrations (Alembic, under a lock; an older file is upgraded in place) and seeds the demo data;
+  the seed only inserts what is missing. `CC_PERSISTENCE=memory` runs without a database.
+- Production runs on Postgres: `CC_DATABASE_URL=postgresql://…` (psycopg 3). Migrations,
+  roles and grants, pool: `docs/platform/deploy/database.md`.
 - Configuration: `CC_*` environment variables or `backend/.env` (template `.env.example`,
   source `src/cc_platform/bootstrap/settings.py`, table in the runbook §4).
 - Seeded staff all use the password `demo1234` and the development MFA code `000000`, e.g.
@@ -186,7 +188,7 @@ src/cc_platform/
   infrastructure/  adapters: SQLAlchemy + in-memory persistence, event bus, realtime hub,
                    Argon2, HMAC tokens, dev MFA, structlog, seed data, clock, ids
   api/             FastAPI routers per context, schemas, problem+json, auth/RBAC, WebSocket
-  bootstrap/       settings, composition root (container), app factory, cc-api entry point
+  bootstrap/       settings, composition root (container), app factory, cc-api and cc-migrate
   scripts/         export_openapi
 tests/             domain, application, infrastructure, api, architecture, openapi
 ```
@@ -213,7 +215,20 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy src            # strict on cc_platform.domain and cc_platform.application
 uv run pytest -q           # includes the OpenAPI staleness check
+scripts/test-postgres.sh -q   # the same suite on a throwaway Postgres container (docker/podman)
 ```
+
+## Migrations
+
+```bash
+uv run cc-migrate                         # apply the pending ones (cc-api also does it on start)
+uv run cc-migrate check                   # exit 1 unless the database is at head
+uv run cc-migrate revision -m "add x"     # after editing tables.py: write the next revision
+```
+
+Revisions live in `src/cc_platform/infrastructure/persistence/sqlalchemy/migrations/versions/`;
+`tests/unit/infrastructure/test_migrations.py` fails while `tables.py` and the head differ. Details,
+lock, roles and grants: `docs/platform/deploy/database.md`.
 
 ## OpenAPI contract
 
@@ -230,9 +245,9 @@ Regenerate after every API change, then run `pnpm gen:api` in `frontend/`.
 - **The copilot (slice 15):** answers are text (no structured suggested tools yet) and as good as agent-core's tools; no live listening mode; a call lost with its process is recovered by asking again with the same `clientMessageId`. Details: `docs/platform/api/slice-15-copilot.md` §6.
 - **The assistant (slice 14):** the second factor is simulated; a sweep (`CC_ASSISTANT_SWEEP_SECONDS`) re-runs assistant work lost with its process; `GET /api/v1/internal/grants/{grantRef}` answers agent-core's `grant_active` (shared secret `CC_INTERNAL_SERVICE_TOKEN`, not in the public OpenAPI), but agent-core still needs an adapter that calls it (delegations live 10 minutes meanwhile); only `CC_ASSISTANT_LANGUAGES` start with the assistant; links to dataset customers come from a startup file (no endpoint). Details: `docs/platform/api/slice-14-assistant.md` §10.
 
-- **No migrations.** `metadata.create_all` runs at startup. A database created by an older
-  build fails fast with `OutdatedSchemaError` (it names the missing tables or columns): delete
-  `cc_platform.db` and restart.
+- Migrations are forward-only (no downgrades). A SQLite file created before slice 22 cannot be
+  adopted by them (`OutdatedSchemaError` names what is missing; move it aside). There is no copy
+  of a SQLite database into Postgres.
 - Dev-only parts: the MFA code `000000` for seeded accounts, HMAC session tokens, the dev
   mailbox; `CC_ENV=prod` refuses to start until a real email adapter exists (and requires its own
   `CC_TOTP_SECRET_KEY`). No self-service "forgot password", no administration reset of a lost

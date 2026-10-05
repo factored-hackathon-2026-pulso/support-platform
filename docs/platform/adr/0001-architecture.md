@@ -29,7 +29,8 @@ audit) and administration (users, roles, languages, teams) be added later withou
 reworking the core.
 
 The team is small, the timeline is a hackathon, and the API contract is consumed by a typed
-React frontend. Persistence starts on SQLite but must be Postgres-ready.
+React frontend. Persistence starts on SQLite but must be Postgres-ready (done 2026-10-05: Postgres in
+production, Alembic migrations; `docs/platform/deploy/database.md`).
 
 ## Decision
 
@@ -138,5 +139,5 @@ Removed on 2026-10-03 (slice 2): Chain of Responsibility (`Responder` judge → 
 - Negative: more files and explicit mapping code than a CRUD app; the single `UnitOfWork`
   protocol grows one repository per aggregate; events are published in-process after commit
   (a crash between commit and publish drops that realtime signal, never the log entry).
-- Follow-ups: Alembic migrations when the schema stabilises; broker-backed hub/outbox relay
+- Follow-ups: broker-backed hub/outbox relay
   for multi-worker deployments; real MFA/IdP adapter before any production use.

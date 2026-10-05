@@ -386,7 +386,8 @@ describe('team screen in Portuguese (pt-BR)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Julián Ortega' }))
     const sheet = await screen.findByRole('dialog', { name: 'Julián Ortega' })
-    expect(within(sheet).getByText('Aguardando o cliente')).toBeInTheDocument()
+    // The count label and the case's status pill share the words.
+    expect(within(sheet).getAllByText('Aguardando o cliente')).toHaveLength(2)
     expect(
       within(sheet).getByRole('link', { name: 'Ver conversa de Camila Torres Benavides' }),
     ).toBeInTheDocument()

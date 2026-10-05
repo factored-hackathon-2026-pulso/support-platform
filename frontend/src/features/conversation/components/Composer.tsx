@@ -1,13 +1,21 @@
-import { useId, useRef, type KeyboardEvent } from 'react'
+import { useId, useImperativeHandle, useRef, type KeyboardEvent, type Ref } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Button, ComposerFrame, Textarea } from '@/components/ui'
 import { MAX_MESSAGE_LENGTH, normalizeMessage } from '../model'
+
+/** Slice 20: where the copilot's draft leaves the focus ("Editar": the box; "Usar": "Enviar"). */
+export interface ComposerHandle {
+  /** Focus the box with the caret at the end. */
+  focusInput(): void
+  focusSend(): void
+}
 
 export interface ComposerProps {
   /** The draft, owned by the pane so it survives the composer (see `UnsentDraft`). */
   value: string
   onChange: (text: string) => void
   onSend: (text: string) => void
+  ref?: Ref<ComposerHandle>
 }
 
 /**
@@ -18,10 +26,22 @@ export interface ComposerProps {
  * nothing to send, so pressing it never drops the keyboard focus to <body>.
  * Shown only when the viewer may reply (`ReadOnlyFooter` otherwise).
  */
-export function Composer({ value: text, onChange: setText, onSend }: ComposerProps) {
+export function Composer({ value: text, onChange: setText, onSend, ref }: ComposerProps) {
   const id = useId()
   const hintId = `${id}-hint`
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const sendRef = useRef<HTMLButtonElement>(null)
+  useImperativeHandle(ref, () => ({
+    focusInput() {
+      const element = textareaRef.current
+      if (!element) return
+      element.focus()
+      element.setSelectionRange(element.value.length, element.value.length)
+    },
+    focusSend() {
+      sendRef.current?.focus()
+    },
+  }))
   const message = normalizeMessage(text)
   const tooLong = text.trim().length > MAX_MESSAGE_LENGTH
 
@@ -62,6 +82,7 @@ export function Composer({ value: text, onChange: setText, onSend }: ComposerPro
             : 'Enter envía. Shift + Enter agrega una línea.'}
         </span>
         <Button
+          ref={sendRef}
           variant="primary"
           iconEnd={<ArrowRight size={16} aria-hidden="true" />}
           aria-disabled={!message || undefined}

@@ -9,6 +9,13 @@ export { CopilotPanel } from './components/CopilotPanel'
 export type { CopilotPanelProps } from './components/CopilotPanel'
 export { ToolsPanel } from './components/ToolsPanel'
 export type { ToolsPanelProps } from './components/ToolsPanel'
+export { CopilotDraft } from './components/CopilotDraft'
+export type { CopilotDraftProps, DraftTakeMode, TakenDraft } from './components/CopilotDraft'
+export { EscalationSuggestion } from './components/EscalationSuggestion'
+export type {
+  EscalationPrefill,
+  EscalationSuggestionProps,
+} from './components/EscalationSuggestion'
 export { useCopilotAccess, useCopilotThread } from './hooks/use-copilot'
 export type { CopilotCase } from './hooks/use-copilot'
 export { useLatestSuggestion } from './hooks/use-suggestions'

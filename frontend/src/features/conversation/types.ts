@@ -75,6 +75,8 @@ export interface PendingMessage {
   error: string | null
   /** False when re-sending cannot help (closed case, not the assignee). */
   retryable: boolean
+  /** Slice 20: the copilot draft it came from (a retry sends it again). */
+  copilotSuggestionId?: string | null
 }
 
 /**

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { applyCaseSummaryToInboxes } from '@/features/cases'
+import { copilotKeys } from '@/features/copilot/core'
 import { conversationKeys, conversationMutationKeys, postAnalystTurn } from '../api'
 import {
   addPending,
@@ -25,6 +26,12 @@ export function sendScope(caseId: string): string {
 interface SendInput {
   text: string
   clientMessageId: string
+  /** Slice 20: the copilot draft the reply came from (the backend derives used / edited). */
+  copilotSuggestionId?: string | null
+}
+
+export interface SendOptions {
+  copilotSuggestionId?: string | null
 }
 
 /**
@@ -60,7 +67,13 @@ export function storeTurnResult(
 async function sendAndReconcile(queryClient: QueryClient, caseId: string, input: SendInput) {
   const turnsKey = conversationKeys.turns(caseId)
   try {
-    storeTurnResult(queryClient, caseId, await postAnalystTurn(caseId, input))
+    const { copilotSuggestionId, ...rest } = input
+    const body = copilotSuggestionId ? { ...rest, copilotSuggestionId } : rest
+    storeTurnResult(queryClient, caseId, await postAnalystTurn(caseId, body))
+    // The draft was decided (used or edited): it leaves the newest suggestion.
+    if (copilotSuggestionId) {
+      void queryClient.invalidateQueries({ queryKey: copilotKeys.latest(caseId), exact: true })
+    }
   } catch (error) {
     const failure = describeSendFailure(error)
     queryClient.setQueryData<TranscriptCache>(turnsKey, (current) =>
@@ -95,7 +108,8 @@ export function useSendMessage(caseId: string) {
   const { mutate } = mutation
 
   const send = useCallback(
-    (text: string) => {
+    (text: string, options: SendOptions = {}) => {
+      const copilotSuggestionId = options.copilotSuggestionId ?? null
       const clientMessageId = newClientMessageId()
       queryClient.setQueryData<TranscriptCache>(conversationKeys.turns(caseId), (current) =>
         addPending(current ?? emptyTranscript(), {
@@ -105,9 +119,10 @@ export function useSendMessage(caseId: string) {
           status: 'sending',
           error: null,
           retryable: false,
+          ...(copilotSuggestionId ? { copilotSuggestionId } : {}),
         }),
       )
-      mutate({ text, clientMessageId })
+      mutate({ text, clientMessageId, copilotSuggestionId })
     },
     [caseId, mutate, queryClient],
   )
@@ -124,7 +139,11 @@ export function useSendMessage(caseId: string) {
           ? updatePending(current, clientMessageId, { status: 'sending', error: null })
           : current,
       )
-      mutate({ text: message.text, clientMessageId })
+      mutate({
+        text: message.text,
+        clientMessageId,
+        copilotSuggestionId: message.copilotSuggestionId ?? null,
+      })
     },
     [caseId, mutate, queryClient],
   )

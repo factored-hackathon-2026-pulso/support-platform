@@ -640,6 +640,8 @@ export function describeCaseLoadFailure(error: unknown): { title: string; descri
 export const CUSTOMER_FILE_PANEL_ID = 'ficha-del-cliente'
 /** Id of the name button (the focus returns to it when the panel closes). */
 export const CUSTOMER_FILE_TRIGGER_ID = 'ficha-del-cliente-boton'
+/** Slice 20: the header's "Apoyo" button (AI on), the other trigger of the same panel. */
+export const SUPPORT_PANEL_TRIGGER_ID = 'apoyo-del-caso-boton'
 
 /** The customer-name button of the slim header: "Ver ficha de Beatriz Salcedo Prieto". */
 export function customerFileTriggerLabel(customerName: string): string {

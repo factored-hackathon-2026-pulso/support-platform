@@ -36,6 +36,8 @@ class BuildInfo:
 class RealtimeOptions:
     #: How often an idle socket re-checks its session expiry against the ``Clock``.
     expiry_check_interval: timedelta = timedelta(seconds=30)
+    #: How often an idle socket gets a ``heartbeat`` envelope; ``None`` = never.
+    heartbeat_interval: timedelta | None = None
 
 
 @dataclass(frozen=True, slots=True)

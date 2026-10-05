@@ -42,6 +42,28 @@ class AsyncioBackgroundTasks:
                 # ``gather`` of finished tasks never yields, so without this the loop spins forever.
                 await asyncio.sleep(0)
 
+    async def drain_or_cancel(self, grace_seconds: float) -> int:
+        """``drain`` for at most ``grace_seconds``, then cancel what is left (graceful
+        shutdown); returns how many jobs were cancelled."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + grace_seconds
+        while self._tasks:
+            running = [task for task in self._tasks if not task.done()]
+            if not running:
+                await asyncio.sleep(0)  # let the done callbacks forget finished tasks
+                continue
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            await asyncio.wait(running, timeout=remaining)  # never cancels them
+        leftover = [task for task in self._tasks if not task.done()]
+        for task in leftover:
+            task.cancel()
+        await asyncio.gather(*leftover, return_exceptions=True)
+        if leftover:
+            _log.warning("background_jobs_cancelled", count=len(leftover))
+        return len(leftover)
+
     @property
     def pending(self) -> int:
         return len(self._tasks)

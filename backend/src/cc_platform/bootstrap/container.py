@@ -231,7 +231,7 @@ from cc_platform.application.ports.email import DevMailbox, EmailSender
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.health import HealthProbe, ReadinessProbe
 from cc_platform.application.ports.ids import IdGenerator
-from cc_platform.application.ports.realtime import RealtimeHub
+from cc_platform.application.ports.realtime import SERVER_SHUTDOWN, RealtimeHub
 from cc_platform.application.ports.security import (
     MfaVerifier,
     OneTimeTokens,
@@ -342,7 +342,8 @@ class Container:
                 dev_mailbox=self.dev_mailbox is not None,
             ),
             realtime=RealtimeOptions(
-                expiry_check_interval=self.settings.realtime_expiry_check_interval
+                expiry_check_interval=self.settings.realtime_expiry_check_interval,
+                heartbeat_interval=self.settings.realtime_heartbeat_interval,
             ),
             readiness=ReadinessOptions(
                 probes=self.readiness_probes,
@@ -422,13 +423,19 @@ class Container:
             _log.info("seed_demo_data", **created)
 
     async def shutdown(self) -> None:
+        """Graceful stop: periodic jobs first, then the sockets still open (closed with 1012,
+        the SPA reconnects to another or the restarted process), then the background jobs get
+        ``CC_SHUTDOWN_TIMEOUT_SECONDS`` to finish (the assistant sweep recovers the cancelled
+        ones on the next start), then the connections are released."""
         if self.sla_sweep is not None:
             await self.sla_sweep.stop()
         if self.assistant_sweep is not None:
             await self.assistant_sweep.stop()
         if self.suggestion_purge is not None:
             await self.suggestion_purge.stop()
-        await self.background.drain()
+        closed = self.realtime_hub.close_all(SERVER_SHUTDOWN)
+        cancelled = await self.background.drain_or_cancel(self.settings.shutdown_timeout_seconds)
+        _log.info("shutdown", sockets_closed=closed, jobs_cancelled=cancelled)
         if self.agent_core is not None and self.agent_core.http_client is not None:
             await self.agent_core.http_client.aclose()
         if self.database is not None:

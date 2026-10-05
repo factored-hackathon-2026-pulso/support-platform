@@ -164,6 +164,15 @@ class SqlAssistantSessionRepository(VersionedRepository[AssistantSession]):
                 found.append(session)
         return found
 
+    async def list_all(self) -> list[AssistantSession]:
+        result = await self._session.execute(select(self.table).order_by(self.table.c.created_at))
+        found: list[AssistantSession] = []
+        for row in result.mappings():
+            session = self._load(row)
+            if session is not None:
+                found.append(session)
+        return found
+
 
 def _message_to_json(m: CopilotMessage) -> dict[str, Any]:
     return {

@@ -40,6 +40,7 @@ from cc_platform.application.ai.errors import (
     translate_registry_error,
 )
 from cc_platform.application.ai.registry import (
+    AgentPause,
     AgentRegistryClient,
     AgentRegistryError,
     AliasChange,
@@ -141,6 +142,16 @@ class ProposalListing:
     registry_listed: bool
     """True when the rows include every proposal agent-core has (its list answered); False when
     they are only the platform's index (the list did not answer, or ``refresh`` was off)."""
+
+
+PROOF_SCRATCH_PREFIX = "[improvement-engine] [proof-scratch]"
+"""The improvement engine proves a patch on throwaway evaluation drafts it titles with this prefix
+(they carry ``kind: proof_scratch`` in their change docs). They are evidence, never a deliverable,
+so the list leaves them out; they stay readable by id."""
+
+
+def _is_proof_scratch(title: str) -> bool:
+    return title.startswith(PROOF_SCRATCH_PREFIX)
 
 
 def summary_of(entry: BuilderProposal, *, live: bool) -> ProposalSummary:
@@ -336,6 +347,7 @@ class AgentBuilder:
         size = max(1, min(limit, MAX_LIST))
         async with self.uow() as uow:
             entries = await uow.builder_proposals.search(agent_id=agent_id, state=state, limit=size)
+        entries = [e for e in entries if not _is_proof_scratch(e.title)]
         if not refresh:
             return ProposalListing(
                 items=tuple(summary_of(e, live=False) for e in entries), registry_listed=False
@@ -370,6 +382,7 @@ class AgentBuilder:
             if state is None or proposal.state.value == state
         ]
         rows.extend(summary_of(e, live=False) for e in missing if e.id not in by_id)
+        rows = [row for row in rows if not _is_proof_scratch(row.title)]
         rows.sort(key=lambda row: (row.updated_at, row.proposal_id), reverse=True)
         return ProposalListing(items=tuple(rows[:size]), registry_listed=page is not None)
 
@@ -837,6 +850,17 @@ class AgentBuilder:
             )
         )
         return change
+
+    async def set_paused(
+        self, actor: Actor, agent_id: str, *, paused: bool, reason: str, step_up_code: str
+    ) -> AgentPause:
+        """Pause or resume an agent in the registry (out of ``recepcion``'s directory; ``prod``
+        untouched). Her fresh authenticator code, like a promotion. The platform's audit is the
+        case type's (``ai.agent_paused`` / ``ai.agent_resumed``)."""
+        self._ensure(actor)
+        credentials = await self._step_up_credentials(actor, step_up_code)
+        call = self.registry.pause_agent if paused else self.registry.resume_agent
+        return await guarded(call(credentials, agent_id=agent_id, reason=reason.strip()))
 
     async def revoke(
         self, actor: Actor, release_id: str, *, reason: str, step_up_code: str

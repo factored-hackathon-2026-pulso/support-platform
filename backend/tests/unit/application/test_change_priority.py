@@ -99,7 +99,9 @@ async def test_the_assignee_sets_the_priority(world: Container) -> None:
     assert result.changed is True
     assert result.case.priority is CasePriority.HIGH
     assert result.case.version == version + 1
-    assert await priority_events(world, PATRICIA) == [("analyst", {"from": "none", "to": "high"})]
+    assert await priority_events(world, PATRICIA) == [
+        ("analyst", {"from": "none", "to": "high", "schema_version": 1})
+    ]
     detail = await world.use_cases.cases.detail.execute(actor_for(ANALYST), PATRICIA)
     assert detail.case.priority is CasePriority.HIGH
     assert detail.case.sla_due_at == result.case.sla_due_at  # the SLA never moves
@@ -136,10 +138,12 @@ async def test_supervision_changes_any_open_case_even_a_queued_one(world: Contai
         result = await use_case.execute(lucia, case_id, change(priority, version))
         assert result.changed is True
         assert result.case.priority is priority
-    assert await priority_events(world, ROSA) == [("supervisor", {"from": "none", "to": "medium"})]
+    assert await priority_events(world, ROSA) == [
+        ("supervisor", {"from": "none", "to": "medium", "schema_version": 1})
+    ]
     assert (await priority_events(world, CAMILA))[-1] == (
         "supervisor",
-        {"from": "medium", "to": "critical"},
+        {"from": "medium", "to": "critical", "schema_version": 1},
     )
 
 

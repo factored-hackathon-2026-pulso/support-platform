@@ -140,3 +140,82 @@ def test_customers_never_follow_the_stages(
     with connect(client, customer_session(2001)) as ws:
         assert ws.receive_json()["type"] == "welcome"
         assert subscribe(ws, "ai:stages")["type"] == "error"
+
+
+AGENTS = "/api/v1/ai/agents"
+
+
+def served_type(client: TestClient, token: str) -> str:
+    types = client.get(STAGES, headers=bearer(token)).json()["types"]
+    return next(t["caseType"] for t in types if t["agentId"] == "disputas")
+
+
+def test_the_agents_list_names_and_counts_what_each_one_did(
+    client: TestClient, sign_in: SignIn
+) -> None:
+    daniela = sign_in(ANALYST.email)
+
+    body = client.get(AGENTS, headers=bearer(daniela)).json()
+
+    assert body["available"] is True
+    disputas = next(a for a in body["agents"] if a["agentId"] == "disputas")
+    assert disputas["displayName"] == "Disputas"  # no name given: the id, humanized
+    assert disputas["caseType"] == served_type(client, daniela)
+    assert set(disputas["results"]) == {"sessions", "active", "resolved", "handedToPeople"}
+
+
+def test_supervision_names_the_agent_audited_and_it_shows_in_the_list(
+    client: TestClient, sign_in: SignIn
+) -> None:
+    lucia, daniela = sign_in(SUPERVISOR.email), sign_in(ANALYST.email)
+    kind = served_type(client, lucia)
+    url = f"/api/v1/supervision/ai/stages/{kind}/agent/name"
+
+    renamed = client.put(url, headers=bearer(lucia), json={"name": "  Cobros   indebidos "})
+
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["agentName"] == "Cobros indebidos"
+    agents = client.get(AGENTS, headers=bearer(daniela)).json()["agents"]
+    assert (
+        next(a for a in agents if a["agentId"] == "disputas")["displayName"] == "Cobros indebidos"
+    )
+    audit = client.get(
+        "/api/v1/audit/events", params={"family": "agents", "limit": 50}, headers=bearer(lucia)
+    ).json()["items"]
+    row = next(e for e in audit if e["type"] == "ai.agent_renamed")
+    assert "Cobros indebidos" not in str(row)  # the name is free text: not in the audit
+    again = client.put(url, headers=bearer(lucia), json={"name": "Cobros indebidos"})
+    assert again.status_code == 200  # the same name: nothing changes
+
+
+def test_naming_needs_supervision_an_agent_and_a_valid_name(
+    client: TestClient, sign_in: SignIn
+) -> None:
+    lucia, daniela = sign_in(SUPERVISOR.email), sign_in(ANALYST.email)
+    kind = served_type(client, lucia)
+    served = f"/api/v1/supervision/ai/stages/{kind}/agent/name"
+    problem(client.put(served, headers=bearer(daniela), json={"name": "X"}), 403, "forbidden")
+    problem(client.put(served, headers=bearer(lucia), json={"name": ""}), 422, "validation_error")
+    problem(
+        client.put(served, headers=bearer(lucia), json={"name": "x" * 81}), 422, "validation_error"
+    )
+    none = "/api/v1/supervision/ai/stages/none/agent/name"
+    problem(client.put(none, headers=bearer(lucia), json={"name": "X"}), 404, "not_found")
+    other = next(
+        t["caseType"]
+        for t in client.get(STAGES, headers=bearer(lucia)).json()["types"]
+        if t["agentId"] is None
+    )
+    unserved = f"/api/v1/supervision/ai/stages/{other}/agent/name"
+    problem(client.put(unserved, headers=bearer(lucia), json={"name": "X"}), 404, "not_found")
+
+
+def test_ai_off_hides_the_agents(client: TestClient, sign_in: SignIn) -> None:
+    admin = sign_in(ADMIN_ONLY.email)
+    client.put("/api/v1/admin/platform/ai", headers=bearer(admin), json={"enabled": False})
+    daniela, lucia = sign_in(ANALYST.email), sign_in(SUPERVISOR.email)
+    body = client.get(AGENTS, headers=bearer(daniela)).json()
+    assert (body["available"], body["agents"]) == (False, [])
+    kind = "undue_charge"
+    url = f"/api/v1/supervision/ai/stages/{kind}/agent/name"
+    problem(client.put(url, headers=bearer(lucia), json={"name": "X"}), 404, "assistant_disabled")

@@ -39,6 +39,7 @@ ENGINE_SIGNALS = frozenset(
         "copilot.suggestion_decided",
         "copilot.suggestion_ignored",
         "copilot.tool_used",
+        "copilot.item_decided",
         "copilot.query_asked",
         "copilot.answered",
         "assistant.session_started",
@@ -50,6 +51,9 @@ ENGINE_SIGNALS = frozenset(
         "ai.stage_moved_back",
         "ai.agent_ready",
         "ai.agent_activated",
+        "ai.agent_renamed",
+        "ai.agent_paused",
+        "ai.agent_resumed",
         "platform.ai_toggled",
     }
 )

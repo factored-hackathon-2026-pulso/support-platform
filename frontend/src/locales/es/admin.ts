@@ -131,6 +131,9 @@ export default {
       'Los cambios de rol se aplican de inmediato: la persona ve su menú actualizado sin volver a ingresar.',
     languagesHint:
       'Quien atiende casos necesita al menos un idioma. Los casos en portugués solo llegan a quien lo habla (regla 3).',
+    uiLanguage: 'Idioma de la plataforma',
+    uiLanguageHint:
+      'La invitación llega en este idioma y la plataforma se abre así. Después se cambia desde el menú de la cuenta.',
   },
   fieldError: {
     name: 'Escribe el nombre completo (al menos 2 caracteres).',

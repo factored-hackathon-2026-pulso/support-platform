@@ -161,6 +161,32 @@ describe('simulator · the assistant (slice 19)', () => {
     expect(screen.queryByRole('region', { name: 'Confirma para seguir' })).not.toBeInTheDocument()
   })
 
+  it('does not repeat in the card the question the assistant just asked', async () => {
+    const question = 'Voy a radicar la disputa del cargo. ¿Confirmas?'
+    const confirmation = { summary: question, token: 'tok-2', expiresAt: '2099-01-01T16:05:00Z' }
+    signInAs(withAssistant({ working: false, confirmation, stepUp: null }), [
+      customerMessage,
+      makeCustomerTurn({
+        sequence: 2,
+        language: 'es',
+        authorRole: 'assistant',
+        authorName: 'Asistente virtual',
+        text: question,
+      }),
+    ])
+    const { user } = render()
+    const card = await screen.findByRole('region', { name: 'Confirma para seguir' })
+    // Said once, in the bubble; the card keeps its title, deadline and buttons.
+    expect(screen.getAllByText(question)).toHaveLength(1)
+    expect(within(card).queryByText(question)).not.toBeInTheDocument()
+    expect(within(card).getByText('Vence a las 11:05')).toBeInTheDocument()
+    vi.mocked(api.answerConfirmation).mockResolvedValueOnce(
+      withAssistant({ working: true, confirmation: null, stepUp: null }),
+    )
+    await user.click(within(card).getByRole('button', { name: 'Sí' }))
+    expect(api.answerConfirmation).toHaveBeenCalledWith('tok-2', 'yes')
+  })
+
   it('refetches after an expired confirmation and says so', async () => {
     const confirmation = {
       summary: 'Bloquear la tarjeta',

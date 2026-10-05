@@ -59,6 +59,26 @@ export function hadAssistant(turns: readonly Pick<CustomerTurn, 'authorRole'>[])
   return turns.some((turn) => turn.authorRole === 'assistant')
 }
 
+/** Case, spacing and Unicode form apart, the same words (to compare two texts). */
+function comparable(text: string): string {
+  return text.normalize('NFC').toLocaleLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Whether the assistant's last message already says the confirmation's summary: agent-core
+ * often sends the same question as the turn and as the confirmation ("Voy a radicar la disputa
+ * del cargo. ¿Confirmas?"). Then the card shows only its title, deadline and buttons.
+ */
+export function confirmationAlreadySaid(
+  summary: string,
+  turns: readonly Pick<CustomerTurn, 'authorRole' | 'text'>[],
+): boolean {
+  const wanted = comparable(summary)
+  if (!wanted) return false
+  const last = turns.findLast((turn) => turn.authorRole === 'assistant')
+  return last ? comparable(last.text).includes(wanted) : false
+}
+
 /** The simulated second-factor code the backend accepts by default (`CC_ASSISTANT_STEP_UP_CODE`). */
 export const SIMULATED_STEP_UP_CODE = '000000'
 

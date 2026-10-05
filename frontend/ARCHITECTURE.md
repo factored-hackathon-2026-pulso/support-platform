@@ -1049,6 +1049,12 @@ not what it says (`emptyTitle`, not `noEmailsYet`). Reuse `common:actions.*` for
 **In components.** `const { t } = useTranslation('auth')` → `t('login.title')`; several namespaces:
 `useTranslation(['onboarding', 'common'])` → `t('reset.title')`, `t('common:actions.signIn')`; a deep
 block: `useTranslation('admin', { keyPrefix: 'platform' })`. The component re-renders on a language switch.
+A component that shows another area's words through its helpers (the case vocabulary of `cases`:
+statuses, priority, channel, close reasons, rating, case type; the language and queue names of
+`conversation`) lists those namespaces after its own: `useTranslation(['supervision', 'cases',
+'conversation'])`. A model reading an unloaded namespace prints the key and does not re-render when it
+arrives, so a deep link on a first visit would show `status.new.label`
+(`src/test/i18n-cold-load.test.tsx` renders such links with only `common` and `shell` loaded).
 
 **In pure modules** (`model.ts`, copy maps): read the catalog **when the function runs**, never at import:
 `const t = i18n.getFixedT(null, 'auth')` at the top, then `t('failure.generic')` inside the function. Turn
@@ -1079,6 +1085,9 @@ per screen (`renderRoute(…, { locale: 'pt-BR' })`) that walks its main state a
 `src/test/i18n-literals.test.ts` (no copy outside the catalogs; pending areas in `src/test/i18n-allowlist.ts`)
 and `src/lib/i18n/catalogs.test.ts` (same keys and placeholders in every locale). `I18N_REPORT=1 pnpm test
 i18n-literals` lists what an area still has (`I18N_REPORT=all` prints every literal with its line).
+A first visit: `unloadLazyCatalogs()` and `rawCatalogKeys()` (`src/test/cold-catalogs.ts`) drop every lazy
+catalog and find keys printed in place of their text. In the browser, `e2e/i18n.spec.ts` walks every
+role's main screens in Portuguese and fails on a printed key.
 
 **Migrating an area (23b).**
 

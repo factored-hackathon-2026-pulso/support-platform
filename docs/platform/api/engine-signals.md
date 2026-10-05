@@ -1,6 +1,6 @@
 # Signals for the improvement engine (ADR 0007, additive)
 
-What the platform adds so the engine can learn from real interactions. Everything here is additive: no existing field, route or event changes meaning. There are no migrations: **delete `backend/cc_platform.db` once** (it also covers slices 21/22 and the announce): `assistant_sessions.agent_release` and `copilot_suggestions.release` are new columns.
+What the platform adds so the engine can learn from real interactions. Everything here is additive: no existing field, route or event changes meaning. `assistant_sessions.agent_release` and `copilot_suggestions.release` are new columns (migration `0004_engine_release`, applied on start; no database is deleted). The engine's read-only database role and its grants: [`../deploy/database.md`](../deploy/database.md) §3.3.
 
 ## Events (payload keys added; ids, enums and counters only, never a text)
 

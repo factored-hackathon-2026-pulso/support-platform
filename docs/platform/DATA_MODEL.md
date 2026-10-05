@@ -6,12 +6,12 @@ The platform is for people only: customers and support staff talk by chat and, s
 
 ## How it is stored
 
-- SQLite by default, written in portable SQL so it moves to Postgres unchanged.
-- **No migrations yet**: the schema is created on startup. If it changes, delete `backend/cc_platform.db` and it is recreated with the sample data.
+- SQLite for development and tests, Postgres in production (psycopg 3), written in portable SQL. JSON columns are `jsonb` on Postgres; `event_log.sequence` is a `bigint` identity there.
+- **Alembic migrations** (`backend/src/cc_platform/infrastructure/persistence/sqlalchemy/migrations/versions/`) build and upgrade the schema, on every start or with `cc-migrate`; `tables.py` and the head revision must agree (a test checks it). Operations, roles and grants: [deploy/database.md](./deploy/database.md).
 - Prefixed text ids: `CASE-…`, `TRN-…` (message), `ASG-…` (assignment), `CUS-…` (customer), `STF-…` (staff member), `SES-…` (session), `MFA-…`, `TEAM-…` (team), `EVT-…` (event), `CSN-…` (customer session), `ESC-…` (escalation), `NTF-…` (notification), `INV-…` (invitation), `PWR-…` (password reset link), `EML-…` (dev mailbox email), `CALL-…` (call, slice 12).
 - Dates in UTC (ISO-8601).
 - Tables with a `version` column use optimistic concurrency control: if two people change the same thing at once, the second write is rejected and retried on fresh data.
-- `turns` and `event_log` are append-only: rows are never edited or deleted.
+- `turns` and `event_log` are append-only: rows are never edited or deleted. On Postgres a trigger rejects any UPDATE, DELETE or TRUNCATE of `event_log`.
 
 ## Diagram
 
@@ -612,28 +612,9 @@ Event types:
 | Administration | `staff.created`, `staff.profile_updated`, `staff.roles_changed`, `staff.languages_changed`, `staff.team_changed`, `staff.deactivated`, `staff.reactivated`, `staff.account_unlocked`, `team.created`, `team.renamed`, `team.deactivated`, `team.reactivated`; part 4: `staff.invitation_sent` (`invitation_id`, `expires_at`), `staff.invitation_resent` (+ `resend_count`), `staff.invitation_cancelled`, `staff.password_reset_link_sent` (`reset_id`, `expires_at`, `revoked_sessions`, `cleared_lock`); slice 18: `platform.ai_toggled` (entity `platform`, `payload`: `enabled`; audit: "Activó / Desactivó las funciones de IA") |
 | Access | `auth.login_failed`, `auth.password_accepted`, `auth.mfa_challenge_issued`, `auth.mfa_failed`, `auth.account_locked`, `auth.session_started`, `auth.session_ended`, `customer.session_started`; part 4 (the person herself): `staff.invitation_accepted` (`invitation_id`), `staff.mfa_enrolled` (`method: totp`), `staff.password_reset` (`cleared_lock`: she created her new password with the link) |
 
-## What may still change
+## Schema history
 
-- Slice 18 adds `cases.case_type` and the `platform_settings` table: a database created earlier
-  fails on startup (`OutdatedSchemaError`); delete it.
-- Slice 22 adds `case_type_maturity.agent_id`: delete the database (`OutdatedSchemaError` otherwise).
-
-- Slice 7 adds the rating columns to `cases`: a database created earlier fails on startup
-  (`OutdatedSchemaError`) until it is deleted.
-- Slice 8 adds no columns, but it changes the `priority` values, the first-response deadline and
-  the seeded story: delete `backend/cc_platform.db` to see them (an older database starts, with
-  `medium` on its cases and the old deadlines).
-- Slice 9 adds the `escalations` table and the `cases.open_escalation_id` column: an older
-  database fails on startup (`OutdatedSchemaError`) until it is deleted.
-- Slice 10 adds the `notifications` table: an older database fails on startup
-  (`OutdatedSchemaError`) until it is deleted.
-- Slice 11 (part 4) adds the `invitations`, `password_resets` and `dev_mailbox` tables and the
-  `staff.setup` and `login_accounts.totp_secret` columns: an older database fails on startup
-  (`OutdatedSchemaError`) until it is deleted.
-- Slice 12 adds the `calls` table and the `cases.active_call_id` and `turns.subject` columns, and
-  renames the channels (`app_chat` → `chat_app`, `web_chat` → `chat_web`): an older database
-  fails on startup (`OutdatedSchemaError`) until it is deleted.
-- Known gap: there are no migrations. Any future schema change requires deleting `backend/cc_platform.db` until they are added.
+The migrations start at slice 22 (`0001_baseline`, the schema built with `create_all` until then); later changes are revisions: `0002_suggestion_truncated` (PR 25), `0003_engine_announce` (PR 17), `0004_engine_release` (PR 27). A database created by an older build is adopted on its next start (stamped with the revision its columns match, then upgraded); a SQLite file from before slice 22 cannot be adopted (`OutdatedSchemaError`). Schema changes no longer require deleting the database.
 
 ## Differences from `data-lab/contracts/synthetic-sample/platform_history.json`
 

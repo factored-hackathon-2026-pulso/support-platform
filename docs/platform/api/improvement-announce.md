@@ -47,4 +47,4 @@ Also pushed as `notification.created` on the person's `staff:<id>` topic. Render
 - The proposal appears in `/supervision/automation/proposals` (source "Del motor de mejora") and its detail page. That page shows only the registry's `docs` fields (`description`, `rationale`, `changelog`); the `improvement` dossier lives only in the notification. Asked of the SPA team: show it on the page for `source=engine`, render `docs.description` preserving line breaks, and offer "Pasar a producción" instead of "Activar" for an existing agent.
 - If a supervisor tracks the proposal first (`source=tracked`), the announce returns the existing row and still notifies once.
 - Nothing can be approved until the agent has an `eval_suite` (slice 22 §6).
-- One database recreate (delete `backend/cc_platform.db`) covers slice 21/22 and this change: there are no migrations.
+- Persistence: migration `0003_engine_announce` (applied on start; no database is deleted).

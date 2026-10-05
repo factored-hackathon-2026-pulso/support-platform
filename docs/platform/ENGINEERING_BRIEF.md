@@ -98,7 +98,7 @@ hackaton/
 - **Libraries:** FastAPI; Pydantic v2 + pydantic-settings; SQLAlchemy 2.0 (async) with SQLite via aiosqlite by default (Postgres-ready: no SQLite-only SQL); uvicorn; structlog (JSON logs with a request/correlation id).
 - **Tests:** pytest, pytest-asyncio, httpx.
 - **Quality:** ruff (lint + format) and mypy (strict on `domain` and `application`).
-- **Migrations:** no Alembic yet. `metadata.create_all` runs at startup behind a function. This is a documented known gap: a schema change means deleting `backend/cc_platform.db`.
+- **Migrations:** Alembic revisions under `infrastructure/persistence/sqlalchemy/migrations/`, applied at startup or by `cc-migrate` under a lock (`docs/platform/deploy/database.md`). A schema change is a new revision (`uv run cc-migrate revision -m …`), never a deleted database.
 
 ### 4.2 Architecture: hexagonal (ports and adapters), DDD-lite, CQRS-lite
 ```

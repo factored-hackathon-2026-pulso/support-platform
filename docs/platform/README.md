@@ -31,8 +31,9 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | Document | Language | What it is for |
 |---|---|---|
 | [ENGINEERING_BRIEF.md](./ENGINEERING_BRIEF.md) | English | Start here. Scope, stack, layout, patterns, product rules, API conventions, slice plan, quality gates, hygiene. Every slice and review follows it. |
-| [RUNBOOK.md](./RUNBOOK.md) | English | Install, run backend + frontend, environment variables, seeded accounts and simulator customers, database reset, API type regeneration, gates, e2e, troubleshooting. |
+| [RUNBOOK.md](./RUNBOOK.md) | English | Install, run backend + frontend, environment variables, seeded accounts and simulator customers, schema migrations, API type regeneration, gates, e2e, troubleshooting. |
 | [DATA_MODEL.md](./DATA_MODEL.md) | English | Tables, case life cycle, event log, and how the platform differs from the synthetic sample contract. |
+| [deploy/database.md](./deploy/database.md) | English | Postgres in production: migrations (`cc-migrate`, lock, adoption of old SQLite files), roles and grants for the app and the engine's read-only exporter, pool settings, tests on Postgres. |
 | [adr/0001-architecture.md](./adr/0001-architecture.md) | English | Hexagonal + DDD-lite + CQRS-lite with an append-only event log; patterns, alternatives, consequences (amended 2026-10-03 for the scope cut). |
 | [adr/0002-ai-ui-frameworks.md](./adr/0002-ai-ui-frameworks.md) | English | **Superseded (2026-10-03).** Kept only as a record; do not implement it. |
 | [adr/0003-agent-core-integration.md](./adr/0003-agent-core-integration.md) | English | AI returns through `agent-core`: agent-handled chat and escalation, analyst copilot, agent builder, identity issuer, tools over HTTP, slice plan S13–S17. |

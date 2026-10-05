@@ -54,7 +54,8 @@ pnpm dev
 ```
 
 - On first start, the backend creates `backend/cc_platform.db` and seeds the sample data. The
-  times of the seeded story (waits, SLA, lockouts) are computed from that first start.
+  times of the seeded story (waits, SLA, lockouts) are computed from that first start. Every
+  start applies the pending schema migrations first (section 6).
 - With `CC_ENV=dev` (the default) the backend reloads itself when the code changes.
 - Check that everything answers:
   - `curl -s http://127.0.0.1:8000/api/v1/health` → `{"status":"ok","checks":{"database":"ok"}}`
@@ -89,7 +90,9 @@ The backend reads variables prefixed with `CC_`, or a `.env` file in the directo
 | `CC_ENV` | `dev` | `dev` reloads the code and turns on the dev mailbox; `test` does not reload; `prod` refuses to start (a real email adapter is missing; it also requires its own `CC_SESSION_SECRET` and `CC_TOTP_SECRET_KEY`, `CC_SEED_DEMO_DATA=false` and no dev mailbox) |
 | `CC_BUILD` | `dev` | Build identifier shown by `GET /api/v1/meta` |
 | `CC_PERSISTENCE` | `sqlalchemy` | `memory` runs without a database (everything is lost on stop) |
-| `CC_DATABASE_URL` | `sqlite+aiosqlite:///<repo>/backend/cc_platform.db` | Another SQLite database (absolute path: `sqlite+aiosqlite:////tmp/demo.db`) |
+| `CC_DATABASE_URL` | `sqlite+aiosqlite:///<repo>/backend/cc_platform.db` | Another SQLite database (absolute path: `sqlite+aiosqlite:////tmp/demo.db`) or Postgres (`postgresql://<role>:<password>@<host>:5432/<database>`, psycopg 3; [deploy/database.md](./deploy/database.md)) |
+| `CC_MIGRATE_ON_START` | `true` | Apply the pending migrations at startup, under a lock. `false`: the database must already be at head (`cc-migrate` ran), else the API does not start |
+| `CC_DATABASE_POOL_SIZE`, `CC_DATABASE_MAX_OVERFLOW`, `CC_DATABASE_POOL_TIMEOUT_SECONDS` | `5`, `5`, `10` | Postgres connection pool per process (SQLite ignores them) |
 | `CC_DATABASE_ECHO` | `false` | Prints the SQL |
 | `CC_SEED_DEMO_DATA` | `true` | Seeds sample people, customers and cases if they are missing |
 | `CC_SESSION_SECRET` | development secret | HMAC signature of the session tokens |
@@ -299,12 +302,9 @@ first-response SLA (15 min for every case since slice 8; it no longer depends on
 the 7-day window of Cerrados, the queue names and the close reasons. The priority levels do
 follow the dataset (`complaints.priority`), plus "Sin prioridad".
 
-After updating to slice 8, delete `backend/cc_platform.db`: the seed only adds missing cases, so
-an older database keeps the old priorities and deadlines. Slice 9 adds the `escalations` table
-and the `cases.open_escalation_id` column: an older database does not start
-(`OutdatedSchemaError`) until it is deleted.
-Slice 23 adds the `staff_preferences` table (each person's UI language): delete an older
-database too. The UI language is chosen in the account menu ("Idioma de la plataforma": Español /
+The seed only adds what is missing: a database seeded by an older build keeps its older story
+(for example the priorities and deadlines from before slice 8) until you start over (section 6).
+The UI language is chosen in the account menu ("Idioma de la plataforma": Español /
 Português); before signing in, the app uses the language this browser last used, else the
 browser's (Spanish or Portuguese), else Spanish.
 
@@ -327,23 +327,34 @@ previous one. Seeded ratings (slice 7): Héctor already rated his case ("¡Graci
 Bien"); the simulator shows Claudia the survey (or "Ahora no"). Patricia rated her previous cases
 104 (Excelente, with a comment) and 110 (Bien).
 
-## 6. Reset the database
+## 6. Schema migrations and starting over
 
-There are no migrations: the schema is created on startup. To return to the initial state (and
-re-anchor the times of the seeded story):
+The schema is versioned with Alembic. After pulling changes that touch it, just start the backend:
+`uv run cc-api` applies the pending migrations to `backend/cc_platform.db` and keeps the data. By
+hand, or to check:
+
+```bash
+cd backend
+uv run cc-migrate            # apply the pending migrations (idempotent, under a lock)
+uv run cc-migrate check      # exit 1 unless the database is at head
+uv run cc-migrate current    # its revision and the head
+```
+
+A file created before migrations existed (slice 22 to PR 28) is adopted and upgraded on the next
+start. Production (Postgres), roles and grants: [deploy/database.md](./deploy/database.md).
+
+Starting over is optional: only to replay the seeded story from the beginning (its times are
+anchored to the first start):
 
 ```bash
 # stop the backend (Ctrl+C), then
-rm backend/cc_platform.db
-cd backend && uv run cc-api      # creates the database and seeds again
+mv backend/cc_platform.db /tmp/cc_platform-old.db
+cd backend && uv run cc-api      # migrates an empty database and seeds again
 ```
 
 - Without a file: `CC_PERSISTENCE=memory uv run cc-api` (every start begins from scratch).
-- The seed never rewrites existing rows: restarting the backend without deleting the database
-  keeps everything that was done.
-- After pulling changes that touch the schema, the database must be deleted (see
-  [OutdatedSchemaError](#the-api-does-not-start-outdatedschemaerror)).
-- Staff tabs opened before the reset hold sessions that no longer exist: they go back to the
+- The seed never rewrites existing rows: restarting the backend keeps everything that was done.
+- Staff tabs opened before starting over hold sessions that no longer exist: they go back to the
   sign-in and you have to sign in again.
 
 ## 7. Regenerate the API types
@@ -369,6 +380,7 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
 uv run pytest -q
+scripts/test-postgres.sh -q   # the same suite on Postgres (throwaway docker/podman container)
 
 cd ../frontend
 pnpm typecheck
@@ -454,15 +466,22 @@ kill <PID>
 
 Or use other ports (section 3, "Other ports").
 
-### The API does not start: `OutdatedSchemaError`
+### The API does not start: `SchemaNotMigratedError` or `OutdatedSchemaError`
 
 ```
-OutdatedSchemaError: The database schema is older than the code (missing tables: admin_roster).
-Delete the local database (e.g. backend/cc_platform.db) and restart; there are no migrations yet.
+SchemaNotMigratedError: The database is at revision 0003_engine_announce, the code needs
+0004_engine_release: run `cc-migrate` (or start with CC_MIGRATE_ON_START=true).
 ```
 
-The database was created by an older version. Delete `backend/cc_platform.db` and start again
-(section 6). The local data is lost; the seed recreates it.
+`CC_MIGRATE_ON_START=false` and nobody migrated: run `uv run cc-migrate` (section 6).
+
+```
+OutdatedSchemaError: The database was created by a build older than slice 22, before migrations
+existed (missing: …). It cannot be upgraded: move it aside and start again …
+```
+
+A local file from before slice 22: the migrations start at slice 22. Move it aside and start
+again (section 6); the seed recreates the sample data.
 
 ### "No hay conexión con el servidor" on sign-in
 

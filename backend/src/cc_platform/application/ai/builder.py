@@ -144,6 +144,16 @@ class ProposalListing:
     they are only the platform's index (the list did not answer, or ``refresh`` was off)."""
 
 
+PROOF_SCRATCH_PREFIX = "[improvement-engine] [proof-scratch]"
+"""The improvement engine proves a patch on throwaway evaluation drafts it titles with this prefix
+(they carry ``kind: proof_scratch`` in their change docs). They are evidence, never a deliverable,
+so the list leaves them out; they stay readable by id."""
+
+
+def _is_proof_scratch(title: str) -> bool:
+    return title.startswith(PROOF_SCRATCH_PREFIX)
+
+
 def summary_of(entry: BuilderProposal, *, live: bool) -> ProposalSummary:
     return ProposalSummary(
         proposal_id=entry.id,
@@ -337,6 +347,7 @@ class AgentBuilder:
         size = max(1, min(limit, MAX_LIST))
         async with self.uow() as uow:
             entries = await uow.builder_proposals.search(agent_id=agent_id, state=state, limit=size)
+        entries = [e for e in entries if not _is_proof_scratch(e.title)]
         if not refresh:
             return ProposalListing(
                 items=tuple(summary_of(e, live=False) for e in entries), registry_listed=False
@@ -371,6 +382,7 @@ class AgentBuilder:
             if state is None or proposal.state.value == state
         ]
         rows.extend(summary_of(e, live=False) for e in missing if e.id not in by_id)
+        rows = [row for row in rows if not _is_proof_scratch(row.title)]
         rows.sort(key=lambda row: (row.updated_at, row.proposal_id), reverse=True)
         return ProposalListing(items=tuple(rows[:size]), registry_listed=page is not None)
 

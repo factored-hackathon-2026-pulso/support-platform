@@ -16,6 +16,7 @@ import {
   type QueryLike,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { useTranslation } from '@/lib/i18n'
 import {
   ACTIVITY_META,
   NO_SESSION_HINT,
@@ -58,6 +59,7 @@ export function AnalystsPanel({
   onSelectAnalyst,
   onClearFilters,
 }: AnalystsPanelProps) {
+  const { t } = useTranslation(['supervision', 'common'])
   const figures = analystsFigures(analysts, now)
   return (
     <section
@@ -66,7 +68,7 @@ export function AnalystsPanel({
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3.5 pb-2.5">
         <h2 id="analysts-heading" className="m-0 text-16 font-semibold">
-          Analistas
+          {t('analysts.heading')}
         </h2>
         {query.data ? (
           <>
@@ -74,25 +76,21 @@ export function AnalystsPanel({
             {figures.atRisk > 0 ? (
               <span className="inline-flex items-center gap-1 text-13 font-semibold text-warn">
                 <Flame size={13} aria-hidden="true" />
-                {figures.atRisk} en riesgo
+                {t('analysts.atRisk', { count: figures.atRisk })}
               </span>
             ) : null}
           </>
         ) : null}
       </div>
-      <QueryState
-        query={query}
-        skeleton={<RowsSkeleton />}
-        errorTitle="No pudimos cargar el equipo"
-      >
+      <QueryState query={query} skeleton={<RowsSkeleton />} errorTitle={t('analysts.loadError')}>
         {() => {
           if (analysts.length === 0) {
             return (
               <div className="flex flex-col items-center gap-2 border-t border-border-soft px-4 py-8 text-14 text-muted">
-                <span>{filtered ? 'Nadie coincide con los filtros.' : 'No hay analistas.'}</span>
+                <span>{filtered ? t('analysts.noMatch') : t('analysts.empty')}</span>
                 {filtered ? (
                   <Button size="sm" variant="secondary" onClick={onClearFilters}>
-                    Limpiar filtros
+                    {t('common:filters.clear')}
                   </Button>
                 ) : null}
               </div>
@@ -102,20 +100,20 @@ export function AnalystsPanel({
             <Table aria-labelledby="analysts-heading" stickyHeader wrapperClassName="grow">
               <THead>
                 <TRow>
-                  <TH className={CELL_X}>Nombre</TH>
-                  <TH className={CELL_X}>Ahora</TH>
-                  <TH className={CELL_X}>Idiomas</TH>
+                  <TH className={CELL_X}>{t('analysts.columns.name')}</TH>
+                  <TH className={CELL_X}>{t('analysts.columns.now')}</TH>
+                  <TH className={CELL_X}>{t('common:fields.languages')}</TH>
                   <TH align="right" className={CELL_X}>
-                    Abiertos
+                    {t('analysts.columns.open')}
                   </TH>
                   <TH align="right" className={NUMERIC_HEADER}>
-                    Por responder
+                    {t('analysts.columns.toReply')}
                   </TH>
                   <TH align="right" className={NUMERIC_HEADER}>
-                    Espera más larga
+                    {t('analysts.columns.longestWait')}
                   </TH>
                   <TH align="right" className={NUMERIC_HEADER}>
-                    En riesgo
+                    {t('analysts.columns.atRisk')}
                   </TH>
                   <TH align="right" className={NUMERIC_HEADER} title={RECENT_RATING_HEADER.title}>
                     {RECENT_RATING_HEADER.label}
@@ -153,6 +151,7 @@ interface AnalystRowProps {
 }
 
 function AnalystRow({ analyst, selected, now, onSelect }: AnalystRowProps) {
+  const { t } = useTranslation('supervision')
   const atRisk = atRiskCount(analyst.openCases, now)
   return (
     <TRow selected={selected} onSelect={onSelect}>
@@ -179,7 +178,7 @@ function AnalystRow({ analyst, selected, now, onSelect }: AnalystRowProps) {
         <span className="inline-flex items-center gap-1.5">
           {isHighLoad(analyst) ? (
             <Badge tone="warn" size="sm">
-              Carga alta
+              {t('analysts.highLoad')}
             </Badge>
           ) : null}
           {openCasesCell(analyst)}

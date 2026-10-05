@@ -15,7 +15,7 @@
 import { isApiProblem } from '@/lib/api'
 import { i18n } from '@/lib/i18n'
 import type catalog from '@/locales/es/conversation'
-import type { CasePriority, HandoffQuality } from './types'
+import type { CasePriority, HandoffQuality, HandoffReask } from './types'
 
 /** Copy comes from the `conversation` catalog, read when a function runs (the UI language then). */
 const t = i18n.getFixedT(null, 'conversation')
@@ -355,4 +355,37 @@ export function toggleHandoffQuality(
   picked: HandoffQuality,
 ): HandoffQuality | null {
   return current === picked ? null : picked
+}
+
+// ── "¿Qué tuviste que volver a preguntar?" (close dialog, incomplete handoff) ──
+
+/**
+ * The closed list (event catalog 1.3.0, `case.handoff_rated.reasked`), in the order the handoff
+ * packet tells a dispute: who the customer is, the transaction (amount, merchant, date), the
+ * product, why they claim, and anything else.
+ */
+export const HANDOFF_REASK_OPTIONS: readonly HandoffReask[] = [
+  'identity',
+  'amount',
+  'merchant',
+  'date',
+  'product',
+  'reason',
+  'other',
+]
+
+/** The option's short label in the UI language. */
+export function handoffReaskLabel(value: HandoffReask): string {
+  return t(`handoff.quality.reasked.${value}`)
+}
+
+/** Ticks or unticks one; the list keeps the options' order. */
+export function toggleHandoffReask(
+  current: readonly HandoffReask[],
+  picked: HandoffReask,
+): HandoffReask[] {
+  const next = current.includes(picked)
+    ? current.filter((value) => value !== picked)
+    : [...current, picked]
+  return HANDOFF_REASK_OPTIONS.filter((value) => next.includes(value))
 }

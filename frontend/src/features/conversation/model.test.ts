@@ -788,14 +788,31 @@ describe('close dialog', () => {
   })
 
   it('sends the handoff label only when she answered it (slice 19)', () => {
-    expect(toCloseRequest({ reason: 'resolved', note: '', handoffQuality: 'incomplete' })).toEqual({
+    const form = { ...INITIAL_CLOSE_FORM, reason: 'resolved' as const }
+    expect(toCloseRequest({ ...form, handoffQuality: 'incomplete' })).toEqual({
       reason: 'resolved',
       note: null,
       handoffQuality: 'incomplete',
     })
+    expect(toCloseRequest({ ...form, handoffQuality: null })).not.toHaveProperty('handoffQuality')
+  })
+
+  it('sends what she re-asked only with an incomplete handoff (catalog 1.3.0)', () => {
+    const form = { ...INITIAL_CLOSE_FORM, reason: 'resolved' as const }
     expect(
-      toCloseRequest({ reason: 'resolved', note: '', handoffQuality: null }),
-    ).not.toHaveProperty('handoffQuality')
+      toCloseRequest({ ...form, handoffQuality: 'incomplete', handoffReasked: ['amount', 'date'] }),
+    ).toEqual({
+      reason: 'resolved',
+      note: null,
+      handoffQuality: 'incomplete',
+      handoffReasked: ['amount', 'date'],
+    })
+    expect(
+      toCloseRequest({ ...form, handoffQuality: 'useful', handoffReasked: ['amount'] }),
+    ).not.toHaveProperty('handoffReasked')
+    expect(
+      toCloseRequest({ ...form, handoffQuality: 'incomplete', handoffReasked: [] }),
+    ).not.toHaveProperty('handoffReasked')
   })
 
   it('counts the trimmed note', () => {

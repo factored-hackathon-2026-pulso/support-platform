@@ -45,6 +45,7 @@ class AssistantInputQueued(DomainEvent):
     """The customer answered a confirmation: an input for the agent is waiting to be sent."""
 
     event_type = "assistant.input_queued"
+    free_text_keys = frozenset({"answer"})
     entity = "assistant"
 
     kind: str
@@ -82,6 +83,9 @@ class AssistantEnded(DomainEvent):
     result: str
     handoff_ref: str | None
     code: str | None
+    release: str | None = None
+    """The agent release the session's run started on (``assistant.turn_answered``'s), so an
+    outcome can be attributed to it; ``None`` when the runtime never said."""
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -109,6 +113,8 @@ class CopilotAnswered(DomainEvent):
     trace_id: str
     status: str
     messages: int
+    release: str | None = None
+    """The agent release of the run that answered (``None`` when the runtime did not say)."""
 
 
 #: Every copilot event: audited, never sent on a socket (the thread is the analyst's alone).
@@ -181,7 +187,8 @@ class CopilotSuggestionFailed(DomainEvent):
 @dataclass(frozen=True, kw_only=True, slots=True)
 class CopilotSuggestionDecided(DomainEvent):
     """What happened to a suggestion. ``subject`` is ``reply`` (``decision``: used, edited,
-    discarded, ignored; ``edit_distance_permille`` when edited) or ``escalation`` (``accepted``)."""
+    discarded, ignored; ``edit_distance_permille`` when edited) or ``escalation`` (``accepted``:
+    she escalated with it; ``dismissed``: she answered "Ahora no")."""
 
     event_type = "copilot.suggestion_decided"
     entity = "copilot"
@@ -196,6 +203,44 @@ class CopilotSuggestionDecided(DomainEvent):
     release: str | None = None
     """Who produced the suggestion (copied from it), so acceptance can be sliced by agent and
     release without reading the suggestion's table."""
+    reason_code: str | None = None
+    """For ``escalation``: agent-core's code for why it recommended escalating (a rule or policy
+    id such as ``policy:fraude``, never a text); ``None`` for ``reply``."""
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotSuggestionShown(DomainEvent):
+    """The analyst's screen showed a ``ready`` suggestion (the draft, the escalation notice or
+    "Herramientas"): recorded once per suggestion. ``kinds`` and ``count`` are what was still on
+    it then; ``stale`` whether the customer had written after the turns it read."""
+
+    event_type = "copilot.suggestion_shown"
+    entity = "copilot"
+
+    analyst_id: str
+    agent: str
+    kinds: tuple[str, ...]
+    count: int
+    stale: bool
+    release: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CopilotSuggestionIgnored(DomainEvent):
+    """A ``ready`` suggestion left the analyst's screen with nothing of it used: no draft used,
+    edited or discarded, no escalation accepted or dismissed, no tool used. Recorded once per
+    suggestion. ``cause``: ``replaced`` (a newer suggestion), ``case_closed`` or ``expired`` (24
+    hours passed). ``shown``: whether ``copilot.suggestion_shown`` was recorded for it."""
+
+    event_type = "copilot.suggestion_ignored"
+    entity = "copilot"
+
+    analyst_id: str
+    agent: str
+    cause: str
+    kinds: tuple[str, ...]
+    shown: bool
+    release: str | None = None
 
 
 #: Every suggestion event: audited and silent on sockets.
@@ -205,6 +250,8 @@ SUGGESTION_EVENTS: tuple[type[DomainEvent], ...] = (
     CopilotSuggestionNone,
     CopilotSuggestionFailed,
     CopilotSuggestionDecided,
+    CopilotSuggestionShown,
+    CopilotSuggestionIgnored,
 )
 
 

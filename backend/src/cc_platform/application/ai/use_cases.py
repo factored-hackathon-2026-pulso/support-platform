@@ -27,6 +27,7 @@ from cc_platform.application.ai.suggestions import (
     GetLatestSuggestion,
     LinkSuggestion,
     PurgeSuggestionDrafts,
+    RecordSuggestionShown,
     RequestSuggestion,
     SuggestionService,
 )
@@ -57,6 +58,7 @@ class SuggestionUseCases:
     decide: DecideSuggestion
     link: LinkSuggestion
     purge: PurgeSuggestionDrafts
+    shown: RecordSuggestionShown
 
 
 @dataclass(frozen=True, slots=True)

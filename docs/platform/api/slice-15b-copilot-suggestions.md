@@ -79,10 +79,18 @@ The **Sugerir** button. Body `{ "trigger": "manual" }` (optional). It **waits fo
   agent_core_rejected` (with `agentCoreCode`), `403`, `422`. After a 503/502 the suggestion is stored as `failed`:
   offer **Reintentar** with the same key.
 
-### `POST /cases/{caseId}/copilot/suggestions/{suggestionId}/feedback` `{ "decision": "discarded" | "ignored" }`
+### `POST /cases/{caseId}/copilot/suggestions/{suggestionId}/feedback` `{ "subject"?: "reply" | "escalation", "decision": … }`
 
-She dismissed the draft (`discarded`) or left it (`ignored`). Returns the suggestion without the draft. `404` for an id
-that is not hers. `used` and `edited` are **not posted** (below).
+`subject: "reply"` (the default): she dismissed the draft (`discarded`) or left it (`ignored`); the suggestion comes back
+without the draft. `subject: "escalation"` (event catalog 1.3.0): she answered "Ahora no" to the recommendation
+(`dismissed`); it leaves the suggestion, so it does not come back, and `copilot.suggestion_decided` records it with its
+`reason_code`. Any other pair is `422`; `404` for an id that is not hers. `used` and `edited` are **not posted** (below).
+
+### `POST /cases/{caseId}/copilot/suggestions/{suggestionId}/shown` → `204`
+
+Event catalog 1.3.0: send it when a `ready` suggestion is on her screen (the draft, the recommendation or
+"Herramientas"). It records `copilot.suggestion_shown` once per suggestion; a repeat records nothing (still `204`). The
+SPA sends it from whichever of the three shows it first.
 
 ### What she did with a suggestion: two optional fields
 
@@ -130,7 +138,10 @@ signals.
   - **A greeting that chases is not a greeting**: "hola?" after 5 minutes of waiting, or while the first response is
     overdue, does get a suggestion. "sí" and "no" are never skipped.
   - A failure is stored (`failed`) and never raised: she can press *Sugerir*.
-- A new suggestion replaces the previous one: a draft nobody decided becomes `ignored`.
+- A new suggestion replaces the previous one: a draft nobody decided becomes `ignored`. When nothing of the previous one
+  was used (no draft used, edited or discarded, no recommendation accepted or dismissed, no tool used) it is also recorded
+  as `copilot.suggestion_ignored` (`replaced`); the same happens when the case closes (`case_closed`) or the texts expire
+  (`expired`). See `engine-signals.md`.
 - Best effort: a suggestion lost with the process is not recovered (there is no sweep, unlike the assistant).
 
 ## 6. What is kept, and for how long
@@ -138,7 +149,7 @@ signals.
 `copilot_suggestions` keeps **types, tool ids, a hash of the draft, her decision and the edit distance**. The texts (the
 draft, a motive, evidence, an action's summary) live there **only until the draft is decided (the draft) or 24 hours
 pass (everything)**; then they are purged (`CC_COPILOT_SUGGESTIONS_PURGE_SECONDS`, every 10 minutes). The audit
-(`copilot.suggestion_requested | ready | none | failed | decided`, family `conversation`) carries ids, kinds, counters and
+(`copilot.suggestion_requested | ready | none | failed | decided | shown | ignored`, family `conversation`) carries ids, kinds, counters and
 decisions, **never a text**.
 
 ## 7. Configuration

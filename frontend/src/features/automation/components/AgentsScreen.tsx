@@ -45,6 +45,8 @@ export function AgentsScreen() {
     .map((entry) => (entry.prod ?? entry.staging)?.releaseId)
     .filter((id): id is string => typeof id === 'string')
   const releases = useReleases(releaseIds)
+  // While the registry answers, the status cell waits instead of saying "Sin datos del registro".
+  const pendingIds = new Set(aliases.filter((entry) => entry.pending).map((entry) => entry.agentId))
   const rows: AgentRow[] = aliases.map((entry) =>
     agentRow(
       entry.agentId,
@@ -108,7 +110,11 @@ export function AgentsScreen() {
                           : t('agents.servesNone')}
                       </TCell>
                       <TCell>
-                        <Status {...agentRunAppearance(row.status)} />
+                        {pendingIds.has(row.agentId) ? (
+                          <Skeleton className="h-4 w-28" />
+                        ) : (
+                          <Status {...agentRunAppearance(row.status)} />
+                        )}
                       </TCell>
                       <TCell className="font-mono text-13">{row.version ?? ''}</TCell>
                     </TRow>

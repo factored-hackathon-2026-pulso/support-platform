@@ -60,7 +60,5 @@ export const PENDING_AREAS: readonly PendingArea[] = [
   { area: 'audit', paths: ['src/features/audit/'], strings: 81 },
   // ── notifications: the bell, its panel and the live toasts
   { area: 'notifications', paths: ['src/features/notifications/'], strings: 57 },
-  // ── workspace: the analyst Workspace frame (right panel tabs)
-  { area: 'workspace', paths: ['src/features/workspace/'], strings: 17 },
   // ── end of the pending areas
 ]

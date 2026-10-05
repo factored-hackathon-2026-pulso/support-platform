@@ -5531,7 +5531,7 @@ export interface components {
        */
       changes: components['schemas']['EntityDraft'][]
       /** @description The last approval or rejection (null before one, or from an agent-core that does not report it). */
-      lastDecision?: components['schemas']['LastDecision'] | null
+      lastDecision: components['schemas']['LastDecision'] | null
       /** @description The evaluation of the current candidate (null before one, and after a failed gate: the proposal is back in draft; that report came with the 409). */
       lastEval: components['schemas']['EvalRun'] | null
       proposal: components['schemas']['Proposal']

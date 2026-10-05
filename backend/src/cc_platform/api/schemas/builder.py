@@ -237,7 +237,6 @@ class ProposalDetail(ViewModel):
     )
     review: ApprovalReview | None = Field(description="Present once there is an evaluation.")
     last_decision: LastDecision | None = Field(
-        default=None,
         description="The last approval or rejection (null before one, or from an agent-core "
         "that does not report it).",
     )

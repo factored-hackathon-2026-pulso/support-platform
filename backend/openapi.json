@@ -7433,7 +7433,8 @@
           "proposal",
           "changes",
           "lastEval",
-          "review"
+          "review",
+          "lastDecision"
         ],
         "title": "ProposalDetail",
         "type": "object"

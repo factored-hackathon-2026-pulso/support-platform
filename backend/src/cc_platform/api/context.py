@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from cc_platform.application.ports.clock import Clock
-from cc_platform.application.ports.health import HealthProbe
+from cc_platform.application.ports.health import HealthProbe, ReadinessProbe
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.realtime import RealtimeHub
 from cc_platform.application.realtime.topics import TopicAccessPolicy
@@ -39,6 +39,14 @@ class RealtimeOptions:
 
 
 @dataclass(frozen=True, slots=True)
+class ReadinessOptions:
+    """``GET /readyz``: the dependencies to check and how long each may take."""
+
+    probes: Sequence[ReadinessProbe] = ()
+    timeout_seconds: float = 2.0
+
+
+@dataclass(frozen=True, slots=True)
 class ApiContext:
     use_cases: UseCases
     clock: Clock
@@ -50,3 +58,4 @@ class ApiContext:
     realtime: RealtimeOptions = RealtimeOptions()
     #: ``CC_INTERNAL_SERVICE_TOKEN``: unlocks the service-to-service routes (``/internal``).
     internal_token: str | None = None
+    readiness: ReadinessOptions = ReadinessOptions()

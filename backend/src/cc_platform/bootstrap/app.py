@@ -23,8 +23,10 @@ from cc_platform.api.middleware import (
 )
 from cc_platform.api.openapi import install_openapi
 from cc_platform.api.router import API_PREFIX, build_api_router, operation_id
+from cc_platform.api.routers import probes
 from cc_platform.bootstrap.container import Container, build_container
 from cc_platform.bootstrap.settings import Settings
+from cc_platform.bootstrap.startup import load_settings
 from cc_platform.infrastructure.logging import configure_logging
 
 DESCRIPTION = (
@@ -35,7 +37,7 @@ DESCRIPTION = (
 
 
 def create_app(settings: Settings | None = None, *, container: Container | None = None) -> FastAPI:
-    settings = settings or (container.settings if container else Settings())
+    settings = settings or (container.settings if container else load_settings())
     configure_logging(level=settings.log_level, fmt=settings.log_format)
     container = container or build_container(settings)
 
@@ -76,4 +78,6 @@ def create_app(settings: Settings | None = None, *, container: Container | None 
     # Added last → outermost: CORS and error responses also carry the request id.
     app.add_middleware(RequestContextMiddleware)
     app.include_router(build_api_router())
+    # ``/healthz`` and ``/readyz`` at the root, outside ``/api/v1`` and the OpenAPI contract.
+    app.include_router(probes.router)
     return app

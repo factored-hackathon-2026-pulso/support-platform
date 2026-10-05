@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import httpx
 import structlog
 
-from cc_platform.api.context import ApiContext, BuildInfo, RealtimeOptions
+from cc_platform.api.context import ApiContext, BuildInfo, ReadinessOptions, RealtimeOptions
 from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
 from cc_platform.application.ai.announce import AnnounceImprovement
@@ -229,7 +229,7 @@ from cc_platform.application.platform.use_cases import PlatformUseCases
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.email import DevMailbox, EmailSender
 from cc_platform.application.ports.event_bus import EventBus
-from cc_platform.application.ports.health import HealthProbe
+from cc_platform.application.ports.health import HealthProbe, ReadinessProbe
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.realtime import RealtimeHub
 from cc_platform.application.ports.security import (
@@ -256,6 +256,7 @@ from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
 from cc_platform.domain.people.staff import Language
 from cc_platform.domain.platform.events import PLATFORM_EVENTS, PlatformAiToggled
+from cc_platform.infrastructure.ai.core_readiness import CoreReadinessProbe
 from cc_platform.infrastructure.ai.ed25519_issuer import Ed25519AgentCredentialIssuer
 from cc_platform.infrastructure.ai.http_registry import HttpAgentRegistry
 from cc_platform.infrastructure.ai.http_runtime import HttpAgentRuntime
@@ -272,6 +273,7 @@ from cc_platform.infrastructure.ids import UlidIdGenerator
 from cc_platform.infrastructure.persistence.memory.store import InMemoryStore
 from cc_platform.infrastructure.persistence.memory.unit_of_work import InMemoryUnitOfWork
 from cc_platform.infrastructure.persistence.sqlalchemy.database import Database, DatabaseProbe
+from cc_platform.infrastructure.persistence.sqlalchemy.readiness import DatabaseReadinessProbe
 from cc_platform.infrastructure.persistence.sqlalchemy.unit_of_work import SqlAlchemyUnitOfWork
 from cc_platform.infrastructure.realtime.in_memory_hub import InMemoryRealtimeHub
 from cc_platform.infrastructure.security.customer_tokens import HmacCustomerTokenService
@@ -315,6 +317,8 @@ class Container:
     dev_mailbox: DevMailbox | None = None
     database: Database | None = None
     health_probes: Sequence[HealthProbe] = field(default_factory=tuple)
+    #: ``GET /readyz`` (deploy runtime contract): the database, then the Core.
+    readiness_probes: Sequence[ReadinessProbe] = field(default_factory=tuple)
     sla_sweep: PeriodicTask | None = None
     #: ADR 0003: ``None`` while ``CC_AGENT_CORE_URL`` is unset (the platform stays people-only).
     agent_core: AgentCoreServices | None = None
@@ -339,6 +343,10 @@ class Container:
             ),
             realtime=RealtimeOptions(
                 expiry_check_interval=self.settings.realtime_expiry_check_interval
+            ),
+            readiness=ReadinessOptions(
+                probes=self.readiness_probes,
+                timeout_seconds=self.settings.readiness_timeout_seconds,
             ),
             internal_token=(
                 self.settings.internal_service_token.get_secret_value()
@@ -452,6 +460,16 @@ def _agent_core_services(settings: Settings, clock: Clock) -> AgentCoreServices 
         http_client=client,
         registry=HttpAgentRegistry(client),
     )
+
+
+def _readiness_probes(
+    settings: Settings, database: Database | None, agent_core: AgentCoreServices | None
+) -> tuple[ReadinessProbe, ...]:
+    """``GET /readyz``: the database (critical; none with ``CC_PERSISTENCE=memory``), then
+    the Core's own ``/readyz`` (non-critical; ``disabled`` without ``CC_AGENT_CORE_URL``)."""
+    client = agent_core.http_client if agent_core is not None else None
+    core = CoreReadinessProbe(client, timeout_seconds=settings.readiness_timeout_seconds)
+    return (DatabaseReadinessProbe(database), core) if database is not None else (core,)
 
 
 def _wire_realtime(
@@ -1107,6 +1125,7 @@ def build_container(
         dev_mailbox=kit.dev_mailbox,
         database=database,
         health_probes=tuple(probes),
+        readiness_probes=_readiness_probes(settings, database, agent_core),
         sla_sweep=sla_sweep,
         agent_core=agent_core,
         assistant_engine=assistant_engine,

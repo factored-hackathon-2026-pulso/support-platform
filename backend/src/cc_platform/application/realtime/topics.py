@@ -17,6 +17,8 @@ Topics (brief §4.4):
   (``directory.updated``); admins only (slice 4).
 - ``staff:<STF-id>``: one person's own profile and roles (``me.updated``); only that person,
   whatever her roles (slice 4).
+- ``platform:settings``: the platform-wide settings (``platform.updated``, the AI switch,
+  slice 18); every staff member and every customer session may follow it.
 
 ``case:`` topics also need a case-level check (assignee or supervisor), which needs the
 case: the WebSocket endpoint runs ``AuthorizeCaseSubscription`` after this role check.
@@ -40,6 +42,7 @@ class TopicKind(StrEnum):
     SUPERVISION = "supervision"
     ADMIN = "admin"
     STAFF = "staff"
+    PLATFORM = "platform"
 
 
 _KEY_PREFIX: dict[TopicKind, IdPrefix] = {
@@ -54,6 +57,7 @@ SUPERVISION_TEAM = "team"
 SUPERVISION_ESCALATIONS = "escalations"
 _SUPERVISION_KEYS = frozenset({SUPERVISION_QUEUES, SUPERVISION_TEAM, SUPERVISION_ESCALATIONS})
 ADMIN_DIRECTORY = "directory"
+PLATFORM_SETTINGS = "settings"
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +101,10 @@ class Topic:
         return cls(TopicKind.STAFF, staff_id)
 
     @classmethod
+    def platform_settings(cls) -> Topic:
+        return cls(TopicKind.PLATFORM, PLATFORM_SETTINGS)
+
+    @classmethod
     def parse(cls, raw: str) -> Topic:
         name, sep, key = raw.partition(":")
         try:
@@ -107,6 +115,8 @@ class Topic:
             valid = key in _SUPERVISION_KEYS
         elif kind is TopicKind.ADMIN:
             valid = key == ADMIN_DIRECTORY
+        elif kind is TopicKind.PLATFORM:
+            valid = key == PLATFORM_SETTINGS
         else:
             valid = is_valid_id(key, _KEY_PREFIX[kind])
         if not sep or not valid:
@@ -118,7 +128,7 @@ class Topic:
 class TopicAccessPolicy:
     """Who may listen to what (role checks; the case-level check is async, see above)."""
 
-    def can_subscribe(self, actor: Actor, topic: Topic) -> bool:
+    def can_subscribe(self, actor: Actor, topic: Topic) -> bool:  # noqa: PLR0911 - one per kind
         match topic.kind:
             case TopicKind.CASE:
                 return actor.has_any_role({StaffRole.ANALYST, StaffRole.SUPERVISOR})
@@ -132,7 +142,12 @@ class TopicAccessPolicy:
                 return actor.has_any_role({StaffRole.ADMIN})
             case TopicKind.STAFF:
                 return topic.key == actor.staff_id
+            case TopicKind.PLATFORM:
+                return True  # the AI switch: everyone who is signed in
 
     def can_customer_subscribe(self, customer: CustomerActor, topic: Topic) -> bool:
-        """A customer token may only follow its own ``customer:<id>`` topic."""
+        """A customer token may only follow its own ``customer:<id>`` topic and the platform
+        settings (slice 18: the simulator follows the AI switch)."""
+        if topic.kind is TopicKind.PLATFORM:
+            return True
         return topic.kind is TopicKind.CUSTOMER and topic.key == customer.customer_id

@@ -83,6 +83,18 @@ admin_roster = Table(
     _version(),
 )
 
+# Singleton (``id = "default"``, slice 18): platform-wide settings (the AI switch). Absent until
+# Administración changes a switch: the deployment default (``CC_AI_ENABLED``) applies.
+platform_settings = Table(
+    "platform_settings",
+    metadata,
+    Column("id", String(20), primary_key=True),
+    Column("ai_enabled", Boolean, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=True),
+    Column("updated_by_id", String(ID), nullable=True),
+    _version(),
+)
+
 login_accounts = Table(
     "login_accounts",
     metadata,

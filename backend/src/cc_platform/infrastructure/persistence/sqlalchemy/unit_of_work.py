@@ -49,6 +49,9 @@ from cc_platform.infrastructure.persistence.sqlalchemy.repositories.people impor
     SqlStaffSessionRepository,
     SqlTeamRepository,
 )
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.platform import (
+    SqlPlatformSettingsRepository,
+)
 from cc_platform.infrastructure.persistence.unit_of_work_base import BaseUnitOfWork
 
 #: SQLite's busy answers: another connection holds the write lock past the busy timeout.
@@ -66,6 +69,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     staff: SqlStaffRepository
     teams: SqlTeamRepository
     admin_roster: SqlAdminRosterRepository
+    platform_settings: SqlPlatformSettingsRepository
     login_accounts: SqlLoginAccountRepository
     mfa_challenges: SqlMfaChallengeRepository
     sessions: SqlStaffSessionRepository
@@ -106,6 +110,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.staff = SqlStaffRepository(session, self.track)
         self.teams = SqlTeamRepository(session, self.track)
         self.admin_roster = SqlAdminRosterRepository(session, self.track)
+        self.platform_settings = SqlPlatformSettingsRepository(session, self.track)
         self.login_accounts = SqlLoginAccountRepository(session, self.track)
         self.mfa_challenges = SqlMfaChallengeRepository(session, self.track)
         self.sessions = SqlStaffSessionRepository(session, self.track)

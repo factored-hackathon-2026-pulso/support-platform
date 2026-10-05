@@ -2,9 +2,10 @@
 evaluation, approval and publication, releases and aliases, and the chat with the builder agent.
 
 Supervisión and Administración only; ``404 assistant_disabled`` while agent-core is not
-configured. The platform is a client of agent-core's registry: every call carries the credential of
-the person acting, and the registry decides by its own roles. Approving, rejecting, publishing,
-promoting and revoking ask for a fresh authenticator code (``stepUpCode``) in the same request.
+configured or the AI switch is off (slice 18). The platform is a client of agent-core's
+registry: every call carries the credential of the person acting, and the registry decides by
+its own roles. Approving, rejecting, publishing, promoting and revoking ask for a fresh
+authenticator code (``stepUpCode``) in the same request.
 Registry refusals are mapped to ``registry_*`` problem codes (``registryCode`` carries the
 registry's own).
 """
@@ -17,7 +18,7 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from fastapi.exceptions import RequestValidationError
 
 from cc_platform.api.dependencies import ApiContextDep, require_roles
-from cc_platform.api.routers._assistant import builder_use_cases
+from cc_platform.api.routers._assistant import ai_is_on, builder_use_cases
 from cc_platform.api.schemas import builder as schemas
 from cc_platform.api.schemas.common import problem_responses
 from cc_platform.application.ai.registry import EntityDraft, ProposalState, VersionDocs
@@ -75,15 +76,16 @@ def _drafts(items: list[schemas.EntityDraftRequest]) -> list[EntityDraft]:
     summary="Whether the agent builder is available, and what the caller may do",
     description=(
         "Slice 16. Always 200 for Supervisión and Administración: `available: false` while "
-        "agent-core is not configured (hide the section; every other route is 404 "
-        "`assistant_disabled`). `canApprove` / `canRevoke` say which controls to show; "
-        "`stepUpMethod` and `stepUpDigits` describe the code the sensitive calls ask for."
+        "agent-core is not configured or the AI switch is off (slice 18; hide the section; "
+        "every other route is 404 `assistant_disabled`). `canApprove` / `canRevoke` say which "
+        "controls to show; `stepUpMethod` and `stepUpDigits` describe the code the sensitive "
+        "calls ask for."
     ),
     responses=problem_responses(401, 403),
 )
 async def get_status(actor: Builder, api: ApiContextDep) -> schemas.BuilderStatus:
     assistant = api.use_cases.assistant
-    if assistant is None or assistant.builder is None:
+    if assistant is None or assistant.builder is None or not await ai_is_on(api):
         return schemas.BuilderStatus.unavailable()
     return schemas.BuilderStatus.from_view(assistant.builder.registry.status(actor))
 
@@ -111,7 +113,7 @@ async def list_proposals(  # noqa: PLR0917 - a filter per query parameter
     limit: Annotated[int, Query(ge=1, le=50)] = 50,
     refresh: Annotated[bool, Query(description="Re-read each row from the registry.")] = True,
 ) -> schemas.ProposalList:
-    items = await builder_use_cases(api).registry.list_proposals(
+    items = await (await builder_use_cases(api)).registry.list_proposals(
         actor,
         agent_id=agent_id,
         state=state.value if state else None,
@@ -136,7 +138,7 @@ async def list_proposals(  # noqa: PLR0917 - a filter per query parameter
 async def create_proposal(
     body: schemas.CreateProposalRequest, actor: Builder, api: ApiContextDep
 ) -> schemas.Proposal:
-    proposal = await builder_use_cases(api).registry.create_proposal(
+    proposal = await (await builder_use_cases(api)).registry.create_proposal(
         actor, agent_id=body.agent_id, title=body.title
     )
     return schemas.Proposal.model_validate(proposal)
@@ -156,7 +158,7 @@ async def create_proposal(
 async def track_proposal(
     body: schemas.TrackProposalRequest, actor: Builder, api: ApiContextDep
 ) -> schemas.ProposalSummary:
-    summary = await builder_use_cases(api).registry.track_proposal(actor, body.proposal_id)
+    summary = await (await builder_use_cases(api)).registry.track_proposal(actor, body.proposal_id)
     return schemas.ProposalSummary.model_validate(summary)
 
 
@@ -169,7 +171,7 @@ async def track_proposal(
 async def get_proposal(
     proposal_id: ProposalId, actor: Builder, api: ApiContextDep
 ) -> schemas.ProposalDetail:
-    detail = await builder_use_cases(api).registry.get_proposal(actor, proposal_id)
+    detail = await (await builder_use_cases(api)).registry.get_proposal(actor, proposal_id)
     return schemas.ProposalDetail.model_validate(detail)
 
 
@@ -189,7 +191,7 @@ async def get_proposal(
 async def save_draft(
     proposal_id: ProposalId, body: schemas.SaveDraftRequest, actor: Builder, api: ApiContextDep
 ) -> schemas.Proposal:
-    proposal = await builder_use_cases(api).registry.save_draft(
+    proposal = await (await builder_use_cases(api)).registry.save_draft(
         actor, proposal_id, expected_rev=body.expected_rev, changes=_drafts(body.changes)
     )
     return schemas.Proposal.model_validate(proposal)
@@ -205,7 +207,7 @@ async def save_draft(
 async def validate_proposal(
     proposal_id: ProposalId, actor: Builder, api: ApiContextDep
 ) -> schemas.ValidationReport:
-    report = await builder_use_cases(api).registry.validate(actor, proposal_id)
+    report = await (await builder_use_cases(api)).registry.validate(actor, proposal_id)
     return schemas.ValidationReport.model_validate(report)
 
 
@@ -223,7 +225,7 @@ async def validate_proposal(
 async def freeze_proposal(
     proposal_id: ProposalId, actor: Builder, api: ApiContextDep
 ) -> schemas.CandidateView:
-    candidate = await builder_use_cases(api).registry.freeze(actor, proposal_id)
+    candidate = await (await builder_use_cases(api)).registry.freeze(actor, proposal_id)
     return schemas.CandidateView.model_validate(candidate)
 
 
@@ -236,7 +238,7 @@ async def freeze_proposal(
 async def reopen_proposal(
     proposal_id: ProposalId, actor: Builder, api: ApiContextDep
 ) -> schemas.Proposal:
-    proposal = await builder_use_cases(api).registry.reopen(actor, proposal_id)
+    proposal = await (await builder_use_cases(api)).registry.reopen(actor, proposal_id)
     return schemas.Proposal.model_validate(proposal)
 
 
@@ -256,7 +258,7 @@ async def reopen_proposal(
 async def evaluate_proposal(
     proposal_id: ProposalId, body: schemas.EvaluateRequest, actor: Builder, api: ApiContextDep
 ) -> schemas.EvalReport:
-    report = await builder_use_cases(api).registry.evaluate(
+    report = await (await builder_use_cases(api)).registry.evaluate(
         actor, proposal_id, suite_id=body.suite_id, suite_version=body.suite_version
     )
     return schemas.EvalReport.model_validate(report)
@@ -277,7 +279,7 @@ async def evaluate_proposal(
 async def approve_proposal(
     proposal_id: ProposalId, body: schemas.ApproveRequest, actor: Builder, api: ApiContextDep
 ) -> schemas.Approval:
-    approval = await builder_use_cases(api).registry.approve(
+    approval = await (await builder_use_cases(api)).registry.approve(
         actor,
         proposal_id,
         candidate_hash=body.candidate_hash,
@@ -297,7 +299,7 @@ async def approve_proposal(
 async def reject_proposal(
     proposal_id: ProposalId, body: schemas.RejectRequest, actor: Builder, api: ApiContextDep
 ) -> schemas.Proposal:
-    proposal = await builder_use_cases(api).registry.reject(
+    proposal = await (await builder_use_cases(api)).registry.reject(
         actor, proposal_id, reason=body.reason, step_up_code=body.step_up_code
     )
     return schemas.Proposal.model_validate(proposal)
@@ -323,7 +325,7 @@ async def publish_proposal(
     actor: Builder,
     api: ApiContextDep,
 ) -> schemas.ReleaseDetail:
-    release = await builder_use_cases(api).registry.publish(
+    release = await (await builder_use_cases(api)).registry.publish(
         actor, proposal_id, idempotency_key=idempotency_key, step_up_code=body.step_up_code
     )
     return schemas.ReleaseDetail.model_validate(release)
@@ -340,7 +342,7 @@ async def publish_proposal(
 async def get_alias(
     agent_id: AgentId, alias: Alias, actor: Builder, api: ApiContextDep
 ) -> schemas.AliasState:
-    state = await builder_use_cases(api).registry.get_alias(actor, agent_id, alias)
+    state = await (await builder_use_cases(api)).registry.get_alias(actor, agent_id, alias)
     return schemas.AliasState.model_validate(state)
 
 
@@ -358,7 +360,7 @@ async def promote_alias(
     actor: Builder,
     api: ApiContextDep,
 ) -> schemas.AliasChange:
-    change = await builder_use_cases(api).registry.promote(
+    change = await (await builder_use_cases(api)).registry.promote(
         actor,
         agent_id,
         alias,
@@ -378,7 +380,7 @@ async def promote_alias(
 async def get_release(
     release_id: ReleaseId, actor: Builder, api: ApiContextDep
 ) -> schemas.ReleaseDetail:
-    release = await builder_use_cases(api).registry.get_release(actor, release_id)
+    release = await (await builder_use_cases(api)).registry.get_release(actor, release_id)
     return schemas.ReleaseDetail.model_validate(release)
 
 
@@ -389,7 +391,7 @@ async def get_release(
     responses=REGISTRY_ERRORS,
 )
 async def diff_releases(a: str, b: str, actor: Builder, api: ApiContextDep) -> schemas.ReleaseDiff:
-    diff = await builder_use_cases(api).registry.diff_releases(actor, a, b)
+    diff = await (await builder_use_cases(api)).registry.diff_releases(actor, a, b)
     return schemas.ReleaseDiff.model_validate(diff)
 
 
@@ -406,7 +408,7 @@ async def diff_releases(a: str, b: str, actor: Builder, api: ApiContextDep) -> s
 async def revoke_release(
     release_id: ReleaseId, body: schemas.RevokeRequest, actor: Admin, api: ApiContextDep
 ) -> schemas.ReleaseDetail:
-    release = await builder_use_cases(api).registry.revoke(
+    release = await (await builder_use_cases(api)).registry.revoke(
         actor, release_id, reason=body.reason, step_up_code=body.step_up_code
     )
     return schemas.ReleaseDetail.model_validate(release)
@@ -423,7 +425,7 @@ async def revoke_release(
 async def list_versions(
     kind: Kind, entity_id: EntityPath, actor: Builder, api: ApiContextDep
 ) -> schemas.VersionList:
-    items = await builder_use_cases(api).registry.list_versions(actor, kind, entity_id)
+    items = await (await builder_use_cases(api)).registry.list_versions(actor, kind, entity_id)
     return schemas.VersionList(items=[schemas.VersionSummary.model_validate(i) for i in items])
 
 
@@ -441,7 +443,9 @@ async def get_entity(
     api: ApiContextDep,
     version: Annotated[str | None, Query(max_length=40)] = None,
 ) -> schemas.EntityVersion:
-    entity = await builder_use_cases(api).registry.get_entity(actor, kind, entity_id, version)
+    entity = await (await builder_use_cases(api)).registry.get_entity(
+        actor, kind, entity_id, version
+    )
     return schemas.EntityVersion.model_validate(entity)
 
 
@@ -452,13 +456,13 @@ async def get_entity(
     summary="The caller's conversation with the builder agent",
     description=(
         "One thread per person. `available: false` (no messages, status 200) while agent-core is "
-        "not configured: hide the chat."
+        "not configured or the AI switch is off (slice 18): hide the chat."
     ),
     responses=problem_responses(401, 403),
 )
 async def get_chat(actor: Builder, api: ApiContextDep) -> schemas.BuilderThread:
     assistant = api.use_cases.assistant
-    if assistant is None or assistant.builder is None:
+    if assistant is None or assistant.builder is None or not await ai_is_on(api):
         return schemas.BuilderThread(available=False, messages=[])
     view = await assistant.builder.thread.execute(actor)
     return schemas.BuilderThread(
@@ -517,7 +521,7 @@ async def ask_builder(
                 }
             ]
         )
-    exchange = await builder_use_cases(api).ask.execute(
+    exchange = await (await builder_use_cases(api)).ask.execute(
         actor, text=body.text, client_message_id=body.client_message_id
     )
     if exchange.replayed:

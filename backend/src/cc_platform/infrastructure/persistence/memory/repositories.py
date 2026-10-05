@@ -48,6 +48,7 @@ from cc_platform.domain.people.password_reset import PasswordReset
 from cc_platform.domain.people.session import StaffSession
 from cc_platform.domain.people.staff import Language, Staff, StaffRole
 from cc_platform.domain.people.team import Team
+from cc_platform.domain.platform.settings import SETTINGS_ID, PlatformSettings
 from cc_platform.domain.shared.aggregate import AggregateRoot
 from cc_platform.domain.shared.errors import (
     ConcurrentUpdateError,
@@ -237,6 +238,18 @@ class InMemoryAdminRosterRepository(_StagedRepository[AdminRoster]):
         super().__init__(committed, lambda roster: roster.id, track)
 
     async def get(self, key: str = ROSTER_ID) -> AdminRoster | None:
+        return await self._get(key)
+
+
+class InMemoryPlatformSettingsRepository(_StagedRepository[PlatformSettings]):
+    """Slice 18: the platform-wide settings (a singleton created on the first change)."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, PlatformSettings], track: Tracker) -> None:
+        super().__init__(committed, lambda settings: settings.id, track)
+
+    async def get(self, key: str = SETTINGS_ID) -> PlatformSettings | None:
         return await self._get(key)
 
 

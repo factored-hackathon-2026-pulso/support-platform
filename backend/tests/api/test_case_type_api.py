@@ -197,3 +197,17 @@ def test_a_change_reaches_the_inbox_the_case_and_supervision(
         assert len(queues) == 1
         # The analyst saw nothing of a case in no inbox.
         assert [e for e in until_pong(analyst_ws) if e["type"] == "case.updated"] == []
+
+
+def test_the_type_does_not_depend_on_the_ai_switch(client: TestClient, sign_in: SignIn) -> None:
+    """Slice 18 §2: the type is data about the case; the switch only hides it in the SPA."""
+    admin = bearer(sign_in(ADMIN_ONLY.email))
+    off = client.put("/api/v1/admin/platform/ai", headers=admin, json={"enabled": False})
+    assert off.status_code == 200, off.text
+    daniela = sign_in(ANALYST.email)
+    version = version_of(client, daniela, PATRICIA)
+    response = put_type(
+        client, daniela, PATRICIA, {"caseType": "app_issue", "expectedVersion": version}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["case"]["caseType"] == "app_issue"

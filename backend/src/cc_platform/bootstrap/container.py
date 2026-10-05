@@ -174,6 +174,14 @@ from cc_platform.application.people.onboarding.mailer import OnboardingMailer
 from cc_platform.application.people.onboarding.use_cases import OnboardingUseCases
 from cc_platform.application.people.queries import GetCurrentStaff, ListStaff
 from cc_platform.application.people.use_cases import PeopleUseCases
+from cc_platform.application.platform.realtime import PlatformRealtimeProjector
+from cc_platform.application.platform.settings import (
+    AiSwitch,
+    GetPlatformSettings,
+    PlatformDefaults,
+    SetAiEnabled,
+)
+from cc_platform.application.platform.use_cases import PlatformUseCases
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.email import DevMailbox, EmailSender
 from cc_platform.application.ports.event_bus import EventBus
@@ -202,6 +210,7 @@ from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
 from cc_platform.domain.people.staff import Language
+from cc_platform.domain.platform.events import PLATFORM_EVENTS
 from cc_platform.infrastructure.ai.ed25519_issuer import Ed25519AgentCredentialIssuer
 from cc_platform.infrastructure.ai.http_registry import HttpAgentRegistry
 from cc_platform.infrastructure.ai.http_runtime import HttpAgentRuntime
@@ -406,6 +415,7 @@ def _wire_realtime(
     mapper.suppress(*OWNED_EVENTS)  # the cases projection publishes their envelopes
     mapper.suppress(*SILENT_EVENTS)  # audited reads (case.viewed): never on a socket
     mapper.suppress(*ADMIN_OWNED_EVENTS)  # the administration projection signals them
+    mapper.suppress(*PLATFORM_EVENTS)  # the platform projection signals them (slice 18)
     bus.subscribe(RealtimeProjector(hub, mapper))
     bus.subscribe(SessionTerminator(hub), event_types=[SessionEnded])
     bus.subscribe(AccessTerminator(hub), event_types=[StaffRolesChanged])
@@ -422,6 +432,9 @@ def _wire_realtime(
         event_types=SUPERVISION_EVENTS,
     )
     bus.subscribe(QueueDrainer(background, drain_queue), event_types=QUEUE_DRAINER_EVENTS)
+    bus.subscribe(
+        PlatformRealtimeProjector(hub, SchemaRealtimePresenter()), event_types=PLATFORM_EVENTS
+    )
     return hub, mapper
 
 
@@ -445,6 +458,7 @@ def _build_assistant(
     background: AsyncioBackgroundTasks,
     assign_case: AssignCase,
     step_up: BuilderStepUp,
+    ai_switch: AiSwitch,
 ) -> _AssistantParts:
     """Wire the assistant: engine, the bus process that keeps it answering, and the use cases."""
     config = AssistantConfig(
@@ -499,7 +513,7 @@ def _build_assistant(
         ),
     )
     return _AssistantParts(
-        gate=AssistantGate(config),
+        gate=AssistantGate(config, switch=ai_switch),
         engine=engine,
         resolution=RecordHandoffResolution(
             uow=uow, clock=clock, runtime=agent_core.runtime, issuer=agent_core.issuer
@@ -672,6 +686,11 @@ def build_container(
 
     # ADR 0003: the assistant (agent-core). It exists only when agent-core is configured.
     agent_core = agent_core or _agent_core_services(settings, clock)
+    # Slice 18 (ADR 0005): the AI switch, asked by every AI entry point.
+    platform_defaults = PlatformDefaults(
+        ai_enabled=settings.ai_enabled, agent_core_configured=agent_core is not None
+    )
+    ai_switch = AiSwitch(uow=uow, defaults=platform_defaults)
     assistant = (
         None
         if agent_core is None
@@ -692,6 +711,7 @@ def build_container(
                 box=secret_box,
                 dev_verifier=mfa_verifier,
             ),
+            ai_switch=ai_switch,
         )
     )
     assistant_gate = assistant.gate if assistant else None
@@ -873,6 +893,11 @@ def build_container(
                 uow=uow, tokens=link_tokens, clock=clock, guard=link_guard, hasher=hasher
             ),
             dev_mailbox=ListDevMailbox(kit.dev_mailbox),
+        ),
+        platform=PlatformUseCases(
+            settings=GetPlatformSettings(uow=uow, defaults=platform_defaults),
+            set_ai_enabled=SetAiEnabled(uow=uow, clock=clock, defaults=platform_defaults),
+            ai_switch=ai_switch,
         ),
         assistant=assistant_use_cases,
     )

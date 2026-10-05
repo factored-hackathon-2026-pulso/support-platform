@@ -103,7 +103,15 @@ def test_access_policy() -> None:
         "supervision",
         "admin",
         "staff",
+        "platform",
     ]
+    # Slice 18: the AI switch reaches every staff member, whatever her roles.
+    for actor in (analyst, supervisor, admin):
+        assert policy.can_subscribe(actor, Topic.platform_settings())
+    assert Topic.parse("platform:settings") == Topic.platform_settings()
+    for raw in ("platform:", "platform:other"):
+        with pytest.raises(InvalidTopicError):
+            Topic.parse(raw)
     for topic in (Topic.supervision_queues(), Topic.supervision_team()):
         assert policy.can_subscribe(supervisor, topic)
         assert not policy.can_subscribe(analyst, topic)

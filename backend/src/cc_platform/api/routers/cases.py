@@ -17,7 +17,11 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from fastapi.exceptions import RequestValidationError
 
 from cc_platform.api.dependencies import ApiContextDep, require_roles
-from cc_platform.api.routers._assistant import assistant_use_cases
+from cc_platform.api.routers._assistant import (
+    ai_is_on,
+    assistant_use_cases,
+    switched_assistant_use_cases,
+)
 from cc_platform.api.schemas.cases import (
     AskCopilotRequest,
     CaseDetail,
@@ -286,14 +290,15 @@ async def get_handoff(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> Ca
     summary="The analyst's conversation with the copilot about this case",
     description=(
         "Slice 15 (ADR 0003). Only the case's assignee analyst (403 `case_not_assigned` "
-        "otherwise). `available: false` (with no messages) while agent-core is not configured "
-        "or the customer is not linked to the dataset: hide the panel, it is not an error."
+        "otherwise). `available: false` (with no messages) while agent-core is not configured, "
+        "the AI switch is off (slice 18) or the customer is not linked to the dataset: hide the "
+        "panel, it is not an error."
     ),
     responses=problem_responses(401, 403, 404),
 )
 async def get_copilot(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> CopilotThread:
     use_cases = api.use_cases.assistant
-    if use_cases is None:
+    if use_cases is None or not await ai_is_on(api):
         return CopilotThread(case_id=case_id, available=False, messages=[])
     return CopilotThread.from_view(await use_cases.copilot_thread.execute(actor, case_id))
 
@@ -311,9 +316,9 @@ async def get_copilot(case_id: CaseId, actor: Analyst, api: ApiContextDep) -> Co
         "`Idempotent-Replayed: true`, and repeats the call only if the first one got no answer. "
         "Only the assignee, only on an open case (409 `case_closed`) whose customer is linked "
         "(409 `copilot_unavailable`); 409 `copilot_busy` while it answers a previous question; "
-        "404 `assistant_disabled` without agent-core; 503 `agent_core_unavailable` / 502 "
-        "`agent_core_rejected` when it does not answer (the question stays in the thread: ask "
-        "again with the same `clientMessageId`)."
+        "404 `assistant_disabled` without agent-core or while the AI switch is off; 503 "
+        "`agent_core_unavailable` / 502 `agent_core_rejected` when it does not answer (the "
+        "question stays in the thread: ask again with the same `clientMessageId`)."
     ),
     responses={
         200: {"description": "Replay of a question already answered", "model": CopilotExchange},
@@ -330,7 +335,7 @@ async def ask_copilot(
     response: Response,
 ) -> CopilotExchange:
     ensure_idempotency_key(idempotency_key, body.client_message_id)
-    exchange = await assistant_use_cases(api).ask_copilot.execute(
+    exchange = await (await switched_assistant_use_cases(api)).ask_copilot.execute(
         actor, case_id, text=body.text, client_message_id=body.client_message_id
     )
     if exchange.replayed:

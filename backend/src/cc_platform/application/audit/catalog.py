@@ -125,6 +125,8 @@ FAMILY: Mapping[str, AuditFamily] = {
     "staff.invitation_resent": AuditFamily.ADMINISTRATION,
     "staff.invitation_cancelled": AuditFamily.ADMINISTRATION,
     "staff.password_reset_link_sent": AuditFamily.ADMINISTRATION,
+    # the AI switch (slice 18): a platform-wide setting of Administración
+    "platform.ai_toggled": AuditFamily.ADMINISTRATION,
     # …and what the person does with the link (her own access)
     "staff.invitation_accepted": AuditFamily.ACCESS,
     "staff.mfa_enrolled": AuditFamily.ACCESS,
@@ -722,6 +724,11 @@ _DESCRIBERS: Mapping[str, Callable[[StoredEvent, AuditNames], str]] = {
         f"Canceló la invitación de {names.name(event.entity_id)}"
     ),
     "staff.password_reset_link_sent": _reset_link_sent,
+    "platform.ai_toggled": lambda event, _names: (
+        "Activó las funciones de IA"
+        if event.payload.get("enabled") is True
+        else "Desactivó las funciones de IA"
+    ),
     "staff.invitation_accepted": _fixed("Aceptó la invitación y activó su cuenta"),
     "staff.mfa_enrolled": _fixed("Configuró la verificación en dos pasos"),
     "staff.password_reset": _fixed("Creó una contraseña nueva con el enlace de restablecimiento"),

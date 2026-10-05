@@ -46,7 +46,8 @@ def test_a_failed_statement_is_logged_without_its_parameters(
     assert (response.status_code, response.json()["code"]) == (500, "internal_error")
     output = capsys.readouterr().err
     assert "unhandled_error" in output
-    assert "OperationalError" in output  # the error itself is still diagnosable
+    # The error itself is still diagnosable (SQLite: OperationalError; Postgres: ProgrammingError).
+    assert "OperationalError" in output or "ProgrammingError" in output
     assert "[parameters:" not in output
     assert "argon2" not in output
     assert EMAIL not in output

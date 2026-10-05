@@ -1039,6 +1039,66 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/cases/{caseId}/copilot/suggestions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Ask the copilot for a suggestion about this case
+     * @description ADR 0005. The copilot reads the recent turns and answers a typed list that may be empty (`status: none` is a normal answer): a draft reply, reads to look at, a prepared action that is **not executable**, and a recommendation to escalate. Nothing is sent or run. The call waits for the model (seconds). Idempotent on `Idempotency-Key`: a retry of a request that has its answer is 200 with `Idempotent-Replayed: true` and asks nothing; after a failure the same key asks again. Only the assignee, only on an open case (409 `case_closed`) whose customer is linked (409 `copilot_unavailable`); 409 `copilot_busy` while one is being prepared; 404 `assistant_disabled` without agent-core or the suggestions agent, or while the AI switch is off; 503/502 when agent-core does not answer.
+     */
+    post: operations['cases_request_copilot_suggestion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/copilot/suggestions/latest': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The copilot's newest suggestion for this case
+     * @description ADR 0005. Only the case's assignee analyst (403 `case_not_assigned` otherwise). `available: false` hides the suggestions (agent-core, the suggestions agent or the dataset link is missing, or the AI switch is off); `suggestion: null` means none yet or its texts expired (24 hours). `stale: true` once the customer wrote after the turns it read. A suggestion that is `preparing` is on its way: ask again or wait for the `copilot.suggestion_ready` signal on `inbox:<staffId>`.
+     */
+    get: operations['cases_latest_copilot_suggestion']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/feedback': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Dismiss the copilot's draft
+     * @description ADR 0005. `discarded` (the analyst dismissed the draft) or `ignored` (she left it). The draft leaves the list; the rest of the suggestion stays. `used` and `edited` are derived when she replies with `copilotSuggestionId`. 404 for an id that is not hers.
+     */
+    post: operations['cases_decide_copilot_suggestion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/cases/{caseId}/emails': {
     parameters: {
       query?: never
@@ -3269,6 +3329,53 @@ export interface components {
       /** Text */
       text: string
     }
+    /** CopilotSuggestion */
+    CopilotSuggestion: {
+      /** Caseid */
+      caseId: string
+      /**
+       * Createdat
+       * Format: date-time
+       */
+      createdAt: string
+      /** Escalationaccepted */
+      escalationAccepted: boolean
+      /** Failurecode */
+      failureCode: string | null
+      /** Id */
+      id: string
+      /**
+       * Replydecision
+       * @description What happened to the draft once decided (it then leaves `suggestions`).
+       */
+      replyDecision: ('used' | 'edited' | 'discarded' | 'ignored') | null
+      /**
+       * Stale
+       * @description The customer wrote after the turns it read.
+       */
+      stale: boolean
+      /**
+       * Status
+       * @description `none`: the copilot had nothing to propose (a normal answer, show nothing).
+       * @enum {string}
+       */
+      status: 'preparing' | 'ready' | 'none' | 'failed'
+      /**
+       * Suggestions
+       * @description Empty when there is nothing to propose, and once the texts expired.
+       */
+      suggestions: (
+        | components['schemas']['SuggestionReply']
+        | components['schemas']['SuggestionTool']
+        | components['schemas']['SuggestionAction']
+        | components['schemas']['SuggestionEscalation']
+      )[]
+      /**
+       * Trigger
+       * @enum {string}
+       */
+      trigger: 'customer_message' | 'manual' | 'handover'
+    }
     /** CopilotThread */
     CopilotThread: {
       /**
@@ -3803,6 +3910,11 @@ export interface components {
     /** EscalateRequest */
     EscalateRequest: {
       /**
+       * Copilotsuggestionid
+       * @description ADR 0005: the copilot suggestion that recommended escalating; recorded as accepted. A wrong or already decided id never fails the escalation.
+       */
+      copilotSuggestionId?: string | null
+      /**
        * Motive
        * @description Why (required, trimmed, at most 500).
        */
@@ -4293,6 +4405,16 @@ export interface components {
       /** Waiting */
       waiting: number
     }
+    /** LatestCopilotSuggestion */
+    LatestCopilotSuggestion: {
+      /**
+       * Available
+       * @description False while agent-core or the suggestions agent is not configured, or the customer is not linked to the dataset: hide the suggestions.
+       */
+      available: boolean
+      /** @description The newest one; null when none was made yet or its texts expired (24 hours). */
+      suggestion: components['schemas']['CopilotSuggestion'] | null
+    }
     /** LinkTokenRequest */
     LinkTokenRequest: {
       /**
@@ -4641,6 +4763,11 @@ export interface components {
        * @example 0b8f6a52-6f0e-4c1e-9d55-2f5a0c7d9e10
        */
       clientMessageId: string
+      /**
+       * Copilotsuggestionid
+       * @description ADR 0005: the copilot suggestion this reply came from; the platform derives `used` or `edited` from it. A wrong or already decided id never fails the reply.
+       */
+      copilotSuggestionId?: string | null
       /** Text */
       text: string
     }
@@ -5237,6 +5364,15 @@ export interface components {
      * @enum {string}
      */
     ReplyBlockedReason: 'not_assignee' | 'closed'
+    /** RequestSuggestionRequest */
+    RequestSuggestionRequest: {
+      /**
+       * Trigger
+       * @default manual
+       * @constant
+       */
+      trigger: 'manual'
+    }
     /** RespondEscalationRequest */
     RespondEscalationRequest: {
       /**
@@ -5410,6 +5546,90 @@ export interface components {
        * @description Why the analyst calls (required, at most 500).
        */
       reason: string
+    }
+    /** SuggestionAction */
+    SuggestionAction: {
+      /**
+       * Executable
+       * @description Always false in this stage: it is information, the copilot does not run it.
+       * @constant
+       */
+      executable: false
+      /**
+       * Summary
+       * @description What would be done, in plain words.
+       */
+      summary: string
+      /** Tool */
+      tool: string
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: 'action'
+    }
+    /** SuggestionEscalation */
+    SuggestionEscalation: {
+      /** Evidence */
+      evidence: string[]
+      /**
+       * Motivedraft
+       * @description To pre-fill the escalation dialog (at most 500).
+       */
+      motiveDraft: string
+      /**
+       * Reasoncode
+       * @description agent-core's reason code (`policy:…`, `rule:…`).
+       */
+      reasonCode: string
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: 'escalate'
+    }
+    /** SuggestionFeedbackRequest */
+    SuggestionFeedbackRequest: {
+      /**
+       * Decision
+       * @description The analyst dismissed the draft (`discarded`) or left it (`ignored`). `used` and `edited` are not posted: send `copilotSuggestionId` with the reply.
+       * @enum {string}
+       */
+      decision: 'discarded' | 'ignored'
+    }
+    /** SuggestionReply */
+    SuggestionReply: {
+      /** Citations */
+      citations: string[]
+      /** Language */
+      language: string
+      /**
+       * Text
+       * @description A draft for the customer. The analyst sends it; nothing is sent.
+       */
+      text: string
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: 'reply'
+    }
+    /** SuggestionTool */
+    SuggestionTool: {
+      /** Label */
+      label: string
+      /**
+       * Tool
+       * @description A read of the copilot's catalog (`id@version`).
+       */
+      tool: string
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: 'tool'
+      /** Why */
+      why: string
     }
     /** TeamAnalyst */
     TeamAnalyst: {
@@ -10083,6 +10303,228 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_request_copilot_suggestion: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description Must equal the body `clientMessageId`; a retry with it is a replay. */
+        'Idempotency-Key': string
+      }
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['RequestSuggestionRequest'] | null
+      }
+    }
+    responses: {
+      /** @description Replay of a request already answered */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CopilotSuggestion']
+        }
+      }
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CopilotSuggestion']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_latest_copilot_suggestion: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['LatestCopilotSuggestion']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  cases_decide_copilot_suggestion: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        suggestionId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SuggestionFeedbackRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CopilotSuggestion']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
         headers: {
           [name: string]: unknown
         }

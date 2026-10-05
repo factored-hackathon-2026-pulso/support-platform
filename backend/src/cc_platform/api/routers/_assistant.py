@@ -13,7 +13,11 @@ from __future__ import annotations
 
 from cc_platform.api.context import ApiContext
 from cc_platform.application.ai.errors import AssistantDisabledError
-from cc_platform.application.ai.use_cases import AssistantUseCases, BuilderUseCases
+from cc_platform.application.ai.use_cases import (
+    AssistantUseCases,
+    BuilderUseCases,
+    SuggestionUseCases,
+)
 
 
 def assistant_use_cases(api: ApiContext) -> AssistantUseCases:
@@ -36,6 +40,15 @@ async def switched_assistant_use_cases(api: ApiContext) -> AssistantUseCases:
     if not await ai_is_on(api):
         raise AssistantDisabledError()
     return use_cases
+
+
+async def suggestion_use_cases(api: ApiContext) -> SuggestionUseCases:
+    """The copilot's suggestions (ADR 0005), or ``assistant_disabled`` (404) when agent-core or
+    the suggestions agent is not configured, or while the AI switch is off (slice 18)."""
+    suggestions = (await switched_assistant_use_cases(api)).suggestions
+    if suggestions is None:
+        raise AssistantDisabledError()
+    return suggestions
 
 
 async def builder_use_cases(api: ApiContext) -> BuilderUseCases:

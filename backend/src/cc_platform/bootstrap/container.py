@@ -37,8 +37,26 @@ from cc_platform.application.ai.staff import (
     RecordHandoffResolution,
     ReleaseAssistantCase,
 )
+from cc_platform.application.ai.suggestion_process import (
+    SUGGESTION_PROCESS_EVENTS,
+    SUGGESTION_SIGNAL_EVENTS,
+    SuggestionProcess,
+    SuggestionSignal,
+)
+from cc_platform.application.ai.suggestions import (
+    DecideSuggestion,
+    GetLatestSuggestion,
+    LinkSuggestion,
+    PurgeSuggestionDrafts,
+    RequestSuggestion,
+    SuggestionService,
+)
 from cc_platform.application.ai.sweep import SweepAssistantSessions
-from cc_platform.application.ai.use_cases import AssistantUseCases, BuilderUseCases
+from cc_platform.application.ai.use_cases import (
+    AssistantUseCases,
+    BuilderUseCases,
+    SuggestionUseCases,
+)
 from cc_platform.application.audit.queries import GetAuditEvent, ListAuditEvents
 from cc_platform.application.audit.use_cases import AuditUseCases
 from cc_platform.application.cases.analyst_home import GetAnalystHome
@@ -275,6 +293,8 @@ class Container:
     agent_core: AgentCoreServices | None = None
     assistant_engine: AssistantEngine | None = None
     assistant_sweep: PeriodicTask | None = None
+    #: ADR 0005: purges the drafts older than 24 hours; ``None`` without suggestions.
+    suggestion_purge: PeriodicTask | None = None
 
     def api_context(self) -> ApiContext:
         """The narrow view the HTTP/WebSocket layer gets (no adapters, no Unit of Work)."""
@@ -316,6 +336,8 @@ class Container:
             self.sla_sweep.start()
         if self.assistant_sweep is not None:
             self.assistant_sweep.start()
+        if self.suggestion_purge is not None:
+            self.suggestion_purge.start()
 
     async def _link_bank_customers(self) -> None:
         """ADR 0003: apply the private ``{platform customer id: dataset customer id}`` file."""
@@ -366,6 +388,8 @@ class Container:
             await self.sla_sweep.stop()
         if self.assistant_sweep is not None:
             await self.assistant_sweep.stop()
+        if self.suggestion_purge is not None:
+            await self.suggestion_purge.stop()
         await self.background.drain()
         if self.agent_core is not None and self.agent_core.http_client is not None:
             await self.agent_core.http_client.aclose()
@@ -455,6 +479,7 @@ def _build_assistant(
     clock: Clock,
     ids: IdGenerator,
     bus: EventBus,
+    hub: RealtimeHub,
     background: AsyncioBackgroundTasks,
     assign_case: AssignCase,
     step_up: BuilderStepUp,
@@ -511,7 +536,19 @@ def _build_assistant(
         builder=_build_builder(
             settings, agent_core, uow=uow, clock=clock, ids=ids, step_up=step_up
         ),
+        suggestions=_build_suggestions(settings, agent_core, uow=uow, clock=clock, ids=ids),
     )
+    if use_cases.suggestions is not None:  # ADR 0005: automatic suggestions and their signal
+        if settings.copilot_suggestions_auto:
+            bus.subscribe(
+                SuggestionProcess(
+                    background,
+                    use_cases.suggestions.service,
+                    coalesce_seconds=settings.copilot_suggestions_coalesce_seconds,
+                ),
+                event_types=SUGGESTION_PROCESS_EVENTS,
+            )
+        bus.subscribe(SuggestionSignal(hub), event_types=SUGGESTION_SIGNAL_EVENTS)
     return _AssistantParts(
         gate=AssistantGate(config, switch=ai_switch),
         engine=engine,
@@ -520,6 +557,35 @@ def _build_assistant(
         ),
         use_cases=use_cases,
         sweep=SweepAssistantSessions(uow=uow, clock=clock, tasks=background, engine=engine),
+    )
+
+
+def _build_suggestions(
+    settings: Settings,
+    agent_core: AgentCoreServices,
+    *,
+    uow: UnitOfWorkFactory,
+    clock: Clock,
+    ids: IdGenerator,
+) -> SuggestionUseCases | None:
+    """ADR 0005: the copilot's suggestions exist when a suggestions agent is configured."""
+    if settings.copilot_suggestions_agent is None:
+        return None
+    service = SuggestionService(
+        uow=uow,
+        clock=clock,
+        ids=ids,
+        runtime=agent_core.runtime,
+        issuer=agent_core.issuer,
+        agent=settings.copilot_suggestions_agent,
+    )
+    return SuggestionUseCases(
+        service=service,
+        request=RequestSuggestion(service=service, uow=uow),
+        latest=GetLatestSuggestion(uow=uow, clock=clock),
+        decide=DecideSuggestion(uow=uow, clock=clock),
+        link=LinkSuggestion(uow=uow, clock=clock),
+        purge=PurgeSuggestionDrafts(uow=uow, clock=clock),
     )
 
 
@@ -701,6 +767,7 @@ def build_container(
             clock=clock,
             ids=ids,
             bus=bus,
+            hub=hub,
             background=background,
             assign_case=assign_case,
             step_up=BuilderStepUp(
@@ -906,6 +973,16 @@ def build_container(
         if assistant is not None and settings.assistant_sweep_seconds > 0
         else None
     )
+    suggestions = assistant_use_cases.suggestions if assistant_use_cases is not None else None
+    suggestion_purge = (
+        PeriodicTask(
+            "suggestion_purge",
+            settings.copilot_suggestions_purge_seconds,
+            suggestions.purge.execute,
+        )
+        if suggestions is not None and settings.copilot_suggestions_purge_seconds > 0
+        else None
+    )
     sla_sweep = (
         PeriodicTask("sla_sweep", settings.notification_sweep_seconds, sweep_sla_risk.execute)
         if settings.notification_sweep_seconds > 0
@@ -938,4 +1015,5 @@ def build_container(
         agent_core=agent_core,
         assistant_engine=assistant_engine,
         assistant_sweep=assistant_sweep,
+        suggestion_purge=suggestion_purge,
     )

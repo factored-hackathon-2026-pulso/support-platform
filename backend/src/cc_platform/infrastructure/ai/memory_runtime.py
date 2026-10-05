@@ -6,6 +6,7 @@ of S14 can be tested end to end: a greeting, a clarification, a confirmation, an
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -22,6 +23,7 @@ from cc_platform.application.ai.runtime import (
     HandoffResolutionResult,
     SessionLineage,
 )
+from cc_platform.domain.ai.suggestion import Suggestion
 from cc_platform.infrastructure.ai.keys import read_jws
 
 
@@ -45,6 +47,9 @@ class InMemoryAgentRuntime:
     principal_kid: str | None = None
     """When set, the credential must be signed with this key id: the runtime verifies
     principals against the **identity** keys, so another key is ``credentials_invalid``."""
+    suggestion_script: list[tuple[Suggestion, ...] | Exception] = field(default_factory=list)
+    """Each queued item answers one ``task`` run (a ``start_run`` with ``input``): what it
+    proposes (``()`` = nothing to propose), or an exception to raise. Empty: nothing to propose."""
     handoffs: dict[str, dict[str, object]] = field(default_factory=dict)
     """Packets ``get_handoff`` answers by reference (default: just the reference)."""
     _runs: int = 0
@@ -67,12 +72,30 @@ class InMemoryAgentRuntime:
         agent: str,
         idempotency_key: str,
         lang: str | None = None,
+        input: Mapping[str, object] | None = None,
     ) -> AgentRun:
-        self._record(
-            "start_run", credentials, agent=agent, idempotency_key=idempotency_key, lang=lang
-        )
+        arguments: dict[str, object] = {
+            "agent": agent,
+            "idempotency_key": idempotency_key,
+            "lang": lang,
+        }
+        if input is not None:
+            arguments["input"] = dict(input)
+        self._record("start_run", credentials, **arguments)
         self._runs += 1
         run_id = f"run-{self._runs}"
+        if input is not None:  # a task run: no session, no first turn, a list of suggestions
+            answer = self.suggestion_script.pop(0) if self.suggestion_script else ()
+            if isinstance(answer, Exception):
+                raise answer
+            return AgentRun(
+                run_id=run_id,
+                release="rel-1",
+                status="closed",
+                trace_id=f"trace-{self._runs}",
+                outcome=AgentOutcome.COMPLETED,
+                suggestions=answer,
+            )
         turn = AgentTurn(
             run_id=run_id,
             turn_id=f"{run_id}-t0",

@@ -23,6 +23,7 @@ from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.ai.builder import BuilderProposal, BuilderThread
 from cc_platform.domain.ai.copilot import CopilotThread
 from cc_platform.domain.ai.session import AssistantSession
+from cc_platform.domain.ai.suggestion import CopilotSuggestion, SuggestionStatus
 from cc_platform.domain.cases.assignment import Assignment
 from cc_platform.domain.cases.call import Call
 from cc_platform.domain.cases.case import Case
@@ -828,6 +829,61 @@ class InMemoryCopilotThreadRepository(_StagedRepository[CopilotThread]):
     async def get_for(self, case_id: str, analyst_id: str) -> CopilotThread | None:
         found = [t for t in self._all() if (t.case_id, t.analyst_id) == (case_id, analyst_id)]
         return await self._get(found[0].id) if found else None
+
+
+class InMemoryCopilotSuggestionRepository(_StagedRepository[CopilotSuggestion]):
+    """ADR 0005. Same answers as ``SqlCopilotSuggestionRepository``."""
+
+    def __init__(self, committed: dict[str, CopilotSuggestion], track: Tracker) -> None:
+        super().__init__(committed, lambda suggestion: suggestion.id, track)
+
+    def _unique_violation(
+        self, aggregate: CopilotSuggestion, other: CopilotSuggestion
+    ) -> DomainError | None:
+        if aggregate.request_key is not None and (
+            aggregate.case_id,
+            aggregate.analyst_id,
+            aggregate.request_key,
+        ) == (other.case_id, other.analyst_id, other.request_key):
+            return ConcurrentUpdateError(id=aggregate.id)
+        return None
+
+    async def get(self, suggestion_id: str) -> CopilotSuggestion | None:
+        return await self._get(suggestion_id)
+
+    async def get_by_request_key(
+        self, case_id: str, analyst_id: str, request_key: str
+    ) -> CopilotSuggestion | None:
+        found = [
+            s
+            for s in self._all()
+            if (s.case_id, s.analyst_id, s.request_key) == (case_id, analyst_id, request_key)
+        ]
+        return await self._get(found[0].id) if found else None
+
+    async def latest_for(self, case_id: str, analyst_id: str) -> CopilotSuggestion | None:
+        mine = [s for s in self._all() if (s.case_id, s.analyst_id) == (case_id, analyst_id)]
+        if not mine:
+            return None
+        newest = max(mine, key=lambda s: (s.created_at, s.id))
+        return await self._get(newest.id)
+
+    async def list_expired(
+        self, *, created_before: datetime, limit: int
+    ) -> list[CopilotSuggestion]:
+        due = sorted(
+            (
+                s
+                for s in self._all()
+                if s.status is SuggestionStatus.READY
+                and s.purged_at is None
+                and s.created_at <= created_before
+            ),
+            key=lambda s: (s.created_at, s.id),
+        )[:limit]
+        for suggestion in due:
+            self._track(suggestion)
+        return due
 
 
 class InMemoryBuilderThreadRepository(_StagedRepository[BuilderThread]):

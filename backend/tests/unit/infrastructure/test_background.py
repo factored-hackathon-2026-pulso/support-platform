@@ -9,6 +9,23 @@ import pytest
 from cc_platform.infrastructure.background import AsyncioBackgroundTasks, PeriodicTask
 
 
+async def test_drain_returns_when_every_task_finished_but_its_callback_has_not_run() -> None:
+    """A task that finished in the current loop iteration is still in the set (the callback that
+    forgets it runs on the next one). ``gather`` of finished tasks never yields, so a drain that
+    only gathers spins forever: it must hand the loop back."""
+    tasks = AsyncioBackgroundTasks()
+
+    async def quick() -> None:
+        return None
+
+    tasks.spawn("quick", quick)
+    await asyncio.sleep(0)  # the task finishes now; its done callback is still queued
+
+    await asyncio.wait_for(tasks.drain(), timeout=2)
+
+    assert tasks.pending == 0
+
+
 async def test_runs_jobs_isolates_failures_and_drains_nested_work() -> None:
     tasks = AsyncioBackgroundTasks()
     done: list[str] = []

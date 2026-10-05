@@ -421,6 +421,41 @@ copilot_threads = Table(
     UniqueConstraint("case_id", "analyst_id", name="uq_copilot_threads_case_analyst"),
 )
 
+# ADR 0005: what the copilot proposed for a case (one agent-core run) and what the analyst did with
+# it. ``items`` holds the texts (draft, motive, evidence, tool ids) and is cleared by the purge, 24
+# hours at most; what stays is ``kinds``, ``tool_ids``, ``reply_hash`` and the decisions.
+copilot_suggestions = Table(
+    "copilot_suggestions",
+    metadata,
+    Column("id", String(ID), primary_key=True),
+    Column("case_id", String(ID), ForeignKey("cases.id"), nullable=False),
+    Column("analyst_id", String(ID), ForeignKey("staff.id"), nullable=False),
+    Column("agent", String(120), nullable=False),
+    Column("trigger", String(30), nullable=False),
+    Column("status", String(20), nullable=False),
+    Column("based_on_sequence", Integer, nullable=False),
+    Column("request_key", String(80), nullable=True),
+    Column("items", JSON, nullable=False),
+    Column("kinds", JSON, nullable=False),
+    Column("tool_ids", JSON, nullable=False),
+    Column("reply_hash", String(64), nullable=True),
+    Column("reply_decision", String(20), nullable=True),
+    Column("edit_distance_permille", Integer, nullable=True),
+    Column("escalation_accepted", Boolean, nullable=False, default=False),
+    Column("run_id", String(120), nullable=True),
+    Column("trace_id", String(120), nullable=True),
+    Column("failure_code", String(60), nullable=True),
+    Column("purged_at", UtcDateTime, nullable=True),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=False),
+    _version(),
+    UniqueConstraint(
+        "case_id", "analyst_id", "request_key", name="uq_copilot_suggestions_case_analyst_key"
+    ),
+    Index("ix_copilot_suggestions_case_analyst_created", "case_id", "analyst_id", "created_at"),
+    Index("ix_copilot_suggestions_status_created", "status", "created_at"),
+)
+
 # ADR 0003 (slice 16): a supervisor's conversation with the builder agent. One per person.
 # ``messages`` is a JSON list (``[{id, role, text, created_at, client_message_id, answers}]``,
 # newest 200), like ``copilot_threads``.

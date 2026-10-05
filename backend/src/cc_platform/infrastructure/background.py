@@ -34,7 +34,13 @@ class AsyncioBackgroundTasks:
 
     async def drain(self) -> None:
         while self._tasks:
-            await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
+            running = [task for task in self._tasks if not task.done()]
+            if running:
+                await asyncio.gather(*running, return_exceptions=True)
+            else:
+                # Every task is done but its done callback (the one that forgets it) has not run:
+                # ``gather`` of finished tasks never yields, so without this the loop spins forever.
+                await asyncio.sleep(0)
 
     @property
     def pending(self) -> int:

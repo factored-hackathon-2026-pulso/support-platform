@@ -43,6 +43,7 @@ from cc_platform.domain.ai.events import (
     ASSISTANT_EVENTS,
     BUILDER_EVENTS,
     COPILOT_EVENTS,
+    SUGGESTION_EVENTS,
     BuilderProposalCreated,
 )
 from cc_platform.domain.cases import CloseReason
@@ -312,11 +313,14 @@ async def test_every_emitted_event_has_a_description() -> None:
     emitted = {e.type for e in events}
     # The people-only seed tells no assistant story (ADR 0003); ``test_assistant.py`` emits
     # those events and checks that each one has a description; ``test_builder.py`` does the
-    # same for the agent builder (slice 16).
+    # same for the agent builder (slice 16) and ``test_suggestions.py`` for the suggestions.
     assistant_types = {
         "case.assistant_started",
         "case.assistant_released",
-        *(event.event_type for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS, *BUILDER_EVENTS)),
+        *(
+            event.event_type
+            for event in (*ASSISTANT_EVENTS, *COPILOT_EVENTS, *SUGGESTION_EVENTS, *BUILDER_EVENTS)
+        ),
     }
     assert emitted == set(FAMILY) - assistant_types
     assert not [e for e in events if e.description == fallback_description(e.type)]

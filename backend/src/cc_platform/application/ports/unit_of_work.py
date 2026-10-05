@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         BankCustomerLinks,
         BuilderProposalRepository,
         BuilderThreadRepository,
+        CopilotSuggestionRepository,
         CopilotThreadRepository,
     )
     from cc_platform.application.cases.ports import (
@@ -129,6 +130,11 @@ class UnitOfWork(Protocol):
     @property
     def copilot_threads(self) -> CopilotThreadRepository:
         """ADR 0003: each analyst's conversation with the copilot about a case."""
+        ...
+
+    @property
+    def copilot_suggestions(self) -> CopilotSuggestionRepository:
+        """ADR 0005: what the copilot proposed for a case and what the analyst did with it."""
         ...
 
     @property

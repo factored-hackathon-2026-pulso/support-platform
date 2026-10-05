@@ -16,6 +16,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryBuilderThreadRepository,
     InMemoryCallRepository,
     InMemoryCaseRepository,
+    InMemoryCopilotSuggestionRepository,
     InMemoryCopilotThreadRepository,
     InMemoryCustomerCaseSlotRepository,
     InMemoryCustomerRepository,
@@ -57,6 +58,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     notifications: InMemoryNotificationRepository
     assistant_sessions: InMemoryAssistantSessionRepository
     copilot_threads: InMemoryCopilotThreadRepository
+    copilot_suggestions: InMemoryCopilotSuggestionRepository
     builder_threads: InMemoryBuilderThreadRepository
     builder_proposals: InMemoryBuilderProposalRepository
     bank_links: InMemoryBankCustomerLinks
@@ -93,6 +95,9 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             store.assistant_sessions, track
         )
         self.copilot_threads = InMemoryCopilotThreadRepository(store.copilot_threads, track)
+        self.copilot_suggestions = InMemoryCopilotSuggestionRepository(
+            store.copilot_suggestions, track
+        )
         self.builder_threads = InMemoryBuilderThreadRepository(store.builder_threads, track)
         self.builder_proposals = InMemoryBuilderProposalRepository(store.builder_proposals, track)
         self.bank_links = InMemoryBankCustomerLinks(store.bank_links)
@@ -124,6 +129,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryNotificationRepository
         | InMemoryAssistantSessionRepository
         | InMemoryCopilotThreadRepository
+        | InMemoryCopilotSuggestionRepository
         | InMemoryBuilderThreadRepository
         | InMemoryBuilderProposalRepository
         | InMemoryBankCustomerLinks
@@ -148,6 +154,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.calls,
             self.assistant_sessions,
             self.copilot_threads,
+            self.copilot_suggestions,
             self.builder_threads,
             self.builder_proposals,
             self.bank_links,

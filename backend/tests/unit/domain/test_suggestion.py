@@ -21,6 +21,7 @@ from cc_platform.domain.ai.suggestion import (
     SuggestionTrigger,
     ToolSuggestion,
     edit_distance_permille,
+    normalize_report,
     normalize_suggestions,
     text_hash,
 )
@@ -50,7 +51,6 @@ def everything() -> list:
     return [
         ReplySuggestion(text=DRAFT, citations=("fact-1",), language="es"),
         ToolSuggestion(tool="leer_movimientos@1", label="Movimientos", why="Ver los dos cobros"),
-        ActionSuggestion(tool="radicar_pqr@1", summary="Radicar una disputa por 120 USD"),
         EscalationSuggestion(
             reason_code="policy:escalamiento-disputa-monto",
             evidence=("Pidió hablar con supervisión",),
@@ -85,8 +85,8 @@ def test_a_ready_suggestion_keeps_the_kinds_the_tools_and_the_drafts_hash() -> N
     s = ready()
 
     assert s.status is SuggestionStatus.READY
-    assert s.kinds == ("reply", "tool", "action", "escalate")
-    assert s.tool_ids == ("leer_movimientos@1", "radicar_pqr@1")
+    assert s.kinds == ("reply", "tool", "escalate")
+    assert s.tool_ids == ("leer_movimientos@1",)
     assert s.reply_hash == text_hash(DRAFT)
     assert (s.run_id, s.trace_id) == ("run-1", "t-1")
     assert s.reply_pending
@@ -109,7 +109,7 @@ def test_a_list_of_empty_things_is_also_nothing() -> None:
     assert s.status is SuggestionStatus.NONE
 
 
-def test_the_list_is_cleaned_one_reply_one_escalation_and_a_cap() -> None:
+def test_the_list_is_cleaned_one_reply_one_escalation_and_a_cap_of_three() -> None:
     raw = [
         ReplySuggestion(text="uno"),
         ReplySuggestion(text="dos"),
@@ -120,10 +120,57 @@ def test_the_list_is_cleaned_one_reply_one_escalation_and_a_cap() -> None:
 
     cleaned = normalize_suggestions(raw)
 
+    assert MAX_SUGGESTIONS == 3
     assert len(cleaned) == MAX_SUGGESTIONS
-    assert [i.kind for i in cleaned].count("reply") == 1
-    assert [i.kind for i in cleaned].count("escalate") == 1
+    assert [i.kind for i in cleaned] == ["reply", "escalate", "tool"]
     assert cleaned[0].text == "uno"  # type: ignore[union-attr]
+    assert cleaned[1].reason_code == "rule:a"  # type: ignore[union-attr]
+    assert cleaned[2].tool == "t0@1"  # type: ignore[union-attr]
+
+
+def test_the_reply_and_the_escalation_survive_the_cap_and_keep_their_order() -> None:
+    raw = [
+        ToolSuggestion(tool="a@1"),
+        ToolSuggestion(tool="b@1"),
+        ToolSuggestion(tool="c@1"),
+        EscalationSuggestion(reason_code="rule:a"),
+        ReplySuggestion(text="borrador"),
+    ]
+
+    cleaned = normalize_suggestions(raw)
+
+    assert [i.kind for i in cleaned] == ["tool", "escalate", "reply"]  # a, then the two that matter
+
+
+def test_a_cut_is_reported_and_a_clean_list_is_not() -> None:
+    clean = normalize_report([ReplySuggestion(text="uno"), ToolSuggestion(tool="a@1")])
+    assert clean.truncated is False
+
+    for raw in (
+        [ReplySuggestion(text="uno"), ReplySuggestion(text="dos")],  # a second reply
+        [EscalationSuggestion(reason_code="a"), EscalationSuggestion(reason_code="b")],
+        [ToolSuggestion(tool=f"t{i}@1") for i in range(4)],  # over the cap
+        [ReplySuggestion(text="x" * (MAX_REPLY + 1))],  # a text cut
+        [ToolSuggestion(tool="a@1", why="w" * 600)],
+        [EscalationSuggestion(reason_code="a", evidence=tuple("e" for _ in range(6)))],
+    ):
+        assert normalize_report(raw).truncated is True, raw
+
+    # an empty or blank item is dropped, not truncated
+    assert (
+        normalize_report([ReplySuggestion(text="  "), ToolSuggestion(tool=" ")]).truncated is False
+    )
+
+
+def test_the_tool_label_is_the_catalogs_or_the_name() -> None:
+    cleaned = normalize_suggestions(
+        [
+            ToolSuggestion(tool="leer_productos@1", label="Rótulo del agente"),
+            ToolSuggestion(tool="nueva@3", label="Otro"),
+        ]
+    )
+
+    assert [i.label for i in cleaned] == ["Productos", "nueva"]  # type: ignore[union-attr]
 
 
 def test_long_texts_are_cut() -> None:
@@ -235,7 +282,7 @@ def test_purge_clears_every_text_and_ignores_an_undecided_draft() -> None:
     assert s.items == ()
     assert s.purged_at is not None
     assert s.reply_decision is ReplyDecision.IGNORED
-    assert s.kinds == ("reply", "tool", "action", "escalate")  # what was proposed stays
+    assert s.kinds == ("reply", "tool", "escalate")  # what was proposed stays
     assert s.reply_hash == text_hash(DRAFT)
     assert s.purge(at=NOW + DRAFT_TTL) is False
 

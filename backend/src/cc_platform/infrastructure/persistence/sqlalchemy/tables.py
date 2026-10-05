@@ -454,6 +454,7 @@ copilot_suggestions = Table(
     Column("reply_decision", String(20), nullable=True),
     Column("edit_distance_permille", Integer, nullable=True),
     Column("escalation_accepted", Boolean, nullable=False, default=False),
+    Column("truncated", Boolean, nullable=False, default=False),
     Column("run_id", String(120), nullable=True),
     Column("trace_id", String(120), nullable=True),
     Column("failure_code", String(60), nullable=True),

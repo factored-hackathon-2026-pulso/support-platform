@@ -127,8 +127,9 @@ async def test_a_suggestion_round_trips_with_its_four_kinds(harness: Harness) ->
     assert found is not None
     assert found.status is SuggestionStatus.READY
     assert found.items == s.items
-    assert found.kinds == ("reply", "tool", "action", "escalate")
-    assert found.tool_ids == ("leer_movimientos@1", "radicar_pqr@1")
+    assert found.kinds == ("reply", "tool", "escalate")
+    assert found.tool_ids == ("leer_movimientos@1",)
+    assert found.truncated is True  # four were proposed, three kept
     assert found.reply_hash == text_hash(DRAFT)
     assert found.escalation_accepted is True
     assert (found.run_id, found.trace_id, found.request_key) == ("run-1", "trace-1", "k-1")
@@ -289,5 +290,5 @@ async def test_a_purge_persists_empty_texts_and_keeps_what_was_proposed(
     assert again.items == ()
     assert again.purged_at is not None
     assert again.reply_decision is ReplyDecision.IGNORED
-    assert again.kinds == ("reply", "tool", "action", "escalate")
+    assert again.kinds == ("reply", "tool", "escalate")
     assert again.reply_hash == text_hash(DRAFT)

@@ -216,6 +216,7 @@ async def test_the_signal_carries_the_id_and_the_status_only() -> None:
         agent="copiloto-sugerencias@prod",
         kinds=("reply",),
         count=1,
+        truncated=False,
         run_id="run-1",
         trace_id="t-1",
     )

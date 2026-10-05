@@ -39,7 +39,7 @@ supervisors hold no customer data). Only while the customer is **linked to the d
 ```json
 { "available": true,
   "suggestion": { "id": "CPS-…", "caseId": "CASE-…", "trigger": "customer_message", "status": "ready",
-    "stale": false, "createdAt": "…", "replyDecision": null, "escalationAccepted": false, "failureCode": null,
+    "stale": false, "createdAt": "…", "replyDecision": null, "escalationAccepted": false, "truncated": false, "failureCode": null,
     "suggestions": [
       { "type": "reply", "text": "…", "citations": ["…"], "language": "es" },
       { "type": "tool", "tool": "leer_movimientos@1", "label": "Movimientos", "why": "…" },
@@ -53,6 +53,16 @@ supervisors hold no customer data). Only while the customer is **linked to the d
 - `suggestion: null`: none yet, or its texts expired (they are purged after **24 hours**).
 - `status`: `preparing` (on its way), `ready`, `none` (nothing to propose) or `failed` (`failureCode`).
 - `stale: true`: the customer wrote after the turns it read. Dim it; offer *Sugerir*.
+- `truncated`: **the list was cut, and it says so**. The platform keeps **at most 3** suggestions: the `reply` and the
+  `escalate` first (one of each: a second one is dropped), then the others in the order agent-core gave them. It is also
+  `true` when a text was cut to its limit (reply 4000 characters; evidence 5 items of 300; `why`, `motiveDraft` 500;
+  `summary` 300). It is informational: show nothing or a discreet hint; never an error. The audit event
+  `copilot.suggestion_ready` carries the same flag and the count, never a text. Empty or unknown items that are dropped
+  are not a cut.
+- `label` of a `tool` is **the platform's**, not the agent's: a local catalog maps the tool to a readable name
+  (`leer_movimientos` is "Movimientos", `leer_productos` "Productos", `leer_pqr_cliente` "Reclamos del cliente",
+  `obtener_handoff` "Traspaso del asistente", `leer_transcript` "Conversación con el asistente"); a tool that is not in
+  the catalog shows its own name without the `@version`. Do not build labels in the frontend.
 - `replyDecision`: once the draft was decided (`used`, `edited`, `discarded`, `ignored`) it **leaves**
   `suggestions`; the rest stays until it expires. `escalationAccepted` is true once she escalated with it.
 
@@ -153,18 +163,27 @@ decisions, **never a text**.
   suggestion as `preparing` and builds the input), **produce** (agent-core with no transaction open: `POST /v1/runs` with
   `input`, run key = the suggestion id, so agent-core de-duplicates a retry) and **store** (another short one). The
   manual request answers errors; the automatic one swallows them.
-- The input (`build_input`): `idioma`, `canal`, `prioridad`, `sla` (`respondida | vencido | en_riesgo | a_tiempo`),
-  `motivo_llegada` (the assignment reason), `espera_del_cliente_segundos`, `sugerencia_anterior` (what happened to the last
-  draft, so the agent does not repeat a discarded one) and `turnos`: the last 12 spoken turns (chat, email, call lines;
-  banners and notes excluded) as `{rol: cliente | analista | asistente, texto, hora}`. The customer's words are untrusted
-  text for agent-core.
+- The input (`build_input`) is **flat**, as agent-core's `input_schema` takes it (scalars and one list of flat turns; the
+  engine answers 422 to an undeclared slot, an object or a null): `idioma`, `canal`, `prioridad`, `sla_estado`
+  (`respondida | vencido | en_riesgo | a_tiempo`), `espera_del_cliente_segundos` and `turnos` (the last 12 spoken turns:
+  chat, email, call lines; banners and notes excluded; each `{rol: cliente | analista | asistente, texto, hora}`), plus
+  these **only when they apply (omitted, never null)**: `sla_minutos_restantes` (while the SLA runs), `motivo_llegada` (the
+  assignment reason), `sugerencia_borrador` (what happened to the last draft: `used | edited | discarded | ignored`, so the
+  agent does not repeat a discarded one; `ignored` includes a draft nobody decided that this request replaced, and
+  `pendiente` only appears when a failed request is retried), `sugerencia_escalacion_aceptada` and `assistant_session_id`.
+  `assistant_session_id` is the case's assistant session in agent-core, sent as **traceability** (the platform sets it;
+  it is not memory: the platform stays the source of the conversation). The customer's words are untrusted text for
+  agent-core. `tests/unit/application/test_suggestions_agent_contract.py` validates this input against the agent's
+  `input_schema` and parses the synthetic cases' expected outputs, using a snapshot of agent-core's agent and synthetic
+  cases kept in `tests/contracts/copiloto-sugerencias` (refresh it when the agent changes; `AGENT_CORE_SUGGESTIONS_FIXTURES`
+  compares against a live checkout).
 - `SuggestionProcess` (a bus subscriber on `TurnCreated` and `CaseAssigned`) and `SuggestionSignal` (the inbox signal):
   `application/ai/suggestion_process.py`. The cheap filter is `application/ai/suggestion_filter.py`.
 - `PurgeSuggestionDrafts` runs on a `PeriodicTask` (`Container.suggestion_purge`).
 
 ## 9. Contract changes (checklist for the frontend)
 
-After merging run `pnpm gen:api`. New: the three routes above; `CopilotSuggestion`, `LatestCopilotSuggestion`,
+After merging run `pnpm gen:api`. New: the three routes above; `truncated` (required boolean) on `CopilotSuggestion`; `CopilotSuggestion`, `LatestCopilotSuggestion`,
 `SuggestionReply`, `SuggestionTool`, `SuggestionAction`, `SuggestionEscalation`, `RequestSuggestionRequest`,
 `SuggestionFeedbackRequest`; `copilotSuggestionId` (optional) on `PostAnalystTurnRequest` and `EscalateRequest`. New audit
 event types `copilot.suggestion_requested | ready | none | failed | decided`. New realtime envelope
@@ -176,6 +195,12 @@ event types `copilot.suggestion_requested | ready | none | failed | decided`. Ne
   policies and its `eval_suite`. Nothing here was measured with a real model: the quality of the suggestions is unknown.
 - The `tool` items are not tied to a "used" signal yet (*Usar* goes through the Q&A thread); the maturity signals of the
   "Automatización" design (tools used or ignored per case type) need a case type, which `Case` does not have.
-- Turns longer than 1000 characters are cut in the input; only the last 12 spoken turns are sent.
+- Turns longer than 1000 characters are cut in the input; only the last 12 spoken turns are sent. (The cut of the input
+  is not reported; the cut of the answer is: `truncated`.)
+- **No "third contact in 7 days" fact.** The platform does not send it and nothing depends on it: agent-core's escalation
+  rules work from the SLA, the priority, the arrival reason and what the customer says. Counting the customer's contacts
+  and sending it (a scalar such as `contactos_7_dias`) is a future improvement that needs the same change in agent-core's
+  schema.
+- The catalog of tool labels (`TOOL_LABELS` in `domain/ai/suggestion.py`) is maintained by hand.
 - Single process, like the rest: the coalescing and the "one more round" live in memory.
 - The edit distance is a character-level similarity, not a semantic one.

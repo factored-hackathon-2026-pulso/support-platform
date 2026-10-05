@@ -116,6 +116,21 @@ def runs(runtime: InMemoryAgentRuntime) -> list[dict[str, object]]:
     return [c.arguments for c in runtime.calls if c.operation == "start_run"]
 
 
+#: What agent-core's input_schema declares (the contract test checks them against its YAML).
+FLAT_INPUT_KEYS = {
+    "turnos",
+    "idioma",
+    "canal",
+    "prioridad",
+    "sla_estado",
+    "sla_minutos_restantes",
+    "espera_del_cliente_segundos",
+    "motivo_llegada",
+    "sugerencia_borrador",
+    "sugerencia_escalacion_aceptada",
+    "assistant_session_id",
+}
+
 FULL = (
     ReplySuggestion(text=DRAFT, citations=("f1",)),
     ToolSuggestion(tool="leer_movimientos@1", label="Movimientos", why="Ver los cargos"),
@@ -137,7 +152,7 @@ async def test_the_analyst_asks_and_gets_a_typed_list_made_as_her(
 
     suggestion = view.suggestion
     assert suggestion.status is SuggestionStatus.READY
-    assert suggestion.kinds == ("reply", "tool", "action", "escalate")
+    assert suggestion.kinds == ("reply", "tool", "escalate")
     assert suggestion.trigger is SuggestionTrigger.MANUAL
     assert view.stale is False
     (run,) = runs(runtime)
@@ -166,14 +181,132 @@ async def test_the_input_carries_the_recent_turns_and_the_facts_of_the_case(
     assert agent_input["idioma"] == "es"
     assert agent_input["canal"] == "chat_app"
     assert agent_input["motivo_llegada"] == "assistant_handoff"
-    assert agent_input["sugerencia_anterior"] is None
     roles = [t["rol"] for t in agent_input["turnos"]]
     assert roles[0] == "cliente"
     assert "asistente" in roles
     assert roles[-1] == "cliente"  # banners and notices are not speech
     assert agent_input["turnos"][-1]["texto"] == "Quiero hablar con supervisión, esto es un robo"
     assert agent_input["espera_del_cliente_segundos"] == 0
-    assert agent_input["sla"]["estado"] in {"a_tiempo", "en_riesgo", "vencido"}
+    assert agent_input["sla_estado"] in {"a_tiempo", "en_riesgo", "vencido"}
+
+
+async def test_the_input_is_flat_and_omits_what_does_not_apply(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    """agent-core's input_schema takes scalars and one flat list: no objects, no nulls."""
+    case_id = await case_with_daniela(world, runtime)
+    runtime.suggestion_script.append(())
+
+    await request(world, case_id)
+
+    agent_input = runs(runtime)[0]["input"]
+    assert isinstance(agent_input, dict)
+    assert set(agent_input) <= FLAT_INPUT_KEYS
+    assert {"turnos", "idioma", "canal", "prioridad", "sla_estado"} <= set(agent_input)
+    assert "sla" not in agent_input
+    assert "sugerencia_anterior" not in agent_input  # nothing before this one
+    assert "sugerencia_borrador" not in agent_input
+    assert "sugerencia_escalacion_aceptada" not in agent_input
+    assert all(value is not None for value in agent_input.values())
+    for spoken in agent_input["turnos"]:
+        assert set(spoken) == {"rol", "texto", "hora"}
+    if agent_input["sla_estado"] in {"respondida", "vencido"}:
+        assert "sla_minutos_restantes" not in agent_input
+    else:
+        assert isinstance(agent_input["sla_minutos_restantes"], int)
+
+
+async def test_the_input_names_the_assistant_session_as_traceability(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    case_id = await case_with_daniela(world, runtime)
+    async with world.uow() as uow:
+        assistant = await uow.assistant_sessions.get_by_case(case_id)
+    assert assistant is not None
+    assert assistant.agent_session_id is not None
+    runtime.suggestion_script.append(())
+
+    await request(world, case_id)
+
+    agent_input = runs(runtime)[0]["input"]
+    assert isinstance(agent_input, dict)
+    assert agent_input["assistant_session_id"] == assistant.agent_session_id
+
+
+async def test_the_previous_suggestions_fate_goes_as_scalars(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    case_id = await case_with_daniela(world, runtime)
+    runtime.suggestion_script.append(FULL)
+    first = await request(world, case_id, "key-00000001")
+    runtime.suggestion_script.append(())
+
+    await request(world, case_id, "key-00000002")
+
+    agent_input = runs(runtime)[1]["input"]
+    assert isinstance(agent_input, dict)
+    assert first.suggestion.reply_decision is None
+    assert agent_input["sugerencia_borrador"] == "ignored"  # the new request replaced it
+    assert agent_input["sugerencia_escalacion_aceptada"] is False
+    assert "sugerencia_anterior" not in agent_input
+
+
+async def test_the_tool_label_comes_from_the_platforms_catalog(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    case_id = await case_with_daniela(world, runtime)
+    runtime.suggestion_script.append(
+        (
+            ToolSuggestion(tool="leer_movimientos@1", label="lo que diga el agente", why="Ver"),
+            ToolSuggestion(tool="herramienta_nueva@2", why="Ver"),
+        )
+    )
+
+    view = await request(world, case_id)
+
+    labels = [i.label for i in view.suggestion.items if isinstance(i, ToolSuggestion)]
+    assert labels == ["Movimientos", "herramienta_nueva"]  # catalog, else the name without version
+
+
+async def test_more_than_three_are_cut_visibly(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    case_id = await case_with_daniela(world, runtime)
+    runtime.suggestion_script.append(
+        (
+            ToolSuggestion(tool="leer_movimientos@1", why="a"),
+            ToolSuggestion(tool="leer_productos@1", why="b"),
+            ToolSuggestion(tool="leer_pqr_cliente@1", why="c"),
+            ReplySuggestion(text=DRAFT),
+            ReplySuggestion(text="otro borrador"),
+        )
+    )
+
+    view = await request(world, case_id)
+
+    suggestion = view.suggestion
+    assert len(suggestion.items) == 3
+    assert suggestion.kinds[0] == "tool"
+    assert "reply" in suggestion.kinds  # the reply is kept
+    assert suggestion.truncated is True
+    async with world.uow() as uow:
+        events = (await uow.event_log.page(case_id=case_id, limit=500)).items
+    (ready,) = [e for e in events if e.event_type == "copilot.suggestion_ready"]
+    assert ready.payload["truncated"] is True  # visible in the audit, with no text
+    assert ready.payload["count"] == 3
+    assert "otro borrador" not in repr(ready.payload)
+    assert DRAFT not in repr(ready.payload)
+
+
+async def test_a_list_that_fits_is_not_truncated(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    case_id = await case_with_daniela(world, runtime)
+    runtime.suggestion_script.append(FULL[:3])
+
+    view = await request(world, case_id)
+
+    assert view.suggestion.truncated is False
 
 
 async def test_nothing_to_propose_is_a_normal_answer(
@@ -372,7 +505,7 @@ async def test_a_new_request_ignores_the_draft_nobody_decided(
         old = await uow.copilot_suggestions.get(first.suggestion.id)
     assert old is not None
     assert old.reply_decision is ReplyDecision.IGNORED
-    assert old.kinds == ("reply", "tool", "action", "escalate")  # what was proposed stays
+    assert old.kinds == ("reply", "tool", "escalate")  # what was proposed stays
 
 
 # ----------------------------------------------------------------------------- deciding
@@ -388,7 +521,7 @@ async def test_the_analyst_can_discard_the_draft_and_the_rest_stays(
     )
 
     assert view.suggestion.reply_decision is ReplyDecision.DISCARDED
-    assert [i.kind for i in view.suggestion.items] == ["tool", "action", "escalate"]
+    assert [i.kind for i in view.suggestion.items] == ["tool", "escalate"]
 
 
 async def test_a_message_sent_from_the_draft_is_used_or_edited(

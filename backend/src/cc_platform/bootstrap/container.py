@@ -126,6 +126,7 @@ from cc_platform.application.cases.escalations import (
     TakeEscalatedCase,
     WithdrawEscalation,
 )
+from cc_platform.application.cases.evidence import SampleEvidenceCases
 from cc_platform.application.cases.manual_assignment import SetCaseAssignee
 from cc_platform.application.cases.priority import ChangeCasePriority
 from cc_platform.application.cases.queries import (
@@ -687,7 +688,14 @@ def _build_builder(
             builder=registry,
             agent=settings.builder_agent,
         ),
-        restart=RestartBuilderThread(uow=uow, clock=clock),
+        restart=RestartBuilderThread(
+            uow=uow,
+            clock=clock,
+            ids=ids,
+            runtime=agent_core.runtime,
+            issuer=agent_core.issuer,
+            agent=settings.builder_agent,
+        ),
         announce=AnnounceImprovement(uow=uow, clock=clock, builder=registry, writer=notifications),
     )
 
@@ -927,6 +935,7 @@ def build_container(
             respond_escalation=RespondEscalation(uow=uow, clock=clock, ids=ids),
             take_escalated_case=TakeEscalatedCase(uow=uow, clock=clock, ids=ids),
             escalation_overview=GetEscalationOverview(uow=uow, clock=clock),
+            sample_evidence=SampleEvidenceCases(uow=uow, min_cell=settings.evidence_min_cell),
         ),
         channels=ChannelsUseCases(
             list_calls=ListCaseCalls(uow=uow, clock=clock),

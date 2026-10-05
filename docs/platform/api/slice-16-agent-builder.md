@@ -2,7 +2,8 @@
 
 Contract for ADR 0003 §7. Like slices 14 and 15, the **backend is done and tested** and no screen was touched: this is the
 hand-over for whoever wires "Supervisión · Agentes" (and "Administración" for revoking). Tests:
-`tests/unit/application/test_builder.py`, `test_builder_chat.py`, `tests/unit/domain/test_builder.py`,
+`tests/unit/application/test_builder.py`, `test_builder_chat.py`, `test_builder_constructor.py` (against a double of
+`constructor-chat`'s flow), `tests/unit/domain/test_builder.py`,
 `tests/unit/infrastructure/test_agent_registry.py`, `tests/contracts/test_agent_core_registry_contract.py`,
 `tests/api/test_builder_api.py`.
 
@@ -87,14 +88,23 @@ All bodies and responses are camelCase; ids are agent-core's opaque text (propos
 ### Status and the list
 
 - `GET /builder/status` → `BuilderStatus` `{available, canApprove, canRevoke, stepUpMethod, stepUpDigits}`. Always 200.
-- `GET /builder/proposals?agentId=&state=&limit=&refresh=` → `ProposalList` `{items: ProposalSummary[]}`, newest first, at most 50.
-  agent-core's registry has **no list call**, so this is the platform's **index**: the proposals created here, the ones
-  found through the builder chat and the ones tracked by id. With `refresh` (default) each row is re-read from the registry
-  (`live: true`); a row the registry did not answer for keeps its cached state (`live: false`; the registry may be down).
+- `GET /builder/proposals?agentId=&state=&limit=&refresh=` → `ProposalList` `{items: ProposalSummary[], registryListed}`,
+  newest first, at most 50. **Every proposal agent-core has** (its `GET /v1/registry/proposals`, contract 1.4.0, read as
+  the person) **merged with the platform's index**, which remembers who brought each one here. With `refresh`
+  (default) one call to agent-core's list gives the current state of every row (`live: true`) and refreshes the index's
+  cache; an indexed proposal missing from a complete list is re-read by id. If agent-core's list does not answer (an
+  outage, an agent-core before 1.4.0, a refusal), the **index alone** comes back, each row re-read by id as before (a
+  row the registry did not answer for keeps its cached state, `live: false`) and `registryListed: false`: show a quiet
+  notice. `refresh=false` returns the cached index, untouched (`registryListed: false`).
   `ProposalSummary`: `proposalId, agentId, title, origin, state, rev, baseReleaseId, candidateHash, createdBy,
-  registeredBy, source (platform | chat | tracked), updatedAt, refreshedAt, live`.
-- `POST /builder/proposals/track` `{proposalId}` → `ProposalSummary`: bring a proposal agent-core already has into the list.
-  Idempotent. `404 registry_not_found` when the registry does not know it.
+  registeredBy, source, updatedAt, refreshedAt, live`. `source` is who brought it here: `platform` (created on this
+  screen), `chat` (the builder chat's answer named it), `tracked` (by id), `engine` (announced by the improvement engine,
+  ADR 0007; the dossier stays on the notification), or **`registry`**: only agent-core's list has it (the builder chat
+  made it without naming it, or someone created it in agent-core). A `registry` row has `registeredBy: null`; listing it
+  adopts nothing (no index row, no audit event).
+- `POST /builder/proposals/track` `{proposalId}` → `ProposalSummary`: bring a proposal agent-core already has into the
+  index (`source: tracked`). Idempotent. `404 registry_not_found` when the registry does not know it. Since the list reads
+  agent-core's, this is the fallback for `registryListed: false` (the SPA shows "Seguir" only then).
 
 ### Building
 
@@ -146,21 +156,36 @@ All bodies and responses are camelCase; ids are agent-core's opaque text (propos
 
 ### The chat with the builder agent
 
-- `GET /builder/chat` → `BuilderThread` `{available, messages: [{id, role: person | agent, text, createdAt, answers}]}`:
-  one thread per person, the newest 200 messages; `available: false` without agent-core.
+- `GET /builder/chat` → `BuilderThread` `{available, messages: [{id, role: person | agent, text, createdAt, answers}],
+  awaiting}`: one thread per person, the newest 200 messages; `available: false` without agent-core; `awaiting` is null
+  on a read.
 - `POST /builder/chat/messages` `{text (1-2000), clientMessageId}` + `Idempotency-Key` (= `clientMessageId`) →
-  `BuilderExchange` `{message, answers, proposals, replayed}`. Same mechanics as the copilot (slice 15): **it waits for the
-  model**; the message is stored before the call; idempotent (the same text again is `200` + `Idempotent-Replayed: true`
-  and does not ask twice; another text with that id is 409 `idempotency_conflict`); if the call fails (`503
-  agent_core_unavailable`, `502 agent_core_rejected` with `agentCoreCode`) the message stays in the thread: **send it again
-  with the same `clientMessageId`**. `409 builder_busy` while it answers a previous message.
-- `POST /builder/chat/restart` (slice 22, "Nueva conversación") → `BuilderThread` (empty): her thread starts over
-  and the next message starts another run (a run can end, or wait on a question she no longer wants to answer).
-- The agent reads the current version, drafts the change, **creates a proposal**, writes the draft and validates it, and
-  tells the person. It does not freeze, evaluate, approve or publish. The proposals it makes belong to agent-core's service
-  identity, so the platform does not know them: **any proposal id in its answer that the registry confirms is added to the
-  list** and returned in `proposals` (`source: "chat"`). If an answer does not name the id, use `POST /builder/proposals/track`
-  (see the gap in §8).
+  `BuilderExchange` `{message, answers, proposals, replayed, awaiting}`. Same mechanics as the copilot (slice 15): **it
+  waits for the model**; the message is stored before the call; idempotent (the same text again is `200` +
+  `Idempotent-Replayed: true` and does not ask twice; another text with that id is 409 `idempotency_conflict`); if the
+  call fails (`503 agent_core_unavailable`, `502 agent_core_rejected` with `agentCoreCode`) the message stays in the
+  thread: **send it again with the same `clientMessageId`**. `409 builder_busy` while it answers a previous message.
+  `awaiting` is agent-core's after this answer: `slot` when the builder asked for a datum (the next message answers
+  it), `none` when it finished or handed over; null on a replay.
+- `POST /builder/chat/restart` (slice 22, "Nueva conversación") → `BuilderThread`: her thread starts over **and a run of
+  the builder starts at once**, so the thread comes back with the run's opening question and `awaiting` (`slot`). If
+  agent-core does not answer, the thread comes back empty (`awaiting: null`) and her next message starts the run.
+- **Language.** The run and every turn carry her UI language (`es`, or `pt` for `pt-BR`; `constructor-chat` supports
+  both since agent-core 1.4.0). A run started in one language follows the turns' language afterwards.
+- **How `constructor-chat` takes a request** (agent-core's flow `construir`, checked in its code and live): the flow starts
+  **when the run starts** and asks which agent (`¿Qué agente quieres modificar? (por ejemplo: disputas)`); the next
+  message is taken **verbatim** as the agent id (a `collect` with no validator); it then asks what to change, and the next
+  message is taken verbatim as the goal, which becomes the proposal's **title** (agent-core's `Proposal`: `agent_id`
+  `^[a-z0-9][a-z0-9_/-]*$`, `title` 1-200 characters). Then it reads the agent, drafts with the model, creates the
+  proposal as its service identity (`constructor-bot`, `origin: builder_chat`), writes and validates the draft, and
+  answers **without naming the proposal** (its prompt says "sin incluir identificadores"). So a request is two messages:
+  the agent id alone, then a goal of at most 200 characters. One message with both ("Agente: cobros. Objetivo: …") is
+  swallowed whole as the agent id and the run ends in a handover.
+- A message that starts a run (no run yet, or the last one ended or expired) answers that run's opening question: the
+  answer carries the question first, then what the builder said to her message, so the thread reads in order.
+- The agent only proposes: it never freezes, evaluates, approves or publishes. Any proposal id an answer names that the
+  registry confirms joins the index (`source: "chat"`) and comes back in `proposals`; the ones it does not name are in
+  the list anyway (`source: "registry"`).
 
 ## 5. Errors
 
@@ -225,6 +250,14 @@ All `application/problem+json` with the usual members; `registryCode` is agent-c
   open** → one short Unit of Work that refreshes the proposals index and records the audit events.
 - **Persistence.** `builder_threads` (`BuilderThread`, one per person) and `builder_proposals` (`BuilderProposal`, the
   index): see DATA_MODEL. The registry is the source of truth; the index is a cache plus "who brought it here".
+- **The list** (`AgentBuilder.list_proposals`): agent-core's page (`AgentRegistryClient.list_proposals`, `GET
+  /v1/registry/proposals` with `agent_id`, `state`, `limit`) and the index search with the same filters; an indexed row
+  the list lacks is read by id only when the list is complete (a full page means it is older than every row); the index
+  rows are refreshed in one Unit of Work; rows only agent-core has are built from its `Proposal` (`source: registry`).
+  Sorted by `updatedAt`, then id, newest first (agent-core's order).
+- **The chat's language and opening** (`AskBuilder`, `RestartBuilderThread`): her UI language comes from
+  `ui_language_of`; the first turn of a run (`AgentRun.first_turn`) is stored as agent messages
+  (`BuilderThread.record_opening` after a restart, or ahead of the answer when a message starts the run).
 - **Audit** (`builder.*`, family `agents`, silent on sockets): ids, states, counters; the failed gate is audited too
   (`verdict: fail`) before the 409 reaches the caller. Spanish texts in `application/audit/catalog.py`.
 - **The call can succeed and the audit fail** if the process dies between the registry call and the commit; the registry's
@@ -239,11 +272,17 @@ All `application/problem+json` with the usual members; `registryCode` is agent-c
   content has to author it. The screens should show the 404 as "Este agente no tiene suite de evaluación".
 - **No agent catalog.** The registry has no "list agents": the screens take an `agentId` as text (validate with
   `GET /builder/entities/agent/{id}`) or from a configured list.
-- **No list of proposals in agent-core** (that is why the platform keeps an index). Consequence: a proposal made by the
-  builder chat is only found if the agent's answer names its id (the platform tracks any id the registry confirms) or if the
-  person tracks it by id. Asking agent-core for `GET /v1/registry/proposals?agent=&state=&created_by=` would let the platform
-  drop the index and list everything. Not verified live: whether `constructor-chat`'s final answer names the proposal id
-  (the real agent asked for details on the two messages tried).
+- ~~No list of proposals in agent-core~~ **Settled with agent-core 1.4.0** (`GET /v1/registry/proposals`): the list
+  merges it with the index (§4). Verified live (2026-10-05): `constructor-chat`'s answer never names the proposal id (its
+  summary prompt forbids identifiers), so before this the chat's proposals were orphans; they now show as `registry`.
+- **`constructor-chat` takes each answer verbatim** (agent-core's `construir`: `collect` nodes with no validator). The
+  platform answers in its format (§4), but a free message that starts a run is taken whole as the agent id. Asked of
+  agent-core: a validator on `agente` (the agent id pattern) and on `objetivo` (1-200 characters, the title), or reading
+  the slots the opening message already claims.
+- **The builder's draft is refused** (verified live 2026-10-05, es and pt): after creating the proposal, `put_draft` is
+  `invalid_args` (the model's entity has `name`, `description`, `instructions`, but no `id` / `version`), and the run hands
+  over ("Te paso con un asesor."). The proposal stays in `draft` with no changes (`rev 0`). This is the drafting prompt
+  and model's (agent-core): the platform shows the proposal and the handover.
 - **Response schemas not published.** `contracts/registry/` has no `ProposalDetail`, `ValidationReport` or `CandidateView`
   (and its decimals are typed as numeric strings while agent-core's `dumps` writes JSON numbers: the adapter reads both). The
   contract test composes them from published pieces; ask agent-core to publish them.
@@ -253,6 +292,13 @@ All `application/problem+json` with the usual members; `registryCode` is agent-c
   changing a release's interrupts needs `admin`. Both are agent-core's rules.
 
 ## 9. Contract changes (checklist for the frontend)
+
+**2026-10-05 (agent-core 1.4.0):** `ProposalList.registryListed` (required); `ProposalSummary.source` gains `registry`
+and `registeredBy` becomes nullable; `BuilderExchange.awaiting` and `BuilderThread.awaiting` (`none | slot | confirmation
+| step_up | input`, nullable, required members). The platform's copies of agent-core's contract are 1.4.0
+(`tests/contracts/agent-core-openapi.json`, the listing extract `agent-core-registry-listing.json`, the version file).
+
+Original list (slice 16):
 
 After merging run `pnpm gen:api` (`frontend/src/api/schema.gen.ts` was **not** regenerated here). New: every `/builder/*` route;
 schemas `BuilderStatus`, `Proposal`, `ProposalSummary`, `ProposalList`, `ProposalDetail`, `EntityDraft`, `VersionDocs`,
@@ -279,3 +325,19 @@ stale-`rev` conflict, `reopen`, reading aliases, releases, versions, entities an
 audit shows the operations. The builder chat answered (`201`) as a `builder` signed with the identity key. Not exercised live:
 a passing evaluation, approval, publication, promotion and revocation (they need an `eval_suite`), and a chat that creates a
 proposal. They are covered by the double, which applies the same authorization.
+
+## 11. Checked against the real stack (2026-10-05, agent-core 5e3fef9, contract 1.4.0)
+
+Lucía, "Proponer un agente" for "Cobro indebido", in a browser on the local stack (screenshots `B-*`):
+
+1. The sheet opens on a new run: the builder's own question (`¿Qué agente quieres modificar? (por ejemplo: disputas)`)
+   and the request form (Agente `cobros`, Objetivo 193 of 200 characters).
+2. "Enviar al constructor": `cobros` is accepted as the agent (`Cuéntame qué cambio quieres en ese agente.`, `awaiting:
+   slot`), then the goal is sent.
+3. agent-core creates the proposal (`cobros`, the goal as title, `origin: builder_chat`, `constructor-bot`), then its
+   `put_draft` is refused (`invalid_args`, see §8) and the run hands over. The sheet offers "Abrir propuesta" (found in
+   agent-core's list); the proposal is a draft with no changes.
+4. Propuestas lists it, and two earlier orphan proposals of the builder, as "Del registro".
+5. The same in Portuguese (her UI language `pt-BR`): the builder asks and hands over in Portuguese, the proposal is
+   created and offered.
+

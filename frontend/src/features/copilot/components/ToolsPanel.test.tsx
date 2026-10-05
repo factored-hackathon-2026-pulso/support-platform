@@ -36,6 +36,7 @@ function suggestion(overrides: Partial<CopilotSuggestion> = {}): CopilotSuggesti
     trigger: 'customer_message',
     status: 'ready',
     stale: false,
+    truncated: false,
     createdAt: AT,
     replyDecision: null,
     escalationAccepted: false,

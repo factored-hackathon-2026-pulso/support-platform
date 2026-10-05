@@ -10,10 +10,12 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
+import anyio
 import pytest
 from fastapi.testclient import TestClient
 
 from cc_platform.application.ai import AgentRuntimeUnavailableError
+from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.bootstrap.container import AgentCoreServices, Container, build_container
 from cc_platform.domain.ai.suggestion import (
     ActionSuggestion,
@@ -397,6 +399,7 @@ def test_the_events_reach_the_audit_without_any_text(
         assert secret not in dumped
 
 
+<<<<<<< HEAD
 def set_type(client: TestClient, headers: dict[str, str], case_id: str, case_type: str) -> None:
     version = client.get(f"/api/v1/cases/{case_id}", headers=headers).json()["case"]["version"]
     moved = client.put(
@@ -461,10 +464,27 @@ def decide_item(
 
 
 def test_the_analyst_records_what_she_did_with_each_item(
+=======
+def logged(container: Container, *types: str) -> list[dict[str, Any]]:
+    """Payloads of the logged events of these types, oldest first."""
+
+    async def read() -> list[dict[str, Any]]:
+        async with container.uow() as uow:
+            found = await uow.event_log.search(
+                AuditFilters(event_types=frozenset(types)), before=None, limit=500
+            )
+        return [dict(e.payload) for e in reversed(found)]
+
+    return anyio.run(read)
+
+
+def test_the_engine_signals_carry_the_release_and_the_turn_that_was_sent(
+>>>>>>> origin/main
     client: TestClient,
     sign_in: Callable[[str], str],
     assigned_case: str,
     runtime: InMemoryAgentRuntime,
+<<<<<<< HEAD
 ) -> None:
     analyst = bearer(sign_in(ANALYST.email))
     runtime.suggestion_script.append(FULL)
@@ -510,3 +530,29 @@ def test_an_item_the_suggestion_does_not_hold_is_not_found(
     assert decide_item(client, supervisor, assigned_case, suggestion_id, body).status_code == 403
     bad = {"item": "reply", "decision": "used"}
     assert decide_item(client, analyst, assigned_case, suggestion_id, bad).status_code == 422
+=======
+    container: Container,
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    runtime.suggestion_script.append(FULL)
+    made = ask(client, analyst, assigned_case).json()
+
+    sent = reply(client, analyst, assigned_case, "Natalia, ya lo estoy viendo.", made["id"])
+
+    (ready,) = logged(container, "copilot.suggestion_ready")
+    (decided,) = logged(container, "copilot.suggestion_decided")
+    assert ready["release"] == "rel-1"
+    assert decided["decision"] == "edited"
+    assert decided["turn_id"] == sent.json()["turn"]["id"]
+    assert (decided["agent"], decided["release"]) == ("copiloto-sugerencias@prod", "rel-1")
+    assert "Natalia" not in json.dumps([ready, decided])  # ids, enums and counters only
+
+
+def test_the_assistant_turns_are_attributed_to_the_release_that_answered(
+    assigned_case: str, container: Container
+) -> None:
+    answered = logged(container, "assistant.turn_answered")
+
+    assert answered
+    assert {p["release"] for p in answered} == {"rel-1"}
+>>>>>>> origin/main

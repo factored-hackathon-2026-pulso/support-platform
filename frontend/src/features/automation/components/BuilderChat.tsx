@@ -5,6 +5,8 @@ import {
   Button,
   Callout,
   ComposerFrame,
+  Field,
+  Input,
   LinkButton,
   QueryState,
   Sheet,
@@ -16,16 +18,31 @@ import {
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
-import { chatEntries, type ChatEntry } from '../builder-chat'
-import { useAskBuilder, useBuilderChat, useRestartBuilderChat } from '../hooks/use-automation'
+import {
+  MAX_GOAL,
+  chatEntries,
+  goalLength,
+  isValidAgentId,
+  type AgentRequest,
+  type ChatEntry,
+} from '../builder-chat'
+import {
+  useAskBuilder,
+  useBuilderChat,
+  useProposeAgent,
+  useRestartBuilderChat,
+} from '../hooks/use-automation'
 import { proposalStatus } from '../proposals'
 import type { BuilderThread, MaturingType, ProposalSummary } from '../types'
 
 export interface BuilderChatSheetProps {
   open: boolean
   onOpenChange(open: boolean): void
-  /** A first message in the composer ("Proponer un agente"); she can edit it. */
-  prefill?: string
+  /**
+   * "Proponer un agente": the agent id and the goal to answer the builder's two questions with,
+   * in that order. She can edit both before sending.
+   */
+  request?: AgentRequest | null
   /** The case type the conversation is about: the proposal links carry it. */
   type?: MaturingType | null
   /**
@@ -39,12 +56,14 @@ export interface BuilderChatSheetProps {
  * "Constructor de agentes" (slice 16's chat with `constructor-chat`): she says what she wants, it
  * drafts a proposal. One message at a time; a failed one keeps its id for "Reintentar". The thread
  * stays between visits; "Nueva conversación" starts over (an agent-core run can end), and so does
- * an opening with `fresh`.
+ * an opening with `fresh`. With a `request` ("Proponer un agente") the footer is a short form:
+ * sending it answers the builder's questions one by one (the agent, then the goal), and she sees
+ * each answer as it comes.
  */
 export function BuilderChatSheet({
   open,
   onOpenChange,
-  prefill = '',
+  request = null,
   type = null,
   fresh = false,
 }: BuilderChatSheetProps) {
@@ -56,10 +75,33 @@ export function BuilderChatSheet({
   const restart = useRestartBuilderChat()
   const { mutate: restartThread } = restart
   const { toast } = useToast()
-  const [draft, setDraft] = useState(prefill)
+  const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const formId = useId()
   const restarted = useRef(false)
+  const propose = useProposeAgent(ask)
+  // The request form shows until it is sent; then the composer takes over.
+  const [pendingRequest, setPendingRequest] = useState<AgentRequest | null>(request)
+  const [stopped, setStopped] = useState(false)
+
+  async function sendRequest(answers: AgentRequest) {
+    if (needsRestart) {
+      // The restart on opening failed: try again, and only then answer the builder.
+      try {
+        await restart.mutateAsync()
+      } catch {
+        return
+      }
+      setNeedsRestart(false)
+    }
+    setPendingRequest(null)
+    const outcome = await propose.run(answers)
+    if (outcome !== 'done') {
+      // The builder did not ask for the goal (or a message failed): she sends it when it fits.
+      setDraft(answers.goal)
+      setStopped(outcome === 'stopped')
+    }
+  }
 
   useEffect(() => {
     if (!open || !fresh || restarted.current) return
@@ -93,49 +135,57 @@ export function BuilderChatSheet({
       title={t('chat.title')}
       description={t('chat.description')}
       width={480}
-      initialFocusRef={inputRef}
+      initialFocusRef={pendingRequest ? undefined : inputRef}
       footer={
-        <form id={formId} onSubmit={submit} className="flex w-full flex-col gap-2">
-          <ComposerFrame className="px-3 py-2.5">
-            <Textarea
-              ref={inputRef}
-              variant="bare"
-              aria-label={t('chat.message')}
-              value={draft}
-              rows={3}
-              maxLength={2000}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-          </ComposerFrame>
-          <div className="flex items-center justify-between gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              icon={<RotateCcw size={16} />}
-              loading={restart.isPending}
-              disabled={ask.sending}
-              onClick={() =>
-                restart.mutate(undefined, {
-                  onSuccess: () => {
-                    ask.clear()
-                    toast({ title: t('chat.restartDone') })
-                  },
-                })
-              }
-            >
-              {t('chat.restart')}
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              aria-disabled={ask.sending || restart.isPending || draft.trim() === ''}
-            >
-              {t('chat.send')}
-            </Button>
-          </div>
-        </form>
+        pendingRequest ? (
+          <RequestForm
+            initial={pendingRequest}
+            disabled={restart.isPending || ask.sending || propose.running}
+            onSubmit={(answers) => void sendRequest(answers)}
+          />
+        ) : (
+          <form id={formId} onSubmit={submit} className="flex w-full flex-col gap-2">
+            <ComposerFrame className="px-3 py-2.5">
+              <Textarea
+                ref={inputRef}
+                variant="bare"
+                aria-label={t('chat.message')}
+                value={draft}
+                rows={3}
+                maxLength={2000}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+            </ComposerFrame>
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={<RotateCcw size={16} />}
+                loading={restart.isPending}
+                disabled={ask.sending}
+                onClick={() =>
+                  restart.mutate(undefined, {
+                    onSuccess: () => {
+                      ask.clear()
+                      toast({ title: t('chat.restartDone') })
+                    },
+                  })
+                }
+              >
+                {t('chat.restart')}
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                aria-disabled={ask.sending || restart.isPending || draft.trim() === ''}
+              >
+                {t('chat.send')}
+              </Button>
+            </div>
+          </form>
+        )
       }
     >
       {needsRestart ? (
@@ -153,17 +203,93 @@ export function BuilderChatSheet({
           errorTitle={t('chat.loadError')}
         >
           {(data: BuilderThread) => (
-            <ChatLog
-              entries={chatEntries(data, ask.pending)}
-              sending={ask.sending}
-              onRetry={ask.retry}
-              proposals={ask.proposals}
-              type={type}
-            />
+            <>
+              <ChatLog
+                entries={chatEntries(data, ask.pending)}
+                sending={ask.sending || propose.running}
+                onRetry={ask.retry}
+                proposals={ask.proposals}
+                type={type}
+              />
+              {stopped ? (
+                <Callout tone="neutral" className="mt-3">
+                  {t('chat.request.stopped')}
+                </Callout>
+              ) : null}
+            </>
           )}
         </QueryState>
       )}
     </Sheet>
+  )
+}
+
+interface RequestFormProps {
+  initial: AgentRequest
+  disabled: boolean
+  onSubmit(request: AgentRequest): void
+}
+
+/**
+ * "Pedido para el constructor": the agent id (agent-core's rule) and the goal (at most 200
+ * characters: it becomes the proposal's title), prefilled for the type; she can edit both.
+ */
+function RequestForm({ initial, disabled, onSubmit }: RequestFormProps) {
+  const { t } = useTranslation('automation')
+  const [agentId, setAgentId] = useState(initial.agentId)
+  const [goal, setGoal] = useState(initial.goal)
+  const [touched, setTouched] = useState(false)
+  const id = agentId.trim()
+  const length = goalLength(goal.trim())
+  const agentError = touched && !isValidAgentId(id) ? t('chat.request.agentInvalid') : undefined
+  const goalError = !touched
+    ? undefined
+    : length === 0
+      ? t('chat.request.goalEmpty')
+      : length > MAX_GOAL
+        ? t('chat.request.goalTooLong', { max: MAX_GOAL })
+        : undefined
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setTouched(true)
+    if (disabled || !isValidAgentId(id) || length === 0 || length > MAX_GOAL) return
+    onSubmit({ agentId: id, goal: goal.trim() })
+  }
+  return (
+    <form
+      onSubmit={submit}
+      aria-label={t('chat.request.title')}
+      className="flex w-full flex-col gap-3"
+    >
+      <p className="m-0 text-13 text-ink-2">{t('chat.request.intro')}</p>
+      <Field label={t('chat.request.agent')} hint={t('chat.request.agentHint')} error={agentError}>
+        <Input
+          value={agentId}
+          size="sm"
+          className="font-mono"
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(event) => setAgentId(event.target.value)}
+        />
+      </Field>
+      <Field
+        label={t('chat.request.goal')}
+        hint={t('chat.request.goalHint')}
+        error={goalError}
+        labelAside={
+          <span className={cn('text-12', length > MAX_GOAL ? 'text-danger' : 'text-muted')}>
+            {t('chat.request.goalCount', { count: length, max: MAX_GOAL })}
+          </span>
+        }
+      >
+        <Textarea value={goal} rows={4} onChange={(event) => setGoal(event.target.value)} />
+      </Field>
+      <div className="flex justify-end">
+        <Button type="submit" variant="primary" size="sm" aria-disabled={disabled}>
+          {t('chat.request.submit')}
+        </Button>
+      </div>
+    </form>
   )
 }
 

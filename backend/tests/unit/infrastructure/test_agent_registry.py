@@ -57,6 +57,38 @@ async def test_a_proposal_is_parsed_with_its_enums_and_dates() -> None:
     assert proposal.candidate_hash is None
 
 
+async def test_the_list_sends_only_the_filters_given_and_reads_the_page() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        later = {**PROPOSAL, "proposal_id": "p-2", "updated_at": "2026-10-05T09:00:00Z"}
+        return httpx.Response(200, json={"items": [later, PROPOSAL], "total": 7})
+
+    api = registry(handler)
+    page = await api.list_proposals(CREDENTIALS, limit=50)
+    filtered = await api.list_proposals(CREDENTIALS, agent_id="cobros", state="draft", limit=10)
+
+    assert [p.proposal_id for p in page.items] == ["p-2", PROPOSAL["proposal_id"]]
+    assert page.total == 7  # every match, not just this page
+    assert seen[0].url.path == "/v1/registry/proposals"
+    assert dict(seen[0].url.params) == {"limit": "50", "offset": "0"}
+    assert dict(seen[1].url.params) == {
+        "limit": "10",
+        "offset": "0",
+        "agent_id": "cobros",
+        "state": "draft",
+    }
+    assert filtered.items[0].updated_at.isoformat() == "2026-10-05T09:00:00+00:00"
+
+
+async def test_a_list_body_without_items_is_an_outage_not_an_empty_list() -> None:
+    api = registry(lambda _request: httpx.Response(200, json={"unexpected": True}))
+
+    with pytest.raises(AgentRuntimeUnavailableError):
+        await api.list_proposals(CREDENTIALS)
+
+
 async def test_the_detail_carries_the_draft_and_the_last_evaluation() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == f"/v1/registry/proposals/{PROPOSAL['proposal_id']}"

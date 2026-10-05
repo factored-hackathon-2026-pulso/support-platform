@@ -50,8 +50,36 @@ class RatingTotals:
     score_sum: int
 
 
+@dataclass(frozen=True, slots=True)
+class EvidenceCell:
+    """A cell of the cases by the dimensions the improvement engine slices on (every one optional,
+    all must match). Enum values are the cases' own (``CaseType``, ``CaseChannel``, ...)."""
+
+    case_type: str | None = None
+    channel: str | None = None
+    language: str | None = None
+    priority: str | None = None
+    close_reason: str | None = None
+    opened_from: datetime | None = None
+    opened_before: datetime | None = None
+    """Exclusive upper bound of ``opened_at``."""
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceSample:
+    """How many cases match a cell and the newest few (ids only)."""
+
+    matched: int
+    case_ids: tuple[str, ...]
+
+
 class CaseRepository(Protocol):
     async def get(self, case_id: str) -> Case | None: ...
+
+    async def sample_cell(self, cell: EvidenceCell, *, limit: int) -> EvidenceSample:
+        """The number of cases in ``cell`` and the ids of the ``limit`` newest by ``opened_at``
+        (ties by id, descending). Reads ids only: no text, no customer."""
+        ...
 
     async def get_many(self, case_ids: Collection[str]) -> dict[str, Case]:
         """The known cases among ``case_ids``, by id, in one query (unknown ids left out)."""

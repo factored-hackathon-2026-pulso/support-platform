@@ -80,6 +80,19 @@ class Proposal:
 
 
 @dataclass(frozen=True, slots=True)
+class ProposalPage:
+    """One page of ``GET /v1/registry/proposals`` (agent-core contract 1.4.0): newest first."""
+
+    items: tuple[Proposal, ...]
+    total: int
+    """How many proposals match the filters (all pages)."""
+
+
+#: The most a page of agent-core's proposal list holds (it caps ``limit`` at 200).
+MAX_PROPOSAL_PAGE = 200
+
+
+@dataclass(frozen=True, slots=True)
 class Violation:
     """A rule the candidate breaks. Never carries customer data."""
 
@@ -334,6 +347,19 @@ class AgentRegistryClient(Protocol):
     ) -> Proposal:
         """``POST /v1/registry/proposals``: a new proposal in ``draft`` on the agent's ``staging``
         release as base. Needs ``constructor``."""
+        ...
+
+    async def list_proposals(
+        self,
+        credentials: AgentCredentials,
+        *,
+        agent_id: str | None = None,
+        state: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ProposalPage:
+        """``GET /v1/registry/proposals``: every proposal the registry has, newest first
+        (``updated_at``, then id), filtered by agent and state. Any ``builder`` may read it."""
         ...
 
     async def get_proposal(

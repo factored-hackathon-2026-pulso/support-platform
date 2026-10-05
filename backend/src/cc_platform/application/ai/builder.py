@@ -15,9 +15,11 @@ platform's side of it, and it holds three rules:
 3. **Every operation is audited** (``builder.*`` events: ids, states and counters, never a draft's
    content, a reason or a prompt) in the platform's event log, never on a socket.
 
-agent-core's registry has no "list proposals" call, so the platform keeps an index of the ones it
-created or learned about (``BuilderProposal``); the registry stays the source of truth and each
-detail read refreshes the cached state.
+The proposals list merges agent-core's own list (``GET /v1/registry/proposals``, contract 1.4.0)
+with the platform's index (``BuilderProposal``): the index remembers who brought a proposal here
+(``source``) and the last state it saw; the registry stays the source of truth and every read
+refreshes the cached state. A proposal only agent-core knows (the builder chat's, which belong to
+its service identity) is listed with ``source="registry"``.
 """
 
 from __future__ import annotations
@@ -50,6 +52,7 @@ from cc_platform.application.ai.registry import (
     Proposal,
     ProposalDetail,
     ProposalOrigin,
+    ProposalPage,
     ReleaseDetail,
     ReleaseDiff,
     ValidationReport,
@@ -113,13 +116,31 @@ class ProposalSummary:
     base_release_id: str | None
     candidate_hash: str | None
     created_by: str
-    registered_by: str
+    registered_by: str | None
+    """Who brought it into the platform's index (a staff id or ``engine``); None for a proposal
+    only agent-core's list has."""
     source: str
+    """``platform``, ``chat``, ``tracked`` or ``engine`` (the index); ``registry`` when only
+    agent-core's list has it."""
     updated_at: datetime
     refreshed_at: datetime
     live: bool
     """True when ``state`` was just read from the registry; False when it is the cached value
     (the registry did not answer for this one)."""
+
+
+#: ``source`` of a proposal that only agent-core's list has (not in the platform's index).
+REGISTRY_SOURCE = "registry"
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalListing:
+    """``GET /builder/proposals``: the rows, and whether agent-core's own list was read."""
+
+    items: tuple[ProposalSummary, ...]
+    registry_listed: bool
+    """True when the rows include every proposal agent-core has (its list answered); False when
+    they are only the platform's index (the list did not answer, or ``refresh`` was off)."""
 
 
 def summary_of(entry: BuilderProposal, *, live: bool) -> ProposalSummary:
@@ -138,6 +159,26 @@ def summary_of(entry: BuilderProposal, *, live: bool) -> ProposalSummary:
         updated_at=entry.updated_at,
         refreshed_at=entry.refreshed_at,
         live=live,
+    )
+
+
+def _listed(proposal: Proposal, *, at: datetime) -> ProposalSummary:
+    """A row for a proposal only agent-core's list has."""
+    return ProposalSummary(
+        proposal_id=proposal.proposal_id,
+        agent_id=proposal.agent_id,
+        title=proposal.title,
+        origin=proposal.origin.value,
+        state=proposal.state.value,
+        rev=proposal.rev,
+        base_release_id=proposal.base_release_id,
+        candidate_hash=proposal.candidate_hash,
+        created_by=proposal.created_by,
+        registered_by=None,
+        source=REGISTRY_SOURCE,
+        updated_at=proposal.updated_at,
+        refreshed_at=at,
+        live=True,
     )
 
 
@@ -283,54 +324,92 @@ class AgentBuilder:
         state: str | None = None,
         limit: int = MAX_LIST,
         refresh: bool = True,
-    ) -> list[ProposalSummary]:
-        """The proposals the platform knows, newest first. With ``refresh`` each row is re-read
-        from the registry (one that does not answer keeps its cached row, ``live`` false)."""
+    ) -> ProposalListing:
+        """Every proposal, newest first: agent-core's list merged with the platform's index.
+
+        With ``refresh`` the registry is read: its list (one call) gives every proposal and the
+        current state of the indexed ones; a proposal only agent-core has is a ``registry`` row.
+        If the list does not answer, the index alone is shown, each row re-read by id as before
+        (one that does not answer keeps its cached row, ``live`` false) and ``registry_listed``
+        is False. Without ``refresh`` the cached index, untouched."""
         self._ensure(actor)
         size = max(1, min(limit, MAX_LIST))
         async with self.uow() as uow:
             entries = await uow.builder_proposals.search(agent_id=agent_id, state=state, limit=size)
-        if not refresh or not entries:
-            return [summary_of(e, live=False) for e in entries]
+        if not refresh:
+            return ProposalListing(
+                items=tuple(summary_of(e, live=False) for e in entries), registry_listed=False
+            )
         credentials = self._credentials(actor)
+        page = await self._registry_page(credentials, agent_id=agent_id, state=state, size=size)
+        fresh = {p.proposal_id: p for p in page.items} if page is not None else {}
+        if page is None:
+            missing = list(entries)
+        elif page.total > len(page.items):
+            # a full page: an indexed proposal it lacks is older than every row, or gone
+            missing = []
+        else:
+            # the whole list: an indexed proposal it lacks changed state, or the registry lost it
+            missing = [e for e in entries if e.id not in fresh]
         fetched = await asyncio.gather(
-            *(self.registry.get_proposal(credentials, proposal_id=e.id) for e in entries),
+            *(self.registry.get_proposal(credentials, proposal_id=e.id) for e in missing),
             return_exceptions=True,
         )
-        fresh = {
+        by_id = {
             e.id: f.proposal
-            for e, f in zip(entries, fetched, strict=True)
+            for e, f in zip(missing, fetched, strict=True)
             if isinstance(f, ProposalDetail)
         }
-        await self._refresh(fresh)
-        # what is stored now, newest first (a refreshed state may leave the ``state`` filter)
-        async with self.uow() as uow:
-            stored = await uow.builder_proposals.search(agent_id=agent_id, state=state, limit=size)
+        known = await self._refresh({**fresh, **by_id})
         now = self.clock.now()
-        return [
-            replace(summary_of(e, live=True), refreshed_at=now)
-            if e.id in fresh
-            else summary_of(e, live=False)
-            for e in stored
+        rows = [
+            replace(summary_of(known[pid], live=True), refreshed_at=now)
+            if pid in known
+            else _listed(proposal, at=now)
+            for pid, proposal in {**fresh, **by_id}.items()
+            if state is None or proposal.state.value == state
         ]
+        rows.extend(summary_of(e, live=False) for e in missing if e.id not in by_id)
+        rows.sort(key=lambda row: (row.updated_at, row.proposal_id), reverse=True)
+        return ProposalListing(items=tuple(rows[:size]), registry_listed=page is not None)
 
-    async def _refresh(self, fresh: dict[str, Proposal]) -> None:
+    async def _registry_page(
+        self, credentials: AgentCredentials, *, agent_id: str | None, state: str | None, size: int
+    ) -> ProposalPage | None:
+        """agent-core's list, or None when it does not answer (an outage, an older agent-core
+        without the call, a refusal): the caller falls back to the index."""
+        try:
+            return await self.registry.list_proposals(
+                credentials, agent_id=agent_id, state=state, limit=size
+            )
+        except (AgentRuntimeUnavailableError, AgentRegistryError):
+            return None
+
+    async def _refresh(self, fresh: dict[str, Proposal]) -> dict[str, BuilderProposal]:
+        """Remember what the registry says about the indexed proposals among ``fresh``; returns
+        those index entries (refreshed). The others are not in the index."""
+        known: dict[str, BuilderProposal] = {}
         if not fresh:
-            return
+            return known
 
         async def attempt() -> None:
+            known.clear()
             async with self.uow() as uow:
                 now = self.clock.now()
                 changed = False
                 for proposal_id, proposal in fresh.items():
                     entry = await uow.builder_proposals.get(proposal_id)
-                    if entry is not None and _observe(entry, proposal, now):
+                    if entry is None:
+                        continue
+                    if _observe(entry, proposal, now):
                         await uow.builder_proposals.save(entry)
                         changed = True
+                    known[proposal_id] = entry
                 if changed:
                     await uow.commit()
 
         await retry_on_conflict(attempt)
+        return known
 
     async def get_proposal(self, actor: Actor, proposal_id: str) -> ProposalDetail:
         """The proposal with its draft, the last evaluation and (once evaluated) the approver's

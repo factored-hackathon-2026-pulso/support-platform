@@ -90,6 +90,7 @@ class SqlAssistantSessionRepository(VersionedRepository[AssistantSession]):
             "agent": aggregate.agent,
             "agent_session_id": aggregate.agent_session_id,
             "run_id": aggregate.run_id,
+            "agent_release": aggregate.agent_release,
             "awaiting": aggregate.awaiting,
             "confirmation": _confirmation_to_json(aggregate.confirmation),
             "step_up": (
@@ -126,6 +127,7 @@ class SqlAssistantSessionRepository(VersionedRepository[AssistantSession]):
             agent=row["agent"],
             agent_session_id=row["agent_session_id"],
             run_id=row["run_id"],
+            agent_release=row["agent_release"],
             awaiting=row["awaiting"],
             confirmation=_confirmation_from_json(row["confirmation"]),
             step_up=(

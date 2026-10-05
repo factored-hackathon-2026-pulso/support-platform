@@ -33,7 +33,13 @@ import {
   trackProposal,
   validateProposal,
 } from '../api'
-import { describeChatFailure, newClientMessageId, type PendingMessage } from '../builder-chat'
+import {
+  describeChatFailure,
+  newClientMessageId,
+  newProposals,
+  type AgentRequest,
+  type PendingMessage,
+} from '../builder-chat'
 import type {
   AliasState,
   BuilderExchange,
@@ -303,6 +309,13 @@ export interface BuilderAsk {
   /** The proposals the last answer made or named. */
   proposals: BuilderExchange['proposals']
   send(text: string): void
+  /**
+   * Send and wait for the answer ("Proponer un agente" answers the builder's questions in
+   * order): the exchange, or null when it failed (the message stays for "Reintentar").
+   */
+  sendAndWait(text: string): Promise<BuilderExchange | null>
+  /** Offer these proposals ("Abrir propuesta"), e.g. the ones the builder made unnamed. */
+  showProposals(proposals: BuilderExchange['proposals']): void
   retry(): void
   /** Forget the message in flight and the proposals (a new conversation). */
   clear(): void
@@ -327,6 +340,7 @@ export function useAskBuilder(): BuilderAsk {
         return {
           available: true,
           messages: [...messages, exchange.message, ...exchange.answers],
+          awaiting: exchange.awaiting,
         }
       })
       setPending(null)
@@ -344,6 +358,20 @@ export function useAskBuilder(): BuilderAsk {
     },
     [mutation],
   )
+  const { mutateAsync } = mutation
+  const sendAndWait = useCallback(
+    async (text: string): Promise<BuilderExchange | null> => {
+      const message = { text, clientMessageId: newClientMessageId() }
+      setProposals([])
+      setPending({ ...message, status: 'sending' })
+      try {
+        return await mutateAsync(message)
+      } catch {
+        return null // onError kept it as failed, for "Reintentar"
+      }
+    },
+    [mutateAsync],
+  )
   return {
     pending,
     proposals,
@@ -353,6 +381,8 @@ export function useAskBuilder(): BuilderAsk {
       setProposals([])
       ask({ text, clientMessageId: newClientMessageId() })
     },
+    sendAndWait,
+    showProposals: setProposals,
     retry: () => {
       if (!pending || mutation.isPending) return
       ask({ text: pending.text, clientMessageId: pending.clientMessageId })
@@ -362,6 +392,55 @@ export function useAskBuilder(): BuilderAsk {
       setProposals([])
     },
   }
+}
+
+export type ProposeOutcome = 'done' | 'stopped' | 'failed'
+
+export interface ProposeAgent {
+  /**
+   * Answer `constructor-chat`'s questions in its order: the agent id, then (only if it asks for
+   * the next datum) the goal. `stopped`: it did not ask for the goal; `failed`: a message got no
+   * answer (it stays for "Reintentar").
+   */
+  run(request: AgentRequest): Promise<ProposeOutcome>
+  running: boolean
+}
+
+/**
+ * "Proponer un agente" in the builder's format (slice 22). Its answer names no proposal, so the
+ * proposals list (agent-core's own, merged) is read before and after: what is new for that agent
+ * is offered as "Abrir propuesta".
+ */
+export function useProposeAgent(ask: BuilderAsk): ProposeAgent {
+  const queryClient = useQueryClient()
+  const [running, setRunning] = useState(false)
+  const { sendAndWait, showProposals } = ask
+  const run = useCallback(
+    async (request: AgentRequest): Promise<ProposeOutcome> => {
+      setRunning(true)
+      try {
+        const before = await fetchProposals()
+          .then((list) => new Set(list.items.map((p) => p.proposalId)))
+          .catch(() => null)
+        const agent = await sendAndWait(request.agentId)
+        if (agent === null) return 'failed'
+        if (agent.awaiting !== 'slot') return 'stopped'
+        const goal = await sendAndWait(request.goal)
+        if (goal === null) return 'failed'
+        void queryClient.invalidateQueries({ queryKey: automationKeys.proposals() })
+        if (goal.proposals.length === 0) {
+          const after = await fetchProposals().catch(() => null)
+          const made = after ? newProposals(before, after.items, request.agentId) : []
+          if (made.length > 0) showProposals(made)
+        }
+        return 'done'
+      } finally {
+        setRunning(false)
+      }
+    },
+    [queryClient, sendAndWait, showProposals],
+  )
+  return { run, running }
 }
 
 /** "Nueva conversación": an empty thread; the next message starts another run. */

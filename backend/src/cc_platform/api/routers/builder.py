@@ -12,7 +12,7 @@ registry's own).
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from fastapi.exceptions import RequestValidationError
@@ -471,10 +471,12 @@ async def get_entity(
 async def get_chat(actor: Builder, api: ApiContextDep) -> schemas.BuilderThread:
     assistant = api.use_cases.assistant
     if assistant is None or assistant.builder is None or not await ai_is_on(api):
-        return schemas.BuilderThread(available=False, messages=[])
+        return schemas.BuilderThread(available=False, messages=[], awaiting=None)
     view = await assistant.builder.thread.execute(actor)
     return schemas.BuilderThread(
-        available=True, messages=[schemas.BuilderMessage.model_validate(m) for m in view.messages]
+        available=True,
+        messages=[schemas.BuilderMessage.model_validate(m) for m in view.messages],
+        awaiting=None,
     )
 
 
@@ -483,17 +485,22 @@ async def get_chat(actor: Builder, api: ApiContextDep) -> schemas.BuilderThread:
     response_model=schemas.BuilderThread,
     summary="Start a new conversation with the builder agent",
     description=(
-        'Slice 22, "Nueva conversación": the caller\'s thread starts over, empty (the transcript '
-        "stays in agent-core), and her next message starts another run of the builder agent, "
-        "whatever state the current one is in. Proposals already made stay in the list. Safe to "
-        "repeat. AI off or no agent-core: 404 `assistant_disabled`."
+        'Slice 22, "Nueva conversación": the caller\'s thread starts over (the transcript stays in '
+        "agent-core) and a new run of the builder agent starts at once, in her UI language, "
+        "whatever state the current one is in: the thread comes back with the run's opening "
+        "(`constructor-chat` first asks which agent) and `awaiting`. If agent-core does not "
+        "answer, the thread comes back empty and her next message starts the run. Proposals "
+        "already made stay in the list. Each call starts over. AI off or no agent-core: 404 "
+        "`assistant_disabled`."
     ),
     responses=problem_responses(401, 403, 404),
 )
 async def restart_chat(actor: Builder, api: ApiContextDep) -> schemas.BuilderThread:
     view = await (await builder_use_cases(api)).restart.execute(actor)
     return schemas.BuilderThread(
-        available=True, messages=[schemas.BuilderMessage.model_validate(m) for m in view.messages]
+        available=True,
+        messages=[schemas.BuilderMessage.model_validate(m) for m in view.messages],
+        awaiting=cast("schemas.BuilderAwaiting | None", view.awaiting),
     )
 
 
@@ -503,8 +510,12 @@ async def restart_chat(actor: Builder, api: ApiContextDep) -> schemas.BuilderThr
     status_code=status.HTTP_201_CREATED,
     summary="Tell the builder agent what to change",
     description=(
-        "The agent (`constructor-chat`) reads the current version, drafts the change, creates a "
-        "proposal, writes the draft and validates it. It only proposes: freezing, evaluating, "
+        "The agent (`constructor-chat`) asks which agent, then what to change; it then reads the "
+        "current version, drafts the change, creates a proposal, writes the draft and validates "
+        "it, in the caller's UI language (es or pt-BR). `awaiting: slot` says it asked for the "
+        "next datum. A message that starts a run (none yet, or the last one ended) answers the "
+        "run's opening question: the answer carries that question first. It only proposes: "
+        "freezing, evaluating, "
         "approving and publishing are the screens' steps, and approving and publishing are a "
         "person's. The call waits for the model (seconds): show a spinner. Idempotent on "
         "`clientMessageId` (= `Idempotency-Key`), like the analyst's copilot: a retry with the "
@@ -559,4 +570,5 @@ async def ask_builder(
         answers=[schemas.BuilderMessage.model_validate(m) for m in exchange.answers],
         proposals=[schemas.ProposalSummary.model_validate(p) for p in exchange.proposals],
         replayed=exchange.replayed,
+        awaiting=cast("schemas.BuilderAwaiting | None", exchange.awaiting),
     )

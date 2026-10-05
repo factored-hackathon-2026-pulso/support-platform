@@ -161,6 +161,7 @@ def test_off_the_builder_is_unavailable(client: TestClient, sign_in: SignIn) -> 
     assert client.get("/api/v1/builder/chat", headers=lucia).json() == {
         "available": False,
         "messages": [],
+        "awaiting": None,
     }
     listed = client.get("/api/v1/builder/proposals", headers=lucia)
     assert (listed.status_code, listed.json()["code"]) == (404, "assistant_disabled")

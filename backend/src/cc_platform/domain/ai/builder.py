@@ -1,10 +1,10 @@
 """The agent builder's two records (ADR 0003 §7, slice 16).
 
-``BuilderProposal`` is the platform's *index* of agent-core's proposals. agent-core's registry has
-no "list proposals" call, so the platform remembers the ones it created or learned about (a
-supervisor creates one here, or the builder chat made one and it is tracked by id) and keeps the
-last state it saw. The registry stays the source of truth: every detail read goes there, and the
-cached state is refreshed on the way.
+``BuilderProposal`` is the platform's *index* of agent-core's proposals: the ones it created or
+learned about (a supervisor creates one here, the builder chat's answer names one, a person tracks
+one by id, the improvement engine announces one), with who brought it here and the last state it
+saw. agent-core's own list (contract 1.4.0) is merged with it when the list is read; the registry
+stays the source of truth, and every read refreshes the cached state.
 
 ``BuilderThread`` is a supervisor's conversation with the builder agent (``constructor-chat``).
 One thread per person. Same mechanics as the analyst's copilot thread: a question is stored
@@ -195,6 +195,24 @@ class BuilderThread(AggregateRoot):
         self.messages = ()
         self.new_run(at=at)
         return True
+
+    def record_opening(
+        self, *, texts: list[str], message_ids: list[str], trace_id: str, at: datetime
+    ) -> tuple[BuilderMessage, ...]:
+        """What a new run said before anyone wrote (its first question): agent messages that
+        answer nothing. Not audited, like the restart that starts the run."""
+        if len(texts) != len(message_ids):
+            raise InvalidValueError("one id per opening message", field="message_ids")
+        written: list[BuilderMessage] = []
+        for message_id, raw in zip(message_ids, texts, strict=True):
+            text = raw.strip()[:MAX_ANSWER]
+            if not text:
+                continue
+            opening = BuilderMessage(id=message_id, role="agent", text=text, created_at=at)
+            self._append(opening, at)
+            written.append(opening)
+        self.last_trace_id = trace_id
+        return tuple(written)
 
     def record_answer(
         self,

@@ -407,9 +407,17 @@ class BuilderMessage(ViewModel):
     )
 
 
+BuilderAwaiting = Literal["none", "slot", "confirmation", "step_up", "input"]
+
+
 class BuilderThread(ViewModel):
     available: bool = Field(description="False while agent-core is not configured.")
     messages: list[BuilderMessage] = Field(description="Oldest first (the newest 200).")
+    awaiting: BuilderAwaiting | None = Field(
+        description="Only on `POST /builder/chat/restart`: what the new run waits for after its "
+        "opening (`slot`: it asked for a datum, e.g. which agent). Null on a read, or when the "
+        "run could not start (the next message starts it).",
+    )
 
 
 class AskBuilderRequest(RequestModel):
@@ -426,3 +434,8 @@ class BuilderExchange(ViewModel):
         description="Proposals the answer mentions that the registry confirmed, now in the list."
     )
     replayed: bool = Field(description="A retry of a message that was already answered.")
+    awaiting: BuilderAwaiting | None = Field(
+        description="What the builder waits for after this answer (agent-core's `awaiting`): "
+        "`slot` when it asked for a datum (the next message answers it), `none` when it finished "
+        "or handed over. Null on a replay."
+    )

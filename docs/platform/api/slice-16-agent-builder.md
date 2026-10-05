@@ -154,6 +154,8 @@ All bodies and responses are camelCase; ids are agent-core's opaque text (propos
   and does not ask twice; another text with that id is 409 `idempotency_conflict`); if the call fails (`503
   agent_core_unavailable`, `502 agent_core_rejected` with `agentCoreCode`) the message stays in the thread: **send it again
   with the same `clientMessageId`**. `409 builder_busy` while it answers a previous message.
+- `POST /builder/chat/restart` (slice 22, "Nueva conversación") → `BuilderThread` (empty): her thread starts over
+  and the next message starts another run (a run can end, or wait on a question she no longer wants to answer).
 - The agent reads the current version, drafts the change, **creates a proposal**, writes the draft and validates it, and
   tells the person. It does not freeze, evaluate, approve or publish. The proposals it makes belong to agent-core's service
   identity, so the platform does not know them: **any proposal id in its answer that the registry confirms is added to the

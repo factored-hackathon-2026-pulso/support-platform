@@ -468,6 +468,32 @@ Contract: `docs/platform/api/slice-21-stages.md`. In `copilot` (the stage is how
   item, "y N más"); `HandoffItem.lines`.
 - Test fixture: `src/test/stage-fixtures.ts` (`makeStages`, `makeTypeStage`, shaped like the seed).
 
+### Automatización (slice 22)
+
+Contract: `docs/platform/api/slice-22-automation.md` (on `slice-21-stages.md` and `slice-16-agent-builder.md`).
+New feature `automation` (only `index.ts`: the shell needs nothing from it). Supervisión only, AI on only.
+
+- **Shell**: `NavItem.ai` + `visibleNav(items, aiEnabled)`; `Rail aiEnabled` (from `AppShell`, `useAiEnabled`);
+  the supervisor's "Automatización" (bot) with the `agentProposals` dot (`agentProposalCount` over
+  `useAiStages({ enabled })`, both now in `features/copilot/core`).
+- **Pure**: `model.ts` (the panorama and one type: `stageView`, `signalLine`, `maturitySteps`, `ruleLines`,
+  `draftBreakdown`, `moveBackOptions`, `agentIdFor`: the type's `agentId` or a suggested id), `proposals.ts`
+  (states and steps, `proposalSource` incl. the improvement engine's `engine`, `changeView`, `draftTools`,
+  `draftLanguages`, `suiteFor`, `reportView`, `describeBuilderFailure`), `agents.ts` (derived list, run status,
+  rollback and promotion targets), `builder-chat.ts` (`chatEntries`, `newAgentRequest`: Spanish on purpose, the
+  builder agent speaks only Spanish), `url.ts` (`?type=`).
+- **Hooks** (`hooks/use-automation.ts`): builder status, proposals (refetched on focus), one proposal, aliases,
+  releases, versions, `useProposalStep` (validate, freeze, reopen, evaluate, approve, reject, publish),
+  `useActivateAgent`, `useTrackProposal`, `usePromoteProd`, the chat (`useAskBuilder`: one at a time, retry with the
+  same `clientMessageId`; `useRestartBuilderChat`). Every step refreshes the proposal, the list, the aliases and the
+  stages.
+- **Screens**: `AutomationGate` (AI unknown → spinner, off → Colas), `AutomationFrame` (path, title, section links
+  Tipos de caso · Agentes · Propuestas as `nav` + `aria-current`, the "Constructor de agentes" sheet any screen opens
+  through `useBuilderChatPanel`), `TypesScreen` + `TypePanel` (move back dialog), `ProposalsScreen`, `ProposalScreen`
+  (stepper, `ProposalNextStep`, `EvaluationReport`, `ActivatePanel`), `AgentsScreen`, `AgentScreen`. Every decision
+  goes through `StepUpDialog` (the code boxes; a wrong code clears them and says the attempts left).
+- Test fixtures: `src/test/automation-fixtures.ts`.
+
 ### The platform in Spanish and Portuguese (slice 23)
 
 Contract: `docs/platform/api/slice-23-i18n.md`; decisions: ADR 0008; the guide: §12. No new feature folder.
@@ -636,6 +662,9 @@ comma-separated. Unknown values (old Spanish links included) fall back to the de
 | `/supervision/escalations?escalation=&reassign=`                             | Escalados (slice 9)                                | supervisor |
 | `/supervision/cases/:caseId?previous=&reassign=`                             | supervisor read-only case view (`state.from`)      | supervisor |
 | `/supervision/audit?actor=&person=&case=&type=&from=&to=&q=&changes=&event=` | Auditoría                                          | supervisor |
+| `/supervision/automation?type=` (slice 22, AI on)                            | Automatización: the case types (`type`: the panel) | supervisor |
+| `/supervision/automation/proposals`, `…/proposals/:proposalId?type=`         | the proposals; one proposal (slice 22)             | supervisor |
+| `/supervision/automation/agents`, `…/agents/:agentId`                        | the agents; one agent (slice 22)                   | supervisor |
 | `/admin/users?role=&status=&team=&language=&q=&person=&new=`                 | Usuarios y roles                                   | admin      |
 | `/admin/teams?status=&team=&new=`                                            | Equipos                                            | admin      |
 | `/admin/audit?…` (the supervision audit params)                              | Auditoría (same screen, `canOpenCases`)            | admin      |
@@ -643,7 +672,7 @@ comma-separated. Unknown values (old Spanish links included) fall back to the de
 | `/customer?channel=`                                                         | customer simulator: chat, call or email (dev tool) | —          |
 
 Any other path inside a role section shows that role's not-found page; any other
-path at all (including the removed automation, approvals, tools, rules and
+path at all (including the removed approvals, tools, rules and
 retention URLs) shows the global one.
 
 Guards (`app/guards.tsx`):
@@ -1037,7 +1066,7 @@ The rules every area follows (ADR 0008; contract `docs/platform/api/slice-23-i18
 `src/locales/pt-BR/<namespace>.ts` (`export default { … } satisfies Translation<typeof es>`). One namespace
 per area: `common` (actions, loading, generic errors, the primitives), `shell` (rail, account menu, roles,
 session and route-error screens), `auth`, `onboarding`, `home`, `cases`, `conversation`, `copilot`,
-`workspace`, `supervision`, `audit`, `admin`, `notifications`, `customer`. An area edits only its own files;
+`workspace`, `supervision`, `audit`, `automation`, `admin`, `notifications`, `customer`. An area edits only its own files;
 a new namespace is added to both folders and to `src/locales/namespaces.ts` (list and `Resources`).
 
 **Keys.** English, camelCase, nested by screen or component, then by role of the text:

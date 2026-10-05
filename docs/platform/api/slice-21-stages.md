@@ -209,5 +209,6 @@ Seeded cases close into these counts (e.g. 104 counts as a resolved Cobro indebi
 - A case counts with the type it has **when it closes**; reclassifying a closed case is not possible anyway.
 - Cases resolved while AI is off do not count (the projector runs only with AI on).
 - Supervisión's screen for the stages (panorama, signals, thresholds labelled "Regla del equipo (ejemplo)", move
-  back) is slice 22; this slice ships its API.
+  back) is slice 22; this slice ships its API. Slice 22 adds `CaseTypeStage.agentId` and the activation
+  (`POST /supervision/ai/stages/{caseType}/agent`): `api/slice-22-automation.md`.
 - No migrations: delete `backend/cc_platform.db`.

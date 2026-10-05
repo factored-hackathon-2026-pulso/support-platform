@@ -198,6 +198,7 @@ from cc_platform.application.platform.settings import (
     GetPlatformSettings,
     PlatformDefaults,
     SetAiEnabled,
+    WhileAiOn,
 )
 from cc_platform.application.platform.use_cases import PlatformUseCases
 from cc_platform.application.ports.clock import Clock
@@ -541,10 +542,14 @@ def _build_assistant(
     if use_cases.suggestions is not None:  # ADR 0005: automatic suggestions and their signal
         if settings.copilot_suggestions_auto:
             bus.subscribe(
-                SuggestionProcess(
-                    background,
-                    use_cases.suggestions.service,
-                    coalesce_seconds=settings.copilot_suggestions_coalesce_seconds,
+                # Slice 18: no automatic suggestion while the AI switch is off.
+                WhileAiOn(
+                    ai_switch,
+                    SuggestionProcess(
+                        background,
+                        use_cases.suggestions.service,
+                        coalesce_seconds=settings.copilot_suggestions_coalesce_seconds,
+                    ),
                 ),
                 event_types=SUGGESTION_PROCESS_EVENTS,
             )

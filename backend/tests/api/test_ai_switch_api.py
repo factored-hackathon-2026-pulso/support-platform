@@ -47,6 +47,8 @@ def container(clock: FixedClock, tmp_path: Path, runtime: InMemoryAgentRuntime) 
         make_settings(
             database_url=f"sqlite+aiosqlite:///{tmp_path / 'switch.db'}",
             bank_customer_links_file=links,
+            copilot_suggestions_agent="copiloto-sugerencias@prod",
+            copilot_suggestions_auto=False,  # asked by hand here; WhileAiOn is unit-tested
         ),
         clock=clock,
         ids=SequentialIdGenerator(),
@@ -124,6 +126,7 @@ def test_off_the_copilot_is_not_available(
     assert on["available"] is True
 
     set_ai(client, sign_in, False)
+    runtime.calls.clear()
     off = client.get(f"/api/v1/cases/{case_id}/copilot", headers=analyst)
     assert off.status_code == 200
     assert off.json() == {"caseId": case_id, "available": False, "messages": []}
@@ -134,6 +137,18 @@ def test_off_the_copilot_is_not_available(
         json={"text": "¿Cuánto debe?", "clientMessageId": key},
     )
     assert (asked.status_code, asked.json()["code"]) == (404, "assistant_disabled")
+
+    # The copilot's suggestions (ADR 0005) are off too.
+    latest = client.get(f"/api/v1/cases/{case_id}/copilot/suggestions/latest", headers=analyst)
+    assert latest.status_code == 200
+    assert latest.json() == {"available": False, "suggestion": None}
+    suggested = client.post(
+        f"/api/v1/cases/{case_id}/copilot/suggestions",
+        headers={**analyst, "Idempotency-Key": "sugg-00000001"},
+        json={"trigger": "manual"},
+    )
+    assert (suggested.status_code, suggested.json()["code"]) == (404, "assistant_disabled")
+    assert runtime.calls == []
 
 
 def test_off_the_builder_is_unavailable(client: TestClient, sign_in: SignIn) -> None:

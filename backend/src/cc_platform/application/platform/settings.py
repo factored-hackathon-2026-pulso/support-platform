@@ -4,9 +4,10 @@ One platform-wide setting, persisted (``PlatformSettings``), changed by Administ
 by every place where the AI layer could act:
 
 - ``AiSwitch`` answers "is AI on now?" from the stored setting, or the deployment default
-  (``CC_AI_ENABLED``) while nobody changed it. The assistant gate (new chats), the copilot and
-  the agent builder ask it; off, they behave as if agent-core were not configured, so the
-  platform is exactly the people-only one.
+  (``CC_AI_ENABLED``) while nobody changed it. The assistant gate (new chats), the copilot, its
+  suggestions (``WhileAiOn`` wraps their automatic process) and the agent builder ask it; off,
+  they behave as if agent-core were not configured, so the platform is exactly the people-only
+  one.
 - ``GetPlatformSettings`` is what the SPA (``/auth/me``, the admin screen) and the customer
   simulator read.
 - ``SetAiEnabled`` turns it on or off: a ``PUT`` of a desired state, safe to repeat (the same
@@ -20,10 +21,12 @@ chats from starting with it (contract §2.3).
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 
 from cc_platform.application.concurrency import retry_on_conflict
+from cc_platform.application.events import EventRecord
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
@@ -67,6 +70,20 @@ class AiSwitch:
         """Inside a Unit of Work the caller already holds."""
         settings, _new = await load_settings(uow, self.defaults)
         return settings.ai_enabled
+
+
+@dataclass(frozen=True, slots=True)
+class WhileAiOn:
+    """A bus subscriber that forwards events only while the AI switch is on: the background AI
+    work (the copilot's automatic suggestions, ADR 0005) stops with the switch, without that work
+    knowing about it."""
+
+    switch: AiSwitch
+    subscriber: Callable[[EventRecord], Awaitable[None]]
+
+    async def __call__(self, record: EventRecord) -> None:
+        if await self.switch.is_on():
+            await self.subscriber(record)
 
 
 @dataclass(frozen=True, slots=True)

@@ -11,10 +11,12 @@ from pathlib import Path
 
 import pytest
 
+from cc_platform.application.events import EventRecord
 from cc_platform.application.platform.settings import (
     AiSwitch,
     PlatformDefaults,
     SetAiEnabled,
+    WhileAiOn,
 )
 from cc_platform.application.ports.unit_of_work import UnitOfWork
 from cc_platform.bootstrap.container import Container, build_container
@@ -109,3 +111,26 @@ async def test_racing_first_changes_store_one_singleton() -> None:
     assert Counter(r.changed for r in results) == {True: 1, False: 3}
     assert len(store.platform_settings) == 1
     assert sum(1 for e in store.events if e.event_type == "platform.ai_toggled") == 1
+
+
+async def test_background_ai_work_runs_only_while_the_switch_is_on() -> None:
+    """``WhileAiOn`` (the copilot's automatic suggestions): events pass only while AI is on."""
+    store = InMemoryStore()
+    clock, ids, bus = FixedClock(), SequentialIdGenerator(), InProcessEventBus()
+
+    def uow() -> UnitOfWork:
+        return InMemoryUnitOfWork(store, bus=bus, ids=ids, clock=clock)
+
+    await seed_demo_staff(uow, PlainHasher())
+    defaults = PlatformDefaults(ai_enabled=True)
+    seen: list[object] = []
+
+    async def subscriber(record: EventRecord) -> None:
+        seen.append(record)
+
+    gated = WhileAiOn(AiSwitch(uow, defaults), subscriber)
+    record = object()
+    await gated(record)  # type: ignore[arg-type]
+    await SetAiEnabled(uow, clock, defaults).execute(actor_for(ADMIN_ONLY), False)
+    await gated(record)  # type: ignore[arg-type]
+    assert seen == [record]

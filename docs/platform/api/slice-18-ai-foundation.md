@@ -9,7 +9,7 @@ the switch off the platform is exactly the people-only one. The frontend types a
 (they were stale after the S14–S16 merges).
 
 Read first: `../ENGINEERING_BRIEF.md` (it wins), `../adr/0006-ai-maturity-by-case-type.md`
-(the model), `../adr/0003-agent-core-integration.md`, `slice-8-priority.md` (the case type
+(the model), `../adr/0003-agent-core-integration.md`, `../adr/0005-copilot-suggestions.md`, `slice-8-priority.md` (the case type
 mirrors it), `slice-14-assistant.md`, `slice-15-copilot.md`, `slice-16-agent-builder.md`.
 
 ---
@@ -56,11 +56,16 @@ catalog (`CASE_TYPE_LABEL`). The API carries only the value.
 | New chat (`AssistantGate`) | the case goes to people (queue + rule 3), never `with_assistant` | people (as before) |
 | `GET /cases/{caseId}/copilot` | `available: false`, no messages (200) | same |
 | `POST /cases/{caseId}/copilot/messages` | 404 `assistant_disabled` | same |
+| `GET /cases/{caseId}/copilot/suggestions/latest` (ADR 0005) | `available: false`, `suggestion: null` (200) | same |
+| `POST /cases/{caseId}/copilot/suggestions`, `…/{suggestionId}/feedback` | 404 `assistant_disabled` | same |
+| Automatic suggestions (`SuggestionProcess`) | not made (`WhileAiOn` drops the events) | not made (no agent-core) |
 | `GET /builder/status`, `GET /builder/chat` | `available: false` (200) | same |
 | every other `/builder/*` route | 404 `assistant_disabled` | same |
 | The SPA | hides every AI element (S18: the case type) | shows the case type |
 
-Not affected (a conversation the assistant already holds can finish): the customer's
+Not affected: the `copilotSuggestionId` a reply or an escalation may carry (it records what the
+analyst did with an earlier suggestion, best effort). And, so that a conversation the assistant
+already holds can finish: the customer's
 confirmation, step-up and "ask for a person", `GET /cases/{caseId}/handoff`, Supervisión's
 `POST /supervision/cases/{caseId}/assistant/release`, the assistant sweep and agent-core's
 `GET /internal/grants/{grantRef}`. Turning AI off does not hand the assistant's open
@@ -186,7 +191,8 @@ shows these rows whatever the switch says.
   `tests/unit/application/test_platform_settings.py` (default, stored value wins, race on the
   first insert), `tests/api/test_platform_api.py` (admin, `/me`, simulator, RBAC, audit, live to
   staff and customers), `tests/api/test_ai_switch_api.py` (with a fake agent-core: new chats to
-  people, copilot and builder unavailable, an assistant conversation can still reach a person).
+  people, copilot, suggestions and builder unavailable, an assistant conversation can still reach
+  a person; `WhileAiOn` in `test_platform_settings.py`).
 - Frontend: `Switch`, `app/platform`, the case-type model and ficha rows, `CustomerFile` (menu,
   optimistic, rollback, hidden with AI off), the supervisor header, `/admin/platform`, the
   simulator following the switch live.

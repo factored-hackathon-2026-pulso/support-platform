@@ -78,7 +78,7 @@ beforeEach(() => {
 })
 
 function renderPane({ aiEnabled = true }: { aiEnabled?: boolean } = {}) {
-  const onOpenHandoff = vi.fn()
+  const onOpenHandoff = vi.fn<() => void>()
   const view = renderWithProviders(
     <ConversationPane caseId={handoffDetail().case.id} onOpenHandoff={onOpenHandoff} />,
     { staff: analystStaff, aiEnabled },

@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiProblem } from '@/lib/api'
+import type { AppLocale } from '@/lib/i18n'
 import {
   makeCaseDetail,
   makeClosedDetail,
@@ -77,11 +78,14 @@ beforeEach(() => {
   vi.mocked(api.closeCase).mockReset()
 })
 
-function renderPane({ aiEnabled = true }: { aiEnabled?: boolean } = {}) {
+function renderPane({
+  aiEnabled = true,
+  locale,
+}: { aiEnabled?: boolean; locale?: AppLocale } = {}) {
   const onOpenHandoff = vi.fn<() => void>()
   const view = renderWithProviders(
     <ConversationPane caseId={handoffDetail().case.id} onOpenHandoff={onOpenHandoff} />,
-    { staff: analystStaff, aiEnabled },
+    { staff: analystStaff, aiEnabled, locale },
   )
   return { ...view, onOpenHandoff }
 }
@@ -279,5 +283,59 @@ describe('HandoffPanel ("Traspaso" tab)', () => {
     expect(await screen.findByText('El cliente pidió hablar con una persona')).toBeInTheDocument()
     expect(screen.getByText('El asistente no verificó ningún dato.')).toBeInTheDocument()
     expect(screen.getByText('El asistente no dejó un resumen.')).toBeInTheDocument()
+  })
+})
+
+describe('the handoff in Portuguese (slice 23)', () => {
+  it('leads the card with why, the assistant as the author, and opens the tab', async () => {
+    const { user, onOpenHandoff } = renderPane({ locale: 'pt-BR' })
+    expect(await screen.findByText('Após a transferência do assistente')).toBeInTheDocument()
+    const card = await screen.findByRole('region', {
+      name: 'O assistente passou este caso para você',
+    })
+    expect(within(card).getByText('Só a equipe')).toBeInTheDocument()
+    expect(card).toHaveTextContent(
+      'Por que passou para você: Uma política exige que uma pessoa atenda (Posible fraude)',
+    )
+    expect(card).toHaveTextContent('2 dados verificados')
+    await user.click(
+      within(card).getByRole('button', { name: 'Ver toda a transferência do assistente' }),
+    )
+    expect(onOpenHandoff).toHaveBeenCalledTimes(1)
+  })
+
+  it('lists every section of the "Traspaso" tab', async () => {
+    renderWithProviders(<HandoffPanel detail={handoffDetail()} />, {
+      staff: analystStaff,
+      aiEnabled: true,
+      locale: 'pt-BR',
+    })
+    expect(await screen.findByRole('region', { name: 'Verificado' })).toHaveTextContent(
+      'Identity verified: Sim',
+    )
+    expect(
+      screen.getByRole('region', { name: 'O cliente diz, sem verificação' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'O que o assistente fez' })).toHaveTextContent(
+      'Radicar disputaFeita e verificada',
+    )
+    expect(screen.getByRole('region', { name: 'Falta resolver' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'O que o cliente pede' })).toBeInTheDocument()
+    expect(screen.getByText('Nas palavras do assistente')).toBeInTheDocument()
+  })
+
+  it('offers "Tentar de novo" when agent-core does not answer', async () => {
+    vi.mocked(api.fetchCaseHandoff).mockRejectedValue(
+      new ApiProblem({ status: 503, code: 'agent_core_unavailable' }),
+    )
+    renderWithProviders(<HandoffPanel detail={handoffDetail()} />, {
+      staff: analystStaff,
+      aiEnabled: true,
+      locale: 'pt-BR',
+    })
+    expect(
+      await screen.findByText('Não foi possível trazer a transferência do assistente'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument()
   })
 })

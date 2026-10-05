@@ -466,3 +466,35 @@ describe('case type in "Este caso" (slice 18)', () => {
     expect(alert).toHaveTextContent('Ya no puedes cambiar el tipo de este caso.')
   })
 })
+
+describe('CustomerFile in Portuguese (slice 23)', () => {
+  it('opens from the name with the customer, this case, how it arrived and the past cases', async () => {
+    const { user } = renderWithProviders(<Harness />, { staff: analystStaff, locale: 'pt-BR' })
+    await user.click(
+      await screen.findByRole('button', { name: 'Ver ficha de Marcela Quintana Pardo' }),
+    )
+    expect(screen.getByRole('button', { name: 'Copiar número do caso' })).toBeInTheDocument()
+    const customer = await screen.findByRole('region', { name: 'Cliente' })
+    expect(customer).toHaveTextContent('Cidade')
+    expect(customer).toHaveTextContent('ID do cliente')
+    const thisCase = screen.getByRole('region', { name: 'Este caso' })
+    expect(thisCase).toHaveTextContent('Primeira respostaNo prazo')
+    const arrival = screen.getByRole('region', { name: 'Como chegou até você' })
+    expect(arrival).toHaveTextContent('Você estava disponível')
+    expect(arrival).toHaveTextContent('Atribuído')
+    const previous = screen.getByRole('region', { name: 'Casos anteriores (2)' })
+    const list = await within(previous).findByRole('list', { name: 'Casos anteriores' })
+    await user.click(within(list).getByRole('button', { name: /Julián Ortega/ }))
+    expect(
+      await within(previous).findByRole('heading', { level: 4, name: /^Caso CASE-…0110/ }),
+    ).toHaveFocus()
+    expect(
+      await within(previous).findByRole('list', { name: 'Mensagens do caso anterior' }),
+    ).toBeInTheDocument()
+    expect(previous).toHaveTextContent('Encerrado:')
+    await user.click(within(previous).getByRole('button', { name: 'Todos os casos anteriores' }))
+    expect(
+      await within(previous).findByRole('list', { name: 'Casos anteriores' }),
+    ).toBeInTheDocument()
+  })
+})

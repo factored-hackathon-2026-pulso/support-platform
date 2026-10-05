@@ -556,3 +556,37 @@ def test_an_item_the_suggestion_does_not_hold_is_not_found(
     assert decide_item(client, supervisor, assigned_case, suggestion_id, body).status_code == 403
     bad = {"item": "reply", "decision": "used"}
     assert decide_item(client, analyst, assigned_case, suggestion_id, bad).status_code == 422
+
+
+@pytest.mark.parametrize("container", ["gated"], indirect=True)
+@pytest.mark.parametrize(
+    ("case_type", "mode", "kinds"),
+    [
+        (
+            "app_issue",
+            "tools",
+            ["tool", "escalate"],
+        ),  # stage 2: no draft, even if the agent sent one
+        ("undue_charge", "drafts", ["reply", "tool", "escalate"]),  # stage 3: drafts too
+    ],
+)
+def test_the_stage_reaches_the_agent_and_a_draft_below_stage_three_is_dropped(
+    client: TestClient,
+    sign_in: Callable[[str], str],
+    assigned_case: str,
+    *,
+    runtime: InMemoryAgentRuntime,
+    case_type: str,
+    mode: str,
+    kinds: list[str],
+) -> None:
+    analyst = bearer(sign_in(ANALYST.email))
+    set_type(client, analyst, assigned_case, case_type)
+    runtime.suggestion_script.append(FULL)
+
+    asked = ask(client, analyst, assigned_case)
+
+    assert asked.status_code == 201, asked.text
+    sent = next(c for c in runtime.calls if c.operation == "start_run")
+    assert sent.arguments["input"]["modo_copiloto"] == mode
+    assert [s["type"] for s in asked.json()["suggestions"]] == kinds

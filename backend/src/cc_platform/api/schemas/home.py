@@ -14,6 +14,7 @@ from cc_platform.application.cases.analyst_home import (
     HomeActivityItemView,
     HomeActivityKind,
     HomeActivityView,
+    HomeAssistantView,
     HomeQueueView,
     HomeTeamView,
     SinceSource,
@@ -111,6 +112,22 @@ class HomeTeam(ApiModel):
         )
 
 
+class HomeAssistant(ApiModel):
+    """Slice 21 (IaHomeTurno): the assistant in her languages."""
+
+    resolved: int = Field(description="Conversations of her languages it resolved since `since`.")
+    handed_to_you: int = Field(description="Cases it handed over that went to her since `since`.")
+    with_assistant_now: int = Field(description="Open conversations of her languages it holds.")
+
+    @classmethod
+    def from_view(cls, view: HomeAssistantView) -> HomeAssistant:
+        return cls(
+            resolved=view.resolved,
+            handed_to_you=view.handed_to_you,
+            with_assistant_now=view.with_assistant_now,
+        )
+
+
 class AnalystHome(ApiModel):
     since: datetime = Field(description="Start of 'Mientras no estabas' (exclusive).")
     since_source: SinceSource = Field(
@@ -119,6 +136,9 @@ class AnalystHome(ApiModel):
     activity: HomeActivity
     team_now: HomeTeam
     server_time: datetime
+    assistant: HomeAssistant | None = Field(
+        description="Slice 21: the assistant in her languages; null while the AI switch is off."
+    )
 
     @classmethod
     def from_view(cls, view: AnalystHomeView) -> AnalystHome:
@@ -128,4 +148,5 @@ class AnalystHome(ApiModel):
             activity=HomeActivity.from_view(view.activity),
             team_now=HomeTeam.from_view(view.team_now),
             server_time=view.server_time,
+            assistant=HomeAssistant.from_view(view.assistant) if view.assistant else None,
         )

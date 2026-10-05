@@ -880,7 +880,7 @@ def build_container(
             team_overview=GetTeamOverview(uow=uow, clock=clock),
             queue_overview=GetQueueOverview(uow=uow, clock=clock),
             set_assignee=SetCaseAssignee(uow=uow, clock=clock, ids=ids),
-            analyst_home=GetAnalystHome(uow=uow, clock=clock),
+            analyst_home=GetAnalystHome(uow=uow, clock=clock, switch=ai_switch),
             rate_conversation=RateConversation(uow=uow, clock=clock),
             change_priority=ChangeCasePriority(uow=uow, clock=clock),
             change_type=ChangeCaseType(uow=uow, clock=clock),

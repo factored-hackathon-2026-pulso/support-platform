@@ -729,6 +729,17 @@
           "activity": {
             "$ref": "#/components/schemas/HomeActivity"
           },
+          "assistant": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HomeAssistant"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Slice 21: the assistant in her languages; null while the AI switch is off."
+          },
           "serverTime": {
             "format": "date-time",
             "title": "Servertime",
@@ -753,7 +764,8 @@
           "sinceSource",
           "activity",
           "teamNow",
-          "serverTime"
+          "serverTime",
+          "assistant"
         ],
         "title": "AnalystHome",
         "type": "object"
@@ -5107,17 +5119,45 @@
         "type": "object"
       },
       "HomeActivityKind": {
-        "description": "One row kind of \"Mientras no estabas\" (each has one fixed template in the frontend).\n\n- ``assigned_on_arrival``: a new case went to her on arrival (rule 3, least loaded).\n- ``assigned_from_queue``: a queued case went to her when she became available.\n- ``assigned_by_supervisor``: a supervisor assigned it to her (from the queue or another\n  analyst).\n- ``reassigned_away``: a supervisor gave one of her cases to someone else (read-only now).\n- ``customer_returned``: the case continues a closed one of the same customer (it\n  replaces the arrival row of that case).\n- ``customer_messages``: the customer wrote in one of her cases (one row per case).",
+        "description": "One row kind of \"Mientras no estabas\" (each has one fixed template in the frontend).\n\n- ``assigned_on_arrival``: a new case went to her on arrival (rule 3, least loaded).\n- ``assigned_from_queue``: a queued case went to her when she became available.\n- ``assigned_by_supervisor``: a supervisor assigned it to her (from the queue or another\n  analyst).\n- ``reassigned_away``: a supervisor gave one of her cases to someone else (read-only now).\n- ``customer_returned``: the case continues a closed one of the same customer (it\n  replaces the arrival row of that case).\n- ``customer_messages``: the customer wrote in one of her cases (one row per case).\n- ``assigned_by_assistant``: the assistant (ADR 0003) handed the case over and it went to her\n  (slice 21; before it, such an assignment had no row).",
         "enum": [
           "assigned_on_arrival",
           "assigned_from_queue",
           "assigned_by_supervisor",
           "reassigned_away",
           "customer_returned",
-          "customer_messages"
+          "customer_messages",
+          "assigned_by_assistant"
         ],
         "title": "HomeActivityKind",
         "type": "string"
+      },
+      "HomeAssistant": {
+        "description": "Slice 21 (IaHomeTurno): the assistant in her languages.",
+        "properties": {
+          "handedToYou": {
+            "description": "Cases it handed over that went to her since `since`.",
+            "title": "Handedtoyou",
+            "type": "integer"
+          },
+          "resolved": {
+            "description": "Conversations of her languages it resolved since `since`.",
+            "title": "Resolved",
+            "type": "integer"
+          },
+          "withAssistantNow": {
+            "description": "Open conversations of her languages it holds.",
+            "title": "Withassistantnow",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resolved",
+          "handedToYou",
+          "withAssistantNow"
+        ],
+        "title": "HomeAssistant",
+        "type": "object"
       },
       "HomeQueue": {
         "properties": {

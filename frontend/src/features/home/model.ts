@@ -36,7 +36,14 @@ import {
   localHour,
   pluralize,
 } from '@/lib/format'
-import type { AnalystHome, HomeActivityItem, HomeActivityKind, HomeQueue, HomeTeam } from './types'
+import type {
+  AnalystHome,
+  HomeActivityItem,
+  HomeActivityKind,
+  HomeAssistant,
+  HomeQueue,
+  HomeTeam,
+} from './types'
 
 type DateInput = Date | string | number
 
@@ -235,6 +242,7 @@ const ICON_OF: Record<HomeActivityKind, ActivityIcon> = {
   reassigned_away: 'out',
   customer_returned: 'back',
   customer_messages: 'msg',
+  assigned_by_assistant: 'in',
 }
 
 /** Whole minutes of a wait, at least 1 ("Esperó 1 min" for 20 s). */
@@ -352,7 +360,30 @@ export function activityTemplate(
         status: caseStatus(item.inboxStatus),
         facts: compact([itemSla(item, now)]),
       }
+    // Slice 21 (IaHomeTurno): the assistant handed the case over and it went to her.
+    case 'assigned_by_assistant':
+      return {
+        ...base,
+        phrase: 'El asistente te lo pasó',
+        status: caseStatus(item.inboxStatus),
+        facts: compact([itemSla(item, now)]),
+      }
   }
+}
+
+/**
+ * Slice 21 (IaHomeTurno): what the assistant did in her languages since her last session, as one
+ * line of "Mientras no estabas" ("Resolvió 9 conversaciones de tus idiomas y te pasó 1"), or null
+ * when it did nothing (or AI is off: no summary).
+ */
+export function assistantSummary(assistant: HomeAssistant | null | undefined): string | null {
+  if (!assistant) return null
+  const { resolved, handedToYou } = assistant
+  const resolvedText = `Resolvió ${pluralize(resolved, 'conversación', 'conversaciones')} de tus idiomas`
+  if (resolved > 0 && handedToYou > 0) return `${resolvedText} y te pasó ${handedToYou}`
+  if (resolved > 0) return resolvedText
+  if (handedToYou > 0) return `Te pasó ${pluralize(handedToYou, 'caso', 'casos')}`
+  return null
 }
 
 /**
@@ -462,8 +493,16 @@ export function queueWait(queue: HomeQueue, now: DateInput): FactItem | null {
   }
 }
 
-/** The rows of "Tu equipo ahora": her team's available count, then one queue per language she speaks. */
-export function teamRows(team: HomeTeam, meAvailable: boolean, now: DateInput): TeamRow[] {
+/**
+ * The rows of "Tu equipo ahora": her team's available count, then one queue per language she
+ * speaks; slice 21, with AI on, how many conversations of her languages the assistant holds now.
+ */
+export function teamRows(
+  team: HomeTeam,
+  meAvailable: boolean,
+  now: DateInput,
+  withAssistant: number | null = null,
+): TeamRow[] {
   return [
     {
       key: 'available',
@@ -482,6 +521,18 @@ export function teamRows(team: HomeTeam, meAvailable: boolean, now: DateInput): 
       tag: null,
       wait: queueWait(queue, now),
     })),
+    ...(withAssistant === null
+      ? []
+      : [
+          {
+            key: 'assistant',
+            icon: 'bot' as const,
+            label: 'Con el asistente ahora',
+            value: String(withAssistant),
+            tag: null,
+            wait: null,
+          },
+        ]),
   ]
 }
 

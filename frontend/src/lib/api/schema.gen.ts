@@ -2485,6 +2485,8 @@ export interface components {
     /** AnalystHome */
     AnalystHome: {
       activity: components['schemas']['HomeActivity']
+      /** @description Slice 21: the assistant in her languages; null while the AI switch is off. */
+      assistant: components['schemas']['HomeAssistant'] | null
       /**
        * Servertime
        * Format: date-time
@@ -4332,6 +4334,8 @@ export interface components {
      *     - ``customer_returned``: the case continues a closed one of the same customer (it
      *       replaces the arrival row of that case).
      *     - ``customer_messages``: the customer wrote in one of her cases (one row per case).
+     *     - ``assigned_by_assistant``: the assistant (ADR 0003) handed the case over and it went to her
+     *       (slice 21; before it, such an assignment had no row).
      * @enum {string}
      */
     HomeActivityKind:
@@ -4341,6 +4345,28 @@ export interface components {
       | 'reassigned_away'
       | 'customer_returned'
       | 'customer_messages'
+      | 'assigned_by_assistant'
+    /**
+     * HomeAssistant
+     * @description Slice 21 (IaHomeTurno): the assistant in her languages.
+     */
+    HomeAssistant: {
+      /**
+       * Handedtoyou
+       * @description Cases it handed over that went to her since `since`.
+       */
+      handedToYou: number
+      /**
+       * Resolved
+       * @description Conversations of her languages it resolved since `since`.
+       */
+      resolved: number
+      /**
+       * Withassistantnow
+       * @description Open conversations of her languages it holds.
+       */
+      withAssistantNow: number
+    }
     /** HomeQueue */
     HomeQueue: {
       language: components['schemas']['Language']

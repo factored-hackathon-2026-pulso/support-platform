@@ -6,6 +6,7 @@ import {
   activityLinkLabel,
   activityRow,
   activityTemplate,
+  assistantSummary,
   availabilityBlockCopy,
   availableValue,
   feedToggleLabel,
@@ -350,12 +351,43 @@ describe('"Mientras no estabas" · templates', () => {
       'reassigned_away',
       'customer_returned',
       'customer_messages',
+      'assigned_by_assistant',
     ]
     for (const kind of kinds) {
       const row = template({ kind, previousCasesCount: 1, waitedSeconds: 60 })
       expect(row.phrase).not.toBe('')
       expect([row.phrase, ...texts(row.facts)].join(' ')).not.toContain('·')
     }
+  })
+})
+
+describe('the assistant on Inicio (slice 21)', () => {
+  it('sums up what it did in her languages in one line', () => {
+    const summary = (resolved: number, handedToYou: number) =>
+      assistantSummary({ resolved, handedToYou, withAssistantNow: 0 })
+    expect(summary(9, 1)).toBe('Resolvió 9 conversaciones de tus idiomas y te pasó 1')
+    expect(summary(1, 0)).toBe('Resolvió 1 conversación de tus idiomas')
+    expect(summary(0, 2)).toBe('Te pasó 2 casos')
+    expect(summary(0, 0)).toBeNull()
+    expect(assistantSummary(null)).toBeNull()
+  })
+
+  it('adds "Con el asistente ahora" to the team rows only when given', () => {
+    const team = makeHome().teamNow
+    expect(teamRows(team, false, NOW).map((row) => row.key)).not.toContain('assistant')
+    expect(teamRows(team, false, NOW, 3).at(-1)).toEqual({
+      key: 'assistant',
+      icon: 'bot',
+      label: 'Con el asistente ahora',
+      value: '3',
+      tag: null,
+      wait: null,
+    })
+  })
+
+  it('the hand-over row says the assistant passed it to her', () => {
+    const row = activityTemplate(makeActivityItem({ kind: 'assigned_by_assistant' }), NOW)
+    expect(row.phrase).toBe('El asistente te lo pasó')
   })
 })
 

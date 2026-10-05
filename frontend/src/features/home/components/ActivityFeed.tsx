@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { CheckCircle2, LogIn, LogOut, MessageSquare, RotateCcw } from 'lucide-react'
+import { Bot, CheckCircle2, LogIn, LogOut, MessageSquare, RotateCcw } from 'lucide-react'
 import { Button, Callout, Fact, FactList, Skeleton, Status } from '@/components/ui'
 import { CloseReasonIcon, closeReasonLabel } from '@/features/cases'
 import type { ApiProblem } from '@/lib/api'
@@ -10,6 +10,7 @@ import {
   FEED_PREVIEW_ROWS,
   activityLinkLabel,
   activityRow,
+  assistantSummary,
   feedToggleLabel,
   feedTruncatedNote,
   sinceFacts,
@@ -41,6 +42,8 @@ export interface ActivityFeedProps {
     refetch: () => unknown
   }
   now: number
+  /** Slice 21: with AI on, the assistant's summary line on top (IaHomeTurno). */
+  aiEnabled?: boolean
 }
 
 /**
@@ -51,9 +54,24 @@ export interface ActivityFeedProps {
  * read-only). The first four show; "Ver todo (n)" expands the list in place. No
  * live region: the feed is not announced as it refreshes.
  */
-export function ActivityFeed({ home, now }: ActivityFeedProps) {
+export function ActivityFeed({ home, now, aiEnabled = false }: ActivityFeedProps) {
   const [expanded, setExpanded] = useState(false)
   const data = home.data
+  const summary = aiEnabled ? assistantSummary(data?.assistant) : null
+  const assistantLine = summary ? (
+    <p className="m-0 grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2.5 border-t border-border-soft px-5 py-2.5">
+      <span
+        aria-hidden="true"
+        className="mt-0.5 flex size-7 items-center justify-center rounded-8 bg-accent-soft text-accent"
+      >
+        <Bot size={15} strokeWidth={2.2} />
+      </span>
+      <span className="flex min-w-0 flex-col gap-1">
+        <strong className="text-14 font-semibold">Asistente virtual</strong>
+        <span className="text-13 text-ink-2">{summary}</span>
+      </span>
+    </p>
+  ) : null
 
   let body
   if (home.status === 'pending') {
@@ -165,7 +183,10 @@ export function ActivityFeed({ home, now }: ActivityFeedProps) {
         </h2>
         {data ? <FactList items={sinceFacts(data, now)} /> : null}
       </div>
-      <div>{body}</div>
+      <div>
+        {assistantLine}
+        {body}
+      </div>
     </section>
   )
 }

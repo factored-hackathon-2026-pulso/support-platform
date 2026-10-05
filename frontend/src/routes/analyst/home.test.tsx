@@ -7,7 +7,7 @@ import { fetchHome } from '@/features/home/api'
 import { ApiProblem } from '@/lib/api'
 import { NOW, emptyInbox, makeInbox, paused, seededInbox } from '@/test/case-fixtures'
 import { analystStaff } from '@/test/fixtures'
-import { makeHome } from '@/test/home-fixtures'
+import { makeActivityItem, makeHome } from '@/test/home-fixtures'
 import { renderRoute } from '@/test/render'
 
 vi.mock('@/features/cases/api', async (importOriginal) => {
@@ -202,6 +202,44 @@ describe('/analyst/home (Inicio)', () => {
     )
     expect(team).toHaveTextContent('Al empezar, la cola de tus idiomas se reparte primero contigo.')
     expect(team.querySelector('dl')?.textContent).not.toContain('·')
+  })
+
+  it('with AI on, sums up the assistant in her languages (IaHomeTurno, slice 21)', async () => {
+    vi.mocked(fetchHome).mockResolvedValue(
+      makeHome({
+        assistant: { resolved: 9, handedToYou: 1, withAssistantNow: 3 },
+        activity: {
+          items: [
+            makeActivityItem({
+              kind: 'assigned_by_assistant',
+              customerName: 'Natalia Guzmán Rincón',
+              reason: 'assistant_handoff',
+            }),
+          ],
+          total: 1,
+        },
+      }),
+    )
+    renderRoute('/analyst/home', { staff: analystStaff, aiEnabled: true })
+    const feed = await screen.findByRole('region', { name: 'Mientras no estabas' })
+    expect(await within(feed).findByText('Asistente virtual')).toBeInTheDocument()
+    expect(feed).toHaveTextContent('Resolvió 9 conversaciones de tus idiomas y te pasó 1')
+    expect(
+      within(feed).getByRole('link', { name: /^Natalia Guzmán Rincón: El asistente te lo pasó\./ }),
+    ).toBeInTheDocument()
+    const team = screen.getByRole('region', { name: 'Tu equipo ahora' })
+    expect(team).toHaveTextContent('Con el asistente ahora3')
+  })
+
+  it('with AI off there is no assistant line nor count', async () => {
+    vi.mocked(fetchHome).mockResolvedValue(
+      makeHome({ assistant: { resolved: 9, handedToYou: 1, withAssistantNow: 3 } }),
+    )
+    renderHome()
+    const team = await screen.findByRole('region', { name: 'Tu equipo ahora' })
+    await within(team).findByText('Disponibles')
+    expect(screen.queryByText('Asistente virtual')).not.toBeInTheDocument()
+    expect(team).not.toHaveTextContent('Con el asistente ahora')
   })
 
   it('says she has no open cases (canvas `vacía`)', async () => {

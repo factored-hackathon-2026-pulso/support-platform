@@ -21,6 +21,7 @@ import httpx
 from cc_platform.application.ai.credentials import AgentCredentials
 from cc_platform.application.ai.registry import (
     REASON_CODES,
+    AgentPause,
     AgentRegistryError,
     AliasChange,
     AliasState,
@@ -286,6 +287,14 @@ def _problem_error(response: httpx.Response) -> Exception:
     )
 
 
+def _pause(data: Mapping[str, Any]) -> AgentPause:
+    return AgentPause(
+        agent_id=str(data["agent_id"]),
+        paused=bool(data["paused"]),
+        release_id=_opt(data.get("release_id")),
+    )
+
+
 def _segment(value: str) -> str:
     """One path segment (an id that is not allowed to add ``/`` or ``..``)."""
     return quote(value, safe="")
@@ -521,6 +530,22 @@ class HttpAgentRegistry:
             reason=str(data.get("reason", "")),
             at=_dt(data["at"]),
         )
+
+    async def pause_agent(
+        self, credentials: AgentCredentials, *, agent_id: str, reason: str = ""
+    ) -> AgentPause:
+        data = await self._call(
+            "POST", f"/agents/{_segment(agent_id)}/pause", credentials, json={"reason": reason}
+        )
+        return _pause(data)
+
+    async def resume_agent(
+        self, credentials: AgentCredentials, *, agent_id: str, reason: str = ""
+    ) -> AgentPause:
+        data = await self._call(
+            "POST", f"/agents/{_segment(agent_id)}/resume", credentials, json={"reason": reason}
+        )
+        return _pause(data)
 
     async def revoke(
         self, credentials: AgentCredentials, *, release_id: str, reason: str

@@ -859,6 +859,12 @@ class InMemoryAssistantSessionRepository(_StagedRepository[AssistantSession]):
             self._track(session)
         return mine
 
+    async def list_all(self) -> list[AssistantSession]:
+        every = sorted(self._all(), key=lambda s: (s.created_at, s.id))
+        for session in every:
+            self._track(session)
+        return every
+
 
 class InMemoryCopilotThreadRepository(_StagedRepository[CopilotThread]):
     """ADR 0003. Same answers as ``SqlCopilotThreadRepository`` (a thread per case and analyst)."""

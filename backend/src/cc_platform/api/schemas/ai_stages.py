@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, StringConstraints
 
 from cc_platform.api.schemas.builder import AliasChange, StepUpCode
 from cc_platform.api.schemas.common import ApiModel, RequestModel
+from cc_platform.application.ai.agents import AgentsView
 from cc_platform.application.ai.maturity import (
     ActivateAgentResultView,
     AiStagesView,
@@ -124,6 +125,12 @@ class CaseTypeStage(ApiModel):
         description="agent-core's id of the agent that serves the type (set while `agent` is "
         "`active`, slice 22)."
     )
+    agent_paused: bool = Field(
+        description="Supervisión paused the agent: new cases do not reach it, open ones carry on."
+    )
+    agent_name: str | None = Field(
+        description="The name Supervisión gave the agent (ADR 0009); null: show the humanized id."
+    )
     last_change: StageLastChange | None
     version: int
 
@@ -144,6 +151,8 @@ class CaseTypeStage(ApiModel):
             reached=[StageReached(stage=s, since=at) for s, at in stage_since(m)],
             agent_since=m.agent_since,
             agent_id=m.agent_id,
+            agent_name=m.agent_name,
+            agent_paused=m.agent_paused,
             last_change=last,
             version=m.version,
         )
@@ -183,6 +192,71 @@ class MoveStageBackResult(ApiModel):
 class ToolUsedRequest(RequestModel):
     tool: str = Field(min_length=1, max_length=120, examples=["leer_movimientos@1"])
     decision: ToolDecision = ToolDecision.USED
+
+
+class AgentResults(ApiModel):
+    sessions: int = Field(description="Assistant sessions whose last answering agent it was.")
+    active: int = Field(description="…still open.")
+    resolved: int
+    handed_to_people: int = Field(
+        description="Escalated, ended without a resolution, failed or taken by Supervisión."
+    )
+
+
+class AgentRow(ApiModel):
+    agent_id: str
+    display_name: str = Field(description="Supervisión's name for it, or the id humanized.")
+    case_type: CaseType | None = Field(description="The type it serves; null: serves none.")
+    results: AgentResults
+    paused: bool = Field(description="Out of the reception directory (ADR 0009 section 2).")
+
+
+class AiAgents(ApiModel):
+    available: bool = Field(description="false while the AI switch is off (`agents` is empty).")
+    agents: list[AgentRow]
+
+    @classmethod
+    def from_view(cls, view: AgentsView) -> AiAgents:
+        return cls(
+            available=view.available,
+            agents=[
+                AgentRow(
+                    agent_id=a.agent_id,
+                    display_name=a.display_name,
+                    case_type=a.case_type,
+                    paused=a.paused,
+                    results=AgentResults(
+                        sessions=a.results.sessions,
+                        active=a.results.active,
+                        resolved=a.results.resolved,
+                        handed_to_people=a.results.handed_to_people,
+                    ),
+                )
+                for a in view.agents
+            ],
+        )
+
+
+class RenameAgentRequest(RequestModel):
+    name: Annotated[str, StringConstraints(min_length=1, max_length=80, strip_whitespace=True)]
+
+
+class PauseAgentRequest(RequestModel):
+    step_up_code: StepUpCode
+    reason: Annotated[str, StringConstraints(max_length=500)] = ""
+
+
+class ItemDecisionRequest(RequestModel):
+    """What the analyst did with one item of her suggestion (slice 24)."""
+
+    item: Literal["tool", "action", "escalate"]
+    ref: str = Field(
+        default="",
+        max_length=120,
+        examples=["leer_movimientos@1"],
+        description="The tool or action (`tool` of the item); empty for `escalate`.",
+    )
+    decision: Literal["used", "dismissed"]
 
 
 class ActivateAgentRequest(RequestModel):

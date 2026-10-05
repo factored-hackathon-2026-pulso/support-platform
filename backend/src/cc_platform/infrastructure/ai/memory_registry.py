@@ -25,6 +25,7 @@ from typing import Any
 from cc_platform.application.ai.credentials import AgentCredentials
 from cc_platform.application.ai.registry import (
     MAX_PROPOSAL_PAGE,
+    AgentPause,
     AgentRegistryError,
     AliasChange,
     AliasState,
@@ -95,6 +96,7 @@ class InMemoryAgentRegistry:
     _decisions: dict[str, LastDecision] = field(default_factory=dict)
     _releases: dict[str, ReleaseDetail] = field(default_factory=dict)
     _aliases: dict[tuple[str, str], str] = field(default_factory=dict)
+    _paused: set[str] = field(default_factory=set)
     _publish_keys: dict[str, tuple[str, str]] = field(default_factory=dict)
     _versions: dict[tuple[str, str], list[EntityVersion]] = field(default_factory=dict)
     _count: int = 0
@@ -556,6 +558,37 @@ class InMemoryAgentRegistry:
         return release
 
     # ------------------------------------------------------------------ aliases and releases
+    async def pause_agent(
+        self, credentials: AgentCredentials, *, agent_id: str, reason: str = ""
+    ) -> AgentPause:
+        principal = self._enter("pause", credentials, agent_id=agent_id)
+        self._require_human_step_up(principal, "aprobador")
+        prod = self._aliases.get((agent_id, "prod"))
+        if prod is None:
+            raise AgentRegistryError(
+                status=404, code="not_found", detail="el agente no tiene release en prod"
+            )
+        if agent_id in self._paused:
+            raise AgentRegistryError(
+                status=409, code="illegal_transition", detail="el agente ya está en pausa"
+            )
+        self._paused.add(agent_id)
+        return AgentPause(agent_id=agent_id, paused=True, release_id=prod)
+
+    async def resume_agent(
+        self, credentials: AgentCredentials, *, agent_id: str, reason: str = ""
+    ) -> AgentPause:
+        principal = self._enter("resume", credentials, agent_id=agent_id)
+        self._require_human_step_up(principal, "aprobador")
+        if agent_id not in self._paused:
+            raise AgentRegistryError(
+                status=409, code="illegal_transition", detail="el agente no está en pausa"
+            )
+        self._paused.discard(agent_id)
+        return AgentPause(
+            agent_id=agent_id, paused=False, release_id=self._aliases.get((agent_id, "prod"))
+        )
+
     async def promote(
         self,
         credentials: AgentCredentials,

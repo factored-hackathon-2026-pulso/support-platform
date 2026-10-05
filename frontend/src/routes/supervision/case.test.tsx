@@ -346,3 +346,30 @@ describe('supervisor case view of a case the assistant holds (slice 19)', () => 
     expect(await screen.findByText('Tomaste el caso del asistente')).toBeInTheDocument()
   })
 })
+
+describe('supervisor case view in Portuguese (pt-BR)', () => {
+  it('is read-only, goes back to Filas and reassigns in Portuguese', async () => {
+    vi.mocked(setCaseAssignee).mockResolvedValue({
+      changed: true,
+      case: { ...makeCaseDetail().case, assignedAnalystId: DANIELA_ID },
+      assignment: { ...makeCaseDetail().assignment!, reason: 'manual' },
+    })
+    const { user } = renderRoute(casePath(), { staff: supervisorStaff, locale: 'pt-BR' })
+    expect(await screen.findByRole('link', { name: 'Voltar para Filas' })).toHaveAttribute(
+      'href',
+      '/supervision/queues',
+    )
+    expect(screen.getByText('Somente leitura')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /^Conversa de .+ \(supervisão\)$/ }),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(document.title).toMatch(/^Caso .+ em supervisão/))
+    await user.click(screen.getByRole('button', { name: 'Reatribuir' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reatribuir caso' })
+    await user.click(within(dialog).getByRole('radio', { name: /^Daniela Ríos/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Reatribuir para Daniela' }))
+    expect(
+      await screen.findByText('O caso de Marcela Quintana Pardo passou para Daniela Ríos'),
+    ).toBeInTheDocument()
+  })
+})

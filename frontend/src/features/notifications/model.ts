@@ -11,6 +11,7 @@
  */
 import {
   adminUserPath,
+  automationProposalPath,
   PATHS,
   supervisionCasePath,
   supervisionEscalationPath,
@@ -80,6 +81,7 @@ export const NOTIFICATION_KIND: Record<NotificationKind, NotificationAppearance>
   sla_at_risk: appearance('flame', 'danger', 'viewInQueue'),
   account_locked: appearance('lock', 'danger', 'review'),
   invitation_accepted: appearance('user-check', 'success', 'viewUsers'),
+  improvement_proposed: appearance('up', 'accent', 'review'),
 }
 
 /** What one notification says and where its action goes. */
@@ -186,6 +188,16 @@ export function notificationCopy(n: Notification, now: number): NotificationCopy
         t('kinds.invitationAccepted', { name: target }),
         t('kinds.invitationAcceptedDetail'),
         n.targetId ? adminUserPath(n.targetId) : PATHS.admin.users,
+      )
+    case 'improvement_proposed':
+      return copy(
+        t('kinds.improvementProposed', {
+          agent: n.improvement?.agentId ?? t('kinds.improvementAgentFallback'),
+        }),
+        n.improvement?.title ?? t('kinds.improvementDetailFallback'),
+        n.improvement
+          ? automationProposalPath(n.improvement.proposalId)
+          : PATHS.supervision.automationProposals,
       )
   }
 }

@@ -185,14 +185,20 @@ class InMemoryAgentRegistry:
         return proposal
 
     def seed_proposal(
-        self, *, agent_id: str, title: str, created_by: str = "constructor-bot"
+        self,
+        *,
+        agent_id: str,
+        title: str,
+        created_by: str = "constructor-bot",
+        origin: ProposalOrigin = ProposalOrigin.BUILDER_CHAT,
     ) -> str:
-        """A proposal somebody else made (the builder chat's service identity): returns its id."""
+        """A proposal somebody else made (the builder chat's service identity, or the improvement
+        engine with ``origin=AUTO_DETECT``): returns its id."""
         self._count += 1
         proposal = Proposal(
             proposal_id=self._proposal_id(),
             agent_id=agent_id,
-            origin=ProposalOrigin.BUILDER_CHAT,
+            origin=origin,
             state=ProposalState.DRAFT,
             rev=0,
             base_release_id=self._aliases.get((agent_id, "staging")),

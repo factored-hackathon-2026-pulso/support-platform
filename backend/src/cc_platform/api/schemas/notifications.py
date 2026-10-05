@@ -19,6 +19,21 @@ from cc_platform.domain.notifications.notification import NotificationKind
 from cc_platform.domain.people.staff import Language, StaffRole
 
 
+class ImprovementNotice(ApiModel):
+    """``improvement_proposed``: what the improvement engine says about its proposal (ADR 0007).
+    Bounded free text without personal data; render it as text, never as markup."""
+
+    proposal_id: str = Field(description="agent-core's proposal id; open it in the Agentes list.")
+    agent_id: str
+    title: str = Field(description="Up to 120 characters.")
+    problem: str = Field(description="Up to 600 characters.")
+    evidence: str = Field(description="Up to 600 characters.")
+    expected_effect: str = Field(description="Up to 400 characters.")
+    evidence_links: list[str] = Field(
+        description="Up to 8 case ids (`CASE-…`); open `/supervision/cases/{id}`."
+    )
+
+
 class Notification(ApiModel):
     id: str = Field(description="`NTF-…`")
     kind: NotificationKind
@@ -27,7 +42,9 @@ class Notification(ApiModel):
     )
     created_at: datetime = Field(description="When the fact happened (not when it was written).")
     read_at: datetime | None
-    case_id: str | None = Field(description="Every kind but account_locked, invitation_accepted.")
+    case_id: str | None = Field(
+        description="The case of a case kind (null for staff and improvement kinds)."
+    )
     customer_name: str | None
     actor_id: str | None = Field(
         description=(
@@ -49,6 +66,9 @@ class Notification(ApiModel):
     failed_attempts: int | None = Field(description="account_locked: attempts that locked it.")
     sla_due_at: datetime | None = Field(description="The case's first-response due time now.")
     first_response_at: datetime | None = Field(description="The case's first response, if any.")
+    improvement: ImprovementNotice | None = Field(
+        description="improvement_proposed only (`caseId` is null for it)."
+    )
 
     @classmethod
     def from_view(cls, view: NotificationView) -> Notification:
@@ -70,6 +90,19 @@ class Notification(ApiModel):
             failed_attempts=view.failed_attempts,
             sla_due_at=view.sla_due_at,
             first_response_at=view.first_response_at,
+            improvement=(
+                None
+                if view.improvement is None or view.proposal_id is None or view.agent_id is None
+                else ImprovementNotice(
+                    proposal_id=view.proposal_id,
+                    agent_id=view.agent_id,
+                    title=view.improvement.title,
+                    problem=view.improvement.problem,
+                    evidence=view.improvement.evidence,
+                    expected_effect=view.improvement.expected_effect,
+                    evidence_links=list(view.improvement.evidence_links),
+                )
+            ),
         )
 
 

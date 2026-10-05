@@ -26,6 +26,7 @@ export function makeNotification(overrides: Partial<Notification> = {}): Notific
     failedAttempts: null,
     slaDueAt: minutesFrom(1),
     firstResponseAt: null,
+    improvement: null,
     ...overrides,
   }
 }

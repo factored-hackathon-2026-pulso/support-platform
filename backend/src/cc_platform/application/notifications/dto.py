@@ -14,7 +14,11 @@ from weakref import WeakKeyDictionary
 
 from cc_platform.application.notifications.ports import NotificationCursor
 from cc_platform.application.ports.unit_of_work import UnitOfWork
-from cc_platform.domain.notifications.notification import Notification, NotificationKind
+from cc_platform.domain.notifications.notification import (
+    ImprovementDossier,
+    Notification,
+    NotificationKind,
+)
 from cc_platform.domain.people.staff import Language, Staff, StaffRole
 from cc_platform.domain.shared.errors import InvalidValueError
 from cc_platform.domain.shared.ids import IdPrefix, is_valid_id
@@ -40,6 +44,10 @@ class NotificationView:
     sla_due_at: datetime | None
     """The case's first-response due time (``sla_at_risk``; any case kind)."""
     first_response_at: datetime | None
+    proposal_id: str | None = None
+    agent_id: str | None = None
+    improvement: ImprovementDossier | None = None
+    """``improvement_proposed``: the engine's dossier summary."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +155,9 @@ class NotificationReader:
                     failed_attempts=item.failed_attempts,
                     sla_due_at=case.sla_due_at if case is not None else None,
                     first_response_at=case.first_response_at if case is not None else None,
+                    proposal_id=item.proposal_id,
+                    agent_id=item.agent_id,
+                    improvement=item.improvement,
                 )
             )
         return views

@@ -5315,6 +5315,59 @@
         "title": "HomeTeam",
         "type": "object"
       },
+      "ImprovementNotice": {
+        "description": "``improvement_proposed``: what the improvement engine says about its proposal (ADR 0007).\nBounded free text without personal data; render it as text, never as markup.",
+        "properties": {
+          "agentId": {
+            "title": "Agentid",
+            "type": "string"
+          },
+          "evidence": {
+            "description": "Up to 600 characters.",
+            "title": "Evidence",
+            "type": "string"
+          },
+          "evidenceLinks": {
+            "description": "Up to 8 case ids (`CASE-…`); open `/supervision/cases/{id}`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidencelinks",
+            "type": "array"
+          },
+          "expectedEffect": {
+            "description": "Up to 400 characters.",
+            "title": "Expectedeffect",
+            "type": "string"
+          },
+          "problem": {
+            "description": "Up to 600 characters.",
+            "title": "Problem",
+            "type": "string"
+          },
+          "proposalId": {
+            "description": "agent-core's proposal id; open it in the Agentes list.",
+            "title": "Proposalid",
+            "type": "string"
+          },
+          "title": {
+            "description": "Up to 120 characters.",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposalId",
+          "agentId",
+          "title",
+          "problem",
+          "evidence",
+          "expectedEffect",
+          "evidenceLinks"
+        ],
+        "title": "ImprovementNotice",
+        "type": "object"
+      },
       "InboxCounts": {
         "properties": {
           "all": {
@@ -5945,7 +5998,7 @@
                 "type": "null"
               }
             ],
-            "description": "Every kind but account_locked, invitation_accepted.",
+            "description": "The case of a case kind (null for staff and improvement kinds).",
             "title": "Caseid"
           },
           "createdAt": {
@@ -6006,6 +6059,17 @@
             "description": "`NTF-…`",
             "title": "Id",
             "type": "string"
+          },
+          "improvement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImprovementNotice"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "improvement_proposed only (`caseId` is null for it)."
           },
           "kind": {
             "$ref": "#/components/schemas/NotificationKind"
@@ -6103,7 +6167,8 @@
           "score",
           "failedAttempts",
           "slaDueAt",
-          "firstResponseAt"
+          "firstResponseAt",
+          "improvement"
         ],
         "title": "Notification",
         "type": "object"
@@ -6124,7 +6189,8 @@
           "case_queued",
           "sla_at_risk",
           "account_locked",
-          "invitation_accepted"
+          "invitation_accepted",
+          "improvement_proposed"
         ],
         "title": "NotificationKind",
         "type": "string"
@@ -7299,7 +7365,8 @@
             "enum": [
               "platform",
               "chat",
-              "tracked"
+              "tracked",
+              "engine"
             ],
             "title": "Source",
             "type": "string"

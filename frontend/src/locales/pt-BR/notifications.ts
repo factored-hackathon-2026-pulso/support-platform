@@ -30,6 +30,9 @@ export default {
     failedAttempts_other: '{{count, number}} tentativas malsucedidas de entrar',
     invitationAccepted: 'Convite aceito: {{name}}',
     invitationAcceptedDetail: 'Já pode entrar na plataforma',
+    improvementProposed: 'Nova proposta de melhoria para {{agent}}',
+    improvementAgentFallback: 'um agente',
+    improvementDetailFallback: 'Proposta do motor de melhoria',
   },
   sla: {
     answered: '{{name}}, já tem resposta',

@@ -189,7 +189,7 @@ class ProposalSummary(ViewModel):
     candidate_hash: str | None
     created_by: str
     registered_by: str = Field(description="The staff member who brought it into this list.")
-    source: Literal["platform", "chat", "tracked"] = Field(
+    source: Literal["platform", "chat", "tracked", "engine"] = Field(
         description="Created here, found through the builder chat, or tracked by id."
     )
     updated_at: datetime

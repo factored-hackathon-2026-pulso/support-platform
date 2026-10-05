@@ -223,7 +223,7 @@ erDiagram
     notifications {
         string id PK "NTF-…"
         string recipient_id FK
-        string kind "14 kinds (slice 10)"
+        string kind "15 kinds (slice 10, ADR 0007)"
         datetime created_at "when the fact happened"
         string source_key "EVT-… or sla:CASE-…"
         string case_id
@@ -235,6 +235,9 @@ erDiagram
         int score
         int failed_attempts
         datetime read_at
+        string proposal_id
+        string agent_id
+        json improvement
         int version
     }
     event_log {
@@ -514,7 +517,7 @@ locking like every aggregate. No message text is stored here (it lives in `turns
 
 `case_type_maturity` (slice 21) — one row per case type that matured (absent = stage 0): `case_type` (key), `stage` (0-3), `agent` (`none|ready|active`), `signals` (JSON counters since the current stage, the last drafts as letters), `stage_since` (JSON stage → when), `agent_since`, **`agent_id`** (slice 22: agent-core's id of the agent that serves the type, set by "Activar"), `changed_at`, `changed_by_id`, `last_change`, `version`.
 
-`builder_proposals` (slice 16) — the platform's index of agent-core's proposals (its registry cannot list them): `id` is **agent-core's proposal id** (a UUID, not a platform id), `agent_id`, `title`, `origin` (`manual|builder_chat|auto_detect|import`), `created_by` (a staff id or the builder service's identity), `registered_by` → staff (who brought it into the list), `source` (`platform|chat|tracked`), and the last state read from the registry: `state` (`draft|candidate|evaluated|approved|published`), `rev`, `base_release_id`, `candidate_hash`, `updated_at` (the registry's), `refreshed_at` (when the platform read it), `created_at`, `version`. Indexes `(agent_id, updated_at)` and `(state, updated_at)`. The registry is the source of truth: this is a cache plus "who brought it here".
+`builder_proposals` (slice 16) — the platform's index of agent-core's proposals (its registry cannot list them): `id` is **agent-core's proposal id** (a UUID, not a platform id), `agent_id`, `title`, `origin` (`manual|builder_chat|auto_detect|import`), `created_by` (a staff id or the builder service's identity), `registered_by` (the staff id who brought it into the list, or `engine`, ADR 0007; no foreign key), `source` (`platform|chat|tracked|engine`), and the last state read from the registry: `state` (`draft|candidate|evaluated|approved|published`), `rev`, `base_release_id`, `candidate_hash`, `updated_at` (the registry's), `refreshed_at` (when the platform read it), `created_at`, `version`. Indexes `(agent_id, updated_at)` and `(state, updated_at)`. The registry is the source of truth: this is a cache plus "who brought it here".
 
 `bank_customer_links` (`customer_id` PK → customers, `bank_customer_id`) — which dataset customer each
 platform customer is; filled at startup from a private file.
@@ -530,7 +533,7 @@ renders the Spanish text with fixed templates. No AI.
 |---|---|---|
 | `id` | text, PK | `NTF-…` |
 | `recipient_id` | FK → staff | who receives it |
-| `kind` | text | Analista: `assigned_on_arrival`, `assigned_from_queue`, `assigned_by_supervisor`, `reassigned_away`, `customer_returned`, `escalation_answered`, `escalation_taken`, `escalation_reassigned`, `case_rated`; Supervisión: `case_escalated`, `case_queued`, `sla_at_risk`; Administración: `account_locked`, `invitation_accepted` |
+| `kind` | text | Analista: `assigned_on_arrival`, `assigned_from_queue`, `assigned_by_supervisor`, `reassigned_away`, `customer_returned`, `escalation_answered`, `escalation_taken`, `escalation_reassigned`, `case_rated`; Supervisión: `case_escalated`, `case_queued`, `sla_at_risk`; Administración: `account_locked`, `invitation_accepted`; Supervisión (ADR 0007): `improvement_proposed` |
 | `created_at` | date | when the fact happened (the source event's time), not when it was written |
 | `source_key` | text(80) | idempotency: the source event id (`EVT-…`) or the sweep's `sla:<case>`; unique per person |
 | `case_id`, `customer_id` | text, null | the case and its customer (case kinds) |
@@ -541,6 +544,7 @@ renders the Spanish text with fixed templates. No AI.
 | `score` | integer, null | `case_rated`: the rating (1 to 4) |
 | `failed_attempts` | integer, null | `account_locked`: failed attempts |
 | `read_at` | date, null | when it was read (once) |
+| `proposal_id`, `agent_id`, `improvement` | text(64), text(64), JSON; null | `improvement_proposed` (ADR 0007): agent-core's proposal id, its agent and the engine's dossier summary (`title`, `problem`, `evidence`, `expectedEffect`, `evidenceLinks`); source key `improve:<proposal id>` |
 | `version` | integer | optimistic concurrency (reading one is a compare-and-set; "Marcar todas" is a conditional `UPDATE … WHERE read_at IS NULL`) |
 
 Indexes: unique `(recipient_id, source_key)`; `(recipient_id, created_at, id)` (the list, newest

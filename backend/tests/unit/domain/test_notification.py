@@ -9,6 +9,7 @@ import pytest
 from cc_platform.domain.notifications.notification import (
     KIND_ROLE,
     STAFF_KINDS,
+    ImprovementDossier,
     Notification,
     NotificationKind,
 )
@@ -44,6 +45,7 @@ def test_every_kind_belongs_to_one_role() -> None:
         NotificationKind.CASE_ESCALATED,
         NotificationKind.CASE_QUEUED,
         NotificationKind.SLA_AT_RISK,
+        NotificationKind.IMPROVEMENT_PROPOSED,
     }
     assert make().role is StaffRole.ANALYST
 
@@ -63,6 +65,11 @@ def test_never_read_before_it_happened() -> None:
     assert notification.read_at == T
     with pytest.raises(InvalidValueError):
         make(read_at=T - timedelta(seconds=1))
+
+
+def test_an_artifact_reference_is_not_an_email_address() -> None:
+    kept = dossier(problem="recepcion@1.0.0 y disputas@2.1.0-rc.1 responden tarde")
+    assert "recepcion@1.0.0" in kept.problem
 
 
 @pytest.mark.parametrize(
@@ -90,3 +97,57 @@ def test_staff_kinds_name_their_person() -> None:
         make(NotificationKind.ACCOUNT_LOCKED, case_id=None, score=None)
     with pytest.raises(InvalidValueError):
         make(NotificationKind.INVITATION_ACCEPTED, case_id=None, target_id=CASE)
+
+
+# --------------------------------------------------------------------------- ADR 0007
+def dossier(**changes: object) -> ImprovementDossier:
+    values: dict[str, object] = {
+        "title": "Resumen más corto",
+        "problem": "Los clientes escalan por resúmenes largos.",
+        "evidence": "12 casos en 7 días.",
+        "expected_effect": "Menos escalaciones.",
+        "evidence_links": (CASE,),
+    }
+    values.update(changes)
+    return ImprovementDossier(**values)  # type: ignore[arg-type]
+
+
+def improvement(**changes: object) -> Notification:
+    values: dict[str, object] = {
+        "case_id": None,
+        "score": None,
+        "proposal_id": "PRP-1",
+        "agent_id": "disputas",
+        "improvement": dossier(),
+    }
+    values.update(changes)
+    return make(NotificationKind.IMPROVEMENT_PROPOSED, **values)
+
+
+def test_an_improvement_is_for_supervision_and_names_its_proposal() -> None:
+    assert improvement().role is StaffRole.SUPERVISOR
+    for missing in ("proposal_id", "agent_id", "improvement"):
+        with pytest.raises(InvalidValueError):
+            improvement(**{missing: None})
+    with pytest.raises(InvalidValueError):
+        improvement(case_id=CASE)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"title": " "},
+        {"title": "x" * 121},
+        {"problem": "x" * 601},
+        {"evidence": "x" * 601},
+        {"expected_effect": "x" * 401},
+        {"problem": "escribir a ana@example.com"},
+        {"evidence": "tarjeta 4111 1111 1111 1111"},
+        {"evidence_links": (CASE,) * 2},
+        {"evidence_links": tuple(f"CASE-{n:026d}" for n in range(9))},
+        {"evidence_links": ("https://example.com",)},
+    ],
+)
+def test_a_dossier_is_bounded_and_free_of_personal_data(changes: dict[str, object]) -> None:
+    with pytest.raises(InvalidValueError):
+        dossier(**changes)

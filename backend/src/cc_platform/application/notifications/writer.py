@@ -31,6 +31,7 @@ from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFac
 from cc_platform.application.realtime.topics import Topic
 from cc_platform.domain.notifications.notification import (
     RETENTION_PER_PERSON,
+    ImprovementDossier,
     Notification,
     NotificationKind,
 )
@@ -58,6 +59,9 @@ class NotificationDraft:
     language: Language | None = None
     score: int | None = None
     failed_attempts: int | None = None
+    proposal_id: str | None = None
+    agent_id: str | None = None
+    improvement: ImprovementDossier | None = None
 
 
 class NotificationPresenter(Protocol):
@@ -198,6 +202,9 @@ class NotificationWriter:
                 language=draft.language,
                 score=draft.score,
                 failed_attempts=draft.failed_attempts,
+                proposal_id=draft.proposal_id,
+                agent_id=draft.agent_id,
+                improvement=draft.improvement,
             )
             await uow.notifications.add(notification)
             created.append(notification)

@@ -519,7 +519,8 @@ builder_proposals = Table(
     Column("title", String(200), nullable=False),
     Column("origin", String(20), nullable=False),
     Column("created_by", String(120), nullable=False),
-    Column("registered_by", String(ID), ForeignKey("staff.id"), nullable=False),
+    # a staff id, or ``engine`` for a proposal the improvement engine announced (ADR 0007)
+    Column("registered_by", String(ID), nullable=False),
     Column("source", String(10), nullable=False),
     Column("state", String(12), nullable=False),
     Column("rev", Integer, nullable=False, default=0),
@@ -564,6 +565,10 @@ notifications = Table(
     Column("score", Integer, nullable=True),
     Column("failed_attempts", Integer, nullable=True),
     Column("read_at", UtcDateTime, nullable=True),
+    # ADR 0007 (``improvement_proposed``): the proposal, its agent and the engine's dossier.
+    Column("proposal_id", String(64), nullable=True),
+    Column("agent_id", String(64), nullable=True),
+    Column("improvement", JSON, nullable=True),
     _version(),
     UniqueConstraint("recipient_id", "source_key", name="uq_notifications_recipient_source"),
     # Her list, newest first (keyset pagination and retention).

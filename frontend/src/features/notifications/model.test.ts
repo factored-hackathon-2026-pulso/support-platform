@@ -166,11 +166,32 @@ describe('notificationCopy: one fixed template per kind (canvas boards)', () => 
       action: 'Ver usuarios',
       icon: 'user-check',
     })
+    expect(
+      copyOf({
+        kind: 'improvement_proposed',
+        role: 'supervisor',
+        caseId: null,
+        improvement: {
+          proposalId: 'p-1',
+          agentId: 'disputas',
+          title: 'Resumen más corto',
+          problem: 'p',
+          evidence: 'e',
+          expectedEffect: 'x',
+          evidenceLinks: [],
+        },
+      }),
+    ).toMatchObject({
+      title: 'Nueva propuesta de mejora para disputas',
+      detail: 'Resumen más corto',
+      action: 'Revisar',
+      href: '/supervision/automation/proposals/p-1',
+    })
   })
 
   it('covers every kind and never joins facts with " · "', () => {
     const kinds = Object.keys(NOTIFICATION_KIND) as NotificationKind[]
-    expect(kinds).toHaveLength(14)
+    expect(kinds).toHaveLength(15)
     for (const kind of kinds) {
       const copy = copyOf({ kind, targetId: 'STF-1', escalationId: 'ESC-1' })
       expect(copy.title).not.toContain(' · ')

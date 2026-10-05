@@ -4497,6 +4497,45 @@ export interface components {
       /** Teamname */
       teamName: string
     }
+    /**
+     * ImprovementNotice
+     * @description ``improvement_proposed``: what the improvement engine says about its proposal (ADR 0007).
+     *     Bounded free text without personal data; render it as text, never as markup.
+     */
+    ImprovementNotice: {
+      /** Agentid */
+      agentId: string
+      /**
+       * Evidence
+       * @description Up to 600 characters.
+       */
+      evidence: string
+      /**
+       * Evidencelinks
+       * @description Up to 8 case ids (`CASE-…`); open `/supervision/cases/{id}`.
+       */
+      evidenceLinks: string[]
+      /**
+       * Expectedeffect
+       * @description Up to 400 characters.
+       */
+      expectedEffect: string
+      /**
+       * Problem
+       * @description Up to 600 characters.
+       */
+      problem: string
+      /**
+       * Proposalid
+       * @description agent-core's proposal id; open it in the Agentes list.
+       */
+      proposalId: string
+      /**
+       * Title
+       * @description Up to 120 characters.
+       */
+      title: string
+    }
     /** InboxCounts */
     InboxCounts: {
       /**
@@ -4796,7 +4835,7 @@ export interface components {
       actorName: string | null
       /**
        * Caseid
-       * @description Every kind but account_locked, invitation_accepted.
+       * @description The case of a case kind (null for staff and improvement kinds).
        */
       caseId: string | null
       /**
@@ -4827,6 +4866,8 @@ export interface components {
        * @description `NTF-…`
        */
       id: string
+      /** @description improvement_proposed only (`caseId` is null for it). */
+      improvement: components['schemas']['ImprovementNotice'] | null
       kind: components['schemas']['NotificationKind']
       /** @description The case language (case kinds). */
       language: components['schemas']['Language'] | null
@@ -4872,6 +4913,7 @@ export interface components {
       | 'sla_at_risk'
       | 'account_locked'
       | 'invitation_accepted'
+      | 'improvement_proposed'
     /** NotificationPage */
     NotificationPage: {
       /**
@@ -5459,7 +5501,7 @@ export interface components {
        * @description Created here, found through the builder chat, or tracked by id.
        * @enum {string}
        */
-      source: 'platform' | 'chat' | 'tracked'
+      source: 'platform' | 'chat' | 'tracked' | 'engine'
       state: components['schemas']['ProposalState']
       /** Title */
       title: string

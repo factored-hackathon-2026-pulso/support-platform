@@ -61,7 +61,7 @@ from cc_platform.application.errors import ForbiddenError
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
 from cc_platform.application.security import Actor, ensure_any_role
-from cc_platform.domain.ai.builder import BuilderProposal, ProposalSource
+from cc_platform.domain.ai.builder import ENGINE_REGISTRANT, BuilderProposal, ProposalSource
 from cc_platform.domain.ai.events import (
     BuilderAliasPromoted,
     BuilderDraftSaved,
@@ -77,8 +77,8 @@ from cc_platform.domain.ai.events import (
     BuilderReleaseRevoked,
 )
 from cc_platform.domain.people.staff import StaffRole
-from cc_platform.domain.shared.actor import ActorRef
-from cc_platform.domain.shared.errors import NotFoundError
+from cc_platform.domain.shared.actor import ActorRef, ActorRole
+from cc_platform.domain.shared.errors import InvalidValueError, NotFoundError
 from cc_platform.domain.shared.events import DomainEvent
 
 #: How many proposals the list refreshes against the registry at once.
@@ -164,7 +164,7 @@ async def guarded[T](call: Awaitable[T]) -> T:
 
 
 def _add_to_index(
-    proposal: Proposal, *, actor: Actor, source: ProposalSource, at: datetime
+    proposal: Proposal, *, registered_by: str, source: ProposalSource, at: datetime
 ) -> BuilderProposal:
     return BuilderProposal(
         id=proposal.proposal_id,
@@ -172,7 +172,7 @@ def _add_to_index(
         title=proposal.title,
         origin=proposal.origin.value,
         created_by=proposal.created_by,
-        registered_by=actor.staff_id,
+        registered_by=registered_by,
         source=source,
         state=proposal.state.value,
         rev=proposal.rev,
@@ -219,7 +219,7 @@ class AgentBuilder:
 
     async def _settle(
         self,
-        actor: Actor,
+        actor: Actor | None,
         credentials: AgentCredentials,
         proposal_id: str,
         events: Callable[[str], Sequence[DomainEvent]],
@@ -238,13 +238,17 @@ class AgentBuilder:
             except (AgentRuntimeUnavailableError, AgentRegistryError):
                 proposal = None
 
+        registered_by = actor.staff_id if actor is not None else ENGINE_REGISTRANT
+
         async def attempt() -> None:
             async with self.uow() as uow:
                 now = self.clock.now()
                 entry = await uow.builder_proposals.get(proposal_id)
                 if proposal is not None:
                     if entry is None:
-                        entry = _add_to_index(proposal, actor=actor, source=source, at=now)
+                        entry = _add_to_index(
+                            proposal, registered_by=registered_by, source=source, at=now
+                        )
                         await uow.builder_proposals.add(entry)
                     elif _observe(entry, proposal, now):
                         await uow.builder_proposals.save(entry)
@@ -410,6 +414,27 @@ class AgentBuilder:
         detail = await guarded(self.registry.get_proposal(credentials, proposal_id=proposal_id))
         return await self.adopt(actor, credentials, detail.proposal, source="tracked")
 
+    async def announce_proposal(self, proposal_id: str) -> ProposalSummary:
+        """ADR 0007: adopt a proposal the improvement engine made (``origin=auto_detect``) into the
+        list, without a human session. Read-only towards the registry (a ``constructor`` read, never
+        an approver); it approves and publishes nothing. Idempotent like ``track_proposal``."""
+        credentials = self.issuer.builder(
+            BuilderIdentity(staff_id=ENGINE_REGISTRANT, constructor=True)
+        )
+        detail = await guarded(self.registry.get_proposal(credentials, proposal_id=proposal_id))
+        if detail.proposal.origin is not ProposalOrigin.AUTO_DETECT:
+            raise InvalidValueError(
+                "only a proposal the improvement engine detected can be announced",
+                field="proposal_id",
+            )
+        return await self._adopt(
+            None,
+            ActorRef(role=ActorRole.SYSTEM, actor_id=ENGINE_REGISTRANT),
+            credentials,
+            detail.proposal,
+            source="engine",
+        )
+
     async def adopt(
         self,
         actor: Actor,
@@ -420,7 +445,18 @@ class AgentBuilder:
     ) -> ProposalSummary:
         """Add a proposal the registry confirmed to the list (the audit records it once) or refresh
         the one already there. Used by ``track_proposal`` and by the builder chat."""
-        ref, now = self._ref(actor), self.clock.now()
+        return await self._adopt(actor, self._ref(actor), credentials, proposal, source=source)
+
+    async def _adopt(
+        self,
+        actor: Actor | None,
+        ref: ActorRef,
+        credentials: AgentCredentials,
+        proposal: Proposal,
+        *,
+        source: ProposalSource,
+    ) -> ProposalSummary:
+        now = self.clock.now()
         async with self.uow() as uow:
             known = await uow.builder_proposals.get(proposal.proposal_id) is not None
         await self._settle(

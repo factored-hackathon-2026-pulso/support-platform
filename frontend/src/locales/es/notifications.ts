@@ -35,6 +35,9 @@ export default {
     failedAttempts_other: '{{count, number}} intentos fallidos al entrar',
     invitationAccepted: 'Invitación aceptada: {{name}}',
     invitationAcceptedDetail: 'Ya puede entrar a la plataforma',
+    improvementProposed: 'Nueva propuesta de mejora para {{agent}}',
+    improvementAgentFallback: 'un agente',
+    improvementDetailFallback: 'Propuesta del motor de mejora',
   },
   /** The SLA line of "Caso por vencer sin respuesta". */
   sla: {

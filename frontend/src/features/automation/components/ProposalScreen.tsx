@@ -200,7 +200,7 @@ function Changes({ detail }: { detail: ProposalDetail }) {
                   {view.id ? <span className="font-mono text-13">{view.id}</span> : null}
                   {view.version ? <span className="text-12 text-muted">{view.version}</span> : null}
                 </span>
-                <span className="text-14">{view.description}</span>
+                <span className="text-14 whitespace-pre-line">{view.description}</span>
                 {view.rationale ? (
                   <span className="text-13 text-ink-2">
                     <span className="font-semibold">{t('proposal.why')}: </span>

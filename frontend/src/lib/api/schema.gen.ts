@@ -278,6 +278,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/ai/stages': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The AI stage of every case type (analysts and Supervisión)
+     * @description Slice 21. Every case type but `none`, with its stage (0-3), whether an agent is proposed (`ready`) or serves it (`active`), the copilot mode a case of the type gets, the signals counted since its current stage and the team rule (example thresholds). A type nothing happened to is at stage 0. AI off: `available: false` and no types. Live: `ai.stage_updated` on `ai:stages`.
+     */
+    get: operations['ai-stages_get_ai_stages']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/audit/events': {
     parameters: {
       query?: never
@@ -1093,6 +1113,26 @@ export interface paths {
      * @description ADR 0005. `discarded` (the analyst dismissed the draft) or `ignored` (she left it). The draft leaves the list; the rest of the suggestion stays. `used` and `edited` are derived when she replies with `copilotSuggestionId`. 404 for an id that is not hers.
      */
     post: operations['cases_decide_copilot_suggestion']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/cases/{caseId}/copilot/suggestions/{suggestionId}/tools': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * The analyst used a tool the copilot proposed
+     * @description Slice 21. Send it when "Usar" asks the copilot about a `tool` of the suggestion. Records `copilot.tool_used` (audited; the suggestion is not changed); it feeds the stage 2 signal of the case's type. Her own suggestion (`ready`), a tool it proposed: 404 otherwise. AI off: 404 `assistant_disabled`.
+     */
+    post: operations['ai-stages_record_tool_used']
     delete?: never
     options?: never
     head?: never
@@ -1918,6 +1958,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/supervision/ai/stages/{caseType}/move-back': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Move a case type back to an earlier stage (Supervisión)
+     * @description Slice 21. A desired state, safe to repeat: the same stage answers `changed: false`. `toStage` 3 on a type `ready` for an agent withdraws the proposal. Moving up is only the team rule's. 409 `invalid_transition` for a higher stage or a type an agent serves (slice 22 deactivates the agent). Records `ai.stage_moved_back` (audited); the type earns the stages above again from zero. AI off: 404 `assistant_disabled`.
+     */
+    post: operations['ai-stages_move_stage_back']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/supervision/cases/{caseId}/assignee': {
     parameters: {
       query?: never
@@ -2349,6 +2409,25 @@ export interface components {
       /** @description Over every filter except status. */
       statusCounts: components['schemas']['UserStatusCounts']
     }
+    /**
+     * AgentStatus
+     * @enum {string}
+     */
+    AgentStatus: 'none' | 'ready' | 'active'
+    /** AiStages */
+    AiStages: {
+      /**
+       * Available
+       * @description false while the AI switch is off: hide every stage (`types` is empty).
+       */
+      available: boolean
+      rule: components['schemas']['StageRule']
+      /**
+       * Types
+       * @description Every case type but `none` (a case without a type gets no copilot).
+       */
+      types: components['schemas']['CaseTypeStage'][]
+    }
     /** AliasChange */
     AliasChange: {
       /** Actor */
@@ -2406,6 +2485,8 @@ export interface components {
     /** AnalystHome */
     AnalystHome: {
       activity: components['schemas']['HomeActivity']
+      /** @description Slice 21: the assistant in her languages; null while the AI switch is off. */
+      assistant: components['schemas']['HomeAssistant'] | null
       /**
        * Servertime
        * Format: date-time
@@ -3252,6 +3333,30 @@ export interface components {
        */
       changed: boolean
     }
+    /** CaseTypeStage */
+    CaseTypeStage: {
+      /** @description `ready`: the drafts met the rule, the system proposes an agent to Supervisión (slice 22). `active`: an agent serves the type. */
+      agent: components['schemas']['AgentStatus']
+      /** Agentsince */
+      agentSince: string | null
+      caseType: components['schemas']['CaseType']
+      /** @description What the copilot offers a case of the type (ADR 0005's `copilot_mode`); null at stage 0: no copilot. */
+      copilotMode: components['schemas']['CopilotMode'] | null
+      lastChange: components['schemas']['StageLastChange'] | null
+      /**
+       * Reached
+       * @description The stages reached (1-3) and since when.
+       */
+      reached: components['schemas']['StageReached'][]
+      signals: components['schemas']['StageSignals']
+      /**
+       * Stage
+       * @description 0 people only · 1 the analyst asks the copilot · 2 it proposes tools · 3 it shadows (drafts above the composer).
+       */
+      stage: number
+      /** Version */
+      version: number
+    }
     /** ChangeCaseTypeRequest */
     ChangeCaseTypeRequest: {
       caseType: components['schemas']['CaseType']
@@ -3329,6 +3434,12 @@ export interface components {
       /** Text */
       text: string
     }
+    /**
+     * CopilotMode
+     * @description ADR 0005's ``copilot_mode``: what the copilot offers for a case of the type.
+     * @enum {string}
+     */
+    CopilotMode: 'answer' | 'tools' | 'drafts'
     /** CopilotSuggestion */
     CopilotSuggestion: {
       /** Caseid */
@@ -4223,6 +4334,8 @@ export interface components {
      *     - ``customer_returned``: the case continues a closed one of the same customer (it
      *       replaces the arrival row of that case).
      *     - ``customer_messages``: the customer wrote in one of her cases (one row per case).
+     *     - ``assigned_by_assistant``: the assistant (ADR 0003) handed the case over and it went to her
+     *       (slice 21; before it, such an assignment had no row).
      * @enum {string}
      */
     HomeActivityKind:
@@ -4232,6 +4345,28 @@ export interface components {
       | 'reassigned_away'
       | 'customer_returned'
       | 'customer_messages'
+      | 'assigned_by_assistant'
+    /**
+     * HomeAssistant
+     * @description Slice 21 (IaHomeTurno): the assistant in her languages.
+     */
+    HomeAssistant: {
+      /**
+       * Handedtoyou
+       * @description Cases it handed over that went to her since `since`.
+       */
+      handedToYou: number
+      /**
+       * Resolved
+       * @description Conversations of her languages it resolved since `since`.
+       */
+      resolved: number
+      /**
+       * Withassistantnow
+       * @description Open conversations of her languages it holds.
+       */
+      withAssistantNow: number
+    }
     /** HomeQueue */
     HomeQueue: {
       language: components['schemas']['Language']
@@ -4496,6 +4631,23 @@ export interface components {
       code: string
       /** @default totp */
       method: components['schemas']['MfaMethod']
+    }
+    /** MoveStageBackRequest */
+    MoveStageBackRequest: {
+      /**
+       * Tostage
+       * @description An earlier stage (or 3 to withdraw `ready`).
+       */
+      toStage: number
+    }
+    /** MoveStageBackResult */
+    MoveStageBackResult: {
+      /**
+       * Changed
+       * @description false: the type was already there (nothing recorded).
+       */
+      changed: boolean
+      type: components['schemas']['CaseTypeStage']
     }
     /** MuteCallRequest */
     MuteCallRequest: {
@@ -5539,6 +5691,117 @@ export interface components {
      * @enum {string}
      */
     StaffRole: 'analyst' | 'supervisor' | 'admin'
+    /**
+     * StageChange
+     * @description What the last change of the type was.
+     * @enum {string}
+     */
+    StageChange: 'advanced' | 'moved_back' | 'agent_ready' | 'agent_active'
+    /** StageLastChange */
+    StageLastChange: {
+      /**
+       * At
+       * Format: date-time
+       */
+      at: string
+      /**
+       * Byname
+       * @description Who did it; null: the system, by the team rule.
+       */
+      byName: string | null
+      kind: components['schemas']['StageChange']
+    }
+    /** StageReached */
+    StageReached: {
+      /**
+       * Since
+       * Format: date-time
+       */
+      since: string
+      /** Stage */
+      stage: number
+    }
+    /**
+     * StageRule
+     * @description **Team rule** (example thresholds for the demo, not learned from data; show it as "Regla
+     *     del equipo (ejemplo)"). Configurable with ``CC_STAGE_*``.
+     */
+    StageRule: {
+      /**
+       * Askedcasestoproposetools
+       * @description 1 → 2: closed cases of the type in which the analyst asked the copilot.
+       */
+      askedCasesToProposeTools: number
+      /**
+       * Draftasispercentforagent
+       * @description 3 → agent: % of them sent as is or with minor changes.
+       */
+      draftAsIsPercentForAgent: number
+      /**
+       * Draftwindow
+       * @description 3 → agent: the last drafts looked at.
+       */
+      draftWindow: number
+      /**
+       * Minoreditpermille
+       * @description An edited draft counts as minor changes up to this edit distance (0-1000).
+       */
+      minorEditPermille: number
+      /**
+       * Resolvedcasestoask
+       * @description 0 → 1: cases of the type resolved by people.
+       */
+      resolvedCasesToAsk: number
+      /**
+       * Toolcasesminimum
+       * @description 2 → 3: …once there are at least this many.
+       */
+      toolCasesMinimum: number
+      /**
+       * Toolusepercenttoshadow
+       * @description 2 → 3: % of the closed cases with tool proposals in which one was used.
+       */
+      toolUsePercentToShadow: number
+    }
+    /**
+     * StageSignals
+     * @description What the platform recorded for the type **since it reached its current stage**.
+     */
+    StageSignals: {
+      /**
+       * Askedcases
+       * @description Closed cases in which someone asked the copilot.
+       */
+      askedCases: number
+      /** Closedcases */
+      closedCases: number
+      /**
+       * Drafts
+       * @description Decided drafts in the window (at most `rule.draftWindow`).
+       */
+      drafts: number
+      /**
+       * Draftsasis
+       * @description Sent as is or with minor changes.
+       */
+      draftsAsIs: number
+      /** Draftsdiscarded */
+      draftsDiscarded: number
+      /** Draftsedited */
+      draftsEdited: number
+      /** Resolvedcases */
+      resolvedCases: number
+      /**
+       * Toolcases
+       * @description Closed cases in which the copilot proposed tools.
+       */
+      toolCases: number
+      /**
+       * Toolusedcases
+       * @description …and the analyst used one.
+       */
+      toolUsedCases: number
+    }
     /** StartCallRequest */
     StartCallRequest: {
       /**
@@ -5745,6 +6008,22 @@ export interface components {
        * @description Open cases of the team's analysts.
        */
       openCases: number
+    }
+    /**
+     * ToolDecision
+     * @description What the analyst did with a ``tool`` the copilot proposed (only ``used`` for now).
+     * @enum {string}
+     */
+    ToolDecision: 'used'
+    /** ToolUsedRequest */
+    ToolUsedRequest: {
+      /** @default used */
+      decision: components['schemas']['ToolDecision']
+      /**
+       * Tool
+       * @example leer_movimientos@1
+       */
+      tool: string
     }
     /**
      * TotpEnrollment
@@ -7148,6 +7427,44 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807): validation_error */
       422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_get_ai_stages': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AiStages']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
         headers: {
           [name: string]: unknown
         }
@@ -10534,6 +10851,67 @@ export interface operations {
       }
     }
   }
+  'ai-stages_record_tool_used': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseId: string
+        suggestionId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ToolUsedRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
   channels_get_email_thread: {
     parameters: {
       query?: never
@@ -13060,6 +13438,77 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_move_stage_back': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseType: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MoveStageBackRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MoveStageBackResult']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
       422: {
         headers: {
           [name: string]: unknown

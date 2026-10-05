@@ -230,6 +230,42 @@ describe('HandoffPanel ("Traspaso" tab)', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows a nested fact as a readable list, one line per item, never raw JSON', async () => {
+    vi.mocked(api.fetchCaseHandoff).mockResolvedValue({
+      packet: {
+        ...PACKET,
+        verified_facts: [
+          {
+            fact_id: 'f3',
+            name: 'candidatas',
+            value: [
+              { transaction_id: 'TX-901', amount: 120, merchant: 'Estación Norte' },
+              { transaction_id: 'TX-902', amount: 45.5, merchant: 'Café Sur' },
+            ],
+            source: { kind: 'tool' },
+          },
+          { fact_id: 'f4', name: 'card', value: { last4: '3307', blocked: false } },
+        ],
+      },
+    })
+    renderWithProviders(<HandoffPanel detail={handoffDetail()} />, {
+      staff: analystStaff,
+      aiEnabled: true,
+    })
+    const verified = await screen.findByRole('region', { name: 'Verificado' })
+    const items = within(verified).getAllByRole('listitem')
+    expect(items.map((item) => item.textContent)).toContain(
+      'Transaction id: TX-901, Amount: 120, Merchant: Estación Norte',
+    )
+    expect(within(verified).getByText('Candidatas')).toBeInTheDocument()
+    expect(
+      within(verified).getByText('Transaction id: TX-902, Amount: 45.5, Merchant: Café Sur'),
+    ).toBeInTheDocument()
+    expect(within(verified).getByText('Last4: 3307')).toBeInTheDocument()
+    expect(within(verified).getByText('Blocked: No')).toBeInTheDocument()
+    expect(verified.textContent).not.toMatch(/[{}[\]"]/)
+  })
+
   it('says what is missing and retries an outage', async () => {
     vi.mocked(api.fetchCaseHandoff)
       .mockRejectedValueOnce(new ApiProblem({ status: 502, code: 'agent_core_rejected' }))

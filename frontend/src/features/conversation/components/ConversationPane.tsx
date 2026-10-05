@@ -104,6 +104,8 @@ export interface ConversationPaneProps {
   copilotMode?: CopilotMode | null
   /** Slice 20: the "Apoyo" button of the header (the Workspace's tabbed right panel). */
   supportPanel?: { open: boolean; onToggle(): void }
+  /** Slice 21: under the header, the case type's stage strip (the Workspace builds it). */
+  stageStrip?: ReactNode
 }
 
 /**
@@ -131,6 +133,7 @@ function ConversationBody({
   onOpenHandoff,
   copilotMode,
   supportPanel,
+  stageStrip,
 }: ConversationPaneProps) {
   const me = useCurrentUser()
   useConversationLive(caseId)
@@ -187,6 +190,7 @@ function ConversationBody({
       onOpenHandoff={onOpenHandoff}
       copilotMode={copilotMode}
       supportPanel={supportPanel}
+      stageStrip={stageStrip}
     />
   )
 }
@@ -204,6 +208,7 @@ interface LoadedConversationProps {
   onOpenHandoff?(): void
   copilotMode?: CopilotMode | null
   supportPanel?: { open: boolean; onToggle(): void }
+  stageStrip?: ReactNode
 }
 
 function LoadedConversation({
@@ -219,6 +224,7 @@ function LoadedConversation({
   onOpenHandoff,
   copilotMode,
   supportPanel,
+  stageStrip,
 }: LoadedConversationProps) {
   const { case: summary, capabilities } = detail
   const supervision = mode === 'supervision'
@@ -303,6 +309,7 @@ function LoadedConversation({
         customerFile={customerFile}
         supportPanel={supervision ? undefined : supportPanel}
       />
+      {supervision ? null : stageStrip}
       {bar ? (
         <CallBar
           caseId={summary.id}

@@ -6,6 +6,7 @@ import { useCurrentUser } from '@/app/session'
 import { DocumentTitle, EmptyState, Spinner } from '@/components/ui'
 import {
   CaseListPanel,
+  caseType,
   sortByUrgency,
   useAvailability,
   useInbox,
@@ -25,9 +26,12 @@ import {
 } from '@/features/conversation'
 import {
   CopilotPanel,
-  FULL_COPILOT_MODE,
+  StageStrip,
   ToolsPanel,
+  copilotModeOf,
   copilotSurfaces,
+  stageOfType,
+  useAiStages,
   useCopilotAccess,
   useCopilotThread,
   useLatestSuggestion,
@@ -63,7 +67,8 @@ export interface WorkspaceScreenProps {
  * the card's "Ver todo"; "Cliente", the ficha); with AI off it is the ficha, as before. Slice 20
  * adds "Copiloto" (`?panel=copilot`, also opened by the header's "Apoyo") and "Herramientas"
  * (`?panel=tools`), the copilot's draft above the composer and its recommendation to escalate,
- * all gated by one `copilotMode` (S21: the case type's stage). All shareable state
+ * all gated by one `copilotMode`: slice 21, the case type's stage (stage 0 and "Sin tipo": no
+ * copilot), shown under the header as the stage strip. All shareable state
  * lives in the URL (`state`); the screen reports changes through
  * `onStateChange` and the route writes them back.
  *
@@ -123,8 +128,18 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
 
   // Slice 19/20: the AI tabs exist only while AI is on; with AI off the panel is the old ficha.
   const aiEnabled = useAiEnabled()
-  /** How far the copilot goes. S21: the case type's stage; S20 offers everything. */
-  const copilotMode: CopilotMode | null = aiEnabled ? FULL_COPILOT_MODE : null
+  // Slice 21: how far the copilot goes is the case type's stage (the same detail query as the
+  // conversation, so nothing extra is fetched).
+  const stages = useAiStages()
+  const selectedType = useCaseDetail(state.caseId).data?.case.caseType
+  const copilotMode: CopilotMode | null = aiEnabled
+    ? copilotModeOf(stages.data, selectedType)
+    : null
+  const typeStage = aiEnabled ? stageOfType(stages.data, selectedType) : null
+  const stageStrip =
+    typeStage && selectedType ? (
+      <StageStrip typeLabel={caseType(selectedType).label} stage={typeStage} />
+    ) : null
   const requested = openPanel(state)
   const panel: WorkspacePanel | null =
     requested !== null && requested !== 'customer' && !aiEnabled ? null : requested
@@ -233,6 +248,7 @@ export function WorkspaceScreen({ state, onStateChange }: WorkspaceScreenProps) 
             customerFile={{ open: fileOpen, onToggle: toggleCustomerFile }}
             onOpenHandoff={aiEnabled ? openHandoff : undefined}
             copilotMode={copilotMode}
+            stageStrip={stageStrip}
             supportPanel={aiEnabled ? { open: panelOpen, onToggle: toggleSupportPanel } : undefined}
             focusOnLoad={focusRequest?.kind === 'case' && focusRequest.caseId === state.caseId}
             onFocused={clearFocusRequest}
@@ -303,7 +319,7 @@ interface SupportPanelProps {
   onPanelChange(panel: string): void
   onClose(): void
   focusOnOpen: boolean
-  /** Which copilot tabs the case type's stage allows (S21); S20: all of them. */
+  /** Which copilot tabs the case type's stage allows (slice 21). */
   copilotMode: CopilotMode | null
   returnFocusTo: string
 }

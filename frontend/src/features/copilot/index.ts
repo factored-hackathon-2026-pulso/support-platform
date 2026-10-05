@@ -19,3 +19,6 @@ export type {
 export { useCopilotAccess, useCopilotThread } from './hooks/use-copilot'
 export type { CopilotCase } from './hooks/use-copilot'
 export { useLatestSuggestion } from './hooks/use-suggestions'
+export { StageStrip } from './components/StageStrip'
+export type { StageStripProps } from './components/StageStrip'
+export { useAiStages } from './hooks/use-stages'

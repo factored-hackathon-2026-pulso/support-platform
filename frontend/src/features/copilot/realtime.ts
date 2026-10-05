@@ -5,7 +5,8 @@
  * module light (keys + handlers only).
  *
  * A customer's turn makes the newest suggestion stale (`stale: true`), so `turn.created` from the
- * customer reads it again too, for a case whose suggestion is cached.
+ * customer reads it again too, for a case whose suggestion is cached. Slice 21: `ai.stage_updated`
+ * on `ai:stages` reads the stages per case type again.
  */
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -34,7 +35,13 @@ function onTurnCreated(envelope: RealtimeEnvelope, queryClient: QueryClient): vo
   refreshLatest(caseId, queryClient)
 }
 
+/** Slice 21: a case type changed stage (`ai:stages`): read the stages again. */
+function onStageUpdated(_envelope: RealtimeEnvelope, queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: copilotKeys.stages() })
+}
+
 export const registerCopilotRealtime: RealtimeRegistration = (registry) => {
   registry.register('copilot.suggestion_updated', onSuggestionUpdated)
   registry.register('turn.created', onTurnCreated)
+  registry.register('ai.stage_updated', onStageUpdated)
 }

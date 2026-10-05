@@ -104,6 +104,7 @@ def test_access_policy() -> None:
         "admin",
         "staff",
         "platform",
+        "ai",
     ]
     # Slice 18: the AI switch reaches every staff member, whatever her roles.
     for actor in (analyst, supervisor, admin):

@@ -19,6 +19,8 @@ Topics (brief §4.4):
   whatever her roles (slice 4).
 - ``platform:settings``: the platform-wide settings (``platform.updated``, the AI switch,
   slice 18); every staff member and every customer session may follow it.
+- ``ai:stages``: a case type changed stage (``ai.stage_updated``, slice 21); analysts and
+  supervisors (never customers).
 
 ``case:`` topics also need a case-level check (assignee or supervisor), which needs the
 case: the WebSocket endpoint runs ``AuthorizeCaseSubscription`` after this role check.
@@ -43,6 +45,7 @@ class TopicKind(StrEnum):
     ADMIN = "admin"
     STAFF = "staff"
     PLATFORM = "platform"
+    AI = "ai"
 
 
 _KEY_PREFIX: dict[TopicKind, IdPrefix] = {
@@ -58,6 +61,7 @@ SUPERVISION_ESCALATIONS = "escalations"
 _SUPERVISION_KEYS = frozenset({SUPERVISION_QUEUES, SUPERVISION_TEAM, SUPERVISION_ESCALATIONS})
 ADMIN_DIRECTORY = "directory"
 PLATFORM_SETTINGS = "settings"
+AI_STAGES = "stages"
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +109,10 @@ class Topic:
         return cls(TopicKind.PLATFORM, PLATFORM_SETTINGS)
 
     @classmethod
+    def ai_stages(cls) -> Topic:
+        return cls(TopicKind.AI, AI_STAGES)
+
+    @classmethod
     def parse(cls, raw: str) -> Topic:
         name, sep, key = raw.partition(":")
         try:
@@ -117,6 +125,8 @@ class Topic:
             valid = key == ADMIN_DIRECTORY
         elif kind is TopicKind.PLATFORM:
             valid = key == PLATFORM_SETTINGS
+        elif kind is TopicKind.AI:
+            valid = key == AI_STAGES
         else:
             valid = is_valid_id(key, _KEY_PREFIX[kind])
         if not sep or not valid:
@@ -144,6 +154,8 @@ class TopicAccessPolicy:
                 return topic.key == actor.staff_id
             case TopicKind.PLATFORM:
                 return True  # the AI switch: everyone who is signed in
+            case TopicKind.AI:
+                return actor.has_any_role({StaffRole.ANALYST, StaffRole.SUPERVISOR})
 
     def can_customer_subscribe(self, customer: CustomerActor, topic: Topic) -> bool:
         """A customer token may only follow its own ``customer:<id>`` topic and the platform

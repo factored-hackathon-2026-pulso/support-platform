@@ -7,7 +7,7 @@ event-bus consumers. Tests pass their own clock/id generator to get deterministi
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
 import httpx
@@ -28,6 +28,16 @@ from cc_platform.application.ai.customer import (
 )
 from cc_platform.application.ai.engine import AssistantEngine, AssistantHandover
 from cc_platform.application.ai.grants import GetGrantStatus
+from cc_platform.application.ai.maturity import (
+    MATURITY_SIGNAL_EVENTS,
+    GetAiStages,
+    MaturityProjector,
+    MaturityRealtimeProjector,
+    MaturityUseCases,
+    MoveStageBack,
+    RecordToolUsed,
+    WhileTypeProposes,
+)
 from cc_platform.application.ai.priority import ApplyHandoffPriority, HandoffPriorityProcess
 from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
 from cc_platform.application.ai.registry import AgentRegistryClient
@@ -140,6 +150,7 @@ from cc_platform.application.customers.use_cases import (
     ListDemoCustomers,
     StartCustomerSession,
 )
+from cc_platform.application.events import EventRecord
 from cc_platform.application.notifications.projector import NotificationProjector
 from cc_platform.application.notifications.sweep import SweepSlaRisk
 from cc_platform.application.notifications.use_cases import (
@@ -227,6 +238,7 @@ from cc_platform.application.realtime.topics import TopicAccessPolicy
 from cc_platform.application.use_cases import UseCases
 from cc_platform.bootstrap.settings import Settings
 from cc_platform.domain.ai.events import AssistantEnded
+from cc_platform.domain.ai.maturity_events import MATURITY_EVENTS, STAGE_EVENTS
 from cc_platform.domain.people.events import SessionEnded, StaffRolesChanged
 from cc_platform.domain.people.login_account import LockoutPolicy
 from cc_platform.domain.people.mfa import MfaPolicy
@@ -373,6 +385,7 @@ class Container:
                 self.clock,
                 ttl=self.settings.session_ttl,
                 onboarding=onboarding,
+                stage_rule=self.settings.stage_rule(),
             ),
         }
         # Part 4: the seeded pending invitation's email, now that its link exists.
@@ -443,6 +456,7 @@ def _wire_realtime(
     mapper.suppress(*SILENT_EVENTS)  # audited reads (case.viewed): never on a socket
     mapper.suppress(*ADMIN_OWNED_EVENTS)  # the administration projection signals them
     mapper.suppress(*PLATFORM_EVENTS)  # the platform projection signals them (slice 18)
+    mapper.suppress(*MATURITY_EVENTS)  # the stages projection signals them (slice 21)
     bus.subscribe(RealtimeProjector(hub, mapper))
     bus.subscribe(SessionTerminator(hub), event_types=[SessionEnded])
     bus.subscribe(AccessTerminator(hub), event_types=[StaffRolesChanged])
@@ -462,6 +476,7 @@ def _wire_realtime(
     bus.subscribe(
         PlatformRealtimeProjector(hub, SchemaRealtimePresenter()), event_types=PLATFORM_EVENTS
     )
+    bus.subscribe(MaturityRealtimeProjector(hub), event_types=STAGE_EVENTS)
     return hub, mapper
 
 
@@ -550,16 +565,15 @@ def _build_assistant(
     )
     if use_cases.suggestions is not None:  # ADR 0005: automatic suggestions and their signal
         if settings.copilot_suggestions_auto:
+            suggestion_process = SuggestionProcess(
+                background,
+                use_cases.suggestions.service,
+                coalesce_seconds=settings.copilot_suggestions_coalesce_seconds,
+            )
             bus.subscribe(
-                # Slice 18: no automatic suggestion while the AI switch is off.
-                WhileAiOn(
-                    ai_switch,
-                    SuggestionProcess(
-                        background,
-                        use_cases.suggestions.service,
-                        coalesce_seconds=settings.copilot_suggestions_coalesce_seconds,
-                    ),
-                ),
+                # Slice 18: no automatic suggestion while the AI switch is off; slice 21: nor for
+                # a case whose type is below stage 2 (its copilot proposes nothing yet).
+                WhileAiOn(ai_switch, _stage_gated(settings, uow, suggestion_process)),
                 event_types=SUGGESTION_PROCESS_EVENTS,
             )
         bus.subscribe(SuggestionSignal(hub), event_types=SUGGESTION_SIGNAL_EVENTS)
@@ -572,6 +586,13 @@ def _build_assistant(
         use_cases=use_cases,
         sweep=SweepAssistantSessions(uow=uow, clock=clock, tasks=background, engine=engine),
     )
+
+
+def _stage_gated(
+    settings: Settings, uow: UnitOfWorkFactory, subscriber: Callable[[EventRecord], Awaitable[None]]
+) -> Callable[[EventRecord], Awaitable[None]]:
+    """Slice 21: the automatic suggestions only for a case whose type proposes (stage 2+)."""
+    return WhileTypeProposes(uow, subscriber) if settings.stage_gates_suggestions else subscriber
 
 
 def _build_suggestions(
@@ -771,6 +792,12 @@ def build_container(
         ai_enabled=settings.ai_enabled, agent_core_configured=agent_core is not None
     )
     ai_switch = AiSwitch(uow=uow, defaults=platform_defaults)
+    # Slice 21 (ADR 0006): each case type's signals and the team rule that moves its stage.
+    stage_rule = settings.stage_rule()
+    bus.subscribe(
+        WhileAiOn(ai_switch, MaturityProjector(uow=uow, rule=stage_rule)),
+        event_types=MATURITY_SIGNAL_EVENTS,
+    )
     assistant = (
         None
         if agent_core is None
@@ -853,7 +880,7 @@ def build_container(
             team_overview=GetTeamOverview(uow=uow, clock=clock),
             queue_overview=GetQueueOverview(uow=uow, clock=clock),
             set_assignee=SetCaseAssignee(uow=uow, clock=clock, ids=ids),
-            analyst_home=GetAnalystHome(uow=uow, clock=clock),
+            analyst_home=GetAnalystHome(uow=uow, clock=clock, switch=ai_switch),
             rate_conversation=RateConversation(uow=uow, clock=clock),
             change_priority=ChangeCasePriority(uow=uow, clock=clock),
             change_type=ChangeCaseType(uow=uow, clock=clock),
@@ -979,6 +1006,11 @@ def build_container(
             settings=GetPlatformSettings(uow=uow, defaults=platform_defaults),
             set_ai_enabled=SetAiEnabled(uow=uow, clock=clock, defaults=platform_defaults),
             ai_switch=ai_switch,
+        ),
+        maturity=MaturityUseCases(
+            stages=GetAiStages(uow=uow, switch=ai_switch, rule=stage_rule),
+            move_back=MoveStageBack(uow=uow, clock=clock, switch=ai_switch),
+            tool_used=RecordToolUsed(uow=uow, clock=clock, switch=ai_switch),
         ),
         assistant=assistant_use_cases,
     )

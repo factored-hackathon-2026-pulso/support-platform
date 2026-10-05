@@ -54,4 +54,11 @@ describe('registerCopilotRealtime', () => {
     )
     expect(queryClient.getQueryState(copilotKeys.latest('CASE-OTHER'))).toBeUndefined()
   })
+
+  it('reads the stages per case type again on `ai.stage_updated` (slice 21)', () => {
+    const { registry, queryClient } = setup()
+    queryClient.setQueryData(copilotKeys.stages(), { available: true, types: [] })
+    registry.dispatch(envelope('ai.stage_updated', { caseType: 'app_issue' }, ''), queryClient)
+    expect(queryClient.getQueryState(copilotKeys.stages())?.isInvalidated).toBe(true)
+  })
 })

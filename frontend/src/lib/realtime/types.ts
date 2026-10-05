@@ -66,6 +66,7 @@ export type RealtimeTopic =
   | 'admin:directory'
   | `staff:${string}`
   | 'platform:settings'
+  | 'ai:stages'
 
 /** Messages the client sends (one topic per message, backend `api/routers/realtime.py`). */
 export type ClientMessage =
@@ -102,6 +103,7 @@ export const topics = {
   adminDirectory: (): RealtimeTopic => 'admin:directory',
   staff: (staffId: string): RealtimeTopic => `staff:${staffId}`,
   platformSettings: (): RealtimeTopic => 'platform:settings',
+  aiStages: (): RealtimeTopic => 'ai:stages',
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {

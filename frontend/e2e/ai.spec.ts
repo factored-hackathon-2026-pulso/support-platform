@@ -2,7 +2,7 @@ import { CUSTOMERS, SEEDED, uniqueText } from './support/data'
 import { expect, test } from './support/fixtures'
 import { WorkspacePage } from './support/pages/workspace-page'
 
-test.describe('AI functions (slices 18 to 20)', () => {
+test.describe('AI functions (slices 18 to 21)', () => {
   // The dev default is on: whatever happens, the next scenario starts with AI on.
   test.afterEach(async ({ api }) => {
     await api.setAiEnabled(true)
@@ -86,5 +86,55 @@ test.describe('AI functions (slices 18 to 20)', () => {
     await expect(workspace.caseTypeMenu(reloaded)).toHaveAccessibleName(
       'Tipo de caso: Cobro indebido. Cambiar el tipo de caso',
     )
+  })
+
+  test('the stage of the case type shows under the header and follows Supervisión live', async ({
+    api,
+    actors,
+    people,
+    customers,
+  }) => {
+    await api.setAiEnabled(true)
+    const customer = CUSTOMERS.andres
+    await customers.release(customer)
+    const analyst = await people.analyst(['es'])
+
+    const { page } = await actors.signedIn('analista', analyst)
+    const workspace = new WorkspacePage(page)
+    await workspace.goto()
+    await workspace.becomeAvailable()
+    const chat = await actors.customer('cliente', customer)
+    await chat.send(uniqueText('La app no me deja entrar desde ayer'))
+    await workspace.openCase(customer.name)
+    const conversation = workspace.conversation(customer.name)
+    const panel = await workspace.openCustomerFile(customer.name)
+    const strip = conversation.getByTestId('stage-strip')
+
+    // "Sin tipo": no stage strip and no copilot.
+    await expect(strip).toHaveCount(0)
+
+    // A stage-3 type (seeded "Cobro indebido"): the strip says what the copilot does. Without
+    // agent-core the copilot answers `available: false`, so no tab and no draft show (the draft
+    // bar of a stage-3 type is covered by the component tests).
+    await workspace.setCaseType(panel, 'Cobro indebido')
+    await expect(strip).toContainText('Tipo de caso: Cobro indebido')
+    await expect(strip).toContainText(
+      'Etapa 3 de 3: el copiloto propone respuestas y deja herramientas listas',
+    )
+    await expect(page.getByRole('region', { name: 'Borrador del copiloto' })).toHaveCount(0)
+    await expect(panel.getByRole('tab', { name: 'Copiloto' })).toHaveCount(0)
+
+    // Another type: the strip follows; Supervisión moves it back and the strip follows live.
+    await workspace.setCaseType(panel, 'Problema con app')
+    const before = (await api.aiStages()).types.find((t) => t.caseType === 'app_issue')!.stage
+    await expect(strip).toContainText(`Etapa ${before} de 3`)
+    if (before > 0) {
+      await api.moveStageBack('app_issue', before - 1)
+      await expect(strip).toContainText(`Etapa ${before - 1} de 3`)
+    }
+
+    // Back to "Sin tipo": the strip goes away.
+    await workspace.setCaseType(panel, 'Sin tipo')
+    await expect(strip).toHaveCount(0)
   })
 })

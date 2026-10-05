@@ -424,8 +424,8 @@ shows only what the API says is `available`.
 
 - **The stage as one value**: `CopilotMode` (`answer | tools | drafts`, ADR 0005's `copilot_mode`) and
   `copilotSurfaces(mode)` → `{ copilot, tools, draft }`. The Workspace computes `copilotMode` once (S20:
-  `FULL_COPILOT_MODE` with AI on, `null` off) and passes it to the panel and to `ConversationPane`; S21 swaps that one
-  line for the case type's stage.
+  `FULL_COPILOT_MODE` with AI on, `null` off) and passes it to the panel and to `ConversationPane`; S21 swapped that one
+  line for the case type's stage (below).
 - **`copilot`**: `api.ts` (`copilotKeys.thread | asks | latest`), `model.ts` (pure: `copilotTurns`, `mergeExchange`,
   `describeAskFailure`, `suggestionView`, `toolQuestion` / `toolResult`, `escalationReason`, `describeSuggestFailure`,
   `composerTextWithDraft`), hooks (`useCopilotThread`, `useCopilotAsks` (questions in flight in a UI-only cache entry,
@@ -442,6 +442,27 @@ shows only what the API says is `available`.
 - **`workspace`**: `WorkspacePanel` adds `copilot` and `tools` (`parsePanel`); the tabs are Traspaso · Copiloto ·
   Herramientas · Cliente, each only when it applies; "Apoyo" opens at Copiloto; the focus returns to the trigger that
   opened the panel. **`components/layout`**: `SidePanelTab.layout` (`fill`: the tab handles its own scroll).
+
+### The AI stages per case type (slice 21)
+
+Contract: `docs/platform/api/slice-21-stages.md`. In `copilot` (the stage is how far the copilot goes):
+
+- **`stages.ts`** (pure, `stages.test.ts`): `copilotModeOf(stages, caseType)` (the type's `copilotMode`; stage 0,
+  "Sin tipo", unknown stages and AI off → `null`), `stageOfType`, `stageStrip` (three bars, the agent, the one
+  line, `STAGE_TEXT`). `FULL_COPILOT_MODE` is gone.
+- **`useAiStages`** (`hooks/use-stages.ts`): `GET /ai/stages` while AI is on (`copilotKeys.stages`), subscribes
+  `ai:stages` (`topics.aiStages()`), refetches after a reconnect; `realtime.ts` invalidates it on `ai.stage_updated`.
+- **`StageStrip`**: under the case header (IaWorkspace): [tag] type, bars, [bot] for an agent, the line. The
+  Workspace builds it (it knows the type words, `features/cases` `caseType`) and passes it as
+  `ConversationPane stageStrip` (never shown in supervision).
+- **Workspace**: `copilotMode = copilotModeOf(useAiStages().data, useCaseDetail(caseId).data?.case.caseType)` (the
+  detail query the conversation already holds).
+- **Herramientas**: "Usar" also calls `recordToolUsed` (best effort, the rejection is swallowed).
+- **`home`**: `assistantSummary` (the [bot] "Asistente virtual" line on top of "Mientras no estabas"),
+  `teamRows(…, withAssistant)` ("Con el asistente ahora"), the `assigned_by_assistant` template; all with AI on.
+- **`conversation`** (`handoff.ts`): `valueLines` renders a nested fact value as lines (keys humanized, one per
+  item, "y N más"); `HandoffItem.lines`.
+- Test fixture: `src/test/stage-fixtures.ts` (`makeStages`, `makeTypeStage`, shaped like the seed).
 
 ### Supervision and audit (slice 3)
 

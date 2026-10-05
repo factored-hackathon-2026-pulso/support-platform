@@ -16,6 +16,7 @@ from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryBuilderThreadRepository,
     InMemoryCallRepository,
     InMemoryCaseRepository,
+    InMemoryCaseTypeMaturityRepository,
     InMemoryCopilotSuggestionRepository,
     InMemoryCopilotThreadRepository,
     InMemoryCustomerCaseSlotRepository,
@@ -59,6 +60,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     assistant_sessions: InMemoryAssistantSessionRepository
     copilot_threads: InMemoryCopilotThreadRepository
     copilot_suggestions: InMemoryCopilotSuggestionRepository
+    case_type_maturity: InMemoryCaseTypeMaturityRepository
     builder_threads: InMemoryBuilderThreadRepository
     builder_proposals: InMemoryBuilderProposalRepository
     bank_links: InMemoryBankCustomerLinks
@@ -98,6 +100,9 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.copilot_suggestions = InMemoryCopilotSuggestionRepository(
             store.copilot_suggestions, track
         )
+        self.case_type_maturity = InMemoryCaseTypeMaturityRepository(
+            store.case_type_maturity, track
+        )
         self.builder_threads = InMemoryBuilderThreadRepository(store.builder_threads, track)
         self.builder_proposals = InMemoryBuilderProposalRepository(store.builder_proposals, track)
         self.bank_links = InMemoryBankCustomerLinks(store.bank_links)
@@ -130,6 +135,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryAssistantSessionRepository
         | InMemoryCopilotThreadRepository
         | InMemoryCopilotSuggestionRepository
+        | InMemoryCaseTypeMaturityRepository
         | InMemoryBuilderThreadRepository
         | InMemoryBuilderProposalRepository
         | InMemoryBankCustomerLinks
@@ -155,6 +161,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.assistant_sessions,
             self.copilot_threads,
             self.copilot_suggestions,
+            self.case_type_maturity,
             self.builder_threads,
             self.builder_proposals,
             self.bank_links,

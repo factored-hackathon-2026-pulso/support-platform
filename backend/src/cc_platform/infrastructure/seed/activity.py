@@ -13,7 +13,9 @@ from datetime import timedelta
 from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
+from cc_platform.domain.ai.maturity import StageRule
 from cc_platform.infrastructure.seed.cases import add_demo_cases
+from cc_platform.infrastructure.seed.maturity import add_demo_maturity
 from cc_platform.infrastructure.seed.onboarding import SeedOnboarding, add_demo_invitations
 from cc_platform.infrastructure.seed.people import (
     add_demo_admin_story,
@@ -30,10 +32,12 @@ async def seed_demo_activity(
     *,
     ttl: timedelta,
     onboarding: SeedOnboarding | None = None,
+    stage_rule: StageRule | None = None,
 ) -> dict[str, int]:
     """Add what is missing; returns how many sessions, availability rows and cases (and
     whether the admin story and the invitations ran). Part 4: with ``onboarding``, the
-    seeded invitations too (their emails are queued on ``onboarding.emails``)."""
+    seeded invitations too (their emails are queued on ``onboarding.emails``). Slice 21: the AI
+    stages per case type (sample values, climbed with ``stage_rule``)."""
     t = clock.now()
     timeline = SeedTimeline()
     async with uow() as unit:
@@ -42,6 +46,7 @@ async def seed_demo_activity(
             "availability": await add_demo_availability(unit, t, timeline),
             "cases": await add_demo_cases(unit, ids, t, timeline),
             "admin_story": await add_demo_admin_story(unit, t, timeline),
+            "maturity": await add_demo_maturity(unit, t, timeline, stage_rule),
         }
         if onboarding is not None:
             created["invitations"] = await add_demo_invitations(

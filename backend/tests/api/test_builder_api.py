@@ -493,7 +493,8 @@ def test_the_audit_shows_who_did_what_without_the_content(
     audit = client.get("/api/v1/audit/events?family=agents&limit=100", headers=supervisor)
 
     assert audit.status_code == 200, audit.text
-    events = audit.json()["items"]
+    # Slice 21: the family also holds the seeded stage changes of the case types (the system's).
+    events = [e for e in audit.json()["items"] if e["type"].startswith("builder.")]
     assert {e["type"] for e in events} >= {
         "builder.proposal_created",
         "builder.draft_saved",

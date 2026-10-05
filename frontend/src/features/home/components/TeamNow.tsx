@@ -8,6 +8,8 @@ export interface TeamNowProps {
   failed: boolean
   meAvailable: boolean
   now: number
+  /** Slice 21 (AI on): conversations of her languages the assistant holds now. */
+  withAssistant?: number | null
 }
 
 /**
@@ -15,7 +17,7 @@ export interface TeamNowProps {
  * count, no names) and, per language she speaks (its mark), how many cases wait
  * in that queue and the oldest wait (its own clock fact). Nobody else's cases.
  */
-export function TeamNow({ team, failed, meAvailable, now }: TeamNowProps) {
+export function TeamNow({ team, failed, meAvailable, now, withAssistant = null }: TeamNowProps) {
   return (
     <section
       aria-labelledby="home-team"
@@ -27,7 +29,7 @@ export function TeamNow({ team, failed, meAvailable, now }: TeamNowProps) {
       {team ? (
         <>
           <dl className="m-0 flex flex-col gap-2.5">
-            {teamRows(team, meAvailable, now).map((row) => {
+            {teamRows(team, meAvailable, now, withAssistant).map((row) => {
               const Icon = FACT_ICONS[row.icon]
               return (
                 <div key={row.key} className="flex items-center justify-between gap-3 text-14">

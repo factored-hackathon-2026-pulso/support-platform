@@ -9,6 +9,8 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from cc_platform.domain.ai.maturity import StageRule
+
 BACKEND_DIR = Path(__file__).resolve().parents[3]
 DEFAULT_DATABASE_URL = f"sqlite+aiosqlite:///{BACKEND_DIR / 'cc_platform.db'}"
 DEV_SESSION_SECRET = "dev-only-session-secret-change-me-0123456789"
@@ -74,6 +76,27 @@ class Settings(BaseSettings):
     # agent-core says; on without agent-core = also people-only.
     ai_enabled: bool = True
 
+    # The AI maturity per case type (slice 21, ADR 0006): the **team rule** that moves a type up
+    # a stage. Example thresholds chosen for the demo (the canvas values where the design states
+    # one), not learned from data; ``StageRule`` documents each.
+    #: 0 → 1: cases of the type resolved by people.
+    stage_resolved_cases_to_ask: int = Field(default=10, ge=1)
+    #: 1 → 2: closed cases of the type in which the analyst asked the copilot.
+    stage_asked_cases_to_propose_tools: int = Field(default=20, ge=1)
+    #: 2 → 3: % of the closed cases with tool proposals in which one was used…
+    stage_tool_use_percent_to_shadow: int = Field(default=70, ge=1, le=100)
+    #: …counted once there are at least this many of them.
+    stage_tool_cases_minimum: int = Field(default=10, ge=1)
+    #: 3 → agent: the last drafts looked at…
+    stage_draft_window: int = Field(default=100, ge=1)
+    #: …and the % of them sent as is or with minor changes.
+    stage_draft_as_is_percent_for_agent: int = Field(default=80, ge=1, le=100)
+    #: An edited draft is "minor changes" up to this edit distance (0-1000).
+    stage_minor_edit_permille: int = Field(default=150, ge=0, le=1000)
+    #: The copilot's automatic suggestions only for cases whose type is at stage 2 or more. Off:
+    #: for every case, whatever its type (a development aid for the suggestions agent).
+    stage_gates_suggestions: bool = True
+
     # agent-core (ADR 0003). Unset ``agent_core_url`` = the platform runs people-only, as before.
     #: Base URL of agent-core's runtime API (``agentcore serve``), e.g. ``http://localhost:8001``.
     agent_core_url: str | None = None
@@ -113,6 +136,18 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"
+
+    def stage_rule(self) -> StageRule:
+        """The team rule of the AI stages (slice 21)."""
+        return StageRule(
+            resolved_cases_to_ask=self.stage_resolved_cases_to_ask,
+            asked_cases_to_propose_tools=self.stage_asked_cases_to_propose_tools,
+            tool_use_percent_to_shadow=self.stage_tool_use_percent_to_shadow,
+            tool_cases_minimum=self.stage_tool_cases_minimum,
+            draft_window=self.stage_draft_window,
+            draft_as_is_percent_for_agent=self.stage_draft_as_is_percent_for_agent,
+            minor_edit_permille=self.stage_minor_edit_permille,
+        )
 
     @model_validator(mode="after")
     def _refuse_dev_defaults_in_prod(self) -> Self:

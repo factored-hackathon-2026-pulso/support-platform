@@ -78,6 +78,7 @@ export function makeHome(overrides: Partial<AnalystHome> = {}): AnalystHome {
     since: minutesFrom(-40),
     sinceSource: 'previous_session',
     activity: { items: canvasFeed, total: canvasFeed.length },
+    assistant: null,
     teamNow: {
       teamId: TEAM_ANDES.id,
       teamName: TEAM_ANDES.name,

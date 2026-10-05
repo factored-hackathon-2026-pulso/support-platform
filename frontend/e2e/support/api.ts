@@ -116,6 +116,27 @@ export class PlatformApi {
     )
   }
 
+  /** Slice 21: every case type's AI stage, as Supervisión reads it. */
+  async aiStages(): Promise<Schemas['AiStages']> {
+    return json<Schemas['AiStages']>(
+      await this.request.get(`${API}/ai/stages`, {
+        headers: this.auth(await this.supervisorToken()),
+      }),
+      'ai stages',
+    )
+  }
+
+  /** Slice 21: Supervisión moves a case type back to an earlier stage. */
+  async moveStageBack(caseType: Schemas['CaseType'], toStage: number): Promise<void> {
+    await json<Schemas['MoveStageBackResult']>(
+      await this.request.post(`${API}/supervision/ai/stages/${caseType}/move-back`, {
+        headers: this.auth(await this.supervisorToken()),
+        data: { toStage },
+      }),
+      `move ${caseType} back to ${toStage}`,
+    )
+  }
+
   async teamId(name: string = TEAM_ANDES): Promise<string> {
     const teams = await json<Schemas['AdminTeamList']>(
       await this.request.get(`${API}/admin/teams`, { headers: this.auth(await this.adminToken()) }),

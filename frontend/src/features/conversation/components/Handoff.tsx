@@ -222,6 +222,15 @@ function HandoffSection({
               </span>
               <span className="flex min-w-0 flex-col">
                 <span className="break-words">{item.text}</span>
+                {item.lines?.length ? (
+                  <ul className="m-0 mt-0.5 flex list-none flex-col gap-0.5 p-0 text-13 text-ink-2">
+                    {item.lines.map((line, index) => (
+                      <li key={index} className="break-words">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {item.detail ? <span className="text-12 text-muted">{item.detail}</span> : null}
               </span>
             </li>

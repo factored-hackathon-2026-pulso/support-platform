@@ -1,3 +1,4 @@
+import { useAiEnabled } from '@/app/platform'
 import { useCurrentUser } from '@/app/session'
 import { Badge, DocumentTitle } from '@/components/ui'
 import { useAvailability, useInbox } from '@/features/cases'
@@ -19,7 +20,9 @@ const TICK_MS = 30_000
  * primero" (her open cases by urgency), "Mientras no estabas" (what happened
  * since her previous session, fixed templates) and "Tu equipo ahora" (counts
  * only). The tiles and "Lo primero" share the inbox cache with the Casos list;
- * the rest is `GET /me/home`. Owns the `<main>` landmark.
+ * the rest is `GET /me/home`. Slice 21 (AI on, IaHomeTurno): the assistant's line on top of
+ * "Mientras no estabas" and "Con el asistente ahora" in "Tu equipo ahora". Owns the `<main>`
+ * landmark.
  */
 export function HomeScreen() {
   const user = useCurrentUser()
@@ -27,6 +30,7 @@ export function HomeScreen() {
   const inbox = useInbox({ status: null, q: '' })
   const availability = useAvailability()
   const home = useHome()
+  const aiEnabled = useAiEnabled()
   const paused = availability.data?.status !== 'available'
   const header = headerLine(now, user.team.name)
 
@@ -67,12 +71,13 @@ export function HomeScreen() {
         />
         {/* The right column takes its natural height: the page scrolls, nothing is clipped. */}
         <div className="flex flex-col gap-4">
-          <ActivityFeed home={home} now={now} />
+          <ActivityFeed home={home} now={now} aiEnabled={aiEnabled} />
           <TeamNow
             team={home.data?.teamNow}
             failed={home.status === 'error'}
             meAvailable={!paused}
             now={now}
+            withAssistant={aiEnabled ? (home.data?.assistant?.withAssistantNow ?? null) : null}
           />
         </div>
       </div>

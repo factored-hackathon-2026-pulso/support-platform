@@ -171,6 +171,21 @@ describe('the copilot draft above the composer (slice 20)', () => {
     await screen.findByRole('textbox', { name: 'Escribe al cliente' })
     expect(screen.queryByRole('region', { name: 'Borrador del copiloto' })).toBeNull()
   })
+
+  it('slice 21: a stage-3 type gets the draft; stage 1 and stage 0 never ask for one', async () => {
+    const { unmount } = setup({ copilotMode: 'drafts' })
+    expect(await screen.findByRole('region', { name: 'Borrador del copiloto' })).toBeVisible()
+    unmount()
+
+    vi.mocked(fetchLatestSuggestion).mockClear()
+    for (const copilotMode of ['answer', null] as const) {
+      const view = setup({ copilotMode })
+      await screen.findByRole('textbox', { name: 'Escribe al cliente' })
+      expect(screen.queryByRole('region', { name: 'Borrador del copiloto' })).toBeNull()
+      view.unmount()
+    }
+    expect(fetchLatestSuggestion).not.toHaveBeenCalled()
+  })
 })
 
 describe('the copilot recommends escalating (slice 20)', () => {

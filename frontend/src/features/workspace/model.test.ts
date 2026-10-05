@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { setTestLocale } from '@/test/render'
 import { emptyWorkspaceCopy, firstSelectableCase, nextCaseAfterClose } from './model'
 
 describe('case selection', () => {
@@ -30,5 +31,20 @@ describe('emptyWorkspaceCopy', () => {
       description:
         'Estás en pausa: no te llegan casos nuevos. Vuelve a disponible para recibir el siguiente.',
     })
+  })
+})
+
+describe('emptyWorkspaceCopy in Portuguese', () => {
+  beforeEach(() => setTestLocale('pt-BR'))
+
+  it('says there is nothing open, and explains the pause', () => {
+    expect(emptyWorkspaceCopy(false)).toEqual({
+      title: 'Você não tem casos abertos',
+      description:
+        'Você está disponível. Quando um cliente escrever e o caso for seu, ele aparece aqui.',
+    })
+    expect(emptyWorkspaceCopy(true).description).toBe(
+      'Você está em pausa: não recebe casos novos. Fique disponível para receber o próximo.',
+    )
   })
 })

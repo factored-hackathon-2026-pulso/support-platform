@@ -16,7 +16,7 @@ import {
   seededInbox,
 } from '@/test/case-fixtures'
 import { analystStaff } from '@/test/fixtures'
-import { renderWithProviders } from '@/test/render'
+import { renderWithProviders, setTestLocale } from '@/test/render'
 
 vi.mock('@/features/cases/api', async (importOriginal) => {
   const actual = await importOriginal<typeof CasesApi>()
@@ -71,10 +71,14 @@ function Harness({
   )
 }
 
-function renderPanel(options: { collapsed?: boolean; filter?: InboxStatus | null } = {}) {
+function renderPanel({
+  locale,
+  ...options
+}: { collapsed?: boolean; filter?: InboxStatus | null; locale?: 'es' | 'pt-BR' } = {}) {
   return renderWithProviders(<Harness {...options} />, {
     staff: analystStaff,
     route: '/analyst/cases',
+    locale,
   })
 }
 
@@ -454,5 +458,75 @@ describe('CaseListPanel · escalations (slice 9)', () => {
     await screen.findByRole('list', { name: 'Casos' })
     expect(within(card(/Marcela/)).getByText('Escalado')).toBeInTheDocument()
     expect(within(card(/Joaquín/)).queryByText('Escalado')).toBeNull()
+  })
+})
+
+describe('CaseListPanel · Portuguese (slice 23)', () => {
+  it('renders the list, its cards and the availability control in Portuguese', async () => {
+    const { user } = renderPanel({ locale: 'pt-BR' })
+    expect(screen.getByRole('heading', { level: 1, name: 'Casos' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Casos abertos' })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Buscar caso' })).toHaveAttribute(
+      'placeholder',
+      'Buscar por cliente ou número',
+    )
+    await screen.findByRole('list', { name: 'Casos' })
+    const marcela = card(/Marcela Quintana Pardo/)
+    expect(within(marcela).getByText('A responder')).toBeInTheDocument()
+    expect(within(marcela).getByText('Canal: Chat web')).toHaveClass('sr-only')
+    expect(marcela).toHaveTextContent('Última atividade: há 2 min')
+    expect(within(card(/Larissa Monteiro Alves/)).getByText('Novo')).toBeInTheDocument()
+    expect(card(/Larissa Monteiro Alves/)).toHaveTextContent('SLA de primeira resposta: 13 min')
+    expect(card(/Beatriz Salcedo Prieto/)).toHaveTextContent('Vence em 3 min')
+    expect(
+      within(card(/Joaquín Ferreyra Paz/)).getByText('Aguardando o cliente'),
+    ).toBeInTheDocument()
+
+    const pill = await screen.findByRole('button', { name: 'Disponível. Pausar casos novos' })
+    await user.click(pill)
+    const control = await screen.findByRole('button', { name: 'Em pausa. Ficar disponível' })
+    expect(control).toHaveTextContent('Em pausaVocê não recebe casos novos')
+  })
+
+  it('shows Encerrados with the reason and the rating in Portuguese', async () => {
+    vi.mocked(fetchInbox).mockResolvedValue(makeInbox(closedInbox))
+    renderPanel({ locale: 'pt-BR', filter: 'closed' })
+    await screen.findByRole('list', { name: 'Casos' })
+    const hector = card(/Héctor Villarreal Garza/)
+    expect(hector).toHaveTextContent('Encerrado: há 3 h')
+    expect(hector).toHaveTextContent('Fora do escopo')
+    expect(card(/Claudia Restrepo Varela/)).toHaveTextContent('O cliente não respondeu')
+    expect(card(/Patricia Lozano Vega/)).toHaveTextContent('Resolvido')
+    expect(screen.getByRole('button', { name: 'Remover filtro Encerrados' })).toHaveTextContent(
+      'Encerrados',
+    )
+  })
+
+  it('says why the list is empty in Portuguese', async () => {
+    vi.mocked(fetchInbox).mockResolvedValue(emptyInbox)
+    renderPanel({ locale: 'pt-BR' })
+    expect(await screen.findByText('Nada pendente.')).toBeInTheDocument()
+  })
+
+  it('collapses to the rail in Portuguese', async () => {
+    const { user } = renderPanel({ locale: 'pt-BR' })
+    await user.click(await screen.findByRole('button', { name: 'Recolher a lista' }))
+    const rail = screen.getByRole('region', { name: 'Casos, lista recolhida' })
+    expect(within(rail).getByText('a responder').parentElement).toHaveTextContent('2 a responder')
+    expect(
+      within(rail).getByRole('button', { name: 'Marcela Quintana Pardo, A responder' }),
+    ).toBeInTheDocument()
+    expect(
+      within(rail).getByRole('button', { name: 'Mostrar a lista de casos' }),
+    ).toBeInTheDocument()
+  })
+
+  it('follows a language switch without reloading', async () => {
+    renderPanel()
+    await screen.findByRole('list', { name: 'Casos' })
+    expect(within(card(/Marcela Quintana Pardo/)).getByText('Por responder')).toBeInTheDocument()
+    act(() => setTestLocale('pt-BR'))
+    expect(within(card(/Marcela Quintana Pardo/)).getByText('A responder')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Casos abertos' })).toBeInTheDocument()
   })
 })

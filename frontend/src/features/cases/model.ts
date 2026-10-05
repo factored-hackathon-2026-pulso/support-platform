@@ -2,9 +2,14 @@
  * Pure rules and copy of the case list (Workspace.dc.html; contract
  * docs/platform/api/slice-2-case-lifecycle.md §4.1–§4.5, §9.1). No React, no
  * I/O: unit-tested in model.test.ts.
+ *
+ * The words come from the `cases` catalog, read when a function runs or a label is read
+ * (slice 23): the shared maps below (`CASE_STATUS`, `CASE_PRIORITY`, `CLOSE_REASONS`…) expose
+ * their words as getters, so every area that shows them follows the UI language.
  */
 import type { FactIcon, FactItem, FactTone, StatusAppearance, Tone } from '@/components/ui'
-import { formatRelativeTime } from '@/lib/format'
+import { formatDuration, formatRelativeTime } from '@/lib/format'
+import { i18n } from '@/lib/i18n'
 import type {
   CaseChannel,
   CasePriority,
@@ -19,6 +24,8 @@ import type {
   InboxResponse,
   InboxStatus,
 } from './types'
+
+const t = i18n.getFixedT(null, 'cases')
 
 // ─── Case status: the one map (Linear-style glyph + word) ────────────────────
 
@@ -37,37 +44,53 @@ export interface CaseStatusConfig extends StatusAppearance {
  * `tone` also drives the status stripes (`toneBorderLeft`).
  */
 export const CASE_STATUS: Readonly<Record<CaseStatusKey, CaseStatusConfig>> = {
-  queued: { shape: 'dashed', tone: 'neutral', label: 'Sin asignar', bucket: 'Sin asignar' },
-  new: { shape: 'ring', tone: 'accent', label: 'Nuevo', bucket: 'Nuevos' },
-  to_reply: {
-    shape: 'pie-75',
-    tone: 'warn',
-    label: 'Por responder',
-    bucket: 'Por responder',
-    strong: true,
-  },
-  waiting: {
-    shape: 'pie-50',
-    tone: 'waiting',
-    label: 'Esperando al cliente',
-    bucket: 'Esperando al cliente',
-  },
-  closed: { shape: 'check', tone: 'closed', label: 'Cerrado', bucket: 'Cerrados' },
+  queued: statusConfig('queued', { shape: 'dashed', tone: 'neutral' }),
+  new: statusConfig('new', { shape: 'ring', tone: 'accent' }),
+  to_reply: statusConfig('to_reply', { shape: 'pie-75', tone: 'warn', strong: true }),
+  waiting: statusConfig('waiting', { shape: 'pie-50', tone: 'waiting' }),
+  closed: statusConfig('closed', { shape: 'check', tone: 'closed' }),
+}
+
+/** A status whose words are read from `cases:status.<key>` when shown. */
+function statusConfig(
+  key: CaseStatusKey,
+  look: Omit<CaseStatusConfig, 'label' | 'bucket'>,
+): CaseStatusConfig {
+  return {
+    ...look,
+    get label() {
+      return t(`status.${key}.label`)
+    },
+    get bucket() {
+      return t(`status.${key}.bucket`)
+    },
+  }
+}
+
+/** A glyph whose word is read from the catalog when shown. */
+function appearanceOf(
+  look: Omit<StatusAppearance, 'label'>,
+  label: () => string,
+): StatusAppearance {
+  return {
+    ...look,
+    get label() {
+      return label()
+    },
+  }
 }
 
 /** A past case still open, outside any inbox view ("Casos anteriores"). */
-export const OPEN_CASE_STATUS: StatusAppearance = {
-  shape: 'pie-25',
-  tone: 'accent',
-  label: 'Abierto',
-}
+export const OPEN_CASE_STATUS: StatusAppearance = appearanceOf(
+  { shape: 'pie-25', tone: 'accent' },
+  () => t('status.open'),
+)
 
 /** Slice 19: a case the virtual assistant holds (nobody's inbox, no queue, no SLA yet). */
-export const WITH_ASSISTANT_STATUS: StatusAppearance = {
-  shape: 'bot',
-  tone: 'accent',
-  label: 'Con el asistente',
-}
+export const WITH_ASSISTANT_STATUS: StatusAppearance = appearanceOf(
+  { shape: 'bot', tone: 'accent' },
+  () => t('status.withAssistant'),
+)
 
 function appearance({ shape, tone, label, strong }: CaseStatusConfig): StatusAppearance {
   return strong ? { shape, tone, label, strong } : { shape, tone, label }
@@ -97,13 +120,21 @@ export interface InboxFilter {
 
 const filterOf = (status: InboxStatus): InboxFilter => ({
   status,
-  label: CASE_STATUS[status].bucket,
+  get label() {
+    return CASE_STATUS[status].bucket
+  },
   tone: CASE_STATUS[status].tone,
 })
 
 /** Canvas order: Todos · Por responder · Nuevos · Esperando al cliente · Cerrados. */
 export const INBOX_FILTERS: readonly InboxFilter[] = [
-  { status: null, label: 'Todos', tone: 'neutral' },
+  {
+    status: null,
+    get label() {
+      return t('filters.all')
+    },
+    tone: 'neutral',
+  },
   filterOf('to_reply'),
   filterOf('new'),
   filterOf('waiting'),
@@ -161,21 +192,21 @@ export interface CaseChannelConfig {
  * supervision tables show the icon alone (the label is the tooltip); the ficha says the label.
  */
 export const CASE_CHANNEL: Readonly<Record<CaseChannel, CaseChannelConfig>> = {
-  chat_app: { value: 'chat_app', kind: 'chat', icon: 'message', label: 'Chat en la app' },
-  chat_web: { value: 'chat_web', kind: 'chat', icon: 'message', label: 'Chat web' },
-  phone_inbound: {
-    value: 'phone_inbound',
-    kind: 'phone',
-    icon: 'phone-incoming',
-    label: 'Llamada entrante',
-  },
-  phone_outbound: {
-    value: 'phone_outbound',
-    kind: 'phone',
-    icon: 'phone-outgoing',
-    label: 'Llamada saliente',
-  },
-  email: { value: 'email', kind: 'email', icon: 'mail', label: 'Correo' },
+  chat_app: channelConfig({ value: 'chat_app', kind: 'chat', icon: 'message' }),
+  chat_web: channelConfig({ value: 'chat_web', kind: 'chat', icon: 'message' }),
+  phone_inbound: channelConfig({ value: 'phone_inbound', kind: 'phone', icon: 'phone-incoming' }),
+  phone_outbound: channelConfig({ value: 'phone_outbound', kind: 'phone', icon: 'phone-outgoing' }),
+  email: channelConfig({ value: 'email', kind: 'email', icon: 'mail' }),
+}
+
+/** A channel whose label is read from `cases:channel.<value>` when shown. */
+function channelConfig(config: Omit<CaseChannelConfig, 'label'>): CaseChannelConfig {
+  return {
+    ...config,
+    get label() {
+      return t(`channel.${config.value}`)
+    },
+  }
 }
 
 /** The config of a channel (an unknown value reads as a web chat). */
@@ -208,35 +239,26 @@ export interface CasePriorityConfig {
  * rows). Menu order as Linear: none first, then the most urgent down.
  */
 export const CASE_PRIORITY: Readonly<Record<CasePriority, CasePriorityConfig>> = {
-  none: {
-    value: 'none',
-    label: 'Sin prioridad',
-    longLabel: 'Sin prioridad',
-    icon: 'priority-none',
-    rank: 2,
-  },
-  critical: {
-    value: 'critical',
-    label: 'Crítica',
-    longLabel: 'Prioridad crítica',
-    icon: 'priority-critical',
-    rank: 0,
-  },
-  high: {
-    value: 'high',
-    label: 'Alta',
-    longLabel: 'Prioridad alta',
-    icon: 'priority-high',
-    rank: 1,
-  },
-  medium: {
-    value: 'medium',
-    label: 'Media',
-    longLabel: 'Prioridad media',
-    icon: 'priority-medium',
-    rank: 2,
-  },
-  low: { value: 'low', label: 'Baja', longLabel: 'Prioridad baja', icon: 'priority-low', rank: 2 },
+  none: priorityConfig({ value: 'none', icon: 'priority-none', rank: 2 }),
+  critical: priorityConfig({ value: 'critical', icon: 'priority-critical', rank: 0 }),
+  high: priorityConfig({ value: 'high', icon: 'priority-high', rank: 1 }),
+  medium: priorityConfig({ value: 'medium', icon: 'priority-medium', rank: 2 }),
+  low: priorityConfig({ value: 'low', icon: 'priority-low', rank: 2 }),
+}
+
+/** A level whose words are read from `cases:priority.<value>` when shown. */
+function priorityConfig(
+  config: Omit<CasePriorityConfig, 'label' | 'longLabel'>,
+): CasePriorityConfig {
+  return {
+    ...config,
+    get label() {
+      return t(`priority.${config.value}.label`)
+    },
+    get longLabel() {
+      return t(`priority.${config.value}.long`)
+    },
+  }
 }
 
 /** The options of the priority menu, in menu order. */
@@ -254,7 +276,7 @@ export function priorityLabel(priority: CasePriority): string {
 
 /** The trigger of the priority menu: the value, then what it does. */
 export function priorityMenuLabel(priority: CasePriority): string {
-  return `Prioridad: ${casePriority(priority).label}. Cambiar la prioridad`
+  return t('priority.menuTrigger', { level: casePriority(priority).label })
 }
 
 /** Only critical and high show on a card (slice 8 UI rule): the rest is noise there. */
@@ -278,14 +300,24 @@ export interface CaseTypeConfig {
  * share, then the team-generated one. Shown only while the AI switch is on.
  */
 export const CASE_TYPE: Readonly<Record<CaseType, CaseTypeConfig>> = {
-  none: { value: 'none', label: 'Sin tipo' },
-  unrecognized_charge: { value: 'unrecognized_charge', label: 'Cargo no reconocido' },
-  undue_charge: { value: 'undue_charge', label: 'Cobro indebido' },
-  app_issue: { value: 'app_issue', label: 'Problema con app' },
-  branch_service: { value: 'branch_service', label: 'Atención en sucursal' },
-  service_quality: { value: 'service_quality', label: 'Calidad de servicio' },
+  none: caseTypeConfig('none'),
+  unrecognized_charge: caseTypeConfig('unrecognized_charge'),
+  undue_charge: caseTypeConfig('undue_charge'),
+  app_issue: caseTypeConfig('app_issue'),
+  branch_service: caseTypeConfig('branch_service'),
+  service_quality: caseTypeConfig('service_quality'),
   // Team-generated: not a dataset subcategory.
-  virtual_card: { value: 'virtual_card', label: 'Tarjeta virtual' },
+  virtual_card: caseTypeConfig('virtual_card'),
+}
+
+/** A type whose label is read from `cases:caseType.<value>` when shown. */
+function caseTypeConfig(value: CaseType): CaseTypeConfig {
+  return {
+    value,
+    get label() {
+      return t(`caseType.${value}`)
+    },
+  }
 }
 
 /** The options of the case-type menu, in menu order. */
@@ -298,24 +330,26 @@ export function caseType(value: CaseType): CaseTypeConfig {
 
 /** The trigger of the case-type menu: the value, then what it does. */
 export function caseTypeMenuLabel(value: CaseType): string {
-  return `Tipo de caso: ${caseType(value).label}. Cambiar el tipo de caso`
+  return t('caseType.menuTrigger', { type: caseType(value).label })
 }
 
-const COUNTRY_NAMES: Record<CountryCode, string> = {
-  CO: 'Colombia',
-  MX: 'México',
-  AR: 'Argentina',
-  BR: 'Brasil',
-}
+const COUNTRIES: readonly CountryCode[] = ['CO', 'MX', 'AR', 'BR']
 
+/** "Colombia", "México"… (an unknown code reads as itself). */
 export function countryName(country: CountryCode): string {
-  return COUNTRY_NAMES[country] ?? country
+  return COUNTRIES.includes(country) ? t(`country.${country}`) : country
 }
 
 /** The channel as an icon-only fact: the icon, the label as tooltip and accessible text. */
 export function channelFact(channel: CaseChannel): FactItem {
   const config = caseChannel(channel)
-  return { key: 'channel', icon: config.icon, text: config.label, label: 'Canal', iconOnly: true }
+  return {
+    key: 'channel',
+    icon: config.icon,
+    text: config.label,
+    label: t('channel.fact'),
+    iconOnly: true,
+  }
 }
 
 /**
@@ -344,7 +378,13 @@ export function caseCardFacts(
     channelFact(summary.channel),
     // Slice 12: a call on the line right now (the customer may be waiting for "Contestar").
     summary.activeCallId
-      ? { key: 'call', icon: 'phone', text: 'Llamada en curso', tone: 'success', iconOnly: true }
+      ? {
+          key: 'call',
+          icon: 'phone',
+          text: t('card.callInProgress'),
+          tone: 'success',
+          iconOnly: true,
+        }
       : null,
     priorityFact(summary.priority),
     summary.previousCaseId
@@ -376,27 +416,26 @@ export interface CloseReasonOption {
 
 /** "Motivo" options of the close dialog, in contract order: the one reason → copy/tone map. */
 export const CLOSE_REASONS: ReadonlyArray<CloseReasonOption> = [
-  { value: 'resolved', label: 'Resuelto', meaning: 'Se atendió lo que pidió.', tone: 'success' },
-  {
-    value: 'customer_unresponsive',
-    label: 'El cliente no respondió',
-    meaning: 'Dejó de contestar y no se pudo seguir.',
-    tone: 'closed',
-  },
-  {
-    value: 'duplicate',
-    label: 'Duplicado',
-    meaning: 'Ya hay otro caso por lo mismo.',
-    tone: 'accent',
-  },
-  {
-    value: 'out_of_scope',
-    label: 'Fuera de alcance',
-    meaning: 'Lo que pide no lo atiende este equipo.',
-    tone: 'warn',
-  },
-  { value: 'other', label: 'Otro', meaning: 'Cuéntalo en la nota interna.', tone: 'neutral' },
+  closeReason('resolved', 'success'),
+  closeReason('customer_unresponsive', 'closed'),
+  closeReason('duplicate', 'accent'),
+  closeReason('out_of_scope', 'warn'),
+  closeReason('other', 'neutral'),
 ]
+
+/** A reason whose words are read from `cases:closeReason.<value>` when shown. */
+function closeReason(value: CloseReason, tone: Tone): CloseReasonOption {
+  return {
+    value,
+    get label() {
+      return t(`closeReason.${value}.label`)
+    },
+    get meaning() {
+      return t(`closeReason.${value}.meaning`)
+    },
+    tone,
+  }
+}
 
 /** The option of a reason (unknown → "Otro"'s look with the raw value as label). */
 export function closeReasonOption(reason: CloseReason): CloseReasonOption {
@@ -412,7 +451,7 @@ export function closeReasonOption(reason: CloseReason): CloseReasonOption {
 
 /** "Resuelto", "El cliente no respondió"…; `null` → "Sin motivo". */
 export function closeReasonLabel(reason: CloseReason | null | undefined): string {
-  if (!reason) return 'Sin motivo'
+  if (!reason) return t('closeReason.none')
   return CLOSE_REASONS.find((option) => option.value === reason)?.label ?? reason
 }
 
@@ -434,11 +473,24 @@ export interface RatingOption {
 
 /** The one score → words/face/tone map of the staff UI (the audit uses the same words). */
 export const RATING_SCALE: ReadonlyArray<RatingOption> = [
-  { score: 1, label: 'Mal', icon: 'frown', tone: 'danger', textTone: 'danger' },
-  { score: 2, label: 'Regular', icon: 'meh', tone: 'warn', textTone: 'warn' },
-  { score: 3, label: 'Bien', icon: 'smile', tone: 'success', textTone: 'success' },
-  { score: 4, label: 'Excelente', icon: 'laugh', tone: 'success', textTone: 'success' },
+  ratingStep('poor', { score: 1, icon: 'frown', tone: 'danger', textTone: 'danger' }),
+  ratingStep('fair', { score: 2, icon: 'meh', tone: 'warn', textTone: 'warn' }),
+  ratingStep('good', { score: 3, icon: 'smile', tone: 'success', textTone: 'success' }),
+  ratingStep('excellent', { score: 4, icon: 'laugh', tone: 'success', textTone: 'success' }),
 ]
+
+/** A score whose word is read from `cases:rating.<word>` when shown. */
+function ratingStep(
+  word: 'poor' | 'fair' | 'good' | 'excellent',
+  option: Omit<RatingOption, 'label'>,
+): RatingOption {
+  return {
+    ...option,
+    get label() {
+      return t(`rating.${word}`)
+    },
+  }
+}
 
 /** The option of a score; anything off the scale is clamped to 1–4 (rounded). */
 export function ratingOption(score: number): RatingOption {
@@ -462,7 +514,7 @@ export function ratingFact(rating: Pick<CaseRating, 'score'> | null | undefined)
   return {
     key: 'rating',
     icon: option.icon,
-    text: `Calificación: ${option.label}`,
+    text: t('rating.fact', { label: option.label }),
     tone: option.textTone,
     iconOnly: true,
   }
@@ -499,10 +551,8 @@ export function formatSla(
   if (summary.firstResponseAt || summary.status === 'closed') return null
   const remaining = toMs(summary.slaDueAt) - toMs(now)
   const atRisk = remaining <= SLA_AT_RISK_MS
-  if (remaining <= 0) return { text: 'SLA vencido', atRisk }
-  if (remaining < HOUR) return { text: `SLA ${Math.ceil(remaining / MINUTE)} min`, atRisk }
-  if (remaining < 2 * DAY) return { text: `SLA ${Math.floor(remaining / HOUR)} h`, atRisk }
-  return { text: `SLA ${Math.floor(remaining / DAY)} días`, atRisk }
+  if (remaining <= 0) return { text: t('sla.overdueTag'), atRisk }
+  return { text: t('sla.tag', { time: remainingText(remaining) }), atRisk }
 }
 
 /** How close the first-response SLA is: past due, at risk (≤ 5 min), or running. */
@@ -510,9 +560,9 @@ export type SlaLevel = 'overdue' | 'at_risk' | 'normal'
 
 /** "12 min", "5 h", "2 días": the time left, without the word "SLA". */
 function remainingText(remainingMs: number): string {
-  if (remainingMs < HOUR) return `${Math.ceil(remainingMs / MINUTE)} min`
-  if (remainingMs < 2 * DAY) return `${Math.floor(remainingMs / HOUR)} h`
-  return `${Math.floor(remainingMs / DAY)} días`
+  if (remainingMs < HOUR) return t('time.minutes', { count: Math.ceil(remainingMs / MINUTE) })
+  if (remainingMs < 2 * DAY) return t('time.hours', { count: Math.floor(remainingMs / HOUR) })
+  return t('time.days', { count: Math.floor(remainingMs / DAY) })
 }
 
 /**
@@ -528,16 +578,16 @@ export function slaFact(
 ): (FactItem & { level: SlaLevel }) | null {
   if (summary.firstResponseAt || summary.status === 'closed') return null
   const remaining = toMs(summary.slaDueAt) - toMs(now)
-  const label = 'SLA de primera respuesta'
+  const label = t('sla.label')
   if (remaining <= 0) {
     return {
       key: 'sla',
       level: 'overdue',
       icon: 'flame-filled',
       tone: 'danger',
-      text: 'Vencido',
+      text: t('sla.overdue'),
       label,
-      tooltip: 'Primera respuesta vencida',
+      tooltip: t('sla.overdueTooltip'),
     }
   }
   const left = remainingText(remaining)
@@ -549,7 +599,7 @@ export function slaFact(
         tone: 'warn',
         text: left,
         label,
-        tooltip: `Vence en ${left}`,
+        tooltip: t('sla.atRiskTooltip', { time: left }),
       }
     : {
         key: 'sla',
@@ -558,7 +608,7 @@ export function slaFact(
         tone: 'muted',
         text: left,
         label,
-        tooltip: `Primera respuesta: vence en ${left}`,
+        tooltip: t('sla.runningTooltip', { time: left }),
       }
 }
 
@@ -637,17 +687,11 @@ export interface AvailabilityControlCopy {
 }
 
 export function availabilityControlCopy(status: 'available' | 'paused'): AvailabilityControlCopy {
-  return status === 'paused'
-    ? {
-        label: 'En pausa',
-        detail: 'No te llegan casos nuevos',
-        accessibleName: 'En pausa. Volver a disponible',
-      }
-    : {
-        label: 'Disponible',
-        detail: 'Te llegan casos nuevos',
-        accessibleName: 'Disponible. Pausar casos nuevos',
-      }
+  return {
+    label: t(`availability.${status}.label`),
+    detail: t(`availability.${status}.detail`),
+    accessibleName: t(`availability.${status}.accessibleName`),
+  }
 }
 
 // ─── Filter chip (the Casos list filter now lives on Inicio, slice 6 §4.3) ───
@@ -675,26 +719,19 @@ export function formatClosedAgo(
 }
 
 /** Small tag on a card that continues a closed case (contract §4.6). */
-export const RETURNED_TAG = {
-  label: 'Volvió a escribir',
-  title: 'Escribió de nuevo después de que se cerró su caso anterior',
-} as const
+export const RETURNED_TAG: { readonly label: string; readonly title: string } = {
+  get label() {
+    return t('returned.label')
+  },
+  get title() {
+    return t('returned.title')
+  },
+}
 
 /** Empty list copy per filter (contract §9.1; slice 6: a filter reached from Inicio). */
 export function emptyListCopy(filter: InboxStatus | null, searching: boolean): string {
-  if (searching) return 'Ningún caso coincide con tu búsqueda.'
-  switch (filter) {
-    case 'closed':
-      return 'No cerraste casos en los últimos 7 días.'
-    case 'to_reply':
-      return 'Ningún caso espera tu respuesta.'
-    case 'new':
-      return 'No tienes casos nuevos.'
-    case 'waiting':
-      return 'Ningún caso espera al cliente.'
-    default:
-      return 'Nada pendiente.'
-  }
+  if (searching) return t('empty.searching')
+  return t(`empty.${filter ?? 'all'}`)
 }
 
 // ─── Search ──────────────────────────────────────────────────────────────────
@@ -792,16 +829,25 @@ export const MAX_ESCALATION_TEXT = 500
  * supervisor header): a ring with an up arrow, orange. A marker, not a status: the case keeps
  * its own status.
  */
-export const ESCALATED_MARKER: StatusAppearance = { shape: 'up', tone: 'warn', label: 'Escalado' }
+export const ESCALATED_MARKER: StatusAppearance = appearanceOf({ shape: 'up', tone: 'warn' }, () =>
+  t('escalation.marker'),
+)
 
 /** What became of an escalation, as glyph + word (Linear-style; "Escalados"). */
 export const ESCALATION_STATE: Readonly<Record<EscalationState, StatusAppearance>> = {
-  open: { shape: 'ring', tone: 'warn', label: 'Abierto', strong: true },
-  answered: { shape: 'check', tone: 'success', label: 'Respondido' },
-  taken: { shape: 'pie-50', tone: 'accent', label: 'Tomado' },
-  reassigned: { shape: 'forward', tone: 'neutral', label: 'Reasignado' },
-  withdrawn: { shape: 'cross', tone: 'closed', label: 'Retirado' },
-  closed: { shape: 'check', tone: 'closed', label: 'Caso cerrado' },
+  open: escalationState('open', { shape: 'ring', tone: 'warn', strong: true }),
+  answered: escalationState('answered', { shape: 'check', tone: 'success' }),
+  taken: escalationState('taken', { shape: 'pie-50', tone: 'accent' }),
+  reassigned: escalationState('reassigned', { shape: 'forward', tone: 'neutral' }),
+  withdrawn: escalationState('withdrawn', { shape: 'cross', tone: 'closed' }),
+  closed: escalationState('closed', { shape: 'check', tone: 'closed' }),
+}
+
+function escalationState(
+  state: EscalationState,
+  look: Omit<StatusAppearance, 'label'>,
+): StatusAppearance {
+  return appearanceOf(look, () => t(`escalation.state.${state}`))
 }
 
 /** Supervision did something about it (answered, took or reassigned the case). */
@@ -818,11 +864,7 @@ export const ESCALATION_WAIT_LONG_MS = 30 * MINUTE
 
 /** "6 min", "1 h 05 min": how long, in whole minutes (never seconds). */
 function minutesText(ms: number): string {
-  const minutes = Math.max(0, Math.floor(ms / MINUTE))
-  if (minutes < 60) return `${minutes} min`
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  return rest ? `${hours} h ${String(rest).padStart(2, '0')} min` : `${hours} h`
+  return formatDuration(Math.max(0, Math.floor(ms / MINUTE)))
 }
 
 /**
@@ -843,11 +885,12 @@ export function escalationWaitFact(
       icon: 'clock',
       tone: 'muted',
       text,
-      label: 'Esperó',
-      tooltip: `Esperó ${text}`,
+      label: t('escalation.waited'),
+      tooltip: t('escalation.waitedTooltip', { time: text }),
     }
   }
-  const tooltip = `Espera desde hace ${text}`
+  const tooltip = t('escalation.waitingTooltip', { time: text })
+  const label = t('escalation.waiting')
   if (waited > ESCALATION_WAIT_LONG_MS) {
     return {
       key: 'wait',
@@ -855,7 +898,7 @@ export function escalationWaitFact(
       icon: 'flame-filled',
       tone: 'danger',
       text,
-      label: 'Espera',
+      label,
       tooltip,
     }
   }
@@ -866,7 +909,7 @@ export function escalationWaitFact(
       icon: 'flame',
       tone: 'warn',
       text,
-      label: 'Espera',
+      label,
       tooltip,
     }
   }
@@ -876,7 +919,7 @@ export function escalationWaitFact(
     icon: 'clock',
     tone: 'default',
     text,
-    label: 'Espera',
+    label,
     tooltip,
   }
 }

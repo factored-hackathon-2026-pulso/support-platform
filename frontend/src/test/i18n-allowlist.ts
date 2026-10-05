@@ -50,13 +50,9 @@ export const PENDING_AREAS: readonly PendingArea[] = [
     ],
     strings: 231,
   },
-  // ── cases: the Casos list, cards, priority, case type, close reasons, ratings
-  { area: 'cases', paths: ['src/features/cases/'], strings: 123 },
   // ── copilot: Copiloto, Herramientas, the draft, the AI stage strip
   { area: 'copilot', paths: ['src/features/copilot/'], strings: 91 },
   // ── home: Inicio
   { area: 'home', paths: ['src/features/home/'], strings: 90 },
-  // ── workspace: the analyst Workspace frame (right panel tabs)
-  { area: 'workspace', paths: ['src/features/workspace/'], strings: 17 },
   // ── end of the pending areas
 ]

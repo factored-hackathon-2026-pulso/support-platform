@@ -138,7 +138,12 @@ All bodies and responses are camelCase; ids are agent-core's opaque text (propos
   proposal's current one (409 `registry_conflict`, `candidate_changed`). When the proposal **loosens the yardstick**
   (removes a metric, lowers a floor, widens a noise margin...) it is approved apart: the first call answers 409
   `registry_loosening_not_accepted` with `yardstickLoosened`; show it and ask again with `acceptYardstickLoosened: true`.
-- `POST .../reject` `{reason, stepUpCode}` → `Proposal` (`draft`).
+- `POST .../reject` `{reason, stepUpCode, reasonCode?}` → `Proposal` (`draft`). `reasonCode` (2026-10-05, P6) is
+  agent-core's closed list (its PR 53, contract 1.5.0): `insufficient_evidence`, `wrong_target`, `risk`, `duplicate`,
+  `policy_conflict`, `wording`, `other`; anything else is 422. Optional and `null` by default: it is sent to the registry
+  only when given (an older agent-core never sees it) and kept in the audit (`builder.proposal_rejected.reason_code`);
+  the free-text `reason` goes to the registry only. `GET .../proposals/{id}` gains `lastDecision` (`decision`,
+  `reasonCode`, `decidedAt`; null before any decision or from an agent-core without it).
 - `POST .../publish` `{stepUpCode}` + header `Idempotency-Key` (8-64 chars) → `201 ReleaseDetail`. One key per publication the
   person means to make: a retry with it returns the same release.
 - `POST /builder/aliases/{agentId}/{alias}/promote` `{releaseId, reason?, stepUpCode}` → `AliasChange`. `alias` is `staging` or

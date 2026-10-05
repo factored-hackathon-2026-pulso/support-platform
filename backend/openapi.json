@@ -4910,6 +4910,83 @@
         "title": "EvaluateRequest",
         "type": "object"
       },
+      "EvidenceCase": {
+        "description": "An evidence link of the engine's dossier, resolved against the platform's cases.",
+        "properties": {
+          "available": {
+            "description": "False when the id names no case here (stale or never existed): show it without a link; the other facts are null.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "caseType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseChannel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "language": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Language"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "openedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openedat"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "caseId",
+          "available",
+          "status",
+          "caseType",
+          "channel",
+          "language",
+          "openedAt"
+        ],
+        "title": "EvidenceCase",
+        "type": "object"
+      },
       "GateItem": {
         "properties": {
           "baseValue": {
@@ -7361,6 +7438,236 @@
         "title": "ProposalDetail",
         "type": "object"
       },
+      "ProposalHistoryEntry": {
+        "description": "One step of the proposal, from the platform's audit (oldest first). Only the members of\nits `kind` are set; the others are null.",
+        "properties": {
+          "actorId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A staff id; null for the engine or the system.",
+            "title": "Actorid"
+          },
+          "actorName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actorname"
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "enum": [
+                  "staging",
+                  "prod"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`promoted`: which alias.",
+            "title": "Alias"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`evaluated`: how many gate items.",
+            "title": "Items"
+          },
+          "itemsFailed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`evaluated`: how many failed.",
+            "title": "Itemsfailed"
+          },
+          "kind": {
+            "enum": [
+              "created",
+              "tracked",
+              "frozen",
+              "evaluated",
+              "approved",
+              "rejected",
+              "reopened",
+              "published",
+              "promoted"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reasonCode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "insufficient_evidence",
+                  "wrong_target",
+                  "risk",
+                  "duplicate",
+                  "policy_conflict",
+                  "wording",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`rejected`: agent-core's code, if any.",
+            "title": "Reasoncode"
+          },
+          "releaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`published` / `promoted`: the release.",
+            "title": "Releaseid"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`tracked`: who brought it here (`chat`, `tracked`, `engine`).",
+            "title": "Source"
+          },
+          "suiteId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`evaluated`: the suite it ran.",
+            "title": "Suiteid"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "failed_infra"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`evaluated`: the gate's verdict.",
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "actorId",
+          "actorName",
+          "source",
+          "verdict",
+          "items",
+          "itemsFailed",
+          "suiteId",
+          "reasonCode",
+          "releaseId",
+          "alias"
+        ],
+        "title": "ProposalHistoryEntry",
+        "type": "object"
+      },
+      "ProposalImprovement": {
+        "description": "The improvement engine's dossier (ADR 0007), as it announced it. Plain text: render it as\nsuch (no markup), keeping line breaks.",
+        "properties": {
+          "announcedAt": {
+            "format": "date-time",
+            "title": "Announcedat",
+            "type": "string"
+          },
+          "evidence": {
+            "title": "Evidence",
+            "type": "string"
+          },
+          "evidenceCases": {
+            "description": "The announce's `evidenceLinks` (0-8), in its order.",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceCase"
+            },
+            "title": "Evidencecases",
+            "type": "array"
+          },
+          "expectedEffect": {
+            "title": "Expectedeffect",
+            "type": "string"
+          },
+          "language": {
+            "const": "es",
+            "description": "The language the engine wrote it in: the announce carries Spanish only.",
+            "title": "Language",
+            "type": "string"
+          },
+          "problem": {
+            "title": "Problem",
+            "type": "string"
+          },
+          "title": {
+            "description": "At most 120 characters.",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "problem",
+          "evidence",
+          "expectedEffect",
+          "language",
+          "announcedAt",
+          "evidenceCases"
+        ],
+        "title": "ProposalImprovement",
+        "type": "object"
+      },
       "ProposalList": {
         "properties": {
           "items": {
@@ -7392,6 +7699,35 @@
         ],
         "title": "ProposalOrigin",
         "type": "string"
+      },
+      "ProposalRecord": {
+        "properties": {
+          "history": {
+            "description": "Oldest first. Only what happened through the platform: the registry has no history read.",
+            "items": {
+              "$ref": "#/components/schemas/ProposalHistoryEntry"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "improvement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalImprovement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the improvement engine did not announce this proposal (or its notifications were all pruned)."
+          }
+        },
+        "required": [
+          "improvement",
+          "history"
+        ],
+        "title": "ProposalRecord",
+        "type": "object"
       },
       "ProposalState": {
         "enum": [
@@ -13661,6 +13997,86 @@
           }
         ],
         "summary": "Publish the approved candidate as a release (`approved` → `published`)",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/builder/proposals/{proposalId}/record": {
+      "get": {
+        "description": "What the platform keeps about a proposal, without calling agent-core: the improvement engine's dossier (ADR 0007) with each evidence case resolved (`available: false` when the id names no case here), and the history from the platform's audit (evaluated, approved, rejected with its `reasonCode`, published, promoted to `staging` / `prod`). An id nobody announced or acted on answers an empty record.",
+        "operationId": "builder_get_proposal_record",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposalId",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Proposalid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "The engine's dossier and the history of the decisions on a proposal",
         "tags": [
           "builder"
         ]

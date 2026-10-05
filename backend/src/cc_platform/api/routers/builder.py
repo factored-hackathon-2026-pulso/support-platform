@@ -183,6 +183,26 @@ async def get_proposal(
     return schemas.ProposalDetail.model_validate(detail)
 
 
+@router.get(
+    "/proposals/{proposalId}/record",
+    response_model=schemas.ProposalRecord,
+    summary="The engine's dossier and the history of the decisions on a proposal",
+    description=(
+        "What the platform keeps about a proposal, without calling agent-core: the improvement "
+        "engine's dossier (ADR 0007) with each evidence case resolved (`available: false` when "
+        "the id names no case here), and the history from the platform's audit (evaluated, "
+        "approved, rejected with its `reasonCode`, published, promoted to `staging` / `prod`). "
+        "An id nobody announced or acted on answers an empty record."
+    ),
+    responses=problem_responses(401, 403, 404),
+)
+async def get_proposal_record(
+    proposal_id: ProposalId, actor: Builder, api: ApiContextDep
+) -> schemas.ProposalRecord:
+    record = await (await builder_use_cases(api)).record.execute(actor, proposal_id)
+    return schemas.ProposalRecord.model_validate(record)
+
+
 @router.put(
     "/proposals/{proposalId}/draft",
     response_model=schemas.Proposal,

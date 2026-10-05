@@ -116,6 +116,20 @@ class SqlNotificationRepository(VersionedRepository[Notification]):
                 found.append(notification)
         return found
 
+    async def improvement_for(self, proposal_id: str) -> Notification | None:
+        c = self.table.c
+        result = await self._session.execute(
+            select(self.table)
+            .where(
+                c.proposal_id == proposal_id,
+                c.kind == NotificationKind.IMPROVEMENT_PROPOSED.value,
+            )
+            .order_by(c.created_at, c.id)
+            .limit(1)
+        )
+        row = result.mappings().first()
+        return None if row is None else self._load(row)
+
     async def unread_count(self, recipient_id: str) -> int:
         c = self.table.c
         result = await self._session.execute(

@@ -46,6 +46,7 @@ from cc_platform.application.ai.maturity import (
 )
 from cc_platform.application.ai.priority import ApplyHandoffPriority, HandoffPriorityProcess
 from cc_platform.application.ai.process import ASSISTANT_PROCESS_EVENTS, AssistantTurnProcess
+from cc_platform.application.ai.proposal_record import GetProposalRecord
 from cc_platform.application.ai.registry import AgentRegistryClient
 from cc_platform.application.ai.staff import (
     AiOffHandoverProcess,
@@ -692,6 +693,7 @@ def _build_builder(
             agent=settings.builder_agent,
         ),
         announce=AnnounceImprovement(uow=uow, clock=clock, builder=registry, writer=notifications),
+        record=GetProposalRecord(uow=uow),
     )
 
 

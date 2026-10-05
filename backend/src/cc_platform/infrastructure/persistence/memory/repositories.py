@@ -41,7 +41,7 @@ from cc_platform.domain.cases.values import (
     TurnKind,
 )
 from cc_platform.domain.customers.customer import Customer
-from cc_platform.domain.notifications.notification import Notification
+from cc_platform.domain.notifications.notification import Notification, NotificationKind
 from cc_platform.domain.people.admin_roster import ROSTER_ID, AdminRoster
 from cc_platform.domain.people.availability import AnalystAvailability
 from cc_platform.domain.people.errors import EmailTakenError, TeamNameTakenError
@@ -772,6 +772,18 @@ class InMemoryNotificationRepository(_StagedRepository[Notification]):
         for item in found:
             self._track(item)
         return found
+
+    async def improvement_for(self, proposal_id: str) -> Notification | None:
+        found = sorted(
+            (
+                item
+                for item in self._all()
+                if item.proposal_id == proposal_id
+                and item.kind is NotificationKind.IMPROVEMENT_PROPOSED
+            ),
+            key=lambda item: (item.created_at, item.id),
+        )
+        return found[0] if found else None
 
     async def unread_count(self, recipient_id: str) -> int:
         mine = (item for item in self._all() if item.recipient_id == recipient_id)

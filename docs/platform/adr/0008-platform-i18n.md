@@ -1,10 +1,10 @@
 # ADR 0008 · Platform UI in Spanish and Brazilian Portuguese
 
-- Status: **Accepted** (user decision of 2026-10-04). 23a (the foundation) and 23b (the areas, with a
-  Portuguese e2e walk) are built: contract `api/slice-23-i18n.md`. 23c (server-rendered texts) is planned there.
+- Status: **Accepted** (user decision of 2026-10-04). 23a (the foundation), 23b (the areas, with a
+  Portuguese e2e walk) and 23c (server-rendered texts, decision 9) are built: contract `api/slice-23-i18n.md`.
 - Date: 2026-10-04
 - Scope: `frontend/` (the staff app and, without changing its behaviour, the customer simulator), `backend/`
-  (the preference; server texts in 23c).
+  (the preference; the texts it renders, 23c).
 - Related: `ENGINEERING_BRIEF.md` (Language rule), `frontend/ARCHITECTURE.md` §12, ADR 0001.
   Number 0007 is taken by an open pull request (the improvement-engine announce route).
 
@@ -56,6 +56,31 @@ parallel, without editing the same files.
    strings in `.tsx`, accented strings in `.ts`), with an allow-list of the areas 23b has not migrated yet; it also
    fails while the allow-list names an area with nothing left, so the list shrinks as areas land.
 
+9. **Server-rendered texts (23c): the server renders what only it reads or sends; what many viewers see at
+   once carries facts.**
+   - The **audit's descriptions** and the **emails** stay rendered by the server, now in the reader's (or the
+     recipient's) UI language, from one catalog module per language (`application/i18n/es.py`, the source, and
+     `pt_br.py`; flat keys, `str.format` placeholders, `_one` / `_other` plurals; a test compares keys and
+     placeholders, like the frontend's). Why not structured facts for the SPA here: the audit catalog has about
+     a hundred event types whose sentences depend on lookups the server already batches (names, the case
+     language), plurals and lists; moving that logic to the client would duplicate the catalog (families,
+     "changes something") and every API consumer would need it. The log is read on demand over REST, so the
+     server knows its reader (`ui_language_of`); the SPA refetches it when her language is saved. An email has
+     no client at all.
+   - The **staff-only transcript lines** carry their facts instead (`Turn.staffLine`: a kind and its parameters,
+     stored with the turn next to the unchanged Spanish `text`), and the SPA writes them from its catalogs. Why
+     not server rendering here: a new line is pushed once on the shared `case:<id>` topic to everyone watching
+     the case (the assignee, supervision, another tab in another language); rendering per viewer would need a
+     language-aware socket hub or a topic per language. Facts also switch language instantly without refetching
+     the transcript, which is how notifications already work (the API sends a kind, the SPA writes the copy).
+     Lines stored before 23c have no facts and show their text.
+   - **The invitee's language** is chosen by administration when it invites her (default Spanish) and stored as
+     her preference, the one place every later email and her first sign-in read; the link checks return it so
+     the activation screens open in it.
+   - **Problem details stay Spanish**: the SPA never shows them (it maps each `code` to its own copy), they are
+     developer-facing, and translating ~180 raise sites (plus a language for anonymous requests) is not worth it
+     now.
+
 ## Consequences
 
 - Every new string goes to a catalog in both languages; the compiler and the tests say when one is missing.
@@ -63,5 +88,9 @@ parallel, without editing the same files.
   namespaces. Feature catalogs stay out of the entry chunk.
 - Pure model code may call `i18n.t` at call time; components use `useTranslation` so they re-render on a
   switch. A component that only formats values reads `useActiveLocale()`.
-- Server-rendered texts (audit descriptions, notifications, problem details, emails) stay Spanish until 23c.
+- Since 23c the audit descriptions, the staff-only transcript lines and the emails follow the person's
+  language; problem details stay Spanish (decision 9). A new server sentence goes to both server catalogs; a new
+  kind of staff-only line adds a `StaffLineKind`, its builder in `cases/staff_lines.py` and its sentence in the
+  `conversation` catalogs (both languages).
+- A local database created before 23c lacks `turns.staff_line`: delete it.
 - A local database created before 23a lacks `staff_preferences`: delete it (no migrations yet, as before).

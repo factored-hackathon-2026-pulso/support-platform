@@ -2,8 +2,9 @@
 
 **Status:** 23a (foundation) implemented (2026-10-04) on `feat/i18n-foundation`. 23b (the areas)
 implemented (2026-10-05) on `feat/i18n-areas` (the seven area branches merged on top of 23a, then the
-cross-area pass, §8). 23c planned (§9). Gates in `../ENGINEERING_BRIEF.md` §6.
-**Date:** 2026-10-04 (23a), 2026-10-05 (23b).
+cross-area pass, §8). 23c (server-rendered texts) implemented (2026-10-05) on `feat/i18n-server` (§9).
+Gates in `../ENGINEERING_BRIEF.md` §6.
+**Date:** 2026-10-04 (23a), 2026-10-05 (23b, 23c).
 
 **Scope.** The platform UI (the staff app: analyst, Supervisión, Administración, sign-in and onboarding) in
 **es** and **pt-BR**, chosen by each person in the account menu and kept on her profile (ADR 0008). Chat
@@ -20,7 +21,7 @@ Read first: `../ENGINEERING_BRIEF.md` (it wins), `../adr/0008-platform-i18n.md` 
 |---|---|---|
 | **23a** | Foundation: i18next, catalogs and types, the format layer, the preference (API + account menu + pre-login detection), the guard rails, and the shared layer migrated (shell, rail, account menu, role names, `components/ui`, toasts and generic errors, session and route-error screens, not found, sign-in, MFA, lockout, invitation, reset, dev mailbox, "Plataforma"). | done |
 | **23b** | The areas, in parallel, one agent per area (§5): each moves its copy to its namespace, adds pt-BR tests of its screens and deletes its block from the allow-list. Then the cross-area pass (§8): shared vocabulary loaded with every screen that shows it, the simulator's bubble authors in the customer's language, the pt-BR terminology, a cold-load test and a Portuguese browser scenario. The customer simulator moved to `customer` here (with `getFixedT`). | done |
-| **23c** | Server-rendered texts in the person's language (§9). | planned |
+| **23c** | Server-rendered texts in the person's language (§9): audit descriptions (server catalogs per language), staff-only transcript lines (facts on the turn, written by the SPA), invitation and password-reset emails (the recipient's language, chosen at invitation). | done |
 
 ## 2. The preference (API)
 
@@ -36,10 +37,13 @@ person speaks with customers, `es` | `pt`). Default `es`.
 
 - **Event:** `staff.ui_language_changed` (entity `staff`, actor herself with her highest role, payload
   `from_language`, `to_language`). Audit family "Accesos" (her own account, like `staff.mfa_enrolled`), changes
-  state, description "Cambió el idioma de la plataforma a Português" (the language by its own name).
+  state, description "Cambió el idioma de la plataforma a Português" / "Mudou o idioma da plataforma para
+  Português" (23c: in the reader's language; the language by its own name in both).
 - **Realtime:** `preferences.updated` on `staff:<id>` (only that person listens) with `{ uiLanguage }`; the raw
   event never reaches a socket. Her other tabs switch at once.
-- **Server-side reader:** `application/people/preferences.py` `ui_language_of(uow, staff_id)` (23c uses it).
+- **Server-side reader:** `application/people/preferences.py` `ui_language_of(uow, staff_id)` (23c: the audit
+  reader's language, the language of her emails). `preset_ui_language` sets it when administration invites
+  her (no event: not her own change).
 - **Why not a column of `staff`:** administration edits a person with `expectedVersion`; her own language change
   would make that edit stale (`409 version_conflict`).
 - **Database:** new table; a local database from before must be deleted (no migrations yet).
@@ -106,7 +110,7 @@ switch language by themselves once migrated, because they read `i18n.t` at call 
 
 ## 7. Known gaps (after 23b)
 
-- Server-rendered texts are Spanish in a pt-BR UI until 23c (§9).
+- Server-rendered texts were Spanish in a pt-BR UI until 23c (§9; what is still Spanish is listed there).
 - `es` and `pt-BR` only. CLDR also has a `many` plural category for large round numbers (1 000 000); catalogs
   write `_one` and `_other`, so such a count would show the key; no screen counts that high.
 
@@ -148,26 +152,89 @@ conversation}`; the allow-list is empty):
 **Spanish still reaching a pt-BR screen (on purpose or for 23c).** Data: names, team names ("Equipo
 Andes"), case subjects, the escalation motive, messages and the customer notices (chat content is in the
 case language, never translated). Languages by their own name ("Español", "Português"). Server texts
-(§9): the audit's "Qué hizo" ("Reasignó el caso de …"), the staff-only system lines of the transcript
-("Asignado a Daniela Ríos porque está disponible y habla español."), the dev mailbox's emails.
+(§9, translated in 23c): the audit's "Qué hizo" ("Reasignó el caso de …"), the staff-only system lines of
+the transcript ("Asignado a Daniela Ríos porque está disponible y habla español."), the dev mailbox's emails.
 
-## 9. 23c: what is left (server-rendered texts)
+## 9. 23c: server-rendered texts (done, 2026-10-05)
 
-The server reads the viewer's `ui_language_of` (or, for an email to someone not signed in yet, the inviter's
-choice or a stored one) and renders:
+Decision (ADR 0008 §9): **the server renders what only it reads or sends** (the audit log, the emails), in
+one catalog module per language; **what travels to many viewers at once carries facts** (a staff-only
+transcript line goes out on the shared `case:<id>` socket topic to everyone watching the case, each with
+her own language), and the SPA writes the sentence from its catalogs, as it already does for notifications.
 
-- **Audit descriptions** ("Qué hizo", the `description` of each audit event): Spanish sentences built when
-  the log is read (`application/audit/queries.py`).
-- **Staff-only transcript lines** (`routing` / `system` turns: assigned on arrival, from the queue, by
-  supervision, reassigned, escalated / withdrawn / answered / taken, released by the assistant, follow-up
-  call), `application/cases/copy.py`: written once in Spanish and stored, so each viewer's language needs
-  the facts kept with the turn (or the event) and the sentence rendered on read. Customer notices keep the
-  case language.
-- **Problem details** (`title` / `detail` of every `application/problem+json`): the SPA shows its own copy
-  per `code`, so this is for API consumers and logs; low priority.
-- **Emails** (invitation, password reset; the dev mailbox shows them): subject and body.
-- The audit row of a language change ("Cambió el idioma de la plataforma a Português") follows the audit
-  descriptions.
+### 9.1 Server catalogs
+
+`backend/src/cc_platform/application/i18n/`: `es.py` (the source) and `pt_br.py`, flat namespaced keys
+(`audit.caseClosed`, `email.invitation.body`, `priority.high`) with `str.format` placeholders; `texts(language)`
+is the translator (`t(key, **params)`, `t.plural(key, count)` → `key_one` / `key_other`, `t.join(items)` →
+"A, B y C" / "A, B e C"). `tests/unit/application/test_server_i18n.py` fails when a catalog lacks a key or a
+placeholder of the Spanish one, or when the Spanish vocabulary drifts from the stored transcript words
+(`cases/copy.py`: language and queue names, close reasons; `admin/copy.py`: role labels). Portuguese terms
+follow §3 and §8 (atribuir / reatribuir, assumir o caso, fila, encerrar, escalonamento, transferência, perfil,
+convite, e-mail, Supervisão, Administração).
+
+### 9.2 Audit descriptions
+
+`GET /audit/events` and `GET /audit/events/{eventId}` render `description` in the **reader's** saved UI
+language (`ListAuditEvents` / `GetAuditEvent` take the reader; `ui_language_of`). Spanish output is
+byte-identical (the 23b tests pin it); every emitted event type has a Portuguese sentence and none equals the
+Spanish one (`test_the_log_speaks_the_readers_language`). The stored `queue_label` of `case.queued` is a
+Spanish snapshot: only the Spanish sentence uses it. The SPA refetches the audit queries once a new language
+is saved, in this tab or another (`app/preferences.ts` `refetchServerRenderedTexts`). No API shape change.
+
+### 9.3 Staff-only transcript lines
+
+- A `routing` turn now stores its **facts** next to its Spanish `text`: `StaffLine` (`kind`: `StaffLineKind`,
+  `params`: names as they were then, the case language `es` | `pt`, counts, an ISO time), in the `turns.staff_line`
+  JSON column, the `turn.created` event payload (`staff_line`, only when present) and the API `Turn.staffLine`
+  (`{ kind, params }` or `null`; the parameters per kind are listed on the `StaffLine` schema). Builders:
+  `application/cases/staff_lines.py` (the stored text is still `copy.py`'s, unchanged). The seed writes facts too.
+- Kinds: `assigned_on_arrival`, `assigned_from_assistant`, `queued`, `assigned_from_queue`, `wrote_again`,
+  `assigned_by_supervision`, `reassigned` (both with `paused`), `escalated`, `escalation_withdrawn`,
+  `escalation_answered`, `escalation_taken`, `assistant_released`, `follow_up_call`.
+- The SPA (`features/conversation/model.ts` `staffLineText`, `turnText`; `conversation:staffLine.*`) writes the
+  line in the viewer's language in the transcript and in the Escalados panel's last messages; the Spanish
+  catalog repeats the server's sentences. A line without facts (stored before 23c) or with facts this version
+  cannot read shows its stored text. `wrote_again` shows the previous closing in the viewer's zone (the stored
+  text names "hora Bogotá").
+- The audit redacts `staff_line` like the turn text (listed in `redactedFields`, no length).
+- Customer-visible notices (opened, closed, reassigned, call lines, the assistant's handover) stay in the case
+  language: they are chat content.
+- The staff transcript names the virtual assistant from the catalog ("Asistente virtual" / "Assistente
+  virtual"), not from the server's Spanish `authorName`.
+- A local database from before 23c lacks `turns.staff_line`: delete it (no migrations yet).
+
+### 9.4 Emails and the invitation's language
+
+- `POST /admin/users` takes `uiLanguage` (`es` | `pt-BR`, default `es`): administration picks the invitee's
+  platform language ("Idioma de la plataforma" in "Nuevo usuario", Español by default). It becomes her
+  preference (`staff_preferences`), so the invitation, its resends and her later reset links are in it, and her
+  first sign-in opens in it. A reset follows her own preference.
+- `POST /onboarding/invitations/check` and `/password-resets/check` return `uiLanguage`; the activation and reset
+  screens switch to it and remember it for the sign-in that follows.
+- Templates: `email.invitation.*`, `email.reset.*` (Spanish byte-identical; Portuguese subjects "Seu convite para
+  a Plataforma CC do LATAM Bank", "Crie uma nova senha para a Plataforma CC"). The seeded Bruna Esteves is
+  invited in Portuguese, so the dev mailbox shows both languages.
+
+### 9.5 Still Spanish, and why
+
+- **Problem details** (`title` / `detail` of `application/problem+json` and WebSocket `error` envelopes): the
+  SPA never shows them (it maps each `code` to its own copy in both languages); they are developer-facing text
+  for API consumers and logs, spread over ~180 raise sites. Translating them would mean a catalog entry per
+  error and a language source for anonymous requests; not worth it now. Documented as a known gap.
+- **The stored `text` of a routing turn**, the inbox `preview` when a case's last turn is a routing line (only a
+  follow-up call case before its first message), and turn texts sent to the AI services: kept in Spanish on
+  purpose (one stored sentence; the facts carry the translation).
+- **Data**: names, team names, case subjects, motives, messages, and the customer notices (chat content in the
+  case language). Languages by their own name.
+- `es` and `pt-BR` only (as in §7).
+
+### 9.6 Gates (2026-10-05)
+
+Backend `ruff check`, `ruff format --check` (419 files), `mypy src` (290 files), `pytest` 1588 passed,
+`export_openapi --check` clean; frontend `typecheck`, `lint`, `format:check`, `test` 1217 passed in 125 files,
+`build`, `check:api`; `pnpm e2e` 18/18 twice in a row (the Portuguese walk now checks the case's assignment
+line and the case's audit in Portuguese).
 
 Notifications need nothing: the API sends no text, the SPA builds their copy from the kind (`notifications`
 namespace).

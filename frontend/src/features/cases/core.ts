@@ -29,6 +29,7 @@ export {
   OPEN_CASE_STATUS,
   caseCardFacts,
   caseLifecycleStatus,
+  WITH_ASSISTANT_STATUS,
   casePriority,
   caseStatus,
   caseType,

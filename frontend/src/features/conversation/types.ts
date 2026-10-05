@@ -40,6 +40,10 @@ export type PostAnalystTurnRequest = Schemas['PostAnalystTurnRequest']
 export type PostTurnResponse = Schemas['PostTurnResponse']
 export type MarkReadRequest = Schemas['MarkReadRequest']
 export type CloseCaseRequest = Schemas['CloseCaseRequest']
+/** Slice 19: how useful the assistant's handoff was, asked at close (optional). */
+export type HandoffQuality = NonNullable<CloseCaseRequest['handoffQuality']>
+/** Slice 19: agent-core's handoff packet as it publishes it (snake_case, untyped). */
+export type CaseHandoff = Schemas['CaseHandoff']
 /** Slice 8: PUT /cases/{caseId}/priority. */
 export type ChangePriorityRequest = Schemas['ChangePriorityRequest']
 export type CasePriorityResult = Schemas['CasePriorityResult']

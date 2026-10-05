@@ -55,12 +55,14 @@ vi.mock('@/features/conversation', async () => {
     customerFile,
     focusOnLoad,
     onFocused,
+    onOpenHandoff,
   }: {
     caseId: string
     onClosed?: (id: string) => void
     customerFile?: { open: boolean; onToggle(): void }
     focusOnLoad?: boolean
     onFocused?: () => void
+    onOpenHandoff?: () => void
   }) {
     const heading = useRef<HTMLHeadingElement>(null)
     useEffect(() => {
@@ -86,8 +88,27 @@ vi.mock('@/features/conversation', async () => {
             Ver ficha de Patricia Lozano Vega
           </button>
         ) : null}
+        {onOpenHandoff ? (
+          <button type="button" onClick={onOpenHandoff}>
+            Ver todo
+          </button>
+        ) : null}
       </section>
     )
+  }
+  /** Slice 19: the first case of the list came from the assistant; its handoff loaded. */
+  const HANDOFF_CASE = 'CASE-00000000000000000000000102'
+  function useCaseDetail(caseId: string) {
+    return { data: { case: { id: caseId }, assignment: null } }
+  }
+  function useCaseHandoff(detail?: { case: { id: string } }) {
+    return {
+      handoff: { status: 'success' },
+      available: detail?.case.id === HANDOFF_CASE,
+    }
+  }
+  function HandoffPanel({ detail }: { detail: { case: { id: string } } }) {
+    return <p>Traspaso de {detail.case.id}</p>
   }
   /** Stub sections: show what the Workspace passes and let the test drive them. */
   function CustomerFile({
@@ -122,6 +143,10 @@ vi.mock('@/features/conversation', async () => {
     CUSTOMER_FILE_TRIGGER_ID: TRIGGER,
     ConversationPane,
     CustomerFile,
+    HandoffPanel,
+    useCaseDetail,
+    useCaseHandoff,
+    describeHandoffFailure: () => ({ title: '', description: '', retry: false }),
   }
 })
 
@@ -149,7 +174,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const renderWorkspace = (entry = '/analyst/cases') => renderRoute(entry, { staff: analystStaff })
+const renderWorkspace = (entry = '/analyst/cases', { aiEnabled = false } = {}) =>
+  renderRoute(entry, { staff: analystStaff, aiEnabled })
 const searchOf = (router: ReturnType<typeof renderWorkspace>['router']) =>
   new URLSearchParams(router.state.location.search)
 
@@ -467,5 +493,59 @@ describe('/analyst/cases "Ficha del cliente"', () => {
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
     // The next URL write drops them.
     expect(router.state.location.search).toContain('list=collapsed')
+  })
+})
+
+describe('/analyst/cases right panel with AI on (slice 19)', () => {
+  it('turns the ficha into the "Cliente" tab and opens "Traspaso" from "Ver todo"', async () => {
+    const { router, user } = renderWorkspace('/analyst/cases', { aiEnabled: true })
+    await screen.findByText(`Conversación ${FIRST}`)
+    await user.click(screen.getByRole('button', { name: 'Ver ficha de Patricia Lozano Vega' }))
+    expect(searchOf(router).get('panel')).toBe('customer')
+    const panel = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(panel).toHaveAttribute('id', 'ficha-del-cliente')
+    const tabs = within(panel).getByRole('tablist', { name: 'Apoyo' })
+    expect(
+      within(tabs)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent),
+    ).toEqual(['Traspaso', 'Cliente'])
+    expect(within(tabs).getByRole('tab', { name: 'Cliente' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(panel).toHaveTextContent(`Ficha de ${FIRST} · list`)
+
+    await user.click(within(tabs).getByRole('tab', { name: 'Traspaso' }))
+    expect(searchOf(router).get('panel')).toBe('handoff')
+    expect(panel).toHaveTextContent(`Traspaso de ${FIRST}`)
+
+    await user.click(within(panel).getByRole('button', { name: 'Cerrar el panel de apoyo' }))
+    expect(searchOf(router).get('panel')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Ver todo' }))
+    expect(searchOf(router).get('panel')).toBe('handoff')
+    const reopened = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(within(reopened).getByRole('tab', { name: 'Traspaso' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
+  it('has only "Cliente" for a case the assistant did not hand over', async () => {
+    renderWorkspace(`/analyst/cases?case=${SECOND}&panel=handoff`, { aiEnabled: true })
+    const panel = await screen.findByRole('complementary', { name: 'Apoyo del caso' })
+    expect(
+      within(panel)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent),
+    ).toEqual(['Cliente'])
+    expect(panel).toHaveTextContent(`Ficha de ${SECOND} · list`)
+  })
+
+  it('keeps the old ficha and ignores the handoff tab with AI off', async () => {
+    renderWorkspace(`/analyst/cases?case=${FIRST}&panel=handoff`)
+    await screen.findByText(`Conversación ${FIRST}`)
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ver todo' })).not.toBeInTheDocument()
   })
 })

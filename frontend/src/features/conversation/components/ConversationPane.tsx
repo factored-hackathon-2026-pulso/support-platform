@@ -46,6 +46,7 @@ import { CloseCaseDialog } from './CloseCaseDialog'
 import { EmailComposer } from './EmailComposer'
 import { EscalateCaseDialog } from './EscalateCaseDialog'
 import { EscalationCard } from './EscalationCard'
+import { HandoffCard } from './Handoff'
 import { Composer } from './Composer'
 import { ReadOnlyFooter } from './ReadOnlyFooter'
 import { StartCallDialog } from './StartCallDialog'
@@ -78,6 +79,12 @@ export interface ConversationPaneProps {
    * the name (a button that toggles the panel) and the case number.
    */
   customerFile?: { open: boolean; onToggle(): void }
+  /**
+   * Slice 19 (AI on): the Workspace's "Traspaso" tab. With it, a case that came from an
+   * assistant escalation shows "El asistente te pasó este caso" on top, and its "Ver todo"
+   * opens the tab.
+   */
+  onOpenHandoff?(): void
 }
 
 /**
@@ -102,6 +109,7 @@ function ConversationBody({
   mode = 'workspace',
   headerActions,
   customerFile,
+  onOpenHandoff,
 }: ConversationPaneProps) {
   const me = useCurrentUser()
   useConversationLive(caseId)
@@ -155,6 +163,7 @@ function ConversationBody({
       mode={mode}
       headerActions={headerActions}
       customerFile={customerFile}
+      onOpenHandoff={onOpenHandoff}
     />
   )
 }
@@ -169,6 +178,7 @@ interface LoadedConversationProps {
   mode: ConversationMode
   headerActions?: ReactNode
   customerFile?: { open: boolean; onToggle(): void }
+  onOpenHandoff?(): void
 }
 
 function LoadedConversation({
@@ -181,6 +191,7 @@ function LoadedConversation({
   mode,
   headerActions,
   customerFile,
+  onOpenHandoff,
 }: LoadedConversationProps) {
   const { case: summary, capabilities } = detail
   const supervision = mode === 'supervision'
@@ -236,6 +247,9 @@ function LoadedConversation({
       ) : null}
       {escalationCard ? <EscalationCard caseId={summary.id} card={escalationCard} /> : null}
       <ArrivalNote detail={detail} meId={meId} mode={mode} />
+      {!supervision && onOpenHandoff ? (
+        <HandoffCard detail={detail} onOpen={onOpenHandoff} />
+      ) : null}
       <TranscriptArea
         caseId={summary.id}
         turns={turns}
@@ -273,6 +287,7 @@ function LoadedConversation({
         <>
           <CloseCaseDialog
             summary={summary}
+            assignment={detail.assignment}
             open={closing}
             onOpenChange={setClosing}
             onClosed={onClosed}

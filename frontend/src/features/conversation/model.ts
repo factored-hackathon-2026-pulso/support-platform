@@ -49,6 +49,7 @@ import type {
   CaseHistoryItem,
   CaseSummary,
   CloseCaseRequest,
+  HandoffQuality,
   Escalation,
   Language,
   PendingMessage,
@@ -226,7 +227,16 @@ export function readTarget(summary: CaseSummary, meId: string): number | null {
  * ended), `note` a staff-only note, `email` one email of the thread.
  */
 export type TranscriptVariant =
-  'customer' | 'own' | 'analyst' | 'routing' | 'notice' | 'line' | 'call-event' | 'note' | 'email'
+  | 'customer'
+  | 'own'
+  | 'analyst'
+  | 'assistant'
+  | 'routing'
+  | 'notice'
+  | 'line'
+  | 'call-event'
+  | 'note'
+  | 'email'
 
 /** Who speaks on a call line or wrote an email. */
 export type TranscriptSpeaker = 'customer' | 'own' | 'analyst'
@@ -276,6 +286,9 @@ export function turnVariant(turn: Turn, meId: string): TranscriptVariant {
       return 'customer'
     case 'analyst':
       return turn.authorId === meId ? 'own' : 'analyst'
+    // Slice 19: the virtual assistant's replies (agent-core), before people had the case.
+    case 'assistant':
+      return 'assistant'
     default:
       return 'notice'
   }
@@ -294,6 +307,8 @@ export function turnAuthor(turn: Turn, variant: TranscriptVariant, meId = ''): s
       return turn.authorName ?? 'Cliente'
     case 'analyst':
       return turn.authorName ?? 'Analista'
+    case 'assistant':
+      return turn.authorName ?? ASSISTANT_NAME
     case 'line': {
       // The canvas labels the call's two sides "Cliente" and "Tú".
       const speaker = turnSpeaker(turn, meId)
@@ -385,6 +400,9 @@ export function toTranscriptItems(
   }))
   return [...confirmed, ...pending]
 }
+
+/** The assistant's name in staff screens (the API's `authorName`, Spanish for staff). */
+export const ASSISTANT_NAME = 'Asistente virtual'
 
 /** Label of a centred note: staff-only notes vs notices the customer also saw. */
 export function noticeLabel(item: TranscriptItem): string {
@@ -486,6 +504,12 @@ export function supervisionArrivalLine(
 ): { line: string; time: string | null } | null {
   const { assignment, case: summary } = detail
   const language = LANGUAGE_NAMES[summary.language]
+  if (summary.status === 'with_assistant') {
+    return {
+      line: `Lo atiende el asistente virtual desde las ${formatTime(summary.openedAt)}`,
+      time: null,
+    }
+  }
   if (summary.status === 'queued') {
     return {
       line: `Sin asignar desde las ${formatTime(summary.openedAt)}: nadie disponible habla ${language}`,
@@ -510,6 +534,8 @@ export function supervisionArrivalLine(
       const verb = assignment.previousAnalystId === null ? 'se lo asignó' : 'se lo pasó'
       return { line: `${who}: ${verb} ${assignment.assignedByName ?? 'supervisión'}`, time }
     }
+    case 'assistant_handoff':
+      return { line: `${who}: le llegó tras el traspaso del asistente`, time }
     default: {
       const rule = summary.language === 'pt' ? ' (regla 3)' : ''
       return { line: `${who}: le llegó al estar disponible y hablar ${language}${rule}`, time }
@@ -537,6 +563,11 @@ export function supervisionFooter(
 ): string[] | null {
   const { case: summary, closure, assignment } = detail
   if (closure) return null
+  if (summary.status === 'with_assistant') {
+    return [
+      `Lo atiende el asistente virtual. Si lo tomas, pasa a la cola en ${LANGUAGE_NAMES[summary.language]}.`,
+    ]
+  }
   if (summary.status === 'queued' || !assignment) {
     return [
       `Sin asignar: le llega automáticamente a la primera persona disponible que hable ${LANGUAGE_NAMES[summary.language]}.`,
@@ -815,6 +846,23 @@ export function arrivalFacts(
     }
   }
   const heading = 'Cómo llegó a ti'
+  if (assignment.reason === 'assistant_handoff') {
+    // Slice 19: the assistant escalated it; she got it like any arrival (rule 3).
+    return {
+      heading,
+      time,
+      facts: [
+        { key: 'assistant', icon: 'bot', text: 'Tras el traspaso del asistente', tone: 'accent' },
+        {
+          key: 'language',
+          icon: 'languages',
+          text: 'Hablas',
+          languages: [summary.language],
+          ...(summary.language === 'pt' ? { tag: 'Regla 3' } : {}),
+        },
+      ],
+    }
+  }
   if (assignment.reason === 'manual') {
     const previous = assignment.previousAnalystId
       ? {
@@ -1055,9 +1103,14 @@ export interface CloseCaseForm {
   reason: CloseReason | null
   /** Internal note, optional ('' = none). Only staff see it. */
   note: string
+  /**
+   * Slice 19: "¿Te sirvió el traspaso del asistente?" (optional, only asked when the handoff
+   * loaded). null = not answered: nothing is sent, the platform never guesses a label.
+   */
+  handoffQuality: HandoffQuality | null
 }
 
-export const INITIAL_CLOSE_FORM: CloseCaseForm = { reason: null, note: '' }
+export const INITIAL_CLOSE_FORM: CloseCaseForm = { reason: null, note: '', handoffQuality: null }
 
 export type CloseFormErrors = Partial<Record<keyof CloseCaseForm, string>>
 
@@ -1070,9 +1123,13 @@ export function validateCloseForm(form: CloseCaseForm): CloseFormErrors {
   return errors
 }
 
-/** `{ reason, note: trimmed || null }`. Call it only after `validateCloseForm` passed. */
+/**
+ * `{ reason, note: trimmed || null }`, plus `handoffQuality` only when she answered it (slice
+ * 19). Call it only after `validateCloseForm` passed.
+ */
 export function toCloseRequest(form: CloseCaseForm & { reason: CloseReason }): CloseCaseRequest {
-  return { reason: form.reason, note: form.note.trim() || null }
+  const request: CloseCaseRequest = { reason: form.reason, note: form.note.trim() || null }
+  return form.handoffQuality ? { ...request, handoffQuality: form.handoffQuality } : request
 }
 
 /** "{n}/500" under the note (trimmed length, as the server counts it). */

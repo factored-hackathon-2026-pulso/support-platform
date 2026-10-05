@@ -62,6 +62,13 @@ export const OPEN_CASE_STATUS: StatusAppearance = {
   label: 'Abierto',
 }
 
+/** Slice 19: a case the virtual assistant holds (nobody's inbox, no queue, no SLA yet). */
+export const WITH_ASSISTANT_STATUS: StatusAppearance = {
+  shape: 'bot',
+  tone: 'accent',
+  label: 'Con el asistente',
+}
+
 function appearance({ shape, tone, label, strong }: CaseStatusConfig): StatusAppearance {
   return strong ? { shape, tone, label, strong } : { shape, tone, label }
 }
@@ -75,6 +82,7 @@ export function caseStatus(inboxStatus: InboxStatus | null): StatusAppearance {
 export function caseLifecycleStatus(status: CaseStatus): StatusAppearance {
   if (status === 'queued') return appearance(CASE_STATUS.queued)
   if (status === 'closed') return appearance(CASE_STATUS.closed)
+  if (status === 'with_assistant') return WITH_ASSISTANT_STATUS
   return OPEN_CASE_STATUS
 }
 

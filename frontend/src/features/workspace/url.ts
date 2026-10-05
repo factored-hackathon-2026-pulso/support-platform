@@ -1,12 +1,18 @@
 /**
  * URL state of the Workspace ("Casos", `/analyst/cases`): the selected case, the filter, the
- * search, the collapsed list and the "Ficha del cliente" panel
+ * search, the collapsed list and the right panel (the "Ficha del cliente"; slice 19, with AI on,
+ * its tabs: `?panel=handoff` is "Traspaso", `?panel=customer` "Cliente")
  * (`?case=&status=&q=&list=&panel=&previous=`, docs/platform/api/slice-2-case-lifecycle.md
  * §9.2). Links into it are built by `workspacePath` (app/paths.ts). Pure: unit-tested in
  * url.test.ts.
  */
 import { parseInboxStatus, type InboxStatus } from '@/features/cases'
 import type { PreviousCasesSelection } from '@/features/conversation'
+
+/** The right panel's tab (slice 19). S20 adds the copilot and the tools. */
+export type WorkspacePanel = 'customer' | 'handoff'
+
+const PANELS: readonly WorkspacePanel[] = ['customer', 'handoff']
 
 export interface WorkspaceUrlState {
   /** `?case=CASE-…`. */
@@ -17,8 +23,11 @@ export interface WorkspaceUrlState {
   query: string
   /** `?list=collapsed`. */
   listCollapsed: boolean
-  /** `?panel=customer`: "Ficha del cliente" is open (slice 6 §5). */
-  customerFile: boolean
+  /**
+   * `?panel=`: the right panel and its tab. `customer` is "Ficha del cliente" (slice 6 §5; the
+   * "Cliente" tab with AI on), `handoff` the "Traspaso" tab (slice 19, AI on only); null = closed.
+   */
+  panel: WorkspacePanel | null
   /**
    * `?previous=`: "Casos anteriores" inside the panel: `list` (`PREVIOUS_CASES_LIST`), a past
    * case id (its transcript), or null (the list). A value also opens the panel.
@@ -26,11 +35,24 @@ export interface WorkspaceUrlState {
   history: PreviousCasesSelection | null
 }
 
+/**
+ * The tab the right panel shows, or null when it is closed: `?panel=`, else "Ficha del cliente"
+ * for a `?previous=` deep link ("Casos anteriores" lives there).
+ */
+export function openPanel(
+  state: Pick<WorkspaceUrlState, 'panel' | 'history'>,
+): WorkspacePanel | null {
+  if (state.history !== null) return 'customer'
+  return state.panel
+}
+
 /** Whether "Ficha del cliente" shows (`?panel=customer`, or a `?previous=` deep link). */
-export function isCustomerFileOpen(
-  state: Pick<WorkspaceUrlState, 'customerFile' | 'history'>,
-): boolean {
-  return state.customerFile || state.history !== null
+export function isCustomerFileOpen(state: Pick<WorkspaceUrlState, 'panel' | 'history'>): boolean {
+  return openPanel(state) === 'customer'
+}
+
+function parsePanel(value: string | null): WorkspacePanel | null {
+  return (PANELS as readonly (string | null)[]).includes(value) ? (value as WorkspacePanel) : null
 }
 
 export interface WorkspaceStateChangeOptions {
@@ -45,7 +67,7 @@ export function parseWorkspaceSearch(params: URLSearchParams): WorkspaceUrlState
     filter: parseInboxStatus(params.get('status')),
     query: params.get('q') ?? '',
     listCollapsed: params.get('list') === 'collapsed',
-    customerFile: params.get('panel') === 'customer',
+    panel: parsePanel(params.get('panel')),
     history: params.get('previous')?.trim() || null,
   }
 }
@@ -57,7 +79,7 @@ export function toWorkspaceSearch(state: WorkspaceUrlState): URLSearchParams {
   if (state.filter) params.set('status', state.filter)
   if (state.query) params.set('q', state.query)
   if (state.listCollapsed) params.set('list', 'collapsed')
-  if (state.customerFile) params.set('panel', 'customer')
+  if (state.panel) params.set('panel', state.panel)
   if (state.history) params.set('previous', state.history)
   return params
 }

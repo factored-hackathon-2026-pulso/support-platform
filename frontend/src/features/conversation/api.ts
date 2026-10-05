@@ -9,6 +9,7 @@ import type {
   CallList,
   CallResponse,
   CaseDetail,
+  CaseHandoff,
   CaseHistory,
   CasePriorityResult,
   CaseSummary,
@@ -32,6 +33,8 @@ export const conversationKeys = {
   history: (caseId: string) => ['conversation', caseId, 'history'] as const,
   /** Slice 12: the case's calls, most recent first. */
   calls: (caseId: string) => ['conversation', caseId, 'calls'] as const,
+  /** Slice 19: the assistant's handoff packet ("Traspaso"). */
+  handoff: (caseId: string) => ['conversation', caseId, 'handoff'] as const,
 }
 
 export const conversationMutationKeys = {
@@ -283,4 +286,15 @@ export async function replyByEmail(
       body,
     }),
   )
+}
+
+/**
+ * GET /cases/{caseId}/handoff (slice 19; contract slice-14-assistant.md §4.1): the packet the
+ * assistant built when it escalated, rendered by agent-core for the analyst's permissions.
+ * Only her own case (`case_not_assigned`), only a case that came from an escalation
+ * (`handoff_unavailable`); `agent_core_unavailable` (503) / `agent_core_rejected` (502) when
+ * agent-core does not answer.
+ */
+export async function fetchCaseHandoff(caseId: string, signal?: AbortSignal): Promise<CaseHandoff> {
+  return unwrap(api.GET('/api/v1/cases/{caseId}/handoff', { params: { path: { caseId } }, signal }))
 }

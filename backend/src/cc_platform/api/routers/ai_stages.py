@@ -84,7 +84,7 @@ async def move_stage_back(
         "stage 2 signal of the case's type. Her own suggestion (`ready`), a tool it proposed: "
         "404 otherwise. AI off: 404 `assistant_disabled`."
     ),
-    responses=problem_responses(401, 403, 404, 409, 422),
+    responses=problem_responses(401, 403, 404, 422),
 )
 async def record_tool_used(
     case_id: CaseId,

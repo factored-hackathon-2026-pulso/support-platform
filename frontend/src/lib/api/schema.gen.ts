@@ -10902,15 +10902,6 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807) */
-      409: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ProblemDetails']
-        }
-      }
-      /** @description Problem details (RFC 7807) */
       422: {
         headers: {
           [name: string]: unknown

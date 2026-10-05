@@ -42,6 +42,8 @@ export type MarkReadRequest = Schemas['MarkReadRequest']
 export type CloseCaseRequest = Schemas['CloseCaseRequest']
 /** Slice 19: how useful the assistant's handoff was, asked at close (optional). */
 export type HandoffQuality = NonNullable<CloseCaseRequest['handoffQuality']>
+/** Event catalog 1.3.0: what she had to ask the customer again after an incomplete handoff. */
+export type HandoffReask = NonNullable<CloseCaseRequest['handoffReasked']>[number]
 /** Slice 19: agent-core's handoff packet as it publishes it (snake_case, untyped). */
 export type CaseHandoff = Schemas['CaseHandoff']
 /** Slice 8: PUT /cases/{caseId}/priority. */

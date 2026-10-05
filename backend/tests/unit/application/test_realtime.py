@@ -158,7 +158,7 @@ async def test_projector_fans_out_envelopes_to_topic_subscribers() -> None:
             "entityId": CASE_ID,
             "caseId": CASE_ID,
             "actor": {"role": "supervisor", "id": STAFF_ID},
-            "payload": {"analyst_id": STAFF_ID},
+            "payload": {"analyst_id": STAFF_ID, "schema_version": 1},
         },
     }
     assert hub.subscriber_count(f"inbox:{STAFF_ID}") == 1

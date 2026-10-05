@@ -9,6 +9,7 @@ change: a customer message that loses to a close opens a new linked case instead
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 from typing import Protocol
 
@@ -28,7 +29,7 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor
-from cc_platform.domain.ai.session import HANDOFF_QUALITIES
+from cc_platform.domain.ai.session import HANDOFF_QUALITIES, handoff_reasks
 from cc_platform.domain.cases.case import Case
 from cc_platform.domain.cases.errors import (
     CallInProgressError,
@@ -36,6 +37,7 @@ from cc_platform.domain.cases.errors import (
     IdempotencyConflictError,
     invalid_case_transition,
 )
+from cc_platform.domain.cases.events import CaseHandoffRated
 from cc_platform.domain.cases.turn import Turn, normalize_turn_text
 from cc_platform.domain.cases.values import (
     CLOSABLE_STATUSES,
@@ -45,6 +47,7 @@ from cc_platform.domain.cases.values import (
     TurnKind,
 )
 from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import InvalidValueError
 from cc_platform.domain.shared.ids import IdPrefix
 
@@ -164,6 +167,11 @@ class CloseCase:
         quality = command.handoff_quality
         if quality is not None and quality not in HANDOFF_QUALITIES:
             raise InvalidValueError("handoffQuality is not valid", field="handoffQuality")
+        reasked = handoff_reasks(command.handoff_reasked)
+        if reasked and quality != "incomplete":
+            raise InvalidValueError(
+                "handoffReasked goes with an incomplete handoff", field="handoffReasked"
+            )
         detail = await retry_on_conflict(lambda: self._attempt(actor, case_id, command))
         if quality is not None and self.resolution is not None and self.tasks is not None:
             # After the commit and off the request: a failure here never fails the close.
@@ -203,6 +211,8 @@ class CloseCase:
             )
             closer = actor.acting_as({StaffRole.ANALYST})
             case.close(actor=closer, at=now, reason=command.reason, note=command.note)
+            if command.handoff_quality is not None:
+                await _rate_handoff(uow, case.id, closer, command, now)
             escalation_id = case.open_escalation_id
             if escalation_id is not None:  # slice 9: an open escalation ends with the case
                 case.clear_escalation(escalation_id)
@@ -219,3 +229,25 @@ class CloseCase:
             detail = await case_detail(uow, case, actor)
             await uow.commit()
         return detail
+
+
+async def _rate_handoff(
+    uow: UnitOfWork, case_id: str, closer: ActorRef, command: CloseCaseCommand, at: datetime
+) -> None:
+    """``case.handoff_rated``, in the close's own Unit of Work (it never depends on agent-core):
+    only for a case the assistant handed over (its session has a handoff)."""
+    session = await uow.assistant_sessions.get_by_case(case_id)
+    if session is None or session.handoff_ref is None or command.handoff_quality is None:
+        return
+    uow.record(
+        CaseHandoffRated(
+            occurred_at=at,
+            actor=closer,
+            entity_id=case_id,
+            case_id=case_id,
+            handoff_ref=session.handoff_ref,
+            quality=command.handoff_quality,
+            reasked=tuple(r.value for r in handoff_reasks(command.handoff_reasked)),
+            release=session.agent_release,
+        )
+    )

@@ -1,7 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CopilotApi from '@/features/copilot/api'
-import { fetchLatestSuggestion, sendSuggestionFeedback } from '@/features/copilot/api'
+import {
+  fetchLatestSuggestion,
+  recordSuggestionShown,
+  sendSuggestionFeedback,
+} from '@/features/copilot/api'
 import type { CopilotMode, CopilotSuggestion } from '@/features/copilot'
 import { makeCaseSummary } from '@/test/case-fixtures'
 import {
@@ -34,6 +38,7 @@ vi.mock('@/features/copilot/api', async (importOriginal) => {
     ...actual,
     fetchLatestSuggestion: vi.fn<typeof actual.fetchLatestSuggestion>(),
     sendSuggestionFeedback: vi.fn<typeof actual.sendSuggestionFeedback>(),
+    recordSuggestionShown: vi.fn<typeof actual.recordSuggestionShown>(),
   }
 })
 
@@ -89,6 +94,8 @@ beforeEach(() => {
   vi.mocked(fetchLatestSuggestion).mockReset()
   vi.mocked(fetchLatestSuggestion).mockResolvedValue({ available: true, suggestion: suggestion() })
   vi.mocked(sendSuggestionFeedback).mockReset()
+  vi.mocked(recordSuggestionShown).mockReset()
+  vi.mocked(recordSuggestionShown).mockResolvedValue(undefined)
 })
 
 describe('the copilot draft above the composer (slice 20)', () => {
@@ -240,10 +247,34 @@ describe('the copilot recommends escalating (slice 20)', () => {
     const notice = await screen.findByRole('region', { name: 'El copiloto recomienda escalar' })
     await user.click(within(notice).getByRole('button', { name: 'Ahora no' }))
     expect(screen.queryByRole('region', { name: 'El copiloto recomienda escalar' })).toBeNull()
+    // Catalog 1.3.0: recorded as dismissed, so it does not come back.
+    expect(sendSuggestionFeedback).toHaveBeenCalledWith(
+      makeCaseDetail().case.id,
+      'CPS-7',
+      'dismissed',
+      'escalation',
+    )
     await user.click(screen.getByRole('button', { name: 'Escalar a supervisión' }))
     const dialog = await screen.findByRole('dialog', { name: 'Escalar a supervisión' })
     expect(within(dialog).getByRole('textbox', { name: 'Motivo' })).toHaveValue('')
     expect(within(dialog).queryByText(/El copiloto sugirió/)).toBeNull()
+  })
+
+  it('reports the suggestion as shown once, whatever shows it (catalog 1.3.0)', async () => {
+    vi.mocked(fetchLatestSuggestion).mockResolvedValue({
+      available: true,
+      suggestion: suggestion({
+        suggestions: [
+          { type: 'reply', text: DRAFT, citations: [], language: 'es' },
+          ...recommendation.suggestions,
+        ],
+      }),
+    })
+    setup({ detail: escalatable() })
+    await screen.findByRole('region', { name: 'El copiloto recomienda escalar' })
+    await screen.findByRole('region', { name: 'Borrador del copiloto' })
+    await waitFor(() => expect(recordSuggestionShown).toHaveBeenCalledTimes(1))
+    expect(recordSuggestionShown).toHaveBeenCalledWith(makeCaseDetail().case.id, 'CPS-7')
   })
 
   it('is not shown when the case cannot be escalated', async () => {

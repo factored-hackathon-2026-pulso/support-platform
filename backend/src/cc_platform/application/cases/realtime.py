@@ -82,6 +82,7 @@ from cc_platform.domain.cases.events import (
     CaseAssistantStarted,
     CaseClosed,
     CaseFirstResponded,
+    CaseHandoffRated,
     CaseOpened,
     CasePriorityChanged,
     CaseQueued,
@@ -123,6 +124,7 @@ _CUSTOMER_VISIBLE_ROLES = frozenset(
 #: Audited reads: recorded in the event log, never sent on any socket.
 SILENT_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseViewed,
+    CaseHandoffRated,
     *COPILOT_EVENTS,
     *SUGGESTION_EVENTS,
     *BUILDER_EVENTS,

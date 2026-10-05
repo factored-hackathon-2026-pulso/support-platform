@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 
 from cc_platform.domain.shared.events import DomainEvent
 from cc_platform.domain.shared.json import JsonObject
@@ -31,6 +32,7 @@ class TurnCreated(DomainEvent):
     line, an internal note or an email (``subject`` set only on emails)."""
 
     event_type = "turn.created"
+    free_text_keys = frozenset({"text", "subject", "staff_line"})
     entity = "turn"
 
     sequence: int
@@ -45,15 +47,9 @@ class TurnCreated(DomainEvent):
     staff_line: JsonObject | None = None
     """Slice 23c: the facts of a staff-only line (``StaffLine.to_json``), when it has them."""
 
-    def payload(self) -> JsonObject:
-        """``subject`` only on emails and ``staff_line`` only on the routing banners that
-        carry facts: the payload of every other turn is unchanged."""
-        data = DomainEvent.payload(self)
-        if self.subject is None:
-            data.pop("subject", None)
-        if self.staff_line is None:
-            data.pop("staff_line", None)
-        return data
+    #: ``subject`` only on emails and ``staff_line`` only on the routing banners that carry
+    #: facts: the payload of every other turn is unchanged.
+    omitted_when_null = frozenset({"subject", "staff_line"})
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -120,6 +116,7 @@ class CaseClosed(DomainEvent):
     """The assignee closed the case with a reason (the note is internal: staff only)."""
 
     event_type = "case.closed"
+    free_text_keys = frozenset({"note"})
     entity = "case"
 
     closed_at: datetime
@@ -136,6 +133,7 @@ class CaseRated(DomainEvent):
     shows it (only its length), like message text."""
 
     event_type = "case.rated"
+    free_text_keys = frozenset({"comment"})
     entity = "case"
 
     score: int
@@ -152,11 +150,10 @@ class CasePriorityChanged(DomainEvent):
     event_type = "case.priority_changed"
     entity = "case"
 
+    payload_keys = MappingProxyType({"from_priority": "from", "to_priority": "to"})
+
     from_priority: str
     to_priority: str
-
-    def payload(self) -> JsonObject:
-        return {"from": self.from_priority, "to": self.to_priority}
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -167,11 +164,10 @@ class CaseTypeChanged(DomainEvent):
     event_type = "case.type_changed"
     entity = "case"
 
+    payload_keys = MappingProxyType({"from_type": "from", "to_type": "to"})
+
     from_type: str
     to_type: str
-
-    def payload(self) -> JsonObject:
-        return {"from": self.from_type, "to": self.to_type}
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -199,6 +195,23 @@ class CaseAssistantReleased(DomainEvent):
     reason: str
     handoff_ref: str | None
     sla_due_at: datetime
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class CaseHandoffRated(DomainEvent):
+    """The analyst said, when closing a case the assistant handed to her, how useful its handoff
+    was (``quality``: ``useful``, ``incomplete``, ``unnecessary``) and, for ``incomplete``, what
+    she had to ask the customer again (``reasked``, a closed list: ``HandoffReask``). Closed
+    values only. ``handoff_ref`` is agent-core's handoff id; ``release`` the agent release of the
+    assistant's run. Audited, never on a socket."""
+
+    event_type = "case.handoff_rated"
+    entity = "case"
+
+    handoff_ref: str
+    quality: str
+    reasked: tuple[str, ...]
+    release: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -230,6 +243,7 @@ class EscalationOpened(DomainEvent):
     its length (like message text)."""
 
     event_type = "escalation.opened"
+    free_text_keys = frozenset({"motive"})
     entity = "escalation"
 
     motive: str
@@ -251,6 +265,7 @@ class EscalationAnswered(DomainEvent):
     """Supervision answered with a note for the analyst (the audit shows only its length)."""
 
     event_type = "escalation.answered"
+    free_text_keys = frozenset({"note"})
     entity = "escalation"
 
     note: str
@@ -321,6 +336,7 @@ class CallStarted(DomainEvent):
     (``outbound``, with a reason: staff text, the audit shows only its length)."""
 
     event_type = "call.started"
+    free_text_keys = frozenset({"reason"})
     entity = "call"
 
     direction: str

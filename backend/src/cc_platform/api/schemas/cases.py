@@ -617,6 +617,15 @@ class CloseCaseRequest(RequestModel):
         "handoff was (`useful`, `incomplete`, `unnecessary`); sent to agent-core as the label "
         "of that handoff. Left out, nothing is sent.",
     )
+    handoff_reasked: (
+        list[Literal["identity", "amount", "merchant", "date", "product", "reason", "other"]] | None
+    ) = Field(
+        default=None,
+        max_length=7,
+        description="Only with `handoffQuality: incomplete`: what the analyst had to ask the "
+        "customer again (closed list; a repeated value counts once). Recorded in the audit "
+        "event `case.handoff_rated`; not sent to agent-core. 422 with another quality.",
+    )
 
     @field_validator("note")
     @classmethod
@@ -828,9 +837,16 @@ class RequestSuggestionRequest(RequestModel):
 
 
 class SuggestionFeedbackRequest(RequestModel):
-    decision: Literal["discarded", "ignored"] = Field(
-        description="The analyst dismissed the draft (`discarded`) or left it (`ignored`). "
-        "`used` and `edited` are not posted: send `copilotSuggestionId` with the reply."
+    subject: Literal["reply", "escalation"] = Field(
+        default="reply",
+        description="What the decision is about: the draft (`reply`, the default) or the "
+        "recommendation to escalate (`escalation`).",
+    )
+    decision: Literal["discarded", "ignored", "dismissed"] = Field(
+        description="`reply`: the analyst dismissed the draft (`discarded`) or left it "
+        "(`ignored`); `used` and `edited` are not posted: send `copilotSuggestionId` with the "
+        'reply. `escalation`: she answered "Ahora no" (`dismissed`): the recommendation leaves '
+        "the suggestion. Any other pair is 422."
     )
 
 

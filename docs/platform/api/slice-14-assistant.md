@@ -159,7 +159,10 @@ earlier assistant turns stay in the transcript.
   `handoffQuality`: `"useful" | "incomplete" | "unnecessary"`. Only meaningful for a case with a handoff;
   the platform sends it to agent-core in the background (it never fails the close). **Leave it out when you
   don't know**: the platform never guesses a label. Suggested UI: a three-way choice in the close dialog
-  only when `GET …/handoff` works.
+  only when `GET …/handoff` works. Event catalog 1.3.0: with `incomplete`, an optional `handoffReasked` (a closed list:
+  `identity`, `amount`, `merchant`, `date`, `product`, `reason`, `other`) says what she had to ask the customer
+  again (422 with another quality); the close records `case.handoff_rated` with both (see `engine-signals.md`).
+  agent-core still gets only the quality.
 
 ### 4.2 Supervisión
 

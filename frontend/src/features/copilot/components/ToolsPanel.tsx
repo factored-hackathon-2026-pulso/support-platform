@@ -25,7 +25,7 @@ import {
 } from '../model'
 import { recordToolUsed } from '../api'
 import { useAskCopilot, useCopilotAsks, useCopilotThread } from '../hooks/use-copilot'
-import { useLatestSuggestion, useRequestSuggestion } from '../hooks/use-suggestions'
+import { useLatestSuggestion, useReportShown, useRequestSuggestion } from '../hooks/use-suggestions'
 import type { SuggestionAction, SuggestionTool } from '../types'
 
 export interface ToolsPanelProps {
@@ -66,6 +66,7 @@ export function ToolsPanel({ caseId, closed, canAsk, onOpenCopilot }: ToolsPanel
   const tools = view?.tools ?? []
   const actions = view?.actions ?? []
   const empty = tools.length === 0 && actions.length === 0
+  useReportShown(caseId, view, !empty)
 
   return (
     <>

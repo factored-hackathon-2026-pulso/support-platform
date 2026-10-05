@@ -327,6 +327,78 @@ previous one. Seeded ratings (slice 7): Héctor already rated his case ("¡Graci
 Bien"); the simulator shows Claudia the survey (or "Ahora no"). Patricia rated her previous cases
 104 (Excelente, with a comment) and 110 (Bien).
 
+### 5.2 Seed profiles (`cc-seed`)
+
+The API seeds the demo story on start (`CC_SEED_DEMO_DATA=true`, the default outside
+production). `cc-seed` seeds on demand, against whatever database the `CC_*` settings name
+(`CC_DATABASE_URL`), and is **idempotent**: run it again and nothing changes (what exists is
+skipped; no duplicates). It is refused with `CC_ENV=prod`.
+
+```bash
+cd backend
+uv run cc-seed --profile demo      # the accounts per role and the story cases above
+uv run cc-seed --profile volume    # demo + the synthetic volume below
+# another database:
+#   CC_DATABASE_URL=sqlite+aiosqlite:////tmp/volume.db uv run cc-seed --profile volume
+```
+
+It prints what it added (`volume_cases_added=1651 … seconds=…`); a second run prints
+`volume_cases_added=0`. The default dev start (and the e2e suite) only ever seeds `demo`.
+
+**What `volume` contains.** 1,651 **synthetic** cases over the last 90 days, on top of the demo
+story, plus 12 synthetic analysts and 1,507 synthetic customers. Nothing comes from the dataset:
+names are invented combinations, texts are short templates per case type (es and pt-BR), and the
+shares are team-generated (the five dataset subcategories in about equal shares, as in the
+dataset's aggregate report).
+
+| Dimension | Closed cases (1,578) |
+|---|---|
+| Case type | Cargo no reconocido, Cobro indebido, Problema con app, Atención en sucursal, Calidad de servicio: 306 each · Tarjeta virtual (team-generated, stage 0): 8 · Sin tipo: 40 |
+| Channel | `chat_app` 528 · `chat_web` 377 · `phone_inbound` 343 · `email` 185 · `phone_outbound` 145 |
+| Language | `es` 1,081 · `pt` 497 |
+| Every cell of the 5 dataset types × 5 channels × 2 languages (50 cells) | 12 to 71 closed cases: the evidence route answers each one with `CC_EVIDENCE_MIN_CELL=10` |
+
+Open now: 14 cases in the queues (10 Spanish, 4 Portuguese), 36 with the synthetic analysts
+(new, to reply, waiting; 6 of them escalated to supervision) and 3 with the assistant. The
+assistant also resolved 20 conversations on its own (no type) in the last 6 days. 144 cases are
+a customer writing again (`previous_case_id`, "Volvió a escribir").
+
+Events (about 36,000, through the domain and the Unit of Work like any request): case opened,
+assigned, read, first response, priority and type changes (8 % corrected once), closed with a
+reason, 723 CSAT ratings, 488 simulated calls (holds, notes), emails with the framed reply, 82
+escalations answered by Lucía, Martín or Renata (6 more still open), and the AI side **as each
+type's stage was at the time** (slice 21): no copilot for a type at stage 0, copilot questions from
+stage 1 (321), suggestions with tools and their use from stage 2 (712 requested, 209
+`copilot.tool_used`), drafts and their decisions from stage 3 (286 `copilot.suggestion_decided`:
+used, edited with the edit distance, discarded, ignored, escalation accepted), and for Cargo no
+reconocido, once its agent is active, chat conversations that start with the assistant
+(`assistant.*`): it resolves some and hands the rest over (`case.assistant_released`, assigned as
+`assistant_handoff`; the analyst's handoff label is recorded on the session). Suggestions older
+than 24 hours are purged like the platform does (no draft text kept).
+
+After the cases, each type's stage **signals** are recomputed from the volume (what the stage
+projector counts since the type reached its stage), so Automatización shows the volume's
+numbers while the stages stay as the story has them: every type still climbing stays below the
+team rule's next step, and Cobro indebido keeps "ready for an agent" with 82 of its last 100
+drafts sent as is.
+
+**Telling synthetic from demo data.** Ids: synthetic cases `CASE-…0005xxxxx` (from
+`CASE-00000000000000000000500001`), customers `CUS-…0005xxxxx`, analysts `STF-…000901` to
+`STF-…000912` (`mariela.castano@`, `hernan.ocampo@`, … all with `demo1234` and the code
+`000000`, all paused). The demo story keeps its own ids (cases 101-117, customers 1001-2005).
+
+**How it is written.** Everything goes through the domain aggregates and the repositories, so it
+works on SQLite and Postgres alike, and the events reach `event_log` through
+`UnitOfWork.commit` with the envelope the log adds (no hand-written rows; the one event built by
+the seed, `copilot.tool_used`, is recorded loose through the Unit of Work exactly as its use case
+does). The Unit of Work publishes to **no** subscriber: replaying 90 days notifies no one, moves
+no stage and never calls agent-core (so the volume adds no notifications). Writes go in batches of
+100 cases per transaction. On a laptop the volume takes about 15-35 s on SQLite and under a
+minute on a local Postgres (more on a busy machine).
+
+**Re-anchoring.** Times are relative to the first `volume` run (later runs read the anchor back
+from the first synthetic case). To move them to today, start from an empty database.
+
 ## 6. Reset the database
 
 There are no migrations: the schema is created on startup. To return to the initial state (and

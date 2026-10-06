@@ -155,7 +155,7 @@ class CaseTypeStage(ApiModel):
             agent_since=m.agent_since,
             agent_id=m.agent_id,
             agent_name=m.agent_name,
-            agent_avatar=m.agent_avatar,  # type: ignore[arg-type]
+            agent_avatar=m.agent_avatar,
             agent_paused=m.agent_paused,
             last_change=last,
             version=m.version,
@@ -230,7 +230,7 @@ class AiAgents(ApiModel):
                     display_name=a.display_name,
                     case_type=a.case_type,
                     paused=a.paused,
-                    avatar=a.avatar,  # type: ignore[arg-type]
+                    avatar=a.avatar,
                     results=AgentResults(
                         sessions=a.results.sessions,
                         active=a.results.active,

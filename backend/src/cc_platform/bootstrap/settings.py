@@ -21,6 +21,11 @@ DEFAULT_DATABASE_URL = f"sqlite+aiosqlite:///{BACKEND_DIR / 'cc_platform.db'}"
 DEV_SESSION_SECRET = "dev-only-session-secret-change-me-0123456789"
 
 
+#: The development MFA code of the seeded accounts; demo mode refuses it.
+DEV_MFA_CODE = "000000"
+MIN_DEMO_PASSWORD_LENGTH = 12
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CC_",
@@ -51,6 +56,11 @@ class Settings(BaseSettings):
     #: at the head revision (``cc-migrate`` ran before), else the process refuses to start.
     migrate_on_start: bool = True
     seed_demo_data: bool = True
+    #: Hosted demo for the hackathon's evaluators: allows the SYNTHETIC demo seed and the customer
+    #: simulator in prod. Requires its own staff password and MFA code (never the dev defaults).
+    demo_mode: bool = False
+    #: Password of every seeded staff account in demo mode (shared privately with the evaluators).
+    demo_staff_password: SecretStr | None = None
     #: With the demo seed, link three SYNTHETIC simulator customers to the assistant (ADR 0003).
     seed_demo_bank_links: bool = True
 
@@ -61,7 +71,7 @@ class Settings(BaseSettings):
     lockout_minutes: int = Field(default=15, ge=1)
     mfa_ttl_seconds: int = Field(default=300, ge=10)
     mfa_max_attempts: int = Field(default=3, ge=1)
-    dev_mfa_code: str = "000000"
+    dev_mfa_code: str = DEV_MFA_CODE
     argon2_time_cost: int = Field(default=3, ge=1)
     argon2_memory_cost: int = Field(default=65536, ge=8)
     argon2_parallelism: int = Field(default=4, ge=1)
@@ -214,10 +224,21 @@ class Settings(BaseSettings):
         # Every broken rule at once (``deploy_checks``); messages never carry values.
         problems = deployment_problems(self, dev_session_secret=DEV_SESSION_SECRET)
         if self.env == "prod":
-            if self.seed_demo_data:
-                problems.append("CC_SEED_DEMO_DATA must be false in production")
+            if self.seed_demo_data and not self.demo_mode:
+                problems.append("CC_SEED_DEMO_DATA must be false in production (or CC_DEMO_MODE)")
             if self.dev_mailbox:
                 problems.append("CC_DEV_MAILBOX is a development tool: never in production")
+        if self.demo_mode:
+            password = (
+                self.demo_staff_password.get_secret_value() if self.demo_staff_password else ""
+            )
+            if len(password) < MIN_DEMO_PASSWORD_LENGTH:
+                problems.append(
+                    f"CC_DEMO_STAFF_PASSWORD is required in demo mode "
+                    f"({MIN_DEMO_PASSWORD_LENGTH}+ characters, not the dev password)"
+                )
+            if self.dev_mfa_code == DEV_MFA_CODE:
+                problems.append("CC_DEV_MFA_CODE must not be the dev default in demo mode")
         if (self.agent_core_url is None) != (self.agent_keys_file is None):
             problems.append("CC_AGENT_CORE_URL and CC_AGENT_KEYS_FILE go together or not at all")
         if invalid := invalid_trusted_proxies(self.trusted_proxies):

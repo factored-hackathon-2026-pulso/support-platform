@@ -88,6 +88,7 @@ from cc_platform.infrastructure.seed.cases import SLA, STRATEGY, _Story, seed_ca
 from cc_platform.infrastructure.seed.customers import CustomerSeed, seed_demo_customers
 from cc_platform.infrastructure.seed.maturity import LUCIA, SEED_TYPE_AGENT, SEED_TYPE_AGENT_NAME
 from cc_platform.infrastructure.seed.people import (
+    DEMO_PASSWORD,
     DEMO_STAFF,
     seed_demo_availability,
     seed_demo_staff,
@@ -1107,12 +1108,15 @@ async def seed_volume(
     hasher: PasswordHasher,
     rule: StageRule,
     batch_size: int = BATCH_SIZE,
+    password: str = DEMO_PASSWORD,
 ) -> VolumeResult:
     """Add the synthetic volume (after the demo seed: it reuses its supervisors and stages).
 
     ``uow`` must publish to no subscriber (see the module docstring). Idempotent."""
     plan = build_plan()
-    staff = await seed_demo_staff(uow, hasher, now=clock.now(), seeds=cat.VOLUME_STAFF, teams=())
+    staff = await seed_demo_staff(
+        uow, hasher, now=clock.now(), password=password, seeds=cat.VOLUME_STAFF, teams=()
+    )
     await seed_demo_availability(
         uow, clock, seeds=cat.VOLUME_STAFF, available=frozenset(), paused_before={}
     )

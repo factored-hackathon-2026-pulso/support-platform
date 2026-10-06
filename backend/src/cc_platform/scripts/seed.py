@@ -60,6 +60,7 @@ async def run_seed(container: Container, profile: str) -> dict[str, Any]:
             container.clock,
             hasher=container.password_hasher,
             rule=container.settings.stage_rule(),
+            password=container.seed_password,
         )
         summary |= {
             "volume_cases_planned": result.planned,

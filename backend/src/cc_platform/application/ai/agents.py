@@ -49,6 +49,7 @@ class AgentRow:
     case_type: CaseType | None
     results: AgentResults
     paused: bool = False
+    avatar: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +107,7 @@ class GetAgents:
                 ),
                 case_type=serving[agent_id].case_type if agent_id in serving else None,
                 paused=agent_id in serving and serving[agent_id].agent_paused,
+                avatar=serving[agent_id].agent_avatar if agent_id in serving else None,
                 results=results.get(agent_id, AgentResults()),
             )
             for agent_id in sorted(set(results) | set(serving))
@@ -136,6 +138,35 @@ class RenameAgent:
                 raise NotFoundError("Ese tipo de caso no tiene un agente.")
             if maturity.rename_agent(
                 name, actor=actor.acting_as({StaffRole.SUPERVISOR}), at=self.clock.now()
+            ):
+                await store_maturity(uow, maturity, new=new)
+                await uow.commit()
+            return await _view(uow, maturity)
+
+
+@dataclass(frozen=True, slots=True)
+class SetAgentAvatar:
+    """Supervisión picks the photo of the agent that serves a type. 404 for a type without an
+    agent; AI off: ``assistant_disabled``."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+    switch: AiSwitch
+
+    async def execute(self, actor: Actor, case_type: str, *, avatar: str) -> CaseTypeStageView:
+        ensure_any_role(actor, {StaffRole.SUPERVISOR})
+        kind = maturing_type(case_type)
+        return await retry_on_conflict(partial(self._set, actor, kind, avatar))
+
+    async def _set(self, actor: Actor, kind: CaseType, avatar: str) -> CaseTypeStageView:
+        async with self.uow() as uow:
+            if not await self.switch.is_on_in(uow):
+                raise AssistantDisabledError()
+            maturity, new = await load_maturity(uow, kind)
+            if maturity.agent_id is None:
+                raise NotFoundError("Ese tipo de caso no tiene un agente.")
+            if maturity.set_agent_avatar(
+                avatar, actor=actor.acting_as({StaffRole.SUPERVISOR}), at=self.clock.now()
             ):
                 await store_maturity(uow, maturity, new=new)
                 await uow.commit()
@@ -192,4 +223,5 @@ class SetAgentPaused:
 class AgentCatalogUseCases:
     agents: GetAgents
     rename: RenameAgent
+    avatar: SetAgentAvatar
     pause: SetAgentPaused

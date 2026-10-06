@@ -125,6 +125,9 @@ class CaseTypeStage(ApiModel):
         description="agent-core's id of the agent that serves the type (set while `agent` is "
         "`active`, slice 22)."
     )
+    agent_avatar: AgentAvatar | None = Field(
+        description="The photo Supervisión picked for the agent; null: none yet."
+    )
     agent_paused: bool = Field(
         description="Supervisión paused the agent: new cases do not reach it, open ones carry on."
     )
@@ -152,6 +155,7 @@ class CaseTypeStage(ApiModel):
             agent_since=m.agent_since,
             agent_id=m.agent_id,
             agent_name=m.agent_name,
+            agent_avatar=m.agent_avatar,
             agent_paused=m.agent_paused,
             last_change=last,
             version=m.version,
@@ -209,6 +213,7 @@ class AgentRow(ApiModel):
     case_type: CaseType | None = Field(description="The type it serves; null: serves none.")
     results: AgentResults
     paused: bool = Field(description="Out of the reception directory (ADR 0009 section 2).")
+    avatar: AgentAvatar | None = Field(description="The photo Supervisión picked; null: none.")
 
 
 class AiAgents(ApiModel):
@@ -225,6 +230,7 @@ class AiAgents(ApiModel):
                     display_name=a.display_name,
                     case_type=a.case_type,
                     paused=a.paused,
+                    avatar=a.avatar,
                     results=AgentResults(
                         sessions=a.results.sessions,
                         active=a.results.active,
@@ -235,6 +241,15 @@ class AiAgents(ApiModel):
                 for a in view.agents
             ],
         )
+
+
+AgentAvatar = Literal[
+    "star", "circle", "hexagon", "drop", "triangle", "rhombus", "cloud", "square", "flame", "ring"
+]
+
+
+class SetAgentAvatarRequest(RequestModel):
+    avatar: AgentAvatar
 
 
 class RenameAgentRequest(RequestModel):

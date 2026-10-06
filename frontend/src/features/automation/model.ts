@@ -7,7 +7,14 @@
 import { caseType } from '@/features/cases/core'
 import { formatDate } from '@/lib/format'
 import { i18n } from '@/lib/i18n'
-import type { AiStages, CaseType, CaseTypeStage, MaturingType, StageRule } from './types'
+import type {
+  AgentAvatarKey,
+  AiStages,
+  CaseType,
+  CaseTypeStage,
+  MaturingType,
+  StageRule,
+} from './types'
 
 const t = i18n.getFixedT(null, 'automation')
 
@@ -334,6 +341,25 @@ export function agentDisplayName(stages: AiStages | undefined, agentId: string):
     if (serving?.agentName) return serving.agentName
   }
   return agentName(agentId)
+}
+
+/** The photo Supervisión picked for the agent serving a type, else `null`. */
+export function agentAvatarOf(
+  stages: AiStages | undefined,
+  agentId: string,
+): AgentAvatarKey | null {
+  if (!stages?.available) return null
+  return (
+    stages.types.find((entry) => entry.agentId === agentId && entry.agentAvatar)?.agentAvatar ??
+    null
+  )
+}
+
+/** The type an agent serves, so the avatar can be changed through it. */
+export function servedTypeOf(stages: AiStages | undefined, agentId: string): MaturingType | null {
+  if (!stages?.available) return null
+  const entry = stages.types.find((e) => e.agentId === agentId && e.agent === 'active')
+  return entry && entry.caseType !== 'none' ? entry.caseType : null
 }
 
 /** Types waiting for an agent (`ready`): what "Activar" can serve. */

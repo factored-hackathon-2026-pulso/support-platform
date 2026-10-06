@@ -15,7 +15,16 @@ import {
 import { useAiStages } from '@/features/copilot/core'
 import { useTranslation } from '@/lib/i18n'
 import { useActivateAgent, useAlias, useRelease } from '../hooks/use-automation'
-import { agentDisplayName, agentName, isMaturing, readyTypes, typeName, typeStage } from '../model'
+import {
+  agentAvatarOf,
+  agentDisplayName,
+  agentName,
+  isMaturing,
+  readyTypes,
+  typeName,
+  typeStage,
+} from '../model'
+import { AgentPhotoSlot } from './AgentPhotoSlot'
 import { describeBuilderFailure, draftLanguages, reportView } from '../proposals'
 import type { MaturingType, ProposalDetail } from '../types'
 import { StepUpDialog } from './StepUpDialog'
@@ -181,6 +190,8 @@ export function ActivatePanel({ detail, type, onTypeChosen }: ActivatePanelProps
 
 function Activated({ agentId, type }: { agentId: string; type: MaturingType }) {
   const { t } = useTranslation(['automation', 'cases'])
+  const stages = useAiStages()
+  const avatar = agentAvatarOf(stages.data, agentId)
   return (
     <Card
       as="section"
@@ -189,6 +200,7 @@ function Activated({ agentId, type }: { agentId: string; type: MaturingType }) {
       className="flex flex-col items-start gap-3"
     >
       <CircleCheck size={28} aria-hidden="true" className="text-success-ink" />
+      <AgentPhotoSlot type={type} avatar={avatar} />
       <h2 id="activated-title" className="m-0 font-display text-22 font-semibold">
         {t('activate.doneTitle', { agent: agentName(agentId), type: typeName(type) })}
       </h2>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, Check, Tag, Wrench } from 'lucide-react'
+import { Check, Tag, Wrench } from 'lucide-react'
 import { automationTypePath, PATHS } from '@/app/paths'
 import { PageBody } from '@/components/layout'
 import {
@@ -20,7 +20,9 @@ import {
   useProposal,
   useProposalRecord,
 } from '../hooks/use-automation'
-import { agentDisplayName, typeName, typeStage } from '../model'
+import { agentAvatarOf, agentDisplayName, typeName, typeStage } from '../model'
+import { AgentAvatar } from './AgentAvatar'
+import { AgentPhotoSlot } from './AgentPhotoSlot'
 import {
   announcedByEngine,
   changeView,
@@ -125,7 +127,7 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
     <>
       <ul className="m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-2 p-0 text-14 text-ink-2">
         <li className="inline-flex items-center gap-1.5">
-          <Bot size={15} aria-hidden="true" />
+          <AgentAvatar avatar={agentAvatarOf(stages.data, proposal.agentId)} size={22} />
           {t('proposal.agent', { agent: agentDisplayName(stages.data, proposal.agentId) })}
         </li>
         {type ? (
@@ -138,6 +140,9 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
           <Status {...proposalStatus(proposal.state)} />
         </li>
       </ul>
+      {servesThisAgent && type ? (
+        <AgentPhotoSlot type={type} avatar={agentAvatarOf(stages.data, proposal.agentId)} />
+      ) : null}
       <Stepper state={proposal.state} done={done} endStep={endStep} />
       {record.data?.improvement ? (
         <ImprovementDossier improvement={record.data.improvement} />

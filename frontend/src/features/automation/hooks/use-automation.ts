@@ -11,6 +11,7 @@ import { copilotKeys } from '@/features/copilot/core'
 import { isApiProblem, type ApiProblem } from '@/lib/api'
 import {
   activateTypeAgent,
+  setAgentAvatar,
   approveAndPublishProposal,
   askBuilder,
   automationKeys,
@@ -41,6 +42,7 @@ import {
   type PendingMessage,
 } from '../builder-chat'
 import type {
+  AgentAvatarKey,
   AliasState,
   BuilderExchange,
   BuilderStatus,
@@ -302,6 +304,16 @@ export function useActivateAgent(caseType: MaturingType | null) {
     mutationKey: automationMutationKeys.activate(caseType ?? ''),
     mutationFn: (body: { agentId: string; releaseId: string; stepUpCode: string }) =>
       activateTypeAgent(caseType ?? 'undue_charge', body),
+    onSettled: () => refresh(),
+  })
+}
+
+/** PUT /supervision/ai/stages/{caseType}/agent/avatar (the stages are read again). */
+export function useSetAgentAvatar(caseType: MaturingType | null) {
+  const refresh = useRefreshAfterStep()
+  return useMutation({
+    mutationKey: automationMutationKeys.avatar(caseType ?? ''),
+    mutationFn: (avatar: AgentAvatarKey) => setAgentAvatar(caseType ?? 'undue_charge', avatar),
     onSettled: () => refresh(),
   })
 }

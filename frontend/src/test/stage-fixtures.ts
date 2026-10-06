@@ -16,6 +16,7 @@ export function makeTypeStage(
     caseType,
     stage,
     agent,
+    agentAvatar: null,
     copilotMode: MODE[stage],
     signals: {
       closedCases: 0,

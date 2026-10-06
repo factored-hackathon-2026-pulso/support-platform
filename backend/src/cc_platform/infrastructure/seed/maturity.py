@@ -38,6 +38,8 @@ LUCIA = 5
 SEED_TYPE_AGENT = "disputas"
 #: The name the ``volume`` profile gives it (sample, team-generated; ADR 0009 / slice 25).
 SEED_TYPE_AGENT_NAME = "Asistente de disputas"
+#: …and its photo, so the demo shows one (the agents proposed later get none: Supervisión picks).
+SEED_TYPE_AGENT_AVATAR = "triangle"
 
 
 @dataclass(frozen=True, slots=True)

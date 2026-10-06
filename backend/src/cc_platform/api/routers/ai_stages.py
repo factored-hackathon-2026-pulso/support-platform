@@ -25,6 +25,7 @@ from cc_platform.api.schemas.ai_stages import (
     MoveStageBackResult,
     PauseAgentRequest,
     RenameAgentRequest,
+    SetAgentAvatarRequest,
     ToolUsedRequest,
 )
 from cc_platform.api.schemas.common import problem_responses
@@ -173,6 +174,26 @@ async def rename_agent(
     api: ApiContextDep,
 ) -> CaseTypeStage:
     view = await api.use_cases.agent_catalog.rename.execute(actor, case_type, name=body.name)
+    return CaseTypeStage.from_view(view)
+
+
+@router.put(
+    "/supervision/ai/stages/{caseType}/agent/avatar",
+    response_model=CaseTypeStage,
+    summary="Pick the photo of the agent that serves a case type (Supervisión)",
+    description=(
+        "One of the fixed avatar keys. 404 `not_found`: the type has no agent; 404 "
+        "`assistant_disabled`: AI off. Audited (`ai.agent_avatar_set`), live on `ai:stages`."
+    ),
+    responses=problem_responses(401, 403, 404, 422),
+)
+async def set_agent_avatar(
+    case_type: Annotated[str, Path(alias="caseType", max_length=40, examples=["undue_charge"])],
+    body: SetAgentAvatarRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> CaseTypeStage:
+    view = await api.use_cases.agent_catalog.avatar.execute(actor, case_type, avatar=body.avatar)
     return CaseTypeStage.from_view(view)
 
 

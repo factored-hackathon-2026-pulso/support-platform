@@ -25,7 +25,8 @@ import {
   useProposals,
   useReleases,
 } from '../hooks/use-automation'
-import { agentName, typeName } from '../model'
+import { agentAvatarOf, agentName, typeName } from '../model'
+import { AgentAvatar } from './AgentAvatar'
 import { AutomationFrame, EngineMissing } from './AutomationFrame'
 
 /**
@@ -96,7 +97,10 @@ export function AgentsScreen() {
                       <TCell>
                         <TRowSelect>
                           <span className="inline-flex items-center gap-2">
-                            <Bot size={15} aria-hidden="true" className="text-accent-strong" />
+                            <AgentAvatar
+                              avatar={agentAvatarOf(stages.data, row.agentId)}
+                              size={28}
+                            />
                             <span className="flex flex-col">
                               <span className="font-semibold">{agentName(row.agentId)}</span>
                               <span className="font-mono text-12 text-muted">{row.agentId}</span>

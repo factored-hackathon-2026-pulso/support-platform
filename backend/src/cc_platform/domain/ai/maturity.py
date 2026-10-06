@@ -34,6 +34,7 @@ from enum import IntEnum, StrEnum
 
 from cc_platform.domain.ai.maturity_events import (
     CaseTypeAgentActivated,
+    CaseTypeAgentAvatarSet,
     CaseTypeAgentPaused,
     CaseTypeAgentReady,
     CaseTypeAgentRenamed,
@@ -60,6 +61,12 @@ class CopilotMode(StrEnum):
     ANSWER = "answer"
     TOOLS = "tools"
     DRAFTS = "drafts"
+
+
+#: The photos Supervisión can give an agent (the frontend ships one picture per key).
+AGENT_AVATARS: tuple[str, ...] = (
+    "star", "circle", "hexagon", "drop", "triangle", "rhombus", "cloud", "square", "flame", "ring",
+)  # fmt: skip
 
 
 class AgentStatus(StrEnum):
@@ -221,6 +228,8 @@ class CaseTypeMaturity(AggregateRoot):
     """The agent is out of ``recepcion``'s directory (ADR 0009 §2): new cases do not reach it."""
     agent_name: str | None = None
     """The name shown for that agent (ADR 0009; ``None``: the screens humanize the id)."""
+    agent_avatar: str | None = None
+    """The photo shown for that agent, one of ``AGENT_AVATARS`` (``None``: none picked yet)."""
     changed_at: datetime | None = None
     changed_by_id: str | None = None
     """Who made the last change (``None``: the system, by the rule)."""
@@ -320,6 +329,7 @@ class CaseTypeMaturity(AggregateRoot):
         self.agent_since = None
         self.agent_id = None
         self.agent_name = None
+        self.agent_avatar = None
         self.agent_paused = False
         self.stage_since = {k: v for k, v in self.stage_since.items() if k <= int(to_stage)}
         self.signals = StageSignals()
@@ -408,6 +418,27 @@ class CaseTypeMaturity(AggregateRoot):
                 entity_id=self.case_type.value,
                 case_type=self.case_type.value,
                 agent_id=self.agent_id,
+            )
+        )
+        return True
+
+    def set_agent_avatar(self, avatar: str, *, actor: ActorRef, at: datetime) -> bool:
+        """Supervisión picks the agent's photo. False: nothing changed."""
+        if avatar not in AGENT_AVATARS:
+            raise InvalidValueError("Unknown agent avatar.", field="avatar")
+        if self.agent is not AgentStatus.ACTIVE or self.agent_id is None:
+            raise InvalidTransitionError("The type has no agent to give a photo.")
+        if avatar == self.agent_avatar:
+            return False
+        self.agent_avatar = avatar
+        self._record(
+            CaseTypeAgentAvatarSet(
+                occurred_at=at,
+                actor=actor,
+                entity_id=self.case_type.value,
+                case_type=self.case_type.value,
+                agent_id=self.agent_id,
+                avatar=avatar,
             )
         )
         return True

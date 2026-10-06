@@ -437,6 +437,24 @@ export default {
     footnote:
       'Os tipos sem agente continuam chegando às pessoas, como hoje. O registro de agentes não tem um catálogo: a lista vem dos tipos de caso e das propostas.',
   },
+  /** The agent's photo: one of ten avatars, picked by Supervisão. */
+  avatar: {
+    label: 'Foto do agente',
+    pick: 'Escolher a foto do agente',
+    saveError: 'Não conseguimos salvar a foto',
+    names: {
+      star: 'Estrela',
+      circle: 'Círculo',
+      hexagon: 'Hexágono',
+      drop: 'Gota',
+      triangle: 'Triângulo',
+      rhombus: 'Losango',
+      cloud: 'Nuvem',
+      square: 'Quadrado',
+      flame: 'Chama',
+      ring: 'Anel',
+    },
+  },
   agent: {
     loadError: 'Não foi possível carregar o agente',
     where: 'Onde roda',

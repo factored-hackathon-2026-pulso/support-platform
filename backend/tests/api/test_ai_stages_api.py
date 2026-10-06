@@ -219,3 +219,25 @@ def test_ai_off_hides_the_agents(client: TestClient, sign_in: SignIn) -> None:
     kind = "undue_charge"
     url = f"/api/v1/supervision/ai/stages/{kind}/agent/name"
     problem(client.put(url, headers=bearer(lucia), json={"name": "X"}), 404, "assistant_disabled")
+
+
+def test_supervision_picks_the_agent_photo_audited_and_listed(
+    client: TestClient, sign_in: SignIn
+) -> None:
+    lucia, daniela = sign_in(SUPERVISOR.email), sign_in(ANALYST.email)
+    kind = served_type(client, lucia)
+    url = f"/api/v1/supervision/ai/stages/{kind}/agent/avatar"
+
+    problem(client.put(url, headers=bearer(daniela), json={"avatar": "star"}), 403, "forbidden")
+    problem(client.put(url, headers=bearer(lucia), json={"avatar": "dog"}), 422, "validation_error")
+    picked = client.put(url, headers=bearer(lucia), json={"avatar": "star"})
+
+    assert picked.status_code == 200, picked.text
+    assert picked.json()["agentAvatar"] == "star"
+    agents = client.get(AGENTS, headers=bearer(daniela)).json()["agents"]
+    assert next(a for a in agents if a["agentId"] == "disputas")["avatar"] == "star"
+    audit = client.get(
+        "/api/v1/audit/events", params={"family": "agents", "limit": 50}, headers=bearer(lucia)
+    ).json()["items"]
+    assert any(e["type"] == "ai.agent_avatar_set" for e in audit)
+    assert client.put(url, headers=bearer(lucia), json={"avatar": "star"}).status_code == 200

@@ -23,7 +23,9 @@ import {
   useProposals,
   useRelease,
 } from '../hooks/use-automation'
-import { agentName, typeName } from '../model'
+import { agentAvatarOf, agentName, servedTypeOf, typeName } from '../model'
+import { AgentAvatar } from './AgentAvatar'
+import { AgentPhotoSlot } from './AgentPhotoSlot'
 import { agentVersionIn, describeBuilderFailure, proposalStatus } from '../proposals'
 import type { AliasState, VersionList } from '../types'
 import { AutomationFrame, EngineMissing } from './AutomationFrame'
@@ -48,6 +50,8 @@ export function AgentScreen({ agentId }: AgentScreenProps) {
   const staging = useAlias(builder ? agentId : null, 'staging')
   const status = builder ? agentRunStatus(prod.data, staging.data) : 'unknown'
   const name = agentName(agentId)
+  const avatar = agentAvatarOf(stages.data, agentId)
+  const servedType = servedTypeOf(stages.data, agentId)
   return (
     <AutomationFrame
       section="agents"
@@ -56,12 +60,18 @@ export function AgentScreen({ agentId }: AgentScreenProps) {
         { label: t('agents.heading'), to: PATHS.supervision.automationAgents },
         { label: name },
       ]}
-      title={name}
+      title={
+        <span className="inline-flex items-center gap-3">
+          <AgentAvatar avatar={avatar} size={32} />
+          {name}
+        </span>
+      }
       subtitle={<span className="font-mono text-13">{agentId}</span>}
       documentTitle={name}
     >
       <PageBody>
         <div className="mx-auto flex w-full max-w-[920px] flex-col gap-5">
+          {servedType ? <AgentPhotoSlot type={servedType} avatar={avatar} /> : null}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Status {...agentRunAppearance(status)} />
             {serves.map((type) => (

@@ -1,4 +1,5 @@
 import { Bot, Tag } from 'lucide-react'
+import { AgentAvatar } from './AgentAvatar'
 import { PageBody } from '@/components/layout'
 import {
   Button,
@@ -184,6 +185,9 @@ function TypeRow({ type, entry, signal, selected, onSelect }: TypeRowProps) {
       <TCell>
         <span className="inline-flex items-center gap-2 whitespace-nowrap" title={view.tip}>
           <StageBars bars={view.bars} agent={view.agent} />
+          {entry.agent === 'active' && entry.agentAvatar ? (
+            <AgentAvatar avatar={entry.agentAvatar} size={20} />
+          ) : null}
           <span>{view.label}</span>
           <span className="sr-only">{view.tip}</span>
         </span>

@@ -2119,6 +2119,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/supervision/ai/stages/{caseType}/agent/avatar': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Pick the photo of the agent that serves a case type (Supervisión)
+     * @description One of the fixed avatar keys. 404 `not_found`: the type has no agent; 404 `assistant_disabled`: AI off. Audited (`ai.agent_avatar_set`), live on `ai:stages`.
+     */
+    put: operations['ai-stages_set_agent_avatar']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/supervision/ai/stages/{caseType}/agent/name': {
     parameters: {
       query?: never
@@ -2683,6 +2703,24 @@ export interface components {
     AgentRow: {
       /** Agentid */
       agentId: string
+      /**
+       * Avatar
+       * @description The photo Supervisión picked; null: none.
+       */
+      avatar:
+        | (
+            | 'star'
+            | 'circle'
+            | 'hexagon'
+            | 'drop'
+            | 'triangle'
+            | 'rhombus'
+            | 'cloud'
+            | 'square'
+            | 'flame'
+            | 'ring'
+          )
+        | null
       /** @description The type it serves; null: serves none. */
       caseType: components['schemas']['CaseType'] | null
       /**
@@ -3650,6 +3688,24 @@ export interface components {
     CaseTypeStage: {
       /** @description `ready`: the drafts met the rule, the system proposes an agent to Supervisión (slice 22). `active`: an agent serves the type. */
       agent: components['schemas']['AgentStatus']
+      /**
+       * Agentavatar
+       * @description The photo Supervisión picked for the agent; null: none yet.
+       */
+      agentAvatar:
+        | (
+            | 'star'
+            | 'circle'
+            | 'hexagon'
+            | 'drop'
+            | 'triangle'
+            | 'rhombus'
+            | 'cloud'
+            | 'square'
+            | 'flame'
+            | 'ring'
+          )
+        | null
       /**
        * Agentid
        * @description agent-core's id of the agent that serves the type (set while `agent` is `active`, slice 22).
@@ -6268,6 +6324,24 @@ export interface components {
        * @constant
        */
       tokenType: 'Bearer'
+    }
+    /** SetAgentAvatarRequest */
+    SetAgentAvatarRequest: {
+      /**
+       * Avatar
+       * @enum {string}
+       */
+      avatar:
+        | 'star'
+        | 'circle'
+        | 'hexagon'
+        | 'drop'
+        | 'triangle'
+        | 'rhombus'
+        | 'cloud'
+        | 'square'
+        | 'flame'
+        | 'ring'
     }
     /** SetAiEnabledRequest */
     SetAiEnabledRequest: {
@@ -14697,6 +14771,68 @@ export interface operations {
       }
       /** @description Problem details (RFC 7807) */
       503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_set_agent_avatar': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        caseType: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetAgentAvatarRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CaseTypeStage']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
         headers: {
           [name: string]: unknown
         }

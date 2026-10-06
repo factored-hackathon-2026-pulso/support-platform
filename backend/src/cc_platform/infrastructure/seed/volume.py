@@ -86,7 +86,12 @@ from cc_platform.domain.shared.ids import IdPrefix
 from cc_platform.infrastructure.seed import volume_catalog as cat
 from cc_platform.infrastructure.seed.cases import SLA, STRATEGY, _Story, seed_case_id
 from cc_platform.infrastructure.seed.customers import CustomerSeed, seed_demo_customers
-from cc_platform.infrastructure.seed.maturity import LUCIA, SEED_TYPE_AGENT, SEED_TYPE_AGENT_NAME
+from cc_platform.infrastructure.seed.maturity import (
+    LUCIA,
+    SEED_TYPE_AGENT,
+    SEED_TYPE_AGENT_AVATAR,
+    SEED_TYPE_AGENT_NAME,
+)
 from cc_platform.infrastructure.seed.people import (
     DEMO_PASSWORD,
     DEMO_STAFF,
@@ -1167,6 +1172,15 @@ async def _name_served_agents(
         ):
             at = (row.agent_since or now) + timedelta(minutes=5)
             if row.rename_agent(SEED_TYPE_AGENT_NAME, actor=lucia, at=at):
+                await unit.case_type_maturity.save(row)
+                timeline.take(row)
+        if (
+            row.agent is AgentStatus.ACTIVE
+            and row.agent_id == SEED_TYPE_AGENT
+            and not row.agent_avatar
+        ):
+            at = (row.agent_since or now) + timedelta(minutes=6)
+            if row.set_agent_avatar(SEED_TYPE_AGENT_AVATAR, actor=lucia, at=at):
                 await unit.case_type_maturity.save(row)
                 timeline.take(row)
     timeline.record_into(unit)

@@ -692,3 +692,75 @@ async def test_without_the_registry_there_is_no_builder(tmp_path: Path) -> None:
     async for built in builder_world("memory", tmp_path, with_registry=False):
         assert built.container.use_cases.assistant is not None
         assert built.container.use_cases.assistant.builder is None
+
+
+async def test_approve_and_publish_takes_one_code_and_audits_both_steps(
+    world: BuilderWorld,
+) -> None:
+    proposal_id, candidate_hash = await evaluated_proposal(world)
+    api, who = builder(world), actor_for(SUPERVISOR)
+
+    release = await api.approve_and_publish(
+        who,
+        proposal_id,
+        candidate_hash=candidate_hash,
+        accept_yardstick_loosened=False,
+        idempotency_key="publish-0010",
+        step_up_code=CODE,
+    )
+
+    assert release.proposal_id == proposal_id
+    detail = await api.get_proposal(who, proposal_id)
+    assert detail.proposal.state is ProposalState.PUBLISHED
+    names = [e[0] for e in await builder_events(world.container)]
+    assert names[-2:] == ["builder.proposal_approved", "builder.proposal_published"]
+
+
+async def test_approve_and_publish_keeps_the_approval_when_the_publish_fails_then_retries(
+    world: BuilderWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proposal_id, candidate_hash = await evaluated_proposal(world)
+    api, who = builder(world), actor_for(SUPERVISOR)
+    real_publish = world.registry.publish
+    failures = [AgentRegistryError(status=500, code="internal_error", detail="boom")]
+
+    async def flaky(*args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        if failures:
+            raise failures.pop()
+        return await real_publish(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(world.registry, "publish", flaky)
+    kwargs = {
+        "candidate_hash": candidate_hash,
+        "accept_yardstick_loosened": False,
+        "idempotency_key": "publish-0011",
+        "step_up_code": CODE,
+    }
+
+    with pytest.raises(Exception):  # noqa: B017, PT011 - the translated registry failure
+        await api.approve_and_publish(who, proposal_id, **kwargs)  # type: ignore[arg-type]
+    assert (await api.get_proposal(who, proposal_id)).proposal.state is ProposalState.APPROVED
+    assert [e[0] for e in await builder_events(world.container)][-1] == "builder.proposal_approved"
+
+    release = await api.approve_and_publish(who, proposal_id, **kwargs)  # type: ignore[arg-type]
+
+    assert release.proposal_id == proposal_id
+    assert len(calls(world, "approve")) == 1  # the retry did not approve again
+    names = [e[0] for e in await builder_events(world.container)]
+    assert names.count("builder.proposal_approved") == 1
+    assert names[-1] == "builder.proposal_published"
+
+
+async def test_approve_and_publish_with_a_wrong_code_does_nothing(world: BuilderWorld) -> None:
+    proposal_id, candidate_hash = await evaluated_proposal(world)
+    with pytest.raises(BuilderStepUpInvalidError):
+        await builder(world).approve_and_publish(
+            actor_for(SUPERVISOR),
+            proposal_id,
+            candidate_hash=candidate_hash,
+            accept_yardstick_loosened=False,
+            idempotency_key="publish-0012",
+            step_up_code="999999",
+        )
+    assert calls(world, "approve") == []
+    assert calls(world, "publish") == []

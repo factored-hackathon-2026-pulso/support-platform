@@ -173,14 +173,27 @@ export async function evaluateProposal(
   )
 }
 
-export async function approveProposal(
+/**
+ * POST …/approve-and-publish: the one "Aprobar" (approve, then publish, one code). One key per
+ * decision she means to make; a retry with it only repeats the publication.
+ */
+export async function approveAndPublishProposal(
   proposalId: string,
-  body: { candidateHash: string; acceptYardstickLoosened: boolean; stepUpCode: string },
-): Promise<unknown> {
+  body: {
+    candidateHash: string
+    acceptYardstickLoosened: boolean
+    stepUpCode: string
+    idempotencyKey: string
+  },
+): Promise<ReleaseDetail> {
   return unwrap(
-    api.POST('/api/v1/builder/proposals/{proposalId}/approve', {
-      params: { path: { proposalId } },
-      body,
+    api.POST('/api/v1/builder/proposals/{proposalId}/approve-and-publish', {
+      params: { path: { proposalId }, header: { 'Idempotency-Key': body.idempotencyKey } },
+      body: {
+        candidateHash: body.candidateHash,
+        acceptYardstickLoosened: body.acceptYardstickLoosened,
+        stepUpCode: body.stepUpCode,
+      },
     }),
   )
 }
@@ -194,19 +207,6 @@ export async function rejectProposal(
     api.POST('/api/v1/builder/proposals/{proposalId}/reject', {
       params: { path: { proposalId } },
       body,
-    }),
-  )
-}
-
-/** POST …/publish: a release (`staging` points at it). One key per publication she means. */
-export async function publishProposal(
-  proposalId: string,
-  body: { stepUpCode: string; idempotencyKey: string },
-): Promise<ReleaseDetail> {
-  return unwrap(
-    api.POST('/api/v1/builder/proposals/{proposalId}/publish', {
-      params: { path: { proposalId }, header: { 'Idempotency-Key': body.idempotencyKey } },
-      body: { stepUpCode: body.stepUpCode },
     }),
   )
 }

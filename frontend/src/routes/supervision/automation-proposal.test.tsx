@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AutomationApi from '@/features/automation/api'
 import {
   activateTypeAgent,
-  approveProposal,
+  approveAndPublishProposal,
   evaluateProposal,
   fetchAlias,
   fetchBuilderStatus,
@@ -13,7 +13,6 @@ import {
   fetchRelease,
   freezeProposal,
   promoteAlias,
-  publishProposal,
   rejectProposal,
   validateProposal,
 } from '@/features/automation/api'
@@ -55,9 +54,8 @@ vi.mock('@/features/automation/api', async (importOriginal) => {
     validateProposal: vi.fn<typeof actual.validateProposal>(),
     freezeProposal: vi.fn<typeof actual.freezeProposal>(),
     evaluateProposal: vi.fn<typeof actual.evaluateProposal>(),
-    approveProposal: vi.fn<typeof actual.approveProposal>(),
+    approveAndPublishProposal: vi.fn<typeof actual.approveAndPublishProposal>(),
     rejectProposal: vi.fn<typeof actual.rejectProposal>(),
-    publishProposal: vi.fn<typeof actual.publishProposal>(),
     fetchAlias: vi.fn<typeof actual.fetchAlias>(),
     fetchRelease: vi.fn<typeof actual.fetchRelease>(),
     activateTypeAgent: vi.fn<typeof actual.activateTypeAgent>(),
@@ -136,16 +134,13 @@ describe('a proposal (slice 22)', () => {
       'href',
       '/supervision/automation?type=undue_charge',
     )
-    const steps = screen.getByRole('list', { name: 'Avance de la propuesta' })
+    const steps = await screen.findByRole('list', { name: 'Avance del agente' })
     expect(
       within(steps)
         .getAllByRole('listitem')
         .map((li) => li.textContent),
-    ).toEqual(['Borrador', 'Lista para probar', 'Probada', 'Aprobada', 'Publicada', 'Activa'])
-    expect(within(steps).getByText('Borrador').closest('li')).toHaveAttribute(
-      'aria-current',
-      'step',
-    )
+    ).toEqual(['Revisar', 'Probar', 'Aprobar', 'Activar'])
+    expect(within(steps).getByText('Revisar').closest('li')).toHaveAttribute('aria-current', 'step')
     expect(screen.getByText('Agente Cobros')).toBeInTheDocument()
     expect(screen.getByText('Para Cobro indebido')).toBeInTheDocument()
     // What it changes: the agent's tools and languages, then each entity with its docs.
@@ -203,7 +198,7 @@ describe('a proposal (slice 22)', () => {
     expect(await screen.findByText('No pasó la prueba')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'La propuesta volvió a borrador. Revisa cada criterio antes de pedir otro cambio.',
+        'El agente volvió a borrador. Revisa cada criterio antes de pedir otro cambio.',
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('traspaso_a_tiempo')).toBeInTheDocument()
@@ -245,10 +240,12 @@ describe('a proposal (slice 22)', () => {
         },
       ),
     )
-    vi.mocked(approveProposal).mockRejectedValueOnce(
+    vi.mocked(approveAndPublishProposal).mockRejectedValueOnce(
       problem(422, 'builder_step_up_invalid', { remainingAttempts: 4 }),
     )
-    vi.mocked(approveProposal).mockResolvedValueOnce({})
+    vi.mocked(approveAndPublishProposal).mockResolvedValueOnce(
+      makeRelease({ releaseId: RELEASE_ID }),
+    )
     const { user } = renderProposal()
     expect(await screen.findByText('Pasó la prueba')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Aprobar' }))
@@ -262,12 +259,17 @@ describe('a proposal (slice 22)', () => {
     ).toBeInTheDocument()
     await typeCode(user, dialog, '000000')
     await user.click(within(dialog).getByRole('button', { name: 'Aprobar' }))
-    expect(approveProposal).toHaveBeenLastCalledWith(PROPOSAL_ID, {
+    expect(approveAndPublishProposal).toHaveBeenLastCalledWith(PROPOSAL_ID, {
       candidateHash: 'h1',
       acceptYardstickLoosened: false,
       stepUpCode: '000000',
+      idempotencyKey: expect.stringMatching(/^publish-/) as string,
     })
-    expect(await screen.findByText('Aprobaste la propuesta')).toBeInTheDocument()
+    // one decision: the single "Aprobar", with one code per attempt, never a separate "Publicar"
+    expect(approveAndPublishProposal).toHaveBeenCalledTimes(2)
+    expect(
+      await screen.findByText('Aprobado: el agente queda listo para activar'),
+    ).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
@@ -317,14 +319,16 @@ describe('a proposal (slice 22)', () => {
     vi.mocked(fetchProposal).mockResolvedValue(
       makeProposalDetail({ state: 'evaluated', candidateHash: 'h1' }),
     )
-    vi.mocked(approveProposal).mockRejectedValueOnce(
+    vi.mocked(approveAndPublishProposal).mockRejectedValueOnce(
       problem(409, 'registry_loosening_not_accepted', {
         yardstickLoosened: [
           { kind: 'floor_loosened', target: 'resuelve', message: 'Baja el mínimo de 0.85 a 0.80' },
         ],
       }),
     )
-    vi.mocked(approveProposal).mockResolvedValueOnce({})
+    vi.mocked(approveAndPublishProposal).mockResolvedValueOnce(
+      makeRelease({ releaseId: RELEASE_ID }),
+    )
     const { user } = renderProposal()
     await user.click(await screen.findByRole('button', { name: 'Aprobar' }))
     const dialog = screen.getByRole('dialog', { name: 'Aprobar' })
@@ -336,7 +340,7 @@ describe('a proposal (slice 22)', () => {
     )
     await typeCode(user, dialog, '000000')
     await user.click(within(dialog).getByRole('button', { name: 'Aprobar' }))
-    expect(approveProposal).toHaveBeenLastCalledWith(
+    expect(approveAndPublishProposal).toHaveBeenLastCalledWith(
       PROPOSAL_ID,
       expect.objectContaining({ acceptYardstickLoosened: true }),
     )
@@ -378,24 +382,45 @@ describe('a proposal (slice 22)', () => {
     })
   })
 
-  it('publishes with her code and one key per publication', async () => {
+  it('retries an approval whose publication failed with the same key and no second "Publicar"', async () => {
+    vi.mocked(fetchProposal).mockResolvedValue(
+      makeProposalDetail({ state: 'evaluated', candidateHash: 'h1' }),
+    )
+    vi.mocked(approveAndPublishProposal).mockRejectedValueOnce(ApiProblem.network())
+    vi.mocked(approveAndPublishProposal).mockResolvedValueOnce(
+      makeRelease({ releaseId: RELEASE_ID }),
+    )
+    const { user } = renderProposal()
+    await user.click(await screen.findByRole('button', { name: 'Aprobar' }))
+    const dialog = screen.getByRole('dialog', { name: 'Aprobar' })
+    await typeCode(user, dialog, '000000')
+    await user.click(within(dialog).getByRole('button', { name: 'Aprobar' }))
+    expect(await within(dialog).findByText(/El motor de IA no respondió/)).toBeInTheDocument()
+    await typeCode(user, dialog, '000000')
+    await user.click(within(dialog).getByRole('button', { name: 'Aprobar' }))
+    const [first, second] = vi.mocked(approveAndPublishProposal).mock.calls
+    expect(first?.[1].idempotencyKey).toMatch(/^publish-/)
+    expect(second?.[1].idempotencyKey).toBe(first?.[1].idempotencyKey)
+    expect(
+      await screen.findByText('Aprobado: el agente queda listo para activar'),
+    ).toBeInTheDocument()
+  })
+
+  it('offers "Reintentar" for a proposal approved whose publication did not happen', async () => {
     vi.mocked(fetchProposal).mockResolvedValue(
       makeProposalDetail({ state: 'approved', candidateHash: 'h1' }),
     )
-    vi.mocked(publishProposal).mockRejectedValueOnce(ApiProblem.network())
-    vi.mocked(publishProposal).mockResolvedValueOnce(makeRelease({ releaseId: RELEASE_ID }))
+    vi.mocked(approveAndPublishProposal).mockResolvedValueOnce(
+      makeRelease({ releaseId: RELEASE_ID }),
+    )
     const { user } = renderProposal()
-    await user.click(await screen.findByRole('button', { name: 'Publicar' }))
-    const dialog = screen.getByRole('dialog', { name: 'Publicar' })
+    expect(await screen.findByText(/Quedó aprobado, pero no se pudo/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Publicar' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    const dialog = screen.getByRole('dialog', { name: 'Aprobar' })
     await typeCode(user, dialog, '000000')
-    await user.click(within(dialog).getByRole('button', { name: 'Publicar' }))
-    expect(await within(dialog).findByText(/El motor de IA no respondió/)).toBeInTheDocument()
-    await typeCode(user, dialog, '000000')
-    await user.click(within(dialog).getByRole('button', { name: 'Publicar' }))
-    const [first, second] = vi.mocked(publishProposal).mock.calls
-    expect(first?.[1].idempotencyKey).toMatch(/^publish-/)
-    expect(second?.[1].idempotencyKey).toBe(first?.[1].idempotencyKey)
-    expect(await screen.findByText('Publicada: queda lista para activar')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Aprobar' }))
+    expect(approveAndPublishProposal).toHaveBeenCalledTimes(1)
   })
 
   it('activates the published agent for the type with her code, then says it serves it', async () => {
@@ -439,8 +464,8 @@ describe('a proposal (slice 22)', () => {
       'href',
       '/supervision/automation/agents/cobros',
     )
-    const steps = screen.getByRole('list', { name: 'Avance de la propuesta' })
-    await waitFor(() => expect(within(steps).getAllByText('Hecho')).toHaveLength(6))
+    const steps = screen.getByRole('list', { name: 'Avance del agente' })
+    await waitFor(() => expect(within(steps).getAllByText('Hecho')).toHaveLength(4))
   })
 
   it('asks for the type when the link names none, among the ready ones', async () => {
@@ -470,7 +495,19 @@ describe('a proposal (slice 22)', () => {
       makeProposalDetail({ state: 'evaluated', candidateHash: 'h1' }),
     )
     const { user } = renderProposal(`${PATH}?type=undue_charge`, 'pt-BR')
-    expect(await screen.findByRole('list', { name: 'Andamento da proposta' })).toBeInTheDocument()
+    const steps = await screen.findByRole('list', { name: 'Andamento do agente' })
+    expect(
+      within(steps)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(
+      ['Revisar', 'Testar', 'Aprovar', 'Ativar'].map((label, i) =>
+        i < 2 ? `${label}Feito` : label,
+      ),
+    )
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Agente para Cobrança indevida' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('Para Cobrança indevida')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Aprovar' }))
     expect(screen.getByRole('dialog', { name: 'Aprovar' })).toHaveTextContent('Confirme que é você')
@@ -616,9 +653,9 @@ describe("an improvement engine's proposal (P6: dossier and decisions)", () => {
         name: 'La versión de esta propuesta ya está en producción',
       }),
     ).toBeInTheDocument()
-    const stepper = screen.getByRole('list', { name: 'Avance de la propuesta' })
+    const stepper = screen.getByRole('list', { name: 'Avance del agente' })
     expect(within(stepper).getByText('En producción')).toBeInTheDocument()
-    expect(within(stepper).getAllByText('Hecho')).toHaveLength(6)
+    expect(within(stepper).getAllByText('Hecho')).toHaveLength(4)
   })
 
   it('compares the current version with the proposal, criterion by criterion', async () => {
@@ -703,7 +740,7 @@ describe("an improvement engine's proposal (P6: dossier and decisions)", () => {
     expect(screen.queryByRole('button', { name: 'Activar agente' })).not.toBeInTheDocument()
     expect(within(panel).getByText(BASE_RELEASE_ID)).toBeInTheDocument()
     expect(within(panel).getByText(RELEASE_ID)).toBeInTheDocument()
-    const stepper = screen.getByRole('list', { name: 'Avance de la propuesta' })
+    const stepper = screen.getByRole('list', { name: 'Avance del agente' })
     expect(within(stepper).getByText('En producción')).toBeInTheDocument()
     const submit = within(panel).getByRole('button', { name: 'Pasar a producción' })
     await user.click(submit)

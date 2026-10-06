@@ -50,7 +50,19 @@ export function proposalStatus(state: string): StatusAppearance {
   return { ...STATE_LOOK[state], label: t(`proposals.state.${state}`) }
 }
 
-export type StepKey = ProposalState | 'active'
+/** What the supervisor does, in order: Revisar, Probar, Aprobar (which publishes), Activar. */
+export type StepKey = 'review' | 'test' | 'approve' | 'activate'
+
+const STEP_KEYS: readonly StepKey[] = ['review', 'test', 'approve', 'activate']
+
+/** The step each registry state is at (approved: the publication still has to be retried). */
+const STEP_OF_STATE: Record<ProposalState, number> = {
+  draft: 0,
+  candidate: 1,
+  evaluated: 2,
+  approved: 2,
+  published: 3,
+}
 
 export interface ProposalStep {
   key: StepKey
@@ -89,23 +101,22 @@ export function endStepFor(facts: EndStepFacts): EndStep {
 }
 
 /**
- * The stepper: Borrador, Lista para probar, Probada, Aprobada, Publicada, then Activa (`activate`)
- * or En producción (`promote`). `done` is true once that last step happened.
+ * The stepper: Revisar, Probar, Aprobar, then Activar (`activate`) or En producción (`promote`).
+ * `done` is true once that last step happened.
  */
 export function proposalSteps(
   state: string,
   done: boolean,
   endStep: EndStep = 'activate',
 ): ProposalStep[] {
-  const index = isProposalState(state) ? PROPOSAL_STATES.indexOf(state) : 0
-  const keys: StepKey[] = [...PROPOSAL_STATES, 'active']
-  const current = done ? keys.length : index
-  return keys.map((key, position) => ({
+  const index = isProposalState(state) ? STEP_OF_STATE[state] : 0
+  const current = done ? STEP_KEYS.length : index
+  return STEP_KEYS.map((key, position) => ({
     key,
     label:
-      key === 'active' && endStep === 'promote'
-        ? t('proposals.state.prod')
-        : t(`proposals.state.${key}`),
+      key === 'activate' && endStep === 'promote'
+        ? t('proposal.steps.prod')
+        : t(`proposal.steps.${key}`),
     state: position < current ? 'done' : position === current ? 'current' : 'later',
   }))
 }

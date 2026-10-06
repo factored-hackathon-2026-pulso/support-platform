@@ -368,6 +368,37 @@ async def publish_proposal(
     return schemas.ReleaseDetail.model_validate(release)
 
 
+@router.post(
+    "/proposals/{proposalId}/approve-and-publish",
+    response_model=schemas.ReleaseDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Approve the evaluated candidate and publish it, with one code",
+    description=(
+        f'The screens\' single "Aprobar": `approve` then `publish` after one verification of the '
+        f"code. {STEP_UP_NOTE} Both steps are audited as when called apart. If the publish fails "
+        "the approval stands (`approved`): call again with the same `Idempotency-Key` and only "
+        "the publish is retried. Same errors as `approve` and `publish`."
+    ),
+    responses=REGISTRY_ERRORS,
+)
+async def approve_and_publish_proposal(
+    proposal_id: ProposalId,
+    body: schemas.ApproveRequest,
+    idempotency_key: PublishKey,
+    actor: Builder,
+    api: ApiContextDep,
+) -> schemas.ReleaseDetail:
+    release = await (await builder_use_cases(api)).registry.approve_and_publish(
+        actor,
+        proposal_id,
+        candidate_hash=body.candidate_hash,
+        accept_yardstick_loosened=body.accept_yardstick_loosened,
+        idempotency_key=idempotency_key,
+        step_up_code=body.step_up_code,
+    )
+    return schemas.ReleaseDetail.model_validate(release)
+
+
 # ----------------------------------------------------------------------------- aliases and releases
 @router.get(
     "/aliases/{agentId}/{alias}",

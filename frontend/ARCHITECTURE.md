@@ -483,7 +483,7 @@ New feature `automation` (only `index.ts`: the shell needs nothing from it). Sup
   (Activar or Pasar a producción), `REASON_CODES` / `reasonCodeLabel`, `historyView`, `describeBuilderFailure`),
   `agents.ts` (derived list, run status,
   rollback and promotion targets), `builder-chat.ts` (`chatEntries`; `agentRequest`, `isValidAgentId`, `fitGoal`,
-  `newProposals`: "Proponer un agente" in `constructor-chat`'s format, the agent id then a goal of at most
+  `newProposals`: "Crear el agente" in `constructor-chat`'s format, the agent id then a goal of at most
   200 characters, in the UI language), `url.ts` (`?type=`).
 - **Hooks** (`hooks/use-automation.ts`): builder status, proposals (refetched on focus), one proposal, aliases,
   releases, versions, `useProposalStep` (validate, freeze, reopen, evaluate, approve, reject, publish),

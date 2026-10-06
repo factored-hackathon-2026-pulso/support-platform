@@ -2,7 +2,15 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { Bot, Check, Clock, Tag, X } from 'lucide-react'
 import { automationAgentPath, automationProposalPath } from '@/app/paths'
-import { Button, Dialog, IconButton, RadioGroup, Status, useToast } from '@/components/ui'
+import {
+  Button,
+  Dialog,
+  IconButton,
+  LinkButton,
+  RadioGroup,
+  Status,
+  useToast,
+} from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
 import { agentRequest } from '../builder-chat'
@@ -264,7 +272,7 @@ function AgentSection({ type, entry }: { type: MaturingType; entry: CaseTypeStag
 }
 
 /**
- * "Proponer un agente": a new conversation with the builder and the type's request (the agent id,
+ * "Crear el agente": a new conversation with the builder and the type's request (the agent id,
  * then the goal, the order its questions take; agent-core needed). It never continues an older
  * thread.
  */
@@ -273,8 +281,24 @@ function ProposeButton({ type, entry }: { type: MaturingType; entry: CaseTypeSta
   const builder = useBuilderAvailable()
   const serviceDown = useAgentsServiceDown()
   const chat = useBuilderChatPanel()
+  const proposals = useProposals({ enabled: builder })
+  // The agent already drafted for this type (awaiting its activation, whatever its state): Supervisión reviews it, not a second one.
+  const agentId = agentIdFor(entry)
+  const draft = (proposals.data?.items ?? []).find((p) => p.agentId === agentId)
   // P4: while the agents service is down the frame says so and the chat waits for it.
   if (!builder || serviceDown) return null
+  if (draft) {
+    return (
+      <LinkButton
+        to={automationProposalPath(draft.proposalId, { type })}
+        variant="primary"
+        size="sm"
+        icon={<Bot size={16} />}
+      >
+        {t('type.review')}
+      </LinkButton>
+    )
+  }
   return (
     <Button
       variant="primary"

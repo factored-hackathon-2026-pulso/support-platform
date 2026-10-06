@@ -11,7 +11,7 @@ import { copilotKeys } from '@/features/copilot/core'
 import { isApiProblem, type ApiProblem } from '@/lib/api'
 import {
   activateTypeAgent,
-  approveProposal,
+  approveAndPublishProposal,
   askBuilder,
   automationKeys,
   automationMutationKeys,
@@ -27,7 +27,6 @@ import {
   freezeProposal,
   moveStageBack,
   promoteAlias,
-  publishProposal,
   rejectProposal,
   reopenProposal,
   restartBuilderChat,
@@ -245,9 +244,14 @@ export type ProposalStep =
   | { kind: 'freeze' }
   | { kind: 'reopen' }
   | { kind: 'evaluate'; suiteId: string; suiteVersion: string | null }
-  | { kind: 'approve'; candidateHash: string; acceptYardstickLoosened: boolean; stepUpCode: string }
+  | {
+      kind: 'approve'
+      candidateHash: string
+      acceptYardstickLoosened: boolean
+      stepUpCode: string
+      idempotencyKey: string
+    }
   | { kind: 'reject'; reason: string; reasonCode: ReasonCode; stepUpCode: string }
-  | { kind: 'publish'; stepUpCode: string; idempotencyKey: string }
 
 async function runStep(proposalId: string, step: ProposalStep): Promise<unknown> {
   switch (step.kind) {
@@ -263,21 +267,17 @@ async function runStep(proposalId: string, step: ProposalStep): Promise<unknown>
         suiteVersion: step.suiteVersion,
       })
     case 'approve':
-      return approveProposal(proposalId, {
+      return approveAndPublishProposal(proposalId, {
         candidateHash: step.candidateHash,
         acceptYardstickLoosened: step.acceptYardstickLoosened,
         stepUpCode: step.stepUpCode,
+        idempotencyKey: step.idempotencyKey,
       })
     case 'reject':
       return rejectProposal(proposalId, {
         reason: step.reason,
         reasonCode: step.reasonCode,
         stepUpCode: step.stepUpCode,
-      })
-    case 'publish':
-      return publishProposal(proposalId, {
-        stepUpCode: step.stepUpCode,
-        idempotencyKey: step.idempotencyKey,
       })
   }
 }

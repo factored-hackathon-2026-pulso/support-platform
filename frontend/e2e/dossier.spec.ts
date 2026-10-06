@@ -295,7 +295,7 @@ test.describe("An improvement engine's proposal (P6)", () => {
     await expect(history).toContainText('Hay que mejorar la redacción')
 
     // An agent in production: "Pasar a producción", never "Activar".
-    const steps = page.getByRole('list', { name: 'Avance de la propuesta' })
+    const steps = page.getByRole('list', { name: 'Avance del agente' })
     await expect(steps).toContainText('En producción')
     await expect(page.getByRole('button', { name: 'Activar agente' })).toHaveCount(0)
     const promote = page.getByRole('region', { name: 'Pasar a producción' })

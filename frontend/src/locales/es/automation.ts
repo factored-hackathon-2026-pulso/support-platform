@@ -17,12 +17,12 @@ export default {
   },
   engine: {
     title: 'El motor de IA no está conectado',
-    text: 'Los tipos de caso maduran igual con lo que registra la plataforma. Para proponer, probar y activar agentes hace falta el motor de IA.',
+    text: 'Los tipos de caso maduran igual con lo que registra la plataforma. Para crear, probar y activar agentes hace falta el motor de IA.',
   },
   /** Deploy brief P4: agent-core is wired but down. */
   serviceDown: {
     title: 'El servicio de agentes no está disponible',
-    text: 'Los tipos de caso y las propuestas guardadas se siguen viendo. Proponer, evaluar, aprobar y publicar vuelven solos cuando el servicio responda.',
+    text: 'Los tipos de caso y las propuestas guardadas se siguen viendo. Crear, probar, aprobar y activar agentes vuelven solos cuando el servicio responda.',
   },
   /** The five states of a case type, as the panorama shows them. */
   stage: {
@@ -138,9 +138,10 @@ export default {
     moveBack: 'Devolver a una etapa anterior',
     moveBackBlocked: 'Un agente atiende este tipo: no se puede devolver de etapa desde aquí.',
     agent: 'Agente',
-    propose: 'Proponer un agente',
+    propose: 'Crear el agente',
+    review: 'Revisar el agente',
     proposeText:
-      'El constructor de agentes arma el borrador con lo que aprendió el equipo. Después lo validas, lo pruebas y lo activas.',
+      'El constructor de agentes arma el borrador con lo que aprendió el equipo. Después tú lo revisas, lo pruebas, lo apruebas y lo activas.',
     proposals: 'Propuestas para el agente {{agent}}',
     servedBy: 'Lo atiende el agente {{agent}}',
     openAgent: 'Ver el agente',
@@ -196,7 +197,7 @@ export default {
       candidate: 'Lista para probar',
       evaluated: 'Probada',
       approved: 'Aprobada',
-      published: 'Publicada',
+      published: 'Lista para activar',
       active: 'Activa',
       prod: 'En producción',
       unknown: 'Otro estado',
@@ -210,11 +211,19 @@ export default {
     },
   },
   proposal: {
-    kicker: 'Propuesta',
-    loadError: 'No pudimos cargar la propuesta',
+    kicker: 'Agente',
+    pageTitle: 'Agente para {{type}}',
+    loadError: 'No pudimos cargar el agente',
     forType: 'Para {{type}}',
     agent: 'Agente {{agent}}',
-    progress: 'Avance de la propuesta',
+    progress: 'Avance del agente',
+    steps: {
+      review: 'Revisar',
+      test: 'Probar',
+      approve: 'Aprobar',
+      activate: 'Activar',
+      prod: 'En producción',
+    },
     stepDone: 'Hecho',
     stepCurrent: 'Paso actual',
     changes: 'Qué cambia',
@@ -253,11 +262,11 @@ export default {
     testing: 'Probando con la suite del agente. Puede tardar unos minutos.',
     noSuiteTitle: 'Este agente no tiene suite de evaluación',
     noSuiteText:
-      'Sin una suite no se puede probar, aprobar ni publicar. La suite (los escenarios y los umbrales de la prueba) la escribe el equipo de IA en el registro.',
+      'Sin una suite no se puede probar ni aprobar. La suite (los escenarios y los umbrales de la prueba) la escribe el equipo de IA en el registro.',
     report: 'Resultado de la prueba',
     passed: 'Pasó la prueba',
     failed: 'No pasó la prueba',
-    failedText: 'La propuesta volvió a borrador. Revisa cada criterio antes de pedir otro cambio.',
+    failedText: 'El agente volvió a borrador. Revisa cada criterio antes de pedir otro cambio.',
     criteria: '{{passed}} de {{total}} criterios',
     criterion: {
       passed: 'Cumple',
@@ -297,16 +306,17 @@ export default {
     rejectCodeHint: 'El motor de mejora aprende de este motivo.',
     rejectReason: 'Detalle',
     rejectHint: 'Lo verá quien siga la propuesta. No escribas datos de clientes.',
-    rejected: 'La propuesta volvió a borrador',
-    approved: 'Aprobaste la propuesta',
-    publish: 'Publicar',
-    published: 'Publicada: queda lista para activar',
-    publishedPromote: 'Publicada: queda en pruebas, lista para pasar a producción',
+    rejected: 'El agente volvió a borrador',
+    retry: 'Reintentar',
+    approvedPending:
+      'Quedó aprobado, pero no se pudo dejar listo para activar. Reintenta: no hace falta aprobar otra vez.',
+    published: 'Aprobado: el agente queda listo para activar',
+    publishedPromote: 'Aprobado: queda en pruebas, listo para pasar a producción',
     lastRejected: 'La última vez se rechazó',
     activate: 'Activar',
     activeNow: 'Activa',
     nextStep: 'Siguiente paso',
-    stale: 'La propuesta cambió mientras la mirabas. La recargamos con su estado actual.',
+    stale: 'El agente cambió mientras lo mirabas. Lo recargamos con su estado actual.',
   },
   /** agent-core's closed list of rejection reasons (its PR 53). */
   reasonCode: {
@@ -391,7 +401,7 @@ export default {
   },
   activate: {
     title: 'Activar el agente {{agent}}',
-    intro: 'Lo revisas y lo activas tú: Supervisión puede probar y publicar agentes.',
+    intro: 'Lo revisas, lo pruebas, lo apruebas y lo activas tú: el sistema solo propone.',
     serves: 'Atiende',
     languages: 'Idiomas',
     starts: 'Empieza',
@@ -469,7 +479,7 @@ export default {
     open: 'Constructor de agentes',
     title: 'Constructor de agentes',
     description:
-      'Le cuentas qué quieres y arma una propuesta. Solo propone: tú la pruebas y la activas.',
+      'Le cuentas qué quieres y arma el borrador del agente. Solo propone: tú lo revisas, lo pruebas, lo apruebas y lo activas.',
     log: 'Conversación con el constructor',
     you: 'Tú',
     builder: 'Constructor',
@@ -486,8 +496,8 @@ export default {
     busy: 'El constructor todavía responde el mensaje anterior.',
     unavailable: 'El constructor no respondió. Tu mensaje quedó guardado: reintenta en un momento.',
     rejected: 'El motor de IA rechazó el mensaje.',
-    proposalReady: 'Propuesta lista',
-    openProposal: 'Abrir propuesta',
+    proposalReady: 'Agente listo para revisar',
+    openProposal: 'Revisar el agente',
     loadError: 'No pudimos cargar la conversación',
     request: {
       title: 'Pedido para el constructor',

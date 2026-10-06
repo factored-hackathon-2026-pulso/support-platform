@@ -56,7 +56,7 @@ export interface ProposalNextStepProps {
   publishedReleaseId: string | null
 }
 
-type Decision = 'approve' | 'reject' | 'publish'
+type Decision = 'approve' | 'reject'
 
 /** The next step of a proposal by its state (slice 16 §2), with the decisions' dialogs. */
 export function ProposalNextStep({
@@ -199,15 +199,19 @@ export function ProposalNextStep({
       )
       break
     case 'approved':
+      // Approving publishes in the same step: an approved proposal is one whose publication failed.
       body = (
-        <Actions>
-          <Button variant="ghost" onClick={() => run({ kind: 'reopen' })}>
-            {t('proposal.reopen')}
-          </Button>
-          <Button variant="primary" onClick={() => setDecision('publish')}>
-            {t('proposal.publish')}
-          </Button>
-        </Actions>
+        <>
+          <Callout tone="warn">{t('proposal.approvedPending')}</Callout>
+          <Actions>
+            <Button variant="ghost" onClick={() => run({ kind: 'reopen' })}>
+              {t('proposal.reopen')}
+            </Button>
+            <Button variant="primary" onClick={() => setDecision('approve')}>
+              {t('proposal.retry')}
+            </Button>
+          </Actions>
+        </>
       )
       break
     case 'published':
@@ -269,7 +273,10 @@ interface DecisionDialogProps {
   onDone(message: string): void
 }
 
-/** Approve, reject or publish: each asks for a fresh code (and approve, the yardstick warning). */
+/**
+ * Approve (which also publishes) or reject: each asks for one fresh code (and approve, the
+ * yardstick warning).
+ */
 function DecisionDialog({ decision, detail, endStep, onClose, onDone }: DecisionDialogProps) {
   const { t } = useTranslation('automation')
   const { proposal } = detail
@@ -282,12 +289,7 @@ function DecisionDialog({ decision, detail, endStep, onClose, onDone }: Decision
   // One key per publication she means to make: a retry of this dialog reuses it.
   const [idempotencyKey] = useState(newIdempotencyKey)
 
-  const label =
-    decision === 'approve'
-      ? t('proposal.approve')
-      : decision === 'reject'
-        ? t('proposal.reject')
-        : t('proposal.publish')
+  const label = decision === 'approve' ? t('proposal.approve') : t('proposal.reject')
 
   function confirm(code: string) {
     setError(null)
@@ -298,25 +300,22 @@ function DecisionDialog({ decision, detail, endStep, onClose, onDone }: Decision
             candidateHash: proposal.candidateHash ?? '',
             acceptYardstickLoosened: accept,
             stepUpCode: code,
+            idempotencyKey,
           }
-        : decision === 'reject'
-          ? {
-              kind: 'reject',
-              reason: reason.trim(),
-              reasonCode: reasonCode ?? 'other',
-              stepUpCode: code,
-            }
-          : { kind: 'publish', stepUpCode: code, idempotencyKey }
+        : {
+            kind: 'reject',
+            reason: reason.trim(),
+            reasonCode: reasonCode ?? 'other',
+            stepUpCode: code,
+          }
     step.mutate(next, {
       onSuccess: () =>
         onDone(
-          decision === 'approve'
-            ? t('proposal.approved')
-            : decision === 'reject'
-              ? t('proposal.rejected')
-              : endStep === 'promote'
-                ? t('proposal.publishedPromote')
-                : t('proposal.published'),
+          decision === 'reject'
+            ? t('proposal.rejected')
+            : endStep === 'promote'
+              ? t('proposal.publishedPromote')
+              : t('proposal.published'),
         ),
       onError: (failure) => {
         const described = describeBuilderFailure(failure)
@@ -374,6 +373,9 @@ function DecisionDialog({ decision, detail, endStep, onClose, onDone }: Decision
             onChange={(event) => setReason(event.target.value)}
           />
         </Field>
+      ) : null}
+      {proposal.state === 'approved' ? (
+        <Callout tone="warn">{t('proposal.approvedPending')}</Callout>
       ) : null}
       {loosened ? (
         <Callout tone="warn" title={t('proposal.loosened')} role="note">

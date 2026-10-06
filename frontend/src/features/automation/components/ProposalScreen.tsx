@@ -65,7 +65,9 @@ export function ProposalScreen({ proposalId, type, onTypeChange }: ProposalScree
     ...(type ? [{ label: typeName(type), to: automationTypePath(type) }] : []),
     { label: t('proposal.kicker') },
   ]
-  const title = proposal.data?.proposal.title ?? t('proposal.kicker')
+  const title = type
+    ? t('proposal.pageTitle', { type: typeName(type) })
+    : (proposal.data?.proposal.title ?? t('proposal.kicker'))
   return (
     <AutomationFrame section="proposals" crumbs={crumbs} title={title}>
       <PageBody>
@@ -168,7 +170,7 @@ function Stepper({ state, done, endStep }: { state: string; done: boolean; endSt
   return (
     <ol
       aria-label={t('proposal.progress')}
-      className="m-0 grid list-none grid-cols-6 gap-1 rounded-12 border border-border bg-surface p-2"
+      className="m-0 grid list-none grid-cols-4 gap-1 rounded-12 border border-border bg-surface p-2"
     >
       {proposalSteps(state, done, endStep).map((step) => (
         <li

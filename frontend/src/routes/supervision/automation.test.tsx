@@ -20,6 +20,7 @@ import {
   BUILDER_ON,
   CONSTRUCTOR_TEXTS,
   builderMessage,
+  makeSummary,
   scriptedConstructor,
 } from '@/test/automation-fixtures'
 import { supervisorStaff } from '@/test/fixtures'
@@ -161,10 +162,8 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
       '80 % de los últimos 100 borradores se envían tal cual o con cambios menores',
     )
     expect(aside).toHaveTextContent('Regla del equipo (ejemplo)')
-    // Without agent-core: no "Proponer un agente", it says why.
-    expect(
-      within(aside).queryByRole('button', { name: 'Proponer un agente' }),
-    ).not.toBeInTheDocument()
+    // Without agent-core: no "Crear el agente", it says why.
+    expect(within(aside).queryByRole('button', { name: 'Crear el agente' })).not.toBeInTheDocument()
     expect(aside).toHaveTextContent('El motor de IA no está conectado')
     await user.click(within(aside).getByRole('button', { name: 'Cerrar' }))
     await waitFor(() => expect(router.state.location.search).toBe(''))
@@ -268,7 +267,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
 
   it("proposes an agent in the builder's order: the agent id, then the goal", async () => {
     vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
-    // An older thread: "Proponer un agente" starts a new conversation instead of continuing it.
+    // An older thread: "Crear el agente" starts a new conversation instead of continuing it.
     vi.mocked(fetchBuilderChat).mockResolvedValue({
       available: true,
       messages: [
@@ -283,7 +282,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     vi.mocked(fetchProposals).mockImplementation(builder.list)
     const { user } = renderAutomation('/supervision/automation?type=undue_charge')
     const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
-    await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
+    await user.click(await within(aside).findByRole('button', { name: 'Crear el agente' }))
     const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
     // the new run opens by asking for the agent
     expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.es.askAgent)).toBeInTheDocument()
@@ -315,7 +314,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
       `Constructor${CONSTRUCTOR_TEXTS.es.done}`,
     ])
     // its answer names no proposal: the list (agent-core's, merged) has the new one
-    expect(await within(sheet).findByRole('link', { name: 'Abrir propuesta' })).toHaveAttribute(
+    expect(await within(sheet).findByRole('link', { name: 'Revisar el agente' })).toHaveAttribute(
       'href',
       '/supervision/automation/proposals/p-made-1?type=undue_charge',
     )
@@ -341,7 +340,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     )
     const { user } = renderAutomation('/supervision/automation?type=undue_charge')
     const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
-    await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
+    await user.click(await within(aside).findByRole('button', { name: 'Crear el agente' }))
     const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
     const form = await within(sheet).findByRole('form', { name: 'Pedido para el constructor' })
     const goal = within(form).getByRole('textbox', { name: /Objetivo/ })
@@ -365,7 +364,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     vi.mocked(fetchProposals).mockImplementation(builder.list)
     const { user } = renderAutomation('/supervision/automation?type=undue_charge')
     const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
-    await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
+    await user.click(await within(aside).findByRole('button', { name: 'Crear el agente' }))
     const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
     const form = await within(sheet).findByRole('form', { name: 'Pedido para el constructor' })
     const agent = within(form).getByRole('textbox', { name: 'Agente' })
@@ -402,7 +401,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     vi.mocked(fetchProposals).mockImplementation(builder.list)
     const { user } = renderAutomation('/supervision/automation?type=undue_charge')
     const aside = await screen.findByRole('complementary', { name: 'Tipo de caso: Cobro indebido' })
-    await user.click(await within(aside).findByRole('button', { name: 'Proponer un agente' }))
+    await user.click(await within(aside).findByRole('button', { name: 'Crear el agente' }))
     const sheet = await screen.findByRole('dialog', { name: 'Constructor de agentes' })
     expect(
       await within(sheet).findByText('No pudimos empezar una conversación nueva'),
@@ -416,6 +415,39 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     )
   })
 
+  it.each([
+    [
+      'es',
+      '/supervision/automation?type=undue_charge',
+      'Tipo de caso: Cobro indebido',
+      'Revisar el agente',
+      'Crear el agente',
+    ],
+    [
+      'pt-BR',
+      '/supervision/automation?type=undue_charge',
+      'Tipo de caso: Cobrança indevida',
+      'Revisar o agente',
+      'Criar o agente',
+    ],
+  ] as const)(
+    'offers to review the agent already drafted for the type, not to create another (%s)',
+    async (locale, path, panelName, review, create) => {
+      vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
+      vi.mocked(fetchProposals).mockResolvedValue({
+        items: [makeSummary({ proposalId: 'p-draft-1', state: 'evaluated' })],
+        registryListed: true,
+      })
+      renderAutomation(path, { locale })
+      const aside = await screen.findByRole('complementary', { name: panelName })
+      expect(await within(aside).findByRole('link', { name: review })).toHaveAttribute(
+        'href',
+        '/supervision/automation/proposals/p-draft-1?type=undue_charge',
+      )
+      expect(within(aside).queryByRole('button', { name: create })).not.toBeInTheDocument()
+    },
+  )
+
   it('proposes an agent in Portuguese for a person who reads Portuguese', async () => {
     vi.mocked(fetchBuilderStatus).mockResolvedValue(BUILDER_ON)
     const builder = scriptedConstructor('pt')
@@ -428,7 +460,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     const aside = await screen.findByRole('complementary', {
       name: 'Tipo de caso: Cobrança indevida',
     })
-    await user.click(await within(aside).findByRole('button', { name: 'Propor um agente' }))
+    await user.click(await within(aside).findByRole('button', { name: 'Criar o agente' }))
     const sheet = await screen.findByRole('dialog', { name: 'Construtor de agentes' })
     expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.pt.askAgent)).toBeInTheDocument()
     const form = within(sheet).getByRole('form', { name: 'Pedido para o construtor' })
@@ -439,7 +471,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     await user.click(within(form).getByRole('button', { name: 'Enviar ao construtor' }))
     await waitFor(() => expect(builder.sent).toEqual(['cobros', goal]))
     expect(await within(sheet).findByText(CONSTRUCTOR_TEXTS.pt.done)).toBeInTheDocument()
-    expect(within(sheet).getByRole('link', { name: 'Abrir proposta' })).toBeInTheDocument()
+    expect(within(sheet).getByRole('link', { name: 'Revisar o agente' })).toBeInTheDocument()
   })
 
   it('keeps a failed message for a retry with the same id, and starts a new conversation', async () => {
@@ -531,9 +563,7 @@ describe('/supervision/automation ("Automatización", slice 22)', () => {
     const aside = panel('Cobro indebido')
     // the chat waits for the service: no way to open it meanwhile
     expect(screen.queryByRole('button', { name: 'Constructor de agentes' })).not.toBeInTheDocument()
-    expect(
-      within(aside).queryByRole('button', { name: 'Proponer un agente' }),
-    ).not.toBeInTheDocument()
+    expect(within(aside).queryByRole('button', { name: 'Crear el agente' })).not.toBeInTheDocument()
   })
 
   it('says it in Portuguese too', async () => {

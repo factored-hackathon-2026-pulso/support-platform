@@ -36,26 +36,34 @@ describe('a proposal', () => {
   it('shows its state as a glyph and a word, an unknown one as such', () => {
     expect(proposalStatus('draft')).toEqual({ shape: 'dashed', tone: 'neutral', label: 'Borrador' })
     expect(proposalStatus('candidate').label).toBe('Lista para probar')
-    expect(proposalStatus('published')).toMatchObject({ shape: 'check', label: 'Publicada' })
+    expect(proposalStatus('published')).toMatchObject({
+      shape: 'check',
+      label: 'Lista para activar',
+    })
     expect(proposalStatus('rejected').label).toBe('Otro estado')
   })
 
   it('walks from draft to an active agent', () => {
     expect(proposalSteps('evaluated', false).map((s) => [s.label, s.state])).toEqual([
-      ['Borrador', 'done'],
-      ['Lista para probar', 'done'],
-      ['Probada', 'current'],
-      ['Aprobada', 'later'],
-      ['Publicada', 'later'],
-      ['Activa', 'later'],
+      ['Revisar', 'done'],
+      ['Probar', 'done'],
+      ['Aprobar', 'current'],
+      ['Activar', 'later'],
     ])
+    // an approved proposal (its publication to retry) is still at Aprobar
+    expect(proposalSteps('approved', false).find((s) => s.state === 'current')?.label).toBe(
+      'Aprobar',
+    )
+    expect(proposalSteps('published', false).find((s) => s.state === 'current')?.label).toBe(
+      'Activar',
+    )
     expect(proposalSteps('published', true).every((s) => s.state === 'done')).toBe(true)
   })
 
   it('ends in production, not activation, for an agent that already runs there', () => {
     expect(proposalSteps('published', false, 'promote').at(-1)).toMatchObject({
       label: 'En producción',
-      state: 'later',
+      state: 'current',
     })
     const facts = {
       typeAgent: null,

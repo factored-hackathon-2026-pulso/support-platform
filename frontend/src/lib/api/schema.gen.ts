@@ -630,6 +630,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/builder/proposals/{proposalId}/approve-and-publish': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Approve the evaluated candidate and publish it, with one code
+     * @description The screens' single "Aprobar": `approve` then `publish` after one verification of the code. Needs a fresh authenticator code (`stepUpCode`): a wrong one is 422 `builder_step_up_invalid` (`remainingAttempts`; it counts toward the account lock, 423 `account_locked`). Both steps are audited as when called apart. If the publish fails the approval stands (`approved`): call again with the same `Idempotency-Key` and only the publish is retried. Same errors as `approve` and `publish`.
+     */
+    post: operations['builder_approve_and_publish_proposal']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/builder/proposals/{proposalId}/draft': {
     parameters: {
       query?: never
@@ -9330,6 +9350,107 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['Approval']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  builder_approve_and_publish_proposal: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description One key per publication the caller means to make: a retry with it returns the same release (the registry de-duplicates it). */
+        'Idempotency-Key': string
+      }
+      path: {
+        proposalId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ApproveRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReleaseDetail']
         }
       }
       /** @description Problem details (RFC 7807) */

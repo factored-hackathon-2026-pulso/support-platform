@@ -8,7 +8,7 @@ export interface StepUpDialogProps {
   onOpenChange(open: boolean): void
   title: ReactNode
   description?: ReactNode
-  /** What the decision is ("Aprobar", "Publicar", "Activar agente"). */
+  /** What the decision is ("Aprobar", "Rechazar", "Activar agente"). */
   confirmLabel: string
   /** More fields before the code (a reason, the yardstick warning). */
   children?: ReactNode

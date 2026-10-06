@@ -54,6 +54,7 @@ from cc_platform.application.ai.registry import (
     ProposalDetail,
     ProposalOrigin,
     ProposalPage,
+    ProposalState,
     ReasonCode,
     ReleaseDetail,
     ReleaseDiff,
@@ -732,6 +733,23 @@ class AgentBuilder:
     ) -> Approval:
         self._ensure(actor)
         credentials = await self._step_up_credentials(actor, step_up_code)
+        return await self._approve(
+            actor,
+            credentials,
+            proposal_id,
+            candidate_hash=candidate_hash,
+            accept_yardstick_loosened=accept_yardstick_loosened,
+        )
+
+    async def _approve(
+        self,
+        actor: Actor,
+        credentials: AgentCredentials,
+        proposal_id: str,
+        *,
+        candidate_hash: str,
+        accept_yardstick_loosened: bool,
+    ) -> Approval:
         approval = await guarded(
             self.registry.approve(
                 credentials,
@@ -800,6 +818,37 @@ class AgentBuilder:
         )
         return proposal
 
+    async def approve_and_publish(
+        self,
+        actor: Actor,
+        proposal_id: str,
+        *,
+        candidate_hash: str,
+        accept_yardstick_loosened: bool,
+        idempotency_key: str,
+        step_up_code: str,
+    ) -> ReleaseDetail:
+        """One decision, one code: approves the evaluated candidate, then publishes it.
+
+        The code is verified once (one attempt counted against the lock) and the same ``step_up``
+        credential serves both registry calls (it lives two minutes). Each step keeps its own
+        audit event. If the publish fails the approval stands (the proposal stays ``approved``):
+        calling again with the same key skips the approval (the registry would refuse a second
+        one; neither is it repeated once published) and only retries the publish, which the key
+        makes idempotent."""
+        self._ensure(actor)
+        credentials = await self._step_up_credentials(actor, step_up_code)
+        current = await guarded(self.registry.get_proposal(credentials, proposal_id=proposal_id))
+        if current.proposal.state not in (ProposalState.APPROVED, ProposalState.PUBLISHED):
+            await self._approve(
+                actor,
+                credentials,
+                proposal_id,
+                candidate_hash=candidate_hash,
+                accept_yardstick_loosened=accept_yardstick_loosened,
+            )
+        return await self._publish(actor, credentials, proposal_id, idempotency_key)
+
     async def publish(
         self, actor: Actor, proposal_id: str, *, idempotency_key: str, step_up_code: str
     ) -> ReleaseDetail:
@@ -807,6 +856,15 @@ class AgentBuilder:
         ``idempotency_key`` (a retry returns the same release)."""
         self._ensure(actor)
         credentials = await self._step_up_credentials(actor, step_up_code)
+        return await self._publish(actor, credentials, proposal_id, idempotency_key)
+
+    async def _publish(
+        self,
+        actor: Actor,
+        credentials: AgentCredentials,
+        proposal_id: str,
+        idempotency_key: str,
+    ) -> ReleaseDetail:
         release = await guarded(
             self.registry.publish(
                 credentials, proposal_id=proposal_id, idempotency_key=idempotency_key

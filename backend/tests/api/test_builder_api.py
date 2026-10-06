@@ -817,3 +817,46 @@ def test_without_agent_core_the_builder_is_off(tmp_path: Path, clock: FixedClock
             ),
         ):
             assert (response.status_code, response.json()["code"]) == (404, "assistant_disabled")
+
+
+def test_approve_and_publish_is_one_call_with_one_code(
+    client: TestClient, supervisor: dict[str, str]
+) -> None:
+    proposal_id, candidate_hash = evaluated(client, supervisor)
+    base = f"{API}/proposals/{proposal_id}"
+    body = {"candidateHash": candidate_hash, "stepUpCode": CODE}
+    headers = {**supervisor, "Idempotency-Key": "publish-0020"}
+
+    no_key = client.post(f"{base}/approve-and-publish", headers=supervisor, json=body)
+    wrong = client.post(
+        f"{base}/approve-and-publish",
+        headers=headers,
+        json={**body, "stepUpCode": "999999"},
+    )
+    first = client.post(f"{base}/approve-and-publish", headers=headers, json=body)
+    again = client.post(f"{base}/approve-and-publish", headers=headers, json=body)
+
+    assert no_key.status_code == 422
+    assert wrong.status_code == 422
+    assert wrong.json()["code"] == "builder_step_up_invalid"
+    assert first.status_code == 201, first.text
+    assert first.json()["status"] == "active"
+    assert again.json()["releaseId"] == first.json()["releaseId"]
+    assert client.get(base, headers=supervisor).json()["proposal"]["state"] == "published"
+
+
+def test_approve_and_publish_resumes_a_proposal_approved_apart(
+    client: TestClient, supervisor: dict[str, str]
+) -> None:
+    proposal_id, candidate_hash = evaluated(client, supervisor)
+    base = f"{API}/proposals/{proposal_id}"
+    body = {"candidateHash": candidate_hash, "stepUpCode": CODE}
+    assert client.post(f"{base}/approve", headers=supervisor, json=body).status_code == 200
+
+    retried = client.post(
+        f"{base}/approve-and-publish",
+        headers={**supervisor, "Idempotency-Key": "publish-0021"},
+        json=body,
+    )
+
+    assert retried.status_code == 201, retried.text

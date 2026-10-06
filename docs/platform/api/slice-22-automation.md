@@ -45,6 +45,7 @@ Design: `IaAutomatizacion` (views `panorama`, `tipo`, `propuesta`, `prueba`, `ac
 |---|---|---|---|---|
 | `GET /api/v1/ai/stages` (changed) | analyst, supervisor | — | 200 `AiStages`; `CaseTypeStage` gains **`agentId`** | as slice 21 |
 | `POST /api/v1/supervision/ai/stages/{caseType}/agent` (new) | supervisor | **`ActivateAgentRequest`** | 200 **`ActivateAgentResult`** | 401; 403 `forbidden`; 404 `not_found` (`none`, unknown type), `assistant_disabled` (AI off or no agent-core); 409 `invalid_transition` (not `ready`, or another agent serves it); 422 `validation_error`, `builder_step_up_invalid` (`remainingAttempts`); 423 `account_locked`; `registry_*` (slice 16 §5); 502/503 |
+| `POST /api/v1/builder/proposals/{proposalId}/approve-and-publish` (new, 2026-10-05) | supervisor, admin | `ApproveRequest` (`candidateHash`, `acceptYardstickLoosened?`, `stepUpCode`) + `Idempotency-Key` | 201 `ReleaseDetail` | those of `approve` and `publish` (slice 16 §6) |
 | `POST /api/v1/builder/chat/restart` (new) | supervisor, admin | — | 200 `BuilderThread` (empty) | 401, 403, 404 `assistant_disabled` |
 
 ```ts
@@ -52,6 +53,19 @@ CaseTypeStage         { …slice 21…; agentId: string | null }   // agent-core
 ActivateAgentRequest  { agentId: string /* ^[a-z0-9][a-z0-9_/-]*$ */; releaseId: string; stepUpCode: string }
 ActivateAgentResult   { changed: boolean; type: CaseTypeStage; alias: AliasChange | null }
 ```
+
+**One "Aprobar"** (2026-10-05, "the system proposes; Supervisión creates, tests and activates").
+The steps Supervisión sees are **Revisar, Probar, Aprobar, Activar**; the registry's `approved` and
+`published` states are not two decisions for her. `AgentBuilder.approve_and_publish` verifies her
+code **once** (one attempt against the lock), mints one `step_up` credential (it lives two minutes)
+and uses it for both registry calls, reusing the `approve` and `publish` code paths: each keeps its
+audit event (`builder.proposal_approved`, `builder.proposal_published`) and `publish` its
+`Idempotency-Key`. If the publish fails (outage, `proposal_stale`...), the approval stands: the
+proposal stays `approved`, the page says so and offers **"Reintentar"**, which calls the same
+endpoint again: it sees `approved` (or `published`), skips the approval (the registry refuses a
+second one) and only repeats the publish, which the key makes idempotent. The registry did not
+need two codes: its step-up level is carried by the credential, not by a per-call code. `approve`
+and `publish` stay as they were.
 
 **Activation** (`ActivateTypeAgent`, `application/ai/maturity.py`): checks the type first (`ready`;
 the agent that already serves it is a no-op, `changed: false`, nothing promoted), then promotes the
@@ -80,10 +94,10 @@ served by `disputas` (agent-core's demo agent for card disputes).
 | Canvas view | Built on | Notes |
 |---|---|---|
 | `panorama` | `GET /ai/stages` | Columns: type (+ dataset category), stage (bars + word), "Lo que mide ahora" (the current stage's signal), **"Cerrados en la etapa"** (the canvas's "Casos hoy" is not something the stages record), action. The ready type on top ("El sistema propone un agente para …"). Footnote: types are the dataset's subcategories, "Tarjeta virtual" team-generated, thresholds "regla del equipo (ejemplo)". Live on `ai:stages`. |
-| `tipo` (drawer) | the same stage | "Cómo maduró" from `reached` and `agentSince`; the drafts bar (stage 3: as is or minor, more changes, discarded); "Umbrales para pasar de etapa": each step of `rule` with "Cumplida", "Hoy: …" (only the current step has a value: signals are counted since the current stage) or "Todavía no", labelled "Regla del equipo (ejemplo)". Footer: "Devolver a una etapa anterior" (slice 21's move-back; for a `ready` type the first option withdraws the proposal) and, for a `ready` type with agent-core, "Proponer un agente". |
-| `propuesta` | `GET /builder/proposals/{id}` | **The canvas's "Qué haría / Cuándo pasa a una persona / Un caso de ejemplo" is not what a proposal holds**: the screen shows the draft as the registry has it: "Herramientas que usaría" (the agent entity's `tools_allowed`), "Idiomas" (its `supported_locales`), and each change (kind, id, version, description, rationale, changelog). A stepper Borrador, Lista para probar, Probada, Aprobada, Publicada, Activa. "Siguiente paso" by state: Validar / Preparar para la prueba (draft), Probar / Volver a editar (candidate), Aprobar / Rechazar / Volver a editar (evaluated), Publicar (approved), Activar (published). The draft is not edited here: the builder chat writes it (agent-core's `put_draft` takes whole entities). |
+| `tipo` (drawer) | the same stage | "Cómo maduró" from `reached` and `agentSince`; the drafts bar (stage 3: as is or minor, more changes, discarded); "Umbrales para pasar de etapa": each step of `rule` with "Cumplida", "Hoy: …" (only the current step has a value: signals are counted since the current stage) or "Todavía no", labelled "Regla del equipo (ejemplo)". Footer: "Devolver a una etapa anterior" (slice 21's move-back; for a `ready` type the first option withdraws the proposal) and, for a `ready` type with agent-core, **"Crear el agente"** (the builder chat); once an agent was drafted for it, the same slot reads **"Revisar el agente"** and opens that proposal. |
+| `propuesta` | `GET /builder/proposals/{id}` | **The canvas's "Qué haría / Cuándo pasa a una persona / Un caso de ejemplo" is not what a proposal holds**: the screen shows the draft as the registry has it: "Herramientas que usaría" (the agent entity's `tools_allowed`), "Idiomas" (its `supported_locales`), and each change (kind, id, version, description, rationale, changelog). The page is titled "Agente para <tipo>" and the stepper is **Revisar, Probar, Aprobar, Activar** (last step "En producción" for an agent already in production). "Siguiente paso" by state: Validar / Preparar para la prueba (draft, Revisar), Probar / Volver a editar (candidate, Probar), Aprobar / Rechazar / Volver a editar (evaluated; Aprobar also publishes), "Reintentar" (approved: the publication did not happen), Activar (published). The state chips keep the registry's states (Borrador, Lista para probar, Probada, Aprobada, Lista para activar). "Propuestas" stays where it is a list of change requests (the Propuestas list, the engine's improvement proposals, the type's list of proposals for its agent). The draft is not edited here: the builder chat writes it (agent-core's `put_draft` takes whole entities). |
 | `prueba` | `POST …/evaluate` | The registry's evaluation, gate item by gate item (metric, Cumple / No cumple, value, floor, before), never a composite score. **Not "50 casos anteriores comparados con el equipo"**: agent-core's evaluation runs its suite's scenarios. The suite is the one the draft brings (`kind: eval_suite`) or the one the base release was evaluated with; none → "Este agente no tiene suite de evaluación" without calling; a 404 on evaluate reads the same; a failed gate (409) is a result: the report and "La propuesta volvió a borrador". |
-| (decisions) | `approve`, `reject`, `publish` | A dialog per decision with her code (6 boxes, `stepUpDigits`); a wrong code clears the boxes and says the attempts left; 423 says the account locked. Approve shows the loosened yardstick and asks to accept it. Reject asks a reason. Publish sends one `Idempotency-Key` per dialog (a retry reuses it). |
+| (decisions) | `approve-and-publish`, `reject` | A dialog per decision with her code (6 boxes, `stepUpDigits`); a wrong code clears the boxes and says the attempts left; 423 says the account locked. Approve shows the loosened yardstick and asks to accept it. Reject asks a reason. Publish sends one `Idempotency-Key` per dialog (a retry reuses it). |
 | `activar` | `POST /supervision/ai/stages/{caseType}/agent` | Summary (Atiende, Idiomas, Empieza, Pasa a una persona, Prueba "Pasó N de M criterios", Versión publicada = the release `staging` points at, checked to be this proposal's), "Revisé el resultado de la prueba", "Activar agente" → her code. Without `?type=` she picks among the `ready` types. |
 | `activado` | the stage (`agent: active`, `agentId`) | "El agente X ya atiende Y", "Volver a los tipos de caso", "Ver el agente". |
 | `agentes` | stages + proposals + aliases + releases | No catalog in the registry (slice 16 §8): the agents are those serving a type and those proposals are for. Columns: Agente (name from the id + id), Atiende, Estado (En producción, Solo en pruebas, Sin publicar; "Sin datos del registro" without agent-core), Versión (the agent entity's version in the release `prod` points at). **No "Hoy" column**: see §6. |
@@ -112,7 +126,7 @@ draft, and answers. **Updated 2026-10-05 (agent-core 1.4.0), in the builder's fo
   "Cargo no reconocido", agent-core's demo agent; `cobros`, `soporte-app`, `sucursales`,
   `calidad-servicio`, `tarjeta-virtual`: **team-generated**).
 - The builder's answer names no proposal id, so the sheet reads the proposals list before and after:
-  what is new for that agent is offered as "Abrir propuesta" (the link carries `?type=`). Proposals an
+  what is new for that agent is offered as "Revisar el agente" (the link carries `?type=`). Proposals an
   answer does name are still tracked by the backend. The type panel lists the proposals for its agent
   id. Creating an empty proposal (`POST /builder/proposals`) is not used: nobody could write its draft
   from the platform.
@@ -188,10 +202,10 @@ New feature `features/automation` (public `index.ts`; no `core.ts`: the shell ne
   id and the length, retries a failed restart, Portuguese): `model.test.ts`, `proposals.test.ts`,
   `agents.test.ts`, `builder-chat.test.ts`,
   `url.test.ts`; routes `automation.test.tsx` (panorama, the type panel, move back and its failure,
-  live `ai.stage_updated`, "Proponer un agente" through the chat, retry and "Nueva conversación",
+  live `ai.stage_updated`, "Crear el agente" through the chat, retry and "Nueva conversación",
   AI off and turned off, pt-BR), `automation-proposal.test.tsx` (draft: validate with violations
   and valid, freeze; no suite; a failed gate; 404 as no suite; approve with a wrong then a good
-  code; the loosened yardstick; reject; publish with one key; activate and the done view; choosing
+  code; the loosened yardstick; reject; approve and publish with one code and one key (a retry reuses it), "Reintentar" for an approved proposal; activate and the done view; choosing
   the type; no agent-core; pt-BR), `automation-agents.test.tsx` (list, detail with rollback, no
   "Pausar", without agent-core, the proposals list with an engine row, tracking, pt-BR);
   `Rail.test.tsx`, `roles.test.ts`.

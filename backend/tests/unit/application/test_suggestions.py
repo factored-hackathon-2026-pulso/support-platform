@@ -12,6 +12,7 @@ import pytest
 
 from cc_platform.application.ai import AgentRuntimeError, AgentRuntimeUnavailableError
 from cc_platform.application.ai.errors import AgentCoreRejectedError, AgentCoreUnavailableError
+from cc_platform.application.ai.runtime import AgentOutcome
 from cc_platform.application.ai.suggestions import MIN_GAP, PREPARING_TIMEOUT
 from cc_platform.application.ai.use_cases import SuggestionUseCases
 from cc_platform.application.audit.catalog import AuditNames, describe, fallback_description
@@ -353,6 +354,21 @@ async def test_a_failure_is_stored_and_the_same_key_asks_again(
     assert again.suggestion.status is SuggestionStatus.READY
     keys = [r["idempotency_key"] for r in runs(runtime)]
     assert keys == [failed.suggestion.id, failed.suggestion.id]  # agent-core dedupes it
+
+
+async def test_a_run_agent_core_closes_failed_is_a_failure_not_an_empty_list(
+    world: Container, runtime: InMemoryAgentRuntime
+) -> None:
+    case_id = await case_with_daniela(world, runtime)
+    runtime.suggestion_script.extend([AgentOutcome.FAILED, FULL])
+
+    view = await request(world, case_id)
+
+    assert view.suggestion.status is SuggestionStatus.FAILED
+    assert view.suggestion.failure_code == "agent_run_failed"
+    assert view.suggestion.items == ()
+    again = await request(world, case_id)  # a failure is retried, like any other
+    assert again.suggestion.status is SuggestionStatus.READY
 
 
 async def test_a_refusal_carries_agent_cores_code(

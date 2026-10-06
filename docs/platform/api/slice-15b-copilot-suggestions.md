@@ -51,7 +51,7 @@ supervisors hold no customer data). Only while the customer is **linked to the d
 - `available: false` (status 200): hide the suggestions (no agent-core, no suggestions agent, or the customer is not
   linked). It is not an error.
 - `suggestion: null`: none yet, or its texts expired (they are purged after **24 hours**).
-- `status`: `preparing` (on its way), `ready`, `none` (nothing to propose) or `failed` (`failureCode`).
+- `status`: `preparing` (on its way), `ready`, `none` (nothing to propose) or `failed` (`failureCode`: `agent_core_unavailable`, an agent-core error code, or `agent_run_failed` when agent-core closed the run `failed` — its checks rejected the model's list or a step failed; that is a failure to show, not "nothing to propose").
 - `stale: true`: the customer wrote after the turns it read. Dim it; offer *Sugerir*.
 - `truncated`: **the list was cut, and it says so**. The platform keeps **at most 3** suggestions: the `reply` and the
   `escalate` first (one of each: a second one is dropped), then the others in the order agent-core gave them. It is also

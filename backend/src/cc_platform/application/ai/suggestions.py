@@ -27,6 +27,7 @@ from cc_platform.application.ai.credentials import AgentCredentialIssuer, AgentC
 from cc_platform.application.ai.errors import AgentCoreRejectedError, AgentCoreUnavailableError
 from cc_platform.application.ai.maturity import copilot_mode_for, mode_allows
 from cc_platform.application.ai.runtime import (
+    AgentOutcome,
     AgentRun,
     AgentRuntime,
     AgentRuntimeError,
@@ -420,6 +421,11 @@ class SuggestionService:
                 raise AgentCoreRejectedError(
                     agent_core_code=error.code, agent_core_status=error.status
                 ) from None
+            return await self._read(prepared.suggestion_id)
+        if run.outcome is AgentOutcome.FAILED:
+            # agent-core closed the run without a list (its checks rejected the model's, a tool
+            # failed, a threshold artifact is missing...). That is not "nothing to suggest".
+            await self._fail(prepared.suggestion_id, "agent_run_failed")
             return await self._read(prepared.suggestion_id)
         return await retry_on_conflict(
             partial(self._store_answer, prepared.suggestion_id, run, prepared.drafts)

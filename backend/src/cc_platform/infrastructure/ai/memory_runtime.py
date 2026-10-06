@@ -50,9 +50,13 @@ class InMemoryAgentRuntime:
     principal_kid: str | None = None
     """When set, the credential must be signed with this key id: the runtime verifies
     principals against the **identity** keys, so another key is ``credentials_invalid``."""
-    suggestion_script: list[tuple[Suggestion, ...] | Exception] = field(default_factory=list)
+    suggestion_script: list[tuple[Suggestion, ...] | Exception | AgentOutcome] = field(
+        default_factory=list
+    )
     """Each queued item answers one ``task`` run (a ``start_run`` with ``input``): what it
-    proposes (``()`` = nothing to propose), or an exception to raise. Empty: nothing to propose."""
+    proposes (``()`` = nothing to propose), an exception to raise, or ``AgentOutcome.FAILED`` (the
+    run closes failed, as agent-core does when its checks reject the model's list). Empty: nothing
+    to propose."""
     handoffs: dict[str, dict[str, object]] = field(default_factory=dict)
     """Packets ``get_handoff`` answers by reference (default: just the reference)."""
     _runs: int = 0
@@ -94,6 +98,14 @@ class InMemoryAgentRuntime:
             answer = self.suggestion_script.pop(0) if self.suggestion_script else ()
             if isinstance(answer, Exception):
                 raise answer
+            if isinstance(answer, AgentOutcome):
+                return AgentRun(
+                    run_id=run_id,
+                    release="rel-1",
+                    status="closed",
+                    trace_id=f"trace-{self._runs}",
+                    outcome=answer,
+                )
             return AgentRun(
                 run_id=run_id,
                 release="rel-1",

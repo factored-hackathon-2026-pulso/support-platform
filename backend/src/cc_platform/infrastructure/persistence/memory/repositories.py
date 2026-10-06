@@ -25,6 +25,7 @@ from cc_platform.application.ports.event_log import AuditFilters
 from cc_platform.domain.ai.builder import BuilderProposal, BuilderThread
 from cc_platform.domain.ai.copilot import CopilotThread
 from cc_platform.domain.ai.maturity import CaseTypeMaturity
+from cc_platform.domain.ai.profile import AgentProfile
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.ai.suggestion import CopilotSuggestion, SuggestionStatus
 from cc_platform.domain.cases.assignment import Assignment
@@ -900,6 +901,22 @@ class InMemoryCaseTypeMaturityRepository(_StagedRepository[CaseTypeMaturity]):
     async def list(self) -> list[CaseTypeMaturity]:
         found = sorted(self._all(), key=lambda maturity: maturity.case_type.value)
         return [m for m in [await self._get(m.case_type.value) for m in found] if m is not None]
+
+
+class InMemoryAgentProfileRepository(_StagedRepository[AgentProfile]):
+    """Same answers as ``SqlAgentProfileRepository`` (one per agent id)."""
+
+    insert_race_is_retryable = True
+
+    def __init__(self, committed: dict[str, AgentProfile], track: Tracker) -> None:
+        super().__init__(committed, lambda profile: profile.agent_id, track)
+
+    async def get(self, agent_id: str) -> AgentProfile | None:
+        return await self._get(agent_id)
+
+    async def list(self) -> list[AgentProfile]:
+        found = sorted(self._all(), key=lambda profile: profile.agent_id)
+        return [p for p in [await self._get(p.agent_id) for p in found] if p is not None]
 
 
 class InMemoryCopilotSuggestionRepository(_StagedRepository[CopilotSuggestion]):

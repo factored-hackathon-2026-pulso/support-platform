@@ -88,6 +88,19 @@ class CaseTypeAgentAvatarSet(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class AgentAvatarChosen(DomainEvent):
+    """Supervisión picked the photo of an agent that serves no type yet (while reviewing it).
+    ``entity_id`` is the agent id; for an agent that serves a type the type records
+    ``ai.agent_avatar_set`` instead."""
+
+    event_type = "ai.agent_avatar_chosen"
+    entity = "agent"
+
+    agent_id: str
+    avatar: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CaseTypeAgentPaused(DomainEvent):
     """Supervisión paused the agent of the type (out of ``recepcion``'s directory, ADR 0009 §2)."""
 
@@ -139,6 +152,7 @@ STAGE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseTypeAgentActivated,
     CaseTypeAgentRenamed,
     CaseTypeAgentAvatarSet,
+    AgentAvatarChosen,
     CaseTypeAgentPaused,
     CaseTypeAgentResumed,
 )

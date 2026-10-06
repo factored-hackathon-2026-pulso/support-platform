@@ -165,6 +165,7 @@ CATALOG: Final[Mapping[str, str]] = {
     "audit.stage.agentActivated": "Activó el agente de {type}",
     "audit.stage.agentRenamed": "Cambió el nombre del agente de {type}",
     "audit.stage.agentAvatarSet": "Cambió la foto del agente de {type}",
+    "audit.stage.agentAvatarChosen": "Eligió la foto de un agente en revisión",
     "audit.stage.agentPaused": "Pausó el agente de {type}",
     "audit.stage.agentResumed": "Reanudó el agente de {type}",
     # the agent builder (slice 16)

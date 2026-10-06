@@ -40,3 +40,5 @@ Needs agent-core's `POST /v1/registry/agents/{id}/pause|resume` (agent-core PR "
 ## Photo
 
 `PUT /api/v1/supervision/ai/stages/{caseType}/agent/avatar` (supervisor) `{ avatar }`, one of `star, circle, hexagon, drop, triangle, rhombus, cloud, square, flame, ring`; 200 `CaseTypeStage` (`agentAvatar`), 404 without an agent, 422 for an unknown key. Audited (`ai.agent_avatar_set`), live on `ai:stages`; `AgentRow.avatar` carries it. Column `case_type_maturity.agent_avatar` (migration `0006_agent_avatar`). The frontend ships the pictures (`frontend/src/assets/agent-avatars/`).
+
+The photo belongs to the agent id, so it can be picked while the agent is reviewed: `GET /api/v1/supervision/ai/agents/{agentId}` and `PUT /api/v1/supervision/ai/agents/{agentId}/avatar` (supervisor) `{ avatar }` answer `{ agentId, avatar }` (`avatar` null until picked). Stored in `agent_profiles` (migration `0007_agent_profiles`); activating the agent copies it to the type, and picking it while a type runs the agent updates both. Audited as `ai.agent_avatar_chosen` (no type yet) or `ai.agent_avatar_set` (a type runs it), live on `ai:stages`.

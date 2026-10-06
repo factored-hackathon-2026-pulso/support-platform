@@ -17,6 +17,7 @@ from cc_platform.api.dependencies import ApiContextDep, require_roles
 from cc_platform.api.schemas.ai_stages import (
     ActivateAgentRequest,
     ActivateAgentResult,
+    AgentProfile,
     AiAgents,
     AiStages,
     CaseTypeStage,
@@ -175,6 +176,50 @@ async def rename_agent(
 ) -> CaseTypeStage:
     view = await api.use_cases.agent_catalog.rename.execute(actor, case_type, name=body.name)
     return CaseTypeStage.from_view(view)
+
+
+@router.get(
+    "/supervision/ai/agents/{agentId}",
+    response_model=AgentProfile,
+    summary="What Supervisión set for an agent by its id (its photo)",
+    description=(
+        "Readable while the agent is still being reviewed, before it serves a type. 404 "
+        "`assistant_disabled`: AI off."
+    ),
+    responses=problem_responses(401, 403, 404),
+)
+async def get_agent_profile(
+    agent_id: Annotated[str, Path(alias="agentId", max_length=120, examples=["cobros"])],
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> AgentProfile:
+    return AgentProfile.from_view(
+        await api.use_cases.agent_catalog.profile.execute(actor, agent_id)
+    )
+
+
+@router.put(
+    "/supervision/ai/agents/{agentId}/avatar",
+    response_model=AgentProfile,
+    summary="Pick the photo of an agent by its id, also while reviewing it (Supervisión)",
+    description=(
+        "One of the fixed avatar keys. Works before the agent serves a type: when it is "
+        "activated, the type shows this photo. Audited (`ai.agent_avatar_chosen`; "
+        "`ai.agent_avatar_set` when a type already runs the agent), live on `ai:stages`. 404 "
+        "`assistant_disabled`: AI off."
+    ),
+    responses=problem_responses(401, 403, 404, 422),
+)
+async def choose_agent_avatar(
+    agent_id: Annotated[str, Path(alias="agentId", max_length=120, examples=["cobros"])],
+    body: SetAgentAvatarRequest,
+    actor: Supervisor,
+    api: ApiContextDep,
+) -> AgentProfile:
+    view = await api.use_cases.agent_catalog.choose_avatar.execute(
+        actor, agent_id, avatar=body.avatar
+    )
+    return AgentProfile.from_view(view)
 
 
 @router.put(

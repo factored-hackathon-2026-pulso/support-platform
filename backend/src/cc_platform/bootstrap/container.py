@@ -18,6 +18,8 @@ from cc_platform.api.realtime_presenter import SchemaRealtimePresenter
 from cc_platform.application.ai import AgentCredentialIssuer, AgentRuntime
 from cc_platform.application.ai.agents import (
     AgentCatalogUseCases,
+    ChooseAgentAvatar,
+    GetAgentProfile,
     GetAgents,
     RenameAgent,
     SetAgentAvatar,
@@ -1251,6 +1253,8 @@ def build_container(
             agents=GetAgents(uow=uow, switch=ai_switch),
             rename=RenameAgent(uow=uow, clock=clock, switch=ai_switch),
             avatar=SetAgentAvatar(uow=uow, clock=clock, switch=ai_switch),
+            profile=GetAgentProfile(uow=uow, switch=ai_switch),
+            choose_avatar=ChooseAgentAvatar(uow=uow, clock=clock, switch=ai_switch),
             pause=SetAgentPaused(
                 uow=uow,
                 clock=clock,

@@ -7,6 +7,7 @@ from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.infrastructure.persistence.memory.repositories import (
     InMemoryAdminRosterRepository,
+    InMemoryAgentProfileRepository,
     InMemoryAnalystAvailabilityRepository,
     InMemoryAnalystHomeReader,
     InMemoryAssignmentRepository,
@@ -63,6 +64,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
     copilot_threads: InMemoryCopilotThreadRepository
     copilot_suggestions: InMemoryCopilotSuggestionRepository
     case_type_maturity: InMemoryCaseTypeMaturityRepository
+    agent_profiles: InMemoryAgentProfileRepository
     builder_threads: InMemoryBuilderThreadRepository
     builder_proposals: InMemoryBuilderProposalRepository
     bank_links: InMemoryBankCustomerLinks
@@ -106,6 +108,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         self.case_type_maturity = InMemoryCaseTypeMaturityRepository(
             store.case_type_maturity, track
         )
+        self.agent_profiles = InMemoryAgentProfileRepository(store.agent_profiles, track)
         self.builder_threads = InMemoryBuilderThreadRepository(store.builder_threads, track)
         self.builder_proposals = InMemoryBuilderProposalRepository(store.builder_proposals, track)
         self.bank_links = InMemoryBankCustomerLinks(store.bank_links)
@@ -140,6 +143,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
         | InMemoryCopilotThreadRepository
         | InMemoryCopilotSuggestionRepository
         | InMemoryCaseTypeMaturityRepository
+        | InMemoryAgentProfileRepository
         | InMemoryBuilderThreadRepository
         | InMemoryBuilderProposalRepository
         | InMemoryBankCustomerLinks
@@ -167,6 +171,7 @@ class InMemoryUnitOfWork(BaseUnitOfWork):
             self.copilot_threads,
             self.copilot_suggestions,
             self.case_type_maturity,
+            self.agent_profiles,
             self.builder_threads,
             self.builder_proposals,
             self.bank_links,

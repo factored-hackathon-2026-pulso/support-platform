@@ -53,6 +53,7 @@ ENGINE_SIGNALS = frozenset(
         "ai.agent_activated",
         "ai.agent_renamed",
         "ai.agent_avatar_set",
+        "ai.agent_avatar_chosen",
         "ai.agent_paused",
         "ai.agent_resumed",
         "platform.ai_toggled",

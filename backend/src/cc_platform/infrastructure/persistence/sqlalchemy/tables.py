@@ -477,6 +477,16 @@ copilot_suggestions = Table(
     Index("ix_copilot_suggestions_status_created", "status", "created_at"),
 )
 
+# What Supervisión sets for an agent by its agent-core id (its photo), so it can be picked while
+# the agent is reviewed, before it serves a type. One row per agent, created on the first pick.
+agent_profiles = Table(
+    "agent_profiles",
+    metadata,
+    Column("agent_id", String(120), primary_key=True),
+    Column("avatar", String(20), nullable=True),
+    _version(),
+)
+
 # Slice 21 (ADR 0006): how far the AI matured for each case type. One row per type, created the
 # first time something happens to it (absent = stage 0). ``signals`` is a JSON object (the
 # counters since the current stage, ``StageSignals``); ``stage_since`` maps a reached stage (1-3)

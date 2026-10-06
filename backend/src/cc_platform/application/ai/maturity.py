@@ -47,7 +47,13 @@ from cc_platform.domain.ai.maturity import (
     MaturityStage,
     StageRule,
 )
-from cc_platform.domain.ai.maturity_events import STAGE_EVENTS, CopilotItemDecided, CopilotToolUsed
+from cc_platform.domain.ai.maturity_events import (
+    STAGE_EVENTS,
+    AgentAvatarChosen,
+    CopilotItemDecided,
+    CopilotToolUsed,
+)
+from cc_platform.domain.ai.profile import AgentProfile
 from cc_platform.domain.ai.suggestion import (
     ActionSuggestion,
     CopilotSuggestion,
@@ -83,6 +89,19 @@ class CaseTypeMaturityRepository(Protocol):
         ...
 
     async def save(self, maturity: CaseTypeMaturity) -> None: ...
+
+
+class AgentProfileRepository(Protocol):
+    async def get(self, agent_id: str) -> AgentProfile | None: ...
+
+    async def list(self) -> list[AgentProfile]: ...
+
+    async def add(self, profile: AgentProfile) -> None:
+        """Store an agent's profile the first time (a concurrent first insert raises
+        ``ConcurrentUpdateError``: retry on fresh state)."""
+        ...
+
+    async def save(self, profile: AgentProfile) -> None: ...
 
 
 async def load_maturity(uow: UnitOfWork, case_type: CaseType) -> tuple[CaseTypeMaturity, bool]:
@@ -208,8 +227,9 @@ class MaturityRealtimeProjector:
     async def __call__(self, record: EventRecord) -> None:
         if not isinstance(record.event, STAGE_EVENTS):
             return
+        key = "agentId" if isinstance(record.event, AgentAvatarChosen) else "caseType"
         envelope = derived_envelope(
-            record, STAGE_SIGNAL_TYPE, {"caseType": record.entity_id}, actor_id=None
+            record, STAGE_SIGNAL_TYPE, {key: record.entity_id}, actor_id=None
         )
         await self.hub.publish(str(Topic.ai_stages()), envelope)
 
@@ -396,10 +416,12 @@ class ActivateTypeAgent:
     ) -> tuple[bool, CaseTypeStageView]:
         async with self.uow() as uow:
             maturity, new = await load_maturity(uow, case_type)
+            profile = await uow.agent_profiles.get(agent_id.strip())
             changed = maturity.activate_agent(
                 agent_id=agent_id,
                 actor=actor.acting_as({StaffRole.SUPERVISOR}),
                 at=self.clock.now(),
+                avatar=profile.avatar if profile else None,
             )
             if changed:
                 await store_maturity(uow, maturity, new=new)

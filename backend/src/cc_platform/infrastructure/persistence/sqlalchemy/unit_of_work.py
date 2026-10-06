@@ -11,6 +11,9 @@ from cc_platform.application.ports.clock import Clock
 from cc_platform.application.ports.event_bus import EventBus
 from cc_platform.application.ports.ids import IdGenerator
 from cc_platform.domain.shared.errors import ConcurrentUpdateError
+from cc_platform.infrastructure.persistence.sqlalchemy.repositories.agent_profiles import (
+    SqlAgentProfileRepository,
+)
 from cc_platform.infrastructure.persistence.sqlalchemy.repositories.analyst_home import (
     SqlAnalystHomeReader,
 )
@@ -102,6 +105,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
     copilot_threads: SqlCopilotThreadRepository
     copilot_suggestions: SqlCopilotSuggestionRepository
     case_type_maturity: SqlCaseTypeMaturityRepository
+    agent_profiles: SqlAgentProfileRepository
     builder_threads: SqlBuilderThreadRepository
     builder_proposals: SqlBuilderProposalRepository
     bank_links: SqlBankCustomerLinks
@@ -146,6 +150,7 @@ class SqlAlchemyUnitOfWork(BaseUnitOfWork):
         self.copilot_threads = SqlCopilotThreadRepository(session, self.track)
         self.copilot_suggestions = SqlCopilotSuggestionRepository(session, self.track)
         self.case_type_maturity = SqlCaseTypeMaturityRepository(session, self.track)
+        self.agent_profiles = SqlAgentProfileRepository(session, self.track)
         self.builder_threads = SqlBuilderThreadRepository(session, self.track)
         self.builder_proposals = SqlBuilderProposalRepository(session, self.track)
         self.bank_links = SqlBankCustomerLinks(session)

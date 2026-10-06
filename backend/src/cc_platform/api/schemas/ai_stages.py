@@ -10,7 +10,7 @@ from pydantic import Field, StringConstraints
 
 from cc_platform.api.schemas.builder import AliasChange, StepUpCode
 from cc_platform.api.schemas.common import ApiModel, RequestModel
-from cc_platform.application.ai.agents import AgentsView
+from cc_platform.application.ai.agents import AgentProfileView, AgentsView
 from cc_platform.application.ai.maturity import (
     ActivateAgentResultView,
     AiStagesView,
@@ -246,6 +246,17 @@ class AiAgents(ApiModel):
 AgentAvatar = Literal[
     "star", "circle", "hexagon", "drop", "triangle", "rhombus", "cloud", "square", "flame", "ring"
 ]
+
+
+class AgentProfile(ApiModel):
+    agent_id: str = Field(description="agent-core's id of the agent (`cobros`).")
+    avatar: AgentAvatar | None = Field(
+        description="The photo Supervisión picked for the agent; null: none yet."
+    )
+
+    @classmethod
+    def from_view(cls, v: AgentProfileView) -> AgentProfile:
+        return cls(agent_id=v.agent_id, avatar=v.avatar)
 
 
 class SetAgentAvatarRequest(RequestModel):

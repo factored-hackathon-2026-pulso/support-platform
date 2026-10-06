@@ -34,6 +34,7 @@ The schema is a chain of Alembic revisions in
 | `0004_engine_release` | `assistant_sessions.agent_release`, `copilot_suggestions.release` (PR 27) |
 | `0005_agent_catalog` | `case_type_maturity.agent_name`, `case_type_maturity.agent_paused` (PR 31, ADR 0009) |
 | `0006_agent_avatar` | `case_type_maturity.agent_avatar` (the agent's photo, one of ten keys) |
+| `0007_agent_profiles` | `agent_profiles` (`agent_id` → `avatar`: the photo picked per agent, also before it serves a type) |
 
 How they run:
 

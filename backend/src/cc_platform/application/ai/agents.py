@@ -10,6 +10,7 @@ resolved, how many it handed to people). The results are counted from the assist
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 
 from cc_platform.application.ai.builder import AgentBuilder
@@ -24,12 +25,14 @@ from cc_platform.application.ai.maturity import (
 from cc_platform.application.concurrency import retry_on_conflict
 from cc_platform.application.platform.settings import AiSwitch
 from cc_platform.application.ports.clock import Clock
-from cc_platform.application.ports.unit_of_work import UnitOfWorkFactory
+from cc_platform.application.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from cc_platform.application.security import Actor, ensure_any_role
 from cc_platform.domain.ai.maturity import AgentStatus
+from cc_platform.domain.ai.profile import AgentProfile
 from cc_platform.domain.ai.session import AssistantSession, AssistantState
 from cc_platform.domain.cases.values import CaseType
 from cc_platform.domain.people.staff import StaffRole
+from cc_platform.domain.shared.actor import ActorRef
 from cc_platform.domain.shared.errors import NotFoundError
 
 
@@ -93,6 +96,7 @@ class GetAgents:
             if not await self.switch.is_on_in(uow):
                 return AgentsView(available=False, agents=())
             results = count_results(await uow.assistant_sessions.list_all())
+            profiles = {p.agent_id: p.avatar for p in await uow.agent_profiles.list()}
             serving = {
                 m.agent_id: m
                 for m in await uow.case_type_maturity.list()
@@ -107,7 +111,8 @@ class GetAgents:
                 ),
                 case_type=serving[agent_id].case_type if agent_id in serving else None,
                 paused=agent_id in serving and serving[agent_id].agent_paused,
-                avatar=serving[agent_id].agent_avatar if agent_id in serving else None,
+                avatar=(serving[agent_id].agent_avatar if agent_id in serving else None)
+                or profiles.get(agent_id),
                 results=results.get(agent_id, AgentResults()),
             )
             for agent_id in sorted(set(results) | set(serving))
@@ -144,6 +149,87 @@ class RenameAgent:
             return await _view(uow, maturity)
 
 
+async def _keep_profile(
+    uow: UnitOfWork, agent_id: str | None, avatar: str, who: ActorRef, at: datetime
+) -> bool:
+    """Remember the photo on the agent itself, silently (the type's own event audits it)."""
+    if agent_id is None:
+        return False
+    stored = await uow.agent_profiles.get(agent_id)
+    profile = stored or AgentProfile(agent_id=agent_id)
+    if not profile.choose_avatar(avatar, actor=who, at=at, announce=False):
+        return False
+    if stored is None:
+        await uow.agent_profiles.add(profile)
+    else:
+        await uow.agent_profiles.save(profile)
+    return True
+
+
+@dataclass(frozen=True, slots=True)
+class AgentProfileView:
+    agent_id: str
+    avatar: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class GetAgentProfile:
+    """What Supervisión set for an agent by its id (``GET /supervision/ai/agents/{agentId}``)."""
+
+    uow: UnitOfWorkFactory
+    switch: AiSwitch
+
+    async def execute(self, actor: Actor, agent_id: str) -> AgentProfileView:
+        ensure_any_role(actor, {StaffRole.SUPERVISOR})
+        async with self.uow() as uow:
+            if not await self.switch.is_on_in(uow):
+                raise AssistantDisabledError()
+            profile = await uow.agent_profiles.get(agent_id)
+        return AgentProfileView(agent_id, profile.avatar if profile else None)
+
+
+@dataclass(frozen=True, slots=True)
+class ChooseAgentAvatar:
+    """Supervisión picks the photo of an agent by its id, also while she reviews it (before it
+    serves a type). When a type already runs the agent, the type shows it too (audited as
+    ``ai.agent_avatar_set``); otherwise it is audited as ``ai.agent_avatar_chosen``."""
+
+    uow: UnitOfWorkFactory
+    clock: Clock
+    switch: AiSwitch
+
+    async def execute(self, actor: Actor, agent_id: str, *, avatar: str) -> AgentProfileView:
+        ensure_any_role(actor, {StaffRole.SUPERVISOR})
+        await retry_on_conflict(partial(self._choose, actor, agent_id, avatar))
+        return AgentProfileView(agent_id, avatar)
+
+    async def _choose(self, actor: Actor, agent_id: str, avatar: str) -> None:
+        who = actor.acting_as({StaffRole.SUPERVISOR})
+        now = self.clock.now()
+        async with self.uow() as uow:
+            if not await self.switch.is_on_in(uow):
+                raise AssistantDisabledError()
+            serving = [
+                m
+                for m in await uow.case_type_maturity.list()
+                if m.agent is AgentStatus.ACTIVE and m.agent_id == agent_id
+            ]
+            stored = await uow.agent_profiles.get(agent_id)
+            profile = stored or AgentProfile(agent_id=agent_id)
+            changed = profile.choose_avatar(avatar, actor=who, at=now, announce=not serving)
+            if changed:
+                if stored is None:
+                    await uow.agent_profiles.add(profile)
+                else:
+                    await uow.agent_profiles.save(profile)
+            for maturity in serving:
+                if maturity.set_agent_avatar(avatar, actor=who, at=now):
+                    await uow.case_type_maturity.save(maturity)
+                    changed = True
+            if changed:
+                await uow.commit()
+
+
 @dataclass(frozen=True, slots=True)
 class SetAgentAvatar:
     """Supervisión picks the photo of the agent that serves a type. 404 for a type without an
@@ -165,10 +251,13 @@ class SetAgentAvatar:
             maturity, new = await load_maturity(uow, kind)
             if maturity.agent_id is None:
                 raise NotFoundError("Ese tipo de caso no tiene un agente.")
-            if maturity.set_agent_avatar(
-                avatar, actor=actor.acting_as({StaffRole.SUPERVISOR}), at=self.clock.now()
-            ):
+            who = actor.acting_as({StaffRole.SUPERVISOR})
+            now = self.clock.now()
+            changed = maturity.set_agent_avatar(avatar, actor=who, at=now)
+            profile_changed = await _keep_profile(uow, maturity.agent_id, avatar, who, now)
+            if changed:
                 await store_maturity(uow, maturity, new=new)
+            if changed or profile_changed:
                 await uow.commit()
             return await _view(uow, maturity)
 
@@ -224,4 +313,6 @@ class AgentCatalogUseCases:
     agents: GetAgents
     rename: RenameAgent
     avatar: SetAgentAvatar
+    profile: GetAgentProfile
+    choose_avatar: ChooseAgentAvatar
     pause: SetAgentPaused

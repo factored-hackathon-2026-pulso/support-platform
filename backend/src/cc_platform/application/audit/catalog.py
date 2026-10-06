@@ -148,6 +148,7 @@ FAMILY: Mapping[str, AuditFamily] = {
     "ai.agent_activated": AuditFamily.AGENTS,
     "ai.agent_renamed": AuditFamily.AGENTS,
     "ai.agent_avatar_set": AuditFamily.AGENTS,
+    "ai.agent_avatar_chosen": AuditFamily.AGENTS,
     "ai.agent_paused": AuditFamily.AGENTS,
     "ai.agent_resumed": AuditFamily.AGENTS,
     # the AI switch (slice 18): a platform-wide setting of Administración
@@ -193,6 +194,7 @@ CHANGES_STATE: frozenset[str] = frozenset(
         "ai.agent_activated",
         "ai.agent_renamed",
         "ai.agent_avatar_set",
+        "ai.agent_avatar_chosen",
         "ai.agent_paused",
         "ai.agent_resumed",
         "escalation.opened",
@@ -761,6 +763,7 @@ _DESCRIBERS: Mapping[str, Describer] = {
     "ai.agent_activated": _about_type("audit.stage.agentActivated"),
     "ai.agent_renamed": _about_type("audit.stage.agentRenamed"),
     "ai.agent_avatar_set": _about_type("audit.stage.agentAvatarSet"),
+    "ai.agent_avatar_chosen": _fixed("audit.stage.agentAvatarChosen"),
     "ai.agent_paused": _about_type("audit.stage.agentPaused"),
     "ai.agent_resumed": _about_type("audit.stage.agentResumed"),
     # slice 16: the agent builder (the audit never shows a draft, a reason or a chat text)

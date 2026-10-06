@@ -5,6 +5,7 @@ import {
   activateTypeAgent,
   approveAndPublishProposal,
   evaluateProposal,
+  fetchAgentProfile,
   fetchAlias,
   fetchBuilderStatus,
   fetchProposal,
@@ -14,6 +15,7 @@ import {
   freezeProposal,
   promoteAlias,
   rejectProposal,
+  setAgentAvatar,
   validateProposal,
 } from '@/features/automation/api'
 import type * as CopilotApi from '@/features/copilot/api'
@@ -59,6 +61,8 @@ vi.mock('@/features/automation/api', async (importOriginal) => {
     fetchAlias: vi.fn<typeof actual.fetchAlias>(),
     fetchRelease: vi.fn<typeof actual.fetchRelease>(),
     activateTypeAgent: vi.fn<typeof actual.activateTypeAgent>(),
+    fetchAgentProfile: vi.fn<typeof actual.fetchAgentProfile>(),
+    setAgentAvatar: vi.fn<typeof actual.setAgentAvatar>(),
   }
 })
 
@@ -80,6 +84,8 @@ beforeEach(() => {
   vi.mocked(fetchProposals).mockResolvedValue({ items: [], registryListed: true })
   vi.mocked(fetchQueueOverview).mockResolvedValue(makeQueueOverview())
   vi.mocked(fetchProposalRecord).mockResolvedValue(makeRecord())
+  vi.mocked(fetchAgentProfile).mockResolvedValue({ agentId: 'cobros', avatar: null })
+  vi.mocked(setAgentAvatar).mockResolvedValue(undefined)
   // By default the agent runs nowhere yet (its first activation).
   vi.mocked(fetchAlias).mockRejectedValue(problem(404, 'registry_not_found'))
   vi.mocked(fetchRelease).mockImplementation((releaseId) =>
@@ -109,6 +115,17 @@ async function typeCode(
 }
 
 describe('a proposal (slice 22)', () => {
+  it('lets Supervisión pick the agent photo while reviewing it, before activating', async () => {
+    vi.mocked(fetchProposal).mockResolvedValue(makeProposalDetail())
+    const { user } = renderProposal()
+    expect(await screen.findByText('Foto del agente')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Elegir la foto del agente' }))
+    await user.click(screen.getByRole('button', { name: 'Estrella' }))
+
+    expect(vi.mocked(setAgentAvatar)).toHaveBeenCalledWith('cobros', 'star')
+  })
+
   it('shows what the draft changes and where it is, then validates and prepares it', async () => {
     vi.mocked(fetchProposal).mockResolvedValue(makeProposalDetail())
     vi.mocked(validateProposal).mockResolvedValueOnce({

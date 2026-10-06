@@ -2,25 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from '@/lib/i18n'
 import { cn } from '@/lib/cn'
 import { useToast } from '@/components/ui'
-import { useSetAgentAvatar } from '../hooks/use-automation'
-import type { AgentAvatarKey, MaturingType } from '../types'
+import { useAgentAvatar, useSetAgentAvatar } from '../hooks/use-automation'
+import type { AgentAvatarKey } from '../types'
 import { AgentAvatar } from './AgentAvatar'
 import { AGENT_AVATARS, avatarUrl } from './avatars'
 
 export interface AgentPhotoSlotProps {
-  /** The type the agent serves (the photo is stored on it). */
-  type: MaturingType
-  avatar: AgentAvatarKey | null
+  /** agent-core's id of the agent: the photo is the agent's, so it can be picked before it serves. */
+  agentId: string
 }
 
 /**
  * "Foto del agente": a dashed empty circle until a photo is set; a click opens a small row of
  * avatar tiles, and the chosen one shows in the circle.
  */
-export function AgentPhotoSlot({ type, avatar }: AgentPhotoSlotProps) {
+export function AgentPhotoSlot({ agentId }: AgentPhotoSlotProps) {
   const { t } = useTranslation('automation')
   const { toast } = useToast()
-  const set = useSetAgentAvatar(type)
+  const avatar = useAgentAvatar(agentId)
+  const set = useSetAgentAvatar(agentId)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 

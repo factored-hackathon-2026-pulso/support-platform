@@ -15,12 +15,13 @@ import { useAiStages } from '@/features/copilot/core'
 import { cn } from '@/lib/cn'
 import { useTranslation } from '@/lib/i18n'
 import {
+  useAgentAvatar,
   useAlias,
   useBuilderAvailable,
   useProposal,
   useProposalRecord,
 } from '../hooks/use-automation'
-import { agentAvatarOf, agentDisplayName, typeName, typeStage } from '../model'
+import { agentDisplayName, typeName, typeStage } from '../model'
 import { AgentAvatar } from './AgentAvatar'
 import { AgentPhotoSlot } from './AgentPhotoSlot'
 import {
@@ -101,6 +102,7 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
   const { proposal } = detail
   const stages = useAiStages()
   const served = typeStage(stages.data, type)
+  const avatar = useAgentAvatar(proposal.agentId)
   const record = useProposalRecord(proposal.proposalId)
   const prod = useAlias(proposal.agentId, 'prod')
   const history = record.data?.history ?? []
@@ -127,7 +129,7 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
     <>
       <ul className="m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-2 p-0 text-14 text-ink-2">
         <li className="inline-flex items-center gap-1.5">
-          <AgentAvatar avatar={agentAvatarOf(stages.data, proposal.agentId)} size={22} />
+          <AgentAvatar avatar={avatar} size={22} />
           {t('proposal.agent', { agent: agentDisplayName(stages.data, proposal.agentId) })}
         </li>
         {type ? (
@@ -140,9 +142,7 @@ function ProposalBody({ detail, type, onTypeChange }: ProposalBodyProps) {
           <Status {...proposalStatus(proposal.state)} />
         </li>
       </ul>
-      {servesThisAgent && type ? (
-        <AgentPhotoSlot type={type} avatar={agentAvatarOf(stages.data, proposal.agentId)} />
-      ) : null}
+      <AgentPhotoSlot agentId={proposal.agentId} />
       <Stepper state={proposal.state} done={done} endStep={endStep} />
       {record.data?.improvement ? (
         <ImprovementDossier improvement={record.data.improvement} />

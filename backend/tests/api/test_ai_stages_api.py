@@ -241,3 +241,57 @@ def test_supervision_picks_the_agent_photo_audited_and_listed(
     ).json()["items"]
     assert any(e["type"] == "ai.agent_avatar_set" for e in audit)
     assert client.put(url, headers=bearer(lucia), json={"avatar": "star"}).status_code == 200
+
+
+def test_supervision_picks_the_photo_of_an_agent_before_it_serves_a_type(
+    client: TestClient, sign_in: SignIn
+) -> None:
+    lucia, daniela = sign_in(SUPERVISOR.email), sign_in(ANALYST.email)
+    url = "/api/v1/supervision/ai/agents/cobros"
+
+    assert client.get(url, headers=bearer(lucia)).json() == {"agentId": "cobros", "avatar": None}
+    problem(
+        client.put(f"{url}/avatar", headers=bearer(daniela), json={"avatar": "star"}),
+        403,
+        "forbidden",
+    )
+    problem(
+        client.put(f"{url}/avatar", headers=bearer(lucia), json={"avatar": "dog"}),
+        422,
+        "validation_error",
+    )
+    picked = client.put(f"{url}/avatar", headers=bearer(lucia), json={"avatar": "flame"})
+
+    assert picked.status_code == 200, picked.text
+    assert picked.json() == {"agentId": "cobros", "avatar": "flame"}
+    assert client.get(url, headers=bearer(lucia)).json()["avatar"] == "flame"
+    agents = client.get(AGENTS, headers=bearer(daniela)).json()["agents"]
+    assert (
+        next((a for a in agents if a["agentId"] == "cobros"), {"avatar": "flame"})["avatar"]
+        == "flame"
+    )
+    audit = client.get(
+        "/api/v1/audit/events", params={"family": "agents", "limit": 50}, headers=bearer(lucia)
+    ).json()["items"]
+    assert any(e["type"] == "ai.agent_avatar_chosen" for e in audit)
+
+
+def test_the_photo_of_an_agent_that_serves_a_type_shows_on_the_type(
+    client: TestClient, sign_in: SignIn
+) -> None:
+    lucia = sign_in(SUPERVISOR.email)
+    kind = served_type(client, lucia)
+    picked = client.put(
+        "/api/v1/supervision/ai/agents/disputas/avatar",
+        headers=bearer(lucia),
+        json={"avatar": "cloud"},
+    )
+
+    assert picked.status_code == 200, picked.text
+    types = client.get(STAGES, headers=bearer(lucia)).json()["types"]
+    assert next(t for t in types if t["caseType"] == kind)["agentAvatar"] == "cloud"
+    audit = client.get(
+        "/api/v1/audit/events", params={"family": "agents", "limit": 50}, headers=bearer(lucia)
+    ).json()["items"]
+    assert any(e["type"] == "ai.agent_avatar_set" for e in audit)
+    assert not any(e["type"] == "ai.agent_avatar_chosen" for e in audit)

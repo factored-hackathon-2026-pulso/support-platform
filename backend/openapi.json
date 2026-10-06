@@ -629,6 +629,45 @@
         "title": "AdminUserList",
         "type": "object"
       },
+      "AgentProfile": {
+        "properties": {
+          "agentId": {
+            "description": "agent-core's id of the agent (`cobros`).",
+            "title": "Agentid",
+            "type": "string"
+          },
+          "avatar": {
+            "anyOf": [
+              {
+                "enum": [
+                  "star",
+                  "circle",
+                  "hexagon",
+                  "drop",
+                  "triangle",
+                  "rhombus",
+                  "cloud",
+                  "square",
+                  "flame",
+                  "ring"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The photo Supervisión picked for the agent; null: none yet.",
+            "title": "Avatar"
+          }
+        },
+        "required": [
+          "agentId",
+          "avatar"
+        ],
+        "title": "AgentProfile",
+        "type": "object"
+      },
       "AgentResults": {
         "properties": {
           "active": {
@@ -21207,6 +21246,180 @@
         "summary": "List staff (active only unless includeInactive), optionally by role",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/agents/{agentId}": {
+      "get": {
+        "description": "Readable while the agent is still being reviewed, before it serves a type. 404 `assistant_disabled`: AI off.",
+        "operationId": "ai-stages_get_agent_profile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agentId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "cobros"
+              ],
+              "maxLength": 120,
+              "title": "Agentid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807): validation_error"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "What Supervisión set for an agent by its id (its photo)",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/agents/{agentId}/avatar": {
+      "put": {
+        "description": "One of the fixed avatar keys. Works before the agent serves a type: when it is activated, the type shows this photo. Audited (`ai.agent_avatar_chosen`; `ai.agent_avatar_set` when a type already runs the agent), live on `ai:stages`. 404 `assistant_disabled`: AI off.",
+        "operationId": "ai-stages_choose_agent_avatar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agentId",
+            "required": true,
+            "schema": {
+              "examples": [
+                "cobros"
+              ],
+              "maxLength": 120,
+              "title": "Agentid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAgentAvatarRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Pick the photo of an agent by its id, also while reviewing it (Supervisión)",
+        "tags": [
+          "ai-stages"
         ]
       }
     },

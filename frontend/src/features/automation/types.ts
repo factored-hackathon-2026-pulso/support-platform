@@ -3,6 +3,7 @@ import type { Schemas } from '@/lib/api'
 
 export type AiStages = Schemas['AiStages']
 export type CaseTypeStage = Schemas['CaseTypeStage']
+export type AgentProfile = Schemas['AgentProfile']
 export type AgentAvatarKey = NonNullable<CaseTypeStage['agentAvatar']>
 export type StageRule = Schemas['StageRule']
 export type CaseType = Schemas['CaseType']

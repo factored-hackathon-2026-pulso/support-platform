@@ -57,6 +57,7 @@ from cc_platform.domain.ai.maturity import (
     StageSignals,
 )
 from cc_platform.domain.ai.maturity_events import CopilotItemDecided, CopilotToolUsed
+from cc_platform.domain.ai.profile import AgentProfile
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.ai.suggestion import (
     DRAFT_TTL,
@@ -1183,6 +1184,10 @@ async def _name_served_agents(
             if row.set_agent_avatar(SEED_TYPE_AGENT_AVATAR, actor=lucia, at=at):
                 await unit.case_type_maturity.save(row)
                 timeline.take(row)
+    if await unit.agent_profiles.get(SEED_TYPE_AGENT) is None:
+        profile = AgentProfile(agent_id=SEED_TYPE_AGENT)
+        profile.choose_avatar(SEED_TYPE_AGENT_AVATAR, actor=lucia, at=now, announce=False)
+        await unit.agent_profiles.add(profile)
     timeline.record_into(unit)
     await unit.commit()
 

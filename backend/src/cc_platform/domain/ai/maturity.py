@@ -361,7 +361,9 @@ class CaseTypeMaturity(AggregateRoot):
             raise InvalidTransitionError("El tipo de caso todavía no está listo para un agente.")
         return True
 
-    def activate_agent(self, *, agent_id: str, actor: ActorRef, at: datetime) -> bool:
+    def activate_agent(
+        self, *, agent_id: str, actor: ActorRef, at: datetime, avatar: str | None = None
+    ) -> bool:
         """``agent_id`` now serves the type (slice 22: Supervisión promoted its release to
         ``prod`` and activates it here; the seed tells the demo story with it). Only from "ready
         for an agent"; activating the same agent again is a no-op (False)."""
@@ -370,6 +372,8 @@ class CaseTypeMaturity(AggregateRoot):
         self.agent = AgentStatus.ACTIVE
         self.agent_since = at
         self.agent_id = agent_id.strip()
+        if avatar in AGENT_AVATARS:
+            self.agent_avatar = avatar  # the photo picked while reviewing the agent
         self._changed(StageChange.AGENT_ACTIVE, actor.actor_id, at)
         self._record(
             CaseTypeAgentActivated(

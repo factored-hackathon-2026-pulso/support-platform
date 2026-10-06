@@ -8,6 +8,7 @@ from cc_platform.application.events import StoredEvent
 from cc_platform.domain.ai.builder import BuilderProposal, BuilderThread
 from cc_platform.domain.ai.copilot import CopilotThread
 from cc_platform.domain.ai.maturity import CaseTypeMaturity
+from cc_platform.domain.ai.profile import AgentProfile
 from cc_platform.domain.ai.session import AssistantSession
 from cc_platform.domain.ai.suggestion import CopilotSuggestion
 from cc_platform.domain.cases.assignment import Assignment
@@ -56,6 +57,7 @@ class InMemoryStore:
     copilot_threads: dict[str, CopilotThread] = field(default_factory=dict)
     copilot_suggestions: dict[str, CopilotSuggestion] = field(default_factory=dict)
     case_type_maturity: dict[str, CaseTypeMaturity] = field(default_factory=dict)
+    agent_profiles: dict[str, AgentProfile] = field(default_factory=dict)
     builder_threads: dict[str, BuilderThread] = field(default_factory=dict)
     builder_proposals: dict[str, BuilderProposal] = field(default_factory=dict)
     bank_links: dict[str, str] = field(default_factory=dict)

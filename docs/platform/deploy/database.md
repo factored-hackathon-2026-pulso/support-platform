@@ -33,6 +33,7 @@ The schema is a chain of Alembic revisions in
 | `0003_engine_announce` | `notifications.proposal_id/agent_id/improvement`; drops the `builder_proposals.registered_by` foreign key, so it may be `engine` (PR 17, ADR 0007) |
 | `0004_engine_release` | `assistant_sessions.agent_release`, `copilot_suggestions.release` (PR 27) |
 | `0005_agent_catalog` | `case_type_maturity.agent_name`, `case_type_maturity.agent_paused` (PR 31, ADR 0009) |
+| `0006_agent_avatar` | `case_type_maturity.agent_avatar` (the agent's photo, one of ten keys) |
 
 How they run:
 

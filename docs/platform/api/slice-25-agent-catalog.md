@@ -36,3 +36,7 @@ Needs agent-core's `POST /v1/registry/agents/{id}/pause|resume` (agent-core PR "
 - The registry is called first; the type then records it (`ai.agent_paused` / `ai.agent_resumed`, audited, live on `ai:stages`). Repeating the same action is 200 and changes nothing. 404 `not_found`: the type has no agent; `assistant_disabled`: AI off or no agent-core.
 - `CaseTypeStage.agentPaused` and `AgentRow.paused` carry the state. Moving a type back clears it with the agent.
 - Persistence: `case_type_maturity.agent_paused` (new column, same database reset as above).
+
+## Photo
+
+`PUT /api/v1/supervision/ai/stages/{caseType}/agent/avatar` (supervisor) `{ avatar }`, one of `star, circle, hexagon, drop, triangle, rhombus, cloud, square, flame, ring`; 200 `CaseTypeStage` (`agentAvatar`), 404 without an agent, 422 for an unknown key. Audited (`ai.agent_avatar_set`), live on `ai:stages`; `AgentRow.avatar` carries it. Column `case_type_maturity.agent_avatar` (migration `0006_agent_avatar`). The frontend ships the pictures (`frontend/src/assets/agent-avatars/`).

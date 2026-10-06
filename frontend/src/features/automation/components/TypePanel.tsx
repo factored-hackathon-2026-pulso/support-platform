@@ -33,6 +33,7 @@ import {
   typeName,
   type RuleLine,
 } from '../model'
+import { AgentAvatar } from './AgentAvatar'
 import { describeBuilderFailure, proposalStatus } from '../proposals'
 import type { CaseTypeStage, MaturingType, StageRule } from '../types'
 import { EngineMissing } from './AutomationFrame'
@@ -232,7 +233,10 @@ function AgentSection({ type, entry }: { type: MaturingType; entry: CaseTypeStag
       ) : null}
       {entry.agent === 'active' ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-14">{t('type.servedBy', { agent: agentName(agentId) })}</span>
+          <span className="inline-flex items-center gap-2 text-14">
+            <AgentAvatar avatar={entry.agentAvatar} size={24} />
+            {t('type.servedBy', { agent: agentName(agentId) })}
+          </span>
           {builder ? (
             <Link to={automationAgentPath(agentId)} className="text-14 text-link font-medium">
               {t('type.openAgent')}

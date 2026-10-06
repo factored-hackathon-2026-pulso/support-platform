@@ -8,6 +8,7 @@
 import { api, unwrap } from '@/lib/api'
 import type {
   ActivateAgentResult,
+  AgentAvatarKey,
   AliasState,
   BuilderExchange,
   BuilderStatus,
@@ -52,6 +53,7 @@ export const automationKeys = {
 
 export const automationMutationKeys = {
   moveBack: (caseType: string) => ['automation', 'move-back', caseType] as const,
+  avatar: (caseType: string) => ['automation', 'avatar', caseType] as const,
   activate: (caseType: string) => ['automation', 'activate', caseType] as const,
   proposal: (proposalId: string) => ['automation', 'proposal', proposalId, 'step'] as const,
   ask: () => ['automation', 'chat', 'ask'] as const,
@@ -82,6 +84,19 @@ export async function activateTypeAgent(
     api.POST('/api/v1/supervision/ai/stages/{caseType}/agent', {
       params: { path: { caseType } },
       body,
+    }),
+  )
+}
+
+/** PUT /supervision/ai/stages/{caseType}/agent/avatar: the photo of the agent that serves it. */
+export async function setAgentAvatar(
+  caseType: MaturingType,
+  avatar: AgentAvatarKey,
+): Promise<void> {
+  await unwrap(
+    api.PUT('/api/v1/supervision/ai/stages/{caseType}/agent/avatar', {
+      params: { path: { caseType } },
+      body: { avatar },
     }),
   )
 }

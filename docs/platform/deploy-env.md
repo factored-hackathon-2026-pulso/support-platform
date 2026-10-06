@@ -183,6 +183,7 @@ written as JSON (`CC_CORS_ORIGINS=["https://a.example"]`).
 | `CC_DATABASE_POOL_TIMEOUT_SECONDS` | no | `10.0` | no | `10.0` | Seconds to wait for a free Postgres connection before failing the request. |
 | `CC_MIGRATE_ON_START` | no | `true` | no | `true` | Apply the pending migrations at startup (under a lock). Off: the database must already be at the head revision (`cc-migrate` ran before), else the process refuses to start. |
 | `CC_SEED_DEMO_DATA` | prod (false) | `true` | no | `true` | Insert the synthetic demo data (accounts, customers, cases) that is missing; idempotent. Refused in prod. |
+| `CC_SEED_DEMO_BANK_LINKS` | no | `true` | no | `true` | With the demo seed, link three SYNTHETIC simulator customers to the assistant (ADR 0003). |
 
 #### Auth
 

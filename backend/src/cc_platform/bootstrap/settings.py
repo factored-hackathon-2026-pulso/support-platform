@@ -51,8 +51,8 @@ class Settings(BaseSettings):
     #: at the head revision (``cc-migrate`` ran before), else the process refuses to start.
     migrate_on_start: bool = True
     seed_demo_data: bool = True
+    #: With the demo seed, link three SYNTHETIC simulator customers to the assistant (ADR 0003).
     seed_demo_bank_links: bool = True
-    """With the demo seed, link three SYNTHETIC simulator customers to the assistant (ADR 0003)."""
 
     # Auth (brief §4.5, canvas BoLogin/BoMfa/BoLocked)
     session_secret: SecretStr = SecretStr(DEV_SESSION_SECRET)

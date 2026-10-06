@@ -31,6 +31,7 @@ Every person, customer and case in the seed is invented ("Datos de ejemplo").
 | Document | Language | What it is for |
 |---|---|---|
 | [ENGINEERING_BRIEF.md](./ENGINEERING_BRIEF.md) | English | Start here. Scope, stack, layout, patterns, product rules, API conventions, slice plan, quality gates, hygiene. Every slice and review follows it. |
+| [TRY-IT.md](./TRY-IT.md) | English | Use the deployed hackathon environment as a customer (`/customer`) and as the support team: URLs, simulator customers, seeded accounts, what to try. |
 | [RUNBOOK.md](./RUNBOOK.md) | English | Install, run backend + frontend, environment variables, seeded accounts and simulator customers, schema migrations, API type regeneration, gates, e2e, troubleshooting. |
 | [deploy-env.md](./deploy-env.md) | English | Deploy runtime contract: every `CC_*` variable (generated), what a deployed environment requires, `/healthz` and `/readyz`, graceful shutdown, realtime keepalive. |
 | [deploy/edge.md](./deploy/edge.md) | English | What CloudFront and the host reverse proxy must configure: paths, WebSocket, timeouts, headers, caching, health checks. |

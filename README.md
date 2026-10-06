@@ -1,6 +1,6 @@
 # Support platform
 
-Support platform for LATAM Bank's transaction-dispute intake (Factored AI & Data Hackathon 2026). Customers and support staff talk by chat and by simulated phone calls and email; analysts handle cases, supervisors watch queues, team and escalations, and administrators manage users by email invitation. People only: no AI is connected yet.
+Support platform for LATAM Bank's transaction-dispute intake (Factored AI & Data Hackathon 2026). Customers and support staff talk by chat and by simulated phone calls and email; analysts handle cases, supervisors watch queues, team and escalations, and administrators manage users by email invitation. On top of that, AI (the agent-core engine) answers customers, helps analysts with a copilot and, case type by case type, earns its way to autonomous agents that supervisors approve and activate; with AI switched off the platform works with people only.
 
 The product UI is in Spanish and, since slice 23, Brazilian Portuguese (each person picks it in the account menu); the implementation is in English.
 
@@ -12,6 +12,10 @@ The product UI is in Spanish and, since slice 23, Brazilian Portuguese (each per
 | `frontend/` | React 19 + Vite SPA, feature-sliced, types generated from the API's OpenAPI. See `frontend/README.md` and `frontend/ARCHITECTURE.md`. |
 | `docs/platform/` | Engineering brief, data model, run book, ADRs and one API contract per slice. Start at `docs/platform/README.md`. |
 | `docker-compose.yml` | Runs the API and the web app together. |
+
+## Try the deployed platform
+
+Use the hackathon deployment as a customer (`/customer`) and as the support team (analyst, supervisor, administrator): [docs/platform/TRY-IT.md](docs/platform/TRY-IT.md).
 
 ## Run it
 

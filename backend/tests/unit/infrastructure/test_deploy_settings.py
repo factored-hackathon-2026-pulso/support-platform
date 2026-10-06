@@ -93,6 +93,50 @@ def test_staging_may_seed_synthetic_data_but_prod_may_not() -> None:
     assert any(line.startswith("CC_DEV_MAILBOX") for line in problems)
 
 
+DEMO_PASSWORD_VALUE = "ev4luat0rs-" + "k" * 12
+DEMO_MFA = "482913"
+
+
+def test_prod_demo_mode_may_seed_synthetic_data_with_its_own_password_and_code() -> None:
+    settings = Settings(
+        _env_file=None,
+        **deployed(
+            "prod",
+            seed_demo_data=True,
+            demo_mode=True,
+            demo_staff_password=DEMO_PASSWORD_VALUE,
+            dev_mfa_code=DEMO_MFA,
+        ),
+    )
+
+    assert settings.demo_mode
+    assert settings.seed_demo_data
+    assert not settings.dev_mailbox_enabled  # the dev mailbox stays off in demo mode
+
+
+def test_demo_mode_refuses_the_dev_password_and_the_dev_code() -> None:
+    problems = problems_of(**deployed("prod", seed_demo_data=True, demo_mode=True))
+
+    assert any("CC_DEMO_STAFF_PASSWORD" in p for p in problems)
+    assert any("CC_DEV_MFA_CODE" in p for p in problems)
+    assert not any("CC_SEED_DEMO_DATA" in p for p in problems)
+
+
+def test_demo_mode_refuses_a_short_password_and_never_echoes_it() -> None:
+    problems = problems_of(
+        **deployed(
+            "prod",
+            seed_demo_data=True,
+            demo_mode=True,
+            demo_staff_password="short",
+            dev_mfa_code=DEMO_MFA,
+        )
+    )
+
+    assert any("CC_DEMO_STAFF_PASSWORD" in p for p in problems)
+    assert not any("short" in p for p in problems)
+
+
 def test_dev_and_test_keep_their_defaults() -> None:
     assert Settings(_env_file=None, env="dev").reload_enabled
     assert not Settings(_env_file=None, env="test").reload_enabled

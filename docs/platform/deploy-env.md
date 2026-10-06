@@ -182,7 +182,9 @@ written as JSON (`CC_CORS_ORIGINS=["https://a.example"]`).
 | `CC_DATABASE_MAX_OVERFLOW` | no | `5` | no | `5` | Extra Postgres connections the pool may open beyond the pool size, per process. |
 | `CC_DATABASE_POOL_TIMEOUT_SECONDS` | no | `10.0` | no | `10.0` | Seconds to wait for a free Postgres connection before failing the request. |
 | `CC_MIGRATE_ON_START` | no | `true` | no | `true` | Apply the pending migrations at startup (under a lock). Off: the database must already be at the head revision (`cc-migrate` ran before), else the process refuses to start. |
-| `CC_SEED_DEMO_DATA` | prod (false) | `true` | no | `true` | Insert the synthetic demo data (accounts, customers, cases) that is missing; idempotent. Refused in prod. |
+| `CC_SEED_DEMO_DATA` | prod (false, unless CC_DEMO_MODE) | `true` | no | `true` | Insert the synthetic demo data (accounts, customers, cases) that is missing; idempotent. Refused in prod. |
+| `CC_DEMO_MODE` | no | `false` | no | `false` | Hosted demo for the hackathon's evaluators: allows the SYNTHETIC demo seed and the customer simulator in prod. Requires its own staff password and MFA code (never the dev defaults). |
+| `CC_DEMO_STAFF_PASSWORD` | with CC_DEMO_MODE | unset | yes | `<12+ characters, shared privately with the evaluators>` | Password of every seeded staff account in demo mode (shared privately with the evaluators). |
 | `CC_SEED_DEMO_BANK_LINKS` | no | `true` | no | `true` | With the demo seed, link three SYNTHETIC simulator customers to the assistant (ADR 0003). |
 
 #### Auth
@@ -195,7 +197,7 @@ written as JSON (`CC_CORS_ORIGINS=["https://a.example"]`).
 | `CC_LOCKOUT_MINUTES` | no | `15` | no | `15` | How long a locked account stays locked. |
 | `CC_MFA_TTL_SECONDS` | no | `300` | no | `300` | Lifetime of an MFA challenge. |
 | `CC_MFA_MAX_ATTEMPTS` | no | `3` | no | `3` | Wrong MFA codes before the challenge is spent. |
-| `CC_DEV_MFA_CODE` | no | `000000` | no | `000000` | MFA code of the seeded accounts without an authenticator (synthetic data). |
+| `CC_DEV_MFA_CODE` | no | `000000` | no | `000000` | MFA code of the seeded accounts without an authenticator (synthetic data). Demo mode requires a value other than the dev default. |
 | `CC_ARGON2_TIME_COST` | no | `3` | no | `3` | Argon2id password hashing: iterations. |
 | `CC_ARGON2_MEMORY_COST` | no | `65536` | no | `65536` | Argon2id password hashing: memory in KiB. |
 | `CC_ARGON2_PARALLELISM` | no | `4` | no | `4` | Argon2id password hashing: lanes. |

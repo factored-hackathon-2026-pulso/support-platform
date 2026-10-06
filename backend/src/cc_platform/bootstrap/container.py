@@ -321,7 +321,7 @@ from cc_platform.infrastructure.seed.bank_links import seed_demo_bank_links
 from cc_platform.infrastructure.seed.customers import seed_demo_customers
 from cc_platform.infrastructure.seed.notifications import mark_seed_notifications_seen
 from cc_platform.infrastructure.seed.onboarding import SeedOnboarding
-from cc_platform.infrastructure.seed.people import seed_demo_staff
+from cc_platform.infrastructure.seed.people import DEMO_PASSWORD, seed_demo_staff
 
 _log = structlog.get_logger(__name__)
 
@@ -453,13 +453,27 @@ class Container:
         changed, skipped = await LinkBankCustomers(self.uow).execute(links)
         _log.info("bank_customer_links", changed=changed, skipped=skipped)
 
+    @property
+    def seed_password(self) -> str:
+        """Password of the seeded staff accounts: the dev one, or demo mode's own."""
+        secret = self.settings.demo_staff_password
+        if self.settings.demo_mode and secret is not None:
+            return secret.get_secret_value()
+        return DEMO_PASSWORD
+
     async def seed_demo_data(self) -> None:
         """ "Datos de ejemplo": invented staff, customers, availability and the seeded cases."""
+        password = self.seed_password
         onboarding = SeedOnboarding(
-            hasher=self.password_hasher, tokens=self.one_time_tokens, box=self.secret_box
+            hasher=self.password_hasher,
+            tokens=self.one_time_tokens,
+            box=self.secret_box,
+            password=password,
         )
         created = {
-            "staff": await seed_demo_staff(self.uow, self.password_hasher, now=self.clock.now()),
+            "staff": await seed_demo_staff(
+                self.uow, self.password_hasher, now=self.clock.now(), password=password
+            ),
             "customers": await seed_demo_customers(self.uow),
             "bank_links": (
                 await seed_demo_bank_links(self.uow) if self.settings.seed_demo_bank_links else 0

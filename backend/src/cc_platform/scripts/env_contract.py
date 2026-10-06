@@ -46,7 +46,8 @@ REQUIRED: dict[str, str] = {
     "agent_core_url": "with the Core (with the keys)",
     "agent_keys_file": "with the Core (with the URL)",
     "internal_service_token": "with the Core and the engine",
-    "seed_demo_data": "prod (false)",
+    "seed_demo_data": "prod (false, unless CC_DEMO_MODE)",
+    "demo_staff_password": "with CC_DEMO_MODE",
 }
 
 #: Secret values (never logged, injected by infra). Files: the path is not secret, the file is.
@@ -54,6 +55,7 @@ SECRET: dict[str, str] = {
     "database_url": "yes (holds the password)",
     "agent_keys_file": "file contents",
     "bank_customer_links_file": "file contents",
+    "demo_staff_password": "yes",
 }
 
 #: Example shapes where the default is not one (secrets, unset values, deployed values).
@@ -73,6 +75,7 @@ EXAMPLES: dict[str, str] = {
     "copilot_suggestions_agent": "copiloto-sugerencias@prod",
     "internal_service_token": "<48+ random url-safe characters>",
     "bank_customer_links_file": "/run/secrets/bank-customer-links.json",
+    "demo_staff_password": "<12+ characters, shared privately with the evaluators>",
     "core_timeout_assistant_seconds": "60",
     "core_timeout_copilot_seconds": "60",
     "core_timeout_suggestions_seconds": "60",
@@ -97,7 +100,15 @@ NOTES: dict[str, str] = {
     "lockout_minutes": "How long a locked account stays locked.",
     "mfa_ttl_seconds": "Lifetime of an MFA challenge.",
     "mfa_max_attempts": "Wrong MFA codes before the challenge is spent.",
-    "dev_mfa_code": "MFA code of the seeded accounts without an authenticator (synthetic data).",
+    "dev_mfa_code": (
+        "MFA code of the seeded accounts without an authenticator (synthetic data). Demo mode "
+        "requires a value other than the dev default."
+    ),
+    "demo_mode": (
+        "Hosted demo for the evaluators: allows the synthetic demo seed and the customer "
+        "simulator in prod. Needs CC_DEMO_STAFF_PASSWORD and a non-default CC_DEV_MFA_CODE."
+    ),
+    "demo_staff_password": "Password of every seeded staff account in demo mode.",
     "argon2_time_cost": "Argon2id password hashing: iterations.",
     "argon2_memory_cost": "Argon2id password hashing: memory in KiB.",
     "argon2_parallelism": "Argon2id password hashing: lanes.",

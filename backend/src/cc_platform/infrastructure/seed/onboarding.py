@@ -78,6 +78,8 @@ class SeedOnboarding:
     hasher: PasswordHasher
     tokens: OneTimeTokens
     box: SecretBox
+    #: Password of the seeded accounts (demo mode replaces the dev one).
+    password: str = DEMO_PASSWORD
     emails: list[PendingInvitationEmail] = field(default_factory=list)
 
 
@@ -110,7 +112,7 @@ async def add_demo_invitations(
     accepted_at = t - TATIANA_ACCEPTED_BEFORE
     herself = ActorRef(ActorRole.ANALYST, tatiana.id)
     sealed = onboarding.box.seal(TATIANA_TOTP_SECRET)
-    password_hash = await onboarding.hasher.hash(DEMO_PASSWORD)
+    password_hash = await onboarding.hasher.hash(onboarding.password)
     invitation.start_enrollment(password_hash=password_hash, totp_secret=sealed, now=accepted_at)
     tatiana.activate(team)
     account = LoginAccount.open(

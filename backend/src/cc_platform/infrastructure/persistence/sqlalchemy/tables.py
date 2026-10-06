@@ -493,6 +493,7 @@ case_type_maturity = Table(
     Column("agent_id", String(120), nullable=True),
     Column("agent_name", String(80), nullable=True),
     Column("agent_paused", Boolean, nullable=False, default=False),
+    Column("agent_avatar", String(20), nullable=True),
     Column("changed_at", UtcDateTime, nullable=True),
     Column("changed_by_id", String(ID), nullable=True),
     Column("last_change", String(20), nullable=True),

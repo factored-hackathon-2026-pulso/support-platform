@@ -75,6 +75,19 @@ class CaseTypeAgentRenamed(DomainEvent):
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
+class CaseTypeAgentAvatarSet(DomainEvent):
+    """Supervisión picked the photo (avatar) the platform shows for the agent of the type.
+    ``avatar`` is one of the fixed keys, not free text."""
+
+    event_type = "ai.agent_avatar_set"
+    entity = "case_type"
+
+    case_type: str
+    agent_id: str
+    avatar: str
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
 class CaseTypeAgentPaused(DomainEvent):
     """Supervisión paused the agent of the type (out of ``recepcion``'s directory, ADR 0009 §2)."""
 
@@ -125,6 +138,7 @@ STAGE_EVENTS: tuple[type[DomainEvent], ...] = (
     CaseTypeAgentReady,
     CaseTypeAgentActivated,
     CaseTypeAgentRenamed,
+    CaseTypeAgentAvatarSet,
     CaseTypeAgentPaused,
     CaseTypeAgentResumed,
 )

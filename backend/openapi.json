@@ -666,6 +666,30 @@
             "title": "Agentid",
             "type": "string"
           },
+          "avatar": {
+            "anyOf": [
+              {
+                "enum": [
+                  "star",
+                  "circle",
+                  "hexagon",
+                  "drop",
+                  "triangle",
+                  "rhombus",
+                  "cloud",
+                  "square",
+                  "flame",
+                  "ring"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The photo Supervisión picked; null: none.",
+            "title": "Avatar"
+          },
           "caseType": {
             "anyOf": [
               {
@@ -696,7 +720,8 @@
           "displayName",
           "caseType",
           "results",
-          "paused"
+          "paused",
+          "avatar"
         ],
         "title": "AgentRow",
         "type": "object"
@@ -2818,6 +2843,30 @@
             "$ref": "#/components/schemas/AgentStatus",
             "description": "`ready`: the drafts met the rule, the system proposes an agent to Supervisión (slice 22). `active`: an agent serves the type."
           },
+          "agentAvatar": {
+            "anyOf": [
+              {
+                "enum": [
+                  "star",
+                  "circle",
+                  "hexagon",
+                  "drop",
+                  "triangle",
+                  "rhombus",
+                  "cloud",
+                  "square",
+                  "flame",
+                  "ring"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The photo Supervisión picked for the agent; null: none yet.",
+            "title": "Agentavatar"
+          },
           "agentId": {
             "anyOf": [
               {
@@ -2915,6 +2964,7 @@
           "reached",
           "agentSince",
           "agentId",
+          "agentAvatar",
           "agentPaused",
           "agentName",
           "lastChange",
@@ -8741,6 +8791,32 @@
           "staff"
         ],
         "title": "SessionResponse",
+        "type": "object"
+      },
+      "SetAgentAvatarRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "avatar": {
+            "enum": [
+              "star",
+              "circle",
+              "hexagon",
+              "drop",
+              "triangle",
+              "rhombus",
+              "cloud",
+              "square",
+              "flame",
+              "ring"
+            ],
+            "title": "Avatar",
+            "type": "string"
+          }
+        },
+        "required": [
+          "avatar"
+        ],
+        "title": "SetAgentAvatarRequest",
         "type": "object"
       },
       "SetAiEnabledRequest": {
@@ -21271,6 +21347,98 @@
           }
         ],
         "summary": "Activate the agent of a case type (Supervisión)",
+        "tags": [
+          "ai-stages"
+        ]
+      }
+    },
+    "/api/v1/supervision/ai/stages/{caseType}/agent/avatar": {
+      "put": {
+        "description": "One of the fixed avatar keys. 404 `not_found`: the type has no agent; 404 `assistant_disabled`: AI off. Audited (`ai.agent_avatar_set`), live on `ai:stages`.",
+        "operationId": "ai-stages_set_agent_avatar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caseType",
+            "required": true,
+            "schema": {
+              "examples": [
+                "undue_charge"
+              ],
+              "maxLength": 40,
+              "title": "Casetype",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAgentAvatarRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseTypeStage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Problem details (RFC 7807)"
+          }
+        },
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "summary": "Pick the photo of the agent that serves a case type (Supervisión)",
         "tags": [
           "ai-stages"
         ]

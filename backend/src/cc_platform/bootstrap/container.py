@@ -20,6 +20,7 @@ from cc_platform.application.ai.agents import (
     AgentCatalogUseCases,
     GetAgents,
     RenameAgent,
+    SetAgentAvatar,
     SetAgentPaused,
 )
 from cc_platform.application.ai.announce import AnnounceImprovement
@@ -1249,6 +1250,7 @@ def build_container(
         agent_catalog=AgentCatalogUseCases(
             agents=GetAgents(uow=uow, switch=ai_switch),
             rename=RenameAgent(uow=uow, clock=clock, switch=ai_switch),
+            avatar=SetAgentAvatar(uow=uow, clock=clock, switch=ai_switch),
             pause=SetAgentPaused(
                 uow=uow,
                 clock=clock,

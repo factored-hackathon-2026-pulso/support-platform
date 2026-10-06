@@ -7,10 +7,11 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query'
 import { useAiEnabled } from '@/app/platform'
-import { copilotKeys } from '@/features/copilot/core'
+import { copilotKeys, useAiStages } from '@/features/copilot/core'
 import { isApiProblem, type ApiProblem } from '@/lib/api'
 import {
   activateTypeAgent,
+  fetchAgentProfile,
   setAgentAvatar,
   approveAndPublishProposal,
   askBuilder,
@@ -41,8 +42,10 @@ import {
   type AgentRequest,
   type PendingMessage,
 } from '../builder-chat'
+import { agentAvatarOf } from '../model'
 import type {
   AgentAvatarKey,
+  AgentProfile,
   AliasState,
   BuilderExchange,
   BuilderStatus,
@@ -308,13 +311,30 @@ export function useActivateAgent(caseType: MaturingType | null) {
   })
 }
 
-/** PUT /supervision/ai/stages/{caseType}/agent/avatar (the stages are read again). */
-export function useSetAgentAvatar(caseType: MaturingType | null) {
+/**
+ * The photo of an agent: the type's, once it serves one, else the one picked while reviewing it
+ * (GET /supervision/ai/agents/{agentId}). `null`: none yet.
+ */
+export function useAgentAvatar(agentId: string): AgentAvatarKey | null {
+  const stages = useAiStages()
+  const profile = useQuery<AgentProfile, ApiProblem>({
+    queryKey: automationKeys.agent(agentId),
+    queryFn: ({ signal }) => fetchAgentProfile(agentId, signal),
+  })
+  return agentAvatarOf(stages.data, agentId) ?? profile.data?.avatar ?? null
+}
+
+/** PUT /supervision/ai/agents/{agentId}/avatar (the stages and the profile are read again). */
+export function useSetAgentAvatar(agentId: string) {
   const refresh = useRefreshAfterStep()
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationKey: automationMutationKeys.avatar(caseType ?? ''),
-    mutationFn: (avatar: AgentAvatarKey) => setAgentAvatar(caseType ?? 'undue_charge', avatar),
-    onSettled: () => refresh(),
+    mutationKey: automationMutationKeys.avatar(agentId),
+    mutationFn: (avatar: AgentAvatarKey) => setAgentAvatar(agentId, avatar),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: automationKeys.agent(agentId) })
+      refresh()
+    },
   })
 }
 

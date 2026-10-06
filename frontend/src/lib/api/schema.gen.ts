@@ -2099,6 +2099,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/supervision/ai/agents/{agentId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What Supervisión set for an agent by its id (its photo)
+     * @description Readable while the agent is still being reviewed, before it serves a type. 404 `assistant_disabled`: AI off.
+     */
+    get: operations['ai-stages_get_agent_profile']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/supervision/ai/agents/{agentId}/avatar': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Pick the photo of an agent by its id, also while reviewing it (Supervisión)
+     * @description One of the fixed avatar keys. Works before the agent serves a type: when it is activated, the type shows this photo. Audited (`ai.agent_avatar_chosen`; `ai.agent_avatar_set` when a type already runs the agent), live on `ai:stages`. 404 `assistant_disabled`: AI off.
+     */
+    put: operations['ai-stages_choose_agent_avatar']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/supervision/ai/stages/{caseType}/agent': {
     parameters: {
       query?: never
@@ -2678,6 +2718,32 @@ export interface components {
       serverTime: string
       /** @description Over every filter except status. */
       statusCounts: components['schemas']['UserStatusCounts']
+    }
+    /** AgentProfile */
+    AgentProfile: {
+      /**
+       * Agentid
+       * @description agent-core's id of the agent (`cobros`).
+       */
+      agentId: string
+      /**
+       * Avatar
+       * @description The photo Supervisión picked for the agent; null: none yet.
+       */
+      avatar:
+        | (
+            | 'star'
+            | 'circle'
+            | 'hexagon'
+            | 'drop'
+            | 'triangle'
+            | 'rhombus'
+            | 'cloud'
+            | 'square'
+            | 'flame'
+            | 'ring'
+          )
+        | null
     }
     /** AgentResults */
     AgentResults: {
@@ -14663,6 +14729,126 @@ export interface operations {
         }
       }
       /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_get_agent_profile': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        agentId: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AgentProfile']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807): validation_error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+    }
+  }
+  'ai-stages_choose_agent_avatar': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        agentId: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetAgentAvatarRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AgentProfile']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails']
+        }
+      }
+      /** @description Problem details (RFC 7807) */
       422: {
         headers: {
           [name: string]: unknown

@@ -38,6 +38,8 @@ function onTurnCreated(envelope: RealtimeEnvelope, queryClient: QueryClient): vo
 /** Slice 21: a case type changed stage (`ai:stages`): read the stages again. */
 function onStageUpdated(_envelope: RealtimeEnvelope, queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: copilotKeys.stages() })
+  // A photo picked while the agent is reviewed (no type yet) lives on the agent's own profile.
+  void queryClient.invalidateQueries({ queryKey: ['automation', 'agent'] })
 }
 
 export const registerCopilotRealtime: RealtimeRegistration = (registry) => {

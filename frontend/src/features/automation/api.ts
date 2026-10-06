@@ -9,6 +9,7 @@ import { api, unwrap } from '@/lib/api'
 import type {
   ActivateAgentResult,
   AgentAvatarKey,
+  AgentProfile,
   AliasState,
   BuilderExchange,
   BuilderStatus,
@@ -47,13 +48,15 @@ export const automationKeys = {
   release: (releaseId: string) => ['automation', 'release', releaseId] as const,
   /** GET /builder/versions/agent/{agentId}. */
   versions: (agentId: string) => ['automation', 'versions', agentId] as const,
+  /** GET /supervision/ai/agents/{agentId}: what Supervisión set for the agent (its photo). */
+  agent: (agentId: string) => ['automation', 'agent', agentId] as const,
   /** GET /builder/chat: her thread with the builder agent. */
   chat: () => ['automation', 'chat'] as const,
 }
 
 export const automationMutationKeys = {
   moveBack: (caseType: string) => ['automation', 'move-back', caseType] as const,
-  avatar: (caseType: string) => ['automation', 'avatar', caseType] as const,
+  avatar: (agentId: string) => ['automation', 'avatar', agentId] as const,
   activate: (caseType: string) => ['automation', 'activate', caseType] as const,
   proposal: (proposalId: string) => ['automation', 'proposal', proposalId, 'step'] as const,
   ask: () => ['automation', 'chat', 'ask'] as const,
@@ -88,14 +91,21 @@ export async function activateTypeAgent(
   )
 }
 
-/** PUT /supervision/ai/stages/{caseType}/agent/avatar: the photo of the agent that serves it. */
-export async function setAgentAvatar(
-  caseType: MaturingType,
-  avatar: AgentAvatarKey,
-): Promise<void> {
+/** GET /supervision/ai/agents/{agentId}: the photo picked for the agent (null: none yet). */
+export async function fetchAgentProfile(
+  agentId: string,
+  signal?: AbortSignal,
+): Promise<AgentProfile> {
+  return unwrap(
+    api.GET('/api/v1/supervision/ai/agents/{agentId}', { params: { path: { agentId } }, signal }),
+  )
+}
+
+/** PUT /supervision/ai/agents/{agentId}/avatar: the photo of an agent, also before it serves. */
+export async function setAgentAvatar(agentId: string, avatar: AgentAvatarKey): Promise<void> {
   await unwrap(
-    api.PUT('/api/v1/supervision/ai/stages/{caseType}/agent/avatar', {
-      params: { path: { caseType } },
+    api.PUT('/api/v1/supervision/ai/agents/{agentId}/avatar', {
+      params: { path: { agentId } },
       body: { avatar },
     }),
   )

@@ -71,7 +71,7 @@ export function AgentScreen({ agentId }: AgentScreenProps) {
     >
       <PageBody>
         <div className="mx-auto flex w-full max-w-[920px] flex-col gap-5">
-          {servedType ? <AgentPhotoSlot type={servedType} avatar={avatar} /> : null}
+          {servedType ? <AgentPhotoSlot agentId={agentId} /> : null}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Status {...agentRunAppearance(status)} />
             {serves.map((type) => (
